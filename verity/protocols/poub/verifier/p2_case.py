@@ -101,24 +101,24 @@ def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any
     """The case's answer in the core interface's form from the session's own answer `session` (`p2_party.answer`'s,
     `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_party.SESSION`'s session: accepted,
     `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
-    its draw; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    the sample it failed at; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}
     verdict = session.get("verdict")
     if verdict == "accept":
-        draws = session["draws"]
-        public = {"eps": str(Fraction(2**24 + sum(draws), 2**64)), "q_bytes": session["q_bytes"],
+        sampled = session["draws"]
+        public = {"eps": str(Fraction(2**24 + sum(sampled), 2**64)), "q_bytes": session["q_bytes"],
                   "span_ns": session["span_ns"]}
-        profile = {"bound": session["bound"], "delta": session["delta"], "draws": draws,
+        profile = {"bound": session["bound"], "delta": session["delta"], "draws": sampled,
                    "plan_units": session["plan_units"], "receipts": session["receipts"],
                    "registration": session["registration"], "unit_bytes": session["unit_bytes"],
                    "units": session["units"], "windows": len(session["windows"]), "wrong": session["wrong_at_most"]}
         return out | {"profile": profile, "public": public, "verdict": "accept"}
     if verdict == "reject":
         at = session.get("at")
-        draw = f", draw [{at[0]}, {at[1]}]" if at is not None else ""
-        return out | {"reason": f"the session was rejected: {session['failure']} at window {session['window']}{draw}",
+        where = f", draw [{at[0]}, {at[1]}]" if at is not None else ""
+        return out | {"reason": f"the session was rejected: {session['failure']} at window {session['window']}{where}",
                       "verdict": "reject"}
     return out | {"reason": "the session has a window not yet verified", "verdict": "undecided"}
 
