@@ -5,9 +5,9 @@ module
 
 The executable form of `security/Definitions/NetworkCertifier/RecordRows.lean` over the lanes of
 `security/Definitions/NetworkCertifier/Warden.lean`, for the records the active network certifier writes
-(`verity/protocols/certifier/verifier/warden.py`, whose `audit` is the reference). Each direction's record has a row a
-bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order, each cell
-naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
+(`verity/protocols/accounting/certifier/verifier/warden.py`, whose `audit` is the reference). Each direction's record
+has a row a bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order,
+each cell naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
 
 `audit` reads a run's records over its `W` windows and accepts only when they are the schedule's. It reads the schedule
 the egress record shows (`scheduleOf`: each connection's admission bucket and its lane's cells) and the data its egress
