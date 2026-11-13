@@ -23,7 +23,7 @@ from research.merge import REPAIRED
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
-                             Red, Snapshot, Verdict, _inherited, decide, meets)
+                             Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
                                   _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
                                   judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
@@ -1438,6 +1438,20 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
     assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
+
+
+@pytest.mark.parametrize("kind, inherited", [("infra", False), ("timeout", False), ("own", True)])
+def test_a_base_whose_machine_failed_a_step_says_nothing_of_the_tests_its_candidate_fails_there(kind, inherited):
+    """The run beside `main` failed pytest where its disk filled, erroring every test that wanted a temporary directory; a
+    candidate on `main` fails one of those tests on a sound machine.  The base's word on that test is unknown, not a failure,
+    so the candidate's failure is its own and it doesn't land; a base that failed the test on its own work still answers."""
+    tests = ["prove_path::tests/test_a.py::t", "prove_path::tests/test_b.py::t"]
+    base = {"verdict": {"state": FAIL, "failed": [{"task": "step pytest", "key": "kb", "inputs": [], "tests": tests,
+                                                   "kind": kind}]}}
+    v = Verdict(FAIL, (Failed("step pytest", "kc", frozenset(), "kb0", frozenset(tests[:1]), kind="own"),), ended=True)
+    (f,) = (got := based(v, base)).failed
+    assert f.base_tests == (frozenset(tests) if inherited else None)
+    assert _inherited(f) is inherited and _reading(got) == (PASS if inherited else FAIL)
 
 
 # -- lean-audit taken from the base's check
