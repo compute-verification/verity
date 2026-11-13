@@ -2,7 +2,7 @@
 ``frame_v3/vectors_sha512.json``'s ``row_seg_leaves`` (the whole at the short lengths, its segment part on every vector
 segment and its outer part on every vector's segment digests) and `rowleaf.sha512_row_seg_digest` on random 262,144-bit
 rows, a 64 x 64 Pearl-C tile's ``-h3`` digest; a flipped data bit, two segments swapped and a wrong length each change it;
-it refuses malformed bindings and rows; its parts cost the gates pinned here, and C-Flock lowers a part by the builder its
+it refuses malformed bindings and rows; its parts cost the gates pinned here, and Flock lowers a part by the builder its
 trace was taken from."""
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def test_malformed_bindings_and_rows_are_refused() -> None:
 
 @pytest.mark.parametrize("name", ["Sha512RowSegSegment", "Sha512RowSegOuter"])
 def test_a_part_lowers_by_the_builder_its_trace_was_taken_from(name) -> None:
-    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
+    """Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
     without one gate by gate, where one compression passes 1 GB; called so, the builder traces to the part's own gates."""
     d = getattr(G, name)
     S = SimpleNamespace(**dict(zip(d.statics, (13,))))
