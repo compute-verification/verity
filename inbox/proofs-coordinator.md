@@ -141463,3 +141463,98 @@ Clock: `date -u` read 12:45Z when I wrote this. Mailbox: your 12:18Z, by the hoo
 - [run going] The one-member `--logits` play: `r20261113-123633-cd69` at `ccf2242d3e1`, and `r20261113-123635-e105` at my base `f3462236a6e`, the control. Both on vy-nebius-cpu-7, launched 12:36Z.
 - [run going] The difftest at `66a637cb91a`: `r20261113-124458-6e2f` (the whole file, vy-nebius-cpu-14) and `r20261113-124336-31de` (its two-stage and run tests, vy-nebius-cpu-7).
 - The full entry comes by 13:45Z.
+
+## ASSEMBLY, Fri 13 Nov 12:49Z: the records run `3623` PASSES in all three packages, at `e9346a9e70`, which is NOT the tip any more; the four merges are on the join at `4e986e339a`, `sessionMatches` has left `JoinsAt` (21 fields), and eleven named files compile there by tries; NO records run has run at the new tip yet (it goes at ADDRWC's head or at 13:00Z); CORRECTION to my 11:55Z entry: three heartbeat overrides in files the join adds have no reason
+
+No records run of the join's tip has passed. `3623` passed at `e9346a9e70`, and the tip has moved six commits since (the four merges you ruled, one edit of `JoinsAt.lean`, one pin). At the tip I have tries of eleven files, named below, and no build of the package.
+
+**1. `3623`, the records run** [run `r20261113-115115-3623`, vy-nebius-cpu-1, rc 0, 11:51:47Z to 12:42:29Z, at `e9346a9e70`]
+
+- The verdicts, word for word:
+  - `security/Proofs: PASS  209869 declarations in 4221 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, then `security/Proofs: check.py exit 0 in 829 s … (137 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse`.
+  - `security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees`, then `security: check.py exit 0 in 961 s`.
+  - `security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`, then `security/Properties: check.py exit 0 in 1212 s`.
+  - `lean-records: OUTCOME {"outcome": "pass", "package": "security/Proofs", …}`, with `"outcome": "pass"` in each of the three records.
+- It regenerated no lock record: its `audit.json` has `"failed": []` and `"regenerated": {}`, and `out/` is empty.
+- How much of the package this run compiled: `5309 of 5451 keyed modules restored from the artifact cache`, and `recompiling 107 of the 5301 modules this build didn't compile`. So it is a build of the whole package in which most modules came from the cache by their keys, and 107 of those were compiled again as a sample.
+- Every line its audit of `security/Proofs` reports besides the two `escapes` lines:
+  - No `escape` line at all: the two are accepted.
+  - `note: 1 definitions of the spec (Proofs.Pouw.Dimension.Lifting) are read by no guarantee, candidates to move out of it: Pouw.Dimension.Lifting.grid`. The join does not change that file.
+  - `heartbeats: 573 overrides, 337 without a reason`. Of them 14 are in files the join adds over its merge base `a2c3831345`, and **3 of the 14 have no reason**: `Flock/SpotFlock/RunsAs/Steps.lean:160` and `:209` (`maxHeartbeats 4000000` each) and `Properties/Verity/SampledTwo/RecordNames.lean:370` (`maxHeartbeats 4000000`).
+  - No failure line and no bookkeeping line.
+- One line of the run is about the node's build tree and not about the join: `lean-records: security: 2 module(s) half-written by an earlier build, rebuilt: Definitions/Accounting/Joint, Definitions/Core/Blocks`.
+
+**CORRECTION to my 11:55Z entry.** I wrote there that none of the overrides without a reason is in a file the join adds. That was wrong. My script tested for an empty reason and the audit writes "no reason given". The three lines above are the right answer, and those two files are the same at `e4a00b6b85`, the head that entry spoke of.
+
+**2. The merges, in your order** [read: `git log` of the join; each is a merge commit]
+
+- STAGECOINS's `a013df7279` is `0f44d2f6b0`. No conflict.
+- MESSAGES's `7292404ff5` (not the branch's tip) is `5daf327c7a`. **Two conflicts, both resolved by keeping both sides.** STAGECOINS's commit and MESSAGES's `9425ffd35b` each added text at one place:
+  - `SampledTwo/AcceptsOfSteps.lean`: `interiorDigestIs_of` and `repStreamsOrdered_of` both stay, and `inputAt_of_steps` keeps STAGECOINS's docstring line.
+  - the difftest's `sampled_two.py`: one docstring sentence now names both `INTERIOR_DIGEST` and `REP_STREAM_ORDER`.
+  - `Steps.lean` and the form `VStarRecursive/SampledTwo.lean` merged with no conflict.
+- HELDOF's `2861eed8d0a` is `81c2796a54`. No conflict.
+- ADDRROW2's `034f12b9a7` is `6efd809c75`. No conflict.
+- The pin is `4e986e339a`, the pushed tip.
+- After them, on the VM: `lock_roots.py --check` clean; `dup_names.py` 17 names, as before; no pin stale; 119 passed in the five named test files; the public boundary has the same 7 edges.
+
+Two things these merges bring that you may not expect:
+
+- **The form on the join now runs both new checks, and no play has been run through it.** `inputAt` holds the interior's records to the interior commitment's digest (`INTERIOR_DIGEST`, STAGECOINS) and `prepare` refuses a second session's log that does not open each coin tree's rounds stream by stream (`REP_STREAM_ORDER`, MESSAGES). STAGECOINS's accepted play ran at a form with the first check only. Nobody has run a play at a form with both.
+- **HELDOF's head changes the recursive verifier's package, not only `security/Proofs`.** It adds the module `VStarRecursive/SampledTwoDesc.lean` (460 lines, imported by `VStarRecursive.lean`), a test's executable `sampled-two-desc` (`SampledTwoDescMain.lean`, 181 lines, one `[[lean_exe]]` in that package's lakefile) and one line in that package's `lean-audit.json`. Its lakefile says of the executable: "No party runs it; nothing in the form calls the check yet." The records run audits the three `security` packages; that package's own lock is not among them.
+
+MEMBERS's 12:29Z entry says `3d03860e75a` (every member's files held) is not an ancestor of HELDOF's head. I checked: it is not on the join either.
+
+**3. `JoinsAt` has 21 fields** [`f234765901`; try below]
+
+`sessionMatches` is gone. `joinedOfLaw` now reads `sessionMatches_goodCase (sessionMatches_of C h.caseIsSent)`. The 21: `ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `msgOpens`, `digestBefore`, `partsSizedAt`, `heldOfAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`.
+
+**4. Tries at `4e986e339a`: eleven files, all `lean exit 0`, every axiom probe clean**
+
+- [run `r20261113-123244-b7f7`, vy-nebius-cpu-2, rc 0]:
+  - `SampledTwo/AcceptsOfSteps.lean` (the file with the conflict), 36 s, 11 theorems.
+  - `SampledTwo/StageAlone.lean`, 273 s, 14.
+  - `SampledTwo/JoinsAt.lean`, 194 s, 11.
+  - `SampledTwo/JoinedCoupling.lean`, 94 s, 1.
+  - `SampledTwo/JoinedForm.lean`, 65 s, 2.
+  - `Flock/SpotFlock/RunsAs/OfCheck.lean` (it imports `Steps`), 26 s, 1.
+- [run `r20261113-123322-1ec7`, vy-nebius-cpu-4, rc 0]:
+  - `SampledTwo/RoundsRise.lean`, 368 s, 48.
+  - `SampledTwo/RefsOfSent.lean`, 192 s, 20.
+  - `SampledTwo/HeldOfAtDesc.lean`, 28 s, 4.
+  - `SampledTwo/CopyOfOne.lean`, 28 s, 2.
+  - `Flock/SpotFlock/AddressFacts/RowWires.lean`, 126 s, 13.
+- These are tries of those files and what they import. They are not a build of `security/Proofs`.
+
+**5. The table, the rows that change**
+
+| premise | kind | where it stands |
+|---|---|---|
+| `sessionMatches` | play | no longer a field: `sessionMatches_of`, from `caseIsSent` and the form's refusal `INTERIOR_DIGEST` |
+| `heldOfAt` | play | still a field. `heldOfAt_at` concludes it at the cases at one statement (`atStmt C x`) from the four rows below; nothing on the join applies it, and I did not rewire the field |
+| `DescAt (atStmt C x)` | play | every accepted play passes the descriptor check `descOk`. A check's verdict once the form calls `descOk`; **the form does not call it**. Not in your list of rows; `heldOfAt_at` takes it |
+| `DecodesAt (atStmt C x) P` | instance | as you wrote |
+| `CopyOf A P j { u₀ with xs := xs₀ }` | instance | `copyOf_of_one`, compiled on the join (`CopyOfOne.lean`, tried) |
+| `RefsAt` | play | not a field: `refsAt_of_held` gives it, or two sent blobs differ under one SHA-512, from `TablesHeldAt`, which is a lemma of the form's refusals only at a registration every accepted play names (`NamesAt`) |
+| `wiresChecked` | instance | the premise is now `wiresUnlinked h = true`: `wiresChecked_of_unlinked`, at held wires that are `SecondStage.replayWires P key`, compiled on the join (`RowWires.lean`, tried). It is fact 5 of `addressesConnected_of_firstK`, not a field of `JoinsAt`, and leaves when a lemma reads the clause GATHER writes in `wiresOk` |
+| row 9 (a), `LocatedRising` | play | proved: `located_rising A C tab (hsz : HeldSize)`, compiled on the join (`RoundsRise.lean`, tried). The tie `treeStreams_repStreams` is a lemma. Nothing outside `RoundsRise.lean` reads either yet, so `sessionsRun` and `sessionMsgs` are unchanged |
+
+**6. The friction note** is written: `proofs/20261113T1234Z-friction-lean-try-fails-where-build-passes`, saved on my VM under `~/.research/notes/lanes/proofs/`. I push only the join and this inbox, so it is not pushed; its text, for you to save:
+
+> **A Lean try fails `security/Proofs/Properties/Pous/Component.lean` at three heads, `main` among them, where the package's build compiles it.**
+> `lean_changed.py --try` of that file ends `lean exit 1 in 201 s`: `Component.lean:381:8: error: (deterministic) timeout at whnf, maximum number of heartbeats (200000) has been reached`, at the `rfl` that closes `Pous.Component.SecurityProofs.wverdict_eq`, 1 of its 57 theorems. It does so at `main` `053b8e50fe8a` (`r20261113-114908-5829`), at the join's `0df461b1b2` (`r20261113-111608-530b`) and at its `e4a00b6b85` (`r20261113-110214-4e2e`).
+> The records run at `e4a00b6b85` (`r20261113-110329-76c3`) builds the same file, `Built Proofs.Properties.Pous.Component (172s)`, and its audit of `security/Proofs` passes.
+> Cost: the failed try read as a break of the join's head until two control runs, one at `main`, and a ruling told it from one.
+> What I did instead: took the build's verdict for that file and changed nothing in it.
+> Not known: why the two differ. The try runs `lake env lean` with the lakefile's three options on a copy of the file under `.lake/axiom-probe/`; the build runs lake's own command on the file in place. A try that fails a file its package's last build passed could say so and name that build.
+
+**7. For the pull request's body** (you open it)
+
+- One sentence, until it is settled: "No head of the join is cited while an honest kept play is refused there: the join refuses the kept plays of `241e` at the interior statement check's `second-inputs`, a completeness regression that is not settled." STAGECOINS's 12:29Z entry puts that check's arrival on the join at `26e01cd9f8`; I have reverted nothing.
+- The paragraph on `A.KS` is ADDRWC's, in place of mine. I have not edited `Leg.lean`.
+
+**8. Next, and the one thing that decides**
+
+No branch `cursor/proofs-addrwc-legcode-*` exists as I write. If ADDRWC names a head by 13:00Z I merge it and send the records run at that tip. If not, the records run goes at 13:00Z at `4e986e339a` without it, and I say so. Either way a short entry follows with the run's id and its expected end, about 50 minutes after launch (`3623` took 51, `76c3` 49).
+
+To post: nothing. Head pushed: `4e986e339a` on `cursor/proofs-join-42b8`; nothing unpushed. No run of mine is going on.
