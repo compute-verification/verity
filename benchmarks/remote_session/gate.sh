@@ -9,7 +9,8 @@
 #          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
 #          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
-#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
+#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after;
+#          with BIND=0 no `--model`, so the period signs no model and the auditor's line finds none to bind the store to.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, and with BIND=1, the default, MODEL with ENGINES arenas of
 #          ARENA_BLOCKS: the store bound to MODEL's pinned checkpoint); its `status` every 30 s until it ends, then the
@@ -164,8 +165,10 @@ EOF
 }
 
 open_period() {
+  local model=()
+  [ "$BIND" = 0 ] || model=(--model "$MODEL")
   gate "$CHALLENGER" ledger > "$OUT/ledger.before.jsonl"
-  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" --model "$MODEL" \
+  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" "${model[@]}" \
     > "$OUT/period-open.out" 2> "$OUT/period-open.err"
   local r=$?
   echo "period-open rc $r"

@@ -263,6 +263,16 @@ def test_both_forms_at_once_or_a_window_without_sessions_is_refused_before_any_r
     assert sent is None
 
 
+@pytest.mark.parametrize("bind, model", [({}, " --model QWEN25_32B_BF16"), ({"BIND": "1", "MODEL": "TINY"}, " --model TINY"),
+                                         ({"BIND": "0"}, "")], ids=["default", "bound", "unbound"])
+def test_the_period_signs_the_model_only_when_the_run_binds_the_store_to_it(tmp_path, bind, model):
+    """`open` asks for `period-open` with MODEL where the host's run binds the store to it (BIND=1, the default), and
+    with no model under BIND=0, whose period the auditor's line then finds no model to bind the store to in."""
+    p, sent = host(tmp_path, "open", CIRCUIT="ab" * 64, **bind)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert sent == ["ledger", f"period-open --name ma-remote-coins-9 --cap 4 --circuit {'ab' * 64}{model}", "ledger"]
+
+
 @pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
 @pytest.mark.parametrize("bind", ["2", "yes", ""], ids=["two", "a-word", "set-empty"])
 def test_a_bind_other_than_0_or_1_is_refused_before_any_request(tmp_path, verb, bind):
@@ -291,7 +301,8 @@ def test_a_dry_fire_that_cant_read_the_provers_leases_says_so_once_and_writes_ev
     (run,) = [r for r in sent if r.startswith("run ")]
     assert run.endswith("--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 "
                         "--quantile max")
-    assert any(r.startswith("period-open --name ma-remote-coins-8 ") for r in sent)
+    (opened,) = [r for r in sent if r.startswith("period-open --name ma-remote-coins-8 ")]
+    assert "--model" not in opened, "a period of an unbound run signs no model"
     assert any(r.startswith("period-close") for r in sent)
 
 

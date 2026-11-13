@@ -22,8 +22,8 @@
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to the verifier host's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
-#                  COMMIT's remote_bandwidth tree, MODEL), the host's run, period-close, auditor.sh (the line of record,
-#                  its auditor_line.json and credit.md in the fire run's out/).
+#                  COMMIT's remote_bandwidth tree, MODEL unless BIND=0), the host's run, period-close, auditor.sh (the
+#                  line of record, its auditor_line.json and credit.md in the fire run's out/).
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
@@ -41,8 +41,9 @@
 # unset: today's pass) asks the node for the leaf pass on that many reading CTAs, the node's `--leaf-ctas`: each card's
 # shard is hashed by the warps that read it (`rs_leaf_pass`), a host part still by today's pass, and the prover's gate
 # checks it before the first coin; the store refuses it where h0 is over 8. BIND (default 1) binds the verifier's
-# store to ROLE's pinned checkpoint (gate.sh's MODEL); BIND=0 binds it to none, so the verifier holds no checkpoint and
-# the store is the developer's choice. LEASE_BY (a UTC time) is when the
+# store to ROLE's pinned checkpoint (gate.sh's MODEL), and the period signs MODEL; BIND=0 binds it to none and the
+# period signs no model, so the verifier holds no checkpoint, the store is the developer's choice, and the line of
+# record credits nothing, its `bound` check failing. LEASE_BY (a UTC time) is when the
 # prover must hold its GPUs, or nothing runs: the prover asks through gate_lease.sh (sent beside) from LEASE_FROM
 # (default now) and gives up a minute before LEASE_BY, and fire opens no period for a lease that began after it.
 # ARENA_GIB (default 62) is each engine's weights arena
