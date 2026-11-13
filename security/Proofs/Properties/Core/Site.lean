@@ -751,20 +751,27 @@ theorem refusedAt_honest :
   ⟨check_honestLog, check_staleLog⟩
 
 /-- `RefusedAt`'s nontrivial witness: a log check that refuses everything at its first entry, as not following the
-head, refuses `honestLog` with a refusal the spec doesn't give that entry, at every index of `honestLog` it may name. -/
+head, fails `RefusedAt` on `honestLog`. What `RefusedAt` concludes of that refusal is false: the spec doesn't give
+`honestLog`'s first entry that refusal, and the first entry is not the log's end. -/
 theorem refusedAt_nontrivial :
-    ∀ i : Fin honestLog.length,
-      ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
-          (Verity.Site.ofLog (log (honestLog.take i)))
-          (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take i)))
-          (regEntry honestLog[i]) = some (refusal .previous) := by
-  rintro ⟨i, hi⟩
-  obtain rfl : i = 0 := by simp only [honestLog, List.length_singleton] at hi; omega
-  have h := refuses witnessDigests witnessAuditor .remote emptySite "genesis" honestEntry
-  rw [honestEntry_refusal] at h
-  show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
-    (site emptySite) "genesis" (regEntry honestEntry) = _
-  rw [← h]
-  simp
+    ¬(Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+          (log (honestLog.take 0)) ∧
+        ((∃ hi : 0 < honestLog.length,
+            Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+              (Verity.Site.ofLog (log (honestLog.take 0)))
+              (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take 0)))
+              (regEntry honestLog[0]) = some (refusal .previous)) ∨
+          (0 = honestLog.length ∧ Core.Site.Registration.Refusal.previous = .inventory ∧
+            ¬Verity.Registration.Complete (digests witnessDigests) (auditor witnessAuditor)
+              (Verity.Site.ofLog (log honestLog))))) := by
+  rintro ⟨-, ⟨hi, hr⟩ | ⟨-, hp, -⟩⟩
+  · have h := refuses witnessDigests witnessAuditor .remote emptySite "genesis" honestEntry
+    rw [honestEntry_refusal] at h
+    revert hr
+    show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      (site emptySite) "genesis" (regEntry honestEntry) = _
+    rw [← h]
+    simp
+  · cases hp
 
 end Properties.Site
