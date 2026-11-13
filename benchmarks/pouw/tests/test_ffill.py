@@ -15,7 +15,7 @@ import ffill_ref as F
 import numpy as np
 import pytest
 
-from verity.definitions.silicon import fp32 as silicon
+from verity.circuits.silicon import fp32 as silicon
 from verity_machine_model.eps import design
 from verity_machine_model.model import device
 

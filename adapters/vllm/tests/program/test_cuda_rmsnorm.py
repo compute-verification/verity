@@ -7,7 +7,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.definitions.numerics import twins as TW
-from verity.definitions.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import mufu as BM
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import cuda_rmsnorm as C
 
