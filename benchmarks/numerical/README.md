@@ -73,10 +73,10 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 
 ## The reference: how independent the existing columns are
 
-The target names three executable columns of the finite-domain step: Python `verity.definitions.silicon.models`, Rust
-`tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
-casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
-`utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
+Two columns of the finite-domain step are read here: Python `verity.definitions.silicon` (`term.py`, `models.py`) and Lean
+`security/Definitions/Core/TC/Spec.lean`. The Python is read against Hawkeye's pinned simulator
+(`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
+`utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`), the Lean by what its header says:
 
 - `models.py` states its body is "a bit-exact pure-Python port of" the reference simulator at that commit. `models.group_sum` is the
   C++ `group_sum` statement for statement -- scan for the maximum exponent from the floor, align each term by
@@ -88,17 +88,15 @@ casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/sil
   terms are skipped in the maximum (the C++ gives every zero the exponent `E_ZERO`, so the maximum is the same), and Python
   integers replace the `int32_t` with its `shift >= 32` guard (equal for every input the step forms; see
   `hawkeye_close.group_sum`).
-- `tc.rs` says it is "bit for bit as `veritor/core/silicon.py` models it and `lean/VeritorSpec/TC.lean` specifies it"; every
-  function's doc comment names the `silicon` function it ports, the bodies keep the Python's names (`max_exponent`, `total`,
-  `bit_length`, `rescale`) and order, and `shift_int`/`unshift_int` are documented as `TC.shiftInt`/`TC.unshiftInt`.
-- `TC.lean` says it is "bit for bit as `veritor/core/silicon.py` models it"; `groupSum` is the same statement sequence as
-  `foldl`s, `packFp32`'s docstring says it is written "with `+` and `%` where the Python uses `|` and `&`". `TCTotal.lean`
-  proves the total transcription agrees with it on finite inputs -- a theorem about two transcriptions.
+- `Spec.lean`'s header calls it "A transcription of `term.py`", of `models.py`'s `group_sum` and of `total.py`, "function for
+  function and branch for branch, on the Python functions' domain". `verity/definitions/evaluate/Evaluate/TC/Spec.lean` is, by
+  its own header, a copy of that file and of the `Pipeline.lean` beside it, "definition for definition". Neither body is read
+  against the Python here.
 
-Finding: the three columns are transliterations of one derivation -- the simulator's `group_sum`, ported once into Python and
-from there into Rust and Lean. Their agreement establishes transcription fidelity, not independent confirmation of the hardware
+Finding: the two columns are one derivation -- the simulator's `group_sum`, ported once into Python and, by the Lean's header,
+transcribed from there. Agreement between them shows transcription fidelity, not an independent confirmation of the hardware
 semantics. The independent evidence for the target is (i) the hardware captures (`verity/definitions/ops/tests/fixtures`, and the
-recorded probe runs below), (ii) the compiled pinned simulator itself, driven on the same cases by
+probe's recorded runs, by stage below), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/reference/test_normalisation_d3.py`).
 
