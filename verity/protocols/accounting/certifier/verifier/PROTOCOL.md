@@ -2237,7 +2237,37 @@ prompt ids and a size of ids released, each a power of two.
     count can say. The lengths and fails entries, every row's size, the tables' names and order and the head's
     length in bytes are the schedule's whatever the load.
   - **The work under form 2** of laying and committing an execution phase's tables follows its counts, and so may
-    the time its head is signed and published. Nothing here charges the counts or that time to a bound.
+    the time its head is signed and, in a schedule without a head offset, published. The network certifier's term
+    charges the counts on its design's rows, classes · log₂(R + 1) bits for each execution phase on each link
+    (`verity bench certifier_term`, its `count`). Nothing charges that time to a bound.
+- **The head's tick** (`WardenParams.head_offset` and `WardenParams.head_wait`, none by default, set together and
+  only with lengths rows, each in the parameters' digest only where set). Without them a head is published when
+  whoever takes the hand has signed it. With them the tick it is published at is the schedule's:
+  - **The due tick.** Execution phase w's head is due `head_offset` buckets after the last bucket of the window
+    whose close hands it (`WardenParams.head_tick`), counted in the device's buckets, its one clock. The run's
+    last two execution phases, handed at its last close, share a due tick.
+  - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network certifier
+    (`Warden.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a served
+    run the publisher process sends the line of `rows.jsonl` back and the tick appends it. The line holds no
+    tick: the tick it left at is the network certifier's own note, in its log alone (`warden.json`'s `heads`).
+    No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
+    not built.
+  - **A head back by its due tick** leaves at that tick and never sooner.
+  - **A head back later** leaves at the first tick it is back by, at most W = `head_wait` ticks after the due one.
+  - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A served
+    run's tick writes the network certifier's own unsigned note of it in the line's place. The run's check reads
+    that note: it stands where a head or the word would, so it can only take one away. What an execution phase
+    with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The
+    check's summary names those execution phases for it (`heads`).
+  - **At W = 0** a head leaves at its due tick or never.
+  - **Under form 2** the word that an execution phase has no head is held to the same ticks.
+  - **The run** ticks `head_offset` + W buckets past its last window while a head may still leave. Those ticks
+    carry no cell.
+  - **What stays public.** Which of its W + 1 ticks a head left at, and whether it left. What that costs a bound
+    is the reader's to charge, and no reader here does yet: log₂(W + 1) bits an execution phase for its head's
+    tick, and each class's whole schedule for an execution phase with no head. The device writes nothing of it.
+  - **Not held here.** That an auditor reads a head only at its tick, and holds a schedule without the offset to
+    none, is the auditor's side, which is not built: nothing holds the head's time yet.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. So do the request words, where a schedule has them: one without them

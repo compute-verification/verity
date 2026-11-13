@@ -603,16 +603,32 @@ def refusing_commit(*args, **kwargs):
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
-         late: dict[int, float] | None = None) -> Warden:
+         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`, its
     connection rows kept as the publisher process keeps them when the schedule has lengths rows (its key then a
     height taller, for their heads), `deployment.json`, and `client.json` with every cell's arrival 1 ms into the
     bucket it was sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side
-    of each connection, in connect order. Returns the network certifier."""
+    of each connection, in connect order. In a schedule with a head offset the publisher hands each execution phase's
+    line of connection rows back and the network certifier's tick writes it, as in `serve`: the line is back at
+    the hand itself when published inline and before the next tick when by the process, or, inline, just before the
+    tick `back` names for its execution phase, never where that is None. The run then ticks on past its last window
+    while a line may still leave. Returns the network certifier."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
+    timed = params.head_offset is not None
+    assert not back or (timed and not process)
+    lines = ws.crr.Lines(out, ws.LINK) if timed else None
+    held: dict[int, dict] = {}
+    device: list[Warden] = []
+
+    def taken(window: int, line: dict) -> None:
+        if window in (back or {}):
+            held[window] = line
+        else:
+            device[0].head_back(window, line)
+
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
@@ -625,8 +641,9 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         signer = ws.cs.signer(key, height)
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
-        hooks, public = {"publish": publisher, "withhold": publisher.withhold,
-                         "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
+        keeper = ws.crr.Keeper(out, issuer, params, ws.LINK, back=taken if timed else None)
+        hooks, public = {"publish": publisher, "withhold": publisher.withhold, "lengths": keeper.keep}, \
+            signer.public_key()
     answers = iter(responses)
 
     async def connect():
@@ -643,9 +660,35 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     async def main() -> tuple[list[_Writer], Warden]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
+                        **hooks)
+        device.append(warden)
+        over: list[bool] = []
+        if process and timed:
+            loop = asyncio.get_running_loop()
+
+            def on_loop(call, *args) -> None:
+                # the process's last word comes at `close`, when the run is over and its loop closed
+                if not loop.is_closed():
+                    loop.call_soon_threadsafe(call, *args)
+
+            # the process's end wakes a wait for a line that then never comes, and `close` raises its failure
+            publisher.heads(lambda window, line: on_loop(taken, window, line),
+                            ended=lambda: on_loop(lambda: (over.append(True), warden._changed.set())))
         running = asyncio.create_task(warden.run())
+        running.add_done_callback(lambda _: warden._changed.set())
         clients, tasks = [], []
+
+        async def tick(t: int) -> None:
+            # the lines the process was handed are back before tick t runs, and `back`'s are handed back
+            if process and timed:
+                await warden.until(lambda w: over or not w.awaited)
+            for window, at in (back or {}).items():
+                if at == t:
+                    warden.head_back(window, held.pop(window))
+            # tick t runs `late[t]` seconds past its time
+            clock.advance(t * tau + (late or {}).get(t, 0))
+            await warden.until(lambda w: w.ticks > t or running.done())
 
         async def connect_due(t: int) -> None:
             # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
@@ -666,9 +709,11 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
                 if t:
                     await connect_due(t)
                 await warden.until(settled)
-                # tick t runs `late[t]` seconds past its time
-                clock.advance(t * tau + (late or {}).get(t, 0))
-                await warden.until(lambda w, t=t: w.ticks > t)
+                await tick(t)
+            t = windows * params.window
+            while timed and not running.done():
+                await tick(t)
+                t += 1
             await running
         finally:
             PROCESS_CLOCK.remove(clock)
@@ -677,6 +722,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     clients, warden = asyncio.run(main())
     publisher.close()
+    if lines is not None:
+        lines.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows,
                                       listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
                                       run_id=warden.run_id)
