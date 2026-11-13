@@ -195,8 +195,9 @@ KNOWN = frozenset({
     "verity_vllm.commit.store_dump",
     "verity_vllm.correspondence.reader_for_query",
     "verity_vllm.correspondence.runtime",
-    # the served circuits (`verity_vllm.definitions`), which Flock's prover, the protocols' tests and the benchmarks take
-    # whole; their importers move onto the circuits a protocol names
+    # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
+    # move into the adapter; vllm takes these down, with the private name below, under its goal
+    # vllm/benchmarks-import-public-only (due Wed 25 Nov)
     "verity_vllm.definitions.boolean",
     "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
@@ -366,7 +367,7 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_attach_specs'),
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
-    ('verity_vllm.definitions.boolean', '_load'),
+    ('verity_vllm.definitions.boolean', '_load'),  # the served circuits' move, with its group in KNOWN
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
 })
