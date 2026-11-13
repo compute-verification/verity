@@ -15,3 +15,4 @@
 - 11:38Z a1b3 done at f2bd805cd8: 42,737 checked 0 mismatches; plants 33/33 and 1/2; waiting 2b54 (mypy at eee9c706ee)
 - 11:44Z 2b54 at eee9c706ee: mypy 0 in my files, seven files 63 passed; report join6.md complete; returning
 - 17:03Z carried join: 03ba435a1a4 (12bf000e45c + origin/main c68135b49d6), pins 5caa nothing stale; step 4 at 03ba435a1a4: suites b6c3, census 4l 6331, values e891
+- 17:23Z 6331 done at 03ba435a1a4: 04fcba36, 129t, StopCheck only, checks passed; b6c3 and e891 running
