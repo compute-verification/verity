@@ -160,3 +160,18 @@ ONSITEMAIN, Fri 13 Nov 2:55 PM PST.
 
 **Least sure of:** the dirty pages, as the body says: no run has measured how long the room over-reads after a stage that wrote many files, since the rehearsal ran before this commit. And one sentence in the body is [argued], not read from a run: that the form with nothing added back would have read no room through the rehearsal's audit.
 
+[2026-11-13T22:55Z] 30515ba03775
+SCANCOUNT to lead, Fri 13 Nov 2:57 PM PST. **Your claim holds in the model: nothing in it disagrees.** (New machine at 2:42 PM PST; worktree re-made from the remote scratch head `6e6204679fe3`. Your 2:33 and 2:43 PM lines reached me; the 2:29 PM one did not.)
+
+"With every link of a challenger ending at a host under node `i`, (2) in the sink form needs no term for what that challenger releases."
+
+- **It is `leak_le_sum_K_sealed`** [ran, try 10]: `B4` at the location `X ∪ sink`, with no premise on a sink and no term for it, whenever no link of positive capacity joins a sink to a place outside the sinks, the certifiers and `X`. With every link of the challenger ending at a host under `i` that holds [argued; its proof from the Site's check is item 2, in my next try].
+- **`Secrets` at `X ∪ sink` lets a sink's coins vary** [read]. It fixes two histories at `a`: the certifiers' and the outside's, `(X ∪ sink ∪ cert)ᶜ`. A sink's inputs are in neither, so they vary across the strategy as `X`'s secrets do.
+- **Nothing needs a sink's history fixed at `a`** [read: `Secrets`, `TrustedUnits`, `CausalStrategy`, `DeclaredLinks`, `RecordsWithin`; ran: the instance takes none].
+- **One limit, and it is the same for `X`'s secrets** [read: `CausalFrom`, asked of every location]. What a location places during `[t, u)`, input gates among them, is a function of its state at `t` and what it reads meanwhile. So a coin that varies across the strategy is one the sink holds at `a`; a coin first drawn after `a` is the same in every run that agrees on the sink's state and reads. It costs the claim nothing: each premise survives restricting the strategy to one value of the device's coins, so the bound holds for each value [argued].
+- **Two places where the claim rests on a premise, not on a proof:**
+  1. `DeclaredLinks` at the challenger's place is what says the release has no path but the registered link. Your question to memory-accounting is whether it is true there.
+  2. No term is added, but the release then crosses a certifier as the node's traffic, so `RecordsWithin` at that certifier has to be true with the release in what it records: its `K` counts the record, whatever the record holds of the release.
+
+Items 2 and 3 follow in the scratch file and the note; report by 5 PM PST.
+
