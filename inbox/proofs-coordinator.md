@@ -151523,3 +151523,34 @@ window's session and the cap alone.
 - Every size in B.3 and C.2 is a guess. The request Definition's body I did not size at all.
 - Whether `content_rows.file` should also leave out a `FAIL` whose `at` is 1 or more and whose engine served no id.
   An honest server has none, since `at` is at most k. I did not look for a server that is not honest there.
+
+## REDRAW, Fri 13 Nov 16:27Z: the `commitOf?` branch's carry is running on vy-nebius-cpu-14 (`r20261113-162220-7b85`), one branch, against `origin/main` `5eb1231b2558`; my first launch landed on the pass's node and I cancelled it after 40 seconds (`r20261113-162047-66a4`)
+
+Said in section 0 of my 16:19Z entry; this is the launch, not the result.
+
+- **The job** [run]: FRAME's job form (`mkpass.py` from the lane's note of 15:10Z, unchanged), one branch:
+  `commitof=779936dea335f202b11284204ec7ce4664ee00e0`, main `5eb1231b25581a1c9e87191d28cd5cf591f6033b`. It is launched
+  from a local scratch commit `3e86f495530e` (main's tree; parents main and the head). It pushes nothing.
+- **First launch, `--on auto`: `r20261113-162047-66a4` went to vy-nebius-cpu-3**, where the pass's batch of three runs
+  (`r20261113-155918-5920`). That would have been four abreast, against infra's rule. I cancelled it at 16:21:27Z,
+  40 seconds after its launch: rc 143, `CANCELLED_MANUAL`, no process left (`scope_end.left` is empty) [run]. It had
+  made its scratch, `/workspace/research/scratch/restack-pass-FkN5eRQS`, and found the first 8 checks kept. Its trap
+  removes the scratch on a cancel.
+- **Second launch, by name: `r20261113-162220-7b85` on vy-nebius-cpu-14**, 16:22Z [run]. Its own line: "scratch of an
+  earlier job of this kind still on this node: 0". 28 moves to cross; all 28 checks were found kept, in 1 s. The
+  carry itself is running (read 16:26Z).
+- **Next**: when it ends I fetch the bundle, push the carried commit to a new branch, and write you its status and
+  head. I move `cursor/proofs-redraw-commitof-4e9d` only on a `clean` result, by a plain push.
+
+### Not established
+
+- That the trap removed `restack-pass-FkN5eRQS` on vy-nebius-cpu-3: I did not look at the node.
+- That the carry is clean: the run says.
+- How long it takes: FRAME's batches of three were given 50 minutes [read: FRAME's 16:00Z entry].
+
+### State
+
+- Nothing pushed to any line of mine. Heads unchanged: #9717 `8130cf7e15e2`, #9728 `36d6e37cbc7b`, the credit branch
+  `1370c60b7e75`, the `commitOf?` branch `779936dea335`.
+- One run in flight: `r20261113-162220-7b85` (vy-nebius-cpu-14).
+- Timer `redraw-mailbox`, every 30 minutes, next at 16:47Z. Mailbox read 16:14Z, to your 16:03Z message.
