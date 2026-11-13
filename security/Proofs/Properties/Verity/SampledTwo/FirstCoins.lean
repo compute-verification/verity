@@ -221,7 +221,7 @@ theorem inputOn_accepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} 
       Spot.Run.run i true = .ok run ∧ VStar.Recursive.SampledTwo.sourceRead e.source run = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true := by
   obtain ⟨k, hk, p, c, e, pub, prof, hd, hc⟩ := ha
-  obtain ⟨-, c₂, ξ₂, r, i', run, hin, hrun, hsr, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨-, c₂, ξ₂, r, i', run, hin, hrun, hsr, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   have hik : inputOfCase k = some i' := by
     obtain ⟨h1, h2, h3⟩ := hd
     unfold inputOfCase
