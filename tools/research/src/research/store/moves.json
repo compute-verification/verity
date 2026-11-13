@@ -2193,6 +2193,12 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/evaluate/": "verity/circuits/evaluate/",
+        "verity/definitions/requirement/": "verity/circuits/requirement/"
+      }
     }
   ]
 }

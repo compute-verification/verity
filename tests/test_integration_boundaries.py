@@ -33,15 +33,15 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: Every file under ``verity/`` that imports an integration, with each integration module it imports.  Repoint it at
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
-    ("verity/definitions/evaluate/tests/test_difftest.py", "verity.definitions.registry"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
+    ("verity/circuits/evaluate/tests/test_difftest.py", "verity.definitions.registry"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
     # PoUB's memory-map/v1 builder (`Lines`), which records a session's appends and frees: `map_case` builds with it
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
-    ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
+    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.boolean"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),
@@ -82,7 +82,7 @@ KNOWN = {
     ("verity/circuits/tests/test_codec.py", "verity.definitions.registry.io_shell"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.dsa_topk_mask"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.prims"),
-    ("verity/definitions/requirement/tests/test_requirement_difftest.py", "verity.definitions.registry"),
+    ("verity/circuits/requirement/tests/test_requirement_difftest.py", "verity.definitions.registry"),
     # proofs': Flock's prover is handed the served circuits, and spot's, Flock's and PoUW's tests take theirs from `verity`.
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics"),
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics.rows"),
