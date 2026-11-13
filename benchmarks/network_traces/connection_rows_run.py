@@ -37,10 +37,12 @@ so a line's rows, its blob of salts and the publisher's build and commit follow 
 In a schedule with a head offset (`WardenParams.head_offset`) the publisher's process writes no line. It keeps the
 salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
 (`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) with the
-tick it left at under `tick`. A line that is not back by the last tick it could leave at is never written: that
-execution phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its place, the
-network certifier's own unsigned note of it, so that every execution phase still has one line and one blob. A late
-line may leave after the next execution phase's, so `read` takes the lines by execution phase.
+tick it left at under `tick`. That `tick` is the network certifier's own note of when the line left, beside the
+signed registration and not under its signature: no check and no verifier reads it, and the head's time is held on
+the auditor's side. A line that is not back by the last tick it could leave at is never written: that execution
+phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its place, the network
+certifier's own unsigned note of it, so that every execution phase still has one line and one blob. A late line
+may leave after the next execution phase's, so `read` takes the lines by execution phase.
 
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
@@ -50,9 +52,10 @@ Under form 2 they are those whose records, the ones before theirs and the ones a
 execution phase of the run has the word that it has no head, which `connection_rows.check_no_head` accepts: an
 execution phase with neither, with both, or with the one where the other is due is a problem. The reading takes each
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
-counting it at an execution phase that isn't complete. In a schedule with a head offset every line has the tick it
-left at, one of the W + 1 from its due tick (`WardenParams.head_tick`); an execution phase whose line is `missed`
-has no head, which is no problem of the run, and the summary counts those and the lines that left late (`heads`).
+counting it at an execution phase that isn't complete. In a schedule with a head offset the check reads no line's
+`tick`. An execution phase whose line is `missed` has no head, which is no problem of the run, and the summary
+counts those (`heads`). Reading that unsigned note is safe: it stands where a head or the word would, so it can
+only take one away, and an execution phase with no head has each class charged its whole schedule.
 
 **The cost** of a close, for a schedule and its classes:
 
@@ -81,7 +84,8 @@ within N + W (`late`) and those later still (`missed`: at W = 0, the heads that 
 `phases` it ran, with the least offset at which none of them would be late (`least_offset`). The cost has no
 ticker: it counts by the host's clock from the hand, and its publisher does nothing else, where a served close has
 it keep the closing window's three records before the hand. So its count is a floor on a served run's; a served
-run's own count is its `rows.jsonl`, each line's `tick` and each `missed`.
+run's own count is its `missed` lines, and the network certifier's own log has the tick each line left at
+(`warden.json`'s `heads`).
 """
 
 from __future__ import annotations
@@ -157,8 +161,8 @@ def head_flags(q: argparse.ArgumentParser) -> None:
     q.add_argument("--head-offset", type=int, default=None, metavar="N",
                    help="with --lengths and --head-wait: each execution phase's line of rows.jsonl leaves at a tick "
                         "of the schedule, N buckets after the close that hands it (warden's \"The head's tick\"), "
-                        "written by the network certifier's tick (default: none, the publisher writes it when it "
-                        "has signed)")
+                        "written by the network certifier's tick with the tick it left at, its own note, which "
+                        "no check reads (default: none, the publisher writes it when it has signed)")
     q.add_argument("--head-wait", type=int, default=None, metavar="W",
                    help="with --head-offset: a line not back at its tick leaves at the first tick it is back by, "
                         "at most W ticks later, and never after; 0: a late line never leaves (no default)")
@@ -254,7 +258,8 @@ class Lines:
     """The network certifier's `leave` in a schedule with a head offset (the module docstring's "The hand"): called
     by its tick with an execution phase, the tick and the line the publisher handed back, it appends the line to
     `rows.jsonl` with the tick under `tick`; with None for the line, the note that the execution phase's line
-    missed its last tick. The file is opened once, before the run."""
+    missed its last tick. The tick is this device's own note of when the line left, which no check reads. The file
+    is opened once, before the run."""
 
     def __init__(self, out: Path, link: str) -> None:
         self.link, self.file = link, open(out / ROWS, "a")
@@ -335,8 +340,11 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows. A line's `tick` is the network certifier's own note beside the signed
-    registration, not under its signature, so this check refuses a late head only as far as the device's line says."""
+    schedule without lengths rows. It reads no line's `tick`: that is the network certifier's own note of when the
+    line left, beside the signed registration and not under its signature, and the head's time is held on the
+    auditor's side. It does read a `missed` line, unsigned too, in a schedule with a head offset: the execution
+    phase has no head. That is safe, since the note stands where a head or the word would and so can only take one
+    away, and an execution phase with no head has each class charged its whole schedule."""
     if params.lengths is None:
         return None, []
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
@@ -369,23 +377,13 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
-    missed, late = [], []
+    costs, registered, worded, missed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
-        if params.head_offset is not None and doc is not None and 0 <= w < windows:
-            due = params.head_tick(w, windows)
-            if type(doc.get(TICK)) is not int or not due <= doc[TICK] <= due + params.head_wait:
-                problems.append(f"execution phase {w}'s line left at tick {doc.get(TICK)!r}, and it is due at tick "
-                                f"{due} or within the {params.head_wait} after it")
-            elif MISSED in doc:
-                # no head, and no word that none comes: the line wasn't back by its last tick
-                problems += [f"execution phase {w}'s line is marked missed at tick {doc[TICK]}, before its last, "
-                             f"{due + params.head_wait}"] if doc[TICK] != due + params.head_wait else []
-                missed.append(w)
-                continue
-            elif doc[TICK] > due:
-                late.append(w)
+        if params.head_offset is not None and doc is not None and MISSED in doc and 0 <= w < windows:
+            # no head, and no word that none comes: the line wasn't back by its last tick
+            missed.append(w)
+            continue
         if w not in want and not params.closes:
             problems.append(f"execution phase {w} has connection rows, and its records or the next one's weren't "
                             f"published complete")
@@ -423,7 +421,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
                "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
                **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
     if params.head_offset is not None:
-        summary |= {"heads": {"offset": params.head_offset, "wait": params.head_wait, "late": late, "missed": missed}}
+        summary |= {"heads": {"offset": params.head_offset, "wait": params.head_wait, "missed": missed}}
     return summary | ({NO_HEAD: {"signed": worded, "of": len(without)}} if params.closes else {}), problems
 
 
