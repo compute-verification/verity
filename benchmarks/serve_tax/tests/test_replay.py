@@ -485,13 +485,15 @@ def test_replay_tokens_round_trip(tmp_path: Path):
 
 def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp_path):
     """The two-stage serve's launch settings for GLM-5.3, the boundary object as ``BOUNDARY_ROWS`` (the greedy select in
-    units as its check, ``ids``, the arm's tables) and the capture's template as ``--capture-template``, say what the
-    ``two-stage`` arm and the model's check say by default: the plugin is handed the same boundary object either way,
-    and a capture is labelled with the same check whether given it, reading the serve's meta, or the model's."""
+    units as its check, ``ids``, the logits they were selected from, the arm's tables) and the capture's template as
+    ``--capture-template``, say what the ``two-stage`` arm and the model's check say by default: the plugin is handed
+    the same boundary object either way, and a capture is labelled with the same check whether given it, reading the
+    serve's meta, or the model's. An object handed as ``BOUNDARY_ROWS`` replaces the arm's whole, so one that leaves
+    ``logits`` out serves a class whose select's inputs are not committed."""
     S, glm, two = R.S, R.S.MODELS["glm53"], R.S.ARMS["two-stage"]
     check = "GreedySelect_v1{V=154880,N=7744}"
     setting = {"check": check, "inline": True, "per_prompt": 0, "per_output": 1, "drained": True, "ids": True,
-               "tables": {"layers": 1, "private": S.PRIVATE}}
+               "logits": {"private": S.PRIVATE}, "tables": {"layers": 1, "private": S.PRIVATE}}
 
     def handed(rows: dict | None) -> dict:
         env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, boundary_rows=rows, check=glm.check,
@@ -499,5 +501,6 @@ def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp
         return json.loads(env[S.PLUGIN_ENV])["boundary_rows"]
 
     assert handed(json.loads(json.dumps(setting))) == handed(None)
+    assert "logits" in handed(None) and "logits" not in handed({k: v for k, v in setting.items() if k != "logits"})
     assert {R.capture_template({"model_id": "glm53", "boundary_rows": handed(None)}),
             R.capture_template({"model_id": "glm53"}), R.capture_template({}, check)} == {check}
