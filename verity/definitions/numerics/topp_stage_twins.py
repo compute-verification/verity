@@ -308,7 +308,7 @@ def mask_chunk_inputs(rng, S: int, *, V: int, N: int, FIRST: bool, LAST: bool) -
 
 
 def _sample_mask_chunk(rng, n: int, params, **statics) -> list[np.ndarray]:
-    """`mask_chunk_inputs` at split counts drawn from `K.SPLIT_COUNTS`."""
+    """`mask_chunk_inputs` at split counts chosen at random from `K.SPLIT_COUNTS`."""
     rows = [mask_chunk_inputs(rng, int(rng.choice(K.SPLIT_COUNTS)), **statics) for _ in range(n)]
     return [np.asarray([r[j] for r in rows], np.uint64) for j in range(len(params))]
 
