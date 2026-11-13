@@ -132,9 +132,9 @@ what it did.
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
 cap (limit), the server's connection failing (upstream), an egress cell out of the egress form (format), ingress past
-its bounds (ingress), a client cell of another kind than `DATA` or `END` or a request to the watermark's path
-(malformed), a request refused under the response cap (cap). Its `FAIL` cell is in the slot of the next egress cell,
-and it is in the egress record.
+its bounds (ingress), a client cell of another kind than `DATA` or `END`, a request to the watermark's path or one
+that isn't one request to a server (malformed), a request refused under the response cap (cap). Its `FAIL` cell is in
+the slot of the next egress cell, and it is in the egress record.
 Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
 whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once
@@ -172,8 +172,19 @@ off the request line) is refused before that cell is cut: none of its bytes is c
 its ingress is padding and it fails as its client's (malformed). A request line that ends past the first cell (line
 breaks before it, a long authority) is read at the request's `END`, with the request whole, before that cell is cut:
 the cells before it are in the ingress record, and the request has no `END`, no place in the release order and no
-byte for the server. Past a request's first line the network certifier reads nothing here: a second request on the
-connection is the server's to refuse.
+byte for the server.
+
+**One request a connection.** A release is a connection's bytes, written whole with the headers on its first request
+line. A server reads as many requests in them as they hold, and a second one would reach it behind the first with no
+release headers but its sender's own, to any path, the watermark's included. So the request is read whole at its
+`END`, before that cell is cut (`release.one_request`), and refused as the watermark's is there (malformed: no `END`,
+no place in the release order, no byte for the server) unless it is at most one request to a server: bytes that open
+none (a first line of one word, or no head's end), or one whose head is the one the headers go in, with each field a
+name, a colon and a value on one line, no transfer coding and at most one `content-length`, a decimal count, and with
+no byte past the body that length gives it. The network certifier reads the head and counts the body, so a line of
+the body that looks like a request line is the body's. A head it doesn't read that way is one servers end
+differently, so it is refused whole: line breaks that aren't CRLF or come before the request line, a field folded
+onto a second line or with a space before its colon, a chunked body, two lengths.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
@@ -207,7 +218,7 @@ from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridP
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.release import to_watermark
+from verity.protocols.accounting.certifier.verifier.release import one_request, to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the network certifier's cell kinds, beside `active`'s PAD and DATA
@@ -518,7 +529,7 @@ class _Connection:
     egress_cells: int = 0  # egress slots past s + D, released
     problem: str | None = None  # the client's: failed at the next slot
     max_tokens: int | None = None  # under a response cap, its request's, read at its first request cell
-    refused: bool = False  # its request was refused (under a response cap, or to the watermark's path): no more is cut
+    refused: bool = False  # its request was refused (a response cap, the watermark's path, a second request): none cut
     left: int = 0  # with lengths rows, its request's bytes still to be cut (`io_request.read`'s carry)
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
     failed: str | None = None  # one of REASONS
@@ -908,7 +919,8 @@ class Warden:
         then written whole with the release order, or kept until its connection opens (at most the ingress bound's
         bytes): the release never waits on the server. A request that opens as one to the watermark's path
         (`release.to_watermark`) is refused with the client's reason malformed, where its first cell says so before any
-        cell of it is cut, and where only the whole request does before its `END` is: either way nothing is released."""
+        cell of it is cut, and where only the whole request does before its `END` is; so is one a server would read a
+        second request in (`release.one_request`), before its `END` is cut: either way nothing is released."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent, pad = [], [], _pad(c, B)
         for _ in range(r):
@@ -921,11 +933,12 @@ class Warden:
                 out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended) or c.ingress_ended:
                 kind = DATA if len(c.ingress) > p or not c.ingress_ended else END
-                if (kind == END or not (c.ingress_cells or sent)) and \
-                        to_watermark(bytes(c.held) + b"".join(sent) + bytes(c.ingress[:p])):
-                    c.refused, c.problem = True, c.problem or "malformed"
-                    out.append(pad)
-                    continue
+                if kind == END or not (c.ingress_cells or sent):
+                    read = bytes(c.held) + b"".join(sent) + bytes(c.ingress[:p])
+                    if to_watermark(read) or (kind == END and not one_request(read)):
+                        c.refused, c.problem = True, c.problem or "malformed"
+                        out.append(pad)
+                        continue
                 made = cell(kind, c.ordinal, bytes(c.ingress[:p]), B)
                 if self.params.lengths is not None and not _id_request_cell(self.params, c, made):
                     c.problem = c.problem or "malformed"
