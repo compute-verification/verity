@@ -44,8 +44,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/codec_tensor/reader.py").parent))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/word_codec/cuda_lib.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/codec_tensor/reader.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py").parent))
 sys.path.append(str(HERE.parents[1]))
 
 import cuda_lib  # noqa: E402

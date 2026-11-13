@@ -12,10 +12,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.certifier.verifier import calibration
-from verity.protocols.certifier.verifier import active
-from verity.protocols.certifier.verifier.active import DATA, encode_frame
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier
+from verity.protocols.accounting.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.active import DATA, encode_frame
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
@@ -275,7 +275,7 @@ def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
     bucket's tick, so the tick at w·T only takes it. Every window takes the rule's choice, none the envelope for want
     of it; they are what the plan declares on the model's run, and the run is accepted and is `run_shaper`'s under
     what was declared."""
-    from verity.protocols.certifier.verifier import online
+    from verity.protocols.accounting.certifier.verifier import online
 
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1", lag=5)

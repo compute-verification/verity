@@ -12,7 +12,7 @@ from pathlib import Path
 
 import test_session as T
 
-from verity.protocols.poub.verifier.session import verifier, wire
+from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
 
 def main() -> int:

@@ -39,7 +39,7 @@ the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice
 
 PoUB's prover is not a package: `session_module` loads its ``prover.py`` from the source tree
 (`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
-`verity.protocols.poub.verifier.session`.
+`verity.protocols.accounting.poub.verifier.session`.
 """
 from __future__ import annotations
 
@@ -60,15 +60,15 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.poub.verifier import audit, codec as rcodec, receipts as rb
+from verity.protocols.accounting.poub.verifier import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
-REMOTE_SESSION = (config.ROOT.parent.parent / "verity/protocols/poub/prover/remote_session/prover.py").parent
+REMOTE_SESSION = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent
 #: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
-VLLM_ENCODED = (config.ROOT.parent.parent / "verity/protocols/poub/prover/word_codec/paged.py").parent
+VLLM_ENCODED = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent
 
 
 def address(value: str) -> tuple[str, int]:
@@ -395,7 +395,7 @@ class StoreBackend:
 
 
 class KvDevice:
-    """The store's encode on the GPU by kv.cu (``verity/protocols/poub/prover/word_codec/kv.cu``, a build at the codec's field and mask
+    """The store's encode on the GPU by kv.cu (``verity/protocols/accounting/poub/prover/word_codec/kv.cu``, a build at the codec's field and mask
     loaded as `kv_bench.Lib`): blocks under the seed's key by ``kv_encode``; an append's under their bound keys and its
     coin by ``kv_encode_bound``, each block's offset b_j(c_a) = `codec.binding`(d_j, j, key, c_a) handed to the device
     by ``paged.offsets`` (`VLLM_ENCODED`), so the host computes only d_j and b_j."""

@@ -1,4 +1,4 @@
-"""PoUB's verifier host (`verity/protocols/poub/device/live_verifier/host.py`) on what this directory holds, with the
+"""PoUB's verifier host (`verity/protocols/accounting/poub/device/live_verifier/host.py`) on what this directory holds, with the
 gate's stand-ins of its own tests (`gate_harness.py`): a bound run's command line, which verifier.py binds to a
 synthetic checkpoint (`store_layout.synthetic`); the prover's tunnel key, whose client is `run.sh`'s; `auditor_line.py`
 on the host's python3; and the slow test, a run through the stub verifier (`stub_verifier.py`, a real paced session
@@ -21,7 +21,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 RS = HERE.parent
-LIVE = HERE.parents[2] / "verity" / "protocols" / "poub" / "device" / "live_verifier"
+LIVE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "poub" / "device" / "live_verifier"
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(LIVE / "tests"))
 

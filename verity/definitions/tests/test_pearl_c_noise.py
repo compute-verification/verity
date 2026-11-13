@@ -26,7 +26,7 @@ from verity.commitments.gates import sha512 as SHA
 from verity.commitments.gates.sha512 import compress_ref, pad_tail, words_be
 from verity.definitions.boolean import boolean_version, sigma_lift
 from verity.definitions.registry import pearl_c_noise as N
-from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 #: the Lean vectors' salt, weight root and activation row (`W1Checks`' `vSalt`, `vRoot`, `vRow`), at unit 3 and row 5
 SALT = bytes(range(32))

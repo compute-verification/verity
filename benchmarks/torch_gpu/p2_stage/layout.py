@@ -1,7 +1,7 @@
 """Where a layer's matrices' plaintext comes from in the P2-encoded weights store, and P2's decode of one block on the CPU
 (the check's reference). No torch.
 
-The store's layout is p2_v1's fixture (`verity/protocols/pous/prover/p2/p2_store/store.py`, schema
+The store's layout is p2_v1's fixture (`verity/protocols/accounting/pous/prover/p2/p2_store/store.py`, schema
 `verity-pous/p2-store-layout/v1`), as `p2_store.load` holds it: `StoreLayout` over its `Tensor`s, a layer's `MATRICES`,
 the codec's `PARAMS` and the sizes of a block's row and payload (`ROW`, `PAYLOAD`, `LEAD`). They are defined there and
 read here by this directory's modules. `store_layout` reads the fixture's JSON, the real store's (`store.py layout`,
@@ -13,7 +13,7 @@ at its stream offset, QKV being wq, wk and wv one after another, each with its f
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
 `check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_store/store.py`'s
-`decode_block`: `verity.protocols.pous.verifier.p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
+`decode_block`: `verity.protocols.accounting.pous.verifier.p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """
 from __future__ import annotations
@@ -27,11 +27,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.pous.verifier.schemes import p2 as S
+from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str((ROOT / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
-from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R  # noqa: E402
 from p2_store.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout,  # noqa: E402, F401
                            Tensor, blocks_of, matrix_name)
 
@@ -164,7 +164,7 @@ def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes,
     `setup.draw_salt(source, commitment)`, the auditor's coin `source` flipped after the store's commitment. Refused unless
     the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters, and
     under this coin and salt where `setup.json` records them."""
-    from verity.protocols.pous.verifier import setup as P
+    from verity.protocols.accounting.pous.verifier import setup as P
 
     salt = P.draw_salt(source, commitment)
     want = {"commitment": commitment.hex(), "layout_sha512": layout_sha512, "manifest": layout_doc.get("params"),

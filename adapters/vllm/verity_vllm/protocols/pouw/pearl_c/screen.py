@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 __all__ = ["launch", "scatter_into", "screen_into"]
 

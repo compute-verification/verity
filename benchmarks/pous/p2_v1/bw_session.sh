@@ -31,7 +31,7 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
 NODE=${NODE:-vy-dc-h200-2}
-REG=verity/protocols/poub/verifier/bandwidth-mem69-v2.json
+REG=verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json
 KSTAGE=${KSTAGE:-/workspace/research/runs/r20261026-073433-59f7}
 BUILD=${BUILD:-/workspace/research/runs/r20261025-233631-4164/out}
 LIB_SHA256=${LIB_SHA256:-6f9789ca44f23592a5c0d1239b10fd81b395f6d94b30bf5246987e225d847353}
@@ -43,7 +43,7 @@ MODE=${MODE:-both}
 WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WINDOW_S:-1} DEADLINE_S=${DEADLINE_S:-1}
 SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
-VERIFIER=${VERIFIER:-$PY -m verity.protocols.poub.verifier.p2_party --registration $REG --stdio}
+VERIFIER=${VERIFIER:-$PY -m verity.protocols.accounting.poub.verifier.p2_party --registration $REG --stdio}
 CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
 PARTY=${PARTY:-} PARTY_HOST=${PARTY_HOST:-}
 S=$(mktemp -d)
@@ -83,7 +83,7 @@ step registration $?
 "$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
   && "$PY" "$D/bandwidth.py" session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
-    --verifier "$PY -m verity.protocols.poub.verifier.p2_party --registration $S/toy/registration.json --stdio \
+    --verifier "$PY -m verity.protocols.accounting.poub.verifier.p2_party --registration $S/toy/registration.json --stdio \
       --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1
 step toy $?

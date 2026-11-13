@@ -1,6 +1,6 @@
 # benchmarks/remote_session
 
-The session harness of PoUB (`verity/protocols/poub/verifier`), not the remote
+The session harness of PoUB (`verity/protocols/accounting/poub/verifier`), not the remote
 protocol's demo, which is `verity demo vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
@@ -16,9 +16,9 @@ What code outside this directory may use. Everything else here is internal.
 
 Read from outside `benchmarks/`: the whole directory, which the verifier's host is pinned with, beside `verity`. The
 live verifier's tests that need this directory's code are here (`tests/test_live_verifier.py`, with the gate's stand-ins
-from `verity/protocols/poub/device/live_verifier/tests/gate_harness.py`). Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
-`verity/protocols/poub/prover/remote_session/`, and the verifier's is
-`verity/protocols/poub/verifier/remote_session/verifier_process.py`.
+from `verity/protocols/accounting/poub/device/live_verifier/tests/gate_harness.py`). Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
+`verity/protocols/accounting/poub/prover/remote_session/`, and the verifier's is
+`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`.
 
 **Status: active.** The live verifier's host is pinned with it, the audit's Lean verifier names `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session`
 over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
@@ -28,13 +28,13 @@ reference (`CpuBackend`) as the prover's backend, and the Lean line test where `
 side a machine: `ROLE=verifier` on a machine the developer doesn't control and `ROLE=prover` on the developer's, with no
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
-- `verity/protocols/poub/verifier/remote_session/verifier_process.py`: the verifier's process, which these scripts and
+- `verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`: the verifier's process, which these scripts and
   live_verifier's host run:
-  `verity/protocols/poub/verifier/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
+  `verity/protocols/accounting/poub/verifier/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
   verify a served or gate session's signatures are checked with and the live challenger's `serve.py`. That verifier
   runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
   a run where the two differ; `wire.py` beside it frames the messages between the two processes.
-- `verity/protocols/poub/prover/remote_session/prover.py`: the prover's process, PoUB's prover's, which these scripts
+- `verity/protocols/accounting/poub/prover/remote_session/prover.py`: the prover's process, PoUB's prover's, which these scripts
   run; its GPU backend is `device.py` with `session.cu` beside it (which includes `../codec_tensor/reader.cu`), and
   `serve.py` here serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.

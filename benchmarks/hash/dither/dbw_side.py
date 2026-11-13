@@ -1,6 +1,6 @@
 """PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: PoUB's own verifier (`verity/protocols/poub/verifier/session/verifier.py`'s
+One process stands in for the auditor: PoUB's own verifier (`verity/protocols/accounting/poub/verifier/session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -31,9 +31,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.poub.verifier import audit
-from verity.protocols.poub.verifier.session import verifier as V
-from verity.protocols.poub.verifier.session import wire
+from verity.protocols.accounting.poub.verifier import audit
+from verity.protocols.accounting.poub.verifier.session import verifier as V
+from verity.protocols.accounting.poub.verifier.session import wire
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -99,7 +99,7 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    cmd = [a.prover_py, str(ROOT / "verity/protocols/poub/prover/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
+    cmd = [a.prover_py, str(ROOT / "verity/protocols/accounting/poub/prover/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]

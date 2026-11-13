@@ -1,5 +1,5 @@
 """The store's load of a layer: its matrices from the P2-encoded store into plaintext load buffers on the GPU, by
-memory-accounting's decode unchanged (`libp2v1.so` from `verity/protocols/pous/prover/p2/p2_store/`, built for sm_90a by
+memory-accounting's decode unchanged (`libp2v1.so` from `verity/protocols/accounting/pous/prover/p2/p2_store/`, built for sm_90a by
 `build.sh`, through its own wrapper `p2_store.gpu.Kernels`) under the store's own load, `p2_store.load`: `EncodedRows`,
 the encoded rows of a range of the store's blocks resident on the device, its screen (`EncodedRows.check`, raising
 `StoreError` with the flag bits `WIDE` and `PADDING`) and `scatter`. They are defined there and read here by this

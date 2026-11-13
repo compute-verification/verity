@@ -23,14 +23,14 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
-from verity.protocols.pous.verifier.p2_v1 import reference  # noqa: E402
+sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference  # noqa: E402
 from p2_store import store as S  # noqa: E402
 
-from verity.protocols.pous.verifier import protocol, setup, verifier  # noqa: E402
-from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
-from verity.protocols.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
-from verity.protocols.pous.verifier.verifier import VerifierKey  # noqa: E402
+from verity.protocols.accounting.pous.verifier import protocol, setup, verifier  # noqa: E402
+from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
+from verity.protocols.accounting.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey  # noqa: E402
 from verity.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())

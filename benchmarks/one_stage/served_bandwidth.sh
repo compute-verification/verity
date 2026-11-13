@@ -36,7 +36,7 @@ P2=benchmarks/pous/p2_v1
 PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
-REG=${BW_REGISTRATION:-"verity/protocols/poub/verifier/bandwidth-mem69-v2.json"}
+REG=${BW_REGISTRATION:-"verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"}
 PARTY_MIN=${BW_PARTY_MIN:-40}
 PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --fixture --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
@@ -53,7 +53,7 @@ step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 LAYOUT=${BW_LAYOUT:-}
 if [ -z "$LAYOUT" ]; then
   LAYOUT=$S/layout.json
-  "$PY" verity/protocols/pous/prover/p2/p2_store/store.py layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
+  "$PY" verity/protocols/accounting/pous/prover/p2/p2_store/store.py layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
     && "$PY" - "$STORE/setup.json" "$LAYOUT" >> "$O/layout.log" 2>&1 <<'EOF'
 import hashlib, json, sys
 want, got = json.load(open(sys.argv[1]))["layout_sha512"], hashlib.sha512(open(sys.argv[2], "rb").read()).hexdigest()

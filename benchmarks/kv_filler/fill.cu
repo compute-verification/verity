@@ -16,7 +16,7 @@
 // MMAs (bytes 0–7, then 8–15), and expands its own 16 sign bits of rows g and g + 8 at the same bytes into A. A warp
 // runs four such groups of 8 blocks at once, and keeps DEPTH offsets of loads in flight.
 //
-// Included by topup.cu (mode 4) after `../../verity/protocols/poub/prover/codec_tensor/sha512.cuh` (v2's SHA-512) and readers.cu (its TMA copies); its C
+// Included by topup.cu (mode 4) after `../../verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh` (v2's SHA-512) and readers.cu (its TMA copies); its C
 // ABI is there.
 #pragma once
 #include <cuda_runtime.h>

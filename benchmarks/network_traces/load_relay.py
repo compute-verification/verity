@@ -97,10 +97,10 @@ from verity.commitments.hm96 import batch as HB  # noqa: E402
 from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.commitments.crypto import chacha20  # noqa: E402
-from verity.protocols.certifier.verifier import transfer_rows as TR  # noqa: E402
-from verity.protocols.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
-from verity.protocols.pous.verifier.schemes import p2 as P2  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import transfer_rows as TR  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
+from verity.protocols.accounting.pous.verifier.schemes import p2 as P2  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"
 LINK, KIND, WINDOW = "s0/uplink", "load", 0
@@ -284,7 +284,7 @@ class StoreTensor:
 
 
 def store_tensors(shape: Shape, params: P2.P2Params) -> tuple[StoreTensor, ...]:
-    """Interface 2's layout (``verity/protocols/pous/prover/p2/p2_store/store.py``'s `build`) over interface 1's values: per layer
+    """Interface 2's layout (``verity/protocols/accounting/pous/prover/p2/p2_store/store.py``'s `build`) over interface 1's values: per layer
     ``qkv_proj`` (``wq ‖ wk ‖ wv``), ``o_proj``, ``up_proj`` and ``down_proj``, then ``lm_head`` as layer L, each from a
     block boundary and ⌈size / payload⌉ blocks."""
     by = {v.name: v for v in manifest(shape)}

@@ -160,7 +160,7 @@ def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_list
     """A job run whole whose pass check keeps (`check.STEP_KEYS`) lists one key on every slot and host: keyed by its step key,
     which reads the slot's test cache, the kernel release and `rustc -vV`, `flock-rust-tests` passed on a worker's slot under
     another key than the lister's, so its verdict was never labelled."""
-    flock = tree / "verity" / "protocols" / "flock" / "prover"
+    flock = tree / "verity" / "protocols" / "proofs" / "flock" / "prover"
     (flock / "live").mkdir(parents=True)
     (flock / "check_build.sh").write_text("RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.0.0}\n")
     (flock / "live" / "lib.rs").write_text("pub fn f() {}\n")
