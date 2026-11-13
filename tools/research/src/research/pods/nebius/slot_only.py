@@ -78,7 +78,7 @@ def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = No
 def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:
     """`in_pool`'s command for a run that carries a pair, as its late twin on another machine runs it: the pair names
     ``home``, the first's machine (slot.py's `--twin PAIR@HOME`: the twin runs only if it claims the pair there first), and it
-    waits in its own line no longer than ``wait_s``, what is left of the first's wait. ValueError for a command with no pair."""
+    waits in its own line no longer than ``wait_s``. ValueError for a command with no pair."""
     end = command.index("--") if "--" in command else 0
     opts = command[:end]
     if not through_slot(command) or "--twin" not in opts:
@@ -88,6 +88,8 @@ def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:
     out[at] = f"{out[at].partition('@')[0]}@{home}"
     if "--wait-max" in opts:
         out[opts.index("--wait-max") + 1] = f"{max(wait_s, 1):g}"
+    else:
+        out[end:end] = ["--wait-max", f"{max(wait_s, 1):g}"]
     return out
 
 

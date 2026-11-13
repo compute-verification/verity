@@ -3,15 +3,17 @@ when another machine's pool would start the run now it launches the run's late t
 
 A pool run `--on auto` placed carries a pair (slot.py's `--twin`, the run's own id), and `research run` leaves one asker of
 that launch behind (`leave`): a detached process on the launching VM that holds what the launch shipped in its memory alone.
-Every ASK_EVERY_MIN minutes it looks at the run (`see`). While the run waits and its last reason is memory, it asks
-(`ask`: `auto.read` and `auto.elsewhere`) from a checkout of the commit the launch shipped (`tree`), never from what the
-launching checkout holds by then, and launches the same request on the machine it is given (`launch`) as `--twin
-PAIR@HOME` (`slot_only.late_twin`), with what is left of the first's wait for a slot. slot.py's claim then lets one of the
-two run: the twin runs only if it claims the pair on the first's machine before the first takes a slot, and the first
-leaves its line once it finds the claim. A twin that can't reach the first's machine leaves unrun, and that machine is asked
-for no other twin of the run. One twin is live at a time. The asker ends when the run has started on either machine, has
-ended or been cancelled (it then cancels a live twin), when its twin was cancelled, or when the first's wait for a slot is
-over.
+At minute FIRST_ASK_MIN of its life, then every ASK_EVERY_MIN minutes, it looks at the run (`see`). While the run waits
+and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`) from a checkout of the commit the launch
+shipped (`tree`), never from what the launching checkout holds by then. The answer is a pool that has a place now for a
+job of this run's CPUs and memory, as a waiter with its ask finds the line there (`auto._pool`), not a count of free
+slots. There it launches the same request (`launch`) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then
+lets one of the two run: the twin runs only if it claims the pair on the first's machine before the first takes a slot,
+and the first leaves its line once it finds the claim. A twin waits in its line no longer than ASK_EVERY_MIN minutes, or
+what is left of the first's wait: it was sent where it would start now, and one that hasn't started by then leaves, as
+one that can't reach the first's machine does at once. A machine whose twin left unrun is asked for no other twin of the
+run. One twin is live at a time. The asker ends when the run has started on either machine, has ended or been cancelled
+(it then cancels a live twin), when its twin was cancelled, or when the first's wait for a slot is over.
 
 Its record (`record`) is <runs root>/DIR/<run id>.json on the launching VM, written before every sleep and before a twin is
 launched, so a twin is never launched unrecorded, and copied beside the run's request on its machine
@@ -43,6 +45,9 @@ from typing import Any
 SCHEMA = "research/asker/v1"
 #: a run that waits on memory asks again at this minute of its wait and every so many after
 ASK_EVERY_MIN = 10
+#: and first at this minute: a run told it starts now, which found the memory gone when it reached the line (launches that
+#: asked `auto` in the same seconds were each told of the same place), asks before it has waited ASK_EVERY_MIN
+FIRST_ASK_MIN = 1
 #: an asker whose next look is this many seconds overdue is not alive (`alive`)
 LATE_S = 300
 #: the askers' records and logs, under the runs root: <run id>.json, <run id>.log
@@ -98,9 +103,10 @@ def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path]
     except (OSError, subprocess.SubprocessError, TypeError, ValueError) as e:
         return (f"no asker of this launch could be left here ({type(e).__name__}: {e}), so the run will not move by itself: "
                 f"it waits in {asks['home']}'s line")
-    return (f"an asker of this launch stays on {os.uname().nodename} (pid {pid}): each {ASK_EVERY_MIN} min the run waits on memory "
-            f"in {asks['home']}'s line it asks `auto` again and, where another machine's pool would start the run now, launches "
-            f"its late twin there. It lives only while this VM is up: `research status {run_dir.name}` says whether one is alive")
+    return (f"an asker of this launch stays on {os.uname().nodename} (pid {pid}): at minute {FIRST_ASK_MIN} and each "
+            f"{ASK_EVERY_MIN} min the run waits on memory in {asks['home']}'s line it asks `auto` again and, where another "
+            f"machine's pool would start the run now, launches its late twin there. It lives only while this VM is up: "
+            f"`research status {run_dir.name}` says whether one is alive")
 
 
 def start(root: Path, m: dict) -> int:
@@ -148,7 +154,6 @@ def tree(git: str, commit: str) -> Iterator[Path]:
     finally:
         subprocess.run(["git", f"--git-dir={git}", "worktree", "remove", "--force", str(at)], capture_output=True)
         shutil.rmtree(top, ignore_errors=True)
-        subprocess.run(["git", f"--git-dir={git}", "worktree", "prune"], capture_output=True)
 
 
 def ask(source: Path, m: dict, tried: dict[str, str]) -> tuple[tuple[str, str] | None, str]:
@@ -162,7 +167,7 @@ def ask(source: Path, m: dict, tried: dict[str, str]) -> tuple[tuple[str, str] |
 
 def launch(source: Path, m: dict, twin: dict, wait_s: float) -> dict:
     """Launch ``twin`` of launch ``m``'s run from its tree ``source``: the same request on the twin's machine, its command as
-    the run's late twin's (`slot_only.late_twin`), which waits no longer than ``wait_s``. `remote.launch`'s record; its
+    the run's late twin's (`slot_only.late_twin`), which waits in its line no longer than ``wait_s``. `remote.launch`'s record; its
     `auto` says where it moved from, which run it is the twin of, why that one waited and for how many minutes."""
     from . import remote
     from .cli import lean_records_urls
@@ -223,7 +228,7 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
 
     began = now()
     over = began + m["wait_s"]
-    every = ASK_EVERY_MIN * 60
+    every, early = ASK_EVERY_MIN * 60, began + FIRST_ASK_MIN * 60
     rec: dict[str, Any] = {"schema": SCHEMA, "run": m["run"], "home": m["home"], "pool": m["pool"], "host": os.uname().nodename,
                            "pid": os.getpid(), "since": _utc(began), "every_min": ASK_EVERY_MIN, "asks": [], "twin": None}
     twin: dict | None = None                                   # the live twin
@@ -234,8 +239,12 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
         rec.update(seen=_utc(now()), next=_utc(now() + pause))
         tell(root, rec)
 
+    def due(t: float) -> float:
+        """Its next look after ``t``: minute FIRST_ASK_MIN of its life, then each ASK_EVERY_MIN, and never past the wait."""
+        return min(early if t < early else began + (int((t - began) // every) + 1) * every, over)
+
     while True:
-        pause = 0 if again else min(every, max(over - now(), 0))
+        pause = 0 if again else max(due(now()) - now(), 0)
         again = False
         beat(pause)
         sleep(pause)
@@ -270,7 +279,7 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
             break
         if twin or not reached or first["state"] != "waiting" or auto.MEMORY_BLOCK not in str(slot.get("why")):
             continue
-        asked: dict[str, Any] = {"at": _utc(now()), "after_min": int((now() - (_epoch(slot.get("since")) or began)) // 60)}
+        asked: dict[str, Any] = {"at": _utc(now()), "after_min": round((now() - (_epoch(slot.get("since")) or began)) / 60)}
         rec["asks"].append(asked)
         try:
             with tree(m["git"], m["commit"]) as source:
@@ -285,7 +294,8 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
                                 f"({twin['why']}), to {twin['machine']}'s, which would start it now ({asked['said']})")
                 rec["twin"] = twin
                 beat(every)                                    # before the launch: no twin is ever launched unrecorded
-                twin["state"] = "launched" if launch(source, m, twin, max(over - now(), 1)).get("phase") == "launched" else "refused"
+                sent = launch(source, m, twin, max(min(over - now(), every), 1))
+                twin["state"] = "launched" if sent.get("phase") == "launched" else "refused"
         except Exception as e:  # noqa: BLE001  (an ask or a launch that failed is recorded, and the run keeps its place)
             asked["error"] = f"{type(e).__name__}: {e}"
             if twin:
@@ -366,8 +376,8 @@ def told(s: dict, now: float) -> list[str]:
         return out
     if alive(rec, now):
         return [*out, f"an asker is alive on {rec['host']} since {rec['since']} (pid {rec['pid']}; it looked last at {rec['seen']} and "
-                      f"looks next at {rec['next']}): each {rec.get('every_min', ASK_EVERY_MIN)} min the run waits on memory it asks "
-                      "`auto` again, and moves the run to a pool that would start it now"]
+                      f"looks next at {rec['next']}): while the run waits on memory it asks `auto` again, and moves the run to a "
+                      "pool that would start it now"]
     gone = "" if rec is None else f" (the one on {rec['host']} ended at {rec['ended']['at']}: {rec['ended']['why']})" if rec.get("ended") \
         else f" (the one on {rec['host']} looked last at {rec.get('seen')} and is gone)"
     return [*out, f"waits{' on memory' if auto.MEMORY_BLOCK in str(slot.get('why')) else ''} on {where}; no asker is alive{gone}, so it "
