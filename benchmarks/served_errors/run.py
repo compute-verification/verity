@@ -13,7 +13,7 @@ The served sizes it reads:
 - PoUW: Pearl+ on Llama 3.2 1B on one H200, credited under the H100 record (`pearl-c-h100-v1-h3`, `devH100`) at the
   inert-work share 1/400: four passes of 64 calls (prefill at m = 128, three decode passes at m = 4) over the model's
   four linears in 16 layers, 29,440 credited 64 x 64 tiles, 459 work-weighted draws, sampling δ 1/100.
-- Sampled proofs: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
+- SPOT: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
   request (the floor), and one request of 3,320.5 computed tokens (`benchmarks/spot_figures/breakeven/reprice.py`), at
   the card's cut.
 - Monitoring periods: `verity/protocols/reporting.py`'s week, month and year, in hourly phases.
