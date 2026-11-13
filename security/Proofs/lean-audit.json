@@ -219,7 +219,8 @@
   "Proofs.Properties.Verity.Sampled.MemberForm.Reads",
   "Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses",
   "Proofs.Properties.Verity.Sampled.MemberForm.OpensOwn",
-  "Proofs.Properties.Verity.Sampled.MemberForm.ClaimReads"
+  "Proofs.Properties.Verity.Sampled.MemberForm.ClaimReads",
+  "Proofs.Properties.Verity.Sampled.MemberForm.Leg"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

@@ -26,6 +26,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Sent
 public import Proofs.Properties.Verity.Sampled.MemberForm.Reads
 public import Proofs.Properties.Verity.Sampled.MemberForm.OpensOwn
 public import Proofs.Properties.Verity.Sampled.MemberForm.ClaimReads
+public import Proofs.Properties.Verity.Sampled.MemberForm.Leg
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -107,4 +108,6 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   window laid out with its own share and units, and the committed files read at the claim by the window's members
   in order, at the seats' traces side by side (`readsWith_of`), where each member's commitment is ready for its
   openings.
+* `MemberForm.Leg`: SPOT's leg and remote's soundness over windows of several members, at the three facts above as
+  proved of the per-member form (`spotSound_form`, `soundnessAt_form`), with what is left as their premises.
 -/
