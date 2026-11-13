@@ -2176,11 +2176,11 @@
    "imports": [
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusDraw",
-    "Properties.Challenger",
-    "Properties.Verity.Game"
+    "Definitions.Core.Interaction",
+    "Flock.Hash"
    ],
    "except": [],
-   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as the challenger's (`Properties.Challenger.collisionIn`) under the composite's SHA-512 (`Properties.Verity.Game`)"
+   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as a `Claims.Finder` (`Definitions.Core.Interaction`) over the compiled SHA-512 (`Flock.Hash`)"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
