@@ -1,8 +1,8 @@
 """Each entry of the library held to a reference in plain torch: the entry's own dials, read from its config, run for
 a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
 its own average of the weights, or against the published rule where torch has none. The two end at the same output
-model. An entry whose output is an average over a horizon is held to torch's average of the weights the entry beside
-it writes, the one whose output is those weights, which has its own reference.
+model. An entry whose output is an average over a horizon is held to torch's average of the weights its route writes
+without the horizon.
 
 What is held to a reference is the update's rule, so both sides run their forward in float32 (`forward_in_float32`):
 a reference sums a gradient in another order than its route (accumulation's micro-batches against the whole batch,
@@ -21,7 +21,7 @@ from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
 from training_slowdown import config, library, run
 from training_slowdown.model import LM
-from training_slowdown.routes import subset
+from training_slowdown.routes import grow, subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
 
 #: six blocks, as the entries' patterns name them, 16 wide
@@ -55,7 +55,7 @@ def batches(steps: int = STEPS) -> list[torch.Tensor]:
     return [torch.randint(0, SHAPE["vocab"], (BATCH, CTX + 1), generator=g) for _ in range(steps)]
 
 
-def routed(route, dials: dict) -> dict:
+def routed(route, dials: dict, steps: int | None = None) -> dict:
     """The output model after the route's own steps. A weight the route hands over as its trained parts is the one
     the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it. A route whose
     model starts otherwise than as the start (`origin`) starts from what the harness builds of the start by it."""
@@ -66,7 +66,7 @@ def routed(route, dials: dict) -> dict:
     if hasattr(route, "origin"):
         model.load_state_dict(run.start_state(theta, model.state_dict(), route.origin(SHAPE, dials)))
     start = {k: v.clone() for k, v in model.state_dict().items()}
-    steps = steps_of(dials)
+    steps = steps or steps_of(dials)
     for t, rows in enumerate(batches(steps)):
         route.step(model, rows, optimizers, dials, t, steps)
     out = dict(route.output(model, dials) if hasattr(route, "output") else model.state_dict())
@@ -120,15 +120,19 @@ def under(optimizers):
     return lambda dials: plain(dials, optimizers(dials))
 
 
-def averaged(dials: dict) -> dict:
-    """torch's own average (`AveragedModel`) of the weights `subset`'s steps write under the same dials, each update
-    taking the share of the new weights that reaches back `ema_horizon` of the steps so far."""
+def averaged(dials: dict, route=subset) -> dict:
+    """torch's own average (`AveragedModel`) of the weights `route`'s steps write under the same dials but the
+    horizon (`subset`'s, under `ema`), from the start the harness builds for it, each update taking the share of the
+    new weights that reaches back `ema_horizon` of the steps so far."""
+    weights = dials | {"ema_horizon": 0.0}
     torch.manual_seed(0)
-    model, optimizers = subset.build(SHAPE, dials)
+    model, optimizers = route.build(SHAPE, weights)
+    if hasattr(route, "origin"):
+        model.load_state_dict(deepened(dials)[1])
     average = AveragedModel(model, avg_fn=lambda mean, new, seen: mean + (new - mean) / max(
         1.0, dials["ema_horizon"] * (seen + 1)))
     for t, rows in enumerate(batches(LONG)):
-        subset.step(model, rows, optimizers, dials, t, LONG)
+        route.step(model, rows, optimizers, weights, t, LONG)
         average.update_parameters(model)
     return average.module.state_dict()
 
@@ -224,9 +228,10 @@ def deepened(dials: dict) -> tuple[dict, dict]:
 
 def grown(dials: dict) -> dict:
     """`grow` written out: the deepened model, its blocks' matrices under the published Muon at `lr` with the decay
-    decoupled, its gains at `adam_lr` and its embedding at `embed_lr` under torch's AdamW, undecayed, the gradient
-    clipped at 1, the rate a linear ramp over `warmup` steps falling linearly to 0, one forward and backward over the
-    whole batch."""
+    decoupled (its norm a scalar: under `stack` the same value), its gains at `adam_lr` and its embedding at
+    `embed_lr` under torch's AdamW, undecayed, the gradient clipped at 1, the rate a linear ramp over `warmup` steps
+    or `warmup_share` of them, 1 until the last `decay` share of the steps and then falling linearly to 0, one forward
+    and backward over the whole batch."""
     model = LM.of(SHAPE | {"n_layer": dials["depth"]})
     model.load_state_dict(deepened(dials)[1])
     model.embed.requires_grad_(dials["embed_lr"] > 0)
@@ -235,16 +240,21 @@ def grown(dials: dict) -> dict:
         [{"params": [model.embed], "lr": dials["embed_lr"]}] if dials["embed_lr"] else [])
     opts = [Rule(matrices, muon_rule, lr=dials["lr"], weight_decay=dials["weight_decay"]),
             torch.optim.AdamW(adam, betas=(0.9, 0.95), weight_decay=0.0)]
+    warm = dials["warmup_share"] * STEPS or dials["warmup"]
     for t, rows in enumerate(batches()):
         F.cross_entropy(model(rows[:, :-1]).flatten(0, 1), rows[:, 1:].flatten()).backward()
         torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
         for o in opts:
             for g in o.param_groups:
-                ramp = min(1.0, (t + 1) / dials["warmup"]) if dials["warmup"] else 1.0
-                g["lr"] = g.setdefault("rate", g["lr"]) * ramp * (1 - t / STEPS)
+                ramp = min(1.0, (t + 1) / warm) if warm else 1.0
+                g["lr"] = g.setdefault("rate", g["lr"]) * ramp * min(1.0, (1 - t / STEPS) / dials["decay"])
             o.step()
             o.zero_grad()
     return model.state_dict()
+
+
+def averaged_grown(dials: dict) -> dict:
+    return averaged(dials, grow)
 
 
 def adamw(d: dict):
@@ -334,6 +344,7 @@ REFERENCES = {
     "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "m-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
+    "m-t20-2x-hybrid-grow-depth-18": (grown, CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -349,6 +360,9 @@ REFERENCES = {
     "s-t20-1.1x-qat-top2": (qat, CLOSE),
     "s-t20-1.1x-qat-top3": (qat, CLOSE),
     "s-t20-1.1x-qat-top4": (qat, CLOSE),
+    "s-t20-1.1x-ref-data-grow-muon-1481": (grown, CLOSE_BF16),
+    "s-t20-1.1x-ref-data-grow-muon-1563": (grown, CLOSE_BF16),
+    "s-t20-1.1x-ref-data-grow-muon-1563-ema": (averaged_grown, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-1027": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-747": (under(muon), CLOSE_BF16),
@@ -362,6 +376,11 @@ REFERENCES = {
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
+    "s-t20-2x-ref-data-grow-muon-2465-ema": (averaged_grown, CLOSE),
+    "s-t20-2x-ref-data-grow-muon-3782": (grown, CLOSE_BF16),
+    "s-t20-2x-ref-data-grow-muon-3782-ema": (averaged_grown, CLOSE),
+    "s-t20-2x-ref-data-grow-muon-4550-ema": (averaged_grown, CLOSE),
+    "s-t20-2x-ref-data-grow-muon-5686": (grown, CLOSE_BF16),
     "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
 }
 
@@ -377,7 +396,7 @@ def test_an_entrys_steps_end_at_its_references_weights(name):
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)
-    start = deepened(dials)[1] if reference is grown else LM.of(SHAPE).state_dict()
+    start = deepened(dials)[1] if hasattr(route, "origin") else LM.of(SHAPE).state_dict()
     moved = [k for k in got if not torch.equal(got[k], start[k])]
     assert moved and set(moved) == {k for k in want if not torch.equal(want[k], start[k])}
     for k in moved:
@@ -385,20 +404,29 @@ def test_an_entrys_steps_end_at_its_references_weights(name):
         assert (got[k] - want[k]).abs().max() <= close * move + rounding, k
 
 
-def test_the_weights_and_their_average_are_each_an_entry():
-    """An entry whose output is the average over a horizon has an entry beside it, the same config with `subset`'s
-    route and no horizon, whose output is the weights themselves: the two are two runs, a frontier takes the lower,
-    and no entry chooses between them inside a run. The two outputs differ, so each reference above holds its own."""
+#: the route whose output is the weights an average's route averages: `ema`'s is `subset`, and a route that takes the
+#: horizon as a dial of its own (`grow`) is its own
+WEIGHTS_ROUTE = {"ema": "subset"}
+
+
+def test_an_average_is_named_for_its_weights_and_differs_from_them():
+    """An entry whose output is the average over a horizon is NAME-ema. Where NAME is an entry too, the two are one
+    config but for the horizon, NAME under the route that writes the weights the average's route averages: two runs,
+    of which a frontier takes the lower, and no entry chooses between them inside a run. For every NAME-ema, the
+    average differs from the weights that route writes without the horizon, so the average's reference holds what
+    the weights' can't. Which forms of a run have an entry, the weights, their average or both, is the forms its
+    checkpoints handed out: the frontier's own list of points holds that, not this test."""
     configs = {p.stem: tomllib.loads(p.read_text()) for p in library.entries()}
     horizons = {name: raw for name, raw in configs.items() if raw.get("dials", {}).get("ema_horizon")}
     assert horizons
     for name, raw in horizons.items():
-        beside = name.removesuffix("-ema")
-        assert name.endswith("-ema") and beside in configs, (
-            f"attacks/{name}.toml sets ema_horizon: name it NAME-ema and write attacks/NAME.toml beside it, the same "
-            f"config with route subset and no ema_horizon")
+        assert name.endswith("-ema"), f"attacks/{name}.toml sets ema_horizon: name it NAME-ema"
+        base = WEIGHTS_ROUTE.get(raw["route"], raw["route"])
         dials = {k: v for k, v in raw["dials"].items() if k != "ema_horizon"}
-        assert configs[beside] == raw | {"route": "subset", "dials": dials}, (name, beside)
+        if (beside := name.removesuffix("-ema")) in configs:
+            assert configs[beside] == raw | {"route": base, "dials": dials}, (name, beside)
         route, filled = entry(name)
-        averages, weights = routed(route, filled), routed(subset, filled)
+        weights_route = config.route(base)
+        averages = routed(route, filled)
+        weights = routed(weights_route, config.dials(weights_route, dials, beside), steps_of(filled))
         assert any(not torch.equal(averages[k], weights[k]) for k in weights)

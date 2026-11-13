@@ -11,7 +11,8 @@
 
 The average of each trained tensor is a buffer of the model, outside its state: the route carries it from step to
 step, the step still reads the weights themselves, and a checkpoint's output takes each average in its tensor's
-place (`output`), which computes nothing. E is the averages, encoded as `subset`'s `store` says.
+place (`output`), which computes nothing. E is the averages, encoded as `subset`'s `store` says. A route that names
+the tensors it trains otherwise carries their averages by `track` and `update` (`grow`).
 """
 from __future__ import annotations
 
@@ -33,16 +34,22 @@ def plan(dials: dict):
     return subset.plan(dials)
 
 
-def averages(model: torch.nn.Module, dials: dict) -> dict[str, torch.Tensor]:
-    """Each trained tensor's average, by the tensor's name."""
-    return {n: model.get_buffer(f"average_{i}") for i, n in enumerate(subset.trained(model, dials))}
+def averages(model: torch.nn.Module, dials: dict, names: list[str] | None = None) -> dict[str, torch.Tensor]:
+    """Each trained tensor's average, by the tensor's name (`names`: the tensors averaged, else `subset`'s)."""
+    names = subset.trained(model, dials) if names is None else names
+    return {n: model.get_buffer(f"average_{i}") for i, n in enumerate(names)}
+
+
+def track(model: torch.nn.Module, names: list[str]) -> None:
+    """A buffer for the average of each tensor `names` names, outside the model's state."""
+    for i, n in enumerate(names):
+        model.register_buffer(f"average_{i}", torch.zeros_like(model.get_parameter(n)), persistent=False)
 
 
 def build(shape: dict, dials: dict):
     plan(dials)
     model, optimizers = subset.build(shape, dials)
-    for i, n in enumerate(subset.trained(model, dials)):
-        model.register_buffer(f"average_{i}", torch.zeros_like(model.get_parameter(n)), persistent=False)
+    track(model, subset.trained(model, dials))
     return model, optimizers
 
 
@@ -53,14 +60,19 @@ def keeps(dials: dict, t: int) -> float:
     return dials["ema_decay"]
 
 
-def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
-    subset.step(model, rows, optimizers, dials, t, n)
+def update(model, dials: dict, t: int, names: list[str] | None = None) -> None:
+    """The averages after step `t` (`names` as `averages` takes them)."""
     with torch.no_grad():
-        for name, average in averages(model, dials).items():
+        for name, average in averages(model, dials, names).items():
             if t == 0 and not dials["ema_horizon"]:
                 average.copy_(model.get_parameter(name))
             else:
                 average.lerp_(model.get_parameter(name), 1 - keeps(dials, t))
+
+
+def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
+    subset.step(model, rows, optimizers, dials, t, n)
+    update(model, dials, t)
 
 
 def output(model, dials: dict) -> dict[str, torch.Tensor]:
