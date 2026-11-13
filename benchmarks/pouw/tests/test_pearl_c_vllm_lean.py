@@ -17,29 +17,18 @@ didn't read, or on a Lean answer over another source."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import stat
-import sys
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("torch")
 
-HERE = Path(__file__).resolve().parent
+import test_pearl_c_vllm as T  # the served passes' test: its honest passes, their serve dir and its `verify`
+from conftest import load
 
-
-def _module(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
-T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
-SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+SP = load("pearl_c_vllm/served_passes.py")
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 W = "d7" * 64
