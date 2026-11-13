@@ -6,19 +6,28 @@ from the plain weights, whose nonces they don't move.
 """
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import re
 
+import numpy as np
 import pytest
 from verity_vllm.pipeline import expert_tables as XT
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
+from verity_vllm.program.predict import node_window_values as NV
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.window_builder import Grain
+from verity_vllm.protocols.pouw.h1 import registered as H1R
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity.circuits.codec import descriptor_id
+from verity.circuits.evaluation.batch import evaluate_batch
+from verity.commitments.gates.embedding import arguments, reference
+from verity.commitments.gates.embedding import read as read_of
 from verity.commitments.windows import interface as IF
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NE.FAMILIES}
 WIDTH, V, BLOCKS = 6144, 154880, 6144 // NE.WIDTH
@@ -106,7 +115,7 @@ def test_split_keeps_weight_nonces(window, without):
     nonces are the tables' registration's, from `TABLES_NONCE`."""
     params, before = window[0].registered.params, without[0].registered.params
     plain, tables = NE.split(params)
-    assert plain == WW.weight_params(before) and NE.split(before) == (plain, [])
+    assert NE.split(before) == (plain, []) == (WW.weight_params(before), [])
     assert WW.weight_nonces(plain) == WW.weight_nonces(before)
     moved = WW.weight_nonces(params)
     assert any(moved[p] != n for p, n in WW.weight_nonces(before).items())
@@ -118,6 +127,24 @@ def test_split_keeps_weight_nonces(window, without):
     nonces = XT.nonces(by, [label for label, _f, _n in window[1].b.weights], 0)
     assert sorted(nonces) == sorted(tables) and len(set(nonces.values())) == BLOCKS
     assert min(nonces.values()) >= XT.TABLES_NONCE > max(WW.weight_nonces(plain).values())
+
+
+@pytest.mark.slow
+def test_split_beside_expert_tables():
+    """Over an MoE layer with the sparse families, whose expert blocks' tables are in the window too, the split keeps both
+    kinds of table apart: the plain weights and their nonces are the same with and without the shard's tables, and handed
+    unsplit all but the first would draw another nonce."""
+    from verity_vllm.program.predict import node_window_sparse as NS
+
+    fn = glm_request(LP, 1, moe=True).program.fn
+    base = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
+    params, before = (NW.node_window(fn, families=f)[0].registered.params for f in ({**base, **NE.FAMILIES}, base))
+    (plain, tables), (plain0, tables0) = NE.split(params), NE.split(before)
+    assert plain == plain0 and WW.weight_nonces(plain) == WW.weight_nonces(plain0)
+    assert set(tables) - set(tables0) == {NE.shard_param(LABEL, NE.WIDTH, b) for b in range(BLOCKS)}
+    assert all(t.endswith("/table") for t in tables0) and tables0
+    moved = WW.weight_nonces(params)
+    assert sum(moved[p] != n for p, n in WW.weight_nonces(plain0).items()) == len(plain0) - 1
 
 
 def test_second_width_refused(program):
@@ -137,3 +164,113 @@ def test_refusals():
     """A shard of no registered vocabulary is refused by name."""
     with pytest.raises(NW.Unexpressible, match="no registered vocabulary"):
         NE.shard_vocab("EmbeddingShard_v1{VS=16,H=2,START=16}")
+
+
+# ---- values: the units, fed from the circuit's declarations, against the shard's words
+
+VS, KEY = 19360, hashlib.sha512(b"node-window embed test: a test committer's key").digest()[:32]
+PROGRAM = hashlib.sha512(b"node-window embed test: a test program").hexdigest()
+ZERO_SALT, ZERO_PATH = bytes(96), [bytes(64)] * 18
+
+
+@pytest.fixture(scope="module")
+def tables():
+    """Made-up shard columns of blocks 0 and 1 (VS rows of 192 bf16 words each), padded and committed under a test key as the
+    tables' registration commits them."""
+    rng = np.random.default_rng(274)
+    cols = {b: rng.integers(0, 0x7F80, (VS, NE.WIDTH), dtype=np.uint16) for b in (0, 1)}
+    held = {NE.shard_param(LABEL, NE.WIDTH, b): H1R.commit(PROGRAM, NE.shard_param(LABEL, NE.WIDTH, b),
+                                                           NE.table_words(c, 0, V), KEY, b, keep_rows=True, schema=G.SCHEMA_SEG)
+            for b, c in cols.items()}
+    return cols, held
+
+
+def _declared(circuit: IF.Circuit, tid: str, u: int) -> str:
+    """The one table unit ``u``'s root, domain id and opening are all declared of."""
+    reg = circuit.registered
+    got = {(x.of, x.table) for x in reg.roots if x.reader == tid and x.at <= u < x.at + x.units}
+    got |= {("opening", o.table) for o in reg.openings if o.reader == tid and o.at <= u < o.at + o.units}
+    (table,) = {t for _of, t in got}
+    assert {of for of, _t in got} == {"root", "domain", "opening"}
+    return table
+
+
+def _inputs(held: dict, table: str, tok: int, row_of: int | None = None) -> tuple:
+    """A unit's read inputs: its table's root and domain id, and the opening at ``tok`` (the row at ``row_of`` where given,
+    a prover's wrong row); zeros past the table, which the read never opens."""
+    tb, t = held[table], tok & 0xFFFFFFFF
+    e = tb.entry()
+    if t >= tb.leaves:
+        return tok, bytes.fromhex(e["root"]), bytes.fromhex(e["domain"]), [0] * NE.WIDTH, ZERO_SALT, ZERO_PATH
+    r = t if row_of is None else row_of
+    path = bytes(tb.path(t))
+    return (tok, bytes.fromhex(e["root"]), bytes.fromhex(e["domain"]), [int(x) for x in tb.rows[r]], bytes(tb.salts[r]),
+            [path[k:k + 64] for k in range(0, len(path), 64)])
+
+
+def _expected(cols: dict, block: int, tok: int) -> list[int]:
+    """`EmbeddingShard_v1`'s words at block ``block``'s columns (its NumPy transcription, held to its reference evaluator
+    by `node_window_values.native_selftest`): the shard's row where it owns the token, zeros elsewhere."""
+    return [int(x) for x in cols[block][tok]] if 0 <= tok < VS else [0] * NE.WIDTH
+
+
+def _units(window) -> list[tuple[int, int]]:
+    """Each (unit, block) of the prefill's member 3 and the decode's member over blocks 0 and 1, by the frame's pieces."""
+    circuit, w = window
+    read = _tid(circuit, READ)
+    out = []
+    for j, m in ((0, 3), (20, 0)):
+        (p,) = w.outs[j].pieces
+        out += [(r.unit, b) for b, r in enumerate(p.rows(m, 0, 2 * NE.WIDTH, "test")) if r.tid == read]
+    return out
+
+
+@pytest.mark.parametrize("tok", [7, VS - 1, VS, 100000, V - 1], ids=["inside", "last-inside", "first-outside", "outside",
+                                                                   "last-of-V"])
+def test_values(window, tables, tok):
+    """Each unit, fed from what the circuit declares for it (its table's root, domain id and the opening at its key), gives
+    the shard's words at its block for a token the shard owns and zeros for one it doesn't, with verdict 1."""
+    NV.native_selftest()
+    circuit, _w = window
+    cols, held = tables
+    read = _tid(circuit, READ)
+    for u, b in _units(window):
+        h, ok = reference(V, *_inputs(held, _declared(circuit, read, u), tok))
+        assert (h, ok) == (_expected(cols, b, tok), 1), (u, b)
+
+
+def test_planted_errors_fail(window, tables):
+    """A block declared over another block's table gives that block's words, and a wrong row at the key fails its opening:
+    each differs from the shard's words or its verdict."""
+    circuit, _w = window
+    cols, held = tables
+    read = _tid(circuit, READ)
+    (u, b), = [(u, b) for u, b in _units(window) if b == 1][:1]
+    other = NE.shard_param(LABEL, NE.WIDTH, 0)
+    reg = circuit.registered
+    swapped = dataclasses.replace(circuit, registered=dataclasses.replace(
+        reg, roots=tuple(dataclasses.replace(x, table=other) if x.reader == read and x.at <= u < x.at + x.units else x
+                         for x in reg.roots),
+        openings=tuple(dataclasses.replace(o, table=other) if o.reader == read and o.at <= u < o.at + o.units else o
+                       for o in reg.openings)))
+    h, ok = reference(V, *_inputs(held, _declared(swapped, read, u), 7))
+    assert ok == 1 and h == _expected(cols, 0, 7) != _expected(cols, b, 7)
+    h, ok = reference(V, *_inputs(held, _declared(circuit, read, u), 7, row_of=8))
+    assert ok == 0 and h != _expected(cols, b, 7)
+
+
+@pytest.mark.slow
+def test_values_boolean(window, tables):
+    """The read's Boolean circuit itself on two units, a token inside the shard and one outside: the same words and verdicts
+    as the reference the other value tests use. It catches a read that differs from its reference at this binding
+    (V = 154,880, H = 192), which the cheaper tests take on trust; about 80 s for its 2 units."""
+    circuit, _w = window
+    cols, held = tables
+    read = _tid(circuit, READ)
+    fn = read_of(V, NE.WIDTH)
+    (u, b), = _units(window)[:1]
+    args = [arguments(V, *_inputs(held, _declared(circuit, read, u), tok)) for tok in (7, 100000)]
+    got = np.asarray(evaluate_batch(fn, *(np.asarray([a[k] for a in args], np.uint8) for k in range(6)))).reshape(2, -1)
+    for i, tok in enumerate((7, 100000)):
+        words = [int(sum(int(got[i, 16 * k + j]) << j for j in range(16))) for k in range(NE.WIDTH)]
+        assert (words, int(got[i, -1])) == (_expected(cols, b, tok), 1)

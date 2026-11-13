@@ -25,6 +25,8 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+import numpy as np
+
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates.embedding import read
 from verity.commitments.windows import interface as IF
@@ -69,6 +71,17 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         H = int(spec_statics(spec)["H"])
         hit += ((descriptor_id(read(shard_vocab(spec), WIDTH)), H // WIDTH),)
     return hit
+
+
+def table_words(columns: np.ndarray, start: int, V: int) -> np.ndarray:
+    """A block's padded table, ``(V, WIDTH)`` u16 words: ``columns`` (the shard's VS rows of the block's `WIDTH` columns) at
+    rows [start, start + VS), zero rows elsewhere. What the prover commits for `shard_param` (`expert_tables` registers it)."""
+    a = np.ascontiguousarray(columns, np.uint16)
+    if a.ndim != 2 or a.shape[1] != WIDTH or not 0 <= start <= V - a.shape[0]:
+        raise ValueError(f"a shard's block of {a.shape} words at row {start}: {WIDTH} columns within {V} rows")
+    out = np.zeros((V, WIDTH), np.uint16)
+    out[start:start + a.shape[0]] = a
+    return out
 
 
 def split(params: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -133,5 +146,5 @@ def embedding_shard(w: NodeWindow, j: int, node: Any) -> None:
 #: the embedding shard's lowering by family (the node's Definition's name), beside `node_window.FAMILIES`
 FAMILIES: dict[str, Lowering] = {"EmbeddingShard": embedding_shard}
 
-__all__ = ["FAMILIES", "SHARD_VOCAB", "WIDTH", "embedding_shard", "shard_param", "shard_vocab", "split", "tables_of",
-           "unit_templates"]
+__all__ = ["FAMILIES", "SHARD_VOCAB", "WIDTH", "embedding_shard", "shard_param", "shard_vocab", "split", "table_words",
+           "tables_of", "unit_templates"]
