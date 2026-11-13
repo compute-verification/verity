@@ -3384,7 +3384,6 @@
     {"file": "benchmarks/tc_probe_fp4/f8_sm100.sh", "count": 3},
     {"file": "benchmarks/tc_probe_fp4/k32.py", "count": 2},
     {"file": "benchmarks/tc_probe_fp4/tcgen05_f8.cu", "count": 6},
-    {"file": "benchmarks/torch_gpu/attn_bf16/fixture.py", "count": 5},
     {"file": "benchmarks/torch_gpu/commit_slots/gpu.sh", "count": 2},
     {"file": "benchmarks/torch_gpu/commit_slots/slots.py", "count": 8},
     {"file": "benchmarks/torch_gpu/commit_slots/slots_gpu.py", "count": 2},
