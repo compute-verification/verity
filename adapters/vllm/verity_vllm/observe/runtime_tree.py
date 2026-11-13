@@ -2,7 +2,7 @@
 the built model's module paths with their class MRO names + buffers + the runner's facts,
 taken from a live engine (`runtime_tree_of`) or from a model instantiated on the META device as Build does (`meta_runtime_tree`, pod
 only: needs vLLM).  Module-tree facts are NOT correspondence: they say which modules the runtime HAS, not which module a Program Call was
-lowered from (that is `verity_vllm.correspondence.runtime`, read by `acquire.correspondence`).  Serialisable so the CPU gate runs off-pod.
+lowered from (that is `verity_vllm.correspondence.runtime`, read through `correspondence.reader_for_acquire`).  Serialisable so the CPU gate runs off-pod.
 
     verity-vllm runtime-tree --model <hf repo> --revision <rev> [--dtype bfloat16] [--max-model-len N] [--tp W] --out tree.json
 
