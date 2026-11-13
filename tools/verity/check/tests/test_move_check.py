@@ -199,6 +199,42 @@ def test_the_init_of_a_package_the_move_emptied_may_be_deleted(tmp_path):
     assert r["rules"] == {"emptied": ["protocols/pous/src/verity_pous/__init__.py", "protocols/pous/src/verity_pous/sub/__init__.py"]}
 
 
+CARDS = {**BASE_FILES, "verity/hardware/site.py": "S = 1\n", "verity/hardware/cards/a100.toml": "peak = 1\n"}
+CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {name: S}\n"
+
+
+@pytest.mark.parametrize("held, certified", [
+    ("", True), ("# one data sheet a GPU\n\n   \n", True),
+    ('"""The data sheets, one a GPU."""\n', False), (CODE, False), ("def load(:\n", False),
+])
+def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_but_comments(tmp_path, held, certified):
+    """The range moves only the data sheet out of `verity/hardware/cards/` and deletes its `__init__.py`. Read at BASE by
+    the mover's own `only_comments`: empty or of comments and whitespace alone, it goes with its package; a docstring,
+    code, or text that doesn't parse is refused, naming the file and the fix."""
+    repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": held})
+    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _git(repo, "rm", "-q", "verity/hardware/cards/__init__.py")
+    r = _check(repo, base)
+    if certified:
+        assert r["certified"] and r["rules"] == {"emptied": ["verity/hardware/cards/__init__.py"]}, r["refusals"]
+        return
+    assert not r["certified"]
+    [f] = r["refusals"]
+    assert (f["path"], f["status"]) == ("verity/hardware/cards/__init__.py", "D")
+    assert "give it a row in the map saying where it goes, or delete it in a hand commit before the move" in f["reason"]
+    assert "emptied" not in r["rules"]
+
+
+def test_the_init_of_an_emptied_package_moved_by_its_row_is_certified(tmp_path):
+    """The fix for one that holds code: its row sends it where it goes (the package becomes a module of its name)."""
+    repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": CODE})
+    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/__init__.py", "verity/hardware/cards.py")
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert {"old": "verity/hardware/cards/__init__.py", "new": "verity/hardware/cards.py"} in r["renames"]
+
+
 COVERED = {
     "tools/move/layout_map.toml": '[roots]\nnew = { verity = "verity" }\n',
     "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
