@@ -20,7 +20,7 @@ copies' two-stage design decides it of every statement in a template's scope:
 
 This file imports SPOT[Flock]'s analysis alone and nothing of the sessions' layout (`SessionCoins`), so a file of
 SPOT's analysis, which imports none of the network certifier, can read it. What the layout makes of one table is
-`OneTable`'s.
+`OneTable`'s. Its two theorems are in the namespace `Verity.SampledTwo`, where the layout's files read them.
 -/
 
 @[expose] public section

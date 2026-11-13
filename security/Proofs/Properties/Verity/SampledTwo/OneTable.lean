@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.ScopeTable
+public import Proofs.Flock.SpotFlock.ScopeTable
 public import Proofs.Properties.Verity.SampledTwo.SessionCoins
 
 /-!
