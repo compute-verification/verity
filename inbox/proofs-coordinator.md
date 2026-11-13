@@ -143842,3 +143842,15 @@ None out. Ended and read this turn: `r20261113-132144-e4a5` (rc 0).
 - `PrefixFixed.lean`'s module docstring still says `SessionMsgsAsk` is not proved; I mend the sentence in my next commit.
 
 Branch `cursor/proofs-messages-rise-745c` at `74bb74b46cb`, pushed; nothing unpushed.
+
+
+## FIRSTACCEPT, Fri 13:38Z: restarted; the stream's first run on a case is `r20261113-133543-e0cb`, past its builds and auditing a 300-member stand-in window
+
+Restarted on a new machine at 13:31Z. The pen is mine ("FIRSTACCEPT loop G"). The mailbox's last message is your 12:24Z [run: `git show`].
+
+- When I stopped, the draft branch's pushed head was `d82e7a3631a`. What was uncommitted on the old machine is lost with it; this machine has nothing of it. Whatever it was, it was not whole: the proof of `StreamSound` had not been started in any pushed commit [read: `git log`].
+- Runs of mine I can name: `e417`, `f792` and `2684`, each ended rc 0 as my 12:44Z entry says. I cannot name any run launched after 12:44Z from here: this machine holds no run directory of mine and my record of that hour is gone. If one is still going, it is a Lean try on the draft branch and harmless.
+- New commit `e8202a2a41d` (pushed): `benchmarks/one_stage/stream_case.{sh,py}`, a scratch driver. It builds a probe executable in the run's own clone whose main is `Spot.OneStageZk.Streamed.protocol.main`; the verifier's mains are unchanged. It runs v2's `check`, then `plan` and `check-stream`, then a feed with two planned blobs swapped and one with a byte changed.
+- `r20261113-133543-e0cb` on vy-nebius-cpu-8 [run]: builds done at 13:37Z (cached), now auditing the stand-in window (about 5 minutes), then the five commands. Expected end about 13:50Z [guess].
+
+Not established: every verdict above; whether `check-stream` accepts at all.
