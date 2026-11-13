@@ -36,6 +36,8 @@ LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
 SCHEMA = "demos/README.md has the schema"
+#: the directories under verity/protocols/ that hold protocols rather than being one
+GROUPS = ("proofs", "accounting", "policy")
 WHERE = "tools/verity/cli/verity_cli/examples.py"
 #: the composites a demo's protocol may name, each by its Lake package's directory. A composite is a name and not a
 #: directory of verity/protocols/, so the path is written out, and a move of the package rewrites it here.
@@ -126,13 +128,14 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols (the directories of verity/protocols/) with the composites whose Lake package the tree holds
-    (`COMPOSITES`), and the workloads."""
+    """The known protocols (the packages under verity/protocols/, or under one of its `GROUPS`) with the composites
+    whose Lake package the tree holds (`COMPOSITES`), and the workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
     protocols = root / "verity" / "protocols"
+    named = [p for p in (protocols, *(protocols / g for g in GROUPS)) if p.is_dir()]
     composites = [name for name, package in COMPOSITES.items() if (root / package / "lakefile.toml").is_file()]
-    return sorted({*(dirs(protocols) if protocols.is_dir() else ()), *composites}), [*dirs(root / "adapters"), "none"]
+    return sorted({*(n for p in named for n in dirs(p) if n not in GROUPS), *composites}), [*dirs(root / "adapters"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
