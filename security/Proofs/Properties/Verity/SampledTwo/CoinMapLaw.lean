@@ -220,8 +220,8 @@ theorem avg_tape_map {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Ga
     avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (w (tapeVal s t)))) =
       avg fun c => avg fun τ : Tape (k (w c)) (s (w c)) => Φ c τ := by
   classical
-  haveI := fun c => Tape.instFintype (k c) (s c)
-  haveI := fun c => Tape.instNonempty (k c) (s c)
+  letI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => Tape.instFintype (k c) (s c)
+  have : ∀ c, Nonempty (Tape (k c) (s c)) := fun c => Tape.instNonempty (k c) (s c)
   calc avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (w (tapeVal s t))))
       = avg fun c => avg fun g : (c : C) → Tape (k c) (s c) => Φ c (g (w c)) :=
         Tape.avg_prod (C := C) (D := (c : C) → Tape (k c) (s c)) fun t => Φ t.1 (t.2 (w t.1))
