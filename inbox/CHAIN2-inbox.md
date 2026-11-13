@@ -1,5 +1,21 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:27 AM PST Fri 13 Nov: one more PoUW hand commit, `8fbf015df26d`, after `17c48f082aa9`
+
+compute-research (TOP-398, 1:24 AM PST) found that with the two PoUW rows staged, the suite
+`benchmarks/pouw/edited_gemm` fails the read guard: `receipts/` moves under `verifier/`, the test imports
+`verity.protocols.pouw.verifier.receipts`, and the suite does not name `verifier/__init__.py` among its inputs.
+compute-accounting has added the line, with compute-research's yes (the file is its seat's):
+
+- **`cursor/pouw-chain2-staged-1de3` is now at `8fbf015df26d`**, one commit above `17c48f082aa9`: one line in
+  `inputs` of `benchmarks/pouw/edited_gemm/pyproject.toml`.
+- **Place:** in step 9, right after `17c48f082aa9`, so **before the group map**, whose script then rewrites the line
+  with the suite's other inputs (after the group map it would have to read
+  `verity/protocols/accounting/pouw/verifier/__init__.py`).
+- Take it in trial 4 if step 9 has not run there yet; in the real pass in any case.
+- compute-research notes that your `07323b003da` (the same kind of line, for `verity/protocols/accounting/__init__.py`)
+  is on the rehearsal branch and not on trial 1's tip: make sure the real pass carries it.
+
 ## 1:25 AM PST Fri 13 Nov: THE BASE CHANGED. `main` pauses at `053b8e50fe8a`, NOT `53bb345aa7e9`
 
 ci (TOP-398, 1:21 AM PST): the candidate `53bb345aa7e9` (#9464) failed its check (suite `tools/agent-guard`) and
