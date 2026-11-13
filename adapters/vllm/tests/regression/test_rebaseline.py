@@ -49,6 +49,23 @@ def test_record_result_writes_the_document_write_reads(monkeypatch, tmp_path):
     assert resolver.record_result(ROW, "x", {}, {}, []) is None
 
 
+def _nested(depth: int) -> dict:
+    doc: dict = {}
+    at = doc
+    for _ in range(depth):
+        at["a"] = {}
+        at = at["a"]
+    return doc
+
+
+@pytest.mark.parametrize("make", [lambda: None, list, lambda: _nested(200_000)], ids=["none", "a-list", "nested-past-what-json-writes"])
+def test_a_result_that_cannot_be_recorded_is_not_recorded_and_nothing_raises(monkeypatch, tmp_path, make):
+    """`record_result` never raises: an `actual` that is no mapping, or one nested deeper than `json.dumps` writes, records nothing."""
+    monkeypatch.setenv(resolver.RECORD_ACTUAL_ENV, str(tmp_path))
+    assert resolver.record_result(ROW, "x", {}, make(), []) is None
+    assert not list(tmp_path.rglob("*.json"))
+
+
 def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys):
     """A result file that is no JSON, is not text, or is nested deeper than `json.load` reads is named on stderr and left out."""
     (tmp_path / ROW).mkdir()

@@ -96,8 +96,8 @@ def oracle() -> str:
 def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
     """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
     `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
-    A document that can't be written (the directory, a value JSON can't hold, an unknown oracle) is not recorded and returns None:
-    a recording failure is not a test failure."""
+    A document that can't be written (the directory, an `actual` that is no mapping, a value JSON can't hold or one nested deeper
+    than it writes, an unknown oracle) is not recorded and returns None: a recording failure is not a test failure."""
     d = os.environ.get(RECORD_ACTUAL_ENV)
     if not d:
         return None
@@ -108,7 +108,7 @@ def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[s
                "problems": list(problems), "matched": matched(act, problems), "engine": ENGINE, "oracle": oracle()}
         p.write_text(canonical(doc) + "\n")
         return p
-    except (OSError, TypeError, ValueError):
+    except (AttributeError, OSError, RecursionError, TypeError, ValueError):
         return None
 
 
