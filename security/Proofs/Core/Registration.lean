@@ -115,7 +115,7 @@ theorem theta_keys_sublist (log : Registration) :
   | nil => simp
   | cons i is ih =>
     cases i with
-    | theta t => simpa [Item.key] using ih.cons₂ ("theta " ++ t.value)
+    | theta t => simpa [Item.key] using ih.cons_cons ("theta " ++ t.value)
     | builder b => simpa [Item.key] using ih.cons "builder"
 
 /-- **A valid log registers each θ value once.** -/
