@@ -18,7 +18,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 #: test_lean_zk.py's: RoPE d64 with hidden outputs and the live build's --zk sessions, under the statement it was staged for; a
-#: fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs
+#: fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
 #: the templated statement (`Tags.templated`), and `test_tmpl_statement`'s layout mode for it
