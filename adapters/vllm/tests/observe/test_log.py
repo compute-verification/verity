@@ -2,8 +2,10 @@
 log with."""
 from __future__ import annotations
 
-from verity_vllm.observe.events import Event, Note, StepEnd, StepStart
-from verity_vllm.observe.log import LogWriter, read_log, split_steps
+import pytest
+
+from verity_vllm.observe.events import Event, Note, RunHeader, StepEnd, StepStart
+from verity_vllm.observe.log import LogWriter, header_of, read_log, split_steps
 
 
 def _start(step: int) -> StepStart:
@@ -40,3 +42,16 @@ def test_split_steps_ends_with_the_events_that_follow_the_last_step_end():
     assert list(split_steps([*pre, *step, *tail, *open_step])) == [(pre, step), (tail, open_step)], "a step that never ended is the last group's"
     assert list(split_steps(open_step)) == [([], open_step)] and list(split_steps(tail)) == [(tail, [])]
     assert list(split_steps([])) == []
+
+
+def test_header_of_is_the_logs_first_event_and_refuses_a_log_that_does_not_begin_with_one():
+    header = RunHeader("verity-capture/log/v1", "2026-09-16T00:00:00Z", "pid", {}, {"repo": "toy"}, {"requests": []})
+    assert header_of([header, Note("after")]) is header and header_of(iter([header])) is header
+    for events in ([], [Note("before"), header], [_start(0), StepEnd(0)]):
+        with pytest.raises(ValueError) as e:
+            header_of(events)
+        assert str(e.value) == "log does not start with a RunHeader"
+    rest = iter([Note("before"), header, Note("after")])
+    with pytest.raises(ValueError):
+        header_of(rest)
+    assert list(rest) == [header, Note("after")], "it reads the first event and no more"
