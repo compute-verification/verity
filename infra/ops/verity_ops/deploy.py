@@ -522,7 +522,8 @@ def null_fault(seen: list[int] | str) -> dict | None:
 
 def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...], "distrusted":
-    [...], "null_device": null_fault's}."""
+    [...], "null_device": null_fault's}. A tree's entry has `tree`, the tree's path, and a whole tree's has `whole` (true) too,
+    so a reader can tell a copy of one commit's tree, which may be behind REF until its next install, from a file left behind."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     want = expected(node, commit, repo)
     generated = [e.path for e in node.entries if e.by]
@@ -531,6 +532,10 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     old = versions(srcs, commit, limit=HISTORY, repo=repo) if srcs else {}
     recent: dict | None = None
     entries = []
+
+    def of(e: Entry) -> dict:
+        return {"tree": e.path, **({"whole": True} if e.whole else {})} if e.tree else {}
+
     for path in sorted({*want, *generated}):
         got = seen["files"].get(path)
         if path in generated:
@@ -540,7 +545,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
             continue
         rp, sha, _, e = want[path]
         if e.tree and got is None:
-            entries.append({"path": path, "src": rp, "owner": e.owner, "state": "missing", "restart": None, "tree": e.path, **(
+            entries.append({"path": path, "src": rp, "owner": e.owner, "state": "missing", "restart": None, **of(e), **(
                 {"detail": "in a required tree, not installed: install the tree", "required": True} if e.required else
                 {"detail": "in the tree, not installed"})})
             continue
@@ -578,8 +583,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
         elif not e.no_restart and got and "mtime" in got and started is not None and started < got["mtime"] - 1:
             restart = (f"a process started {time.strftime('%m-%d %H:%MZ', time.gmtime(started))}, before the file "
                        f"({time.strftime('%m-%d %H:%MZ', time.gmtime(got['mtime']))})" + (f"; restart {', '.join(e.run)}" if e.run else ""))
-        entries.append({"path": path, "src": rp, "owner": e.owner, "state": state, "detail": detail, "restart": restart,
-                        **({"tree": e.path} if e.tree else {})})
+        entries.append({"path": path, "src": rp, "owner": e.owner, "state": state, "detail": detail, "restart": restart, **of(e)})
     for e in absent(node, want):
         entries.append({"path": e.path, "src": e.src, "owner": e.owner, "state": "absent", "detail": f"{ref} lacks {e.src}",
                         "restart": None})
@@ -597,7 +601,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
             hit = recent.get(key)
             if hit and key not in removed:
                 strays.remove(p)
-                entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
+                entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, **of(t), "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})
     return {"commit": commit, "entries": entries, "strays": strays, "distrusted": seen.get("distrusted", []),
             "null_device": null_fault(seen["null"])}

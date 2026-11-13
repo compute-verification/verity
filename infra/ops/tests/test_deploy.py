@@ -463,6 +463,10 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     os.utime(first / "a.py", (1000, 1000))
     v2 = _push(repo, {"sub/b.py": "b2\n", "sub/gone.py": None, "new.py": "n2\n"})
     seen = tmp_path / "at-the-rename.json"
+    behind = deploy.drift(n, "origin/main", local, repo)["entries"]       # drift marks the tree's entries, and no other entry
+    assert {(Path(e["path"]).name, e["state"], e.get("whole")) for e in behind if e.get("tree") == str(path)} == {
+        ("a.py", "ok", True), ("b.py", "stale", True), ("new.py", "missing", True), ("run.sh", "ok", True)}
+    assert [e for e in behind if e.get("tree") not in (None, str(path))] and not [e for e in behind if e.get("tree") != str(path) and "whole" in e]
     dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
     assert {Path(f["path"]).name: f["changed"] for f in dry["files"]} == {
         "a.py": False, "b.py": None, "gone.py": "would drop", "new.py": None, "run.sh": False}
