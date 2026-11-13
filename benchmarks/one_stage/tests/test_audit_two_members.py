@@ -143,7 +143,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
     design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins. The audit record
     names whose coins those are, the key and the session the challenger's ledger opens on the run's root, and says it
-    wrote no case for the compiled check; sampled proofs' answer on the audit accepts with both in its public outputs."""
+    wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public outputs."""
     window = _window(tmp_path / "window")
     assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
@@ -159,7 +159,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
     # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
-    # as the coins' check verified them; sampled proofs' answer carries them, and that the audit, of two members, wrote
+    # as the coins' check verified them; SPOT's answer carries them, and that the audit, of two members, wrote
     # no case for the compiled check
     opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
                if e["kind"] == "open")
@@ -245,7 +245,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 
 
 def _answer(out: Path) -> dict:
-    """Sampled proofs' answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
+    """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
     certifier's period read it), its registration the one the audit registered."""
     import served_integrity as SI  # beside a5, on the path `records_audit` put there
 

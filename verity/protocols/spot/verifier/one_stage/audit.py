@@ -54,7 +54,7 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
     elif draw["law"] in ("stratified", "work"):
         law = core_law(law_of(draw), registration["population"])
     else:
-        raise ValueError(f"no profile for a {draw['law']!r} draw")
+        raise ValueError(f"no profile for a {draw['law']!r} sample")
     return IntegrityProfile(levels=(Level(LEVEL, registration["partition"]),), sizes=(registration["population"],),
                             draws={LEVEL: law}, delta=delta, programs=(registration["program"],),
                             drawn={LEVEL: len(draw["units"])})
@@ -145,13 +145,13 @@ def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     it of none."""
     if record.get("accepted") is not True:
         raise ValueError("only an accepted audit record has an accept's answer")
-    registration, draw = record["registration"], record["draw"]
-    p = profile(registration, draw, delta).to_json()
+    registration, sample = record["registration"], record["draw"]
+    p = profile(registration, sample, delta).to_json()
     p["delta"] = str(delta)
-    wrong = wrong_units(registration, draw, delta)
+    wrong = wrong_units(registration, sample, delta)
     return {"commitment": registration_digest(registration), "profile": p, "protocol": PROTOCOL,
             "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
-                       "drawn": sorted(draw["units"]), "per_template": wrong.get("per_template"),
+                       "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
                        "proved": sorted(record["proved_units"])},
             "reason": None, "verdict": "accept"}
 
@@ -211,9 +211,9 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     if accepted:
         p = profile(registration, draw, delta)
         if draw["law"] in ("stratified", "work"):
-            drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
-                     for s in draw["strata"]}
-            rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": drawn}
+            sampled = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
+                       for s in draw["strata"]}
+            rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": sampled}
         else:
             rec["profile"] = p.to_json()
         digests = [v.get("digest") for v in of_record]

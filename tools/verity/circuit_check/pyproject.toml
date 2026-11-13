@@ -153,9 +153,13 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
-          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
+          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins; its row builders import chunk_rows,
+          # interior_rows, serving_rows and interior_links when they run, which a build does where no record of the long
+          # row's units counts
           "adapters/vllm/verity_vllm/pipeline/long_row.py", "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.json",
+          "adapters/vllm/verity_vllm/pipeline/chunk_rows.py", "adapters/vllm/verity_vllm/pipeline/interior_rows.py",
+          "adapters/vllm/verity_vllm/pipeline/serving_rows.py", "adapters/vllm/verity_vllm/pipeline/interior_links.py",
           # serve_seal is the home of `target_of`, which the package's `__all__` lists: a check run in a process of its
           # own (test_named_targets.py's C++ model test) reads it when the package's names are resolved
           "adapters/vllm/verity_vllm/pipeline/serve_seal.py",
