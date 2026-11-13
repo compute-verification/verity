@@ -23,7 +23,9 @@ from verity.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
+from verity_vllm.program.predict import build as BUILD
 from verity_vllm.program.predict import dsv4
+from verity_vllm.program.predict import node as NODE
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
 from verity_vllm.program.predict.model_shape import model_shape, weight_leaves
@@ -164,6 +166,31 @@ def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp
     and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
     assert r.digest == digest
+
+
+@pytest.mark.parametrize(("T", "error"), [("x", ValueError), ([1], TypeError)])
+def test_a_step_given_a_T_that_int_refuses_raises_ints_error(T, error):
+    """A `step` is built for no T, yet its launch (`common.in_launch`) takes `int` of a T it is given: one that `int` refuses
+    is `int`'s error, and one it takes (5, 2.5) builds the Program of a step given none."""
+    step = build_program(_phi(TINY), "step", M=1, pos0=8)
+    assert [build_program(_phi(TINY), "step", M=1, pos0=8, T=t).digest for t in (5, 2.5)] == [step.digest] * 2
+    with pytest.raises(error, match=r"^(invalid literal for int\(\) with base 10: 'x'|int\(\) argument must be .* not 'list')$"):
+        build_program(_phi(TINY), "step", M=1, pos0=8, T=T)
+
+
+def test_a_requests_launch_is_looked_up_by_the_LP_and_T_given(monkeypatch):
+    """`build_program` and `build_node_program` hand `common.launch_batch` and `launch_rows` the LP and T they were given, not
+    `int` of them: each reader takes `int` itself, and `launch_batch`'s refusal prints them as given. The Program is the one of
+    `int` of each."""
+    seen: list[tuple] = []
+    for module in (BUILD, NODE):
+        monkeypatch.setattr(module, "launch_batch", lambda phi, LP, T: seen.append(("batch", LP, T)))
+        monkeypatch.setattr(module, "launch_rows", lambda phi, LP, T, C=0: seen.append(("rows", LP, T)))
+    one, two = _phi(TINY), _phi(TINY, tp={"world": 2, "rank": 0})
+    whole = (build_program(one, "request", LP=4, T=2).digest, NODE.build_node_program(two, "request", LP=4, T=2).digest)
+    seen.clear()
+    assert (build_program(one, "request", LP="4", T=2.5).digest, NODE.build_node_program(two, "request", LP="4", T=2.5).digest) == whole
+    assert seen == [("batch", "4", 2.5), ("rows", "4", 2.5), ("batch", "4", 2.5), ("rows", "4", 2.5), ("rows", "4", 2.5)]
 
 
 def test_dsa_refuses_outside_its_domain(tmp_path):
