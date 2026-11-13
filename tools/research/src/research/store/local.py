@@ -9,7 +9,7 @@ disposable catalog, under `~/.research/store` (or `$RESEARCH_STORE`).
     catalog.sqlite                LOCAL ONLY: index.Index; `reindex()` rebuilds it from the three directories above
     scratch/                      LOCAL ONLY: tool caches keyed by reuse_key (owned by the run integration, §6.5)
 
-Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/fixtures/artifacts.json` (`{art id: repo-relative
+Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/artifacts.json` (`{art id: repo-relative
 path}`, every blob sha256-checked against the manifest before use, mismatch warns and falls through) -> remote (`remote.py`).  Bytes
 that arrive from a repo or the remote are checked against the manifest before they enter `objects/`.  `push` uploads an artifact's
 blobs concurrently (conditional create per object, verified by HEAD size + MD5 ETag or by read-back) and the manifest last; `verify`
@@ -42,7 +42,7 @@ from .remote import ConfigError, Remote, config_path, load_remote
 from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
-REPLICA_MAP = Path("fixtures/artifacts.json")
+REPLICA_MAP = Path("artifacts.json")
 #: each place a tree may hold the registry, the first it holds taken: a `research run` puts the launcher's research ahead of
 #: the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name
 REPLICA_MAPS = (REPLICA_MAP, Path("artifacts.json"))
