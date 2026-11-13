@@ -544,7 +544,8 @@ def decode_params(j) -> dict:
     if not isinstance(j["scheme"], str):
         raise D.Reject("scheme is not a string")
     for p, v in _obj(j["ports"], "ports").items():
-        _exactly(v, {"domain", "leaves"}, f"port {p}")
+        wired = isinstance(v, dict) and isinstance(v.get("wired"), str)
+        _exactly(v, {"domain", "leaves", "wired"} if wired else {"domain", "leaves"}, f"port {p}")
         if not _nat(v["leaves"]) or not isinstance(v["domain"], str):
             raise D.Reject(f"port {p}: leaves or domain")
     if j["leaf_layer"] is not None and not isinstance(j["leaf_layer"], str):
@@ -2366,6 +2367,38 @@ def _tied(a: dict, x: int) -> None:
 
 #: One change each to the run Inputs the verifier names tied (`_tied`), or its program's parameters left out.
 TIED = [_tied, _tied, lambda a, x: (_tied(a, x), a["params"].pop("parameters"))]
+#: the name a wired port takes in `_wired`
+WIRED_PORT = "in"
+
+
+def _wired(a, x, of=lambda rs, e, x: None) -> None:
+    """Port `x` of the audit named a second time, as a port wired to it (`WIRED_PORT`): the parameters' entry at its
+    leaves and domain names it (`wired`), and the record registers its root under both names. `of(roots, entry, x)` then
+    changes the record's roots or that entry."""
+    held = sorted(a["params"]["ports"])[x % len(a["params"]["ports"])]
+    a["params"]["ports"][WIRED_PORT] = e = {**a["params"]["ports"][held], "wired": held}
+    r = [r for r in a["record"]["roots"] if r["port"] == held][-1]
+    a["record"]["roots"].append({**r, "port": WIRED_PORT})
+    of(a["record"]["roots"], e, x)
+
+
+def _wired_root(value):
+    return lambda rs, e, x: rs[-1].update(root=value(rs, x) if callable(value) else value)
+
+
+#: A wired port, unchanged or with one change R3 reads: its root another's, its own port's root moved from under it, not
+#: hex or not a string, no root under its name, or under the port it names; and an entry the parameters refuse.
+WIRED = [
+    _wired, _wired,
+    functools.partial(_wired, of=_wired_root("ef" * 64)),
+    functools.partial(_wired, of=_wired_root(lambda rs, x: ["EF" * 64, 5, None, "", rs[-1]["root"] + "0"][x % 5])),
+    functools.partial(_wired, of=lambda rs, e, x: next(r for r in rs if r["port"] == e["wired"]).update(root="ef" * 64)),
+    functools.partial(_wired, of=lambda rs, e, x: rs.pop()),
+    functools.partial(_wired, of=lambda rs, e, x: e.update(wired=["nowhere", WIRED_PORT, ""][x % 3])),
+    functools.partial(_wired, of=lambda rs, e, x: e.update(wired=[5, None, ["x"]][x % 3])),
+    functools.partial(_wired, of=lambda rs, e, x: e.update(extra=1)),
+    functools.partial(_wired, of=lambda rs, e, x: rs.insert(0, {**rs[-1], "root": "ef" * 64})),
+]
 GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED, BINDINGS,
           WINDOWS, SEED_SALTS]
 
@@ -3130,6 +3163,8 @@ _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # n
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits(most=1, setups=READER_SETUPS).map(_REGISTRATION_OF),
     changed_audits([TIED], 1, 1, READER_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([WIRED], 1, 1).map(_REGISTRATION_OF),
+    changed_audits([WIRED, RECORD], 2, 2).map(_REGISTRATION_OF),
     changed_audits([TIED, REGISTERED_PARAMS], 2, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
     changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
@@ -6771,6 +6806,33 @@ def test_a_many_port_registration_agrees(pieces):
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]
     assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
+
+
+def test_a_wired_port_is_held_to_the_root_of_the_port_that_holds_it(pieces):
+    """R3 of a port the layout wires to another's tree (`"wired"`), Lean and Python agreeing: a record naming one root
+    under both names is accepted; one whose root under the wired name is another, or whose root under the port that
+    holds it is, is refused by `R3-wired` alone; so is a layout naming a port the record has no root for; a record with
+    no root under the wired name is refused by it after `R3-ports`; roots that are not well formed give `R3-roots` and
+    no second code; and the parameters refuse a `wired` that is not a string."""
+    a = _REGISTRATION_OF(_v1_audit("subset"))
+
+    def codes(of=lambda rs, e, x: None, x=0, then=lambda b: None):
+        b = copy.deepcopy(a)
+        _wired(b, 1, lambda rs, e, _x: of(rs, e, x))
+        then(b)
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    assert sorted(a["params"]["ports"])[1] == "x" and codes() == []
+    assert codes(_wired_root("ef" * 64)) == ["R3-wired"]
+    assert codes(lambda rs, e, x: next(r for r in rs if r["port"] == "x").update(root="ef" * 64)) == ["R3-wired"]
+    assert codes(lambda rs, e, x: e.update(wired="nowhere")) == ["R3-wired"]
+    assert codes(lambda rs, e, x: e.update(wired=WIRED_PORT)) == []
+    assert codes(lambda rs, e, x: rs.pop()) == ["R3-ports", "R3-wired"]
+    assert codes(_wired_root(5)) == ["R3-root", "R3-wired"]
+    assert codes(lambda rs, e, x: rs.insert(0, {**rs[-1], "root": "ef" * 64})) == ["R3-ports"]
+    assert codes(then=lambda b: b["record"]["roots"][0].pop("domain")) == ["R3-roots"]
+    assert codes(lambda rs, e, x: e.update(wired=5)) == "reject"
 
 
 def test_every_public_items_code_is_reached(pieces):
