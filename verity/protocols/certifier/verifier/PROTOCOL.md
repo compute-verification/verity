@@ -295,9 +295,12 @@ Stated in Lean: `NetworkCheck.Period` (`verity/protocols/certifier/verifier/lean
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
 and the bound `K` it publishes. Its parameters list the LMS public keys of the network certifiers trusted for the
 link (`"keys"`, hex strings: at least one, no two with one identifier, a key's first 16 bytes; parameters that name
-one `"key"` are refused, naming `"keys"`), and each certificate and rows registration is checked under the listed key
-whose identifier it names, a signer that is not listed refused by name. The period check is not in the public tree,
-because it reads the inference-only policy's layout check, which is withheld.
+one `"key"` are refused, naming `"keys"`) and each one's designated session for the period (`"sessions"`, hex strings
+of 32 bytes, one for each key and in the keys' order, session i being key i's; lists of unequal length are refused by
+name, and parameters that name one `"session"` are refused, naming `"sessions"`). Each certificate and rows
+registration is checked under the listed key whose identifier it names, in that key's session, a signer that is not
+listed refused by name. The period check is not in the public tree, because it reads the inference-only policy's
+layout check, which is withheld.
 
 ## A served link (`served`)
 

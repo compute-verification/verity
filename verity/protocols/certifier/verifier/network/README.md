@@ -57,8 +57,11 @@ one-stage, one answer per registered sampling block of the workload). Its parame
   schedule a direction, its records certified, and the scan's one-stage answer for it.
 
 Either form's parameters list the trusted network certifiers' LMS public keys (`"keys": [hex, …]`, at least one, no
-two with one identifier) beside the one certifier session. A certificate or a rows registration is checked under the
-listed key whose first 16 bytes are its key id, and one whose signer is not listed is refused by name.
+two with one identifier) and their sessions (`"sessions": [hex, …]`, of the keys' length, session i being key i's;
+lists of unequal length are refused by name). A certificate or a rows registration is checked under the listed key
+whose first 16 bytes are its key id, in that key's session, and one whose signer is not listed is refused by name.
+`certifierKeys`, `certifierSessions` and `certifierLink` read the keys, the sessions and the link off the parameters
+through the period's own decoder, for a composition that pins them.
 
 It accepts when every link-window passes its form's check and every compute audit accepted. It then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
