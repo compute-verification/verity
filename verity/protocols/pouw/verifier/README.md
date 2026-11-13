@@ -29,7 +29,7 @@ every product, is a reference, not an answer.
      `Accounting.BudgetAbort`.
   3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): in each verification phase
      of a credit period the openings fail to bind with probability at most |L|·√(q/2^256 + κ), L every position of the
-     period. That is one phase's bound, and the period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
+     credit period. That is one phase's bound, and the credit period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
      κ is not yet bounded, and no deployed |L| is stated.
   4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
