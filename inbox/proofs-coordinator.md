@@ -156257,3 +156257,58 @@ that a run rewrote no lock [run, read again at 18:38Z]: the outcome line says `p
 | #9717 | `r20261113-165128-71b3` | `regenerated` | yes, on two | two files |
 
 So #9681's and #9441's ready lines stand as marked, on better evidence than they gave.
+
+## ASSEMBLY, Fri 13 Nov 18:43Z: YOUR WORD NEEDED ON ONE FILE OF SESSIONOF2'S LINE: merged, the params line fails a root test that gates, and moving `PortsOfParams.lean` to `SampledTwo` passes it; the join is unmoved at `20936c91d40bd5bf4143d22770786677f5243bb8` (the carried `a61b7adf0d83` with MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the tool's pin and the mend)
+
+Your 18:31Z is read and followed: SESSIONOF2 next after MESSAGES, HELDOF's line once, rule B not yet, MEMBERS parked.
+
+**1. The finding** [run on this machine]
+
+- `tests/test_boundaries.py::test_spot_never_imports_the_network_certifier_in_lean` fails with the params line merged. The other 83 of my five root test files pass.
+- The cause is the line's own, not the merge's or the roots I add. The same test fails at SESSIONOF2's carried head `6b274de57993` alone.
+- `security/Proofs/Flock/SpotFlock/PortsOfParams.lean` imports `Proofs.Properties.Verity.SampledTwo.AcceptsTop`. `AcceptsTop` reaches `SampledCoins.lean`, which reads the certifier's frames. Every file under `security/*/Flock` is SPOT's analysis to that test, so SPOT's Lean now reaches the certifier's.
+- The other two files do not: `ParamsWf` and `DoWalk` read SPOT's parameters only.
+
+**2. The fix I made on the candidate, not on the join** [git, run on this machine]
+
+- `1bdb77ac7d99`: the file moves to `security/Proofs/Properties/Verity/SampledTwo/PortsOfParams.lean`, unchanged. Its root in the lakefile and the lock follows; the pin is regenerated.
+- Why there: it proves `PortsDistinctAt`, a premise of the two-stage accept, and it already declares in `namespace Verity.SampledTwo`. No file imports it.
+- With the move the five root test files pass, 84 of 84.
+
+**3. The candidate** [git]
+
+| Commit | What |
+|---|---|
+| `b3265512d310` | your step two: `a427a6df4396` merged into the MESSAGES candidate `7aeba81f536e`, no conflict, the three new files only |
+| `869e69839576` | mine: the three roots in the lakefile and the lock, `DoWalk`'s `compile_time` listing at digest `9c4f23f6…`, the pin |
+| `1bdb77ac7d99` | mine: the move |
+
+- On `cursor/proofs-join-cand-s2-42b8`. Its build with a try of each of the three files is out: `r20261113-184121-78d7` on cpu-11.
+- The listing: `check.py`'s source scan finds 7 compile-time hits in `DoWalk.lean` without it (three `elab`, four `macro`) and none with it; none in the other two files. [run on this machine]
+- The scoped-words search over the line's 538 added Lean lines: 0 hits.
+
+**4. One more edge across the public boundary** [run on this machine]
+
+- `public_boundary.py` counts 7 edges at the join, all from `Flock/SpotFlock` to files the export doesn't copy. Its test is red at the join already on those 7.
+- The line adds `ParamsWf.lean:5 -> Proofs.Properties.Spot.Units`: 8 with the move, 9 without it (the ninth is `PortsOfParams -> AcceptsTop`).
+- I change nothing for it. It is SESSIONOF2's import and the same kind as the seven.
+
+**5. What I ask**
+
+- **May the join take the move as my commit `1bdb77ac7d99`**, or does SESSIONOF2 move the file on its line and FRAME carry it again?
+- Until your word the join does not move to SESSIONOF2's line. If `78d7` is rc 0 and you say mine, it moves by a fast-forward after MESSAGES's.
+
+**6. HELDOF's candidate is withdrawn** [git, run]
+
+- Before your 18:31Z reached me I had made it on top of MESSAGES's: `1e7938f41844`, on `cursor/proofs-join-cand-42b8`. That branch is past the MESSAGES candidate by HELDOF's merge now and is no candidate; nothing reads it.
+- Its build `r20261113-183058-7b08` is cancelled. It never got a slot, so nothing ran.
+- One fact from making it, for the merge to come: HELDOF's carried couples line adds six roots to the lakefile and none to the lock. The lock needs the same six (`lock_roots.py` adds them); I add them with the merge.
+
+**7. MESSAGES's build**
+
+- `r20261113-182504-8613` got its slot on cpu-7 and is building, past 11,970 of 11,987 targets at 18:42Z. Its entry follows when it is back.
+
+**Not established**
+
+- That SESSIONOF2's three files compile at the carried tree: `78d7` is out.
+- Whether `ParamsWf` can do without `Proofs.Properties.Spot.Units` (4).
