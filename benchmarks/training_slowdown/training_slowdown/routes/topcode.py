@@ -93,21 +93,31 @@ def rotation(d: int, seed: int) -> torch.Tensor:
     return r * signs
 
 
+def grouped(t: torch.Tensor) -> torch.Tensor:
+    """t as a code rounds it: each token one group of all its coordinates, [tokens, 1, d], the view the run of
+    record's program rounds a one-group code in, so that the two steps count the same products at the same shapes."""
+    return t.reshape(-1, 1, t.shape[-1])
+
+
 def nearest(z: torch.Tensor, bits: int) -> torch.Tensor:
     """Each token's coordinates rounded to nearest on 2^bits levels, midpoints of steps of 2/2^bits of their largest
-    magnitude (in bf16): the codes cross as bytes (`pack_codes`), and come back as the levels' values."""
-    step = (z.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)).to(torch.bfloat16).float().clamp_min(1e-30)
+    magnitude (in bf16): the codes cross as bytes (`pack_codes`), and come back as the levels' values. Each token is
+    one group (`grouped`)."""
+    y = grouped(z)
+    step = (y.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)).to(torch.bfloat16).float().clamp_min(1e-30)
     half = 2 ** (bits - 1)
-    codes = (torch.floor(z / step).clamp(-half, half - 1) + half).long()
-    return (unpack_codes(pack_codes(codes, bits), bits).float() - half + 0.5) * step
+    codes = (torch.floor(y / step).clamp(-half, half - 1) + half).long()
+    return ((unpack_codes(pack_codes(codes, bits), bits).float() - half + 0.5) * step).reshape(z.shape)
 
 
 def stochastic(g: torch.Tensor, bits: int) -> torch.Tensor:
     """Each token's coordinates rounded stochastically onto 2^bits − 1 steps from −top to top, top their largest
-    magnitude rounded up a bf16 unit, the draw torch's global generator's."""
-    top = (g.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float().clamp_min(1e-30)
+    magnitude rounded up a bf16 unit, the draw torch's global generator's. Each token is one group
+    (`grouped`)."""
+    y = grouped(g)
+    top = (y.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float().clamp_min(1e-30)
     step = 2 * top / (2 ** bits - 1)
-    return torch.floor((g + top) / step + torch.rand_like(g)).clamp(0, 2 ** bits - 1) * step - top
+    return (torch.floor((y + top) / step + torch.rand_like(y)).clamp(0, 2 ** bits - 1) * step - top).reshape(g.shape)
 
 
 class Code(torch.autograd.Function):
