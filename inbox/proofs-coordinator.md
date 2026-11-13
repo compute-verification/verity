@@ -140205,3 +140205,158 @@ None out. One try follows the push.
 - Everything in item 2: stated, not written, not compiled.
 - (c4) itself: the half above is the members' check's. That the session's verifier refuses a record whose second rep stream has more than `R` rounds is MESSAGES's and is not read by me.
 - `5eb57387af` is still not on the join; no entry after 11:54Z names it.
+
+## FIRSTACCEPT, Fri 12:17Z: the streamed main, statement first: a stream that names its blobs' order before the first, checks each blob's SHA-512 against it, and decides what `checkBlobs` decides on the blobs fed; its accept is `checkBlobs`' accept in any order, with no collision clause; about 155 GB and 8 to 16 hours on Thursday's window
+
+Nothing here says a listed guarantee is false or empty. `checkBlobs`, `BlobProtocol.main` and every statement on them stay as they are. Read on MEMBERS's switch head `89e34d206ce` (`cursor/proofs-members-switch-34fd`); nothing below is compiled. Two measurements ran (item 8).
+
+**STOP item, before anything else.** The streamed main is a new command beside `check`. To serve it, the two executables' mains change by one line each (`OneStageZk.main`'s and `VStarRecursive.Sampled.main`'s fall-through to `protocol.main` becomes the streamed protocol's main, which adds two commands and passes every other one to `BlobProtocol.main` unchanged). Before: `check PARAMS COMMITMENT EVIDENCE BLOB...` reads every blob, then decides. After: the same, plus `plan PARAMS COMMITMENT EVIDENCE` (prints the blobs' SHA-512 in the order the stream reads them) and `check-stream PARAMS COMMITMENT EVIDENCE LIST` (reads LIST, a file of paths, and each blob one at a time). It accepts only where `checkBlobs` accepts on the same blobs (item 2), so it accepts no form `check` refuses. It is also the "blobs by a file" of 10:20Z. Those two lines are the compiled check's mains: yours to rule on before I write them.
+
+**1. The types** [read, derived]. The interface's part (a new file `CoreProtocol/Stream.lean`; `Blobs.lean` unchanged):
+
+```lean
+/-- A check that reads its blobs one at a time, in an order it names before the first, and holds of each blob only
+what `step` keeps: `tables`, the blobs that may come first, each at most once and in this order; `plan`, the SHA-512
+of every other blob, in the order they are read. -/
+structure Stream (Out : Type) where
+  State : Type
+  tables : List ByteArray
+  plan : V (Array ByteArray)
+  init : State
+  step : State → ByteArray → State
+  finish : State → Out
+
+/-- The blobs `bs` as `s`'s feed: some of its tables first, by SHA-512 and in their order, then exactly its plan. -/
+def Stream.Fed (s : Stream Out) (plan : Array ByteArray) (bs : List ByteArray) : Prop :=
+  ∃ pre rest, bs = pre ++ rest ∧ (pre.map Flock.Sha512.hash).Sublist s.tables ∧
+    rest.map Flock.Sha512.hash = plan.toList
+
+/-- What `s` decides on `bs`, one at a time: its plan's refusal; a refusal at the first blob whose SHA-512 is not the
+next table or plan entry, or where the plan names more blobs than came; else `finish` after `step` on each. -/
+def Stream.run (s : Stream Out) (refuse : String → Out) (bs : List ByteArray) : Out
+
+structure StreamProtocol extends BlobProtocol where
+  stream : Params → Commitment → Evidence → Stream (Outcome Public Profile)
+  stream_eq : ∀ p c e plan bs, (stream p c e).plan = .ok plan → (stream p c e).Fed plan bs →
+    (stream p c e).finish (bs.foldl (stream p c e).step (stream p c e).init) =
+      checkBlobs p c e (Blobs.ofArray bs.toArray)
+```
+
+`StreamProtocol.main`'s `check-stream` is `Stream.run` with one blob in memory at a time: read, hash, step, drop. Like `BlobProtocol.main` reading files today, the loop is trusted code with no theorem of its own.
+
+SPOT's part (a new file `Spot/OneStageZk/Stream.lean`):
+
+```lean
+/-- What a planned blob is to the check. -/
+inductive Role where
+  | circuit (d : String)        -- a circuit file; the members that name it come next
+  | pub (m : Nat)               -- member m's public file (its place in the parameters' members)
+  | record (st s : Nat)         -- statement st's session s's record
+  | rep (st s j : Nat)          -- that session's j-th rep file, in its `reps`' order
+
+/-- The per-member form's plan: each circuit file in the order the members first name it, then each member that
+names it, in the members' order: its public file, and for a statement's member each session's record and rep files.
+Refused where a digest is planned twice or is a pinned table's. -/
+def planOf (p : Params) (e : Evidence) : V (Array (String × Role))
+
+/-- What the check keeps of a session once its files are read. -/
+structure SessionKept where
+  trees : V (String × Array (String × Option Nat) × Json × String)  -- its `membersTreesHeld` entry, or that refusal
+  head : V Unit                -- `step`'s refusals before the verdict: the record found, UTF-8, its draw's length
+  coinKey : Option String
+  files : V Unit               -- its rep files found (`filesOf`)
+  rest : V Unit                -- `verdictOf` past the coin-tree key's freshness
+  units : V (Array Nat)        -- `provedUnits` on its member's public file
+  found : Json × Json          -- the setup's partition finding and openings, as `verdictJson` reads them
+  programSha : Option String
+  want : Json
+
+structure State where
+  read : Nat
+  tables : List (String × ByteArray)
+  file : Option (String × ByteArray × FileKept)   -- the circuit file open: digest, bytes, what the pass keeps
+  pub : Option ByteArray                           -- a statement member's public file, until its sessions are read
+  record : Option ByteArray
+  reps : Array ByteArray
+  members : Array (V Unit)                         -- each member's files' verdict (`Member.files`), by place
+  sessions : Array (Array SessionKept)             -- by statement, then session
+
+def step (p : Params) (c : OneStage.Commitment) (e : Evidence) (plan : Array (String × Role)) :
+    State → ByteArray → State
+
+/-- `checkBlobs`' order with every read of a blob replaced by what the step kept: `coinsOf`, `membersStructure` with
+`membersTreesHeld` on the kept entries, `rootsOf`, `membersHeld`, `sampledHeld`, the members' verdicts in the members'
+order, each statement's sessions folded on their kept pieces, `provedHeld`, then v1's `checkAt`. -/
+def finish (p : Params) (c : OneStage.Commitment) (e : Evidence) : State → Core.Outcome OneStage.Public Core.Integrity
+```
+
+The one statement's form gets a stream that keeps every blob and calls `checkBlobs` on them in `finish` (one circuit, as today). The composition's stream (`VStarRecursive.Sampled`) is SPOT's on `.inl, .inl`; on mismatched forms it plans nothing and rejects as `checkBlobs` does; the recursive form's plan is a refusal, as its parameters are.
+
+**2. The theorem** [derived]:
+
+```lean
+theorem stream_eq (p : Params) (c : OneStage.Commitment) (e : Evidence) (plan : Array ByteArray)
+    (bs : List ByteArray) (hp : (streamOf p c e).plan = .ok plan) (hf : (streamOf p c e).Fed plan bs) :
+    (streamOf p c e).finish (bs.foldl (streamOf p c e).step (streamOf p c e).init) =
+      checkBlobs p c e (Core.Blobs.ofArray bs.toArray)
+```
+
+It is the equality: on a feed in the plan's order, the same outcome, a rejection's reason included. The feed's order is its hypothesis (`Fed`): tables first, a circuit before its members' public files, a member's public file before its sessions' files.
+
+A feed in another order: `Stream.run` rejects it, never undecided, at the first blob out of place. This is a second statement, but it is the interface's, proved once for every stream, not SPOT's:
+
+```lean
+theorem StreamProtocol.run_accept (P : StreamProtocol) {p c e bs pub prof}
+    (h : (P.stream p c e).run .reject bs = .accept pub prof) :
+    P.checkBlobs p c e (Blobs.ofArray bs.toArray) = .accept pub prof
+```
+
+From `run`'s own check: an accept means every blob matched its place, so `Fed` holds and `stream_eq` applies. That is the statement the guarantees go through: whatever the order, the streamed accept is `checkBlobs`' accept on the blobs fed.
+
+MEMBERS's four conditions, as this statement meets them:
+- The summary is the pass's `FileKept` (`fileOf`), not a new one.
+- **No collision clause.** The plan names each digest once, and none is a pinned table's. The step checks each blob's SHA-512 against its place. So every blob fed has its own digest, and `Blobs.get` on the fed blobs finds the one the step had: there is no "first of two". The cost is a refusal of parameters that name one file twice in two roles (two members naming one public file, say). On Thursday's window no digest repeats: a template's circuit is planned once for all its members and its sampled member.
+- The tables come first; a pinned table's digest anywhere in the plan refuses the plan.
+- A public file comes after its circuit, by the plan.
+
+**3. The sampled members.** [read, derived] The plan puts a sampled member's sessions' files right after its public file, inside its circuit's group. The step runs the member's sessions while the circuit file is open, then drops the file at the end of the group. So nothing is kept for a sampled member past its group: 21.9 GB at most, never 355 GB.
+- **Allowed by the equality, and what I propose: sessions while the file is open.** The session keeps its own parse, as today (`setupAt` parses, and `rootBTables` sets the session up once more for the trees' check). One parse shared by the summary and the session would change Flock's session code and its proofs, and saves no peak: parses happen one at a time. Proof cost: `SessionKept` and three lemmas. `verdictOf` splits at the coin-tree key's freshness (`files *> fresh *> rest`), the only part of a session that reads earlier sessions. The trees' entries made early equal `membersTreesHeld`'s. The statements' fold on the kept pieces equals `runMembers`' fold.
+- **Allowed only with a weaker theorem: the file read a second time.** The plan would name the circuit's digest twice. The two fed blobs then share a digest, and the equality needs them equal: the theorem gains "or two of the files fed collide", and the run reads and hashes 333 GB more. I would not take it.
+
+**4. The hashing.** [read] Each blob is read whole and hashed once when the step takes it (`Flock.Sha512.hash`, compiled as `hashFrom` and `blocksFast`), against its place in the plan. Its bytes are in memory anyway for the parse. `Base.Hash` has no streamed SHA-512 today (no update and finish for SHA-512; BLAKE3 has `Hasher.update`). The lemmas one would need exist (`blocks_add`, `padOnto_append`, `hash_eq_blocks`). It is needed only for a file larger than memory, which Thursday's largest (21.9 GB) is not.
+
+**5. The memory on Thursday's window.** [derived] About **155 GB**: the largest circuit file held (21.9 GB) and one parse of it at 6 bytes a byte (131 GB), its summary's parse or its sampled member's session's, never both. Plus the four pinned tables (2 × 2^24 + 2 × 2^23 words: 192 MB as 4-byte words), one public file and one session's record and reps (small), and the per-member verdicts and per-session pieces (102,781 short results and 298 sessions' pieces: well under 1 GB). No summary outlives its group, so META's size counts once, not 298 times.
+
+**6. The size.** [derived]
+- Interface: `CoreProtocol/Stream.lean`, new, about 150 lines: `Stream`, `Fed`, `run`, `run_planned`, `run_unplanned`, `StreamProtocol`, `run_accept`, `StreamProtocol.main` with `plan` and `check-stream`. `Blobs.lean` unchanged.
+- SPOT: `Spot/OneStageZk/Stream.lean`, new, about 700 lines. `planOf` and `Role` (about 80); bytes-taking forms of `fileOf`, `statementOn`, `Member.filesOn`, `step`, `sessionEvidence` and `rootBTables`, each with its equality where the blobs' lookup returns those bytes (about 150); `State`, `step`, `finish` (about 150); the proof (about 300): the blobs' lookup on a feed with distinct digests, `tablesOf` on the feed's tables, `verdictOf`'s split, the trees' entries, the fold, then `membersRun`, `checkMembersAt`, `checkBlobsAt` and `checkBlobs`. `OneStageZk.lean` is already 2,416 lines, so none of it goes there. The composition: about 20 lines in `Sampled.lean`.
+- Reused from the kept pass: `FileKept`, `fileOf`, `statementOn`, `Member.filesOn`, `Member.files_on`, `statementOf_on`, `StepAt.ofOwn_kept`, and through them `CircuitKept`'s `checkOf_kept`, `portsOf_kept`, `filesOf_kept`. `membersFiles_eq_kept` is not needed: the stream calls `Member.filesOn` per member itself, but its proof is the pattern.
+- Locks: the interface's lock has no guarantee, so nothing moves. SPOT's lock: no record moves (nothing listed is restated). For the deployed accept to be the streamed command's, `run_accept` at `VStarRecursive.Sampled`'s protocol would become a property in `security/Properties`, a new record: yours to decide.
+- The driver: the case writer lists the blobs in the plan's order (from `plan`, so no Python copy of the order), `case_files.py` passes one list file to `check-stream`, and the 6 MiB argument cap no longer matters. About 40 lines.
+
+**7. The hours on Thursday's window, with the listing.** [derived; the rates are measured on stand-ins]
+
+| what the check does | hours |
+|---|---|
+| a parse a member, today's `membersFiles`: 229.10 TB at 17.5 s a GB | about 1,110 (46 days) |
+| once a file: 332.77 GB at 17.5 s a GB | about 1.6 |
+| plus what stays a member: within 0.2 s of zero, 102,781 members | 0 to 5.7 |
+| plus the 298 sampled sessions, beyond their files' parse: 333.8 GB of sampled blobs at 84 to 113 s a GB read (my earlier all-sampled stand-ins), less the 17.5 | about 6 to 9 |
+| plus SHA-512 of every blob once: about 338 GB at 2.3 s a GB | about 0.2 |
+| **streamed main, total** | **about 8 to 16** |
+
+MEMBERS's run-wide costs (the tables three times a member, `Blobs.get`'s compares, `KeptParses.after`) are gone in the stream: tables are read once, and a lookup is the blob in hand.
+
+**8. The two measurements.**
+- **SHA-512 in the compiled check** [run `r20261113-115930-6b82`, vy-nebius-cpu-11]: v2's refusal on a stand-in case, then on the same case with one more random blob that the check hashes and never looks up: 12.1 s, +2 GiB 17.2 s, +4 GiB 22.0 s, each twice the same to 0.1 s. So about 2.5 s a GiB (2.3 s a GB), the file's read from the page cache included; the peak grows by 1.0 bytes a byte.
+- **META against its file** [run `r20261113-115012-b0d6`, vy-nebius-cpu-9]: six stand-in circuits, 61.7 MB to 951.7 MB, from three stand-in windows at K = 128 to 16384. META's line is 0.011% to 0.012% of its file each time: 7,348 bytes of 61.7 MB, 51,038 of 478.0 MB, 102,744 of 951.7 MB. If served circuits keep that share [guess], the largest file's META is about 2.4 MB and all 298 files' about 37 MB [derived]. So keeping META whole costs nothing that counts.
+
+**Not established**
+- None of this is compiled or tried. The 700 lines are an estimate from the kept pass's size.
+- That a session's peak is no more than 6 bytes a byte of its circuit on a 21.9 GB circuit (4.2 to 5.6 on my stand-ins, up to K = 16384).
+- The 84 to 113 s a GB for sessions holds on Thursday's circuits.
+- That a served circuit's META is the same share of its file as a stand-in's.
+- Whether any of the four pinned tables is fed on Thursday's window.
+- That nothing outside `membersRun` and `coinsOf` reads a blob in the per-member form. I read every `bs.get` and `tablesOf` on its path: `tablesHeld`, `statementOf`, `fileOf`, `rootBTables`, `sessionEvidence`, `step`, `filesOf`.
+
+Next, unless you say otherwise: Part 3, the draft on `cursor/proofs-firstaccept-streamed-<hex>` off MEMBERS's switch head, statement and definitions first.
