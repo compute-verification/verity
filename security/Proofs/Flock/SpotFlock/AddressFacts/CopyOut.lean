@@ -16,9 +16,10 @@ once. At a written bit of member `t`'s unit `u`, the column `pickAny` chooses is
 A written bit is Bits' commitment position of the key program's gate on bit `b` of returned output leaf `j` of unit
 `u`'s instance `k` (`Spot.Bits.outGate`). `uniform` puts a unit's computed column on its own gate past the earlier
 units' (`wire_comp_uniform`), so that gate is the unit's column `OutColAt` names (`outGate_wire`), and no other
-column of the unit is on it (`RowsWire.shared`). The design evaluates only where every member's circuit is in `scopeOkH`'s scope
-(`membersScoped`): its outputs come from the unit net, and each output row holds one output port (`OutRowsS`), so Bits'
-output row of the leaf's word is the word's output port and its bit the word's bit (`outRowBit_ref`).
+column of the unit is on it (`RowsWire.shared`). The design evaluates only where every member's circuit is in
+`scopeOkH`'s scope (`membersScoped`): its outputs come from the unit net, and each output row holds one output port
+(`OutRowsS`), so Bits' output row of the leaf's word is the word's output port and its bit the word's bit
+(`outRowBit_ref`).
 -/
 
 @[expose] public section

@@ -123,7 +123,8 @@ theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t
 
 /-! ## Unit columns on source gates -/
 
-/-- **A unit's input column is on its own source gate**: input `b`, its own key, of unit `u` reads gate `2 + u·B + b`. -/
+/-- **A unit's input column is on its own source gate**: input `b`, its own key, of unit `u` reads gate
+`2 + u·B + b`. -/
 theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : ℕ}
     (outs : Finset (Fin (Layout.keyN c hU n))) (u : Fin n) {b : ℕ} (hb : b < Layout.keyB c hU)
     (hself : Aliased.keyIdx c (Layout.keyB c hU) ⟨b, hb⟩ = some ⟨b, hb⟩) :
