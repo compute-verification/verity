@@ -7,6 +7,7 @@ import json
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import derived_rows as D
 
 from tests.properties import norm_tap_exactness_gpu as G
 from verity_vllm.properties import norm_tap_exactness as X
@@ -146,14 +147,17 @@ def test_source_diff_accepts_only_the_tap_lines():
 @pytest.mark.parametrize("kernel", X.KERNELS)
 def test_ir_scale_is_the_twins_scale(kernel):
     """The scale gate read off the evaluation trace (`ir_scale`) is the twin's `s` / `inv` on random rows (N = 64): the gate lookup is right."""
-    from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.numerics.rms_relation import RmsUnresolved
     try:
         D._rms_tables()
-    except Exception as e:  # pragma: no cover
+    except RmsUnresolved as e:  # pragma: no cover
         pytest.skip(f"MUFU tables unavailable: {e}")
     rng = np.random.default_rng(64)
     N, eps = 64, 1e-6
-    bf16 = lambda s: ((rng.standard_normal(s) * 2).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)  # noqa: E731
+
+    def bf16(s: int | tuple[int, ...]) -> np.ndarray:
+        return ((rng.standard_normal(s) * 2).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
     x, res, w = bf16((2, N)), bf16((2, N)), bf16(N)
     twin = X.twin_scales(kernel, x, res if kernel == "cuda" else None, w, eps)
     for r in range(2):

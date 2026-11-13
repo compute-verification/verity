@@ -33,10 +33,30 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+from verity.definitions.replay import replayer
+
 from verity_vllm.program.inputs import check_params
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows
+from .build import (
+    BUILDER_ID,
+    I32,
+    I64,
+    WRAPPERS,
+    BuildResult,
+    _Model,
+    decoder,
+    request_shape,
+)
+from .common import (
+    Unexpressible,
+    _arr_shape,
+    _Peers,
+    _Stochastic,
+    drive,
+    in_launch,
+    launch_batch,
+    launch_rows,
+)
 from .phi import Phi
 
 
@@ -59,25 +79,6 @@ class NodeResult(BuildResult):
         for r, lo, hi in self.spans:
             out[lo:hi] = [r] * (hi - lo)
         return out
-
-
-def check_ranks(phi: Phi, node: NodeResult, **shape) -> list[dict]:
-    """Each rank's run of `node`'s body against its own rank Program's body (`build.build_program`, built one rank at a time):
-    node for node, the same form and Definition. Raises on the first rank that differs."""
-    from .build import build_program
-    rank_of, nodes, out = node.rank_of(), node.node_fn.body.nodes, []
-    for r in range(node.world):
-        t0 = time.time()
-        own = build_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}), node.wrapper, with_desc=False, **shape)
-        mine = [(n.form, n.fn.id) for n, q in zip(nodes, rank_of) if q == r]
-        theirs = [(n.form, n.fn.id) for n in own.program.fn.body.nodes]
-        if mine != theirs:
-            at = next((i for i, (a, b) in enumerate(zip(mine, theirs)) if a != b), min(len(mine), len(theirs)))
-            raise AssertionError(f"rank {r}: the node's run of {len(mine)} nodes differs from its Program's {len(theirs)} at node {at}")
-        out.append({"rank": r, "nodes": len(theirs), "gates": sum(n.gates for n in own.program.fn.body.nodes),
-                    "secs": round(time.time() - t0, 1)})
-        del own
-    return out
 
 
 class _Abort(Exception):
@@ -186,8 +187,9 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
-    nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
-    n = M if wrapper == "step" else int(LP)
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    nets = [decoder(p, M, pos0 + M if wrapper == "step" else prompt_rows + decode_steps) for p in phis]
+    n = M if wrapper == "step" else prompt_rows
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
@@ -206,8 +208,9 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     P = node_parameters(phi, wrapper, LP=LP, T=T, M=M, pos0=pos0)
     phis, nets, params, theta = P.phis, P.nets, P.params, P.theta
     world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
-    n = M if wrapper == "step" else int(LP)
-    events = 1 if wrapper == "step" else int(T) + 1
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    n = M if wrapper == "step" else prompt_rows
+    events = 1 if wrapper == "step" else decode_steps + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
     W = [Coll(RecordType(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
          for at, ls in zip(P.weights_at, P.leaves)]
@@ -219,7 +222,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    batch = launch_batch(phis[0], LP, T) if wrapper == "request" else None
+    batch = launch_batch(phis[0], prompt_rows, decode_steps) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r) for r in range(world)]
     models = []
@@ -227,7 +230,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         model = nets[r].model(B, W[r], peers[r])
         in_launch(model, batch, nets[r].model_class, note=f", {len(phi.requests)} requests")
         if wrapper == "request" and isinstance(model, _Model):
-            model.ctx = launch_rows(phis[r], LP, T)
+            model.ctx = launch_rows(phis[r], prompt_rows, decode_steps)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world
@@ -251,7 +254,11 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         raise lockstep.error
     if len(set(lockstep.taken)) != 1:
         raise AssertionError(f"the ranks took {lockstep.taken} collectives")
-    out = Coll(Array(world * events, I32), concat([t.refs for ts in toks for t in ts]))
+    refs: list = []
+    for r, ts in enumerate(toks):
+        assert ts is not None, f"rank {r} ended with no error and no samples"
+        refs += [tok.refs for tok in ts]
+    out = Coll(Array(world * events, I32), concat(refs))
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
@@ -259,7 +266,6 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     name = f"{derive_name}Node[{nets[0].model_class}]"
     src_static = {"class": f"verity-vllm/node/v1[{src_class}]", "mode": "profile", "profile": phi.profile, "world": world,
                   "inputs": inputs, "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
-    from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"a tensor-parallel node's ranks joined at their collectives, predicted ahead of time by "
                                    f"verity_vllm.program.predict.node ({BUILDER_ID})",

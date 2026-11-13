@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from typing import Any
 
 import numpy as np
 import pytest
@@ -33,12 +34,15 @@ except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows
         w = importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
     finally:
         del sys.modules["torch"]
-_cls = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))
+_cls: Any = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))
 
 
 class _Stub:
     _tp2_logical_request = _cls._tp2_logical_request
     _tp2_attribution = _cls._tp2_attribution
+    ids: dict[int, bytes]
+    rc: Any
+    _tp2_commit: dict[str, Any]
 
 
 TOK = {"A": [11, 12, 13], "B": [21, 22, 23]}

@@ -33,11 +33,13 @@ import threading
 import zipfile
 import zlib
 from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
+from verity.protocols.pouw.verifier.protocol import tagged
 
 from verity_vllm.protocols.pouw.h1 import records as ZR
 
@@ -106,15 +108,16 @@ def savez(path: Path, arrays: Mapping[str, Any]) -> Path:
             np.savez(f, **arrays)
             return path
         central, offset = [], 0
-        for name, head, data, crc in members:
+        for member, head, data, crc in members:
             size = len(head) + data.nbytes
             f.write(_LOCAL.pack(b"PK\x03\x04", zipfile.ZIP64_VERSION, 0, 0, zipfile.ZIP_STORED, 0, _DOS_DATE, crc, 0xFFFFFFFF,
-                                0xFFFFFFFF, len(name), _ZIP64.size) + name + _ZIP64.pack(1, _ZIP64.size - 4, size, size) + head)
+                                0xFFFFFFFF, len(member), _ZIP64.size) + member + _ZIP64.pack(1, _ZIP64.size - 4, size, size)
+                    + head)
             f.write(data)
             central.append(_CENTRAL.pack(b"PK\x01\x02", zipfile.ZIP64_VERSION, _SYSTEM, zipfile.ZIP64_VERSION, 0, 0,
-                                         zipfile.ZIP_STORED, 0, _DOS_DATE, crc, size, size, len(name), 0, 0, 0, 0, 0o600 << 16,
-                                         offset) + name)
-            offset += _LOCAL.size + len(name) + _ZIP64.size + size
+                                         zipfile.ZIP_STORED, 0, _DOS_DATE, crc, size, size, len(member), 0, 0, 0, 0,
+                                         0o600 << 16, offset) + member)
+            offset += _LOCAL.size + len(member) + _ZIP64.size + size
         cd = b"".join(central)
         f.write(cd + _END.pack(b"PK\x05\x06", 0, 0, len(central), len(central), len(cd), offset, 0))
     return path
@@ -241,7 +244,7 @@ class Writer:
                 st["waits"] += 1
                 self._cv.notify_all()
                 self._cv.wait()
-            if self._stopped is not None:
+            if self._stopped is not None or lo is None:
                 st["calls"] += 1
                 st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
                 return
@@ -365,8 +368,6 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
     the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
-    from verity.protocols.pouw.verifier.protocol import tagged
-
     from verity_vllm.protocols.pouw.h1 import records as ZR
     from verity_vllm.protocols.pouw.h1 import requests as RQ
 
@@ -382,7 +383,7 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     def table(name: str, leaves: list[bytes]) -> Any:
         tree = RQ.hiding_rows(tagged(RQ.TABLE_TAGS[name], salt, index), index, leaves, key,
                               RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name])
-        if tree.commitment.root.hex() != (row.get("tables") or {}).get(name):
+        if tree.commitment.root.hex() != RQ.table_root(row, name):
             raise ValueError(f"call {index}'s {name} table, rebuilt from the prover's directory, is not the one its "
                              "manifest row carries")
         return tree

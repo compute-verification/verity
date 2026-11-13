@@ -8,7 +8,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import math
 
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program

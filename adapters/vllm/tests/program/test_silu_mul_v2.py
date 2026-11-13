@@ -5,14 +5,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import rows as RK
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.act import SiluMul, SiluMulBf16
+
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import b1, prims as P
-from verity.definitions.registry.act import SiluMul, SiluMulBf16
 from verity_vllm.program.quarantine.act import silu_mul_difftest as DT
 
 V1 = P.SiluMulBf16.evaluate
@@ -67,10 +68,10 @@ def test_v1_on_every_other_gate_word():
 
 
 def test_the_row_is_the_element_per_lane():
-    I = 7
+    INTER = 7
     gates = [ONE, NEG_ZERO, NEG_INF, 0xC2C8, 0x4120, 0x7FC0, 0xC0A0]
     ups = [NEG_ZERO, ONE, ONE, ONE, NEG_ZERO, ONE, 0x4049]
-    got = [int(v) for v in evaluate(bind(SiluMul, I=I), gates + ups)]
+    got = [int(v) for v in evaluate(bind(SiluMul, I=INTER), gates + ups)]
     assert got == [V2(g, u) for g, u in zip(gates, ups)]
 
 
