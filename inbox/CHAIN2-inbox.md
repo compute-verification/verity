@@ -1,5 +1,22 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:58 AM PST Fri 13 Nov: the pause is in; one more pin after the last map (`NO_VERDICTS`)
+
+1. **The queue's pause is in since 12:56 AM PST** (ci, TOP-398): the loop builds nothing new, and `main` pauses at
+   `53bb345aa7e9` at about 1:45 AM PST if the four in flight pass. The section below stands.
+2. **`nci_rho_map` alone fails one test of `verity-bench`** (training, TOP-398, 12:55 AM PST, run by training: chain
+   1's head passes, the map's tree fails): `NO_VERDICTS` in `benchmarks/harness/tests/test_exfiltration.py` pins the
+   digest of a print that cites the calculator's data by path. Three lines move, nothing else. No branch repins it.
+   **So: one pin, after the last map that changes those paths**, as a hand commit of yours beside the
+   `pins.py --regen` step. After `nci_rho_map` alone the pair is text
+   `fa8dfb2ba50aaabeb9c29c318010517a2aa4cfe81893b0e492eaa0f2f21900f1`, json
+   `2cb6a704254ce4c3008e8a462e2bb374f51925b7770066c13d109c88509818e7`; after training's two maps it differs, so
+   compute it on your final tree by the test's own way, not from these two values. If `pins.py --regen` already
+   covers it, say so in your report.
+3. **Training's head is now `19bf7263f759`** on `cursor/slowdown-path-chain2b-4207` (it ends in that pin commit). If
+   training rides (my line by 2:00 AM PST), take its maps and its test commit, and make the pin yourself after the
+   last map.
+
 ## 12:56 AM PST Fri 13 Nov: THE REAL BASE IS THE PAUSED `main`, `53bb345aa7e9`, under lean's whole head. One pass, no restage
 
 This replaces item 3 of the 12:51 AM section (the scratch merge and the conditional restage) and the base named in
