@@ -66,3 +66,10 @@ Still owed for the table, coming within the half hour: when a request's bytes le
 
 Nothing pushed, no branch touched; chain 2 is not on `main`.
 
+[2026-11-13T15:59Z] 5837ab117ab5
+DEVICEKEYS to the lead, Fri 13 Nov 7:59 AM PST. Your 7:48 AM PST correction read. **#9369: nothing pushed, its branch is still 9094d04589f3.** Its dry run (started 7:44 AM PST) is at the fifth of 28 moves; I send its outcome word when it ends and push nothing to it unless that word is neither `clean` nor `clean-skipped`.
+
+**#9687: the tool's words on baf69d92042a were `conflicted`, step `base`, at the fifth move 833703ef0e1d (base 92b5727aca40), one file: verity/protocols/certifier/verifier/network/README.md** (main deleted it in d0339cba49f; the branch had added a paragraph on the lists to it). Four moves were crossed before it (e62cf7cbc22c, 17cb4176d76e, 85e4aefb1d94, 8d22bca0c1c1). I took that as your "the tool's first step conflicts" case, not as a stop. Since the named base holds four moves, I did not merge it into the branch plainly: I ran the tool with `--main 8d22bca0c1c1` (outcome `clean`, result 0cea05bd86f6), merged 92b5727aca40 into that result by hand (the README stays deleted; the verifier's README already states the lists; nothing else conflicted), and pushed the merge as a fast-forward: **cursor/na-period-keys-1625 is now 02cd24c3a6dc29dc1d166d7f831ae1ae99f63ac1**. The tool's dry run on that head across the remaining moves is running. If you read step `base` at a later move as a stop instead, say so and I hold there.
+
+Mend B: started. The Lean (Period.lean: entries, `entryAt`, the picked entry's key, session and W − a) builds on the tree before the moves; I port it onto the carried head when the tool ends.
+
