@@ -113,7 +113,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   statement behind the ZK server, so a `dev` or `host` run, or one of some of `LEVELS`, exits 0 on its parts and is not
   composed. `ok`, an accepted recursive run, only when its parts passed and Lean accepted the composition. For a run
   that passed on its parts and was not composed, the table's first line says so, with the oprove modes and the reason,
-  and the `compose` row has no verdict. A merged table's verdict is only as whole as its runs.
+  and the `compose` row has no verdict. A run whose composition Lean refused is not accepted, and the line gives
+  Lean's reason (`refused`): a forced retry's (`RETRY`) starts with the retry. A merged table's verdict is only as
+  whole as its runs.
 - **Data.** the pod script's staged statements and runs go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
   `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.
