@@ -31,8 +31,9 @@ partition query; the two-stage registration the samples read
 (`filesBlockOf`); the second
 stage's count per stratum; the templates' names and the design's links, as round 2's statement check reads them
 (`names`, `links`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
-`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`),
-which its statement's are but for the run's fields; and the commitment's layout and the reference prover's framing
+`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`)
+and reference header (`refHeaders`), which its statement's are but for the run's fields; and the commitment's layout
+and the reference prover's framing
 (`frame`, a code whose verifier, samples and reveal count are unread).
 
 **The run's statement** (`Roots`): the boundary registration's record, as JSON (`decode`), whose ports' roots are the
@@ -61,7 +62,8 @@ roots the boundary values are committed under (`portRoots`).
   read (`SecondStage.inputsFailure`); the design's links and wires are derived over the parts
   (`SecondStage.designOk`); round 2's
   statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
-  file's header is `xS₀ t`'s placed in the run (`SecondStage.atRun`) but for the run's fields, names the part's slots
+  file's header is the template's reference header (`refHeaders`) placed in the run (`SecondStage.atRun`) but for the
+  run's fields, names the part's slots
   and the interior record's roots, its sample is the second stage's draw within the part, each registered read is one it
   may read, and its registered reads are its template's reference reads (`refReads`) but for the run's fields, the code
   itself the verifier of record of the session it checks (`codesOk`)); and it is `xS₀ t` but for its sample, its
@@ -129,11 +131,14 @@ stage's count per stratum (`k`), the templates' names (`names`) and the design's
 the rows their units read (`rows`) round 2's statement check reads, the names the boundary and interior registrations'
 records must name (`boundaryNames`, `interiorNames`), template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
-null for none (`refReads t`), the commitment's layout and the reference prover's framing
+null for none (`refReads t`), template `t`'s reference header as the auditor's params give it (`refHeaders t`), the
+commitment's layout and the reference prover's framing
 (`frame`), and the rounds after round 1 whose coins the second stage reads too (`more`). Template `t`'s circuit is
 its reference statement's (`Held.ms`). The reference reads are a copy of their own,
 not `xS₀ t`'s: Flock's setup reads a statement's registered reads as a registration's, roots included, which reference
-reads, staged before any run, can't name. -/
+reads, staged before any run, can't name. The reference headers are a copy of their own too, not the headers of
+`xS₀ t`'s public file: the second stage's check holds a statement's header to the JSON the params give, and no check
+holds that JSON to the file's first line as parsed. -/
 structure Held where
   desc : Msg
   vus : List (Array ℕ)
@@ -149,6 +154,7 @@ structure Held where
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   refReads : ℕ → Json
+  refHeaders : ℕ → Json
   frame : Code
   more : ℕ
 
@@ -653,8 +659,8 @@ def headerOf (file : ByteArray) : Option Json := do
 
 /-- **Template `t`'s session statement is its reference one** but for what the run sets: decoded as `w`, it is
 `xS₀ t`'s in every field but its sample, its registered reads and its public file, its circuit, tables and program
-among them. Round 2's statement check holds its public file's header to `xS₀ t`'s but for the run's fields
-(`SecondStage.headerOk` at `refsOf`). -/
+among them. Round 2's statement check holds its public file's header to the template's reference header but for the
+run's fields (`SecondStage.headerOk` at `refsOf`). -/
 def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   match FlockDeploy.decode (h.xS₀ t) with
   | some w₀ =>
@@ -680,10 +686,9 @@ def stmtJsonOf (t : ℕ) (w : FlockDeploy.Raw) : Option Spot.SecondStage.Stmt :=
     [("draw", draw), ("header", header), ("registered", registered), ("template", .str (h.names.getD t ""))])
 
 /-- **The reference headers** round 2's statement check holds each template's statement to (`SecondStage.Own.refs`):
-template `t`'s name with its reference statement's public file's header, for each template whose header reads. -/
+template `t`'s name with its reference header (`Held.refHeaders`), for each template. -/
 def refsOf : Array (String × Json) :=
-  ((List.range h.ms.length).filterMap fun t =>
-    ((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => headerOf w₀.publicFile).map fun r => (h.names.getD t "", r)).toArray
+  ((List.range h.ms.length).map fun t => (h.names.getD t "", h.refHeaders t)).toArray
 
 /-- **The reference reads** round 2's values check holds each template's statement to (`SecondStage.Own.refReads`):
 template `t`'s name with its reference reads (`Held.refReads`), for each template. -/

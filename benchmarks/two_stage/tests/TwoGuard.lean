@@ -173,7 +173,10 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
     let h₀ : Held :=
       { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
         xS₀_ok := refAt_ok refs hz,
-        refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode, more := 0,
+        refReads := fun t => reads.getD t .null,
+        refHeaders := fun t =>
+          ((FlockDeploy.decode (refAt refs t)).bind fun w₀ => headerOf w₀.publicFile).getD .null,
+        frame := SamplingDeploy.toyCode, more := 0,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
                  blockOf := fun _ _ _ => 0, always := fun _ => false } }
     let ms := h₀.ms
