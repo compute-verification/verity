@@ -11,3 +11,4 @@
 2026-11-13T19:14Z BITS: suites r20261113-181406-a0b2 at 7effbf40c705: 5 of 6 passed; repository 361 passed 1 failed (test_the_unwitnessed_list_only_shrinks: security 222 > 221, #9346's SpotOneWaitTwo unwitnessed vs main's lowered cap; not fixed, reported). research.carry exit 1 (bits_pins.json). PR body's Not run line updated; CIR-270 commented. All 69 added commits by Cursor Agent <cursoragent@cursor.com>, the checkout's identity.
 2026-11-13T22:25Z BITS: d2a084f91f3830c5432278afcf0efff9a6f93607 pushed (unwitnessed prints no number); launching the command run (text and --json) at it.
 2026-11-13T22:27Z BITS: command run r20261113-222544-9220 launched at d2a084f91f38; launching the six suites at d2a084f91f38.
+2026-11-13T22:42Z BITS: cancelled r20261113-222544-9220 (waited 16 min for a 16 GB slot, never started); relaunching the command run at d2a084f91f38 with --mem-gb 2.
