@@ -139,6 +139,16 @@ def test_refusal(server, name: str) -> None:
         assert PORT.key(lean) == PORT.key(py)
 
 
+def test_two_definitions_are_refused_by_name(server) -> None:
+    """A boundary population of replay blocks under two Definitions is refused by `ONE_DEFINITION`, in the Lean and the
+    twin alike: the theorem counts replay blocks, a share by weight only where they are one Definition's."""
+    c = case(CHANGES["boundary-two-strata"](base()))
+    lean, py = PORT.lean(server, c), PORT.python(c)
+    assert lean[0] == py[0] == "reject", (lean, py)
+    assert json.loads(lean[1])["reason"] == json.loads(py[1])["reason"], (lean, py)
+    assert T.ONE_DEFINITION in json.loads(lean[1])["reason"], lean
+
+
 def test_the_base_is_refused(server) -> None:
     """Past the mirror the Lean still refuses: the members are none, and the form accepts nothing while `FORM` is false."""
     assert PORT.lean(server, case(base()))[0] == "reject"
