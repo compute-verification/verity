@@ -213,7 +213,7 @@ def honest(audit: Path, tree: Path | None, registration: Path | None) -> dict:
             import served_integrity as SI
             got = SI.answer(audit, load(registration))
             out["answer"] = {"verdict": got.get("verdict"), "reason": got.get("reason")}
-        except Exception as e:  # the rest of rehearsal.json is written without it; `main` says it failed
+        except Exception as e:  # noqa: BLE001  the rest of rehearsal.json is written without it; `main` says it failed
             out["answer"] = {"error": re.sub(r"[0-9a-f]{16,}|[0-9]+", "N", f"{type(e).__name__}: {e}")[:300]}
     return out
 
