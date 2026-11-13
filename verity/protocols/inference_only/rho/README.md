@@ -12,12 +12,12 @@ gives the bound without each assumption, and without both, only as sensitivities
 Every number it reads is a parameter with a public source and a status, so a bound is always at some choice of every
 parameter, and the package shows how the bound moves with each one.
 
-A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
+A scenario is one choice from every part: a fleet (its location and unregistered share), a regime (the envelopes that run), the
 inference-only policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
 algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
-  bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
+  bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
   `Nci.Guarantees.DampenerRemote`'s `ρ`. `verity/protocols/inference_only/nci` reads its slowdown `D` from `multiple_bound`. It
@@ -25,7 +25,7 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
-  each server block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
+  each server block padded to its capacity, over the reference training algorithm's size `T_0`. It is the intermediate the
   server-block bound gives, and what a contradiction compares;
 - **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
   its slowdown `max(1, MFU₀ · |A| / T_0)`, reported beside the bound, not as an end of an interval around it. A bound
@@ -91,7 +91,7 @@ uv run python verity/protocols/inference_only/rho/periods.py --bounds min-cut --
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
-  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_dark`, and the monitoring
+  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_unreg`, and the monitoring
   period (core's `reporting.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
@@ -107,7 +107,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | Notation | here |
 |---|---|
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
-| `ε_dark`, `L_dark` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
+| `ε_unreg`, `L_unreg` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | server block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
@@ -117,7 +117,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Overhead.padded`, `Overhead.rho`, `Scenario.seconds` |
 
-**The uncertified cap.** A bound counts an uncertified or dark gate at `ω_max / s_×`, `s_×` the fewest gates in any
+**The uncertified cap.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
 is valid only under the named assumption `draft:no-straddle` (no counted operation straddles verified and free
 compute), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
@@ -172,7 +172,7 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
 
 - `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
-  `1 / (uncredited + 1 / slowdown)`: the dark share of `theorem.multiple_bound`, which no count covers. A figure of
+  `1 / (uncredited + 1 / slowdown)`: the unregistered share of `theorem.multiple_bound`, which no count covers. A figure of
   `bound` or `bound_charged` is quoted beside it at a stated share, never alone.
 - The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
   weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
@@ -210,7 +210,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 `periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
 Neither writes a file unless told where.
 
-This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
+This package has an import root of its own (`distribution` in `tests/import_order.toml`). A loader puts this directory on
 `sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
 way its suite names what it reads here among its `inputs`, so this lists every loader:
 
@@ -229,7 +229,7 @@ policy's `Γ` and `K` and the range of `K`.
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
 `conditional` (proved under named assumptions), `draft` (a statement not yet in Lean, a `draft:` id) or `absent`. Its
 citations are its argument's and those of the cuts that bound it, and `draft:no-straddle` wherever a bound holds
-uncertified or dark gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
+uncertified or unregistered gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
 
 ## Names
 
