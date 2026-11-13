@@ -1136,14 +1136,15 @@ class LakeArtifacts:
         a build refused for the code its sources run. The log says how many compiled modules `indexable` refused and
         names the first few with its words. Only what
         the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
-        n = 0
+        n, said, read = 0, {}, {}
         for pkg in sorted(reports):
+            say = said.setdefault(pkg, []).append
             if not isinstance(rep := reports[pkg], dict) or rep.get("sandbox") is not True:
-                log(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
+                say(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
                     "into the artifact cache")
                 continue
             if any(str(f).startswith("sampled:") for f in rep.get("failures") or ()):
-                log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
+                say(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
                     "none of the modules compiled on top of it go into the artifact cache")
                 continue
             ws = MK.workspace(pkg)
@@ -1155,7 +1156,7 @@ class LakeArtifacts:
             with ThreadPoolExecutor(max_workers=8) as ex:
                 built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners, at, own), keyed)))
             if at:
-                log(f"lean-audit: {pkg}: {len(own)} setup.json of this build, which read its tree at {at[0]}, name a "
+                say(f"lean-audit: {pkg}: {len(own)} setup.json of this build, which read its tree at {at[0]}, name a "
                     f"path under the tree's own ({at[1]}), each read as it is")
             if isinstance(only := rep.get("compiled"), list):
                 built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
@@ -1167,14 +1168,22 @@ class LakeArtifacts:
                     need.add(m)
                     todo += MK.loads(m, keyed)
             if refused := runs_code(pkg) if need else None:
-                log(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
+                say(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
                     "its modules go into the artifact cache")
             outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
                                    {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
                                     for a, (_, d) in b[2].items()})
-            # Everything above reads the build's own tree, which the caller holds, and nothing of the store; every read of
-            # the store's index is below, with the lock, since another build's `put` may have written it meanwhile
-            with self._lock():
+            read[pkg] = keyed, built, need, refused, refusals, outs
+        # Every package's build is read above with no lock: its own tree, which the caller holds, and nothing of the store.
+        # One hold has every read and write of the index and the prune, so no other writer comes between two packages of
+        # one `put`; what reading a package had to say is logged there, before its entries, in the packages' order
+        with self._lock():
+            for pkg, lines in said.items():
+                for line in lines:
+                    log(line)
+                if pkg not in read:
+                    continue
+                keyed, built, need, refused, refusals, outs = read[pkg]
                 indexed, recorded = set(), 0
                 for mod, k in keyed.items():
                     if mod not in need:
@@ -1196,7 +1205,6 @@ class LakeArtifacts:
                     log(f"lean-audit: {pkg}: {len(refusals)} modules this run compiled can't be indexed (`indexable`), "
                         f"{recorded} recorded under their keys: "
                         + "; ".join(f"{m}: {why}" for m, why in sorted(refusals.items())[:3]))
-        with self._lock():
             self.prune()
         return n
 
