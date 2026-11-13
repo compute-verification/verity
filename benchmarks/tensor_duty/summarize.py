@@ -1,6 +1,6 @@
 """The tensor-duty sweep's verdict on the H200 card's tensor clock (`clock.tensor`), and its reading as Markdown, over
 one or more runs' out/ directories. The sweep is that clock's falsification test: a point whose MACs over the host's
-wall clock exceed the card's tensor rate (`verity.hardware.cards.rate`, 132 SMs x 4096 x clock.tensor) refutes the card.
+wall clock exceed the card's tensor rate (`verity.device.rate`, 132 SMs x 4096 x clock.tensor) refutes the card.
 
 duty.cu prints its host stamps to the millisecond (`STAMP_S`), so a point's rate is known only between its MACs over
 its interval lengthened and shortened by a stamp: the verdict is REFUTED when some point exceeds the card's rate even
@@ -35,7 +35,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.hardware.cards import load, rate
+from verity.device import load_card, rate
 
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
@@ -52,7 +52,7 @@ BASE_SOURCE = ("third-party GPU databases' H200 SXM 141 GB base clock, 1500 MHz 
 
 def readings(sku: str = SKU) -> tuple[float, float, float]:
     """The card's tensor rate at clock.tensor (the bound), at clock.sm (the second reading), and a MHz of clock's."""
-    card = load(sku)
+    card = load_card(sku)
     return float(rate(card)), float(rate(card, mhz=card["clock"]["sm"]["value"])), float(rate(card, mhz=1))
 
 
