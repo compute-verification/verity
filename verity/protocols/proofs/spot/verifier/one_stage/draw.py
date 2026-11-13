@@ -56,7 +56,6 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -214,6 +213,12 @@ def _size(ranges: Sequence[Sequence[int]]) -> int:
 def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
     """A work sampling design's population work, W = sum_s w_s n_s."""
     return sum(s["work"] * _size(s["units"]) for s in strata)
+
+
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],

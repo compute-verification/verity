@@ -108,6 +108,7 @@ EXPECT = {
     "answer-programs-two": "profile: programs", "answer-level-query": "profile: its levels",
     "answer-level-size": "profile: its levels", "answer-level-draw": "profile: its levels",
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
+    "answer-level-work": "profile: its levels",
     "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
     "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:",
     "answer-draw-population": "draw: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",

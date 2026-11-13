@@ -25,7 +25,9 @@ its facts and every link-window's its scan's, so the public's `audits` and `unit
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
 sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses a stratified profile with a stratum
 sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
-of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`).
+of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`). Every profile it
+gives facts of is of one level sampled `subset:k` or stratified, so none holds a work design
+(`factsOf_subset_or_stratified`).
 
 `RowsCapPublished` reads the public off the acceptance, in each form.
 -/
@@ -404,6 +406,29 @@ theorem factsOf_sampled_le_units {what : String} {prof : Core.Integrity} {pub : 
     repeat' split at h
     all_goals cases h
     all_goals assumption
+
+/-- The facts `factsOf` gives are of a profile of one level sampled `subset:k` or stratified: it refuses every other
+profile, among them one whose level records a Bernoulli design or a work design. So the period check reads no work
+design's `k_s`, and what it accepts rests on no rule that sizes them. -/
+theorem factsOf_subset_or_stratified {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
+    (h : factsOf what prof pub = .ok f) :
+    ∃ l, prof.levels = #[l] ∧ ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) := by
+  have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
+      (match prof.levels with | #[l] => body l | _ => alt) = .ok f →
+        alt = .ok f ∨ ∃ l, prof.levels = #[l] ∧ body l = .ok f := by
+    intro body alt hm
+    rcases hls : prof.levels with ⟨_ | ⟨l, _ | ⟨l', ls⟩⟩⟩ <;> rw [hls] at hm
+    · exact .inl hm
+    · exact .inr ⟨l, rfl, hm⟩
+    · exact .inl hm
+  unfold factsOf at h
+  rcases one _ _ h with h | ⟨l, hl, h⟩
+  · cases h
+  · refine ⟨l, hl, ?_⟩
+    simp only [bind, Except.bind, pure, Except.pure, refuse] at h
+    repeat' split at h
+    all_goals cases h
+    all_goals first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, by assumption⟩
 
 /-- Strata that each sample no more than they hold, and in all as many as they hold, are each sampled whole. -/
 theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.size) (a b : ℕ) (hab : a ≤ b)

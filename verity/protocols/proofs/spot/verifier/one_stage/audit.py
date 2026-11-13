@@ -72,7 +72,7 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
 
 def design(law: Mapping[str, Any]) -> SamplingDesign:
     """The sampling design of a well-formed law or sample (`check_draw`'s), as the profile writes it (Lean
-    `Core.SamplingDesign.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Spot.Pieces.designOfLaw`): each stratum named by its template, its size its ranges' total, and a work sampling design's
     `Work` with its works and floors."""
     if law["law"] == "subset":
         return Subset(law["k"])

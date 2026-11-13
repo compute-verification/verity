@@ -199,6 +199,9 @@ MUTATIONS = [
     ("answer-level-bernoulli", "answer", "profile.levels.0.draw", {"bernoulli": "1/2"}),
     ("answer-level-stratified", "answer", "profile.levels.0.draw",
      {"law": "stratified", "strata": [{"k": 1, "name": "t", "size": 2}]}),
+    # a work design whose stratum's k (1) is not what sizing it by its work gives (3): the profile reads it as recorded
+    ("answer-level-work", "answer", "profile.levels.0.draw",
+     {"k": 3, "law": "work", "strata": [{"floor": 1, "k": 1, "name": "t", "size": 4, "work": 3}]}),
     ("answer-level-name", "answer", "profile.levels.0.name", "tile"), ("answer-levels-two", "answer", "profile.levels", None),
     ("answer-delta", "answer", "profile.delta", "1/3"), ("answer-drawn", "answer", "profile.drawn", None),
     ("answer-draw-k", "answer", "public.draw.k", None), ("answer-draw-population", "answer", "public.draw.population", None),

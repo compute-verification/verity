@@ -61,7 +61,7 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.protocols.accounting.pouw.verifier import audit as PA
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
-from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum, work_k
+from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
 from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
@@ -1020,7 +1020,7 @@ def select(j):
 
 
 def design(j):
-    """`Pieces.design`: the sampling design of `select`'s sample (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), Flock's law
+    """`Pieces.design`: the sampling design of `select`'s sample (`audit.design`, Lean `Spot.Pieces.designOfLaw`), Flock's law
     held to core's `Core.SamplingDesign`, the work sampling design's among them."""
     return {"design": _json(audit.design(select(j)["draw"]).to_json())}
 
@@ -3637,7 +3637,7 @@ def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[in
         ss = [{"floor": 1, "template": f"t{i}", "units": rs, "work": works[i % len(works)]}
               for i, rs in enumerate(_cut(population, *strata))]
         total = sum(t["work"] * LP.size(t["units"]) for t in ss)
-        law = {"k": n_k, "law": kind, "strata": [{**t, "k": work_k(n_k, t["work"], LP.size(t["units"]), total, 1)}
+        law = {"k": n_k, "law": kind, "strata": [{**t, "k": DR.work_k(n_k, t["work"], LP.size(t["units"]), total, 1)}
                                                  for t in ss] if total else ss}
     ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
     if 1 <= bad <= 4 and ms:
@@ -5837,7 +5837,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 
 def test_a_work_draws_design_is_cores(pieces):
-    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Core.SamplingDesign.ofFlock`) the Python's
+    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfLaw`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
