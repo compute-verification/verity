@@ -135,6 +135,8 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 #   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
 ~~~
 
+### Measured, with no run named here
+
 Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
 1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
 18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); wp1.probe.4090 (SUCCESS,
