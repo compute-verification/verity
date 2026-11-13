@@ -9,6 +9,7 @@ import json
 import math
 import random
 import struct
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -16,15 +17,35 @@ import pytest
 
 import pearl_c_vectors as CV
 import pearl_vectors as PV
+import test_pouw_pearl_kw as T
+from verity.commitments import CommitmentDomain, hm96
 from verity.commitments.crypto.turboshake import turboshake128
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf, sha512_row_seg_digest
 from verity.definitions.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16
-from verity.protocols.pouw.prover.schemes import get
+from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
+from verity.protocols.pouw.prover.circuit import pc8
+from verity.protocols.pouw.prover.schemes import get, pearl_c4
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier import audit
+from verity.protocols.pouw.verifier.audit import (
+    HM96_TRANSCRIPT,
+    HM96_WEIGHTS,
+    Epoch,
+    Workload,
+    activation_binding,
+    chacha20_block,
+    hm96_salt,
+    rows_domain,
+    transcript_domain,
+    weight_binding,
+)
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
+from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "pearl_c.json").read_text())
 RUST = json.loads(PV.PINNED.read_text())["outputs"]
@@ -61,8 +82,6 @@ def test_chain_matches_pearl_rust_h100_matmul():
 @pytest.mark.parametrize("t", [0, 1])
 def test_chain_matches_pearl_rust_h100_tile(t):
     """The full 16 x 16 H100 tile of Pearl's Rust: its noisy operands through `pearl_kw`, then C̃ by `chain`."""
-    import test_pouw_pearl_kw as T
-
     c, want = IN["tiles"][t], RUST["tiles_h100"][t]
     (a, *_), (b, *_) = T.side(c["a"], P.H100), T.side(c["b"], P.H100)
     got = [C.chain(ra, rb) for ra in a.codes for rb in b.codes]
@@ -286,9 +305,6 @@ def test_the_h100_h3_vectors_are_the_registered_schemes():
 
 
 def test_lifecycle_on_a_test_instance():
-    from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
-
     s, k = C.PearlC(k_min=32, tile=(16, 16), hashing="h0"), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
@@ -579,9 +595,6 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 def test_lifecycle_work_has_no_weight_side():
     """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
-    from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.pouw.clear.clear_audit import Prover, Verifier
-
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
     epoch = Epoch.unverified(work, Prover(s, {9: CV.rows_f32("job", "B", 16, k)}).weight_roots, b"beacon")
@@ -590,9 +603,6 @@ def test_lifecycle_work_has_no_weight_side():
 
 
 def test_v1_lifecycle_on_a_test_instance():
-    from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
-
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
@@ -619,11 +629,6 @@ def test_h3_is_the_default_and_h0_and_sha256_are_named():
     """One hash: what leaves its hashing format or tree hash unnamed gets h3's (SHA-512, hm96-sha512 trees), and h0's
     SHA-256 trees are taken only by name: Pearl-C's h0 schemes, and NCP and Pearl's port, whose 32-byte tile digests
     hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
-    from verity.protocols.pouw.verifier import audit
-    from verity.protocols.pouw.prover.circuit import pc8
-    from verity.protocols.pouw.prover.schemes import pearl_c4
-    from verity.protocols.pouw.verifier.serving import SchemeId
-
     assert C.PearlC(forming="v1").hashing == pearl_c4.PearlC4().hashing == "h3"
     assert C.leaf(C.Checked([[0]], [[0]])) == C.leaf(C.Checked([[0]], [[0]]), "h3")
     assert SchemeId("pearl-c", "h100", "v1", "e4m3").name == "pearl-c-h100-v1-h3"
@@ -640,9 +645,6 @@ def test_h3_is_sha512_throughout():
     bytes are H_"line"(H_"noise-line"(seed) ‖ side ‖ factor ‖ u32 LE line) under Pearl's map to codes; the tile leaf is
     ``sha512/row-seg/v1`` over the tile's messages; a ticket is H_"jackpot"(seed_A ‖ fold).  E_A moves with a row's bytes
     and position alone; no BLAKE3 claim is left."""
-    from verity.commitments.rowleaf import sha512_row_seg_digest
-    from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
-
     s, h0 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h0"))
     assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "hm96-sha512"
     assert "cr/sha-512" in s.certificate.claims and not any("blake3" in c for c in s.certificate.claims)
@@ -686,8 +688,6 @@ def test_h3_is_sha512_throughout():
 def test_hm96_salts_are_chacha20s_stream():
     """The prover's hm96 salts are ChaCha20 blocks under its key (RFC 8439 §2.3.2's block, its 96-bit nonce and 32-bit counter
     as this layout's 64-bit counter and nonce), leaf i's three blocks 3i … 3i + 2."""
-    from verity.protocols.pouw.verifier.audit import chacha20_block, hm96_salt
-
     block = chacha20_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000)
     assert block.hex() == ("10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e"
                            "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e")
@@ -699,15 +699,6 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     """An -h3 transcript is accepted by an -h3 verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
     the pinned key and the prover's salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
     digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
-    from dataclasses import replace
-
-    from verity.commitments import CommitmentDomain, hm96
-    from verity.commitments.merkle import tree_levels
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
-    from verity.protocols.pouw.verifier.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
-                                                  rows_domain, transcript_domain, weight_binding)
-    from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
-
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
@@ -801,9 +792,6 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
-    from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.pouw.clear.clear_audit import Prover, Verifier
-
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)
     row = list(C.parse_f32_row(rows_b[0], k))

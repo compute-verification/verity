@@ -11,8 +11,10 @@ import pytest
 
 import pearl_vectors as PV
 from verity.commitments.crypto.blake3 import blake3
+from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape
 
 PINNED = json.loads(PV.PINNED.read_text())
@@ -129,9 +131,6 @@ def test_interface_and_domain():
 @pytest.mark.slow
 def test_ada_tile_through_the_protocol():
     """One honest 16 x 16 tile on the 4090's device: admissible, digest reproducible, useful output near A·Bᵀ."""
-    from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
-
     s, k = get("pearl-fp8-v4"), 1024
     c = IN["tiles"][0]
     ints_a, ints_b = bytes.fromhex(c["a"]["ints"]), bytes.fromhex(c["b"]["ints"])
