@@ -120926,3 +120926,33 @@ For the table: second and third batches, 19 statements and 6.98% of ranked provi
 - [run] #9621's body holds the suites' result (04:46Z). It stays unmarked: until #9551 lands its diff shows #9551's lines. When #9551 lands I merge `main` in and give its ready line; when #9479 lands first, the same merge keeps both README sections (tested in a scratch merge, 04:16Z).
 - [run] My machine was replaced at 04:43Z under the turn: the worktrees and scratch files are gone. Nothing is lost: both branches were pushed, the pull requests' bodies and entries' texts are kept, and the three scratch scripts are in the lane's notes (the 04:21Z checkpoint). No sign of a second loop: my branches' heads and my entries are as I left them.
 - No run of mine is out. I end the turn. I wait on: your mark on #9479; #9551 landing; your word on the join of the two readers, and on the follow-up that prints the security level at a served run's own sizes; and whether the driver's writer names the class under the key `class`.
+
+## TWOLEG, Fri 13 Nov 04:46Z: (c') no whole accept is in the kernel's reach (one SHA-512 by `decide` took 1.86 s); finding 2 holds and its flagged fix is written; an ask to RUNCOINS
+
+Lean-slot wait: J5 waited 14 minutes unstarted on cpu-4 for a check slot; moved to vy-nebius-2 at 04:44Z, 5 ahead in line there [run]. The last step's exact statement goes in a later entry's title, once it compiles; it has not yet.
+
+STOP RULE: not reached. The equal-labels refusal (`SAME_FAMILY`) and the last step only refuse more: the shipped check still refuses the form by the switch, and nothing here uses `form_off`, `checkBlobs_refuses` or `Run.run` refusing [read].
+
+**(c') measured.** One SHA-512 of "abc" (one compression) decided by the kernel took 1.86 s on a node [run]. An LMS verification at W = 1 is about 565 compressions, so about 17 minutes a signature by `decide` [derived]; the height changes little at W = 1, and a whole accept also verifies each member's Flock session [derived]. So no honest play's whole accept is decidable in reach, at any member count [derived]. The steps after `membersRun` are not cheap either: `interiorUnshown` and `stagesOrdered` verify the challenger's ledger (LMS), and `coinsReason` derives the draw with SHA-512 [read]. So the witness I propose is a converse step lemma, not a decided play: `accepts_of_steps`: if `inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)`, `stagesFit ξ ξ₂ = .ok ()`, `Spot.Run.run i true = .ok run` with `getD run "symbol" = "accept"`, `sourceRead ξ run`, `interiorUnshown p e` and `stagesOrdered p e` are `.ok ()`, `secondLawOf p run = .ok law`, and `secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ {e.interior.base with verdicts := r.out} = .accept pub prof`, then `checkBlobsAtWith true p c ξ e bs = .accept pub prof`. Its premises are exactly the steps' equalities. Nobody discharges them in Lean; the run (c) exhibits them on one honest play's bytes by evaluation of the compiled check [derived]. Soundness's to rule: whether that pair (the lemma plus the run) is the `_honest` witness.
+
+**Finding 2: the stopped session's reading holds** [read]. `two_stage.py` passes `a.coins = None` to the second stage, under `drawn` `a5.audit` keeps `trees = False`, and the non-streamed `write_case` gets no coins, key, family or window root. The fix is written on `cursor/proofs-twoleg-c5e5`, off by default [read]:
+- `two_stage.py` has the flags `--interior-trees`, `--deployed-key` and `--form-case`.
+- Under `--interior-trees`, the second stage's sessions draw on the stage's own challenger session, under the family `draw/second/<rank>` (the stage tag: `a5_coins.family(rank, stage)`). `a5.audit` takes its trees from that session and hands `write_case` the coins, key, family and window root.
+- `--form-case` captures the run of record's input and assembles the form's case (`benchmarks/one_stage/sampled_two_case.py`).
+- `benchmarks/one_stage/sampled_two_small.sh` drives an honest play with at least two interior members and runs `sampled-two-on check` (expects 0) and `sampled-two check` (expects 1).
+- A unit test covers the tagged family, `test_a_second_stage_session_draws_under_its_tagged_family_and_stays_open_while_held`; it has not run.
+- The opt-in accept test is `test_the_form_accepts_one_honest_play_with_its_switch_on` (`SAMPLED_TWO_CASE`).
+
+**To RUNCOINS** (for `StageDraws`' `label = ℓ` half): a lemma that a run of record that `Spot.Run.run i form` returns with `symbol` accept has `coinsCode` none, over `Run.run`'s steps; it is over steps private to `Spot.Run`, so it is yours if you'll take it. One more gap in the same half: the second law is computed from `getD run "draw"`, and nothing yet says that field equals the first stage's accepted sample. I need that lemma too, or a ruling that `secondLawOf` should read the sample from the first stage's own check instead.
+
+NEEDS: none to go on.
+
+Runs:
+- `r20261113-044424-14a0` (vy-nebius-2, the `--try` of the twelve proof files, then build and difftest, at `1f211470c7`): waiting for a Lean slot [run].
+- `r20261113-044454-29e7` (cpu-4, the honest play `sampled_two_small.sh` at `03072eb90b`): started [run].
+- Cancelled unstarted: `r20261113-042950-253b` and `r20261113-043958-f5c3` [run].
+- Head of `cursor/proofs-twoleg-c5e5`: `03072eb90b` [run].
+
+To post: nothing.
+
+Not established: the last step compiles; the form accepts any play (c); the driver fix runs; `accepts_of_steps` is stated in Lean.
