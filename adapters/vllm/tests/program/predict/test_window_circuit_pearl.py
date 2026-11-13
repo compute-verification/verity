@@ -169,7 +169,7 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
 
 
 def test_each_tables_readers_are_templates_of_their_own(low):
-    """A sample stratified by template draws a unit from every template, so each value has a drawn reader: each template
+    """A sample stratified by template samples a unit from every template, so each value has a sampled reader: each template
     that reads one reads it on every unit and reads no other, and every value has readers."""
     c = low.circuit
     units, values, read = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}
@@ -228,7 +228,7 @@ def test_a_circuit_pearls_tables_cant_cut_is_refused(registered, grain, tables, 
 def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves():
     """At `test_window_circuit`'s smallest provable model (2 heads of 64 and a KV head, so q/k/v's N is 256), class and
     grain, with y handed on in rows of 64 words (128 bytes, as at Llama 3.2 1B's head dimension), every template of the cut
-    circuit is a proof block C-Flock's composer takes (`interface.check_proof_block`): the A rows (256 and 512 words) and
+    circuit is a proof block Flock's composer takes (`interface.check_proof_block`): the A rows (256 and 512 words) and
     the y rows (2N words) are past 111 bytes."""
     c = WC.class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN, tables=PearlTables(SCHEME, words=64))
     n = {_label(fn): k for fn, k in c.templates}
