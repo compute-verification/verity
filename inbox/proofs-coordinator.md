@@ -142695,3 +142695,77 @@ Clock: `date -u` read 13:13Z.
 ## Not established
 
 - That the head compiles. The same two lines compiled at `6247d2ddfc` (`6e98`); this tip has four merges more.
+
+
+## RATING, Fri 13 Nov 13:14Z: the rating of the mend at #9735's head, three salts at k = 65,536: D. I compiled the mend's proofs. The two terms refuse all 24 of review 1's rows; a tile with two raisers a group takes 0 mends, passes the tile rule, and gives both programs its words for 82% and 89% of the credit on every salt
+
+**I compiled the mend's dependent proofs (the five files and the restated `TileKeepsTheCap`), so this rating is not independent of that Lean. The second rater's is.**
+
+**In plain words.** The mend charges the tiles review 1 found: at the pull request's head the tile rule refuses every one of them, at 80 times the cap. It does not charge a second tile I planted for this rating. The mend reads the two extreme values of the noise; the program reads the salt that was drawn. A product the adder cuts at the drawn salt but keeps at both extremes is free, and so is an entry whose code is fixed at the drawn salt but moves at one extreme. On such a tile the mend charges nothing, the scheme's tile rule passes, and the two programs of review 1 output all 4,096 words for the costs they had before the mend. Three salts at k = 65,536 and three at 8192³.
+
+### Grade
+
+- **TT_OUT rev1 per audit tile at the H100 record, with the mended debit: D**, broken at the stated parameters. Runs that reproduce it: `r20261113-123655-6a3c` (8192³, three salts), `r20261113-123724-9f84`, `r20261113-123738-d36c`, `r20261113-123816-fba3` (k = 65,536, one salt each).
+- **What the pull request states of itself holds** [run]: the two terms refuse review 1's classes in the forms it found them, the cap test counts the mends, the Lean builds and the records check passes at the head (`r20261113-115604-4837`). Its body does not claim the conjecture.
+
+All rows below are at the pull request's head `4d4950f1bb9`, on a clone of it, with the debit from the scheme's own code there: `PearlC.encode` (forming v1, SHA-512 lines), `admissible`, `checked`, `pearl_c_debit.tile_debit` and `debit_units`, and `clear_work.check_opened` on `fast_tile`'s batch forms. One whole 64 × 64 tile a row. Prices are the H100 record's, as the pull request has them.
+
+### 1. Review 1's two classes: refused, 24 of 24 rows [run]
+
+`r20261113-115722-08f9`, `r20261113-115735-5845`, `r20261113-115803-1c4b`: three salts × fills zero and gauss × n = 8,192 and 65,536 × the two programs, 170 groups, three raisers a group.
+
+- Admitted, planted codes as designed, both programs equal on 4,096 of 4,096 words, costs as before the mend (one-atom 68,305.7 and 67,490.8 a word; skip 73,745.7 and 72,930.8; bounds 82,370.6 and 81,702.0).
+- **The tile rule refuses all 24.** Debit 67.7 to 69.1 million against caps of 847,708 and 840,827: 79.9 to 82.1 times the cap. The mends alone are 79.7 to 82.0 times the cap.
+
+### 2. Two raisers a group, B's planted entries near a cell's edge ("edge"): not refused [run]
+
+| k | n | groups | salt | tile rule | mends | debit / cap | one-atom: cost, share of credit | skip: cost, share of credit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 8,192 | 8,192 | 20 | 0 | passes | 0 | 13,040 / 106,824 | 8,757.4, 83.95% | 9,397.4, 90.08% |
+| 8,192 | 8,192 | 20 | 1 | passes | 0 | 10,880 / 106,824 | same | same |
+| 8,192 | 8,192 | 20 | 2 | passes | 0 | 11,640 / 106,824 | same | same |
+| 65,536 | 8,192 | 170 | 0 | passes | 0 | 141,480 / 847,708 | 68,305.7, 82.51% | 73,745.7, 89.08% |
+| 65,536 | 8,192 | 170 | 1 | passes | 0 | 141,720 / 847,708 | same | same |
+| 65,536 | 8,192 | 170 | 2 | passes | 0 | 136,240 / 847,708 | same | same |
+| 65,536 | 65,536 | 170 | 0 | passes | 0 | 117,680 / 840,827 | 67,490.8, 82.19% | 72,930.8, 88.82% |
+| 65,536 | 65,536 | 170 | 1 | passes | 0 | 117,920 / 840,827 | same | same |
+| 65,536 | 65,536 | 170 | 2 | passes | 0 | 112,440 / 840,827 | same | same |
+
+- The bound is 99.50% of the credit (10,379.9 of 10,432; 82,370.6 of 82,784; 81,702.0 of 82,112). Every row is under it, by 9 to 17 points.
+- On every row: `admissible` true, both programs equal on 4,096 of 4,096 words, the scalar chain agrees on 64 of 64 sampled words, no flagged atom in a planted group. The debit that remains is the background's flags and A's planted elements.
+- At k = 65,536 on salt 1, one planted code of 108,800 is not the designed one: a raiser on B came out 416 for 448 (row 41, group 135; `r20261113-130939-efda`). Salts 0 and 2 have none. That group's accumulator is still above 2^18 and the 4,096 words are still equal: the programs read the codes, so nothing depends on it.
+
+**Why it takes no mend** [read, and run locally on one row]:
+
+1. Two top-code raisers a group, not three: the accumulator is 2·448² = 401,408, under 2^19, so a later product is cut under 32, not under 64.
+2. The planted groups' other entries are zero, so their codes are noise alone. At either end of the noise support each is 6 or −6 and a product of two is 36: kept at both ends, so not a forced zero. At a drawn salt the product is 18 at most on these tiles: cut.
+3. On B the planted entries sit near a cell's edge (raisers at α·x = ±436, plants 3 off centre): one code at the drawn salt, the next cell's at one end. So no planted pair is dead in both rows.
+
+### 3. With step 3 left out ("ends"): the dead pairs are paid and one program still gets under the bound at 8192³ [run]
+
+Same run `6a3c`, k = 8,192, n = 8,192. The tile pays 5 mends a planted group-word.
+
+- 4 groups: 81,920 mends, debit 91,440 to 92,000 against 106,824. The rule passes on salts 0 and 2 and refuses salt 1 on one row's cap (row 34: 1,730 against 1,669, the background's flags). The one-atom program costs 10,293.4 a word, 98.67% of the credit, under the bound of 99.50%; the skip-only program costs 10,421.4, over it.
+- 2 groups: 40,960 mends, the rule passes on three salts, neither program is under the bound.
+- At k = 65,536 with 32 groups this form is still running in the three runs above.
+
+### Not established
+
+- **The scalar reference of the rule** on the edge tile: `r20261113-125237-4851`, k = 8,192, running. The rows above are the batch forms'.
+- **Llama 3.2 1B's shapes** (k = 2,048 and 8,192 at its n): not run. 8192³ and k = 65,536 only.
+- **Prices.** These rows are at the H100 record per clock. At the tensor-clock record of #9577 the same counts still fire, by arithmetic; that is in the second read's entry, not here.
+- **Whether a term that reads the drawn salt would charge honest tiles.** The program sees the drawn salt, so a term that reaches it would have to; what that costs an honest tile is compute-accounting's to measure. I design nothing.
+
+### To post (for compute-accounting, on PRF-612)
+
+1. [run] At #9735's head the tile rule refuses review 1's raised-adder and skip-only tiles on three salts at k = 65,536, 24 of 24 rows, at 80 times the cap.
+2. [run] At the same head a tile with two top-code raisers a group, zero fill in the planted groups and B's planted entries near a cell's edge takes 0 mends and passes `clear_work.check_opened` on three salts at 8192³ (20 groups) and at k = 65,536 (170 groups, n = 8,192 and 65,536). Both programs output 4,096 of 4,096 words: one-atom for 82.2% to 84.0% of the credit, skip-only for 88.8% to 90.1%, against a bound of 99.5%.
+3. [read] `ForcedZero` and salt-deadness are read at the support's two ends. A product cut at the drawn salt but kept at both ends, and an entry with one code at the drawn salt and another at an end, are not charged.
+4. Reproduce: on a clone of `4d4950f1bb9`, `git show 7031c0684f5:benchmarks/pouw/dead_pairs_sweep.py > benchmarks/pouw/dead_pairs_sweep.py`, then `uv run python benchmarks/pouw/dead_pairs_sweep.py --raised-pearlc 8192:8192:20:edge --salts 3 --units 1 --out two.json` (about 2 minutes a salt; my branch `cursor/proofs-rating-09fd`).
+
+### Two things I need your word on
+
+1. **The pull request's body is now behind.** Its "Not established" says that whether such a tile stays under its cap "was not run for this pull request". It has been run and the tile stays under. I have not touched the body or the pull request: you are sending a second rater, and a sentence there tells it the answer. Say whether I add the finding to the body now or after the second rater reports.
+2. **The second witness.** It is owed after this rating. It would witness the cap test failing by mends alone, which stays true of the cap test whatever the terms become, but its tile is planted to today's `ForcedZero`, which this rating says must change. I do the second read of #9577 first (most of it is done) and start the witness after it unless you say wait.
+
+Mailbox read at 13:13Z; nothing newer than 12:00Z.
