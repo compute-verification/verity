@@ -196,11 +196,36 @@ def test_a_fix_whose_patch_no_longer_reverses_at_the_run_is_not_known(changes):
     can't be told to hold it."""
 
     fix = changes.commit("a\nfix\n", "fix")
-    changes.commit("a\nrewritten\n", "rewrite the fix's line")
+    rewrite = changes.commit("a\nrewritten\n", "rewrite the fix's line")
     got = S.closes(changes.root, fix, changes.head())
-    assert got["status"] == "not known" and "doesn't apply in reverse at the run's tree" in got["why"]
+    short = _git(changes.root, "rev-parse", "--short", rewrite)
+    assert got == {"status": "not known", "why": (
+        f"the fix's own patch (`git diff {fix[:12]}^ {fix[:12]}`) doesn't apply in reverse at the run's tree: lines it "
+        "changed were changed again since, so whether that tree still holds it can't be told. "
+        f"{short} touches its files since: if {short} keeps the fix, add it to this hole's commits in spot_holes.json")}
     changes.commit("a\nfix\n", "put it back")
     assert S.closes(changes.root, fix, changes.head())["status"] == "closed"
+
+
+def test_a_rewrite_declared_after_the_fix_is_the_one_read(changes):
+    """A later edit to the fix's lines that keeps it holds the label at `SPOT` only until it is declared."""
+
+    fix = changes.commit("a\nfix\n", "fix")
+    rewrite = changes.commit("a\nfix, reworded\n", "reword the fix's line")
+    (changes.root / "g.txt").write_text("other\n")
+    _git(changes.root, "add", "g.txt")
+    _git(changes.root, "commit", "-q", "-m", "later")
+    run = changes.head()
+    assert S.closes(changes.root, fix, run)["status"] == "not known"
+    assert S.closes(changes.root, [fix, rewrite], run) == {"status": "closed", "why": None}
+    assert S.holes(run, changes.root, {REDRAWN: (fix, rewrite), RECOMMITTED: (fix, rewrite)})[REDRAWN]["status"] == "closed"
+    _git(changes.root, "revert", "--no-edit", rewrite)
+    got = S.closes(changes.root, [fix, rewrite], changes.head())
+    assert got == {"status": "open",
+                   "why": f"reverted by {changes.head()[:12]}, which reverts the fix's later commit {rewrite[:12]}"}
+    with pytest.raises(ValueError, match=f"the commits of the fix {rewrite} are out of order: {rewrite[:12]} is not an "
+                                         f"ancestor of {fix[:12]}"):
+        S.closes(changes.root, [rewrite, fix], run)
 
 
 def test_the_fixes_file_names_only_holes_by_full_commit(repo):
