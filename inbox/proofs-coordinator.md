@@ -114262,3 +114262,62 @@ I wrote nothing to Slack or Linear, resumed nobody and read no run of theirs. If
 - Your 01:44Z message is read: the fifth text goes in the body as a witness; `RefusedAt` keeps no opening `∃`.
 
 Heads unchanged: Site v2 `2d8a2ac46c2c`, the two lists `1b478b7fdf27`.
+
+## MEMBERS, Fri 13 Nov 02:18Z: A14: READY line: #9584 is open and unmarked at `ae80f367e6a2`; the quick tier passes, the records are committed; STOP RULE: no guarantee's own record moves, the review rings 30 guarantees whose read definition changed, one of them listed as deployed
+
+**In plain words.** The change is finished and waits for your mark: the compiled one-statement check now refuses a sample by strata or by work. Every test that reads the change passes. The proof records moved only where expected: the function the theorems read is recorded as changed, and no theorem's own statement or premise is.
+
+Clock: `date -u` read 02:18Z.
+
+**READY: [#9584](https://github.com/compute-verification/verity/pull/9584), head `ae80f367e6a2f4166fa5fbd3712e4402c1527332`, branch `cursor/proofs-members-subset-391b`.** Opened with `research queue open`, no label, `Lane proofs` first in its body, linked to PRF-371 (no issue exists for row A14; say if it should hang elsewhere) [run: `gh pr view 9584`: open, no labels, mergeable]. Nothing of mine is unpushed.
+
+### 1. What ran, by head
+
+The branch is five commits on `origin/main` `417526501974`: the Lean (`9eae385b62`, `0ffc8406f3`), the Python twins and tests (`1023414760`), one test's fix (`1c64505a51`), the two locks (`ae80f367e6`). 8 files, +176 −31.
+
+| What | Head | Run | Result [run] |
+|---|---|---|---|
+| try, `Spot/OneStageZk.lean --siblings` | `0ffc8406f33b` | `r20261112-235232-9445` | exit 0, 11 theorems, the three axioms |
+| try, `Challenger/Limits.lean` | `0ffc8406f33b` | `r20261112-235452-6ef6` | exit 0, 29 theorems |
+| quick tier, 60 of the 61 suites touched | `0ffc8406f33b` | `e555`, `dd87`, `9be7`, `b401` | 60 passed |
+| the 61st, the spot verifier's Lean difftest | `0ffc8406f33b` | `2c26` | failed, 1 test (mine, fixed) |
+| that suite again, changed modules whole | `1c64505a5198` | `r20261113-010640-cae5` | 307 passed, 2 skipped |
+| the 60 suites that read the fixed test file, quick | `1c64505a5198` | `r20261113-002205-c518` | 60 passed |
+| records, `lean_changed.py --records … --update` | `0ffc8406f33b` | `r20261112-235451-f882` | exit 0 in 130 minutes (24 of them waiting for memory) |
+
+- [derived] Nothing ran at `ae80f367e6a2` itself: it differs from `1c64505a5198` in the two lock files alone, which are the records run's own output.
+- [run, 02:14Z] `git merge-tree` of the head: clean against `main` `49d12bdc366a`, FIRSTACCEPT `7e8fb2a0ca1d` and WINDOWAT `5d5c7183ca94`. `main` has changed neither `Spot/OneStageZk.lean` nor either lock since my base.
+- **Not shown** [read]: the records run is without the kernel replay (a `lean-fast/v1` result, which no merge takes); the queue's own records run and check do that. The new composite test runs against remote's Lean, not onsite's.
+
+### 2. STOP RULE: nothing stops; what the records say
+
+[run: `f882`'s regenerated locks against the tree's, compared as JSON]
+
+- **Packages.** The spot verifier's, the certifier verifier's and `security/Proofs`: pass, no record change. `security` and `security/Properties`: regenerated, committed as the run wrote them.
+- **What moved, the same in both locks:** one group, `reads["Spot.OneStageZk"]`. Its digest; `paramsOfJson`'s digest; two new entries, `paramsParsed` and `SUBSET_ONLY`. In `security`'s file one entry also stands at another place in three lists of inline premises, content the same.
+- **No guarantee's own record moved.** The `guarantees` sections are equal before and after in both locks (1,111 and 466 records: statement hash, unfolded hash, premises, assumptions, owner). So are `deployed`, `trust_gap`, `assumptions`, `open` and `domain`. No named assumption changes. So this is the case you allowed: the digests of definitions that listed guarantees read.
+- **What you should know all the same: the tool counts it as a statement change and rings the readers' owners** (`statement_changes: true`, three `reads` changes) [run]. A guarantee that unfolds to `paramsOfJson` now speaks of a check that accepts less. The readers:
+  - `security`, 4: `Flock.SecurityProofs.RecursiveAuditC3` (@proofs), and `Verity.Sampled.remote_soundness_deployedReady` with its `_honest` and `_nontrivial` (@soundness).
+  - `security/Properties`, 26, all @soundness: `Properties.Remote.SecurityProofs.acceptComplies` and `acceptInferenceOnly`, `Verity.coins_couple`, `Verity.remote_soundness_of_subprotocols`, `Verity.soundness_at_of_componentBounds`, `Verity.soundness_at_of_targets`, `Verity.soundness_of_subprotocols`, `Verity.soundness_of_upFront`, `Verity.target_of_periods`, `Verity.wipe_target`, with their listed `_honest` and `_nontrivial`.
+  - **One is listed as deployed: `Verity.remote_soundness_of_subprotocols`.** Its `trust_gap` entry is as it was, three premises.
+- [run] Lake's build of `security/Proofs`, which holds their proofs and their `_honest` and `_nontrivial` witnesses, completed with the changed definition (14,452 jobs, no kernel replay). [derived] So none of those witnesses rests on the check accepting an audit by strata or by work.
+- [derived] I did not stop, because your rule stops on a statement or a named assumption and neither changed. If the deployed guarantee's reader status makes this @soundness's to see before a mark, the pull request's Lock section lists the same names.
+
+### 3. The one test I had missed, and what it now holds
+
+- [run: `2c26`] `test_the_audit_refuses_what_soundness_does_not_cover`, first loop: its `closure` case is a work audit whose sample carries a closure. v2 refused it at its evidence; a work design is now refused first, at the parameters.
+- [run: `cae5`, `c518`] Fixed in `1c64505a51`, the test alone: v2 refuses that work audit at its parameters by kind, and refuses a subset audit whose sample carries a closure at its evidence by the closure's text. The closure's refusal in v2 keeps a test.
+- So the final list of tests changed is my 00:01Z table plus this case. It is in the pull request's Tests table.
+
+### 4. Friday 14:00Z
+
+- [guess] Whether it lands before the first window is the queue's: the candidate runs its own records first, then the check. It is ready for a mark now.
+- [derived] Once on `main`: a one-statement audit handed to the compiled check must sample by `subset:` or `rate:`. The first stage's `rate:2/8` passes. The second stage and a tied audit of several members hand it no case (GATHER 00:01Z; my 00:45Z). A tied window of one template is refused and has no design left (my 00:45Z, section 1).
+- [read] If it does not land before the window, nothing of Friday's breaks: the check then still takes the two designs its theorem does not cover, as today.
+
+### 5. Open, said once more so it is not lost
+
+- `a5.write_case` writes `case-v2.json` at any design and the record says `written: true`, also where the compiled check now refuses the file by kind. Not mine to touch tonight (FIRSTACCEPT's file).
+- Bookkeeping that warns: the retired word `law` in the lines I added (record keys, Lean field names, and the refusal's text, worded as `Draw.BERNOULLI` is).
+- The second change (your 23:43Z, item 3) is sized in my 00:01Z entry, section 5, and must not land ahead of the strata's admission (00:45Z, section 1). Not started.
+- Other work, unchanged: #9441 waits on its records commit (runs `cfeb`, `c3cf` done, unread) and its ready line; the one-parse change after it; PRF-586, PRF-591, the missed-member test and the Python twin of the several-member run after those; PRF-593 on your word.
