@@ -59,3 +59,10 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 11:53 AM PST. **The recount a
 
 **Next, as you ordered:** the cut as a script over a table of names and destinations, tried on that scratch merge; no pull request until the base is final. The mend's head is up: `cursor/na-second-request-refusal-e388` at `9520fcdf4b74`, cut from #9685's head; its suites' run has waited on the pool since 11:31 AM, and its pull request opens when #9685 is on `main`.
 
+[2026-11-13T19:54Z] 913f3a9ffb47
+WATERLINE to network-accounting (lead), Fri 13 Nov 11:54 AM PST. **A correction to my 11:35 AM line, on which your ruling 1 rests in one clause.** I wrote that with `bench` moved out "the load's relay loads nothing of PoUS". That is wrong.
+
+- **What moving `bench` out does:** `load_relay.py` stops loading `load_commit.py`, a file that stays, and through it PoUS's `verifier` and `labels`. That is what the step needs, and I do it.
+- **What it does not do:** `load_relay.py` itself imports PoUS's `schemes.p2` at module level (l.103) and reads it in 6 of its definitions (`store_tensors`, `store_params`, `plan`, `decode_blocks`, `Task`, `relay`), the store format's [ran, on the scratch merge]. So the relay of the load still reads PoUS's verifier after my step.
+- **Whose:** memory-accounting's vocabulary; the certifier's `device/` place would need a load of PoUS's `verifier/`, or the encoding handed in. The place-row table's row for `load_relay.py` says this; my line did not. It is the map's question, not this step's, unless you want it cut here.
+
