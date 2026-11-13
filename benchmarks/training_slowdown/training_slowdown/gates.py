@@ -44,17 +44,17 @@ import sys
 
 from .opnames import GATHER_NAMES, LINALG_NAMES, gemm_like
 
-#: (module, AND, XOR, NOT) per Definition, from `compile(D).counts`; the AND count is circuit-check's pin. A module is
-#: `verity`'s, its sidecar `<module>.circuit-check.json` beside it
+#: (module, AND, XOR, NOT) per Definition, from `compile(D).counts`; the AND count is circuit-check's pin, in the
+#: sidecar `<module>.circuit-check.json` beside the module
 DEFINITIONS = {
-    "HopperBF16WgmmaDot16_v2": ("definitions.ops.boolean.gemm", 7872, 15049, 761),
-    "BlackwellE4m3QmmaDot32_v2": ("definitions.ops.boolean.gemm", 9128, 17402, 1025),
-    "BlackwellE5m2QmmaDot32_v2": ("definitions.ops.boolean.gemm", 8931, 17231, 1251),
-    "BlackwellNvf4OmmaDot64_v2": ("definitions.ops.boolean.gemm", 6864, 13949, 616),
-    "HopperTf32WgmmaDot8_v2": ("definitions.registry.boolean_mhc", 6524, 12120, 439),
-    "F32Fma_v4": ("definitions.ops.boolean.elementwise", 4485, 7863, 289),
-    "Bf16MulBf16_v2": ("definitions.ops.boolean.elementwise", 799, 1155, 99),
-    "Bf16Add_v2": ("definitions.ops.boolean.elementwise", 717, 1061, 116),
+    "HopperBF16WgmmaDot16_v2": ("verity.definitions.ops.boolean.gemm", 7872, 15049, 761),
+    "BlackwellE4m3QmmaDot32_v2": ("verity.definitions.ops.boolean.gemm", 9128, 17402, 1025),
+    "BlackwellE5m2QmmaDot32_v2": ("verity.definitions.ops.boolean.gemm", 8931, 17231, 1251),
+    "BlackwellNvf4OmmaDot64_v2": ("verity.definitions.ops.boolean.gemm", 6864, 13949, 616),
+    "HopperTf32WgmmaDot8_v2": ("verity.definitions.registry.boolean_mhc", 6524, 12120, 439),
+    "F32Fma_v4": ("verity.definitions.ops.boolean.elementwise", 4485, 7863, 289),
+    "Bf16MulBf16_v2": ("verity.definitions.ops.boolean.elementwise", 799, 1155, 99),
+    "Bf16Add_v2": ("verity.definitions.ops.boolean.elementwise", 717, 1061, 116),
 }
 #: the Python names of `DEFINITIONS` in their modules
 PYTHON_NAMES = {"HopperBF16WgmmaDot16_v2": "HopperBF16WgmmaDot16", "BlackwellE4m3QmmaDot32_v2": "BlackwellE4m3QmmaDot32",
@@ -253,7 +253,7 @@ def recompute() -> dict[str, tuple[int, int, int]]:
 
     out = {}
     for name, (module, *_) in DEFINITIONS.items():
-        mod = importlib.import_module(f"verity.{module}")
+        mod = importlib.import_module(module)
         c = compile_bits(getattr(mod, PYTHON_NAMES[name])).counts
         out[name] = (c.get("and", 0), c.get("xor", 0), c.get("not", 0))
     return out
