@@ -139857,3 +139857,26 @@ it. `[read]`
 - `cursor/proofs-sessionof2-parser-defe` `dc91f31f56fe` (pushed; compiles; not through the Lean check)
 - `cursor/proofs-sessionof-9b17` `9a548b2f975d`, `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`,
   `cursor/proofs-sessionof-5c1e` `521933e1430b`: unchanged. `ScopeTable.lean` not edited since `b49c6e4061`.
+
+## REDRAW, Fri 13 Nov 12:13Z: READY #9728 at `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`: `62 suites: 62 passed (0 cached), 0 failed` at the head; records `f241` pass and the head's two locks are the files it wrote. It lands after #9717, so it waits for the carry with it
+
+Mailbox read to line 516, your 11:40Z [read]: the six names with "escape" stay; the no-call lemma stays deleted. The pen is mine [run].
+
+**The ready line.** Pull request #9728, https://github.com/compute-verification/verity/pull/9728, branch `cursor/proofs-honest-session-7c1e`, head `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`, base `main`, open, not a draft, not marked [run, `gh pr view`].
+
+- **Suites at the head:** `r20261113-105619-032e` (vy-nebius-cpu-1 by `--on auto`, 32 GB asked, no wait, 10:56:45Z to 12:09:55Z), `suites.py --changed 8130cf7e15e2 --quick`, exit 0: `62 suites: 62 passed (0 cached), 0 failed; 140.7 min of test time` [run]. Among them `repository` 389 passed, `verity/protocols/pous/verifier` 549 passed, `verity/protocols/spot/verifier` 912 passed, `verity-flock` 1470 passed, `verity-vllm` 14594 passed [run].
+- **Records:** `r20261113-093901-f241` (vy-nebius-2, exit 0) at `4294500e5801`: `security/Proofs` PASS, `security/Properties` PASS with 542 guarantees, `security` PASS after its records regenerate, `OUTCOME {"outcome": "regenerated"` [run, my 10:27Z entry].
+- **The head against that run** [run]: no `.lean`, `.toml`, manifest or toolchain file differs between `4294500e5801` and the head (`git diff --name-only` is empty for them). The three files that differ are the two locks and PoUS's pin. The two locks at the head have the digests of the run's regenerated records: `security/Properties/lean-audit.json` `d6f3a3394abe28ee7b3cc861d32cadb9acb9962592ecff972a9d784029fee082`, `security/lean-audit.json` `555a5ad531e54ed0ca4d43fb57a6a58a524734bf7bb034bb0bd75dd1e6f86f1f`. `security/Proofs/lean-audit.json` is the file the run passed.
+- **No records run at the head itself** [derived]: by the two lines above, what such a run reads is what `f241` read with the locks it wrote. Say so if you want one before the mark; it is about 50 minutes on vy-nebius-2 after `682b`.
+- **The cap:** `UNWITNESSED["security/Properties"]` 185 to 182, the list from 184 entries to 182; `tests/test_lean_packages.py` ran whole in `repository`, passed, and its `-k unwitnessed` passes on my VM at the head [run].
+- **PoUS's pin:** one line of `verity/protocols/pous/lean/TRUSTED.sha256`, regenerated with the README's command, for the lakefile's new roots only; the body says so. No records run of PoUS's package, as you ruled [relayed, 10:37Z].
+- **The body** is edited to the final checks (5718 bytes), `Lane proofs` first, linked to PRF-582 [run].
+- **Order:** it starts at #9717's head `8130cf7e15e2` and lands after it. #9717 is not marked before #9555 is on `main` [relayed, your 09:14Z], so this one is not marked before then either; at your word "carry" I carry both with `tools/move/restack.py`, run the records and the changed suites again and give new ready lines.
+
+**Credit branch:** `r20261113-112700-682b` (the one-call records, vy-nebius-2, 64 GB, since 11:27:30Z) is still running at 12:12Z; about 12:25Z [guess]. Its entry follows.
+
+**Follow-up I hold:** ci's line on #9555, the retired word at `verity/protocols/spot/verifier/README.md:559`, in a pull request after this one [relayed, your 10:31Z]. Not started: it needs #9555's text, so it goes after the carry unless you want it stacked now.
+
+**Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717); `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` (#9728); `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
+
+**I wait on:** `r20261113-112700-682b` (about 12:25Z [guess]). One timer of mine is set for about 12:24Z.
