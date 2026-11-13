@@ -128,9 +128,9 @@ theorem jsonSame_str (j : Json) (s : String) :
     jsonSame j (.str s) = (match j with | .str t => t == s | _ => false) := by
   cases j <;> rfl
 
-example : jsonSame (.str "draw") (.str "draw") = true := by decide
-example : jsonSame (.str "draw") (.str "other") = false := by decide
-example : jsonSame (.arr #[.str "draw"]) (.str "draw") = false := by decide
+example : jsonSame (.str "root") (.str "root") = true := by decide
+example : jsonSame (.str "root") (.str "other") = false := by decide
+example : jsonSame (.arr #[.str "root"]) (.str "root") = false := by decide
 example : jsonSame .null (.bool false) = false := by decide
 example : jsonSame (.arr #[.null, .bool true, .num ⟨7, 0⟩]) (.arr #[.null, .bool true, .num ⟨7, 0⟩]) = true := by decide
 example : jsonSame (.arr #[.null, .bool true]) (.arr #[.null, .bool true, .num ⟨7, 0⟩]) = false := by decide
