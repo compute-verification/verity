@@ -74,7 +74,7 @@ D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/
 BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/lean/Circuits/",
                                "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
-REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
+REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/device.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
@@ -949,10 +949,10 @@ KNOWN: dict[str, str] = {
     "verity/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/definitions/circuits/requirement.py::Layout":
+    "verity/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
-    "verity/definitions/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
-    "verity/definitions/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
+    "verity/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
+    "verity/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
     "verity/commitments/advice.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",

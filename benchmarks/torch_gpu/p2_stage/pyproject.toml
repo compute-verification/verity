@@ -34,5 +34,5 @@ inputs = ["tools/config/verity_config",
           "benchmarks/torch_gpu/sha512_rows",
           "benchmarks/torch_gpu/s8_linear/int_mm.py",
           "verity/protocols/__init__.py",
-          "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon",
+          "verity/circuits/ops", "verity/circuits/silicon",
           "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/poub/__init__.py"]
