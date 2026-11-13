@@ -25,9 +25,11 @@ from training_slowdown import formalism as F
 HERE = Path(__file__).resolve().parents[1]
 #: the one module that reaches the calculator, and this file, whose toy sources name it
 DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
+#: the calculator's package, which has its directory's name
+PACKAGE = calculator.CALCULATOR.name
 #: the calculator's modules as its directory on the import path names them, and the part of a path only its
 #: directory and its policy's have
-MODULES, DIRECTORY = {"rho", "periods"}, "inference_only"
+MODULES, DIRECTORY = {PACKAGE, "periods"}, "inference_only"
 #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
 NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
 
@@ -65,14 +67,15 @@ def test_only_the_one_module_reaches_the_calculator():
 def test_a_reach_is_found():
     """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
     from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
-    assert reaches("import sys\nsys.path.insert(0, 'verity/protocols/inference_only/rho')\nimport periods\n"
-                   "from rho import min_cut\nimport rho.params\n") == [
-        "2: 'verity/protocols/inference_only/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
+    home = calculator.CALCULATOR.relative_to(HERE.parents[1]).as_posix()
+    assert reaches(f"import sys\nsys.path.insert(0, '{home}')\nimport periods\n"
+                   f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
+        f"2: '{home}'", "3: import periods", f"4: from {PACKAGE} import", f"5: import {PACKAGE}.params"]
     assert reaches("from pathlib import Path\nimport importlib.util\n"
-                   "P = Path('verity') / 'protocols' / 'inference_only' / 'rho' / 'rho' / 'min_cut.py'\n"
+                   f"P = Path('verity') / 'protocols' / 'inference_only' / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
                    "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
-    assert reaches('"""Reads verity/protocols/inference_only/rho through calculator."""\nfrom . import calculator\n'
-                   'from .rho import x\n\ndef f():\n    """As inference_only says."""\n    rho = 1\n') == []
+    assert reaches(f'"""Reads {home} through calculator."""\nfrom . import calculator\n'
+                   f'from .{PACKAGE} import x\n\ndef f():\n    """As inference_only says."""\n    {PACKAGE} = 1\n') == []
 
 
 def test_the_products_term_is_the_calculators(monkeypatch):
