@@ -909,7 +909,9 @@ def test_the_command_reads_who_holds_a_handle_from_origin_mains_registry_as_the_
 def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is_writing(vm, event_log):
     """Gone is no hook run in two hours by the VM's record of hook runs. An owner the record holds no run of is gone only if
     the record reaches back that far (it rotates by size), and only if it holds the caller's own shell-hook run: where no
-    shell hook runs, no agent's commands are recorded, and every one of them would read as gone."""
+    shell hook runs, no agent's commands are recorded, and every one of them would read as gone. A run of the caller's by
+    another hook shows nothing of that: where Cursor hands shell commands to the Task hook and to no shell hook, the record
+    holds the caller's runs and none of an owner that is at work."""
     ws, typed = vm.root / "ws", "python3 tools/agent-guard/worktree_guard.py reclaim"
     assert vm.ask("git status", PAST) == {"permission": "allow"}
     event_log.write_text(event_log.read_text().replace('"hook": "shell_hook.py"', '"hook": "task_hook.py"'))
@@ -917,6 +919,15 @@ def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is
     out = vm.reclaim(ws, LEAD)
     assert out.returncode == 1 and "holds no shell-hook run of yours in the last 2 h" in out.stderr, out.stderr
     assert "`python3 tools/agent-guard/inbox.py guard` says why" in out.stderr and vm.owner(ws) == PAST
+
+    typed_here = {"hook_event_name": "beforeShellExecution", "command": f"{typed} {ws}", "conversation_id": LEAD, "cwd": str(ws)}
+    subprocess.run([sys.executable, HOOK.parent / "task_hook.py"], input=json.dumps(typed_here), check=True, capture_output=True,
+                   text=True, env=vm.environment)    # the caller's command, handed to the Task hook: its one run, just now
+    runs = [json.loads(line) for line in event_log.read_text().splitlines()]
+    assert [(run["hook"], run["conversation_id"]) for run in runs] == [("task_hook.py", PAST), ("task_hook.py", LEAD)]
+    out = vm.reclaim(ws, LEAD)
+    assert out.returncode == 1 and "holds no shell-hook run of yours in the last 2 h" in out.stderr, out.stdout + out.stderr
+    assert vm.owner(ws) == PAST, "a Task-hook run of the caller's evicts no one"
 
     event_log.unlink()
     assert vm.ask(f"{typed} {ws}", LEAD) == {"permission": "allow"}             # the record starts with this run
