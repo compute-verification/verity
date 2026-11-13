@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_cost.py", "tests/test_host_twin.py", "tests/test_scale.py", "tests/test_stream.py"]
 # slots_gpu runs the SHA-512 engine (sha512_rows: engine.py and the host twin's sources). step.py reads the
 # run's directory, id and lease through verity_config's SHARED settings.
-inputs = ["benchmarks/torch_gpu/sha512_rows", "verity/configuration/config/verity_config"]
+inputs = ["benchmarks/torch_gpu/sha512_rows", "tools/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
