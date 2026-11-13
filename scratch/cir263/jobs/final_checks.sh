@@ -22,9 +22,14 @@ python3 adapters/vllm/tools/ratchet_gate.py "$base" HEAD --json > "$OUT/gate.jso
 g=$?
 echo "gate rc=$g"; python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print('failures', d.get('failures'))" "$OUT/gate.json"; tail -5 "$OUT/gate.err"
 
+date -u +"pins %FT%TZ"
+python3 tools/verity/check/pins.py --stale > "$OUT/pins.txt" 2>&1
+p=$?
+echo "pins --stale rc=$p"; cat "$OUT/pins.txt"
+
 date -u +"retired %FT%TZ"
 uv run pytest -q -p no:cacheprovider -rA -W always tests/test_retired_terms.py tests/lint/test_repo_retired_terms.py > "$OUT/retired.log" 2>&1
 r=$?
 echo "retired rc=$r"; grep -E "passed|failed|PASSED|FAILED|Warning|Bookkeeping" "$OUT/retired.log" | tail -20
 date -u +"end %FT%TZ"
-exit $(( s || g || r ))
+exit $(( s || g || p || r ))
