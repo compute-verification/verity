@@ -143987,3 +143987,39 @@ None.
 ## To post
 
 Nothing. No timer but one of my own, for the mailbox.
+
+
+## RATING, Fri 13 Nov 13:40Z: #9735's READY LINE, head `4d4950f1bb9`, body changed to "mend 1 of 2", not marked. The scalar reference passes the two-raiser tile too. NEW: at k = 65,536 the tile with its dead pairs paid in full also passes the rule, and the one-atom program is still 1 point under the bound on three salts
+
+**The ready line.** Pull request #9735, https://github.com/compute-verification/verity/pull/9735, branch `cursor/proofs-rating-debit-4ba7`, head `4d4950f1bb99a696bb1fb63a72aca13983ff0f1d`, base `main`, open, not a draft, not marked, no label [run, `gh pr view` at 13:39Z]. GitHub reports it mergeable with `main` now [run]. I merged no `main` and I mark nothing.
+
+- **The body** [run]: its first paragraph is the one you sent, word for word. The sentence "was not run for this pull request" is gone; "Not established" now says what ran. A section "What it refuses and what it does not" holds the rows, and "What ran" names the runs. 20,048 bytes, `Refs PRF-612` kept, title unchanged.
+- **One thing the body says more narrowly than the paragraph.** "Three classes as found" rests on two kinds of evidence: the raised adder and the planted cross-group skips on three salts at k = 65,536 (24 of 24 rows refused) [run], and the dead pairs on the pull request's own tests, one seed (`r20261113-102603-6b5c`, 13 passed) [run]. The three-salt runs did not include a dead-pair tile. The body says so.
+- **Records at the head:** `r20261113-115604-4837`, exit 0, outcome pass, without `--update` [run].
+- **Suites, not at the head:** quick tier 60 of 60 (`r20261113-103148-12f7`) and the tile tests at `930ae673181`; the Pearl+ difftest's slow tier at `98fb5ddbd05` [run]. The head against `930ae673181` is three files: `Cap.lean` (17 lines of its header's prose) and the two locks [run, `git diff --stat`]. No suite ran at the head itself.
+- **A slip of mine, mended:** my first change went through the agent's pull-request tool, which put the new body under the old one. From 13:35Z to 13:37Z the pull request showed both. `research queue edit` then replaced the whole body [run].
+
+**The scalar reference** [run, `r20261113-125237-4851`, exit 0 in 2,337 s]. On the two-raiser tile with B's plants off-centre, 8192³, salt 0, with no batch form: the tile rule passes, 0 mends, debit 13,040 against a cap of 106,824, both programs equal on 4,096 of 4,096 words. Figure for figure the batch forms' row. One tile, one salt; k = 65,536 was not run on the scalar reference.
+
+**New: with the dead pairs paid in full, k = 65,536 is still not refused** [run, `r20261113-123724-9f84`, `r20261113-123738-d36c`, `r20261113-123816-fba3`, exit 0 each]. This is the two-raiser tile with B's plants at their cells' centres, so every planted pair is dead and is charged: 32 planted groups, 5 mends a planted group-word.
+
+| n | salt | tile rule | mends | debit / cap | one-atom: share of credit | skip-only: share of credit |
+| --- | --- | --- | --- | --- | --- | --- |
+| 8,192 | 0 | passes | 655,360 | 731,120 / 847,708 | 98.51% | 99.75% |
+| 8,192 | 1 | passes | 655,360 | 729,600 / 847,708 | same | same |
+| 8,192 | 2 | passes | 655,360 | 733,720 / 847,708 | same | same |
+| 65,536 | 0 | passes | 655,360 | 726,640 / 840,827 | 98.33% | 99.57% |
+| 65,536 | 1 | passes | 655,360 | 725,120 / 840,827 | same | same |
+| 65,536 | 2 | passes | 655,360 | 729,240 / 840,827 | same | same |
+
+- The bound is 99.50% of the credit. The one-atom program is under it by 1.0 point at n = 8,192 and 1.2 points at n = 65,536, on six rows of six. The skip-only program is over it on all six.
+- On every row: admissible, planted codes as designed, 4,096 of 4,096 words equal, the scalar chain agrees on 64 of 64 sampled words, no flagged atom in a planted group.
+- What it means [inference]: the off-centre plants are not needed at k = 65,536. The products cut at the salt drawn and kept at both ends are enough by themselves to put one program under the bound, with every dead pair charged. At 8192³ the same form was under the bound on two salts of three with 4 groups (my 13:14Z). It is in the body, under the table.
+
+**To post for compute-accounting (PRF-612), if you want it there:** [run] at #9735's head the two-raiser tile with B's plants centred, 32 groups, k = 65,536, pays 655,360 mends (86.1% to 86.7% of its cap), passes `clear_work.check_opened` on three salts at n = 8,192 and 65,536, and gives the one-atom program its 4,096 words for 98.51% and 98.33% of the credit against a bound of 99.50%. Reproduce as my 13:14Z says, with `--raised-pearlc 65536:8192+65536:32:ends --salts 3` (about 27 minutes a salt).
+
+**The witness waits**, as you ruled at 13:29Z [relayed]. Nothing of it is written.
+
+**Still running:** the tensor-clock rows at k = 65,536 for the second read of #9577 (`r20261113-131834-4c35`, `r20261113-131846-b62d`, `r20261113-131914-2bde`). One short entry when they end.
+
+Mailbox read at 13:31Z, to your 13:29Z.
