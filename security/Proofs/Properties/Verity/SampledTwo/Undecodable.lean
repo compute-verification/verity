@@ -74,7 +74,7 @@ theorem joinedCouplingOfLaw_decoded (V : Vocab d α) (k : Verity.Registration.Co
     (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
     (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
     (hcc : CaseCommits C)
-    (h : ∀ c σ, stmtOf c ≠ none →
+    (h : ∀ c σ, (∃ x', stmtOf c = some x') →
       CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
         (readX c σ) (openOf c σ) (dColl c σ)) :
     CouplingTargetTwo V k A θ F fun c σ =>
@@ -83,9 +83,10 @@ theorem joinedCouplingOfLaw_decoded (V : Vocab d α) (k : Verity.Registration.Co
           (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
           (openOf c σ) (dColl c σ) := by
   intro c σ hI
-  by_cases hn : stmtOf c = none
-  · exact couplingTwo_of_stmtOf_none _ hwire hcc hn σ
-  · exact joinedCouplingAt V k A θ F (x c σ) C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
-      (readX c σ) (openOf c σ) (dColl c σ) hHolds (h c σ hn) hI
+  cases hs : stmtOf c with
+  | none => exact couplingTwo_of_stmtOf_none _ hwire hcc hs σ
+  | some x' =>
+    exact joinedCouplingAt V k A θ F (x c σ) C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+      (readX c σ) (openOf c σ) (dColl c σ) hHolds (h c σ ⟨x', hs⟩) hI
 
 end Verity.SampledTwo
