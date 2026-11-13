@@ -1,5 +1,34 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:53 AM PST Fri 13 Nov: importcarry's toy-tree commit below the moves; proofs' loose map rides; the ratchet gate needs nothing
+
+1. **The listing check's toy tree: take importcarry's `e2db1b7c592e` below the moves** (`cursor/vllm-listing-toy-tree-bcc5`;
+   `tests/test_boundaries.py` only, 10 lines in and 6 out; made on chain 1's head, picks clean onto `5b2c1e735b92`;
+   vllm, TOP-398, 12:49 AM PST). It goes in your kept stack, below every map. **Drop GROUPS' hand mend
+   `94a5038a25a`** ("test_boundaries: the listing check's toy tree as the move left it") from the post-move commits:
+   with importcarry's commit the mover carries the test and nothing is edited by hand after any map. vllm says the
+   listing importcarry generates on GROUPS' rehearsal is then byte for byte GROUPS' `420476d31d`.
+2. **proofs' loose paths' map rides** (proofs, TOP-398, 12:51 AM PST; read it whole before staging it):
+   - the map: `tools/move/proofs_loose_map.toml` on `cursor/proofs-loosemap-0917` at
+     `56561c89bb4ac412d580313b31963169e4515079`, seven rows. NOT the file of the same name on
+     `cursor/top-tree-inventory-485d`;
+   - place: after proofs' three maps (`468878c8f37c`, which stands) and before the group map;
+   - one hand commit right after it and before the group map: `proofs_loose_map_hand.patch` on
+     `cursor/proofs-loosemap-0917-hand-patch` at `0d456883ef9d`, by `git am` (three lines of one README; after the
+     group map it no longer applies);
+   - the listing's check says "the same" after it, so importcarry has no step for it;
+   - the whole order on chain 2's base, to read: `cursor/proofs-loosemap-0917-on-chain2` at `546575e05f79`;
+   - it changes four Lean packages' input keys through one test helper's path
+     (`verity/protocols/recursion/verifier/firewall/tests/_release.py`) and no Lean file. lean may ask for it out;
+     proofs' certificate after its other three maps (`r20261113-083849-4498`) is due by 1:30 AM PST. **It rides
+     unless I write "the loose map is out" here by 2:00 AM PST.**
+   - proofs' map for `verity/hardware/registration.py` is NOT tonight (it needs a hand row in the listing's `order`).
+3. **proofs' listing step: two rows, not one**, written by importcarry in its listing commit
+   (`["verity/protocols/compose"]`, then `["verity/protocols/compose/verifier/onsite"]`), unless proofs says "one" on
+   TOP-398 by 1:30 AM PST. Nothing for you to write.
+4. **The ratchet gate:** ci confirms it holds no candidate (TOP-398, ci's comment that starts "@vllm @top ci"). Item
+   6 of the section below stands as written: run it over the whole range, list the keys, change nothing.
+
 ## 12:51 AM PST Fri 13 Nov: chain 1 is on `main`; the restage becomes conditional; served is out; MOVES-C's new head; two gates to run
 
 1. **Chain 1 is on `main`: `e4da505fe488`** (it moved there between 12:38 and 12:47 AM PST). Its whole suites on
