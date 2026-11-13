@@ -61,10 +61,11 @@ it, and fast-forwards `main` only to a candidate with no new failure:
 - Before marking, run the Lean check of the packages and the suites your change touches (the testing skill's pre-mark
   run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
-  LANE`); no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
+  LANE`), signed as that reviewer once ci's holder registers its agent (`research queue delegate AGENT --by review-NN`);
+  no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
   `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
   alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
-  once the loop certifies its map, from `main`, rerun on its batch's tip; under `signed_verdicts`, not one changing
+  once the loop certifies its map, from `main`, rerun on its batch's tip; with `signed_verdicts` true, not one changing
   `SIGNED_GUARDS`.
 - The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate

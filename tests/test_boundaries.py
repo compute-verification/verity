@@ -324,7 +324,7 @@ BENCHMARKS_IMPORTERS = {
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
-                                                                       "(`benchmarks/pouw/h1_lanes/run.py`)",
+                                                                       "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
                      "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
                     "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "

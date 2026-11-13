@@ -1,4 +1,4 @@
-"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (the
+"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (`h1_prove/h1unit.py`; the
 statement `h1unit.layout` stages by default) is the one the verifier pins for its template, with the salted layout the opening reads: R A rows, C B rows, then the public row of
 salt, position and roots, each `hm96-sha512/row/v2`. The opening refuses a proof over any other circuit, so a change to
 `PouwH1Tile`'s Definition or to Flock's lowering lands its new digest in both tables. `test_pouw_core_check` ties the
@@ -7,15 +7,11 @@ build takes about 3.5 minutes and 9.5 GB, so it runs when VERITY_POUW_H1_PIN is 
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
+import h1unit as U
 import pytest
 
 from verity.protocols.pouw.verifier import core_check as CC
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "h1_prove"))
-import h1unit as U
 
 
 @pytest.mark.slow

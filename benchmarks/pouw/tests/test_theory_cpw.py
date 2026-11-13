@@ -1,25 +1,10 @@
-"""cpw_floor.py, cpw_sass_count.py and a2u_sat_count.py: the DS-120 bound's break line and CP-W's checkpoint
-floors, and the two SASS counters on small listings in cuobjdump's form."""
+"""theory/{cpw_floor,cpw_sass_count,a2u_sat_count}.py: the DS-120 bound's break line and CP-W's checkpoint floors, and
+the two SASS counters on small listings in cuobjdump's form."""
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-
-
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(name, THEORY / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-cf = _load("cpw_floor")
-cs = _load("cpw_sass_count")
-a2 = _load("a2u_sat_count")
+import a2u_sat_count as a2
+import cpw_floor as cf
+import cpw_sass_count as cs
 
 FOLD = ["IMMA.16832.S8.S8 R4, R8, R10, R4 ;", "IMAD R2, R4, 0x3, RZ ;", "LOP3.LUT R3, R2, R5, 0x7, 0x96, !PT ;",
         "IMAD R5, R3, 0x9, R6 ;", "LEA.HI R6, R3, R5, R3, 0x5 ;"]
