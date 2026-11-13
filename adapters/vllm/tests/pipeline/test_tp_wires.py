@@ -23,7 +23,7 @@ from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import wiring as WI
-from verity.definitions.ops import gemm as GE
+from verity.circuits.ops import gemm as GE
 from verity.definitions.registry import moe
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry.prims import BF16
