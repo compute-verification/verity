@@ -38,8 +38,9 @@ The record is `exfiltration.served_share`'s object, with what the audit showed b
   commit (`run_of`).
 * ``audit``, what the audit showed (`shown`): the class the second stage audited, as its summary names the first
   stage's file (``class``, the directory that holds it), and the digest of the registration it read
-  (``registration``); the sessions' verdicts counted by kind, the driver's checks, the
-  stream's outcome and its codes, the layout the serve committed, what the interior registered, the first stage's
+  (``registration``); the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it
+  held (``held``), the stream's outcome with its codes and whether it says it is complete (``complete``, false where
+  the outcome carries none), the layout the serve committed, what the interior registered, the first stage's
   sample and check, what holds the runs' files to each other (`ties`), the sessions' seconds as the files hold
   them, and the cards the proof server's provers ran on (``audit.proof_server.busy``, each prover's ``device``, its
   ``sessions`` and its ``seconds``; a session's own ``device``).
@@ -222,8 +223,8 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
     outcome = summary.get("outcome")
     if isinstance(outcome, Mapping):
         codes = [c for k in CODES for c in (outcome.get(k) or []) if c not in CODES]
-        outcome = {"accepted": outcome.get("accepted") is True, "codes": list(dict.fromkeys(codes)),
-                   "refused": outcome.get("refused")}
+        outcome = {"accepted": outcome.get("accepted") is True, "complete": outcome.get("complete") is True,
+                   "codes": list(dict.fromkeys(codes)), "refused": outcome.get("refused")}
 
     def total(read: Any) -> float | None:
         values = [read(s) for s in sessions]

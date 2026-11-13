@@ -9,18 +9,20 @@ run; it reads from the tree who decided each of those and what proves it, and pr
 * **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proofs the Lean
   verifier accepted, then the final accept as the stream's outcome gave it: given, refused with its codes, or
   withheld, where every check of the second stage held and the outcome is refused by one code the table names a
-  reason for (`TABLE`'s ``withheld``). An accept the verifier withheld or refused is never printed as given.
+  reason for (`TABLE`'s ``withheld``). An accept the verifier withheld or refused is never printed as given, and
+  neither is an outcome that accepted beside a second stage that did not hold (`NOT_HELD`). An accept whose outcome
+  does not say it is complete is printed as given and not complete, and is among what is open.
 * **What the audit covered** (`covered`): the replay block as the layout names it: the stand-in, instances of the
   check's template, or a Definition of the class's own.
 * **To fully proved** (`open_items`), from the run's own files and the lock entries of its own verdicts: the replay
   block where it is the stand-in; its inputs where the interior registers them, which is after the first stage's
   sample (`AFTER_SAMPLE`); every verdict a verifier that is not Lean decided (`TABLE`'s ``decided_by``);
   every Lean verdict whose lock entry (``proved_by``, in ``security/lean-audit.json``) is missing or lists open
-  premises; and the final accept where it was not given. The resampling holes and the cited theorem are not listed
-  here: `spot_status` prints them, in the same command.
-* **The mark**: ``proved`` only where that list is empty, the final accept is given, the cited theorem's lock entry
-  lists no open premise and each resampling hole is closed at the commit of every one of the served run's four runs
-  (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
+  premises; and the final accept where it was not given, or is not complete. The resampling holes and the cited
+  theorem are not listed here: `spot_status` prints them, in the same command.
+* **The mark**: ``proved`` only where that list is empty, the final accept is given and complete, the cited
+  theorem's lock entry lists no open premise and each resampling hole is closed at the commit of every one of the
+  served run's four runs (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
   `exfiltration.RUN_NOT_PROVED` otherwise. A kind of verdict is ``proved`` only where a Lean verifier decided it and
   its lock entry lists no open premise.
 * **The prover's seconds** as the record holds them, said as ``at most`` where they are a session's, wait included.
@@ -53,8 +55,14 @@ PROOFS = "lean-verify"
 #: under
 NAMES = ("class", "serve", "registration")
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the command's
-#: word for an accept the verifier withheld (`exfiltration.VERDICT_READS`)
-PIECE, WITHHELD = "second_stage", "withheld"
+#: own words for a verdict: accepted and complete, accepted and not complete, refused, withheld
+PIECE = "second_stage"
+ACCEPT, NOT_COMPLETE, REFUSE, WITHHELD = E.VERDICT_READS
+#: why an outcome that accepted is no accept of the audit's: the second stage's own word that every check of its own
+#: held is part of the verdict
+NOT_HELD = "the stream's outcome accepted and the second stage did not hold: its summary's `held` is not true"
+#: an accept that moves no figure
+GIVEN_NOT_COMPLETE = "not complete: its outcome does not say `complete`"
 #: a fact of a two-stage run as served, beside what its form waits on: the values the replay block reads are
 #: registered by the interior registration, which follows the first stage's sample
 AFTER_SAMPLE = "the replay block's inputs are committed after the sample"
@@ -143,27 +151,34 @@ def covered(layout: Mapping | None, interior: Mapping | None) -> dict:
 
 
 def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
-    """The final accept as the stream's outcome gave it: ``given``; ``withheld``, where every check of the second
-    stage held (``held``) and the outcome is refused by one code the table names a reason for; ``refused``, with
-    its codes; or ``none``, where the second stage reached no outcome. Its proof is the cited theorem's."""
+    """The final accept as the stream's outcome gave it, read by the rule the stop class's verdicts of record are
+    written by: ``given``, where the outcome accepted and every check of the second stage held (``held``), with
+    whether the outcome says it is ``complete`` (one that carries none is not); ``withheld``, where every check held
+    and the outcome is refused by one code the table names a reason for; ``refused``, with its codes, and for an
+    outcome that accepted beside a second stage that did not hold (`NOT_HELD`); or ``none``, where the second stage
+    reached no outcome. Its proof is the cited theorem's."""
 
     o, entry = shown.get("outcome"), kinds["outcome"]
     proof = {"name": theorem.get("name"), "listed": theorem.get("name") is not None,
              "open_premises": list(theorem["open_premises"]) if theorem.get("name") else None,
              PROVED: theorem.get("name") is not None and not theorem["open_premises"]}
     out = {**{k: entry[k] for k in ("what", "verifier", "decided_by")}, "proved_by": proof, "held": shown.get("held"),
-           "codes": [], "withheld": None, "why": None, PROVED: False}
+           "codes": [], "withheld": None, "why": None, "complete": None, PROVED: False}
     if not isinstance(o, Mapping):
         refused = shown.get("refused")
         return out | {"final": "none",
                       "why": "the second stage reached no outcome" + (f": {json.dumps(refused)}" if refused else "")}
     out["codes"] = list(o.get("codes") or [])
-    if o.get("accepted") is True:
-        return out | {"final": "given", PROVED: entry["decided_by"] == LEAN and proof[PROVED]}
+    accepted, held = o.get("accepted") is True, shown.get("held") is True
+    if accepted and held:
+        complete = o.get("complete") is True
+        return out | {"final": "given", "complete": complete,
+                      PROVED: complete and entry["decided_by"] == LEAN and proof[PROVED]}
     reasons = kinds.get("withheld") or {}
-    if shown.get("held") is True and len(out["codes"]) == 1 and out["codes"][0] in reasons:
+    if held and len(out["codes"]) == 1 and out["codes"][0] in reasons:
         return out | {"final": "withheld", "withheld": {"code": out["codes"][0], **reasons[out["codes"][0]]}}
-    return out | {"final": "refused", "why": json.dumps(o["refused"]) if o.get("refused") and not out["codes"] else None}
+    why = NOT_HELD if accepted else json.dumps(o["refused"]) if o.get("refused") and not out["codes"] else None
+    return out | {"final": "refused", "why": why}
 
 
 def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
@@ -178,7 +193,8 @@ def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
     else:
         said = f"{proofs['accepted']} of {proofs['of']} sampled proofs accepted by the Lean verifier"
     if final["final"] == "given":
-        return f"{said}; the final accept given by `{final['verifier']}`"
+        return (f"{said}; the final accept given by `{final['verifier']}`"
+                + ("" if final["complete"] else f", and {GIVEN_NOT_COMPLETE}"))
     if final["final"] == "withheld":
         return f"{said}; the final accept withheld, reason `{final['withheld']['code']}` ({final['withheld']['why']})"
     if final["final"] == "refused":
@@ -214,14 +230,17 @@ def open_items(cover: Mapping, kinds: Sequence[Mapping], audit_checks: Sequence[
     elif final["final"] != "given":
         items.append({"item": "final accept",
                       "said": "the final accept is " + ("refused" if final["final"] == "refused" else "not reached")})
+    elif not final["complete"]:
+        items.append({"item": "final accept", "said": f"the final accept is given and {GIVEN_NOT_COMPLETE}"})
     return items
 
 
 def verdict_record(doc: Mapping) -> dict | None:
     """The audit's verdict as a record of the stop class's verdicts of record (`exfiltration.VERDICT_FIELDS`, the
-    piece `PIECE`): the final accept as the outcome gave it, the verifier that gave it at the run's commit, the
-    cited theorem only where the whole run is `proved`, and otherwise what stands between it and proved, in plain
-    words. Beside them it names the class, the serve and the registration (`NAMES`) as the served run's files give
+    piece `PIECE`): the final accept as `outcome` reads it, in the command's own words (an accept whose outcome does
+    not say it is complete is `NOT_COMPLETE`, and one beside a second stage that did not hold is `REFUSE`), the
+    verifier that gave it at the run's commit, the cited theorem only where the whole run is `proved`, and otherwise
+    what stands between it and proved, in plain words. Beside them it names the class, the serve and the registration (`NAMES`) as the served run's files give
     them, null where they give none. None where the second stage reached no outcome: it holds no verdict."""
 
     final, reads = doc["outcome"], doc["mark_reads"]
@@ -232,11 +251,13 @@ def verdict_record(doc: Mapping) -> dict | None:
         word = WITHHELD
         waits = "; ".join([final["withheld"]["why"], *([AFTER_SAMPLE] if doc["covered"].get("registered") else [])])
     elif final["final"] == "refused":
-        word, waits = "refuse", "the verifier refused it" + (f": {', '.join(final['codes'])}" if final["codes"] else "")
+        word = REFUSE
+        waits = NOT_HELD if final["why"] == NOT_HELD else (
+            "the verifier refused it" + (f": {', '.join(final['codes'])}" if final["codes"] else ""))
     else:
         n = reads["open_premises"]
         opened = [h for h in spot_status.HOLES if reads["holes"].get(h) != spot_status.CLOSED]
-        word, waits = "accept", None if proved else "; ".join(filter(None, (
+        word, waits = ACCEPT if final["complete"] else NOT_COMPLETE, None if proved else "; ".join(filter(None, (
             "no Lean theorem is cited for its verifier" if reads["theorem"] is None else
             n and f"{reads['theorem']} takes {n} open premise{'s' * (n != 1)}",
             opened and f"not closed at the run's commit: {', '.join(opened)}",
@@ -354,7 +375,8 @@ def render(doc: Mapping[str, Any]) -> str:
     body += [[f"`{c['check']}`", c["what"], _of(c), f"{c['decided_by']}: `{c['verifier']}`", "none: not a Lean verifier's"]
              for c in doc["checks"]]
     body.append(["the final accept", final["what"],
-                 {"given": "given", "withheld": f"withheld (`{(final['withheld'] or {}).get('code')}`)",
+                 {"given": "given" if final["complete"] else "given, not complete",
+                  "withheld": f"withheld (`{(final['withheld'] or {}).get('code')}`)",
                   "refused": "refused" + (f" ({E._names(final['codes'])})" if final["codes"] else ""),
                   "none": "no outcome"}[final["final"]],
                  f"{final['decided_by']}: `{final['verifier']}`", "the theorem the next block cites"])

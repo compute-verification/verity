@@ -203,7 +203,13 @@ def test_what_the_audit_showed_is_counted_from_the_four_runs_files(tmp_path):
     assert shown["checks"] == {"checks_before_draw": {"accepted": 2, "of": 2}, "pins": {"accepted": 2, "of": 2},
                                "negatives": {"accepted": 2, "of": 2}, "registered_reads": {"accepted": 1, "of": 1},
                                "complete": {"accepted": 1, "of": 1}, "round_two": {"accepted": 1, "of": 1, "codes": []}}
-    assert shown["outcome"] == {"accepted": False, "codes": ["two-stage-form"], "refused": None} and shown["held"] is True
+    assert shown["outcome"] == {"accepted": False, "complete": False, "codes": ["two-stage-form"], "refused": None}
+    assert shown["held"] is True
+    # an outcome is complete only where it says so: one that carries no `complete` is not
+    given = {"accepted": True, "interior": [], "replay_sample": [], "statements": []}
+    for outcome, complete in ((given, False), (given | {"complete": True}, True), (given | {"complete": 1}, False)):
+        got = R.read(**served(tmp_path / "given", outcome=outcome))[0]["audit"]["outcome"]
+        assert (got["accepted"], got["complete"], got["codes"]) == (True, complete, [])
     assert (shown["sessions"], shown["proof_blocks"], shown["cores"], shown["sizes"]) == (2, 3, 30, [20])
     assert shown["seconds"] == {"session_s": 90.0, "busy_s": None, "prove_total_s": 69.75, "lean_verify_s": 6.0,
                                 "verify_s": 1.0}

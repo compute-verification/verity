@@ -17,7 +17,7 @@ from verity_bench import served_record as R
 from verity_bench import spot_status
 
 THEOREM = spot_status.THEOREMS[-1]
-GIVEN = {"accepted": True, "interior": [], "replay_sample": [], "statements": []}
+GIVEN = {"accepted": True, "complete": True, "interior": [], "replay_sample": [], "statements": []}
 #: a request's own Definition as a layout names it: none of the stand-in's fields
 OWN = {k: v for k, v in LAYOUT.items() if k not in W.STAND_IN} | {"replay": "Request_v1{L=2}"}
 CLOSED = dict.fromkeys(spot_status.HOLES, spot_status.CLOSED)
@@ -204,6 +204,40 @@ def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
     assert doc["verdict"]["line"] == ("1 of 2 sampled proofs accepted by the Lean verifier; no final accept: the second "
                                       "stage reached no outcome")
     assert doc["verdict_record"] is None and doc["to_fully_proved"][-1]["said"] == "the final accept is not reached"
+
+
+def test_an_accept_is_the_audits_only_where_the_second_stage_held_and_complete_only_where_its_outcome_says_so(tmp_path):
+    """The command's `accept` is accepted and complete. Under a table and a lock with nothing else open: an outcome
+    that accepted and carries no `complete`, as the two-stage audit writes one, is given and not complete, which is
+    open and moves no figure; one that accepted beside a second stage that did not hold is no accept at all."""
+
+    bare = {k: v for k, v in GIVEN.items() if k != "complete"}
+    for outcome in (bare, bare | {"complete": False}, bare | {"complete": "yes"}):
+        doc = W.account(record_of(tmp_path / "bare", outcome=outcome, layout=OWN, registered=()), tree(tmp_path),
+                        kinds=ALL_LEAN, holes=CLOSED)
+        out = W.render(doc)
+        assert (doc["outcome"]["final"], doc["outcome"]["complete"], doc["outcome"][W.PROVED]) == ("given", False, False)
+        assert doc["verdict"]["mark"] == E.RUN_NOT_PROVED and "verdict: proved" not in out
+        assert doc["verdict"]["line"].endswith("; the final accept given by `lean-outcome`, and not complete: its outcome "
+                                               "does not say `complete`")
+        said = "the final accept is given and not complete: its outcome does not say `complete`"
+        assert [i["said"] for i in doc["to_fully_proved"]] == [said] and "| given, not complete |" in out
+        assert reads(doc["verdict_record"])
+        assert [doc["verdict_record"][k] for k in ("verdict", "proved_by", "open")] == ["not complete", None, said]
+
+    for held in (False, None):
+        doc = W.account(record_of(tmp_path / "unheld", outcome=GIVEN, held=held, layout=OWN, registered=()),
+                        tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
+        out = W.render(doc)
+        assert doc["outcome"]["final"] == "refused" and doc["verdict"]["mark"] == E.RUN_NOT_PROVED
+        assert "final accept given" not in out and "verdict: proved" not in out and "| refused |" in out
+        assert doc["verdict"]["line"].endswith("; the final accept refused: the stream's outcome accepted and the second "
+                                               "stage did not hold: its summary's `held` is not true")
+        assert doc["to_fully_proved"] == [{"item": "final accept", "said": "the final accept is refused"}]
+        assert reads(doc["verdict_record"])
+        assert [doc["verdict_record"][k] for k in ("verdict", "proved_by", "open")] == ["refuse", None, W.NOT_HELD]
+    # the words are the command's own
+    assert (W.ACCEPT, W.NOT_COMPLETE, W.REFUSE, W.WITHHELD) == E.VERDICT_READS
 
 
 def test_what_the_audit_covered_is_the_layouts_own_account(tmp_path):
