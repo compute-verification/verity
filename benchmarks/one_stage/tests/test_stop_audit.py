@@ -18,7 +18,7 @@ import pytest
 
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import rows as CS
-from verity.protocols.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
 
 HERE = Path(__file__).resolve().parent
