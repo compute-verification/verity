@@ -32,7 +32,7 @@ from verity_bench.vllm.table import render
 
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("spec", help="a spec under benchmarks/harness/specs, or its path")
     parser.add_argument("--local-only", action="store_true",
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
