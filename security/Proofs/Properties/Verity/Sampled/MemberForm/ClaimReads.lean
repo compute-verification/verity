@@ -38,16 +38,16 @@ open Flock.Guarantees (MemberV5 Seat ReadsWith tracesWith JointAuditV5)
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Two traces side by side, at the first circuit's gates, are the first.** -/
-theorem traceLeft_beside {C D : Verity.Circuit} (X : C.Trace) (Y : D.Trace) :
-    Verity.Circuit.traceLeft (Verity.Circuit.traceBeside X Y) = X := by
+theorem traceLeft_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
+    Verity.Circuit.traceLeft (Verity.Circuit.traceBeside tC tD) = tC := by
   funext i
   unfold Verity.Circuit.traceLeft Verity.Circuit.traceBeside
   rw [Fin.addCases_left]
   exact BitVec.cast_cast ..
 
 /-- **Two traces side by side, at the second circuit's gates, are the second.** -/
-theorem traceRight_beside {C D : Verity.Circuit} (X : C.Trace) (Y : D.Trace) :
-    Verity.Circuit.traceRight (Verity.Circuit.traceBeside X Y) = Y := by
+theorem traceRight_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :
+    Verity.Circuit.traceRight (Verity.Circuit.traceBeside tC tD) = tD := by
   funext j
   unfold Verity.Circuit.traceRight Verity.Circuit.traceBeside
   rw [Fin.addCases_right]
