@@ -60,7 +60,7 @@ from verity.circuits.types import Array
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ZERO, Circuit, L
 from verity.commitments.gates.sha512 import commit
-from verity.definitions.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL
