@@ -79,6 +79,18 @@ record whose verdict leaves one out or states one wrongly doesn't read, and the 
 (`class_charge.misstates`): a ``withheld`` that is neither null nor a word, a ``codes`` that is no list of words,
 and an accept that states a ``withheld`` word or a code.
 
+**Stopped.** A verifier's command that stopped with an error after its stream's session opened reached no verdict
+and was a try at one. Its record states ``accepted`` false, ``withheld`` null and one field more, ``stopped``, the
+command's own word for the error (`class_charge.STOPPED`). The line says "stopped" with the word, since no verifier
+refused; the charge is a refusal's, and it is final as a refusal is: it stands in a superseded run, and under
+another head it counts against its execution phase ("Another head"). So a second run over the same serve, which
+would fill the verdict the first never reached, holds nothing. A command that stopped before any challenge was
+sent writes no record: nothing was tried. ``stopped`` may be absent, which reads as null; it is handed on with each
+verdict read. A record doesn't read where its verdict's ``stopped`` is neither null nor a word, where an accept
+states one, and where a verdict states a ``withheld`` word too. A command that is killed writes nothing, and a
+second run then fills its verdict unseen: only a record of the sessions opened, which the command does not write
+itself, closes that, and the reader is handed none.
+
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 certifier's key and session, which a calculator doesn't hold, so a head read here is as good as the run that kept it.
@@ -134,10 +146,11 @@ a control names no head, class or serve: of a control record the reader reads it
 control at another commit, by another verifier, or of a thing its verifier doesn't owe counts for nothing. One its
 verifier did not refuse (``accepted`` anything but false), and one it refused for another reason than the
 control's word, leave that verifier without its control at that commit, whatever other control it refused. So
-does one whose accept its verifier withheld: a control counts only where the verifier refused, and a verdict that
-states a ``withheld`` word is not accepted and is no refusal, whatever ``reason`` its record gives. A control's
-verdict is held to what any verdict states of the two fields ("Withheld, and the codes"), and one that states
-either wrongly is a control record that doesn't read. An
+does one whose accept its verifier withheld, and one whose command stopped: a control counts only where the
+verifier refused, and a verdict that states a ``withheld`` or a ``stopped`` word is not accepted and is no
+refusal, whatever ``reason`` its record gives. A control's verdict is held to what any verdict states of those
+fields ("Withheld, and the codes", "Stopped"), and one that states one wrongly is a control record that doesn't
+read. An
 execution phase whose verifier lacks its control is charged its whole schedule, with a line that names the
 verifier and, for a control refused for another reason, the reason given and the control's word. A control record
 that doesn't read holds no execution phase at all, in a run that is not superseded. Of a superseded run, a control
@@ -377,8 +390,9 @@ def _uncontrolled(kind: str, record: Mapping[str, Any],
 
 
 def _refusal(verdict: Mapping[str, Any]) -> bool:
-    """Whether a control's verdict is its verifier's refusal: ``accepted`` exactly false, and no accept withheld,
-    which is not accepted and is no refusal (the module docstring's "A negative control")."""
+    """Whether a control's verdict is its verifier's refusal: ``accepted`` exactly false, and neither an accept
+    withheld nor a command that stopped, which are not accepted and are no refusal (the module docstring's "A
+    negative control")."""
     return verdict.get(CC.ACCEPTED) is False and CC.not_accepted(verdict) == CC.REFUSED
 
 
@@ -414,10 +428,12 @@ def _elsewhere(failed: Read, serves: Sequence[str], head: C.Head, digest: str) -
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
     """A verdict read as the calculator prints it: which of the four it is, what it is of and how it went, what it
-    was withheld for (null where it was not) and its codes as written, its run, serve, registration, verifier and
-    proof as its record names them, the rate it says it ran at, and the mark."""
+    was withheld for (null where it was not) and its codes as written, the word its command stopped with (null
+    where it states none), its run, serve, registration, verifier and proof as its record names them, the rate it
+    says it ran at, and the mark."""
     verdict = record[CC.VERDICT]
     return {"verdict": kind, **{k: verdict.get(k) for k in CC.READ}, **{k: verdict[k] for k in CC.SAID},
+            CC.STOPPED: verdict.get(CC.STOPPED),
             **{k: record.get(k) for k in CC.FIELDS if k != CC.VERDICT}, RATE: record.get(RATE),
             "mark": LB.RUN_NOT_PROVED}
 

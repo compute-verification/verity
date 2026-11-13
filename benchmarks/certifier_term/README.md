@@ -188,10 +188,10 @@ The reader holds what the rule charges below to two more things, which the rule 
   (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
   control at another commit, by another verifier or of another thing serves none, and one the verifier did not
   refuse, or refused for another reason, leaves it without, whatever other it refused. So does one whose accept
-  the verifier withheld: a control counts only where the verifier refused, and a verdict that states a `withheld`
-  word is no refusal, whatever `reason` its record gives. The line names the verifier
-  that lacks its control, with the reason given beside the control's word; the class's line prints the reason each
-  verifier gave.
+  the verifier withheld, or whose command stopped: a control counts only where the verifier refused, and a verdict
+  that states a `withheld` or a `stopped` word is no refusal, whatever `reason` its record gives. The line names
+  the verifier that lacks its control, with the reason given beside the control's word; the class's line prints
+  the reason each verifier gave.
 - **The rate.** A class is held only where every block of the stop record's and the response tie's populations is
   proved: the registration its verdicts name registers `1/1` for both, and each of those two verdicts' records
   says in `rate` that it ran at the registered rate. A rate's text is `NUM/DEN` in lowest terms with no prefix, so
@@ -244,6 +244,15 @@ verdict states both, whatever its format, a control's among them: a verifier wit
 null and `codes` empty, so no withheld verdict reads as refused because a line was left out. A record doesn't read
 where its verdict leaves either out, and the line says which field to add; where its `withheld` is neither null
 nor a word; where its `codes` is no list of words; and where its verdict is accepted and states a word or a code.
+
+A verifier's command that stopped with an error after its stream's session opened reached no verdict, and it was
+a try at one. Its record states `accepted` false, `withheld` null and one field more, `stopped`, the command's own
+word for the error. The line says "stopped" with the word, the charge is a refusal's, and it is final as a refusal
+is, under any head and in a superseded run: a second run over the same serve fills nothing. A command that stopped
+before any challenge was sent writes no record. `stopped` may be absent. A record doesn't read where its
+verdict's `stopped` is neither null nor a word, where an accept states one, and where a verdict states a `withheld`
+word too. What this does not close: a command that is killed writes nothing, and a second run then fills its
+verdict unseen. Only a record of the sessions opened, which the command does not write itself, closes that.
 
 An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's

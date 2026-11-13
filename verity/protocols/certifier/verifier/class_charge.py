@@ -36,8 +36,17 @@ line says "withheld" with the word where it states one, and "refused" where `wit
 Every verdict states both, whatever its format: one with nothing to say states `withheld` null and `codes` empty,
 so no withheld verdict reads as refused because a line was left out. A record doesn't read where its verdict
 leaves either out, where its `withheld` is neither null nor a word, where its `codes` is no list of words, and
-where its verdict is accepted and states a `withheld` word or a code: an accept that also says why it was held
-back says two things (`misstates`).
+where its verdict is accepted and states a `withheld` word or a code: an accept that also says why it is no
+accept says two things (`misstates`).
+
+**Stopped.** A verifier's command that stopped with an error after its stream's session opened reached no verdict,
+and it was a try: nothing retries a verdict, so a second run that then fills the verdict would be a second try
+nobody sees. Its record states `accepted` false, `withheld` null and one field more, `stopped`, the command's own
+word for the error (`STOPPED`). Such a verdict is no refusal by a verifier, so the line says "stopped" with the
+word; it is charged as a refused one is, and stands as one does. A command that stopped before any challenge was
+sent tried nothing and writes no record. `stopped` may be absent, which reads as null. A record doesn't read where
+its verdict's `stopped` is neither null nor a word, where its verdict is accepted and states one, and where it
+states a `withheld` word too: a verifier that withheld its accept reached a verdict.
 
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
@@ -83,8 +92,11 @@ LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class
 #: two fields more every verdict states, which move no charge: what its verifier held its accept back for, null or
 #: a word, and the verifier's own code words, a list
 WITHHELD, CODES = SAID = ("withheld", "codes")
-#: what a verdict that doesn't count lacks; one that is not accepted and states a `withheld` word is `WITHHELD` for
-#: that word (`not_accepted`)
+#: one field more a verdict may state: the word of the error its verifier's command stopped with, after its
+#: stream's session opened and before any verdict; null or absent where it did not
+STOPPED = "stopped"
+#: what a verdict that doesn't count lacks; one that is not accepted and states a `stopped` or a `withheld` word
+#: is `STOPPED` with, or `WITHHELD` for, that word (`not_accepted`)
 MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "refused", "not complete"
 
 
@@ -93,8 +105,8 @@ class ClassCharge:
     """How an execution phase's class is charged. `count`: its count in the head. `below`: whether its connections
     are charged below their schedule, which takes a count above 0, all four verdicts and one serve and one
     registration named by them. `owed`: each verdict that doesn't count, in `VERDICTS`' order, as (the verdict,
-    what it lacks, the runs of the records that lack it), a verdict some records refused and others withheld once
-    for each; empty where `below` and where the count is 0. `read`: the class's records on this head, counted or
+    what it lacks, the runs of the records that lack it), a verdict some records refused and others withheld or
+    stopped once for each; empty where `below` and where the count is 0. `read`: the class's records on this head, counted or
     not, each with the verdict it is of, in `VERDICTS`' order. `differ`: each of `ONE` that those records name more
     than one of, with the names; empty where `below`."""
 
@@ -174,7 +186,8 @@ def lacks(record: object) -> str | None:
 def misstates(verdict: Mapping[str, Any]) -> str | None:
     """What a verdict states wrongly of `SAID` (the module docstring's "Withheld, and the codes"), or None where it
     states nothing wrongly: one of the two left out, a `withheld` that is neither null nor a word, `codes` that
-    are no list of words, and an accept that states a `withheld` word or a code."""
+    are no list of words, a `stopped` that is neither null nor a word ("Stopped"), an accept that states a
+    `withheld` word, a code or a `stopped` word, and a verdict that states both words."""
     if missing := [k for k in SAID if k not in verdict]:
         return (f"its verdict states no `{'` and no `'.join(missing)}`: a verdict with nothing to say states "
                 f"`{WITHHELD}` null and `{CODES}` empty")
@@ -182,9 +195,14 @@ def misstates(verdict: Mapping[str, Any]) -> str | None:
         return f"its verdict's `{WITHHELD}` is neither a word nor null"
     if not (isinstance(verdict[CODES], list) and all(type(c) is str for c in verdict[CODES])):
         return f"its verdict's `{CODES}` is no list of words"
-    if verdict.get(ACCEPTED) is True and (said := [k for k in SAID if verdict.get(k)]):
-        return (f"its verdict is accepted and states `{'` and `'.join(said)}`: an accept that also says why it was "
-                "held back says two things")
+    if not (verdict.get(STOPPED) is None or _named(verdict[STOPPED])):
+        return f"its verdict's `{STOPPED}` is neither a word nor null"
+    if verdict.get(ACCEPTED) is True and (said := [k for k in (*SAID, STOPPED) if verdict.get(k)]):
+        return (f"its verdict is accepted and states `{'` and `'.join(said)}`: an accept that also says why it is "
+                "no accept says two things")
+    if verdict[WITHHELD] and verdict.get(STOPPED):
+        return (f"its verdict states `{WITHHELD}` and `{STOPPED}`: a verifier that withheld its accept reached a "
+                "verdict, and a command that stopped reached none")
     return None
 
 
@@ -194,8 +212,11 @@ def reads(record: object) -> bool:
 
 
 def not_accepted(verdict: Mapping[str, Any]) -> str:
-    """How a line says a verdict that is not accepted went (the module docstring's "Withheld, and the codes"):
-    `WITHHELD` for the word it states, or `REFUSED` where its `withheld` is null."""
+    """How a line says a verdict that is not accepted went (the module docstring's "Withheld, and the codes" and
+    "Stopped"): `STOPPED` with the word it states, `WITHHELD` for the word it states, or `REFUSED` where it
+    states neither word."""
+    if _named(word := verdict.get(STOPPED)):
+        return f"{STOPPED} with `{word}`"
     word = verdict.get(WITHHELD)
     return f"{WITHHELD} for `{word}`" if _named(word) else REFUSED
 
@@ -231,7 +252,8 @@ def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any
         if not ours:
             owed.append((kind, ANOTHER_HEAD if here else MISSING, _runs(here)))
         elif refused := [r for r in ours if r[VERDICT].get(ACCEPTED) is not True]:
-            # refused first, then each word a verdict was withheld for: the charge is the same, the line says which
+            # refused first, then each word a command stopped with and each a verdict was withheld for: the charge
+            # is the same, the line says which
             went = sorted({not_accepted(r[VERDICT]) for r in refused}, key=lambda how: (how != REFUSED, how))
             owed += [(kind, how, _runs(r for r in refused if not_accepted(r[VERDICT]) == how)) for how in went]
         elif partial := [r for r in ours if r[VERDICT].get(COMPLETE) is not True]:

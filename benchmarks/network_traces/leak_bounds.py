@@ -592,8 +592,8 @@ class Stop(NamedTuple):
     row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,
     one no registration was read for among them. ``why``: one line a class and execution phase read, and what was
     read. ``verdicts``: each verdict read that is on a signed head read, with the mark it is printed under
-    (`RUN_NOT_PROVED`), its ``withheld`` word or null, and its ``codes`` where it states them; one that is not
-    accepted is printed withheld for its word, or refused where it states none."""
+    (`RUN_NOT_PROVED`), its ``withheld`` word or null, its ``codes`` and its ``stopped`` word or null; one that is
+    not accepted is printed stopped with its word or withheld for its word, or refused where it states neither."""
     held: int
     why: tuple[str, ...]
     verdicts: tuple[Mapping[str, Any], ...] = ()

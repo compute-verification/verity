@@ -158,7 +158,7 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
     assert got.why[1] == SV.SERVE_NAMED
     assert [v["verdict"] for v in got.verdicts] == list(CC.VERDICTS) * 2
     assert all(v["mark"] == LB.RUN_NOT_PROVED == "run, not proved" and set(v) == {
-        "verdict", *CC.READ, *CC.SAID, CC.RUN, CC.SERVE, CC.REGISTRATION, CC.VERIFIER, CC.PROVED_BY, SV.RATE, "mark"}
+        "verdict", *CC.READ, *CC.SAID, CC.STOPPED, CC.RUN, CC.SERVE, CC.REGISTRATION, CC.VERIFIER, CC.PROVED_BY, SV.RATE, "mark"}
         for v in got.verdicts)
     tie = got.verdicts[1]
     assert (tie[CC.RUN], tie[CC.VERIFIER], tie[CC.HEAD], tie[CC.ACCEPTED], tie[CC.COMPLETE], tie[CC.WINDOW]) == (
@@ -1514,12 +1514,12 @@ def test_a_withheld_that_is_no_word_and_codes_that_are_no_list_of_words_are_a_re
 
 
 def test_an_accept_that_states_a_withheld_word_or_a_code_is_a_record_that_doesnt_read():
-    """An accept that also says why it was held back says two things, so its record doesn't read: ``accepted``
+    """An accept that also says why it is no accept says two things, so its record doesn't read: ``accepted``
     exactly true with a ``withheld`` word, or with codes that are not empty, complete or not. Anything but exactly
     true is no accept: such a verdict reads with a word and codes, and is not accepted."""
     first = head(3, 5, 0)
     registrations = [registration(first)]
-    two = "an accept that also says why it was held back says two things"
+    two = "an accept that also says why it is no accept says two things"
     for complete in (True, False):
         for over, said in (({CC.WITHHELD: FORM}, "`withheld`"), ({CC.CODES: ["roots"]}, "`codes`"),
                            ({CC.CODES: [""]}, "`codes`"),
@@ -1623,10 +1623,10 @@ def test_a_control_counts_only_where_its_verifier_refused_and_a_withheld_one_is_
                        ({CC.CODES: "id"}, "its verdict's `codes` is no list of words"),
                        ({CC.CODES: [1]}, "its verdict's `codes` is no list of words"),
                        ({CC.ACCEPTED: True, CC.CODES: []} | {CC.WITHHELD: FORM},
-                        "its verdict is accepted and states `withheld`: an accept that also says why it was held "
-                        "back says two things"),
+                        "its verdict is accepted and states `withheld`: an accept that also says why it is no "
+                        "accept says two things"),
                        ({CC.ACCEPTED: True}, "its verdict is accepted and states `codes`: an accept that also says "
-                                             "why it was held back says two things")):
+                                             "why it is no accept says two things")):
         controls = control_but(**over)
         assert SV.control_lacks(controls[1]) == lack, over
         got = stop(one, four(first), controls=controls)
@@ -1634,15 +1634,87 @@ def test_a_control_counts_only_where_its_verifier_refused_and_a_withheld_one_is_
                                   f"{lack}: {controls[1]!r}",)), over
 
 
+#: what a line says of a verdict whose command stopped with the word "session"
+STOPPED = "stopped with `session`"
+
+
+def test_a_command_that_stopped_is_stopped_with_its_word_and_final_as_a_refusal_is(tmp_path):
+    """A verdict that is not accepted and states a ``stopped`` word is its command's, which stopped after its
+    stream's session opened: the line says "stopped" with the word, the class is at its whole schedule, and it is
+    final as a refusal is: under another head it counts against its execution phase, and in a superseded run it
+    stands, so a second run over the same serve fills nothing. The word is handed on. A ``stopped`` that is
+    neither null nor a word, an accept that states one, and a verdict that states a ``withheld`` word too are each
+    a record that doesn't read; and a control whose command stopped is no refusal."""
+    first, other = head(3, 5, 0), head(3, 6, 0)
+    registrations = [registration(first)]
+    at = f"the link {LINK}, execution phase 3"
+    whole = f"{at}, class 0: charged its whole schedule on each of its 5 rows: "
+    stopped = {CC.ACCEPTED: False, CC.COMPLETE: False, CC.STOPPED: "session"}
+    got = stop(registrations, audit_but(first, **stopped))
+    assert got.held == 0 and got.why[0] == LACK and got.verdicts[3][CC.STOPPED] == "session"
+    assert got.why[2] == f"{whole}the compute audit is {STOPPED} (run of the compute audit)"
+    # absent or null it says nothing: an accept holds, and a verdict not accepted is refused or withheld
+    for over, how in (({}, "refused"), ({CC.STOPPED: None}, "refused"), ({CC.STOPPED: None, CC.WITHHELD: FORM}, WITHHELD)):
+        got = stop(registrations, audit_but(first, accepted=False, **over))
+        assert got.why[2] == f"{whole}the compute audit is {how} (run of the compute audit)", over
+        assert got.verdicts[3][CC.STOPPED] is None
+    assert stop(registrations, audit_but(first, stopped=None)).held == 1
+    assert all(v[CC.STOPPED] is None for v in stop(registrations, four(first)).verdicts)
+    # under another head it counts against its execution phase, as a refusal does
+    theirs = four(other)[3] | {CC.RUN: "an earlier run"}
+    held = theirs | {CC.VERDICT: theirs[CC.VERDICT] | stopped}
+    got = stop(registrations, [*four(first), held])
+    assert got.held == 0 and got.why[0] == held_back(1, 1, head=1)
+    assert got.why[4] == (f"{at}: held to its whole schedule, every class of it, by a verdict under another head: "
+                          f"the compute audit is {STOPPED} on class 0 (an earlier run)")
+    # a second run over the same serve fills nothing, whether the first is superseded or not
+    store = Store(tmp_path / "again", {"old": held_files(first, audit_but(first, **stopped)[3:]),
+                                       "new": held_files(first, four(first))})
+    for superseded in ((), ["old"]):
+        got = SV.of_runs(store, ["old", "new"], superseded)
+        assert got.held == 0 and got.why[2] == f"{whole}the compute audit is {STOPPED} (run of the compute audit)"
+    # the calculator's line of a verdict read
+    text = LB.render(LB.document(LB.inputs(), only=["node"], periods=["week"], stop=stop(
+        registrations, audit_but(first, **stopped))))
+    assert (f"- compute audit, run, not proved: {STOPPED}, not complete, on class 0 in execution phase 3 of the "
+            f"link {LINK}, by run run of the compute audit under the verifier the compute audit's verifier at "
+            "commit a commit, proved by nothing") in text
+    # what doesn't read
+    off = [(accepted, {CC.STOPPED: value}, "its verdict's `stopped` is neither a word nor null")
+           for accepted in (True, False) for value in ("", 0, False, True, ["session"], {"word": "session"})]
+    off += [(True, {CC.STOPPED: "session"}, "its verdict is accepted and states `stopped`: an accept that also says "
+                                            "why it is no accept says two things")]
+    off += [(False, {CC.STOPPED: "session", CC.WITHHELD: FORM},
+             "its verdict states `withheld` and `stopped`: a verifier that withheld its accept reached a verdict, "
+             "and a command that stopped reached none")]
+    for accepted, over, lack in off:
+        records = audit_but(first, accepted=accepted, **over)
+        assert CC.lacks(records[3]) == lack, (accepted, over)
+        assert stop(registrations, records) == LB.Stop(0, (
+            f"each connection is charged its whole schedule: {NO_RECORD}{lack}: {records[3]!r}",)), (accepted, over)
+        controls = control_but(accepted=accepted, codes=[], **over)
+        assert SV.control_lacks(controls[1]) == lack, (accepted, over)
+    # a control whose command stopped is no refusal, whatever reason its record gives
+    got = stop(registrations, four(first), controls=control_but(stopped="session"))
+    assert got.held == 0 and got.why[4] == (
+        f"{at}: held to its whole schedule by a control: the response tie's verifier the response tie's verifier at "
+        f"a commit did not refuse its negative control (`id`: a released id changed) on control run of the response "
+        f"tie ({STOPPED}, which is no refusal)")
+    assert stop(registrations, four(first), controls=control_but(stopped=None)).held == 1
+
+
 def stating(files: dict[str, str], how: str) -> dict[str, str]:
-    """A run's files with each verdict record that reads stating the two fields another way: ``nothing``, a null
+    """A run's files with each verdict record that reads stating the fields another way: ``nothing``, a null
     ``withheld`` and no code; and on each verdict that is not accepted, ``codes``, a null ``withheld`` and two
-    codes, or ``withheld``, the word and a code."""
+    codes, ``withheld``, the word and a code, or ``stopped``, a null ``withheld`` and the word its command
+    stopped with."""
     def restated(record: object) -> object:
         if not CC.reads(record):
             return record
         verdict = record[CC.VERDICT] | {CC.WITHHELD: None, CC.CODES: []}
-        if how != "nothing" and verdict.get(CC.ACCEPTED) is not True:
+        if how == "stopped" and verdict.get(CC.ACCEPTED) is not True:
+            verdict |= {CC.STOPPED: "session"}
+        elif how != "nothing" and verdict.get(CC.ACCEPTED) is not True:
             verdict |= {CC.WITHHELD: FORM if how == "withheld" else None, CC.CODES: ["a code", "another"]}
         return record | {CC.VERDICT: verdict}
 
@@ -1653,12 +1725,14 @@ def stating(files: dict[str, str], how: str) -> dict[str, str]:
 def test_withheld_and_codes_move_no_charge(tmp_path):
     """The charge reads neither field. Over each pair of the kinds of run files, with neither, the one, the other
     or both superseded, the verdict records are restated in each way that reads (`stating`): what is held is as it
-    was, and so is every line, but for the word of a verdict that is not accepted, "withheld" where it states the
-    word and "refused" where it doesn't."""
+    was, and so is every line, but for the word of a verdict that is not accepted, "withheld" or "stopped" where
+    it states the word and "refused" where it doesn't. The word ``stopped`` moves none either."""
     kinds = run_files()
-    ways = ("nothing", "codes", "withheld")
+    ways = ("nothing", "codes", "withheld", "stopped")
     restated = {how: {kind: stating(files, how) for kind, files in kinds.items()} for how in ways}
-    seen = said = 0
+    fields = (*CC.SAID, CC.STOPPED)
+    seen = 0
+    said = dict.fromkeys(ways, 0)
     for i, a in enumerate(kinds):
         for j, b in enumerate(kinds):
             for superseded in ([], ["old"], ["new"], ["old", "new"]):
@@ -1667,13 +1741,14 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
                 for how in ways:
                     store = Store(tmp_path / f"{i}-{j}-{how}", {"old": restated[how][a], "new": restated[how][b]})
                     got = SV.of_runs(store, ["old", "new"], superseded)
-                    lines = tuple(line.replace(WITHHELD, CC.REFUSED) for line in got.why)
+                    lines = tuple(line.replace(WITHHELD, CC.REFUSED).replace(STOPPED, CC.REFUSED) for line in got.why)
                     assert (got.held, lines) == (was.held, was.why), (a, b, superseded, how)
-                    assert [{k: v for k, v in x.items() if k not in CC.SAID} for x in got.verdicts] == [
-                        {k: v for k, v in x.items() if k not in CC.SAID} for x in was.verdicts]
-                    said += lines != got.why
+                    assert [{k: v for k, v in x.items() if k not in fields} for x in got.verdicts] == [
+                        {k: v for k, v in x.items() if k not in fields} for x in was.verdicts]
+                    said[how] += lines != got.why
                 seen += 1
-    assert seen == 4 * len(kinds) ** 2 == 2500 and said
+    assert seen == 4 * len(kinds) ** 2 == 2500
+    assert said["withheld"] == said["stopped"] > 0 == said["nothing"] == said["codes"]
 
 
 def test_superseding_a_run_raises_what_is_held_only_on_a_serve_launched_after_it(tmp_path):
