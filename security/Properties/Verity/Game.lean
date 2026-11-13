@@ -217,19 +217,11 @@ structure Sent where
 def Sent.components (k : Verity.Registration.Composite) (s : Sent) : List Protocol :=
   (componentsOf k).map (·.onBlobs (Blobs.ofArray s.blobs))
 
-/-- A component's one-stage parameters: where it is sampled proofs' and its parameters decode as the one-stage form
-(`VStar.Recursive.Sampled.paramsOfJson`), those parameters. -/
-def sampledAt (n : Composition.Named) : Option _root_.Spot.OneStageZk.Params :=
-  if n.id = VStar.Recursive.Sampled.PROTOCOL then
-    match canonicalJson n.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson with
-    | .ok (.inl p) => some p
-    | _ => none
-  else none
-
-/-- **The sampled components' one-stage parameters in `θ`**, each component's that `sampledAt` reads. -/
+/-- **The sampled components' one-stage parameters in `θ`**, each component's that `Core.Composites.sampledAt`
+reads. -/
 def sampledParams (θ : ByteArray) : List _root_.Spot.OneStageZk.Params :=
   match canonicalJson θ >>= Composition.decodeParams with
-  | .ok ps => ps.filterMap sampledAt
+  | .ok ps => ps.filterMap Core.Composites.sampledAt
   | .error _ => []
 
 namespace AuditorPins
@@ -249,7 +241,20 @@ def reads (P : AuditorPins) : Subprotocol → List ℕ
   | .network => (List.range P.keys.length).filter fun i => decide ((P.keys[i]?.map (·.role)) = some .networkCertifier)
   | .inferenceOnly => []
 
+/-- **The pins as the compiled verifier reads them** (`Core.Composites.Pins`, `product IDS --pins`): the first
+pin's key and LMS parameters, when it is a challenger's, and the sessions designated for the challenger. -/
+def compiled (P : AuditorPins) : Core.Composites.Pins where
+  challenger := (P.keys.head?.filter fun q => decide (q.role = .challenger)).map fun q =>
+    ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
+  sessions := (P.sessions .challenger).map fun m => ⟨m.toArray⟩
+
 end AuditorPins
+
+/-- **Composite `k`'s compiled verifier under the pins `P`**: `verifier k` run as `product IDS --pins`
+(`Core.Composites.atPins`), whose acceptance stands only where the sampled components name the pinned challenger key
+and designated sessions. -/
+def pinnedVerifier (P : AuditorPins) (k : Verity.Registration.Composite) : BlobProtocol :=
+  Core.Composites.atPins P.compiled (verifier k)
 
 /-- **Sampled proofs' parameters name only what the pins hold**: each sampled component's challenger key is SPOT's
 pinned key under its pinned LMS parameters, and its window is a session the auditor designated for the challenger. -/
@@ -259,18 +264,21 @@ def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
       (kl.1.params.N, kl.1.params.W, kl.1.params.H) = q.scheme) ∧
     ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w
 
-/-- **Subprotocol `a`'s pin check on the parameters `θ`**: sampled proofs' is `SpotPinned`; the others read no key or
-session from the parameters yet. -/
+/-- **Subprotocol `a`'s pin check on the parameters `θ`**: sampled proofs' is `SpotPinned`, which the compiled
+verifier checks (`pinnedVerifier`). PoUW's, PoUS's, the wipe's and the network certifier's checks each verify a
+device's signatures under a key their own parameters carry (PoUW's live challenger's, PoUS's and the wipe's memory
+challenger's, the network certifier's), which no pin check holds to a pin yet, so their `True` is that gap. PoUB-P2's
+and the inference-only policy's checks read no device's signature, and `True` is theirs. -/
 def PinnedFor (P : AuditorPins) : Subprotocol → ByteArray → Prop
   | .sampled, θ => SpotPinned P θ
   | _, _ => True
 
 /-- **Composite `k`'s verifier, given the deployment's pins `P`, accepts what the prover sent**: the compiled
-verifier accepts, and each of `k`'s subprotocols passes its pin check (`PinnedFor`), so a key or session the pins don't
-hold is refused. -/
+verifier run under the pins (`pinnedVerifier`) accepts. That is the compiled verifier's acceptance with each of `k`'s
+subprotocols passing its pin check (`PinnedFor`; `Verity.accepts_iff`), so a key or session the pins don't hold is
+refused. -/
 def Accepts (P : AuditorPins) (k : Verity.Registration.Composite) (s : Sent) : Prop :=
-  ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept ∧
-    ∀ a ∈ subprotocols k, PinnedFor P a s.params
+  ((pinnedVerifier P k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept
 
 /-- The three byte strings decode under the composition's formats (`Core.Composition.product`'s, which both composites
 read): the subprotocols' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/

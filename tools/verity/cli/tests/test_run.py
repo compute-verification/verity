@@ -241,8 +241,8 @@ def test_config_check_and_hash_print_the_hash(capsys):
 # --- the run -----------------------------------------------------------------------------------------------------------
 
 def stand_in_product(tmp: Path) -> Path:
-    """``product IDS id | check PARAMS COMMITMENT EVIDENCE``: the composite of IDS's subprotocols (64 for any other
-    set), which accepts when every subprotocol's case evidence says so."""
+    """``product IDS id | --pins PINS check PARAMS COMMITMENT EVIDENCE``: the composite of IDS's subprotocols (64 for
+    any other set, or a check without pins), which accepts when every subprotocol's case evidence says so."""
     composites = {cid: sorted(subs.values()) for cid, subs in SP.SUBPROTOCOLS.items()}
     exe = tmp / "product"
     exe.write_text(f"#!{sys.executable}\n" + f"COMPOSITES = {composites!r}\n" + """import json, sys
@@ -253,7 +253,10 @@ if not named:
 if sys.argv[2] == "id":
     print(named[0])
     raise SystemExit(0)
-bad = [c["id"] for c in json.loads(open(sys.argv[5]).read())["components"] if bytes.fromhex(c["evidence"]) != b"accept"]
+if sys.argv[2] != "--pins" or sys.argv[4] != "check":
+    raise SystemExit(64)
+json.loads(open(sys.argv[3]).read())
+bad = [c["id"] for c in json.loads(open(sys.argv[7]).read())["components"] if bytes.fromhex(c["evidence"]) != b"accept"]
 print(json.dumps({"verdict": "reject" if bad else "accept", "reason": f"refused {bad}" if bad else None}))
 raise SystemExit(1 if bad else 0)
 """)
@@ -342,7 +345,8 @@ def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None) -> tupl
     s = tmp / "state"
     s.mkdir(exist_ok=True)
     if not (s / "tools.json").exists():
-        (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp))}))
+        (tmp / "pins.json").write_text(json.dumps({"challenger": None, "sessions": []}))
+        (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp)), "pins": str(tmp / "pins.json")}))
     rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True)
     lines = (s / "record" / "verdicts.jsonl").read_text().splitlines() if (s / "record" / "verdicts.jsonl").exists() else []
     return rc, [json.loads(x) for x in lines]

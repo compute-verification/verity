@@ -265,7 +265,7 @@ theorem mem_sampledParams {θ : ByteArray} {p : Spot.OneStageZk.Params} (h : Par
   have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hx
   have hp' : Core.canonicalJson x.params.toByteArray >>= VStar.Recursive.Sampled.paramsOfJson = .ok (.inl p) := hp
   simp only [sampledParams, hps]
-  exact List.mem_filterMap.2 ⟨x, List.mem_of_find?_eq_some hx, by simp [sampledAt, hid, hp']⟩
+  exact List.mem_filterMap.2 ⟨x, List.mem_of_find?_eq_some hx, by simp [Core.Composites.sampledAt, hid, hp']⟩
 
 /-- The challenger's key is the key of the samples v2's coins are read under. -/
 theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}

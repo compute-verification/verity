@@ -78,8 +78,8 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# The composite a configuration's subprotocols make, onsite or remote, and no other: `product IDS id | check | serve`
-# (CoreComposites.lean).
+# The composite a configuration's subprotocols make, onsite or remote, and no other, under the auditor's pins:
+# `product IDS id | product IDS --pins PINS check | serve` (CoreComposites.lean).
 [[lean_lib]]
 name = "CoreComposites"
 

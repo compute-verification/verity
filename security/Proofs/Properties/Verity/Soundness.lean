@@ -62,12 +62,92 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
+/-- **`B` under pins accepts exactly where `B` accepts and the parameters name only what the pins hold.** -/
+theorem _root_.Core.Composites.answer_atPins {P : Composites.Pins} {B : BlobProtocol} {θ c e : ByteArray}
+    {bs : Array ByteArray} :
+    ((Composites.atPins P B).answer θ c e bs).verdict = .accept ↔
+      (B.answer θ c e bs).verdict = .accept ∧ ∀ j, canonicalJson θ = .ok j → Composites.paramsPinned P j = true := by
+  simp only [BlobProtocol.answer, BlobProtocol.on, Protocol.answer]
+  cases hθ : canonicalJson θ with
+  | error _ => simp [bind, Except.bind]
+  | ok j =>
+    simp only [bind, Except.bind, Composites.atPins]
+    cases hp : B.params j with
+    | error _ => simp [Functor.map, Except.map]
+    | ok p =>
+      simp only [Functor.map, Except.map]
+      cases hc : B.commitment c with
+      | error _ => simp
+      | ok c' =>
+        cases he : B.evidence e with
+        | error _ => simp
+        | ok ev =>
+          cases hch : B.checkBlobs p c' ev (Blobs.ofArray bs) with
+          | accept pub prof =>
+            by_cases hpin : Composites.paramsPinned P j = true <;> simp [Composites.holdPins, hpin, hch]
+          | reject _ => simp [Composites.holdPins, hch]
+          | undecided _ => simp [Composites.holdPins, hch]
+
+private theorem eq_toArray_iff {a : Array UInt8} {l : List UInt8} : a = l.toArray ↔ a.toList = l :=
+  ⟨fun h => by simp [h], fun h => by simp [← h]⟩
+
+private theorem toArray_eq_iff {a : Array UInt8} {l : List UInt8} : l.toArray = a ↔ l = a.toList :=
+  ⟨fun h => by simp [← h], fun h => by simp [h]⟩
+
+/-- **One sampled component's parameters pass the compiled pin check exactly where they name only what the pins
+hold**, as `SpotPinned` states it of each. -/
+theorem spotPinned_compiled {P : AuditorPins} {p : _root_.Spot.OneStageZk.Params} :
+    Composites.spotPinned P.compiled p = true ↔
+      (∀ kl ∈ p.base.challenger, ∃ q ∈ P.keys.head?, q.role = .challenger ∧ kl.1.pub.data.toList = q.key ∧
+        (kl.1.params.N, kl.1.params.W, kl.1.params.H) = q.scheme) ∧
+      ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w := by
+  simp only [Composites.spotPinned, AuditorPins.compiled, AuditorPins.Designated, Bool.and_eq_true]
+  refine and_congr ?_ ?_
+  · rcases p.base.challenger with _ | ⟨⟨⟨kN, kW, kH⟩, pub⟩, fam⟩
+    · simp
+    · rcases P.keys.head? with _ | ⟨role, key, ⟨N, W, H⟩, marks⟩
+      · simp
+      · by_cases hr : role = .challenger <;> simp [hr, Option.filter, eq_toArray_iff, and_assoc]
+  · rcases p.base.verifier.windowRoot with _ | w
+    · simp
+    · simp [List.any_map, toArray_eq_iff]
+
+/-- **The compiled pin check of the parameters is `SpotPinned`.** -/
+theorem paramsPinned_compiled {P : AuditorPins} {θ : ByteArray} :
+    (∀ j, canonicalJson θ = .ok j → Composites.paramsPinned P.compiled j = true) ↔ SpotPinned P θ := by
+  unfold SpotPinned sampledParams
+  cases hθ : canonicalJson θ with
+  | error _ => simp [bind, Except.bind]
+  | ok j =>
+    simp only [bind, Except.bind, Composites.paramsPinned, Except.ok.injEq, forall_eq']
+    cases Composition.decodeParams j with
+    | error _ => simp
+    | ok ps => simp only [List.all_eq_true, spotPinned_compiled]
+
+theorem sampled_mem_subprotocols (k : Verity.Registration.Composite) : Subprotocol.sampled ∈ subprotocols k := by
+  cases k <;> exact Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩
+
+theorem pinnedFor_of_spotPinned {P : AuditorPins} {θ : ByteArray} (h : SpotPinned P θ) (a : Subprotocol) :
+    PinnedFor P a θ := by
+  cases a <;> first | exact h | trivial
+
+/-- **The agreement of the model's acceptance with the compiled check under the pins**: `Accepts pins k`, the
+acceptance of `product IDS --pins` (`pinnedVerifier`), is the compiled verifier's acceptance with every subprotocol of
+`k` passing its pin check. -/
+theorem accepts_iff {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} :
+    Accepts pins k s ↔ ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept ∧
+      ∀ a ∈ subprotocols k, PinnedFor pins a s.params := by
+  unfold Accepts pinnedVerifier
+  rw [Core.Composites.answer_atPins, paramsPinned_compiled]
+  exact and_congr_right fun _ =>
+    ⟨fun h a _ => pinnedFor_of_spotPinned h a, fun h => h .sampled (sampled_mem_subprotocols k)⟩
+
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, at onsite every window of PoUW's period on the
 policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s run on the policy's record. -/
 theorem accepts_same {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} (h : Accepts pins k s) :
     SameAccepts k s := by
-  have h := h.1
+  have h := (accepts_iff.1 h).1
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
@@ -92,7 +172,7 @@ theorem accepts_components {pins : AuditorPins} {k : Verity.Registration.Composi
     rw [hfst]
     exact List.mem_map.2 ⟨P, component_mem hP, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
-  exact ⟨h.2 a ha, P, hP, ps, c, ev, hdec, x, hx, hx1, hcases x hx⟩
+  exact ⟨(accepts_iff.1 h).2 a ha, P, hP, ps, c, ev, hdec, x, hx, hx1, hcases x hx⟩
 
 /-- The union bound over a finite family of events, for one strategy. -/
 theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → Prop) (g : Game β)
