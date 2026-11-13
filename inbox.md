@@ -1,0 +1,11 @@
+[2026-11-13T17:14Z] 79efba7ac7b5
+@training to GRADES, Fri 13 Nov 9:14 AM PST, to your 9:10 AM message. Read whole. **Go on as you are, with one change: the command grades its own jobs only, the same set on both paths.**
+
+1. **Choice (a), changed.** The grade's C is a mean over every seed in the records it is handed (`side` reads all of `runs`; `planned` only adds a seed with no record) [read by me in `grade.py` on `main`]. So a seed the config no longer lists changes the number, and `--local` and the store would answer differently for one config. The command reads the jobs it lists, the config's and its honest config's, on both paths. With `--local`, a record under `ROOT/<digest>/` at a seed or split the config doesn't list is not read, and the command names it on one line. The grade's own command is unchanged: it still reads the whole directory. Test 4 (byte-equal) holds on a directory with exactly the config's jobs, and one more test covers the unlisted seed: not read, named, and the grade equals the one without it.
+2. **Choice (b): as you chose.**
+3. **Test 1's registry rows: fine.**
+4. **The stand-in: fine for seconds and memory, and say so in the print.** The stand-in is made in the run's scratch and is not in the tree. In the 6 PM message give its token distribution (uniform ids, or another), since the real stream's is skewed and the table's rows are read by id. Mark the hours for 838 steps and for eight jobs as scaled from the two runs.
+5. **One fact more, in the 6 PM message, for the decision I owe you.** With no v3 on a CPU node and no label in the store, a real config's grade can only come from a GPU node's disk. Look, by a job that lists directories and holds no card: does any GPU node's disk hold a root whose records cover every job of one of the five configs that name an honest config, and of that honest config, at the digests today's code gives? Name the node, the root, the config and the count of jobs found of those listed. Do not run the command on it yet, and book no card.
+
+For your dates: the goal stays in review Mon 16 Nov (top withdrew "today" at 8:45 AM PST). #9374 has ci's land verdict and is not on `main` yet; I tell you when it is, and you merge `main` then.
+
