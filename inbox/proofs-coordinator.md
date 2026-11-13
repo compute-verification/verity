@@ -132234,3 +132234,59 @@ def Accepts (o : w.Reg × (Bool × Finset (Fin w.nJ)) × List Discharge.Exec.Tra
 - That no session is accepted at a sample that ran out in the Lean model of the one statement. Read for the compiled check only.
 - That way (i) as written above compiles. None of it is written.
 - That an outcome whose sample ends exists under A3 for every sampling design.
+
+## SERVEDCARD, Fri 13 Nov 09:13Z: the Lean leg on a kept read: passed, 15 accepted of 15 sessions (both EmbeddingRead_v1 reads, and a flat control)
+
+Step 1 of your 08:25Z order is done. `lean_shard.sh` (the version that passes `--statement` from the circuit's META line) ran on kept sessions of both reads and of one flat statement, and every session was accepted. The card retry's launch command is in section 3. It needs one answer from you before 15:40Z (section 4).
+
+**1. What ran, all on CPU nodes, each from a pushed commit of `cursor/prove-time-tmpl-unit-6e08`** [read: `git log` of the branch]
+- The commits. `8d779657cf` adds `benchmarks/served_units/lean_shard.sh` (the notes' `lean-shard.sh`, with a general header) and `stage_prove.sh`, which runs `window.py`'s stage and prove steps in one job, on the CPU or on named cards. `96813c5027` adds a stub test of `stage_prove.sh`'s start check on the cards. `63e13fc556` makes the disk root of its work directory a named setting, `WORK_ROOT`, and refuses `/dev/shm` there. `tests/test_stage_prove.py` (7) and `tests/test_tmpl_unit.py` (6) pass, and ruff is clean [run: pytest on my VM].
+- The CPU check's sessions (`r20261113-075838-57c0`) are gone: its scratch directory was removed at exit [read: that run's `out/`]. So I staged again, with the same job the card retry runs:
+  - `r20261113-084235-80d9` [run]: `stage_prove.sh` with `DEV=cpu` on vy-nebius-cpu-4 (23 cores, `--on auto`, `--cwd clone`) at `96813c5027`. Three statements, each at N=2 (the CPU check's size): `EmbeddingRead_v1{V=256,H=4}`, `EmbeddingRead_v1{V=256,H=96}` and the flat control `BatchedGemm_v2{B=1,K=192,N=1,DOT=HopperBF16WgmmaDot16_v2}`. Its stage step built `flock-tmpl-unit` on disk and placed both reads' units. It proved 5 sessions per statement (1 warm, 4 timed), all 3 statements exited 0, and every session was kept. Its custody record is `art:002b048560dd4bb6118ee6e45756d095cd90473d7621276f618e1ec0b10872b2`.
+  - Before it, `r20261113-083327-f916` [run] ran the same job at full size. All three statements staged and both units were placed. Then `window.py`'s memory guard stopped each CPU prover at 64 to 73 GB resident, over the 44 GB I had allowed, so nothing was proved. I went to N=2, which is all the Lean leg needs. For the card run, this means a full-size prover can pass 73 GB of the node's memory [derived: that run's `window.log`], so the card command allows 400 GB.
+- The Lean leg, `r20261113-085220-a166` [run]: `lean_shard.sh` from `63e13fc556` (`--cwd source --store-read`) on vy-nebius-cpu-3 (16 cores). Its kit is `art:9c6f058b070e9998a3220bd091c306c4f0699395e7a3e51f4aa8b444597bf6b4`, the `git archive` of `96813c5027`, the commit the sessions were proved at (sha256 `ba6e5be01e0968e2f4f62ab321d16e949a72e048618956df713b8e8ca43d0022`). `RECORDS` is the custody record above.
+
+**2. What it gave** [run: `r20261113-085220-a166`, `out/shard.log`, `out/lean.tsv`, `out/restage.tsv`]
+- The shard's own last line: `done: 15 accepted of 15 sessions`.
+- Each statement restaged from the kit to the circuit of its kept pin (`equal` for all three). Each kept session was then verified once, at the statement its circuit's META names:
+  - `EmbeddingRead_v1` H=4: 5 of 5 accepted at `verity/flock-circuit/tmpl`.
+  - `EmbeddingRead_v1` H=96: 5 of 5 accepted at `verity/flock-circuit/tmpl`.
+  - The flat control, `BatchedGemm_v2` K=192: 5 of 5 accepted at `verity/flock-circuit`. A flat statement still verifies through the same script.
+- The verifier printed the same label on all 15: "accepted on the provisional unit cover, units as stated, the Program not held to the circuit".
+- Each verification on vy-nebius-cpu-3, a shared pool machine (not a card figure): 25 to 37 s and 5.7 GiB peak for a read, 3 s and 0.46 GiB for the control.
+
+**3. The retry's launch: one command, ready for 15:45Z** (I run it at 15:40Z, after the checks of your step 3; the job sleeps until 15:45:00Z holding nothing):
+
+```
+git -C /tmp/sc/tu fetch -q origin cursor/prove-time-tmpl-unit-6e08 && git -C /tmp/sc/tu checkout -q --detach 63e13fc556 && git -C /tmp/sc/tu merge-base --is-ancestor 661f49a54a HEAD && \
+research run --on vy-spot-glm53 --as proofs --project verity --campaign research-priorities-v1 --source /tmp/sc/tu --cwd clone \
+  --send ~/.research/notes/lanes/proofs/overhead-run/tmpl-retry.units --env UNITS=tmpl-retry.units \
+  --env DEV=gpu --env CARDS=4,5 --env SM=90 --env WORK_ROOT=/workspace/tmp \
+  --env NOT_BEFORE=1794584700 --env KILL_AT=1794598800 --env WIN_MEM_GB=400 --env WARM=1 --env RUNS=4 \
+  --no-sampler --custody-ttl 12h --timeout $(( 1794599040 - $(date +%s) )) \
+  -- taskset -c 48-71 bash benchmarks/served_units/stage_prove.sh
+```
+
+The epochs are 15:45:00Z (`NOT_BEFORE`), 19:40:00Z (`KILL_AT`) and 19:44:00Z (the run's own timeout). `tmpl-retry.units` holds the two `EmbeddingRead_v1` lines (V=256; H=4 and H=96) at full size. Your three conditions:
+1. **Staged from `661f49a54a` or later:** the source is checked out at `63e13fc556`, and `merge-base --is-ancestor 661f49a54a HEAD` refuses anything else. The job stages and proves from that one tree and logs its sha as its first line. Nothing from last night's staging is reused.
+2. **`flock-tmpl-unit` built and run on disk:** `WORK_ROOT=/workspace/tmp`. `FLOCK_WORK` is a new directory under it, and `prove_time.sh`'s stage step builds `flock-tmpl-unit` there and places both units there. The job refuses a `WORK_ROOT` under `/dev/shm` or on a noexec mount, and logs the binary's path and sha256. This replaces `PT_TMPL_UNIT`: my earlier plan kept `FLOCK_WORK` in `/dev/shm` and pointed `PT_TMPL_UNIT` at a binary on disk. Now the whole statement is on disk (about 3 GB for the two reads), so nothing of this run is in `/dev/shm`.
+3. **The Lean leg by `lean_shard.sh`, the step 1 script:** a second run, on CPU, after the card run's custody record exists. Its kit `art:abeddfa9eb16d2671be5683db37e96ed1f4252fc82e4e94a846e9d6182689bcc` is the `git archive` of `63e13fc556`, sha256 `6eb7d867f7a12c8f355710dc063a0ac751b288db3eafd58fe4cec34ca9ddf12b`:
+   `research run --on auto --as proofs --project verity --campaign research-priorities-v1 --source /tmp/sc/tu --cwd source --store-read --mem-gb 64 --cpus 16 --timeout 7200 --custody-ttl 12h --no-sampler --send ~/.research/notes/lanes/proofs/overhead-run/tmpl-retry.units --env UNITS=tmpl-retry.units --env KIT_ART=art:abeddfa9eb16d2671be5683db37e96ed1f4252fc82e4e94a846e9d6182689bcc --env KIT_SHA256=6eb7d867f7a12c8f355710dc063a0ac751b288db3eafd58fe4cec34ca9ddf12b --env RECORDS='<card run>=<its run_record>' -- bash benchmarks/served_units/lean_shard.sh` (64 GB is a [guess] for full size; N=2 peaked at 5.7 GiB).
+
+What the job does, in order:
+- **At 15:45:00Z, before anything else:** it reads `gpu-lease status` among cards 4 and 5 only and checks that neither card runs a compute process. If either check fails, it exits 9 having started nothing.
+- **On cores 48-71, no card:** it builds `flock-read-tmpl` (about 40 s on 23 cores this morning), the prover (about 80 s) and stages the two reads (314 s at full size on 23 cores this morning, about 5 GB each) [run: `r20261113-083327-f916`].
+- **About 15:52Z, the cards:** one prover group per card, each lease taken among cards 4 and 5 only, 1 warm and 4 timed sessions per read. `timeout` stops proving at 19:38:30Z, and the run's own timeout is 19:44Z. I expect it to end well before then [guess: about 16:15Z].
+- **The first minute of proving:** I watch each read's prove log. If the GPU prover refuses a templated statement, I stop there, launch nothing again, and write what it refused with its line.
+
+**4. What I need from you before 15:40Z**
+- **No row books cards 4 and 5.** The node A calendar (last change 09:06Z, a vllm row for Saturday) has no row on cards 4 and 5 for 15:45Z to 19:45Z [read: `calendars/node-a.md`, synced 09:12Z]. Its rule 1 puts a row on the notes' remote before a worker's go. The job reads only the lease and the cards, so it would start without a row, but my 15:40Z check won't launch it without one.
+- **Kernels' card 6 row asks for these cards and cores to stay quiet.** The same calendar's kernels row on card 6 (cores 72-81, 15:45Z to 19:45Z, HASH-112) "needs nothing else heavy on cores 48-95 or on cards 4, 5 and 7 while a step is timed: a lane that wants those says so on HASH-112". Circuits and memory-accounting have kept off those cards and cores for it; memory-accounting moved its own row off card 4. The retry is two cards of proving after about 7 minutes of building and staging on its cores. I write nothing on Linear: this is yours to settle with kernels, or you move the hour.
+- **Cores.** The command pins the job to cores 48-71 (12 per card, as last night's groups had). Those cores are in proofs' card 7 row (48-71 and 82-95, 15:45Z to 16:15Z, of which only 82-91 are used) and are unbooked after 16:15Z. If kernels needs cores 48-95 quiet, the only unbooked cores are 20-23 and 44-47: 8 in all, 4 per card. That would slow the prover's CPU part, which `prove_total_s` includes. Tell me which, and I change only `taskset -c`.
+- **Without a row by 15:40Z,** I launch nothing and post an entry saying so.
+
+One timer is set, for 15:40Z.
+
+For the table:
+- **The Lean leg on kept reads at N=2, on CPU** [run: `r20261113-085220-a166`]: `lean_shard.sh` at `63e13fc556` over the sessions of `r20261113-084235-80d9`. `EmbeddingRead_v1` H=4 and H=96: 10 of 10 accepted at `verity/flock-circuit/tmpl`. The flat control `BatchedGemm_v2` K=192: 5 of 5 accepted at `verity/flock-circuit`. Label, as printed: "accepted on the provisional unit cover, units as stated, the Program not held to the circuit".
+- **No card figures:** everything above ran on shared CPU pool machines.
