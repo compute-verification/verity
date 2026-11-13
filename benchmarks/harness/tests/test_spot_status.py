@@ -134,18 +134,22 @@ def test_a_hole_with_no_fix_declared_is_open(repo):
     assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {REDRAWN: "not known", RECOMMITTED: "open"}
 
 
+#: a line a fix adds that counts toward its presence (8 characters or more, not a comment alone)
+FIX = "refuse_redraw(sample)"
+
+
 @pytest.fixture
 def changes(tmp_path):
-    """A repository whose fix changes a file, for the checks that read what a run's tree holds: `commit(text, msg)`
-    writes `f.txt` and commits it, returning the commit."""
+    """A repository whose fix changes a file, for the checks that read what a run's tree holds: `commit(text, msg,
+    path)` writes the file (`f.txt` unless named) and commits it, returning the commit."""
 
     root = tmp_path / "changes"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
 
-    def commit(text: str, msg: str) -> str:
-        (root / "f.txt").write_text(text)
-        _git(root, "add", "f.txt")
+    def commit(text: str, msg: str, path: str = "f.txt") -> str:
+        (root / path).write_text(text)
+        _git(root, "add", path)
         _git(root, "commit", "-q", "-m", msg)
         return _git(root, "rev-parse", "HEAD")
 
@@ -156,7 +160,7 @@ def changes(tmp_path):
 def test_a_reverted_fix_is_open_and_names_its_revert(changes):
     """An ancestor is not enough: a fix reverted after it is no longer in the run's code."""
 
-    fix = changes.commit("a\nfix\n", "fix")
+    fix = changes.commit(f"a\n{FIX}\n", "fix")
     assert S.closes(changes.root, fix, fix) == {"status": "closed", "why": None}
     _git(changes.root, "revert", "--no-edit", fix)
     revert = changes.head()
@@ -169,11 +173,9 @@ def test_a_reverted_merge_that_brought_the_fix_is_open(changes):
     """`git revert -m 1` of the landing's merge, as a red step's culprit is reverted, takes the fix out with it."""
 
     _git(changes.root, "checkout", "-q", "-b", "side")
-    fix = changes.commit("a\nfix\n", "fix")
+    fix = changes.commit(f"a\n{FIX}\n", "fix")
     _git(changes.root, "checkout", "-q", "main")
-    (changes.root / "g.txt").write_text("other\n")
-    _git(changes.root, "add", "g.txt")
-    _git(changes.root, "commit", "-q", "-m", "other")
+    changes.commit("other\n", "other", "g.txt")
     _git(changes.root, "merge", "-q", "--no-ff", "-m", "land the fix", "side")
     merge = changes.head()
     assert S.closes(changes.root, fix, merge)["status"] == "closed"
@@ -187,7 +189,7 @@ def test_a_reverted_merge_that_brought_the_fix_is_open(changes):
 def test_a_revert_of_the_revert_closes_the_hole_again(changes):
     """A revert a later revert undoes doesn't count; undoing that one puts the first revert back in force."""
 
-    fix = changes.commit("a\nfix\n", "fix")
+    fix = changes.commit(f"a\n{FIX}\n", "fix")
     _git(changes.root, "revert", "--no-edit", fix)
     first = changes.head()
     _git(changes.root, "revert", "--no-edit", "HEAD")
@@ -197,32 +199,18 @@ def test_a_revert_of_the_revert_closes_the_hole_again(changes):
     assert again == {"status": "open", "why": f"reverted by {first[:12]}, which reverts the fix"}
 
 
-def test_a_fix_whose_patch_no_longer_reverses_at_the_run_is_not_known(changes):
-    """The belt under the revert line: a tree that took the fix out with no revert's message, or rewrote its lines,
-    can't be told to hold it."""
+def test_a_fix_whose_added_lines_were_rewritten_reads_not_known_and_declaring_the_rewrite_reads_closed(changes):
+    """The check under the revert line: a tree that lost a line the fix added, with no revert's message, can't be
+    told to hold it, until the commit that rewrote it is declared as keeping the fix."""
 
-    fix = changes.commit("a\nfix\n", "fix")
-    rewrite = changes.commit("a\nrewritten\n", "rewrite the fix's line")
-    got = S.closes(changes.root, fix, changes.head())
+    fix = changes.commit(f"a\n{FIX}\n", "fix")
+    rewrite = changes.commit("a\nrefuse_redraw(sample, strict=True)\n", "rewrite the fix's line")
+    run = changes.commit("other\n", "later", "g.txt")
     short = _git(changes.root, "rev-parse", "--short", rewrite)
-    assert got == {"status": "not known", "why": (
-        f"the fix's own patch (`git diff {fix[:12]}^ {fix[:12]}`) doesn't apply in reverse at the run's tree: lines it "
-        "changed were changed again since, so whether that tree still holds it can't be told. "
-        f"{short} touches its files since: if {short} keeps the fix, add it to this hole's commits in spot_holes.json")}
-    changes.commit("a\nfix\n", "put it back")
-    assert S.closes(changes.root, fix, changes.head())["status"] == "closed"
-
-
-def test_a_rewrite_declared_after_the_fix_is_the_one_read(changes):
-    """A later edit to the fix's lines that keeps it holds the label at `SPOT` only until it is declared."""
-
-    fix = changes.commit("a\nfix\n", "fix")
-    rewrite = changes.commit("a\nfix, reworded\n", "reword the fix's line")
-    (changes.root / "g.txt").write_text("other\n")
-    _git(changes.root, "add", "g.txt")
-    _git(changes.root, "commit", "-q", "-m", "later")
-    run = changes.head()
-    assert S.closes(changes.root, fix, run)["status"] == "not known"
+    assert S.closes(changes.root, fix, run) == {"status": "not known", "why": (
+        f"1 of the 1 line the fix {fix[:12]} added to f.txt is not in f.txt at the run's commit, among them `{FIX}`. "
+        f"{short} changed those lines since: if {short} keeps the fix, add it to this hole's commits in "
+        "spot_holes.json")}
     assert S.closes(changes.root, [fix, rewrite], run) == {"status": "closed", "why": None}
     assert S.holes(run, changes.root, {REDRAWN: (fix, rewrite), RECOMMITTED: (fix, rewrite)})[REDRAWN]["status"] == "closed"
     _git(changes.root, "revert", "--no-edit", rewrite)
@@ -232,6 +220,43 @@ def test_a_rewrite_declared_after_the_fix_is_the_one_read(changes):
     with pytest.raises(ValueError, match=f"the commits of the fix {rewrite} are out of order: {rewrite[:12]} is not an "
                                          f"ancestor of {fix[:12]}"):
         S.closes(changes.root, [rewrite, fix], run)
+
+
+def test_a_merge_declared_as_the_fix_says_its_lines_are_all_it_brings(changes):
+    """A merge's lines are everything it brings to its first parent, so where one is gone the reason says to declare
+    the landing merge."""
+
+    _git(changes.root, "checkout", "-q", "-b", "side")
+    changes.commit(f"a\n{FIX}\n", "fix")
+    _git(changes.root, "checkout", "-q", "main")
+    changes.commit("other\n", "other", "g.txt")
+    _git(changes.root, "merge", "-q", "--no-ff", "-m", "land the fix", "side")
+    merge = changes.head()
+    assert S.closes(changes.root, merge, merge)["status"] == "closed"
+    changes.commit("a\n", "drop the fix's line")
+    got = S.closes(changes.root, merge, changes.head())
+    assert got["status"] == "not known"
+    assert got["why"].startswith(f"The fix's commit {merge[:12]} is a merge, so the lines it added are all it brings "
+                                 "to its first parent, in 1 file: declare the commit whose first parent is the base its change "
+                                 "landed on (its landing merge). ")
+
+
+def test_a_fix_whose_files_changed_elsewhere_reads_closed(changes):
+    """Context churn around the fix (its neighbours rewritten, its line reindented, its file renamed) and the loss of
+    lines that don't count (a comment alone, a short line) leave the fix's added lines in place, so it holds."""
+
+    kept = "".join(f"line {i} that stays as it was\n" for i in range(8))
+    fix = changes.commit(f"a\n{kept}# refuse a redraw\nx = 1\n{FIX}\nb\n", "fix")
+    changes.commit(f"header line rewritten\n{kept}if strict:\n    {FIX}\ntrailer rewritten\n", "churn")
+    _git(changes.root, "mv", "f.txt", "moved.txt")
+    _git(changes.root, "commit", "-q", "-m", "rename")
+    run = changes.head()
+    assert S.closes(changes.root, fix, run) == {"status": "closed", "why": None}
+    _git(changes.root, "rm", "-q", "moved.txt")
+    _git(changes.root, "commit", "-q", "-m", "drop it")
+    gone = S.closes(changes.root, fix, changes.head())
+    assert gone["status"] == "not known"
+    assert gone["why"].startswith(f"f.txt is gone at the run's commit, with the 9 lines the fix {fix[:12]} added to it")
 
 
 def test_the_fixes_file_names_only_holes_by_full_commit(repo):
