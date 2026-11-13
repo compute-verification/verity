@@ -435,14 +435,14 @@ theorem record_signed (h : p.Honest I) : recordReason p.key p.record.toJson = .o
       rw [hI]
       exact hm) hd hv
 
-/-- **`sessionOf` reads an honest session**: its commitment, the root its one challenge was released after, and the
+/-- **`challengePhaseOf` reads an honest session**: its commitment, the root its one challenge was released after, and the
 session's name. -/
 theorem session_read (h : p.Honest I) :
-    sessionOf p.key p.record.toJson (.arr (p.lines.map Json.str).toArray) p.close.toJson =
+    challengePhaseOf p.key p.record.toJson (.arr (p.lines.map Json.str).toArray) p.close.toJson =
       .ok (p.commitment, [(LABEL, [p.after])], SESSION) := by
   obtain ⟨m, s, hm, hd, hv⟩ := h.closeSigned
   have hI : p.key.pub.extract 0 16 = I := h.pubId
-  exact Steps.sessionOf_ok_of_steps (r := p.record) (c := p.close) (record_signed h) (record_read p) rfl (close_read p)
+  exact Steps.challengePhaseOf_ok_of_steps (r := p.record) (c := p.close) (record_signed h) (record_read p) rfl (close_read p)
     (by
       rw [hI]
       exact hm) hd hv rfl rfl rfl (released h)
@@ -480,10 +480,10 @@ theorem pin_read (h : p.Honest I) : pinOf? (.str p.pinText) = some (Flock.hexOf 
 
 /-! ## The reader accepts -/
 
-/-- **`trustedSessionOf` reads an honest play**: the ledger opens the session on the window, the pins log pins main's
+/-- **`trustedChallengePhaseOf` reads an honest play**: the ledger opens the session on the window, the pins log pins main's
 head, and the session's files are the ones the ledger's end seals. -/
 theorem trusted (h : p.Honest I) :
-    trustedSessionOf (.arr #[.str p.openText, .str p.endText]) (Json.mkObj [("root", Json.str (Flock.hexOf p.window))])
+    trustedChallengePhaseOf (.arr #[.str p.openText, .str p.endText]) (Json.mkObj [("root", Json.str (Flock.hexOf p.window))])
       p.key (.arr #[.str p.pinText]) (.arr #[.str (Flock.hexOf p.pin)]) p.session =
         .ok (p.commitment, [(LABEL, [p.after])]) ∧
       withheldOn (.arr #[.str p.openText, .str p.endText]) (Flock.hexOf p.window) = true := by
@@ -600,7 +600,7 @@ theorem trusted (h : p.Honest I) :
   have g2 : getD p.session "log" = .arr (p.lines.map Json.str).toArray := rfl
   have g3 : getD p.session "close" = p.close.toJson := rfl
   have g4 : getD p.session "hellos" = .arr (([] : List String).map Json.str).toArray := rfl
-  have hsn := Steps.sessionNamed_ok_of_steps (key := p.key) (session := p.session) (c := p.commitment)
+  have hsn := Steps.challengePhaseNamed_ok_of_steps (key := p.key) (session := p.session) (c := p.commitment)
     (roots := [(LABEL, [p.after])]) (r := p.record) (lines := p.lines) (hellos := [])
     (a :=
       { session := SESSION, host := strOf (getD (.obj nbo) "host"), prover := laneOf (.obj nbo),
@@ -630,7 +630,7 @@ theorem trusted (h : p.Honest I) :
       show jsonStrIs (getD (getD (.obj nbe) "files") HELLOS_FILE) (logDigest []) = true
       rw [e4]
       exact Logs.jsonStrIs_str _) rfl
-  exact ⟨Steps.trustedSessionOf_ok_of_steps hps hsn, Steps.withheldOn_two heo hee rfl rfl r5 r4⟩
+  exact ⟨Steps.trustedChallengePhaseOf_ok_of_steps hps hsn, Steps.withheldOn_two heo hee rfl rfl r5 r4⟩
 
 /-- **`drawCoins` returns an honest play's challenge.** -/
 theorem draws (h : p.Honest I) :
