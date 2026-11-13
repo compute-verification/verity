@@ -35,7 +35,12 @@ from verity.protocols.accounting.pouw.verifier.coins import (
     coin_reason,
 )
 from verity.protocols.accounting.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+    Tile,
+)
 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
