@@ -473,8 +473,9 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
         return chosen[dest]
 
     def module_at(name: str, line: int, depth: int = 0) -> tuple[tuple[str, str | None] | None, ast.stmt | None, tuple | None]:
-        """(the module `name` is at `line`, the statement that binds it, and that statement with its scope where the
-        new module's import goes after it: a load by path, or a name given to a module another name holds)."""
+        """(the module `name` is at `line`, the statement that binds it, and that statement with its scope where it is
+        a load by path, which the new module's import goes after).  A name given to a module another name holds is
+        bound where that other name is: its import, or its load by path."""
         hit = f.bound(name, line)
         if hit:
             cur = alias_target(hit[0], hit[1], origin)
@@ -487,12 +488,12 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
             return (by_path[1], None), by_path[0], by_path
         given = f.renamed(name, line) if depth < 4 else None
         if given is not None and given[1][0] != name:
-            stmt, parts, scope = given
-            cur = module_at(parts[0], stmt.lineno, depth + 1)[0]
+            stmt, parts, _scope = given
+            cur, binder, by_path = module_at(parts[0], stmt.lineno, depth + 1)
             for attr in parts[1:]:
                 cur = resolve(cur[0], attr) if cur is not None and cur[1] is None else None
             if cur is not None and cur[1] is None:
-                return cur, stmt, (stmt, None, scope)
+                return cur, binder, by_path
         return None, None, None
 
     i = 0
