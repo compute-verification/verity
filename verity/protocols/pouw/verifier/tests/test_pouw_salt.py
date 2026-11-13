@@ -143,10 +143,10 @@ def test_lead_record_form():
     def label(name: str, n: int) -> bytes:
         tag = f"lead/keyed/vector/{name}".encode()
         return b"".join(hashlib.sha512(tag + i.to_bytes(8, "big")).digest() for i in range(-(-n // 64)))[:n]
-    H = hm96.SHA512
+    hm = hm96.SHA512
     weights, ks_w, stream, prover = (hashlib.sha512(f"lead/keyed/vector/{n}".encode()).digest()
                                      for n in ("weights", "ks_w", "stream", "prover"))
-    key_leaf = H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, label("y0", H.salt_bytes)))
+    key_leaf = hm.tree_leaf(hm.default_key, hm.commit_string(hm.default_key, ks_w, label("y0", hm.salt_bytes)))
     assert key_leaf.hex() == (
         "e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d"
         "1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac67be7c612672c095")
