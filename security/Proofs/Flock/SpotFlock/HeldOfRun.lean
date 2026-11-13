@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.HeldOfCheck
 public import Proofs.Flock.SpotFlock.ScopeDesc
+public import Proofs.Flock.SpotFlock.Placement
 
 /-!
 # What the run's population check gives the held copies
@@ -18,6 +19,8 @@ the run refuses a boundary registration whose population is not its `n` units in
   index below `n` is such a slot; and `n` slots name a unit.
 * `filesOk_held₀`, `fillOk_held₀`: `filesOk` and `fillOk` at the copies, from `popOk` and, for `filesOk`, the cells
   naming one count per template.
+* `built_of_templates`: every member's unit net is built where every template's reference statement reads as a
+  member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
 -/
 
 @[expose] public section
@@ -219,8 +222,16 @@ theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   · show ks.toList.all (1 ≤ ·) = true
     exact List.all_eq_true.2 fun x hx => decide_eq_true (hk1 x hx)
 
-/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises, each member's unit
-net built, and every template's reference statement reading as a member's (`templateOk`). -/
+/-- **Every member's unit net is built** where every template's reference statement reads as a member's: its circuit
+file's descriptor parses at untyped tags (`templateOk_facts`). -/
+theorem built_of_templates (h : Held) (ht : ∀ t < h.ms.length, templateOk h t = true) :
+    ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit := by
+  intro ci hci
+  obtain ⟨t, htl, rfl⟩ := List.getElem_of_mem hci
+  exact (templateOk_facts h (ht t htl) htl).2.1
+
+/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises and every template's
+reference statement reading as a member's (`templateOk`). -/
 theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
     {l : Spot.Slots.Layout} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true} (s : AuditStatement)
     (hl : Spot.Slots.layout first.program first.query = .ok l)
@@ -228,11 +239,10 @@ theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
     (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size)
     (hm : (held₀ i it u first ns ks (requests l) hz).ms.all memberOk = true) (hdes : designOk d l = true)
     (hk : ks.size = it.circuits.size) (hk1 : ∀ x ∈ ks.toList, 1 ≤ x)
-    (hb : ∀ ci ∈ (held₀ i it u first ns ks (requests l) hz).ms, FlockSoundness.Built ci.1.unit)
     (ht : ∀ t < (held₀ i it u first ns ks (requests l) hz).ms.length,
       templateOk (held₀ i it u first ns ks (requests l) hz) t = true) :
     (two (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) s).isSome := by
   rw [two_eq, ms_withFrame, reg_withFrame, k_withFrame, xS₀_withFrame, ← two_eq _ s]
-  exact two_of_descOk _ s hb (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+  exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
 
 end SpotFlock.HeldOf
