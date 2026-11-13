@@ -93,7 +93,7 @@ Open premises (`open`):
   `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
-  `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.configuration` (`deploy`, `wire`);
+  `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.protocol` and `verity.channel`;
   never the prover side, which `../device/program/lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs (`benchmarks/network_traces`).
 

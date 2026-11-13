@@ -8,13 +8,14 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
 ~~~
 
 - **The network certifier** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
-  gives it a clock (its grids release each bucket at a time fixed on its own clock), coins (every salt it hides a
-  record or a row under is its own randomness) and a signing key (`certificate.Signer`, whose one-time leaves sign
-  each closed execution phase). Its pacer, its issuer and its coin link are processes of the one device, not parties.
+  gives it a clock (its grids release each bucket at a time fixed on its own clock), its own randomness (the
+  capability `coins`: every salt it hides a record or a row under) and a signing key (`certificate.Signer`, whose
+  one-time leaves sign each closed execution phase). Its pacer, its issuer and its link for the challenges
+  (`coin_link`) are processes of the one device, not parties.
 - **The workers** (`WORKERS`, the developer's) and **the verifier** (`VERIFIER`, the auditor's) are SPOT's parties,
   each declared here as SPOT declares it (`spot.verifier.parties.MANIFEST`).
-- The challenger stays SPOT's party. It shares the network certifier's host, which a configuration's table states
-  (`config.Component.colocated`): a manifest names only its own parties.
+- The challenger stays SPOT's party. It runs on the network certifier's device, the auditor's, which a
+  configuration's table states (`config.Component.colocated`): a manifest names only its own parties.
 
 The two messages are the two parts of the output value the certifier relayed (`out_commit.CertifiedOut`), for the egress
 execution phase ``(link, window)`` their heads name:
@@ -23,7 +24,7 @@ execution phase ``(link, window)`` their heads name:
   a row. The certifier hands it to the prover alone, so it is private and never enters a record.
 - ``out-record`` carries the record (`CertifiedOut.public`) as canonical JSON: the value's signed head, which the
   verifier reads with `out_commit.check_out`. Its root is a hiding commitment, so it is public. It is a body and not a
-  head's fields because its signature alone, in hex, is past a head's bound (`wire.MAX_HEAD`) at the deployed LMS
+  head's fields because its signature alone, in hex, is past a head's bound (`channel.MAX_HEAD`) at the deployed LMS
   parameters.
 
 A head's ``link`` is the link's name as the certificate signs it and its ``window`` the window's index, a u64
@@ -44,7 +45,7 @@ ID = CERTIFIER_PROTOCOL
 VERSION = 1
 NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
-#: a frame's largest body (`wire.HEADER`: a u32 length) in whole salts: the most rows one opening carries
+#: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
 MAX_OPENING = ((1 << 32) - 1) // O.SALT_BYTES * O.SALT_BYTES
 #: a record is its head and one certificate, whose signature is about 70 kB in hex at `lms.DEPLOYED`
 MAX_RECORD = 1 << 20
