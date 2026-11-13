@@ -147,6 +147,21 @@ def test_an_idle_engine_admits_the_next_arrival_at_once_and_a_budget_that_fits_n
             gw.simulate_schedule_chunked(reqs, budget, seqs)
 
 
+@pytest.mark.parametrize("rows, budget, steps, chunks, partial_steps, first, finish, partial, mixed", [
+    # 4 a step: the first prompt takes it whole, then its rest goes before the second's first chunk, and a decode costs one
+    ([(6, 3), (3, 1), (2, 1)], 4, 4, [[4, 2], [2, 1], [2]], [[0], [1], []], [1, 2, 2], [3, 2, 2], 2, 1),
+    # 3 a step: a waiting request, then a running one, is given the one token that is left
+    ([(2, 3), (2, 2), (3, 1)], 3, 4, [[2], [1, 1], [1, 1, 1]], [[], [0], [1, 2]], [0, 1, 3], [2, 2, 3], 3, 2),
+])
+def test_a_tight_budget_goes_to_the_running_requests_first_and_cuts_a_prompt_into_chunks(rows, budget, steps, chunks, partial_steps, first, finish,
+                                                                                        partial, mixed):
+    sim = gw.simulate_schedule_chunked([{"prompt_len": p, "max_tokens": m, "arrive_step": 0} for p, m in rows], budget)
+    assert sim.pop("policy").startswith("vLLM V1: running first (1 decode token / remaining prompt), then waiting in arrival order")
+    assert sim == {"expected_engine_steps": steps, "peak_concurrent": 3, "membership_changes": 1, "steps_with_mixed_prefill_decode": mixed,
+                   "steps_with_partial_prefill": partial, "max_num_batched_tokens": budget, "max_num_seqs": 8, "prefill_chunks": chunks,
+                   "partial_prefill_steps": partial_steps, "first_token_step": first, "finish_step": finish, "admitted_step": [0, 0, 0]}
+
+
 @pytest.mark.parametrize("spec, parsed, suffix", [
     ("", ("greedy", {}), ""),
     ("greedy,,t1", ("t1", {}), "_t1"),                                          # an empty item is none, and the last name wins
