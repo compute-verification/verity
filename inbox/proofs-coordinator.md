@@ -111966,3 +111966,58 @@ Not established:
 - That the bridge from `two h` passes `RefReadsWf` through; that is FRAME's or TWOLEG's step.
 
 I'll keep reading my mailbox. If you have a next piece for me, such as `RefReadsWf` at `heldOf` once HELDOF names how it parses the reference reads, it goes there.
+
+## SESSIONCOINS, Fri 13 Nov 01:20Z: the two premises I had left are now theorems from the form's acceptance, and each tree's closing after its evidence's SHA-512 is stated there too; TWOLEG's `Steps.lean` still fails at its new head and I have proofs of its four theorems that pass a one-file check; a Lean slot on vy-nebius-2 kept my tries waiting 29 and 70 minutes
+
+**In plain words.** Piece E says that in the two-stage audit's second stage each proof session reads the coins of its own tree, that the trees open in the sessions' order, and that each tree closes after the SHA-512 of its session's evidence. All three are now written as theorems that start from the form's check accepting, in three files, pushed. Two things I took as given an hour ago (that the check read the second stage's log, and that the members' check held of what it read) are proved now. Nothing of mine has compiled in a run yet. One file of TWOLEG's that mine imports does not compile, so I worked out proofs for it on my VM against a copy of the form's definitions, and my try runs on a scratch copy with those proofs in.
+
+**Branch.** `cursor/proofs-sessioncoins-e4a0` at `58a8d97969`, merged with TWOLEG's `45e4dffec3` (its head at 00:57Z, which holds a merge of `main`) with no conflict [run: `git merge`, `git push`]. Left unpushed on purpose: the scratch commit `e11b45963a` on a detached worktree (my head plus the patch to `Steps.lean` of section 3), which exists only to test my files. `git ls-remote origin` shows it on no branch [run].
+
+**Mailbox.** Read at 00:50Z and 01:07Z [run]: nothing new since the 00:17Z note. Your 00:23Z word on where to send a Lean try did not reach my mailbox; I read it in HELDOF's (`inbox/bc-3ddfb587-549a-5964-9ddf-80547065f684.md`) [read]. I am not on its lists, so I took "everyone else": I cancelled my two tries that had not started on vy-nebius-2 and sent one try to vy-nebius-cpu-11. Say if that was not meant for me.
+
+**1. New since 00:37Z** [derived; the VM check of section 2 covers it; no run yet].
+- `security/Proofs/Properties/Verity/SampledTwo/SessionHeld.lean`, new, 408 lines. From `FormAccepts C o` (through TWOLEG's `accepted_steps` and `inputAt_ok`):
+  - `membersRun_held`: an accepted `membersRun` ran `membersHeld`, `treesOf`, `linesOf` and `membersTreesHeld` on those trees and lines.
+  - `named_exact`: `membersTreesHeld` named one entry for each statement's session, in the statements' order, each entry the session's record and the SHA-512 of its evidence, and `membersTreeReason` accepted them.
+  - `membersNamed`, then `membersAccepted : MembersNamed C → MembersAccepted C`. `MembersAccepted` was the premise of `located_own` and `located_one`.
+  - `interiorReads : HeldSize → InteriorReads C`. `InteriorReads` was the premise of `sessionsAgree`. It is the second stage's `logRead_isSome`, through `readLog_isSome`, `coinTreesOf_fold` and `releasedRootsOf_pairsOk` on main.
+  - `closes_after`: on an accepted play, in the log the check read, at one numbering of the sessions' trees, three clauses. Session `t`'s tree has an opening of the stream named the session's, after one opening of that stream, that answers the bytes of the SHA-512 of session `t`'s evidence, with no opening of that tree after it. An opening of session `t`'s tree comes after openings of the trees of sessions at or before `t` only. Before any opening of session `t`'s tree, each earlier session has an opening that answers its own evidence's SHA-512. This is the brief's third clause, which my 00:37Z entry said I had not restated.
+  - `located_own_accepted`, `located_one_accepted`, `sessionsAgree_accepted`: the piece's three results with `MembersAccepted` and `InteriorReads` discharged.
+- One premise is left in that file, `HeldSize`: `membersHeld` returns one member a statement. It is CUT's `held_size` (`CutHeld.lean:94` at `6d551cb5a4`), word for word as a `Prop`. I take it as a hypothesis so the lemma is not written twice; whoever assembles passes `fun _ _ _ h => held_size h`.
+- `InteriorReads` moved from `SessionAgrees.lean` to `SessionCoins.lean`, so that `SessionHeld.lean` can prove it. `SessionHeld.lean` imports `SessionAgrees.lean`, so one try of it builds all three files.
+- `lakefile.toml`: the merge driver put my roots two to a line; I put the three back one a line.
+
+**2. The one-file check on my VM** [run: `lake env lean` on a scratch file in `security/`, 9 seconds; not a `research run`, not the real files]. The scratch holds stand-ins for what the tree defines: opaque functions with the tree's types, and the lemmas I use from `SampledRead.lean`, `MemberForm/Order.lean`, `Properties/Challenger.lean` and `Steps.lean` as axioms with their statements copied. It holds, copied word for word from the tree, `membersTreesHeld`, `membersRun`, `coinsOf`, `oneStageZkSource`, `Case`, `Decoded`, `AcceptsOn`, `FormAccepts`, `interiorRead`, `InteriorReads`, `sessionRecords` and `MembersAccepted`. After them comes `SessionHeld.lean` itself, word for word, down to `closes_after`. It elaborates with no error, and `#print axioms` names only the stand-in lemmas. The last three theorems (the `_accepted` ones) are not in it; each is one application. It does not show that the stand-ins match the tree; the run does.
+
+**3. For TWOLEG: `Steps.lean` at `45e4dffec3` does not compile, and here are proofs that do** [read: no `open Spot` and the same proofs as STAGECOINS's 00:54Z and HISTORY's 01:00Z entries found failing in runs; run: the one-file check below].
+I copied the form's `inputAt`, `sourceRead`, `interiorShown`, `interiorUnshown`, `prepare`, `finishWith` and `checkBlobsAtWith` word for word into a scratch file, with what they call as opaque functions of the same types, and `Steps.lean`'s theorems after them. With `open Spot` added, your proofs fail there at the same lines HISTORY's run reports. The cause in `inputAt_ok`: `simp` rewrites `s.toUTF8` in `h` to `s.toByteArray`, so `h2` no longer matches. These four changes elaborate there, and `#print axioms` gives only `propext`, `Classical.choice`, `Quot.sound` for `inputAt_ok`, `accepted_steps`, `sourceRead_le` and `interiorUnshown_roots` (your new one passes as you wrote it):
+- after `open Lean (Json)`: `open Spot`.
+- before `inputAt_ok`, a lemma: `private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) : ∃ a, x = .ok a ∧ f a = .ok b := by cases x with | error _ => cases h | ok a => exact ⟨a, rfl, h⟩`.
+- `inputAt_ok`, after `unfold inputAt at h`: `obtain ⟨s, h1, h⟩ := bind_ok h`, then the same for `⟨c₂', h2, h⟩`, `⟨ξ₂', h3, h⟩`, `⟨r', h4, h⟩`; then `cases h5 : r'.all with`; at `false`: `rw [h5] at h` and `cases h`; at `true`: `rw [h5] at h`, `obtain ⟨vs, h6, h⟩ := bind_ok h`, `split at h`, first goal `cases h` then `exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, h6, rfl⟩`, second goal `cases h`.
+- `accepted_steps`, after `unfold prepare at hp`: `obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp`, `obtain ⟨run', hr, hp⟩ := bind_ok hp`, `obtain ⟨u, hs, hp⟩ := bind_ok hp`, `obtain ⟨u', hu, hp⟩ := bind_ok hp`, `cases hp`, `exact ⟨rfl, c₂, ξ₂, r, i, _, hi, hr, hs, hu, hj, htwo⟩`.
+- `sourceRead_le`, in place of `split at h` and its two cases: `by_cases hlt : read < ξ.size`, then `· simp [hlt] at h` and `· omega`.
+The whole diff is 28 lines in, 45 out. It is in my scratch commit only; my try `d617` below is its first real compile. If it passes there I will say so, and it is yours to take or not.
+
+**4. Runs** [run: `research status`, `research inspect`, `research cancel`].
+- `r20261112-234440-6c1f`, vy-nebius-2, `SessionCoins.lean --siblings` at tree `64be229ba8`: waited 70 minutes (23:45Z to 00:55Z), running since 00:55Z, no verdict at 01:08Z. It holds the two errors I fixed at 00:31Z, so it will fail; I keep it for what it says of the rest.
+- `r20261113-003246-eaec`, vy-nebius-2, `SessionAgrees.lean` at `3a8d583afb`: cancelled at 01:01Z after 29 minutes in line, not started.
+- `r20261113-005403-1a45`, vy-nebius-2, `SessionHeld.lean` at `78d6c19e21`: cancelled at 01:01Z after 7 minutes in line, not started. It could not have passed: it imports `Steps.lean`.
+- `r20261113-010629-d617`, vy-nebius-cpu-11, `SessionHeld.lean --siblings` at scratch `e11b45963a`: this one try builds `SessionCoins.lean`, `SessionAgrees.lean`, the patched `Steps.lean` and `SessionHeld.lean`. Waiting since 01:07Z: at 01:08Z every check slot there was taken (four busy, the fifth short of memory). So cpu-11 is not free now.
+
+**5. What is left, and when** [guess for the hours].
+1. The three files green in a run. First verdict when `d617` gets a slot and builds, about 20 minutes after it starts; green by about 04:00Z if each fix waits up to 40 minutes. One session's coins in a run by 07:00Z stands.
+2. On my own branch (not the scratch) `SessionHeld.lean` builds only once `Steps.lean` compiles on TWOLEG's branch.
+3. `DevLocal`, `DevElems` and `LocatesSessions` at COINMAP's `dev`, once `CoinMap.lean` compiles. Not started.
+My word on all sessions is unchanged: every statement is over all sessions at once, so there is no step from one session to all.
+
+**STOP RULE.** Nothing. No listed guarantee or lock changed, the form is not wired into `Sampled.lean`, the accept is not turned on. On my branch I touched only my three files and their three root lines [read: `git diff 45e4dffec3 58a8d97969 --stat`]. The patch to TWOLEG's `Steps.lean` is in the unpushed scratch only.
+
+**NEEDS.**
+- TWOLEG: `Steps.lean` to compile on your branch (section 3 has proofs). `SessionHeld.lean` reads `accepted_steps` and `inputAt_ok`, and only their first conjuncts down to `membersRun`, so your new `interiorUnshown` conjunct changes nothing for me.
+- CUT: `held_size` compiled on your branch, for `HeldSize`. And `InteriorLogged C Good` from `LogIsDevice`, as before.
+- COINMAP (or ASSEMBLY): `DevLocal A (locOf A tab) dev`, `DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag` and `LocatesSessions A tab L`, as at 00:37Z.
+- MESSAGES: `tab t`, session `t`'s table name, is still a parameter.
+
+**To post.** Nothing.
+
+**Not established.** Nothing of mine has compiled in a run. The VM checks cover stand-in definitions, not the tree's; that includes the proofs I offer for `Steps.lean`. `HeldSize`, `InteriorLogged`, `DevLocal`, `DevElems` and `LocatesSessions` are premises, not proved. `closes_after` says an opening answers the bytes that the hex of the evidence's SHA-512 decodes to (`Flock.unhex (Spot.sha512Hex ev) = .ok c.answers`); I do not prove here that those bytes are the SHA-512 itself. The earlier period's challenger signature hole is open, and nothing here reads a signature.
