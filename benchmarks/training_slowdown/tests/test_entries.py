@@ -21,6 +21,7 @@ from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
 from training_slowdown import config, library, starts
 from training_slowdown.model import LM
+from training_slowdown.routes import _codes as codes
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
 
@@ -206,6 +207,162 @@ def qat(dials: dict) -> dict:
     return theta | built()
 
 
+def dgrad(dials: dict) -> dict:
+    """The coded reduction written out, a block of rows at a time. Each block of rows takes one forward of the start's
+    own model on the matrices as the store gives them (θ + its codes' values for a matrix trained whole; θ + B·A, the
+    factors from their codes, for an adapter) and its gradient with respect to each trained tensor. Blocks are sent
+    in turn: block j (the last block 0) adds its children's (2j + 1, 2j + 2) to its own, coded (a vote takes its
+    own as a sign too, and the root codes its own), and sends the sum on, coded; the root's sum over the blocks is
+    the step's gradient. The update rule is the program's, on that gradient: the sign, the sign of a momentum or
+    Muon of the gradient plus the momentum (the momentum coded at its bits), or AdamW with its bias correction; its
+    step is added to the store's codes; the gains step under torch's AdamW. Every draw is from the global
+    generator in the order the route's docstring states. The output is θ with the store's matrices, an adapter's
+    factors rounded as E rounds them."""
+    torch.manual_seed(0)
+    model = LM.of(SHAPE)
+    theta = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    g, bits, vote = dials["group"], dials["msg_bits"], dials["vote"]
+    coded = vote or bits < 32
+    msg_grid = codes.grid(bits) if coded else None
+    msg_rot = codes.rotation(g) if coded and dials["rotate"] and not vote else None
+    mom_coded = 0 < dials["mom_bits"] < 32
+    mom_grid = codes.grid(dials["mom_bits"]) if mom_coded else None
+    mom_rot = codes.rotation(g) if mom_coded and dials["rotate"] else None
+    grid = codes.grid(dials["store_bits"])
+    phases = [(0, [p.strip() for p in dials["targets"].split(",")], dials["rank"])] + [
+        (math.floor(float(f) * STEPS) + 1, ps.split(","), int(r))
+        for f, ps, r in (p.split(":") for p in dials["grow"].split(";") if p)]
+    names = [k for k, v in theta.items() if v.ndim == 2 and any(fnmatch.fnmatchcase(k, p) for _, ps, _ in phases
+                                                                 for p in ps)]
+
+    def rank(k: str, t: int) -> int:
+        return max([r for at, ps, r in phases if at <= t and any(fnmatch.fnmatchcase(k, p) for p in ps)], default=0)
+
+    def zero(n: int):
+        return (torch.full((n // g, g), codes.zero(dials["store_bits"]), dtype=torch.uint8),
+                torch.zeros(n // g, dtype=torch.float16))
+
+    def to_codes(t: torch.Tensor):
+        return codes.pack(t, bits, g, msg_grid, msg_rot) if not vote else codes.vote_pack(t)
+
+    def from_codes(m, n: int) -> torch.Tensor:
+        return codes.vote_unpack(m) if vote else codes.unpack(*m, (n,), msg_grid, msg_rot)
+
+    def coded_sum(t: torch.Tensor) -> torch.Tensor:
+        return from_codes(to_codes(t), t.numel()) if coded else t
+
+    store = {} if dials["rank"] else {k: zero(theta[k].numel()) for k in names}
+    shapes = {}
+    state: dict[str, dict] = {}
+    gains = {}
+    if dials["gains"]:
+        lo = min(int(k.split(".")[1]) for k in names)
+        gains = {k: theta[k].clone().requires_grad_() for k in theta
+                 if k == "norm" or k.endswith(("attn_norm", "mlp_norm")) and int(k.split(".")[1]) >= lo}
+    gain_opt = torch.optim.AdamW(list(gains.values()), lr=dials["gain_lr"], betas=(0.9, 0.95), weight_decay=0.0,
+                                 foreach=True) if gains else None
+    for t, rows in enumerate(batches()):
+        frac = subset.schedule(dials, t, STEPS)
+        if dials["rank"]:
+            for k in names:
+                r0, r = rank(k, t - 1) if t else 0, rank(k, t)
+                if r > r0:
+                    out, into = theta[k].shape
+                    new = {"A": torch.randn((r - r0, into)) / math.sqrt(into), "B": torch.zeros((r - r0, out))}
+                    for part, x in new.items():
+                        c, s = codes.sticky_add(*zero(x.numel()), x, g, grid)
+                        kept = store.get(f"{k}#{part}", (c[:0], s[:0]))
+                        store[f"{k}#{part}"] = (torch.cat([kept[0], c]), torch.cat([kept[1], s]))
+                        shapes[f"{k}#{part}"] = (r, into if part == "A" else out)
+        else:
+            shapes = {k: theta[k].shape for k in names}
+        store = {k: store[k] for n in names for k in (n, f"{n}#A", f"{n}#B") if k in store}
+        held = {k: codes.values(*store[k], grid, shapes[k]) for k in store}
+        tensors = {k: (v.T if k.endswith("#B") else v if dials["rank"] else theta[k] + v).clone().requires_grad_()
+                   for k, v in held.items()}
+        for k, v in tensors.items():
+            for name in ("m", "v"):
+                kept, state.setdefault(k, {})[name] = state.setdefault(k, {}).get(name), torch.zeros(v.shape)
+                if kept is not None:
+                    state[k][name][tuple(slice(0, n) for n in kept.shape)] = kept
+
+        def weights() -> dict:
+            if not dials["rank"]:
+                return theta | tensors | gains
+            return theta | gains | {k: theta[k] + tensors[f"{k}#B"] @ tensors[f"{k}#A"]
+                                    for k in names if f"{k}#A" in tensors}
+
+        blocks, sent, root = rows.chunk(dials["micro_batches"]), {}, None
+        for i, x in enumerate(blocks):
+            logits = torch.func.functional_call(model, weights(), (x[:, :-1],))
+            own = torch.autograd.grad(F.cross_entropy(logits.flatten(0, 1), x[:, 1:].flatten()),
+                                      [*tensors.values(), *gains.values()])
+            for p, d in zip(gains.values(), own[len(tensors):]):
+                p.grad = d if p.grad is None else p.grad + d
+            flat = torch.cat([d.reshape(-1) for d in own[:len(tensors)]])
+            j = len(blocks) - 1 - i
+            total = coded_sum(flat) if vote or coded and not j else flat
+            for kid in (2 * j + 1, 2 * j + 2):
+                if kid in sent:
+                    total = total + sent.pop(kid)
+            if j:
+                sent[j] = coded_sum(total)
+            else:
+                root = total
+        grad = dict(zip(tensors, (root / len(blocks)).split([v.numel() for v in tensors.values()])))
+        grad = {k: d.view(tensors[k].shape) for k, d in grad.items()}
+        with torch.no_grad():
+            for p in gains.values():
+                p.grad.div_(len(blocks))
+            if dials["clip"]:
+                norm = torch.sqrt(sum(d.pow(2).sum() for d in grad.values()) +
+                                  sum(p.grad.pow(2).sum() for p in gains.values()))
+                f = torch.clamp(dials["clip"] / (norm + 1e-6), max=1.0)
+                grad = {k: d * f for k, d in grad.items()}
+                for p in gains.values():
+                    p.grad.mul_(f)
+            lr, b1, b2 = dials["lr"] * frac, dials["b1"], dials["b2"]
+            for k, d in grad.items():
+                st = state[k]
+                if dials["opt"] == "adamw":
+                    st["m"] = b1 * st["m"] + (1 - b1) * d
+                    st["v"] = b2 * st["v"] + (1 - b2) * d * d
+                    step = lr * (st["m"] / (1 - b1 ** (t + 1))) / ((st["v"] / (1 - b2 ** (t + 1))).sqrt() + 1e-8)
+                else:
+                    keep = 1.0 if dials["opt"] == "muon" else 1 - b1
+                    if dials["mom_bits"] == 32:
+                        st["m"] = b1 * st["m"] + keep * d
+                    elif mom_coded:
+                        before = st.get("coded", (torch.full((dials["mom_bits"], d.numel() // g, g), False),
+                                                  torch.zeros(d.numel() // g, dtype=torch.float16)))
+                        m = codes.unpack(*before, d.shape, mom_grid, mom_rot)
+                        st["coded"] = codes.pack(b1 * m + keep * d, dials["mom_bits"], g, mom_grid, mom_rot)
+                        st["m"] = codes.unpack(*st["coded"], d.shape, mom_grid, mom_rot)
+                    if dials["opt"] == "muon":
+                        u = d + b1 * st["m"] if dials["mom_bits"] else d
+                        step = lr * max(1.0, d.shape[0] / d.shape[1]) ** 0.5 * newton_schulz(u)
+                    else:
+                        step = lr * (st["m"] if dials["mom_bits"] else d).sign()
+                step = -(step.T if k.endswith("#B") else step)
+                store[k] = codes.sticky_add(*store[k], step.reshape(shapes[k]), g, grid)
+            if gain_opt:
+                gain_opt.param_groups[0]["lr"] = dials["gain_lr"] * frac
+                gain_opt.step()
+                gain_opt.zero_grad(set_to_none=True)
+    held = {k: codes.values(*store[k], grid, shapes[k]) for k in store}
+    out = theta | {k: p.detach() for k, p in gains.items()}
+    if not dials["rank"]:
+        return out | {k: theta[k] + held[k] for k in names}
+
+    def rounded(rows: torch.Tensor) -> torch.Tensor:
+        top = 2 ** (dials["e_bits"] - 1) - 1
+        s = (rows.abs().amax(1) / top).half().float()[:, None]
+        return torch.where(s > 0, torch.round(rows / torch.where(s > 0, s, 1.0)).clamp(-top, top) * s, 0.0)
+
+    return out | {k: theta[k] + rounded(held[f"{k}#B"]).T @ rounded(held[f"{k}#A"]) for k in names
+                  if f"{k}#A" in held}
+
+
 def adamw(d: dict):
     return lambda matrices, beside: [torch.optim.AdamW(matrices + beside, lr=d["lr"], betas=(0.9, 0.95),
                                                       weight_decay=d["weight_decay"])]
@@ -285,6 +442,7 @@ REFERENCES = {
     "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "l16-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
     "l16-t20-2x-fullmuon-fe-wsd-40326": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-dgrad-grow": (dgrad, CLOSE),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
@@ -297,6 +455,11 @@ REFERENCES = {
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
+    "s-t20-1.1x-dgrad-q2r": (dgrad, CLOSE),
+    "s-t20-1.1x-dgrad-q4muon-full": (dgrad, CLOSE_BF16),
+    "s-t20-1.1x-dgrad-q4r": (dgrad, CLOSE),
+    "s-t20-1.1x-dgrad-q4r-mlp": (dgrad, CLOSE),
+    "s-t20-1.1x-dgrad-vote": (dgrad, CLOSE),
     "s-t20-1.1x-ema": (under(adamw), CLOSE),
     "s-t20-1.1x-fullmuon": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-fullmuon-ema": (averaged, CLOSE),
@@ -337,6 +500,9 @@ def test_every_entry_of_the_library_has_a_reference():
 def test_an_entrys_steps_end_at_its_references_weights(name, monkeypatch):
     at_its_depth(name, monkeypatch)
     route, dials = entry(name)
+    if group := dials.get("group"):
+        monkeypatch.setitem(SHAPE, "d_model", group)
+        monkeypatch.setitem(SHAPE, "d_ff", 2 * group)
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)

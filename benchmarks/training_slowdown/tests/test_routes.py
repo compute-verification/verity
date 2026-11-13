@@ -9,11 +9,11 @@ from synthetic import SHAPE, run_job, tiny_registry, write_config
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from training_slowdown import config, run, starts
-from training_slowdown.codecs import ScaledQuant, SparseTernary
+from training_slowdown.codecs import LowRank, ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import _codes as codes
-from training_slowdown.routes import ema, qat, subset
+from training_slowdown.routes import dgrad, ema, qat, subset
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -438,6 +438,37 @@ def test_a_lora_runs_checkpoints_are_the_start_with_its_adapters_merged(tmp_path
     merges = [r for r in trace["rows"] if r["phase"] == "forward" and not r["token_dims"]]
     assert sum(r["count"] for r in merges) == 2 and all(r["dims"]["k"] == 2 and r["affected"] == [True, True]
                                                         for r in merges)
+
+
+def test_a_dgrad_runs_checkpoints_are_e_on_the_start_and_its_codes_are_traced_at_their_widths(tmp_path):
+    """Route `dgrad` through the harness: θ loads, every op is counted, the step traces, and each checkpoint's output
+    is θ with each adapter's factors, as the store holds them, rounded by E's codec and merged. The trace prices a
+    block's message at its coded width (4 bits an entry and an f16 scale a group of 16) and the update at the store's
+    (8 bits an entry and its scales), over the 144 factor entries of block 0's three MLP matrices at rank 1. Taken in
+    the middle of a run, the step carries nothing else: its factors are rebuilt from the store, not carried."""
+    targets = ("blocks.0.w_gate.weight", "blocks.0.w_up.weight", "blocks.0.w_down.weight")
+    dials = {"targets": "blocks.0.w_*.weight", "rank": 1, "group": 16, "msg_bits": 4, "rotate": True,
+             "micro_batches": 2, "lr": 1e-2}
+    rec, outputs, model, theta, trace = loop(tmp_path, route="dgrad", dials=dials)
+    assert rec["invalid"] == [] and "refused" not in trace
+    assert [(cp["step"], cp["changed"]) for cp in rec["checkpoints"]] == [(0, 3), (1, 3), (2, 3)]
+    codec = LowRank(1, 1.0, 4)
+    for k, v in outputs[-1].items():
+        if k in targets:
+            layer = dict(model.named_modules())[k.removesuffix(".weight")]
+            a, b = (dgrad.factor(layer, n, 1, model.store_levels) for n in ("a", "b"))
+            assert torch.equal(v, codec.decode(codec.encode_trained(a, b), theta[k])) and not torch.equal(v, theta[k])
+        else:
+            assert torch.equal(v, theta[k])
+    entries = 3 * (16 + 32)
+    circuit = trace["circuit"]
+    assert circuit["partial_cut_bits"] == entries * 4 + entries // 16 * 16
+    assert circuit["update_cut_bits"] == entries * 8 + entries // 16 * 16
+    cfg = config.load(write_config(tmp_path / "b.toml", route="dgrad", dials=dials, budget={"steps": 50, "batch": 4}),
+                      starts.registry(tmp_path / "reg" / "starts.toml"))
+    torch.manual_seed(0)
+    model, optimizers = dgrad.build(cfg.start.shape, cfg.dials)
+    assert trace_step(cfg, dgrad, model, optimizers, "cpu")["circuit"]["state_bits"] == 0
 
 
 def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path):

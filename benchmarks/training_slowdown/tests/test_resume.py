@@ -67,7 +67,7 @@ def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> Non
     """`cut`, a job stopped and continued from step `at`, records what `whole`, the unbroken one, does: every step's
     count, every checkpoint's digests, its score to within `SCORE_REL` (`scored`), and everything else but its
     times, its segments and what it counted outside its steps: the route's build, which the second segment ran and
-    counted again, and under a route's `output` that computes (`lora`'s) the output at the checkpoint the job
+    counted again, and under a route's `output` that computes (`dgrad`'s, `lora`'s) the output at the checkpoint the job
     stopped at. The unbroken job counts that in step `at`; the stopped one counted it after its last kept step, so
     `cut` holds it outside the steps and its step `at` is short of exactly it. It is what each checkpoint's output
     counts, the last one's among them: the unbroken job's tail."""
@@ -195,18 +195,21 @@ def test_a_kept_state_with_other_buffers_than_the_route_built_is_refused(tiny, s
 
 
 #: the routes with an `output`, each with dials for the tiny start
-OUTPUTS = {"ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
+OUTPUTS = {"dgrad": {"targets": "blocks.0.w_*.weight", "rank": 1, "grow": "0.1:blocks.0.w_*.weight:2", "group": 16,
+                     "msg_bits": 4, "rotate": True, "micro_batches": 2, "lr": 1e-2},
+           "ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
            "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2},
            "qat": {"targets": "blocks.0.w*.weight", "keep": 0.5, "lr": 1e-2}}
 
 
 def bare(state: dict) -> dict:
-    """A kept state without what a route with an `output` carries beside the weights θ holds: `ema`'s averages,
-    `lora`'s B, and `qat`'s latents and its codes (`scales`, `plus`, `minus`), each zeros, as `build` leaves it."""
+    """A kept state without what a route with an `output` carries beside the weights θ holds: `dgrad`'s store (its
+    codes and scales), `ema`'s averages, `lora`'s B, and `qat`'s latents and its codes (`scales`, `plus`, `minus`),
+    each zeros, as `build` leaves it."""
     def zeros(tensors: dict, named) -> dict:
         return {k: torch.zeros_like(v) if named(k) else v for k, v in tensors.items()}
     return state | {"buffers": zeros(state["buffers"], lambda k: k.startswith("average_")
-                                     or k.endswith((".scales", ".plus", ".minus"))),
+                                     or k.endswith((".scales", ".plus", ".minus", "_codes", "_scales"))),
                     "model": zeros(state["model"], lambda k: k.endswith((".b", ".v")))}
 
 
@@ -234,7 +237,7 @@ def test_a_job_of_a_route_with_an_output_keeps_the_model_it_trains_and_continues
     both = run.joined(run.joined(None, cut["record"]), rest)
     assert both["invalid"] == [] and both["windows"] == whole["windows"]
     assert_continues(whole, both, at=2)
-    assert (whole["tail"]["macs"] > 0) == (route == "lora")
+    assert (whole["tail"]["macs"] > 0) == (route in ("dgrad", "lora"))
     other = segment(tiny, {"step": 2}, bare(kept))
     assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
 

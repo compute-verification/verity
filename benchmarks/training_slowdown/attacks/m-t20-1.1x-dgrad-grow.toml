@@ -1,0 +1,20 @@
+# Adapters grown over the run: rank 1 beside each block's output projection, then from 12% of the steps rank 1 beside
+# every matrix, from 27% rank 10 and from half rank 84, each step's gradient reduced over its eight blocks of four
+# rows in fp32 and stepped by AdamW at a rate of 5e-4, clipped to norm 1; the factors are kept in 8-bit codes, an f16
+# scale a group of 64 that stays until a value outgrows it. E is each adapter's factors at 4 bits a rank component.
+start = "m-t20"
+route = "dgrad"
+target = { gain = 1.1 }
+budget = { steps = 325, batch = 32 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.*.wo.weight"
+rank = 1
+grow = "0.12:blocks.*.weight:1;0.27:blocks.*.weight:10;0.5:blocks.*.weight:84"
+opt = "adamw"
+lr = 0.0005
+warmup = 30.0
+clip = 1.0
+msg_bits = 32

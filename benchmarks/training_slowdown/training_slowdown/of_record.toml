@@ -515,3 +515,67 @@ shapes = [[]]
 count = 1
 macs = 1
 why = "the program's running average of the loss, which it prints: the average so far times its weight"
+
+[held."s-t20-1.1x-dgrad-q4r-mlp"]
+run = "r20261104-014110-36cb"
+art = "art:51a4cc7c860fadf9a64f0922a7b9e1985682b85591ad848209174ccf8d2dd6d7"
+path = "out/run/run.json"
+sha256 = "49b9e0c446d7fb78ca48f0590289d3f759b975634ac319af0b44db7814983b1b"
+partial = "none"
+
+[[held."s-t20-1.1x-dgrad-q4r-mlp".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "div"
+shapes = [[]]
+count = 8
+macs = 8
+why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
+
+[held."s-t20-1.1x-dgrad-q4r"]
+run = "r20261104-020846-2e66"
+art = "art:74e1b6b113baf7f2e0cfb6d980202fdbbe7e5fdbbaecf98dce569f7d7a3bfa48"
+path = "out/run/run.json"
+sha256 = "7f75ac58bd1cf852712a518297601e2147613be974ef638b1ee5e0fc26d0dc6e"
+partial = "none"
+
+[[held."s-t20-1.1x-dgrad-q4r".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "div"
+shapes = [[]]
+count = 8
+macs = 8
+why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
+
+[held."s-t20-1.1x-dgrad-q2r"]
+run = "r20261103-113630-cd91"
+art = "art:349cf5d2fabf3b0761287069046bfe3234bee6d1e441bcf46fc7458c5a3a94ba"
+path = "out/run/run.json"
+sha256 = "0d255377b760e21f0bf636d8793edc12b054ae6fce027d666dc66e30d0eb4d72"
+partial = "none"
+
+[[held."s-t20-1.1x-dgrad-q2r".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "div"
+shapes = [[]]
+count = 8
+macs = 8
+why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
+
+[held."s-t20-1.1x-dgrad-vote"]
+run = "r20261104-013838-0b85"
+art = "art:ce47588df9c02e2ffb7251c4e1a07784a7cc5b3d99c4df00034338c74af1cff2"
+path = "out/run/run.json"
+sha256 = "6e6e2f01f754d8c1d7f99855ecc43f83aa88e0b69395d87f7fd46f2fb7c03ecb"
+partial = "none"
+
+[[held."s-t20-1.1x-dgrad-vote".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "div"
+shapes = [[]]
+count = 8
+macs = 8
+why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
