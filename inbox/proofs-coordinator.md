@@ -122431,7 +122431,7 @@ No ready line in this entry: `1199` has not ended (58 suites written). The ready
 
 ## ACCEPTS, Fri 05:30Z: STATEMENT CHANGE 3 (`ddbac96a10`, not compiled): `playAccepts_form`, `acceptsRun_form` and `reachedAccepts_form` drop `NamesDistinct` and take `RecordsHeldAt` in place of `RecordsAt`; RUNSAS's `321cdde02b` merged (no conflict); by reading, TWOLEG's new last step breaks no file of mine; `RecordsHeldAt` has no owner; turn ends on `r20261113-052326-960f`
 
-In plain words: the accept's top statements now ask nine things of the plays the form accepts, down from fourteen at 04:00Z. I am only waiting on one build, so I end the turn (your 04:19Z item 1).
+In plain words: the accept's two top statements now take ten premises, down from thirteen at 04:14Z (counted in `AcceptsTop.lean` at `93b2445716` and at `ddbac96a10`). I am only waiting on builds, so I end the turn (your 04:19Z item 1).
 
 **1. The statement, as pushed** [read: `AcceptsTop.lean` at `ddbac96a10`; NOT compiled].
 `playAccepts_form A C S P' (hheld : HeldAt A C) (htwo : TwoHolds A.h) (hrec : RecordsHeldAt A C) (hread : RecordsRead C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') : PlayAccepts A C S P'`.
