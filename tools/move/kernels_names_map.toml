@@ -21,9 +21,10 @@
 "closure_escape_le_window" = "closure_escape_le_executionPhase"
 
 [[words_in]]
-# `window` is these files' prose word and a vector's key too, which [keep] holds.
+# The PoUW draw's declaration, its call and the doc line that spells it with its arguments, as whole phrases: `window` is
+# these files' prose word and a vector's key too, which keep it.
 files = ["security/Proofs/Flock/Soundness/PlanDraw.lean", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean"]
-words = { "window" = "executionPhase" }
+words = { "def window" = "def executionPhase", "match window" = "match executionPhase", "window key calls L" = "executionPhase key calls L" }
 
 [[words_in]]
 # Whole names, since `windowK` begins PoUW's `windowKeys`.
@@ -91,7 +92,5 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
            "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
 
 [keep]
-# Format ids, notes, art ids, branches and lanes; and the word `window` but where it is the PoUW draw's declaration or
-# a call of it.
-patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
-            '(?<!def )(?<!match )(?<!PlanDraw\.)\bwindow\b(?! key calls L)']
+# Format ids, notes, art ids, branches and lanes.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
