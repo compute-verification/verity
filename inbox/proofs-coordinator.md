@@ -124250,3 +124250,40 @@ In plain words. Everything I had written has now compiled. The verifier's progra
 
 **Not mine, acted on in no way:** some twenty-five coordinator timers that fired here between 05:20Z and 05:23Z.
 
+
+## CROSSCLOSE, Fri 13 Nov 06:10Z: CI-489's fix forward is open as #9671 at `6ba8b4888752126f52f292551dc9a4f878216669` (the file is back at 23 sites and the gate passes); NOT a ready line yet: its 62 suites are out in `r20261113-060509-54fa`, expected end about 07:45Z
+
+**The three sites, and why none is renamed.**
+- [run on the VM] The ratchet gate on the landing itself (`ratchet_gate.py 9c4cecc797f0^ 9c4cecc797f0`) fails and names them: `verity/difftest/tests/test_protocol_port.py:135` once and `:142` twice, 23 to 26. The lint's module on each tree counts the same.
+- [read] Each is the key `drawn` in the evidence that #9526's new test sends (`b'{"drawn":2,"passed":2}'` and its two variants with a byte past ASCII).
+- [read] **That key is one other code reads**, so I did not rename it: `verity/protocols/interface/CoreProtocol/Example.lean:54` is `field j "drawn"`, and `BlobsExample.lean:31` reads it too. Nothing else stands at those three sites; the test file owns only how often it spells the key.
+- [read] Your message names DESIGN.md's "Glossary"; the root has no DESIGN.md. The lint's source is `GLOSSARY.md`'s table of older names, whose row for "draw" gives "the sample, a sampled proof block; to sample".
+
+**The change** [run: git]: one commit on `main` `b843a10af48a`, one file, 5 lines added and 3 removed.
+- A constant `TWO_OF_TWO = b'{"drawn":2,"passed":2}'`, the example's evidence that two proof blocks were sampled and both passed.
+- The two tests that send that evidence read it: #9526's, and `test_the_outcome_is_compared_field_by_field` (line 106, there before). #9526's two texts are the constant with the extra field appended.
+- [run on the VM] Each test sends the same bytes as before: I evaluated both forms and compared them.
+- No Lean, lock, allowlist or other file changes; the entry stays at 23.
+
+**A choice I made, with the other side** (say if you want it the other way; it is one more commit on the same branch).
+- Taken: spell the key once. It reaches 23 exactly, and to do so it touches line 106 of the older test, which is not one of the three sites.
+- Set aside: rename what the file does own, the reference's local `drawn` and the words of its two reasons ("drawn units failed", "units drawn"), which no test compares. [derived] That reaches 13 with the three sites left as they are, by changing seven lines nobody asked about.
+
+**Checked on the VM** (each a second or a single named file).
+- [run] `ratchet_gate.py origin/main HEAD`: 1 change, 0 failed; "no retired-term site is new in the 1 file(s) it changes".
+- [run] The lint's module on the branch's tree: this file 23 found, 23 allowed.
+- [run] `pytest tests/lint/test_repo_retired_terms.py`: 14 passed, 1 warning. The warning is the bookkeeping one: 944 other files hold more than the list allows on `main`'s tree. None is this file, and none is this job's.
+- [run] `ruff check` on the file: clean, as at the base.
+- [run] The Python half of #9526's test with the constant (the reference alone, no server): accept on the plain evidence, the three bad hex strings refused, the two texts refused with the commitment reported.
+- **Not run on the VM:** `test_protocol_port.py` itself. Your 05:49Z note asks for it there, but it builds the Lean package `verity/protocols/interface` through `lake`, and your standing rule since my 19:10Z fault is no Lean build on the VM. It runs in the remote tier below.
+
+**The run** [run]: `r20261113-060509-54fa`, vy-nebius-cpu-14's research pool, slot r17 (16 cores) taken at 06:05:33Z, at `6ba8b4888752`.
+- The command is yours with one change: `--changed b843a10af48a44ffb019c655d2a959e7f884baa8`, the merge base as a literal, since a shipped tree may hold no `origin/main` (`suites.py`'s own message says to pass it so).
+- It is 62 suites, not one [run: the launch's sizing line]. [guess] `verity-difftest` is a workspace dependency of most suites, so a change anywhere under its directory moves their keys.
+- Expected end [guess]: 07:30Z to 08:00Z. #9253's 63 suites took 80 minutes in a 22-core slot.
+
+**The pull request** [run: `research queue open --issue CI-489 --by proofs`, 06:08Z; read: `gh pr view`]: https://github.com/compute-verification/verity/pull/9671, branch `cursor/proofs-retired-terms-aa1c`, base `main`, not a draft, no label, GitHub says mergeable, **unmarked**. Its body holds `Lane proofs`, `Refs CI-489` and the tool's `Goal ci/landing-two-hours`. The command linked it to CI-489 through the Linear app, as it does for every worker's; I wrote nothing else to Linear.
+
+**Sunday's move:** the edit is four lines of one file. If top's chain lands first, I make the same edit at `tools/difftest/tests/test_protocol_port.py` and say so.
+
+**State.** The machine was replaced again between 05:21Z and 05:57Z (up since 05:57:34Z); nothing was unpushed. `~/wt/.pen` is this loop's, made at 05:57Z by a `mkdir` that succeeded; there is no other loop. The mailbox holds your 05:29Z and 05:49Z notes and no note on the nodes beyond the line in your message. I hold ONE one-off timer, `crossclose-9671-suites`, due 07:40Z, to read the run and write #9671's ready line in an entry's title.
