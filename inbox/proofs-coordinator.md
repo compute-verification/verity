@@ -157804,3 +157804,49 @@ MEMBERS reads the file right: `Spot/OneStageZk.lean` holds `membersFiles` and no
 **Events that are not mine.** From 18:34Z to 18:39Z about fifty of the coordinator's own timers (firings from Thu 21:08Z to Fri 16:30Z, the 30-minute sweep among them), completion notices of its workers and the lane's Slack events were delivered to me. I acted on none and posted nothing.
 
 Not established: what my 18:34Z entry lists. And that the split builds with my files on it: nothing of it is written.
+
+## SESSIONOF2, Fri 13 Nov 19:28Z: the proofs package builds whole with the switch; the Lean check names four listed guarantees that read `Core.canonicalJson` and counts the switch as a change to what they say; no record is committed yet and the records run may hit its limit at 19:59Z
+
+SESSIONOF2 (bc-21526b41-3d76-5d8c-87fa-3839a84ce464), to the coordinator. A checkpoint; both runs are still out. #9776 is at `59e90438b7e4`, unmarked.
+
+### STOP RULE
+The Lean check says the switch changes what four listed guarantees say, because their statements read `Core.canonicalJson` `[run: `r20261113-175338-b748`, the report of `security`, `"statement_changes": true`, failure code `guarantees.reads-changed`]`. Its line: "definition Core.canonicalJson (CoreProtocol.Protocol), read by Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial: changed". Its owners for the change: `@proofs`, `@soundness`.
+- The four `[read: `security/lean-audit.json`]`: `Flock.SecurityProofs.RecursiveAuditC3` (owner `@proofs`) and the three `Verity.Sampled.remote_soundness_deployedReady…` (owner `@soundness`). None is in the lock's `deployed` list.
+- Before, in the definition: `let j ← match Json.parse s with` (Lean core's parser). After: `let j ← match Flock.JsonParse.parse s with`. Nothing else of the definition's code moved; its docstring gained one sentence.
+- This is the moved definition hash you called expected. I put it here because the check files it as a statement change and three of the four are soundness's. I have not seen the regenerated lock yet, so I cannot yet say that no guarantee's own text or `unfolded_hash` moved. By reading `check.py`, `unfolded_hash` is the statement with its own definition unfolded once, so a change inside `Core.canonicalJson` should leave it `[read; guess]`. I commit no record before I have compared them.
+
+**In plain words.** The long part of the records run is done and good: the whole proofs package compiles with the switch, PoUS's token and the new root. What is left is the tool rewriting the two security locks. It is slow and may not finish before the run's two-hour limit. The suites have two failures, both the one cause I fixed at 18:27Z.
+
+**1. The records run so far** `[run: `r20261113-175338-b748`, cpu-6, at `fa5eabe347da`]`
+- `security/Proofs`: "AUDIT … PASS 204343 declarations in 4052 modules; axioms propext, Classical.choice, Quot.sound", build 2,449 s. This is the first whole build of the three commits as committed. PoUS's `Component.lean` is in it, `wverdict_eq` too.
+- `security`: "FAIL" on the one record difference above and nothing else; the tool then went on by itself: "every failure of its records is a record difference …: check.py --update on it too". That second pass began at about 18:58Z and is still running at 19:27Z.
+- `security/Properties` comes after it.
+- Memory `[run]`: peak 23.6 GiB by proportional size under `--mem-gb 32`; the sum of resident sizes peaked at 102.4 GiB, which counts each mapped `.olean` once for every process.
+- **Its limit is 7,200 s from 17:58:49Z, so 19:58:49Z.** If it ends there without `security/Properties`, I launch the second run of section 3 with `--update`, which covers it.
+
+**2. The suites so far** `[run: `r20261113-180009-568e`, cpu-2, at `fa5eabe347da`]`: 56 suites passed, 2 failed, 8 to come.
+- Both failures are the PoUS grader's pin of the proofs lakefile: `verity/protocols/accounting/pous/verifier` (`test_trusted_hashes_are_current`) and `repository` (`tests/test_pins.py::test_no_pin_is_stale`).
+- Shown on my VM `[run]`: `tools/verity/check/pins.py`'s `stale` gives 0 at `59e90438b7e4`, and 1 with the lakefile as at `fa5eabe347da`: "tools/pous_grader/TRUSTED.sha256 is stale (security/Proofs/lakefile.toml)".
+- `verity-difftest` passed whole, 158 passed, so the new test passes under the suite's read guard.
+
+**3. Next, unless you say otherwise**
+- When the records run is back: compare each regenerated lock with the committed one (guarantees' `signature`, `type_hash`, `unfolded_hash`; `reads`). If only `reads` moved, commit and push them and list them in #9776's body. If a guarantee's own record moved, both texts to you and no push.
+- Then one run at the final head: `lean_changed.py --records security --update`, which audits `security` and `security/Properties`, each with the proofs package. It is the check of the root that is in the lock alone (my 18:29Z entry, NEEDS 2).
+- Then the suites again at the final head, and the ready line.
+
+**4. Your 18:44Z message** is read. I do nothing on the params line, I do not move `PortsOfParams.lean`, and I run `tests/test_boundaries.py` on the VM before I push a file under `security/*/Flock` again. #9776 has no file there.
+
+### NEEDS
+1. **You, and soundness through you:** the STOP RULE section. Three of soundness's listed guarantees read the changed definition.
+2. Still open from 18:04Z and 18:29Z: the link to PRF-490; the friction note's line; whether you want the lakefile's root after all.
+
+### To post
+Nothing.
+
+### Not established
+- The regenerated locks; whether any guarantee's own record moves.
+- The Lean check with the root in the lock alone.
+- The last 8 suites; the suites at the final head.
+
+### Heads, all pushed
+`cursor/proofs-sessionof2-parser-carried-e464` `59e90438b7e4a020466ea4ac8036ad2daf135f4b` (pull request #9776). Runs out: `r20261113-175338-b748` (records, cpu-6, ends by 19:58:49Z), `r20261113-180009-568e` (suites, cpu-2, ends by 20:02Z).
