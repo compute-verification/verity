@@ -13,8 +13,8 @@ exceed
 
 given as `dead_to_flip`, a fraction of the tile's |R|·k elements.  Lean bounds a unit's salt-dead elements at ρ_D = 1/64 of
 its m·k (`FormingP.saltDeadP_card_le`, under its domain conditions), which covers a tile whose rows are its unit's
-(`unit_rows`: decode, |R| = m); a tile of fewer rows has the threshold alone.  Every line's own debit and cap are first
-recomputed at `Prices.sm120` (the scheme's, `LINE`), and a line they don't match is refused.
+(`unit_rows`: decode, |R| = m); a tile of fewer rows has the threshold alone.  Every line's own inert work and its bound
+are first recomputed at `Prices.sm120` (the scheme's, `LINE`), and a line they don't match is refused.
 
   python benchmarks/pouw/pearl_c_vllm/forming_headroom.py LINES.jsonl ... --out FILE
 """
@@ -40,7 +40,7 @@ def credit_rev1(m: int, k: int, n: int, prices: tuple) -> Fraction:
 
 
 def tile(line: dict, prices: tuple) -> tuple[Fraction, Fraction]:
-    """A line's (debit without forming, cap) at `prices`."""
+    """A line's (inert work without forming, inert-work bound) at `prices`."""
     add, _, _, g, _, rho = prices
     m, k, n, rows, cols = line["m"], line["k"], line["n"], line["credited_rows"], line["credited_cols"]
     debit = (32 + add / g) * line["atoms"] + add * line["later_zero_promotions"]
@@ -63,8 +63,8 @@ def check_line(line: dict) -> None:
     if line["credited_rows"] == 0 or not line["ok"]:
         raise ValueError(f"tile {line['tile']}: a rejected or rowless tile has no headroom to report")
     if Fraction(line["debit_exact"]) != debit or abs(Fraction(line["cap"]) - cap) > Fraction(1, 10 ** 6) * cap:
-        raise ValueError(f"tile {line['tile']}: its recorded debit {line['debit_exact']} or cap {line['cap']} is not "
-                         f"Prices.sm120's {debit} / {float(cap)}")
+        raise ValueError(f"tile {line['tile']}: its recorded inert work {line['debit_exact']} or bound {line['cap']} "
+                         f"is not Prices.sm120's {debit} / {float(cap)}")
 
 
 def report(paths: list[Path]) -> dict:

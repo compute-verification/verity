@@ -1,0 +1,15 @@
+# The onsite demo's own Python that `verity run` doesn't load (`minutes.py`). Not a package: its tests run in the
+# workspace environment.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = [
+    # minutes.py runs the remote demo's reader, which reads its environment through its settings registry
+    "demos/vllm/minutes.py",
+    "demos/vllm/settings.py",
+]
+# a test file that starts a program the read guard can't trace (git, for the served commit): keyed on the suite's whole tree
+untraced = ["tests/test_onsite_minutes.py"]

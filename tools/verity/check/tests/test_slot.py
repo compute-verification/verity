@@ -9,6 +9,7 @@ import os
 import stat
 import subprocess
 import sys
+import types
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
@@ -1819,3 +1820,149 @@ def test_a_peaks_that_isnt_a_whole_number_from_1_stops_its_own_slot_and_nothing_
     assert SLOT.blocked(good, NOW) is None and SLOT.lane_peaks([bad, good]) == {}, "a refused line lends the pool no peaks="
     (first,) = [ln for ln in SLOT.status([bad], tmp_path, NOW) if ln.startswith("r0 ")]
     assert first.startswith("r0  cores 0  mem 15 GB  free; blocked: its line has peaks=0")
+
+
+def _counted(monkeypatch, free: list[int]) -> list:
+    """`memory_gb` and `reserved_gb` as stubs, ``free[0]`` GiB free now and nothing reserved, and the list each call of them
+    is added to as it is made: "memory", or the way the reservations were counted, (priority, peaks)."""
+    calls = []
+
+    def memory_gb():
+        calls.append("memory")
+        return free[0]
+
+    def reserved_gb(priority=False, peaks=None):
+        calls.append((priority, peaks))
+        return 0
+
+    monkeypatch.setattr(SLOT, "memory_gb", memory_gb)
+    monkeypatch.setattr(SLOT, "reserved_gb", reserved_gb)
+    return calls
+
+
+def test_a_poll_reads_the_machines_memory_once_whatever_the_number_of_slots_and_the_next_poll_reads_it_again(
+        tmp_path, monkeypatch, capsys):
+    """One count of the live reservations walks every one's process tree. Read for each slot, a try of a pool of 24 slots
+    made 24 counts for `take`, 24 more for its reason and 24 more for its listing, and `--status` 24, so the head of a line
+    tried a free slot less often the more slots its pool had. A try makes one, which the line ahead (`ahead`), `take`, the
+    reason and the listing share, and `--status` makes one; the next try reads again, so no slot is judged by an earlier
+    try's figure."""
+    (tmp_path / "slots").write_text("".join(f"r{i:02d} {i} mem=32 peaks=8\n" for i in range(24)))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = [_hold(tmp_path / f"check-r{i:02d}.lock") for i in range(18)]
+    free = [1000]
+    calls, once = _counted(monkeypatch, free), ["memory", (False, 8)]
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "48")                           # memory asked: 45 GiB, over each slot's mem=
+    slots = SLOT.asking(SLOT.parse((tmp_path / "slots").read_text()))
+    slot, fd = SLOT.take(slots, tmp_path, NOW)
+    os.close(fd)
+    assert slot["name"] == "r18" and calls == once, "the first free slot, behind 18 held ones: one reading, not 19"
+    free[0] = 40
+    calls.clear()
+    assert SLOT.take(slots, tmp_path, NOW) is None and calls == once, "memory short for every slot: one reading, not 24"
+    free[0] = 8
+    calls.clear()
+    doc = SLOT.status_doc(NOW)
+    assert calls == once, "`--status --json`: one reading for its 24 slots"
+    assert {s["blocked"] for s in doc["slots"]} == {"8 GB of memory free, under the 32 GB a check here may peak at"}
+    assert [s["holder"] is not None for s in doc["slots"]] == [True] * 18 + [False] * 6
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")
+    _head, hfd = SLOT.join(tmp_path, who=SLOT.asker())                   # a head memory keeps: `ahead` reads what is free
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "48")
+    tries, t = [], [NOW]
+
+    def sleep(s):
+        tries.append(calls.copy())
+        calls.clear()
+        t[0] += timedelta(seconds=s)
+        free[0] = 40 if len(tries) < 2 else 100                          # the third try finds its 45 GiB free
+
+    free[0] = 40
+    calls.clear()
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    with pytest.raises(Exec, match="r18"):
+        SLOT.main(["--", "run"], now=lambda: t[0], sleep=sleep)
+    assert tries == [once, once] and calls == once, "each try: one reading for the line ahead, `take`, the reason and the listing"
+    short = "40 GB of memory free, under the 45 GB a check here may peak at"
+    err = capsys.readouterr().err
+    assert err.count(short) == 48, "the reason names each of the 24 slots and the listing each again; the second try's is the same"
+    assert err.splitlines()[0].startswith(f"slot: every check slot is taken (r00: {short}; r01: {short}; ")
+    assert "slot: check slot r18 (cores 18)" in err
+    for fd in (hfd, *held):
+        os.close(fd)
+
+
+def test_a_poll_counts_the_reservations_once_for_each_way_its_slots_count_them(tmp_path, monkeypatch):
+    """What a slot finds free depends on how it counts the live reservations: a train's gate counts train checks only, a lane
+    slot every one, whole or by its peaks=. A poll makes one count for each way its slots ask, as they ask, and reads the
+    memory once for them all; a `--priority` waiter's is a train's count on every slot, and slots that reserve no memory
+    read none."""
+    lines = ([f"a{i} {i} mem=32 peaks=8" for i in range(6)] + [f"b{i} {6 + i} mem=32 peaks=4" for i in range(6)]
+             + [f"c{i} {12 + i} mem=32" for i in range(6)] + [f"t{i} {18 + i} only=trains mem=32" for i in range(6)])
+    (tmp_path / "slots").write_text("\n".join(lines) + "\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    calls = _counted(monkeypatch, [8])
+    doc = SLOT.status_doc(NOW)
+    assert calls == ["memory", (False, 8), (False, 4), (False, None), (True, None)]
+    assert {s["blocked"] for s in doc["slots"]} == {"8 GB of memory free, under the 32 GB a check here may peak at"}
+    calls.clear()
+    assert SLOT.take(SLOT.parse((tmp_path / "slots").read_text()), tmp_path, NOW, priority=True) is None
+    assert calls == ["memory", (True, None)]
+    calls.clear()
+    assert SLOT.status(SLOT.parse("x 0\ny 1 peaks=8\n"), tmp_path, NOW) == ["x  cores 0  free", "y  cores 1  peaks 8  free"]
+    assert calls == []
+
+
+def _flocks(monkeypatch) -> list[str]:
+    """The name of each file slot.py tries to flock from here on, as it tries it."""
+    tried, real = [], fcntl.flock
+
+    def flock(fd, op):
+        tried.append(Path(os.readlink(f"/proc/self/fd/{fd if isinstance(fd, int) else fd.fileno()}")).name)
+        return real(fd, op)
+
+    monkeypatch.setattr(SLOT.fcntl, "flock", flock)
+    return tried
+
+
+@pytest.mark.parametrize("reason", ["window", "disk", "memory"])
+def test_a_free_slot_that_starts_no_check_is_refused_in_the_same_words_and_its_lock_is_never_tried(
+        reason, tmp_path, monkeypatch, capsys):
+    """A free slot that a window, the disk floor or memory keeps starts no check, and `take`, the wait's reason and listing
+    and `--status` each say why in `blocked`'s words. Its lock is never tried, even to be let go at once: a held lock is a
+    check in the slot to `locked` (a slot.py inside a held slot runs its command there), to `holder` (a listing, a
+    placement) and to the waiters beside this one. The slot gets no record of a holder either."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30\n")
+    line, said, words = {
+        "window": (f"a 0 windows={w} lead=30", "a  cores 0", "window 2026-10-01T09:20Z (30 min) is open or starts within 30 min"),
+        "disk": ("a 0", "a  cores 0", f"{tmp_path} has 10 GB free, under 50"),
+        "memory": ("a 0 mem=560", "a  cores 0  mem 560 GB", "300 GB of memory free, under the 560 GB a check here may peak at"),
+    }[reason]
+    if reason == "disk":
+        monkeypatch.setattr(SLOT, "DISK", tmp_path)
+        monkeypatch.setattr(SLOT.os, "statvfs", lambda p: types.SimpleNamespace(f_bavail=10, f_frsize=10 ** 9, f_files=10 ** 7,
+                                                                                f_favail=10 ** 7))
+    calls = _counted(monkeypatch, [300])
+    (tmp_path / "slots").write_text(line + "\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    (slot,) = SLOT.parse(line)
+    (tmp_path / "check-a.lock").touch()                                  # as where the slot has run a check before
+    tried = _flocks(monkeypatch)
+    assert SLOT.blocked(slot, NOW) == words
+    assert SLOT.take([slot], tmp_path, NOW) is None
+    assert SLOT.status([slot], tmp_path, NOW)[0] == f"{said}  free; blocked: {words}"
+    listed = SLOT.status_doc(NOW)["slots"][0]
+    assert (listed["blocked"], listed["holder"]) == (words, None)
+    t = [NOW]
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran in a slot that starts no check"))
+    assert SLOT.main(["--wait-max", "20", "--", "run"], now=lambda: t[0],
+                     sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s))) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err.splitlines()
+    assert err[0] == f"slot: every check slot is taken (a: {words}); retrying every 20 s"
+    assert err[1] == f"slot:   {said}  free; blocked: {words}"
+    assert err[-1] == f"slot: not started: no check slot within --wait-max 20 s (every check slot is taken (a: {words})); exit 75"
+    assert "check-a.lock" not in tried and tried, "the line's tickets are locked, the slot's lock never"
+    assert not (tmp_path / "check-a.who").exists()
+    assert bool(calls) is (reason == "memory"), "a slot a window or the disk keeps never gets as far as the memory"
