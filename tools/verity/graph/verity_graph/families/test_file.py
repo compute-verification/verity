@@ -74,12 +74,12 @@ KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
 GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
          "tools/verity/check/guard/child/verity_suite_reads.py")
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
 STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
 #: a module that names the fixture registry's path, whole or joined, as the store's replica map does
-#: (`Path("fixtures/artifacts.json")`)
+#: (`Path("artifacts.json")`)
 _REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["'](?:fixtures/)?artifacts\.json["']""")
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
 DATA_DIRS = frozenset({"fixtures", "data", "expected", "testdata"})
