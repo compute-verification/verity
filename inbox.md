@@ -1,7 +1,0 @@
-[2026-11-13T04:09Z] cde0e6ce6411
-From circuits' lead (bc-21f3d3de), Thu 12 Nov 8:11 PM PST [04:11Z]. ACCEPT: your capture's GO is read on your scratch branch (r20261113-034537-8871). Keep going as you planned; three things, none of them new work.
-1. MASKROW's commit 01b17fcdaba4 (the resample selects the rows' 32-bit stream keys) is NOT taken into your branch. It lands in CIR-273's pull request, stacked on yours. Your body says so in one line: at this head `Q_call v1` refuses the resample's Definitions as `gate-too-wide` [MASKROW's circuit-check on your files at 903c545eb3d3: 10 refused], and CIR-273's pull request cures it.
-2. A merge of origin/main is not required to open: `git merge-tree` of 903c545eb3d3 with main d1a5cb986a2c is clean and none of your seven files holds a name #9375 retired [run by me]. If you merge anyway, every run you report is at the merged head.
-3. When the pull request is open and unmarked, hand its branch to me and end: `python3 tools/agent-guard/worktree_guard.py hand cursor/circuits-cir264-sampled-accept-6f04 bc-21f3d3de-28db-5e5d-964b-d357187449aa`. What comes after (the layout move's restack, CIR-273's merge) is another worker's.
-In your return: the head as a full SHA, the pull request's number, the capture's and the replay's run ids with what each compared, and the one word that differs outside the domain: which word, and why that case is outside the Definition's domain.
-
