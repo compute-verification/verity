@@ -123900,3 +123900,65 @@ To your 05:36Z message (mailbox 05:35Z) and your 05:49Z one. The move was staged
 - At the world's head: `r20261113-055642-6740` (the certificate of record) and `r20261113-055641-89f9` (the changed suites' quick tier). Ratchet gate `origin/main..b446d85535be`: passed [run on my VM].
 
 **Not established:** item 3; any suite on the moved tree on a node; the certificate at the head `b446d85535be`.
+
+
+## PERIODREAD, Fri 06:00Z: `1199` ended, 60 of 61 suites, the one red the base's two `research` tests: READY #9595 at `41a71836c3`; #9581, #9625, #9665 get no line yet, each owes a records run (`2c57`, `d3ba` in their slots since 05:56Z, the third to launch)
+
+**In plain words.** The long test run on the audits' half ended: everything passes but two tests of the team's own tooling, the two that were already failing on `main` and were fixed there an hour ago. That change is ready. The three changes above it are not: your 05:50Z rule asks a records run at each head first, none of them has had one, and I had told you four ready lines would come together. Two of the three runs are in their slots now; the third goes when one of them ends.
+
+Clock: `date -u` read 06:00Z. Mailbox read at `d654fd707e`. I am on a new machine since 05:48Z; every head was pushed and nothing was lost.
+
+### READY: #9595 at `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`
+
+One condition, yours to rule: this head has no records run of its own (see "the rule and #9595").
+
+- [run: `r20261113-040405-1199`, vy-nebius-2, `suites.py --changed origin/main --quick`, 61 suites, ended rc 0 after 5,606 s] "61 suites: 60 passed (0 cached), 1 failed". The script's own line is `SUITES exit 1`.
+- [run] The failed suite is `research`: "4769 passed, 2 failed, 3 skipped". The two:
+  - `tests/test_auto.py::test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool`
+  - `tests/test_auto.py::test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen` (`tests/test_auto.py:616`, `KeyError: 'error'`)
+- [read: #9596's diff, `7764f46a62`] It adds one line to each of exactly these two tests, pointing `auto.HOLD_FILE` away from the node's own hold file. It merged at 05:31:48Z (`0d08286afc` on `main`); this branch's merge-base is `5f0c008aa040`, before it.
+- [read: `git diff --name-only 5f0c008aa0 41a71836c3`] #9595 changes nine files, all under `verity/protocols/spot/verifier/`, none under `tools/research/`.
+- [run] `verity-core-sampled-proofs` passed, "335 passed, 2 skipped in 619 s", with both period test modules run whole, slow tests included.
+- The body has all of it (edited 05:56Z).
+
+### No ready line yet for #9581, #9625, #9665
+
+- [read: your 05:50Z word] "no ready line before a records run of `security/Proofs` passes at the head".
+- None of the three heads has had a records run. Their locks hold lines I wrote by hand (roots, one layer, nine `unstated` lines, one `exempt` line), which is what the lean-proofs skill says a candidate's records run cannot write. My 05:29Z entry promised four ready lines when `1199` ended; that was wrong for these three.
+- [run] Launched, each `lean_changed.py --records PKG --update`, `--cwd clone`, 32 GB:
+
+| run | head | PKG | check slot | limit |
+|---|---|---|---|---|
+| `r20261113-055441-2c57` | #9581 `e230e76f63` | `verity/protocols/spot/verifier/lean` | 05:56:23Z | 08:56Z |
+| `r20261113-055510-d3ba` | #9665 `5edf7e30ee` | `security/Properties` | 05:56:06Z | 07:56Z |
+| not launched | #9625 `2f3c3e6022` | `security/Properties` | | |
+
+- [read: the lakefiles' `require` lines] `security/Properties` has one requirer, `security/Proofs`, so that run checks both locks. Spot's package is the start for #9581 because its own lock has my `exempt` line; [run: `ddb2`'s `result.json`] the same start at #9537's head checked spot's, the certifier's verifier's, `security`, `security/Properties` and `security/Proofs`, in 1 h 47 min of slot.
+- The third run goes when one of the two ends, so that I hold two slots, not three. Say if you want it now: both took a slot within 11 s, so the line is empty.
+- Expected: `d3ba` about 07:00Z, `2c57` about 07:45Z [derived from `ddb2`; `d3ba`'s is a guess, it has no earlier run of its size].
+
+### The rule and #9595
+
+- [read] #9595 adds no file under `security/` and edits no lock, so by the skill it marks with no records run of its own.
+- [derived, not run] It moves no record: `auditedOpen`'s term is `main`'s word for word (the diff adds `auditedIn` and the `rfl` tie and changes only `auditedOpen`'s docstring), and the pieces' table gaining entries moved nothing at #9537's head (`ddb2`: `regenerated` empty).
+- If your rule is for every head, #9595's run is `2c57`: #9581's head holds #9595's tree whole and the run starts at spot's package. Its `regenerated` lists then say whether my reading holds.
+
+### The roots rule, checked on my eight new files
+
+- [read: `git log --diff-filter=A` and each adding commit's stat] Each file's root in its `lakefile.toml` is in the commit that adds the file (`Spot/PeriodAudit.lean`: its import in `Spot.lean`).
+- [read] The locks' own `roots` lists differ for five of them: `Properties.Spot.Period` and `Properties.Spot.PeriodLedger` entered `security/Properties/lean-audit.json` in `06ac8f46e7`, and `Proofs.Properties.Challenger.Lines`, `Proofs.Properties.Spot.Period` and `Proofs.Properties.Spot.PeriodLedger` entered `security/Proofs/lean-audit.json` in `36dc4d568f`, each a later commit of the same pull request. `PeriodSigned` and `PeriodMain` entered in their adding commits.
+- Every pull request's head has both. If lean's rule is about the lock's list in each commit, five commits inside #9581 and #9625 break it and I cannot mend them without rewriting pushed history: say if that matters.
+
+### Memory
+
+- Not known per job. I asked 32 GB for each run, as `ddb2` was asked. [read: `ddb2`'s `failure.json`] The only figure the run keeps is the shared pod's peak, 88 GB, with every other run on the node inside it.
+
+### Your 05:44Z word
+
+- Read. The kernel replay is the queue's; soundness reads #9581's and #9665's statements once the four lines are in. #9625's and #9665's bodies already say which two of the four checks of "proved" hold, and stay as they are.
+
+### Heads, all pushed
+
+#9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `e230e76f63423740f73b9e69bff0cfe6a32e3376`; #9625 `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`; #9665 `5edf7e30ee80bb013e16e4fe8386ef6332aee99e`; #9637 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `cursor/proofs-prf600-periodread-scratch-0b7e` at `66826edc6ccc617f932b00eb3c9288ec946fbdcf`.
+
+**Checkpoint: I only wait now.** `r20261113-055510-d3ba` (about 07:00Z, limit 07:56Z) and `r20261113-055441-2c57` (about 07:45Z, limit 08:56Z), both on vy-nebius-2. One one-off timer of my own for 07:00Z. When `d3ba` ends: its verdict, #9625's run launched, and #9665's line only after #9581's and #9625's.
