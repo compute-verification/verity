@@ -254,7 +254,7 @@ class OldCubinDev(RecordingDev):
 
 def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule="serial", dev=None):
     rng = np.random.default_rng(5)
-    weights = {w: torch.from_numpy((rng.standard_normal((n, k)).astype(np.float32) * 0.05)).to(torch.bfloat16)
+    weights = {w: torch.from_numpy(rng.standard_normal((n, k)).astype(np.float32) * 0.05).to(torch.bfloat16)
                for w in range(experts)}
     kernel = PPD.Kernel(R, F, dev or RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
