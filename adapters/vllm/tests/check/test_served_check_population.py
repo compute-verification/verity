@@ -3,13 +3,16 @@ step's notes, and what it answers where they leave a note out.
 
 The served check's own tests reconcile the reports of whole served runs; these hold the cases a run of theirs does not
 reach: a step the Build plans nothing for, notes that are not the check's, and more findings of a kind than it names.
+Last, on that run itself (`tests.check.test_served_check`): the rows a step's attention note counts as not finite.
 """
 from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pytest
 
+from tests.check import test_served_check as SVT
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS
 
@@ -88,3 +91,22 @@ def test_an_ids_note_that_names_no_request_reaches_no_request_s_ids(requests):
     checks = _checks(build, {"batch": {"ok": True, "rows": {"r0": 2}}, SERVED_IDS: note})
     assert checks["identities_without_rows"] == {"n": 1, "first": [{"request_id": "r0", "step": 0, "op_path": "c00.input", "member": "ids"}]}
     assert (checks["vus_outside_query"]["n"], checks["rows_disagree"]["n"], checks["accounted"], checks["ok"]) == (0, 0, True, False)
+
+
+def test_an_attention_note_counts_the_rows_whose_output_is_not_finite():
+    """The served run's attention outputs are finite at every step, and each step's note counts none.  One query word made an
+    infinity at the last step gives one row that is not finite: the note counts it, and counts it once among the wrong words,
+    beside every word of the head that read it."""
+    build, weights = SVT._build(), SVT._weights()
+    steps, prompts = SVT._serve(build, weights)
+
+    def notes(served: list[SC.Step]) -> dict[str, tuple]:
+        rep = SC.check(build, served, weights.__getitem__, seed=None, rows=8, prompts=prompts)
+        return {step: tuple(noted[SVT.ATT][k] for k in ("ok", "rows", "nonfinite", "bad")) for step, noted in rep["steps"].items()}
+
+    def infinite(q: np.ndarray) -> np.ndarray:
+        q[0, 0] = 0x7F80
+        return q
+
+    assert notes(steps) == {"0": (True, 3, 0, 0), "1": (True, 3, 0, 0), "2": (True, 8, 0, 0), "3": (True, 3, 0, 0)}
+    assert notes(SVT._with(steps, 3, SVT.Q, infinite)) == notes(steps) | {"3": (False, 3, 1, SVT.D + 1)}
