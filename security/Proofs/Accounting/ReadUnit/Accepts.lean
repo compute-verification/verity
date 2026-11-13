@@ -1,7 +1,7 @@
 /-
 The read's check accepts its own template: `Flock.ReadNet.check V H (readTmpl V H)` for every vocabulary of `2 ≤ V < 2³²`
 rows of `1 ≤ H ≤ 2¹⁶` words (`check_readTmpl`). Its runs write fresh variables (`Accepts/Fresh.lean`), and its root has at
-most `2³²` columns: each part's Definition has at most `partCap H` (`Accepts/Parts.lean`, over `Accepts/Cost.lean`) and
+most `2³²` columns: each part's Definition has at most `partColsMax H` (`Accepts/Parts.lean`, over `Accepts/Cost.lean`) and
 the root lays out its calls' columns past its inputs and before its outputs.
 -/
 module
@@ -37,7 +37,7 @@ theorem nextPowerOfTwo_le_two_mul (x : ℕ) : x.nextPowerOfTwo ≤ 2 * x + 1 := 
     omega
 
 theorem partDefs_cols_le {V H : ℕ} (hV : V < 2 ^ 32) (i : ℕ) :
-    ((partDefs V H).getD i default).cols ≤ partCap H := by
+    ((partDefs V H).getD i default).cols ≤ partColsMax H := by
   rw [Array.getD_eq_getD_getElem?]
   unfold partDefs
   rw [Array.getElem?_map]
@@ -53,12 +53,12 @@ theorem root_cols_le {V H : ℕ} (hV : V < 2 ^ 32) (hH : H ≤ 2 ^ 16) :
   have hH' : H ≤ 65536 := hH
   have hD := depth_le hV
   have hs : segs H ≤ 128 := by unfold segs; rw [hr]; omega
-  have hcap : partCap H ≤ 18793472 := by unfold partCap; rw [Nat.add_mul, hC]; omega
+  have hcols : partColsMax H ≤ 18793472 := by unfold partColsMax; rw [Nat.add_mul, hC]; omega
   have hn : nCalls V H ≤ 165 := by unfold nCalls; omega
   have hsum : ((List.range (nCalls V H)).map fun i => ((partDefs V H).getD (partOf V H i) default).cols).sum ≤
       165 * 18793472 :=
-    (sum_map_le (List.range (nCalls V H)) _ (partCap H) fun i _ => partDefs_cols_le hV (partOf V H i)).trans
-      (by rw [List.length_range]; exact Nat.mul_le_mul hn hcap)
+    (sum_map_le (List.range (nCalls V H)) _ (partColsMax H) fun i _ => partDefs_cols_le hV (partOf V H i)).trans
+      (by rw [List.length_range]; exact Nat.mul_le_mul hn hcols)
   have hin : (lay V H).inW ≤ 2 * ((2592 + 16 * H + 512 * depth V + Flock.WORD - 1) / Flock.WORD) + 1 := by
     show Nat.nextPowerOfTwo ((2592 + 16 * H + 512 * depth V + Flock.WORD - 1) / Flock.WORD) ≤ _
     exact nextPowerOfTwo_le_two_mul _

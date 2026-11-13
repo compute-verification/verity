@@ -7,7 +7,7 @@ public import Proofs.Accounting.ReadUnit.Frame.Parts
 # How many columns each of the read's parts has
 
 Each part's program adds at most a fixed number of variables and returns at most a fixed number of bits
-(`cost_segPart`, …, `cost_selectPart`), so its Definition's columns are at most `partCap H` (`partDef_cols_le`).
+(`cost_segPart`, …, `cost_selectPart`), so its Definition's columns are at most `partColsMax H` (`partDef_cols_le`).
 -/
 
 @[expose] public section
@@ -352,7 +352,7 @@ theorem cols_le {p : Part} {k L : ℕ} (h : Cost k p.prog fun o => o.length ≤ 
   omega
 
 /-- The columns of each part's Definition are at most this. -/
-def partCap (H : ℕ) : ℕ := (segs H + 9) * COMPRESS + 32 * H + 2048
+def partColsMax (H : ℕ) : ℕ := (segs H + 9) * COMPRESS + 32 * H + 2048
 
 theorem depth_le {V : ℕ} (hV : V < 2 ^ 32) : depth V ≤ 32 := by
   unfold depth
@@ -362,28 +362,28 @@ theorem depth_le {V : ℕ} (hV : V < 2 ^ 32) : depth V ≤ 32 := by
     omega
 
 theorem partDef_cols_le {V H : ℕ} (hV : V < 2 ^ 32) :
-    ∀ p ∈ parts V H, (defOf p.ins p.run).cols ≤ partCap H := by
+    ∀ p ∈ parts V H, (defOf p.ins p.run).cols ≤ partColsMax H := by
   have hC : COMPRESS = 121856 := rfl
   have hr : Flock.HmRow.ROW_SEG_BITS = 8192 := rfl
   have hD := depth_le hV
   have hs : 16 * H ≤ 8192 * segs H := by unfold segs; rw [hr]; omega
   have hn1 : 1 ≤ Frame.indexBytes (depth V) := by unfold Frame.indexBytes; omega
   have hn4 : Frame.indexBytes (depth V) ≤ 4 := by unfold Frame.indexBytes; omega
-  have cap : ∀ {k L : ℕ}, k + L ≤ partCap H → ∀ {p : Part}, Cost k p.prog (fun o => o.length ≤ L) →
-      (defOf p.ins p.run).cols ≤ partCap H := fun hkL _ h => (cols_le h).trans hkL
+  have hcols : ∀ {k L : ℕ}, k + L ≤ partColsMax H → ∀ {p : Part}, Cost k p.prog (fun o => o.length ≤ L) →
+      (defOf p.ins p.run).cols ≤ partColsMax H := fun hkL _ h => (cols_le h).trans hkL
   intro p hp
   simp only [parts, List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_segPart _ (le_of_eq hr))
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_segPart _ (by rw [hr]; omega))
-  · exact cap (by unfold partCap; rw [Nat.add_mul, Nat.add_mul, hC]; omega) (cost_outerPart _ _)
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) cost_leafPart
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_leafHashPart _ hn1 hn4)
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_nodePart 1 le_rfl (by omega))
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_nodePart 2 (by omega) (by omega))
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_nodePart 3 (by omega) (by omega))
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_nodePart 4 (by omega) le_rfl)
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) cost_eqPart
-  · exact cap (by unfold partCap; rw [Nat.add_mul, hC]; omega) (cost_selectPart V H)
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_segPart _ (le_of_eq hr))
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_segPart _ (by rw [hr]; omega))
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, Nat.add_mul, hC]; omega) (cost_outerPart _ _)
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) cost_leafPart
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_leafHashPart _ hn1 hn4)
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_nodePart 1 le_rfl (by omega))
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_nodePart 2 (by omega) (by omega))
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_nodePart 3 (by omega) (by omega))
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_nodePart 4 (by omega) le_rfl)
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) cost_eqPart
+  · exact hcols (by unfold partColsMax; rw [Nat.add_mul, hC]; omega) (cost_selectPart V H)
 
 end Accounting.ReadUnit.Accepts
