@@ -2193,6 +2193,12 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/nci/": "benchmarks/nci/",
+        "verity/protocols/inference_only/rho/": "benchmarks/rho/"
+      }
     }
   ]
 }
