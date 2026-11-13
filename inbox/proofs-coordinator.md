@@ -115382,3 +115382,76 @@ Read from the run's review and confirmed by comparing each lock at `d8c696eda108
 - The two lists at today's `main`: `main` has since changed four files that branch changes; it waits on #9268, open at 02:13Z.
 
 **Next.** A one-off timer wakes me at about 03:20Z to look for #9375 on `main`; then the merge, the records run and the suites, and the ready line when they are read.
+
+## TWOLEG, Fri 13 Nov 02:43Z: Claim.lean compiled (d936); the inner-block claim is written at e0a4052b5fe9 and its try r20261113-022527-aed4 is building on vy-nebius-2
+
+A Lean-slot wait of 15 minutes. `3081` waited ten minutes in cpu-12's line without starting. I cancelled it and sent one try, of `DevAgrees` and then `ClaimInner`, as `r20261113-022527-aed4` on vy-nebius-2. It waited about 5 minutes there for a check slot, started building at about 02:30Z, and stood at module 10,524 of 11,404 at 02:41Z [run]. `d936`'s build of the same tree took 25 minutes [run], so I expect `aed4` to end at about 03:00Z [guess].
+
+The head of `cursor/proofs-twoleg-c5e5` is `e0a4052b5fe9`: `c0216f674d07` (the `DevAgrees` fix, 02:17Z entry) plus `ClaimInner.lean` and its lakefile root. `Claim.lean`, `Leg.lean` and the form's pull request #9574 (`cursor/proofs-twoleg-e0ff`, `8d8015c0546d`) are unchanged [read].
+
+**What d936 failed on** [run]: `DevAgrees.lean` alone: an unknown lemma name, an `omega` blocked by `Fin.cast`, and a `show` past the recursion limit. The fixes are in the 02:17Z entry.
+
+**Whether Claim.lean has compiled:** yes. `d936` built `Proofs.Properties.Verity.SampledTwo.Claim` at `7fed11bb74`, and its `Claim.lean` is byte for byte the one at the head now [run, read]. That build had no axiom probe. I wrote no `sorry` or `axiom` in it [read]; the probe comes with the records run of the second pull request.
+
+**The new statements, as written** (`security/Proofs/Properties/Verity/SampledTwo/ClaimInner.lean`, namespace `Verity.SampledTwo`; not compiled yet, `aed4`). Here an inner block is a proof block of `Pt`, and an outer block is a block of the replay partition `dd.part`.
+
+```lean
+def grid (dd : Design.Two) (Pt : Partition) : Finset (ℕ × ℕ) :=
+  Finset.range dd.part.blocks.length ×ˢ Finset.range Pt.strata.length
+
+def innerCount (dd : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : ℕ := ∑ p ∈ grid dd Pt, fp p.1 p.2
+
+def CellCapsAt (dd : Design.Two) (Pt : Partition) (m δ : ℝ) : Prop :=
+  ∀ fp : ℕ → ℕ → ℕ, (∀ ρ t, fp ρ t ≤ (cell Pt dd.part ρ t).card) →
+    m < (innerCount dd Pt fp : ℝ) → dd.Pa Pt fp ≤ δ
+
+noncomputable def wrongInner H Cm s Pt dd w : Finset ℕ :=
+  (Finset.range Pt.blocks.length).filter fun v => ∀ ι' : ℕ → ℕ → Bool,
+    ∃ p ∈ grid dd Pt, v ∈ wrongIn H Cm s Pt dd.part w p.1 p.2 (ι' p.1)
+
+theorem footprint_le_cell … : footprint H Cm s Pt dd.part w ι' ρ t ≤ (cell Pt dd.part ρ t).card
+theorem wrongInner_card_le … (ι') : (wrongInner H Cm s Pt dd w).card ≤ innerCount dd Pt (footprint H Cm s Pt dd.part w ι')
+
+theorem not_rTwo_of_wrongInner … (hs : parse x = some s) (hP : partition s = some Pt) (hd : two s = some dd)
+    (hcap : CellCapsAt dd Pt m δ) (w) (hw : m < ((wrongInner H Cm s Pt dd w).card : ℝ)) :
+    ¬ RTwo H Cm parse partition two δ x w
+
+def UnitsAreInner V θ F c H Cm s Pt dd readX : Prop :=
+  ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ w u,
+    u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ wrongInner H Cm s Pt dd w
+
+theorem holds_of_rTwo_inner … (hs) (hP) (hd) (readX) (hU : UnitsAreInner V θ F c H Cm s Pt dd readX)
+    (hcap : CellCapsAt dd Pt ((V.certOf θ).ε * V.units θ F) δ) (w) (hR : RTwo H Cm parse partition two δ x w) :
+    Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε
+```
+
+All of the bookkeeping is proved in the file, which has no `sorry` [read]. `wrongInner_card_le` goes through `Finset.card_biUnion_le` over the cells, and the two theorems follow `not_rTwo_of_wrong` and `holds_of_rTwo` line for line. Two choices to check:
+* `CellCapsAt` quantifies only over footprints that fit their cells. That is weaker than `CapsAt`'s every-footprint form, so it is easier to discharge. Every real footprint fits (`footprint_le_cell`) [read].
+* An inner block counts when it is incorrect at every interior of its outer block. This is `UnitsAreReplay`'s reading of a replay block that is not correct, at inner grain [derived].
+
+It displaces nothing: no coupling piece reads `Claim`, and #9574 holds no file under `security/` [read]. Which count the top-level target reads is Daniel's call; `TwoLeg` and `UnitsAreReplay` are unchanged.
+
+**What else in my files rests on the form deciding `two`** [read]:
+* `Leg.lean`'s `TwoAt` is a predicate because the component's two-stage parse is lean's wiring (LEAN-302), not mine.
+* `Live₂.L.two` is the compiled verifier's design at the held copies (`SpotFlock.two A.h`).
+* `Steps.accepted_steps` concludes `form = true` from an accept.
+* `Refused.accepts_never` and `decodedAccepted_never` take `FORM = false`.
+* `ClaimInner` and `Claim` take `two s = some dd` as a hypothesis.
+
+**Lean's conditions (a) and (b):** lean read both as met at `052eb3aba564` and did not build them [relayed, lean's 00:53Z comment on PRF-579]. The form at #9574's head builds with its `#guard`s (`r20261113-011300-9f0c`) [run].
+
+**What compiled** [run]:
+* The form and `Steps` (`9f0c`).
+* `Refused`, `Claim`, `Leg`, `Projection` and `Reading` (`d936`).
+* The difftest passed 65 tests (`5d2d`).
+* `DevAgrees` and `ClaimInner` are in `aed4`.
+
+**Forecast, piece by piece** [guess]:
+* `DevAgrees` and `ClaimInner`: `aed4` ends at about 03:00Z.
+* #9574's quick tier: `c4f6` is still running on vy-nebius-2.
+* #9574's records run: after `c4f6`, one run at a time; ready line well before 10:00Z.
+* The second pull request (the proofs, from c5e5): after `aed4` passes and its records run.
+
+**Both entry points:** keep one, `verity/sampled-proofs/v1` with the form `two-stage`, and retire the form's own protocol id in a change of mine after lean's wiring lands. Two ways to reach one check means two parse paths to hold to one refusal set.
+
+STOP RULE: not reached; nothing here changes what a listed guarantee says or rests on. NEEDS: nothing. To post: nothing. Not established: that `DevAgrees` and `ClaimInner` build (`aed4`); `c4f6`'s verdict; any axiom probe of `Claim`.
