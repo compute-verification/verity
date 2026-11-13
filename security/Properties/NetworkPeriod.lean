@@ -145,11 +145,12 @@ def AuditFacts (i : ℕ) (reg : Lean.Json) (x : Core.Answer) (f : Facts) : Prop 
 
 /-- The facts `f` are of the sample the registration `reg` states, a sample its units hold (`sampleOf`: its
 `population` of `n` units under its `law`, a `subset:k` or a stratified one, which the registration fixes before any
-coin): `f.units` is `n` and `f.drawn`, the sample's count of sampled units, is at most `n`. Of a `subset:k` sample
-`f.drawn` is `k`. Of a stratified sample of strata `ss` it is the strata's `k_s` summed, no stratum samples more than
-it holds, and the strata's sizes sum to `n`. -/
+coin): `f.units` is `n`, `f.design` is its design, which a reading at another δ reads (`Facts.readAt`), and `f.drawn`,
+the sample's count of sampled units, is at most `n`. Of a `subset:k` sample `f.drawn` is `k`. Of a stratified sample
+of strata `ss` it is the strata's `k_s` summed, no stratum samples more than it holds, and the strata's sizes sum to
+`n`. -/
 def SampleHeld (reg : Lean.Json) (f : Facts) : Prop :=
-  ∃ (n : ℕ) (d : Core.SamplingDesign), sampleOf reg = some (n, d) ∧ f.units = n ∧ f.drawn ≤ n ∧
+  ∃ (n : ℕ) (d : Core.SamplingDesign), sampleOf reg = some (n, d) ∧ f.units = n ∧ f.design = d ∧ f.drawn ≤ n ∧
     ((∃ k : ℕ, d = .subset k ∧ f.drawn = k) ∨
       ∃ ss : Array Core.Stratum, d = .stratified ss ∧ f.drawn = ss.foldl (fun m st => m + st.k) 0 ∧
         (∀ st ∈ ss, st.k ≤ st.size) ∧ ss.foldl (fun m st => m + st.size) 0 = n)
@@ -211,8 +212,9 @@ the check accepts a period with the public `pub`, then the count of incorrect pr
 of each compute audit, and in the rows form of each link-window's scan, is at least the bound of the sample that
 answer's registration states, at the facts' δ (`SampleCharged`). The check computes the bound itself and reads the
 larger of it and the `bound` the answer states, so an answer that states a smaller `bound` than its sample gives
-lowers no term of `K`: `ClockKBoundsCount` and `RowsKBoundsCount` are read at these counts, and the rows form's
-charge of a tied audit (`RowsTiedCharged`) reads them too. The facts are of that sample by `RegisteredSampleHeld`.
+lowers no term of `K`: `ClockKBoundsCount` and `RowsKBoundsCount` are read at these counts. The rows form's charge
+of a tied audit reads the same sample at the period's own δ, and `RowsTiedCharged` says the same of that reading.
+The facts are of that sample by `RegisteredSampleHeld`.
 
 The bound is a stratum at a time. A stratum of a registered sample is one uniform `subset:k_s` of its own `n_s`
 units, and its incorrect proof blocks are bounded at δ split equally over the strata, so the strata's bounds hold
@@ -224,18 +226,20 @@ def SampleBoundCharged : Prop :=
     check p c e = .accept pub prof → AnswersAt SampleCharged p c pub
 
 /-- Among the audits' facts `facts`, in their order and each once, those of each audit `tied` ties that is sampled in
-part (`drawn < units`). -/
+part (`drawn < units`), each read at the period's own δ (`Facts.readAt` at `tiedDelta`). -/
 def tiedInPart (tied : ℕ → Bool) (facts : Array Facts) : Array Facts :=
-  (Array.range facts.size).filterMap fun i => facts[i]?.filter fun f => tied i && decide (f.drawn < f.units)
+  (Array.range facts.size).filterMap fun i =>
+    (facts[i]?.filter fun f => tied i && decide (f.drawn < f.units)).map (·.readAt tiedDelta)
 
 /-- What `RowsTiedCharged` says of a period its check accepted with the public `pub`: in the rows form, `pub.charged`
 is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has an
 answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]` and name no more sampled than its level holds
 (`f.drawn ≤ f.units`); if it names as many (`f.drawn = f.units`) and its registration states a stratified sample
-(`sampleOf`), every stratum of that sample is sampled whole; if it is sampled in part (`f.drawn < f.units`), `f` is
-among `pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every link-window `w`
-whose scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's term
-`pub.units[w]`. -/
+(`sampleOf`), every stratum of that sample is sampled whole; if it is sampled in part (`f.drawn < f.units`), its
+reading at the period's own δ (`f.readAt tiedDelta`) is among `pub.charged`, its count is at least its registered
+sample's bound at that δ (`SampleCharged`) and, when that count is at least one incorrect proof block, every
+link-window `w` whose scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's
+term `pub.units[w]`. -/
 def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     pub.charged = tiedInPart (tiedIn c.audits c.windows) pub.audits ∧
@@ -244,10 +248,11 @@ def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public
         f.drawn ≤ f.units ∧
         (f.drawn = f.units → ∀ (n : ℕ) (ss : Array Core.Stratum), sampleOf reg = some (n, .stratified ss) →
           ∀ st ∈ ss, st.k = st.size) ∧
-        (f.drawn < f.units → f ∈ pub.charged ∧ (1 ≤ f.wrong →
-          ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
-            (tiedAudits c.audits wreg).contains i = true →
-              ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
+        (f.drawn < f.units → f.readAt tiedDelta ∈ pub.charged ∧ SampleCharged reg (f.readAt tiedDelta) ∧
+          (1 ≤ (f.readAt tiedDelta).wrong →
+            ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
+              (tiedAudits c.audits wreg).contains i = true →
+                ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
 
 /-- `RowsTiedCharged` of the period check `chk`: `RowsTiedChargedAt` of every period `chk` accepts, at the public it
 accepts with. -/
@@ -257,12 +262,15 @@ def RowsTiedChargedOf (chk : Params → Commitment → Evidence → Core.Outcome
 
 /-- **The rows form charges every tied audit it accepts sampled in part.** If the check accepts a period in the rows
 form with the public `pub`, then `pub.charged` is the facts of each audit that some link-window's scan's `prog` is an
-output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once (`tiedInPart` of
-`pub.audits`). `Public.eps` sums the δ of the terms' facts and of `charged`, and of nothing else, so each such audit's
-δ is in `eps`. And for each such audit whose bound is at least one incorrect proof block, the public's term of every
+output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once, each read at
+the period's own δ, `tiedDelta`, a constant of the check and so fixed before any coin (`tiedInPart` of `pub.audits`).
+That reading is of the same sample, with no second one: its count is the larger of the count the facts hold and the
+registered sample's bound at `tiedDelta`, so it is at least that bound (`SampleCharged`). `Public.eps` sums the δ of
+the terms' facts and of `charged`, and of nothing else, so `tiedDelta` is in `eps` once for each such audit. And for
+each such audit whose count at `tiedDelta` is at least one incorrect proof block, the public's term of every
 link-window whose scan's `prog` is its output has `faultyEntries` at the scan's every slot entry bit (`Scan.entries`),
-which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are the check's own,
-of every period it accepts.
+which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the readings it is read from are the check's
+own, of every period it accepts.
 
 Every tied audit of an accepted period names no more sampled than its level holds: the check reads both counts off the
 answer's profile, the level's size and its `subset`'s `k` or its strata's `k` summed, and refuses a profile that names
@@ -309,16 +317,16 @@ period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
   ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
 
-/-- A window record that states a sample: `population` units under the law `law`. -/
+/-- A window record that states a sample: `population` units under the sampling design its `law` states. -/
 def sampleReg (population : ℕ) (law : Lean.Json) : Lean.Json :=
   Lean.Json.mkObj [("population", Lean.toJson population), ("law", law)]
 
-/-- The law `subset:k`. -/
-def subsetLaw (k : ℕ) : Lean.Json := Lean.Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
+/-- The sampling design `subset:k`, as a registration's `law` states it. -/
+def subsetDesign (k : ℕ) : Lean.Json := Lean.Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
 
-/-- A stratified law of two strata: `a`, the units `[0, na)` with `ka` of them sampled, and `b`, the next `nb` units
-with `kb` of them sampled. -/
-def strataLaw (na ka nb kb : ℕ) : Lean.Json :=
+/-- A stratified sampling design of two strata, as a registration's `law` states it: `a`, the units `[0, na)` with
+`ka` of them sampled, and `b`, the next `nb` units with `kb` of them sampled. -/
+def strataDesign (na ka nb kb : ℕ) : Lean.Json :=
   Lean.Json.mkObj [("law", "stratified"), ("strata", Lean.Json.arr #[
     Lean.Json.mkObj [("template", "a"), ("k", Lean.toJson ka),
       ("units", Lean.Json.arr #[Lean.Json.arr #[Lean.toJson (0 : ℕ), Lean.toJson na]])],
@@ -327,7 +335,7 @@ def strataLaw (na ka nb kb : ℕ) : Lean.Json :=
 
 /-- A registration of 16 units in two strata of 8, 4 of each sampled: the sample `RegisteredSampleHeld`'s and
 `SampleBoundCharged`'s honest lemmas are stated at. -/
-def halvesReg : Lean.Json := sampleReg 16 (strataLaw 8 4 8 4)
+def halvesReg : Lean.Json := sampleReg 16 (strataDesign 8 4 8 4)
 
 /-- One-stage's profile of that sample at δ = 1/10: one level of 16 units, stratified as registered. -/
 def halvesProfile : Core.Integrity :=

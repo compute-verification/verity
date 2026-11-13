@@ -416,14 +416,15 @@ theorem factsOf_sample {what : String} {reg : Lean.Json} {prof : Core.Integrity}
   · obtain ⟨hn, hreg⟩ := ‹_ = l.size ∧ _›
     cases hn
     cases hreg
-    exact ⟨⟨l.size, .subset k, by assumption, rfl, by assumption, .inl ⟨k, rfl, rfl⟩⟩,
+    exact ⟨⟨l.size, .subset k, by assumption, rfl, rfl, by assumption, .inl ⟨k, rfl, rfl⟩⟩,
       l.size, .subset k, by assumption, .inl ⟨k, rfl, Nat.le_max_right _ _⟩⟩
   · obtain ⟨hn, hreg⟩ := ‹_ = l.size ∧ _›
     cases hn
     cases hreg
     have hnone : ∀ st, ss.find? (fun st => decide (st.size < st.k)) = some st → False := by assumption
     have hsum : ss.foldl (fun n st => n + st.size) 0 = l.size := by assumption
-    refine ⟨⟨l.size, .stratified ss, by assumption, rfl, by assumption, .inr ⟨ss, rfl, rfl, fun st m => ?_, hsum⟩⟩,
+    refine ⟨⟨l.size, .stratified ss, by assumption, rfl, rfl, by assumption,
+        .inr ⟨ss, rfl, rfl, fun st m => ?_, hsum⟩⟩,
       l.size, .stratified ss, by assumption, .inr ⟨ss, rfl, Nat.le_max_right _ _⟩⟩
     have := Array.find?_eq_none.mp (Option.eq_none_iff_forall_ne_some.mpr hnone) st m
     simpa using this
@@ -445,7 +446,7 @@ theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.
 /-- Facts of a registered stratified sample with `drawn = units` are of every stratum sampled whole. -/
 theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Core.Stratum} (h : SampleHeld reg f)
     (hs : sampleOf reg = some (n, .stratified ss)) (hw : f.drawn = f.units) : ∀ st ∈ ss, st.k = st.size := by
-  obtain ⟨n', d, hs', hu, -, hd⟩ := h
+  obtain ⟨n', d, hs', hu, -, -, hd⟩ := h
   rw [hs] at hs'
   cases hs'
   rcases hd with ⟨k, hk, -⟩ | ⟨ss', hss, hdr, hle, hsum⟩
@@ -479,8 +480,23 @@ theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedul
   | error r => simp [hr, Functor.map, Except.map] at hz
   | ok u => exact ⟨u, by simpa [hr, Functor.map, Except.map] using hz.symm⟩
 
+/-- Facts of a registered sample, read at any δ, charge that sample's bound there: the reading's count is the larger
+of the facts' own and the bound of the facts' design at that δ, and the design is the registered one. -/
+theorem sampleCharged_readAt {reg : Lean.Json} {f : Facts} (h : SampleHeld reg f) (δ : Core.Ratio) :
+    SampleCharged reg (f.readAt δ) := by
+  obtain ⟨u, dr, δ₀, w, dw⟩ := f
+  obtain ⟨n, d, hs, hu, hdesign, -, hd⟩ := h
+  obtain rfl : u = n := hu
+  obtain rfl : dw = d := hdesign
+  refine ⟨_, _, hs, ?_⟩
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss, hss, -⟩
+  · cases hk
+    exact .inl ⟨k, rfl, Nat.le_max_right _ _⟩
+  · cases hss
+    exact .inr ⟨ss, rfl, Nat.le_max_right _ _⟩
+
 /-- With every audit accepted, the audits the rows form charges are those the accepted facts name: tied and sampled in
-part. -/
+part, each read at the period's own δ. -/
 theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
     (hform : p.form = .rows s sd scan) {as : Array (Found Facts)} (has : ∀ y ∈ as, findingOf y = none) :
     (Array.range as.size).filterMap (chargedOf p c as) =
@@ -499,7 +515,11 @@ theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray}
   | none => rfl
   | some y =>
     obtain ⟨f, rfl⟩ := findingOf_none (has y (Array.mem_of_getElem? hi))
-    simp [hform, tiedOf, Except.toOption, Option.filter]
+    have hf : Except.toOption (Except.ok f : Found Facts) = some f := rfl
+    simp only [hform, tiedOf, hf, Option.filter]
+    by_cases h : (tiedIn c.audits c.windows i && decide (f.drawn < f.units)) = true
+    · first | (rw [if_pos h, if_pos h]; rfl) | (simp [h]; done) | simp_all
+    · first | (rw [if_neg h, if_neg h]; rfl) | (simp [h]; done) | simp_all
 
 theorem rowsTiedCharged : RowsTiedCharged := by
   intro p c e pub prof h s sd scan hform
@@ -524,14 +544,15 @@ theorem rowsTiedCharged : RowsTiedCharged := by
   · show ((auditChecks p c e).filterMap (·.toOption))[i]? = some f
     rw [getElem?_filterMap_of_isSome _ _ hall, hget]
     rfl
-  · obtain ⟨_, _, -, hu, hle, -⟩ := hheld
+  · obtain ⟨_, _, -, hu, -, hle, -⟩ := hheld
     omega
   · exact fun hw _ _ hs => sampleHeld_whole hheld hs hw
   · intro hd
-    have hch : chargedOf p c (auditChecks p c e) i = some f := by
+    have hch : chargedOf p c (auditChecks p c e) i = some (f.readAt tiedDelta) := by
       simp [chargedOf, hget, hform, tiedOf, htied, hd]
-    refine ⟨?_, ?_⟩
-    · show f ∈ (Array.range (auditChecks p c e).size).filterMap (chargedOf p c (auditChecks p c e))
+    refine ⟨?_, sampleCharged_readAt hheld tiedDelta, ?_⟩
+    · show f.readAt tiedDelta ∈
+        (Array.range (auditChecks p c e).size).filterMap (chargedOf p c (auditChecks p c e))
       exact Array.mem_filterMap.mpr ⟨i, Array.mem_range.mpr (Array.getElem?_eq_some_iff.mp hget).1, hch⟩
     · intro hwrong w wreg hw hc
       obtain ⟨hwlt, -⟩ := Array.getElem?_eq_some_iff.mp hw
@@ -572,13 +593,15 @@ def chargedParams : Params :=
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedWindow], .empty⟩
 
 /-- Its honest side, at the slot audit tied to `tiedWindow`: sampled 1 of its 2 units with a bound of one incorrect
-proof block, the audit is charged and its link-window's `β_w` is the scan's every entry bit; sampled whole, it is not
-charged and `β_w` is 0. -/
+proof block, the audit is charged, read at the period's own δ, where the one unit it leaves may be incorrect, and its
+link-window's `β_w` is the scan's every entry bit; sampled whole, it is not charged and `β_w` is 0. -/
 theorem rowsTiedCharged_honest :
-    (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] 0).isSome = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 7 ∧
-      (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] 0).isNone = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 0 := by
+    (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] 0).isSome = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] ⟨0, 0, 0, 0, 7⟩
+        tiedWindow = 7 ∧
+      (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] 0).isNone = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] ⟨0, 0, 0, 0, 7⟩
+        tiedWindow = 0 := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
@@ -761,11 +784,11 @@ theorem registeredSampleHeld_honest :
 sampled of 2 units, so a period check that accepts an audit registered so and publishes its facts as stated, 3 of 2
 units sampled, fails `AnswersAt SampleHeld`. The registration states no stratum, so the other two clauses hold. -/
 theorem registeredSampleHeld_nontrivial :
-    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (subsetLaw 3)], #[], .empty⟩
-      (statedPublic ⟨2, 3, ⟨1, 10⟩, 0⟩) := by
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (subsetDesign 3)], #[], .empty⟩
+      (statedPublic ⟨2, 3, ⟨1, 10⟩, 0, .subset 3⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, hle, hd⟩, -⟩ := h.1 0 (sampleReg 2 (subsetLaw 3)) rfl
-  have hreg : sampleOf (sampleReg 2 (subsetLaw 3)) = some (2, .subset 3) := by decide +kernel
+  obtain ⟨f, -, ⟨n, d, hs, -, -, hle, hd⟩, -⟩ := h.1 0 (sampleReg 2 (subsetDesign 3)) rfl
+  have hreg : sampleOf (sampleReg 2 (subsetDesign 3)) = some (2, .subset 3) := by decide +kernel
   rw [hreg] at hs
   cases hs
   rcases hd with ⟨k, hk, hdr⟩ | ⟨ss, hss, -⟩
@@ -777,11 +800,11 @@ theorem registeredSampleHeld_nontrivial :
 stratum `a` states 2 sampled of its 1 unit, in 3 units of which 2 are sampled and whose strata's sizes sum to 3, so
 a period check that accepts an audit registered so fails `AnswersAt SampleHeld` on that clause alone. -/
 theorem registeredSampleHeld_stratum :
-    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 3 (strataLaw 1 2 2 0)], #[], .empty⟩
-      (statedPublic ⟨3, 2, ⟨1, 10⟩, 0⟩) := by
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 3 (strataDesign 1 2 2 0)], #[], .empty⟩
+      (statedPublic ⟨3, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 3 (strataLaw 1 2 2 0)) rfl
-  have hreg : sampleOf (sampleReg 3 (strataLaw 1 2 2 0)) = some (3, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]) := by
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 3 (strataDesign 1 2 2 0)) rfl
+  have hreg : sampleOf (sampleReg 3 (strataDesign 1 2 2 0)) = some (3, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]) := by
     decide +kernel
   rw [hreg] at hs
   cases hs
@@ -796,11 +819,11 @@ of 2 units whose two strata hold 2 units each, 1 of each sampled, so no more sam
 above its size, and a period check that accepts an audit registered so fails `AnswersAt SampleHeld` on that clause
 alone. -/
 theorem registeredSampleHeld_sizes :
-    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (strataLaw 2 1 2 1)], #[], .empty⟩
-      (statedPublic ⟨2, 2, ⟨1, 10⟩, 0⟩) := by
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (strataDesign 2 1 2 1)], #[], .empty⟩
+      (statedPublic ⟨2, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 2 (strataLaw 2 1 2 1)) rfl
-  have hreg : sampleOf (sampleReg 2 (strataLaw 2 1 2 1)) = some (2, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) := by
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 2 (strataDesign 2 1 2 1)) rfl
+  have hreg : sampleOf (sampleReg 2 (strataDesign 2 1 2 1)) = some (2, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) := by
     decide +kernel
   rw [hreg] at hs
   cases hs
@@ -823,10 +846,12 @@ theorem sampleBoundCharged_honest :
 of 8 units and publishes its facts with a count of 5 at δ = 1/10, below the 6 its strata's bounds sum to, fails
 `AnswersAt SampleCharged`. -/
 theorem sampleBoundCharged_nontrivial :
-    ¬ AnswersAt SampleCharged cappedPeriod ⟨#[halvesReg], #[], .empty⟩ (statedPublic ⟨16, 8, ⟨1, 10⟩, 5⟩) := by
+    ¬ AnswersAt SampleCharged cappedPeriod ⟨#[halvesReg], #[], .empty⟩
+      (statedPublic ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩) := by
   intro h
   obtain ⟨f, hf, ⟨n, d, hs, hd⟩, -⟩ := h.1 0 halvesReg rfl
-  obtain rfl : f = ⟨16, 8, ⟨1, 10⟩, 5⟩ := by simpa [statedPublic, rowsTerms] using hf.symm
+  obtain rfl : f = ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩ := by
+    simpa [statedPublic, rowsTerms] using hf.symm
   have hreg : sampleOf halvesReg = some (16, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]) := by decide +kernel
   rw [hreg] at hs
   cases hs
