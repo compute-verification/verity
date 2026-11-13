@@ -55,6 +55,31 @@ def test_lowrank_factors_rebuild_bit_for_bit(base):
         c.encode(torch.ones(5), torch.zeros(5))
 
 
+def test_lowrank_at_bits_rounds_each_rank_component_to_nearest_once(base):
+    """At `bits`, each row of A and each column of B is rounded to nearest at ±(2^(bits−1) − 1) times an f16 scale,
+    its largest magnitude over that, and decode is `apply` on the rounded factors. Written out here for 4 bits: the
+    trained factors and the factors their target's SVD gives are rounded by the same rule, and the spec carries the
+    bits, which a spec without them leaves at fp32."""
+    g = torch.Generator().manual_seed(2)
+    a, b = torch.randn(2, 12, generator=g), torch.randn(8, 2, generator=g)
+    a[1] = 0.0
+
+    def rounded(rows):
+        s = (rows.abs().amax(1) / 7).half().float()[:, None]
+        return torch.where(s > 0, torch.round(rows / torch.where(s > 0, s, 1.0)).clamp(-7, 7) * s, 0.0)
+
+    c = LowRank(2, scale=0.5, bits=4)
+    enc = c.encode_trained(a, b)
+    assert same(c.decode(enc, base), LowRank.apply(base, rounded(a), rounded(b.T).T, 0.5))
+    assert c.size_bits(enc) < LowRank(2).size_bits(LowRank(2).encode_trained(a, b)) and c.cost_macs(enc, base) == 384
+    assert from_spec(c.spec()).bits == 4 and from_spec(LowRank(2).spec()).bits == 0 == LowRank(2).bits
+    assert "bits" not in LowRank(2, 0.5).spec()
+    target = LowRank.apply(base, a, b, 0.5)
+    assert torch.allclose(c.decode(c.encode(target, base), base), target, atol=0.5 * 0.2)
+    with pytest.raises(ValueError):
+        LowRank(2, bits=1)
+
+
 def test_quant_delta_rebuilds_a_quantized_parameterization(base):
     c = QuantDelta(2)
     codebook = torch.tensor([-0.3, -0.1, 0.1, 0.3])
