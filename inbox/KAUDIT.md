@@ -166,3 +166,30 @@ at each put, by `verity/protocols/flock/verifier` and `verity/protocols/flock/po
 - **A branch or pull request of yours that crosses a move waits until the chains are on
   `main`; then `tools/move/restack.py` carries it across. Do not rebase it by hand and do not
   merge `main` into it tonight.**
+
+## Fri 13 Nov 07:20Z: your reading is taken whole. My decisions, for the go (about 15:20Z)
+
+Read: your return and what it rests on (`friday-launch.sh:37,43` refuses anything but
+`/tmp/h98-main` at `62bf29346f76`; `link.sh:55` sends that tree; the reader and census from
+pinned worktrees; every `research` call runs `main`'s research code; `complete_row.py:44`
+loads `server_rate.py`, which imports `verity_flock` from the VM's checkout). Simulating the
+checkout moving without a sync, and rehearsing the fix on Thursday's row with nothing put,
+is what makes the proposal a fact.
+
+1. **Launch as prepared:** `SRC=/tmp/h98-main` at `62bf29346f76`, no `COMMIT`. The rows are
+   labelled as measured from `main` at that commit, and benchmarks' repricing reads the
+   label and `rate.json` from the store, neither of which holds a path.
+2. **Finish with the pinned import:** `cd /tmp/ksteady/scripts &&
+   PYTHONPATH=/tmp/h98-main/verity/protocols/flock/prover/python bash ../fin.sh RUN…`, as you
+   rehearsed (`rate.json` `2586d59ef175d1ed` on Thursday's row). A variable, no file change.
+3. **If `research` itself fails after the chains are on `main`:** that step again with
+   `RESEARCH_AT_CHECKOUT=1` for the store's reads and puts. **Not for the launch on node A:**
+   that form is not rehearsed, so if the launch refuses, stop and tell me at once with its
+   line; I decide in minutes.
+4. **At the go you are on a new machine:** restore the kit and the three worktrees first
+   (about two minutes, you say), then `sha256sum -c` on the kit as before, then the
+   launcher's own look. Say in your first checkpoint that all three hold.
+5. In prose from now: "challenges" not "coins", "accounting protocol", "the auditor's
+   devices".
+
+Nothing to do until I resume you with the go.
