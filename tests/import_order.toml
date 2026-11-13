@@ -233,7 +233,7 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/commitments",
-    "verity/definitions/ops",
+    "verity/circuits/ops",
 ]
 
 [[place]]
@@ -243,9 +243,9 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/commitments",
-    "verity/definitions/kernels",
-    "verity/definitions/ops",
-    "verity/definitions/silicon",
+    "verity/circuits/kernels",
+    "verity/circuits/ops",
+    "verity/circuits/silicon",
 ]
 
 [[place]]
@@ -253,7 +253,7 @@ paths = [
     "verity/definitions/circuits/targets",
 ]
 loads = [
-    "verity/definitions/silicon",
+    "verity/circuits/silicon",
 ]
 
 [[place]]
@@ -264,26 +264,26 @@ trusted = true
 
 [[place]]
 paths = [
-    "verity/definitions/kernels",
+    "verity/circuits/kernels",
 ]
 loads = [
     "verity/circuits",
-    "verity/definitions/silicon",
+    "verity/circuits/silicon",
 ]
 
 [[place]]
 paths = [
-    "verity/definitions/ops",
+    "verity/circuits/ops",
 ]
 loads = [
     "verity/circuits",
-    "verity/definitions/kernels",
-    "verity/definitions/silicon",
+    "verity/circuits/kernels",
+    "verity/circuits/silicon",
 ]
 
 [[place]]
 paths = [
-    "verity/definitions/private_circuits",
+    "verity/circuits/private_circuits",
 ]
 loads = [
     "verity/circuits",
@@ -297,7 +297,7 @@ trusted = true
 
 [[place]]
 paths = [
-    "verity/definitions/silicon",
+    "verity/circuits/silicon",
 ]
 loads = [
     "verity/circuits",
@@ -556,8 +556,8 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/definitions/ops",
-    "verity/definitions/silicon",
+    "verity/circuits/ops",
+    "verity/circuits/silicon",
     "verity/protocols/pouw/verifier",
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/verifier/profile.py",

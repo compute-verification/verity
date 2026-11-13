@@ -23,9 +23,9 @@ import numpy as np
 import twin as T
 
 from verity.commitments.crypto.turboshake import turboshake128
-from verity.definitions.kernels.tc import group_sum_total_batch
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
+from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.verifier import audit as AU

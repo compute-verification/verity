@@ -13,8 +13,8 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
-from verity.definitions.silicon.integer import HOPPER_SM90_S8_K32
+from verity.circuits.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
+from verity.circuits.silicon.integer import HOPPER_SM90_S8_K32
 from verity.protocols.pouw.prover.circuit import dither as D
 from verity.protocols.pouw.prover.circuit import segment as SG
 

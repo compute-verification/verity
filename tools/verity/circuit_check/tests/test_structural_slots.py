@@ -14,8 +14,8 @@ from verity_flock import struct_slots as SS
 
 from verity.circuits.defs import CompositeDefinition
 from verity.circuits.evaluation.reference import resolve
-from verity.definitions.ops.fp32 import F32AddFtz
-from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
 
