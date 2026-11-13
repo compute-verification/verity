@@ -1,6 +1,6 @@
 /-
 **Round 2's statement check**: a two-stage run's second-stage sessions held, each by its statement, to the interior
-registration and to the second draw's cells (`check`). `Run.run` adds it to the interior registration's audit record as
+registration and to the second sample's cells (`check`). `Run.run` adds it to the interior registration's audit record as
 `checks.statements` (`attach`), and `service.Stream` runs its mirror (`second_stage`), held to it by difftest
 (`second_statements`).
 
@@ -38,7 +38,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
-  - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
+  - `second-sample`: its sample is not the verifier's own, the second sample's units in its part as a subset of its slots
     (`ownDraw`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
@@ -58,7 +58,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
     holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
     `second-read` holds the read to the slot's own rows or its cell's replay block's; at any other it only bounds a ref
-    by its table, so a ref could point a drawn unit at another unit's rows.
+    by its table, so a ref could point a sampled proof block at another unit's rows.
   - `second-values`: its registered reads are not its template's reference statement's (`Own.refReads`, the
     registered reads the auditor's params give beside its header, fixed before the run and taken as given), both with
     each port's run fields blanked (`blankReads`), or the params give its template none. The run's fields are those
@@ -112,14 +112,14 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   when no
   statements are given, `second-order` for each statement for a part other than the one at its position (round 2 reads
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
-  `second-cover` for each part no statement is for (every part has one, drawn by the second draw or not), and
-  `second-reported` when the `{value: root}` the verifiers of record report the sessions read (`Record.sessionRegistered`)
+  `second-cover` for each part no statement is for (every part has one, sampled by the second sample or not), and
+  `second-reported` when the `{value: root}` the verifiers report the sessions read (`Record.sessionRegistered`)
   is not the statements' (`statementReads`). A passing check (`check_ok`) holds the interior record to the replay
   sample in its order (`interiorOrderOk_sample`), the statements to the parts, one each by position, every header to
   its template's reference placed in the run but for the run's fields (`check_ok_header`), every port a header shares
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
   statement's but for the run's fields, a registered value's rows among what they hold (`check_ok_values`), every
-  session's sample to the second draw, cell by cell, and every read it reports to a statement's.
+  session's sample to the second sample, cell by cell, and every read it reports to a statement's.
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
@@ -338,8 +338,8 @@ def rowsOf? : Json → Option (Array Rows)
   | _ => none
 
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
-registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
-Definition makes none), the `{value: root}` the verifiers of record report the sessions read
+registrations' records, the second sample's units, the design's links (`replayLinks`, none when the replay block's
+Definition makes none), the `{value: root}` the verifiers report the sessions read
 (`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), the reference header of each
 template's statement and the registered reads it reads (`refReads`, null for none), as the auditor's params give them
 (`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them, the design's
@@ -806,7 +806,7 @@ def rootsOk (named : Bool) (rec : Json) (t : String) (h : Json) (reads : Array S
     (templatePorts named t rec).all fun x =>
       roots.any (fun (p, _) => portOf named t p == x) || reads.any fun p => portOf named t p == x
 
-/-- **The verifier's own sample** for part `p`'s session: the second draw's units among its slots, counted from its
+/-- **The verifier's own sample** for part `p`'s session: the second sample's units among its slots, counted from its
 first, as `unit_draw` writes a subset of its population. -/
 def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
   let units := (drawn.filter (p.holds q)).map (· - p.lo)
@@ -1026,7 +1026,7 @@ def orderFailures (ps : Array Part) (ss : List Json) : List (String × Json) :=
       else none
     | none => none
 
-/-- `second-cover` for each part no statement is for: every part has one, drawn by the second draw or not. -/
+/-- `second-cover` for each part no statement is for: every part has one, sampled by the second sample or not. -/
 def coverFailures (ps : Array Part) (ss : List Json) : List (String × Json) :=
   ps.toList.filterMap fun p =>
     if !(templates ss).contains p.template then some ("second-cover", Json.mkObj [("template", Json.str p.template)])
@@ -1065,7 +1065,7 @@ def interiorReads (own : Own) (ss : List Json) : Array Json :=
       | _ => acc) acc
     | none => acc) #[]
 
-/-- `second-reported` when the reads the verifiers of record report are not those statements `ss` state. -/
+/-- `second-reported` when the reads the verifiers report are not those statements `ss` state. -/
 def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
   if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
 
@@ -1147,7 +1147,7 @@ example := @check.eq_1
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
 `reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
 `c` does, as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or
-wrong units. -/
+incorrect proof blocks. -/
 def attach (rec : Json) (c : Check) (reads : Array Json := #[]) : Json :=
   let r := rec.setObjVal! "checks" ((getD rec "checks").setObjVal! "statements" c.toJson)
   let r := if reads.isEmpty then r else r.setObjVal! "interior_reads" (.arr reads)
@@ -1289,7 +1289,7 @@ theorem interiorOrderOk_sample {own : Own} (h : interiorOrderOk own = true) :
 (`interiorOrderOk_sample`), the interior program's strata make parts, the replay block's Definition makes links, each
 for a part's template, and wires, each between parts' templates, each statement is one for a part's template, no
 earlier statement's, the part at its position (`orderFailures_nil`), and passes every check at its position
-(`stmtCodes_nil`), every part has a statement, and the reads the verifiers of record report are the statements'. -/
+(`stmtCodes_nil`), every part has a statement, and the reads the verifiers report are the statements'. -/
 theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
     allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
       wiresOk ps own = true ∧
@@ -1420,7 +1420,7 @@ statement's header shares rows at (`shared_rows`) is one of its registered reads
 a link names, the boundary port it names, each slot reading only its cell's replay block's rows; else its own port of
 the interior record, each slot reading only its own rows, or a value either registration registers. The session's
 verifier holds each instance's ref at such a port to the row at the position the read gives its unit
-(`Flock.Registered.check`), so no ref there points a drawn unit at another unit's rows. -/
+(`Flock.Registered.check`), so no ref there points a sampled proof block at another unit's rows. -/
 theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧ ∀ port c, (port, c) ∈ entries (getD s.header "shared_rows") →

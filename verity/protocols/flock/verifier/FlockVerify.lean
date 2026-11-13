@@ -285,7 +285,7 @@ def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← can
 def headerDigest (header : Lean.Json) : Option String := (sha512Of header).toOption
 
 /-- A public file's header: the JSON of its first line, which every public-file loader parses (`Public.load`,
-`HmRow.loadPublic`) and sets the statement up from, and a sampled statement's is drawn from (`HmRow.drawn`, which adds the
+`HmRow.loadPublic`) and sets the statement up from, and a sampled statement's is sampled from (`HmRow.drawn`, which adds the
 sample). A verdict names the file by its `headerDigest`. -/
 def publicHeader (file : ByteArray) : Option Lean.Json := do
   let nl ← findByte file 10
