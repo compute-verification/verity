@@ -2,3 +2,4 @@
 launched r20261113-205731-35a9 (checks) at 7dd7e11362
 launched r20261113-205759-c821 (circuit-check) at 7dd7e11362
 launched r20261113-205829-17e0 (replay) at 7dd7e11362
+21:21Z head 9eee018145 (the split-rate record added); the runs at 7dd7e11362 superseded, checks r20261113-205731-35a9 cancelled
