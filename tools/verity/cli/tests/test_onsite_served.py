@@ -268,7 +268,9 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert rc == 0
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "prover", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4" and hooks["V3C_LAW"] == "subset:1"
+    assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4"
+    kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
+    assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
     assert {"WIPE_CMD", "SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)
     assert hooks["WIPE_KEY_SHA512"] == "1" * 128
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
