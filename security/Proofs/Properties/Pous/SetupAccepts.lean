@@ -7,6 +7,7 @@ public import Proofs.Properties.Pous
 public import Proofs.Properties.Pous.Setup
 public import Proofs.Pous.P2.RingTight
 public import Proofs.Core.CanonUtf8
+public import Proofs.Properties.Pous.RunAccepts
 import all Init.Data.String.Defs
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
@@ -43,7 +44,10 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
   (`natOfBE_beOfNat`), and the honest block decodes to `beOfNat 0 2054` (`decodeBlock_honest`);
 * the decoder's loop over 65,536 honest blocks yields the zeros' payload (`decodeSegment_honest`), with every block's
   keys a `K` and a `t < p` (`KeysOk`), which hold or SHA-512 has a collision (`keysOk_or_collision`);
-* the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`).
+* the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`);
+* the run on setup's output: the table of the honest blocks' row digests (`setupDigests`, rows by `digestTable_row`)
+  has setup's leaves of the honest `C*` as its row leaves (`rowLeaves_digestTable`, `leaves_flat`, `rowLeaves_setup`),
+  so the composed check accepts a run on any published setup with their root (`runCheck_accepts_setup`).
 -/
 
 @[expose] public section
@@ -757,5 +761,115 @@ theorem manifest_deployed : ∃ m, Commit.manifest P2.Params.deployed = .ok m �
   cases Verity.CanonUtf8.canonFlat (Commit.manifestJson P2.Params.deployed) with
   | error e => intro h; cases h
   | ok s => intro h; exact ⟨s.toUTF8, rfl, of_decide_eq_true h⟩
+
+/-! ## The run on setup's leaves -/
+
+/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
+local instance instLawfulBEqByteArray_accepts : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
+
+/-- The rows `f 0, …, f (n − 1)`, concatenated. -/
+def digestTable (f : Nat → ByteArray) : Nat → ByteArray
+  | 0 => .empty
+  | n + 1 => digestTable f n ++ f n
+
+theorem rowDigest_size (b : ByteArray) : (Merkle.rowDigest b).size = Merkle.DIGEST :=
+  Properties.CertifierDevice.Proofs.Lms.sha512_size _
+
+theorem extract_zero_right (b : ByteArray) (i : Nat) : b.extract i 0 = .empty :=
+  ByteArray.extract_eq_empty_iff.2 (by simp)
+
+theorem extract_of_size_le {b : ByteArray} {i : Nat} (j : Nat) (h : b.size ≤ i) : b.extract i j = .empty :=
+  ByteArray.extract_eq_empty_iff.2 (by omega)
+
+theorem digestTable_size {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle.DIGEST) :
+    ∀ n, (digestTable f n).size = n * Merkle.DIGEST
+  | 0 => by simp [digestTable]
+  | n + 1 => by
+    show (digestTable f n ++ f n).size = _
+    rw [ByteArray.size_append, digestTable_size hf n, hf, Nat.add_one_mul]
+
+/-- Row `i` of the table is `f i`. -/
+theorem digestTable_row {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle.DIGEST) :
+    ∀ n i, i < n → PousCheck.Run.row (digestTable f n) i = f i
+  | 0, _, h => absurd h (Nat.not_lt_zero _)
+  | n + 1, i, h => by
+    have hs := digestTable_size hf n
+    unfold PousCheck.Run.row
+    show (digestTable f n ++ f n).extract _ _ = f i
+    rw [ByteArray.extract_append, hs]
+    by_cases hi : i < n
+    · rw [show Merkle.DIGEST * (i + 1) - n * Merkle.DIGEST = 0 by unfold Merkle.DIGEST; omega,
+        extract_zero_right, ByteArray.append_empty]
+      exact digestTable_row hf n i hi
+    · have hin : i = n := by omega
+      rw [hin, extract_of_size_le (b := digestTable f n) (i := Merkle.DIGEST * n) (Merkle.DIGEST * (n + 1))
+          (by rw [hs]; unfold Merkle.DIGEST; omega), ByteArray.empty_append,
+        show Merkle.DIGEST * n - n * Merkle.DIGEST = 0 by unfold Merkle.DIGEST; omega,
+        show Merkle.DIGEST * (n + 1) - n * Merkle.DIGEST = (f n).size by rw [hf]; unfold Merkle.DIGEST; omega,
+        ByteArray.extract_zero_size]
+
+/-- The table of the blocks' row digests has, in block order, the leaves `packageLeaf` gives the blocks. -/
+theorem rowLeaves_digestTable (q : P2.Params) (salt : ByteArray) (blk : Nat → ByteArray) :
+    PousCheck.Run.rowLeaves q salt (digestTable (fun i => Merkle.rowDigest (blk i)) q.blocks) =
+      (Array.range q.blocks).map fun i =>
+        Merkle.packageLeaf salt (i / q.blocksPerSegment) (i % q.blocksPerSegment) (blk i) := by
+  unfold PousCheck.Run.rowLeaves
+  refine Array.ext (by simp) fun i h1 _ => ?_
+  have hi : i < q.blocks := by simpa using h1
+  simp only [Array.getElem_map, Array.getElem_range]
+  rw [digestTable_row (f := fun i => Merkle.rowDigest (blk i)) (fun _ => rowDigest_size _) q.blocks i hi]
+  rfl
+
+/-- Setup's leaves, segment after segment, are the blocks' leaves in block order: block `(s, v)` at `m s + v`. -/
+theorem leaves_flat (salt : ByteArray) {m : Nat} {seg : Nat → Array ByteArray} {B : Nat → Nat → ByteArray}
+    (hsz : ∀ s, (seg s).size = m) (hget : ∀ s v (h : v < (seg s).size), (seg s)[v] = B s v) :
+    ∀ n, (List.range' 0 n).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (seg s)) #[] =
+      (Array.range (n * m)).map fun i => Merkle.packageLeaf salt (i / m) (i % m) (B (i / m) (i % m))
+  | 0 => by simp
+  | n + 1 => by
+    rw [List.range'_concat, List.foldl_append, leaves_flat salt hsz hget n]
+    simp only [List.foldl_cons, List.foldl_nil, Nat.zero_add, Nat.one_mul]
+    refine Array.ext (by simp [Setup.segmentLeaves, hsz, Nat.add_one_mul]) fun i _ h2 => ?_
+    have hi : i < (n + 1) * m := by simpa using h2
+    by_cases hl : i < n * m
+    · simp [hl]
+    · have hle : n * m ≤ i := Nat.le_of_not_lt hl
+      have hdiv : i / m = n := Nat.div_eq_of_lt_le hle hi
+      have hmod : i % m = i - n * m := by
+        have h3 := Nat.div_add_mod i m
+        rw [hdiv] at h3
+        have h4 := Nat.mul_comm m n
+        omega
+      simp [Array.getElem_append, hl, Setup.segmentLeaves, hdiv, hmod, hget]
+
+/-- The table of the honest blocks' row digests, block `(s, v)` at `65,536 s + v`. -/
+noncomputable def setupDigests (salt : ByteArray) : ByteArray :=
+  digestTable (fun i => Merkle.rowDigest (honestBlock (keyPrefix salt) (i / 65536) (i % 65536)))
+    P2.Params.deployed.blocks
+
+/-- `setupDigests`' leaves are setup's leaves of the honest `C*`, the eight segments' `segmentLeaves` in turn. -/
+theorem rowLeaves_setup (salt : ByteArray) :
+    PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) =
+      (List.range' 0 8).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[] := by
+  have hbps : P2.Params.deployed.blocksPerSegment = 65536 := rfl
+  have hbl : P2.Params.deployed.blocks = 8 * 65536 := rfl
+  rw [leaves_flat salt (honestSegment_size (keyPrefix salt)) (honestSegment_get (keyPrefix salt)) 8, setupDigests,
+    rowLeaves_digestTable, hbps, hbl]
+
+/-- **The run on setup's published output.** The composed check accepts a run against the table of the honest
+blocks' row digests on any published setup with P2's blocks, the salt `salt` and the root of setup's leaves of the
+honest `C*` (`Run.check`'s setup-side checks, then `runCheck_acceptsAt`). -/
+theorem runCheck_accepts_setup {salt : ByteArray} (h24 : salt.size = 24) (pub : SetupProtocol.Public)
+    (hb : pub.blocks = P2.Params.deployed.blocks) (hs : pub.salt = salt)
+    (hr : Merkle.root ((List.range' 0 8).foldl
+      (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some pub.root) :
+    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok () := by
+  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsAt pub _ hb (by simp [hs, h24, PousCheck.Run.SALT])
+    (by rw [setupDigests]; exact digestTable_size (fun _ => rowDigest_size _) _) ?_
+  rw [hs, rowLeaves_setup, hr]
+  exact beq_self_eq_true _
 
 end PousCheck.Properties.SecurityProofs.Accepts
