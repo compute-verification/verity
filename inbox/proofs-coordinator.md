@@ -142162,3 +142162,95 @@ Each claim says where it comes from: [run] a node's run, [local] this machine, [
 - That `e033bfc14be` keeps `main`'s side whole in each of the five files: I counted `second-inputs` lines only.
 - The fifth conflict (the retired-terms allowlist) on this machine, and how the queue treats a pull request whose head another one contains.
 - A records run at `3b05c3a3b1a7` itself, or at any carried head.
+
+
+## SESSIONOF2, Fri 13 Nov 13:03Z: of Thursday's window's whole verification the switch adds 0.10% (34.6 s beside 36,022 s); the added time is the list of characters the total parser builds; the second reader's docstring does not yet say its guards are a test
+
+The 43% slower figure is of one small step. Verifying Thursday's served window is almost all the Lean verifier
+checking 298 proofs, about ten hours; the step the parser change touches took 81 seconds. So the change adds a tenth
+of one percent to that window's verification. The extra time is memory traffic: the new parser first turns the whole
+text into a linked list, one cell a character, and then reads the list. A parser that reads the text where it lies
+would cost about what the old one does and can keep every proof, at the price of one new proof that the two agree.
+
+### 1. The whole verification's seconds for Thursday's window
+
+| part | seconds | from |
+|---|---|---|
+| the Lean verifier on the 298 statements' proofs, summed (`lean_verify_s`, largest 328.0) | 35,941.4 | the audit's own `summary.json` `[run]` |
+| the one-stage `check` on the window's case, core's parser | 80.6 | my `dad3` `[run]` |
+| the same with the total parser | 115.2 | my `dad3` `[run]` |
+| **whole verification, before and after** | **36,022.0 and 36,056.6: +34.6 s, +0.10%** | `[derived]` |
+
+- Read by `r20261113-125840-f485` on vy-nebius-cpu-6 (12:58:40Z, rc 0), a read-only job that printed key names, counts
+  and sums of numbers from `v3c-w0-4-27-2/audit/summary.json` (13,322,137 bytes) and `window/audit.json`, and no text
+  value. Nothing of vllm's was copied off the node or deleted. `[run]`
+- The same record's other sums over the 298 statements: proving 22,757.3 s (`prove_total_s`), sessions 45,940.8 s
+  (`session_s`), the proof system's own verifier 193.1 s (`verify_s`); the audit's `seconds` is 57,418.6. `[run]`
+- **The record does not hold the one-stage `check`'s seconds.** No key of the summary is that step: `verifier_window_s`
+  (130.6) is the time to build the verifier's window before the audit (`a5.py:1367` at `69655a037c`). `[read]` So the
+  80.6 s is my measure of today, on the audit's own case and tree.
+- The switch does not touch the 35,941.4 s: Flock's verifier reads with the total parser already and cannot import
+  the interface, which requires it. `[read]`
+- Per monitoring period: not given. The figures are for one window of this size, and how many such windows a week, a
+  month or a year holds is not known to me.
+
+### 2. Where the added time goes
+
+- **It is allocation, yes.** `Flock.JsonParse.parse s` is `parseList s.toList` (`Base/JsonParse.lean:262`): the whole
+  text becomes a `List Char` before the first character is read. `[read]` The second reader's docstring puts
+  `String.toList` at "about 30 bytes of memory per character". `[read]`
+- Then `parseList` walks the list once for the fuel (`2 * cs.length + 2`, `:254`) and once to parse, matching and
+  releasing one cell a character and carrying the byte offset beside it. `[read]` Lean core's parser reads the
+  string's bytes in place and allocates only what it returns. `[read]`
+- On the served window that is 684 million cells built and released over the three texts. The +17 s of system time
+  is the kernel handing out those pages, and the +17.5 s of user time is building and matching the cells. `[guess]`
+  I did not profile it.
+- So my "9.2 bytes of peak a byte" is not a rate: it is the difference of two peaks that fall at different moments
+  (the list of the 367 MB parameters' text under the total parser; something later under core's). `[derived]` Read the
+  cost as 50.6 ns a byte, and the peak as "the largest single text times about 30 bytes, held while it is parsed".
+- **A cheaper form that keeps the proof, sized, not written.** A reader of the string in place (`parseFast`), with
+  `@[csimp] theorem parse_eq_fast : @parse = @parseFast`: compiled code runs the fast one, the kernel and every proof
+  still see `parse`. It is the tree's own pattern (`Base/Field.lean:506`, `Base/Hash.lean:543`), and the Lean check
+  lists each such rewrite with its theorem. `[read]`
+  - Nothing proved about `parse` moves: `parse_wf`, `parse_canon` and the round trip stay as they are. `[derived]`
+  - What it costs: the fifteen functions of the parser again over a byte position, and one simulation proof in the
+    base package, which has no Mathlib. `[read]` My guess is 600 to 1,000 lines, and the risk is core's lemmas about
+    `String.toList` and byte positions at this toolchain. `[guess]`
+  - It is simpler for text that is all ASCII, where a character is a byte, and `canonicalJson` only parses such
+    text. An equation of the form "ASCII: read in place; else `parseList s.toList`" is still unconditional. `[derived]`
+  - It would remove nearly all of the +34.6 s and the list's memory. `[guess]`
+
+### 3. The second reader's docstring
+
+- It does not say it. `CoreProtocol/Protocol/Canonical.lean`'s module docstring says: "The `#guard`s at the end hold
+  each to the function it stands in for on texts at every edge of canonical JSON, and `CoreProtocol.Cli`'s hold
+  `parseUpTo` and `parse` to `canonicalJson`." `[read]` `Cli.lean:93` says no more. `[read]`
+- I add one sentence there with the switch: the guards are a test over those texts, not a theorem, and nothing
+  proves that the in-place reader answers as `canonicalJson` on every text.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+Nothing new. The four lines of other owners are in my 12:58Z entry.
+
+### To post
+
+Nothing of mine. For the pull request's body, as you and soundness asked: the served window's row (80.6 s to
+115.2 s, peak ×1.30, 50.6 ns a byte), and beside it "+34.6 s of 36,022 s, 0.10% of that window's verification".
+
+### Not established
+
+- That the one-stage `check` ran in Thursday's audit with these 80.6 s: its record does not time it.
+- The profile behind section 2: by reading only.
+- The size of the cheaper parser: a guess.
+
+### What I do next, by your 12:33Z word
+
+On `cursor/proofs-sessionof2-parser-defe`: the docstring sentence, then the theorem's statement in a new file under
+`security/Proofs` (order C), compiled on a node, then the pull request's body as a draft in an entry. No pull request,
+no `--update`, and not the other owners' lines.
+
+Heads unchanged: `cursor/proofs-sessionof2-parser-defe` `dc91f31f56fe`.
