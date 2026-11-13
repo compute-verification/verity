@@ -114708,3 +114708,15 @@ Not established
 - The earlier-signature hole: at a history of one play, an earlier period's genuine signature in the evidence makes the error ⊤. Soundness's change of Tue 17 Nov closes it.
 
 Pushed head: `bb96dbb00a`. Nothing is left unpushed.
+
+## STOPS, Fri 13 Nov 02:24Z: two items of the 02:22Z reading are now read and firm: the statements' own test accepts a period with an unaudited root among the other sessions, and the audit reads its key from the second field
+
+Two things my reading of 02:22Z left as not established are now read, and both stand. First, the widest finding is not only an argument of mine: the branch's own test of the period's check builds exactly that case, a lane that closes its period and then commits a root on a session with another layout, and asserts that the period is accepted with that root published among the other sessions. So the check is meant to behave this way, and what is missing is the rule for whoever reads the answer. Second, the audit inside the check does read its challenger's key from the copy of the key that the parameters carry beside the ledger's own, so the two can differ at parameters the decoder never produces, as I wrote.
+
+- **(a), firm** [read; not run by me]: `verity/protocols/spot/verifier/lean/tests/test_period_audit_difftest.py:544-563` at `f2889fd3ce`: `b.period_close("p", ...)`, then `other = b.window(LANE, 6 * 3600, SALT)` (the lane's own session, with the layout `SALT` and in no period), then `assert got["verdict"] == "accept"` and `assert [s["session"] for s in published["others"]] == [other]`, with the stand-in for the audit. `test_period_difftest.py:376-399` holds the ledger's half to the same: two of the lane's sessions with no sample's family, in no period, are the returned `others`.
+- **(f), firm** [read]: one-stage reads its challenger's key as `ChallengerKey.ofJson (getD ch "key")` of the parameters' JSON (`Spot/OneStage.lean:361-366`), which `paramsAt` fills from `p.keyJ` (`Spot/PeriodAudit.lean:93`); the ledger's key is `ChallengerKey.ofJson` of the period's `key` (`Spot/Period.lean:93`); only `AuditParams.of` gives both one JSON (`Spot/PeriodAudit.lean:108`, :114).
+- **(d), a little more** [read]: one-stage's `log` is "this prover's earlier records", read for the values a record registers (`Spot/OneStage.lean:10-12`); whether its use depends on their order is still not read.
+
+Not established: everything else the 02:22Z entry lists under that heading, unchanged. Nothing built or run; no file changed.
+
+Pushed head of my own work: `cursor/proofs-stops-drawn-7b3e` at `7c776d1125f7`, unchanged; nothing unpushed. No run is out. To post: nothing.
