@@ -13,7 +13,7 @@ meta import Identity.Domains
 A span runs on one link of the network certifier, from the execution phase of a start mark to the execution phase of
 an end mark. The count decides, from certificates alone, whether every execution phase of the span and of its tail is
 certified under the schedule, and how many bits can have left on the link over them. Its Python mirror is
-`verity/protocols/certifier/verifier/span.py`, held to it by `tests/test_network_span_protocol.py`.
+`verity/protocols/accounting/certifier/verifier/span.py`, held to it by `tests/test_network_span_protocol.py`.
 
 **A mark** is 64 bytes handed to the network certifier, which certifies them at an execution phase of the link
 (`certificate.CertifiedMark`): it signs the mark hidden under 64 bytes of its own coins,
