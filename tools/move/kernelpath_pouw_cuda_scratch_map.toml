@@ -1,0 +1,42 @@
+# A scratch map for a proof, never to land: what `tools/move/layout.py --map tools/move/kernelpath_pouw_cuda_scratch_map.toml`
+# moves and rewrites. The row that lands is in PoUW's own map, which compute-accounting writes; this file holds that one
+# row alone, so that the adapter's builds can be run on the tree the row makes before that map exists.
+#
+# `adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/` (fifteen `.cu`, `.cuh` and `.cpp` files: the `ncp-v2` unit
+# functions, the row tables, the registered rows, the Z/Y commit and the receipts' noise kernel) becomes
+# `verity/protocols/pouw/prover/kernels/pouw_cuda/`. The directory holds no Python, so no module is renamed and `kernels/`
+# gets no `__init__.py`: the sources are found by path from the `verity.protocols.pouw.prover` package, never imported.
+#
+# What the tool leaves, and a commit by hand after it mends: the two paths the adapter computes to the directory,
+# `adapters/vllm/verity_vllm/protocols/pouw/device.py` (`HERE`, a `with_name` beside the file, which no pass of the
+# rewrite reads) and `adapters/vllm/verity_vllm/commit/row_tables_device.py` (`CUDA_DIR`, which the rewrite re-anchors to
+# the checkout's root and so names nothing where the adapter is installed outside a checkout).
+#
+# What stays: every kernel source's bytes and every Lean file's ([rewrite] exclude). No root moves ([roots] old == new).
+# The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/" = "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under it that has no row
+paths = ["adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
+# archive, files whose bytes a digest pins, every Lean file, every kernel source, whose bytes change only with its
+# owner's build check, and the tree file (`tests/tree.toml`), which a move doesn't edit.
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256",
+           "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "tests/tree.toml"]
+# Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+[modules]
+# the rename [paths] and [roots] imply (`layout.py --modules`): the directory as a dotted path, though it holds no Python
+"verity_vllm.protocols.pouw.pouw_cuda" = "verity.protocols.pouw.prover.kernels.pouw_cuda"
