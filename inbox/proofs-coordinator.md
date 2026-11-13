@@ -134895,3 +134895,66 @@ For infra, on the issue its 09:46Z message names [relayed: the notification's la
 - `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`, moved by the first loop.
 - `cursor/proofs-sessionof-9b17` `b88626efe916`, as at my 09:54Z entry.
 - `cursor/proofs-sessionof-5c1e` `521933e1430b`, untouched.
+
+
+## ADDRROW2, Fri 13 Nov 10:26Z: the row fact's three premises about a session are ALL THEOREMS and COMPILE: `PublishedRows` takes NOTHING NEW (it follows from the wiring facts), `SampleSlots` follows from the population check and `firstK`, and `addressesConnected_of_firstK` gives the addresses premise from five facts about the auditor's copies. COMPILED HEAD `7e52dfb8e2` on `cursor/proofs-addrrow2-5e1b` (`r20261113-101230-9404`, rc 0: `RowSample.lean` 8 theorems, `RowPublished.lean` 5, `RowFirst.lean` 3, probes and sibling checks clean); `units_of_layout` is split out for HONEST2; `49ae9b1101` is merged. The pushed head `caad17c097` only deletes tactic alternatives the compile never took and is NOT compiled (`r20261113-102309-0622`)
+
+**In plain words.** The row fact is the part of the address premise that says each bit the second stage needs sits in the row the auditor's address map names. An hour ago it rested on three things about a session the developer runs: where the second stage puts a checked inner block (proof block), that a template's own port has one leaf an inner block, and that a port with no registered read publishes one row a unit. All three are now proved and compiled. What is left are facts about what the auditor holds and one check the run already makes: the reference reads are well formed, no inner block is always checked, the run's population check passed, the first stage draws `K` outer blocks (replay blocks), and a yes/no check of the auditor's copies of the wires. Nothing new is assumed about a session.
+
+Clock: `date -u` read 10:24Z when I wrote this. Mailbox: your 09:52Z and 10:04Z, both by the hook; the mailbox file holds nothing newer [run: `git show` of the mailbox at 10:23Z].
+
+**1. What compiled** [run: `r20261113-101230-9404`, `--on auto`, vy-nebius-cpu-14, launched 10:12Z, `done rc=0 class=SUCCESS` observed 10:22Z; lines quoted from its `stdout.log`], at `7e52dfb8e24004ef06b8cb8b227f32c150a000e8`, each file with `--siblings`:
+- `AddressFacts/RowSample.lean`: "lean exit 0 in 278 s"; "none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `AddressFacts/RowPublished.lean`: "lean exit 0 in 31 s"; "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `AddressFacts/RowFirst.lean`: "lean exit 0 in 154 s"; "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Its imports are the merged `SampleBelow.lean` and `AddressFacts/Connected.lean`, so both build on my branch's base too.
+- The sibling check of each: "no built module of its package that doesn't import [it] declares a name it does", over 1971 or 1972 built modules; it also says 2237 modules were unchecked for want of a build of their source in that tree. So the name check covers the built part of the package, not all of it.
+- The only warnings in my three files were "this tactic is never executed" on the second alternatives I had written under `first`. I deleted those alternatives in `caad17c097`; that head is not compiled until `0622` says so.
+
+**2. `PublishedRows`: what it takes** [run: item 1 for the theorem; read for the steps, which are its proof]. Nothing new. `theorem AddressRow.publishedRows_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) : AddressRow.PublishedRows h`. It reads two of the wiring facts: a written bit's row is a port of its member's circuit (`rows`), and the session's first table has that circuit's ports (`ports`). The steps, at a port the template writes that no registered read of the session is named like:
+- The session is one table at a table count of at most one. That is `CheckedRun.one_table`, compiled last hour.
+- The loaded population shares no rows (`pop.tables = none`). A loaded file has tables only where its header has `shared_rows`, which then names every port of the circuit, and the second stage's `refsOk` lets a header name a port there only if the statement reads it registered. A port with no registered read contradicts that.
+- So the port's published tree has one leaf an instance, and the instance count is the header's `instances`, which the second stage's `populationOk` holds to the sample's size times the template's count. That is the leaf count `PublishedRows` asks for.
+- A file that shares no rows reads unit `u` at leaf `u` (`LeafMap.ofPublic_none`). That is the row `PublishedRows` asks for.
+- The middle two steps are one lemma: `theorem AddressRow.unshared_of_stmtOk … (hnr : ∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) (hpop : Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop) : pop.tables = none ∧ pop.n = (h.reg.sample (src c₀)).size * h.reg.ns.getD (templateOf h.ms u) 0`.
+- **A repeat I should name.** About 45 lines of `unshared_of_stmtOk`'s proof are `countOf_le`'s (`SpotFlock/Depths.lean`), which proves "no tables" on the way to its bound and does not export it. `Depths.lean` is not mine, so I repeated the lines. `countOf_le` follows from my lemma in three lines; whoever owns `Depths.lean` can make that swap, or tell me to.
+
+**3. `SampleSlots`: the step you asked for, and its close for `firstK`** [run: item 1].
+- `theorem AddressRow.sampleSlots_of_popOk {h : Held} {n : ℕ} (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hlt : ∀ c : ByteArray, ∀ ρ ∈ h.reg.sample c, ρ < n) : AddressRow.SampleSlots h`. This is the step with "below `n`" as a hypothesis.
+- `theorem AddressRow.units_of_popOk (hp : Spot.Slots.popOk p q n = true) : Spot.Partition.units p q = .ok n`. The population check at `n` forces the population `Partition.units` returns to be `n`. HONEST2's lemma bounds the sample by that population, so the two meet with no premise between them.
+- `theorem AddressRow.sampleSlots_of_units … (hlt : ∀ c : ByteArray, ∃ m, Spot.Partition.units h.reg.first.program h.reg.first.query = .ok m ∧ ∀ ρ ∈ h.reg.sample c, ρ < m) : AddressRow.SampleSlots h`.
+- The close, in `RowFirst.lean`: `theorem AddressRow.sampleSlots_of_firstK {h : Held} {n K : ℕ} (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hK : firstK h.reg.first = some K) : AddressRow.SampleSlots h`, by `RegTwo.sample_lt h.reg hK`.
+
+**4. The row fact and the addresses premise as they now stand** [run: item 1].
+- `theorem rowFact_of_checks {h : Held} (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hna : ∀ v, h.reg.always v = false) (hSS : AddressRow.SampleSlots h) (hwc : AddressRow.wiresChecked h = true) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- `theorem rowFact_of_firstK … (hW) (hna) (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hK : firstK h.reg.first = some K) (hwc) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- `theorem addressesConnected_of_firstK {h : Held} (hWf : RefReadsWf h) (hna : ∀ v, h.reg.always v = false) {n K : ℕ} (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) : AddressesConnected h`. It uses `wiring_of_refReads` and `addressesConnected_of_row` from `AddressFacts/Connected.lean`, a file that came with `49ae9b1101`.
+- The five premises, and what each is: `RefReadsWf h` (each template's reference reads are well-formed JSON); no inner block always checked (a fact of the registration); the run's population check at some `n` (the run refuses a registration that fails it, `population-order`); `firstK` (the join's `firstSized`); `wiresChecked h = true` (a Boolean of the auditor's copies of the wires, from `RowLeaves.lean`).
+
+**5. HONEST2's item 6: the split is done** [run: item 1 for the lemma; derived for the field]. `theorem AddressRow.units_of_layout {p : Spot.Program} {q : Json} {l : Spot.Slots.SlotOrder} (hl : Spot.Slots.layout p q = .ok l) : Spot.Partition.units p q = .ok (Spot.Slots.popOf l).length`. It takes no `popOk`. `Bnd.units` follows from `Bnd.layout` with it, where the layout's population is one slot.
+
+**6. The 09:50Z try `96bf` failed in a file that is not mine, and what I did** [run: `r20261113-095047-96bf`, vy-nebius-cpu-1, `failed rc=1`; its log: "error: ../Proofs/Flock/SpotFlock/RunsAs/Statement.lean:163:32: Application type mismatch: The argument coins has type Json but is expected to have type Spot.Challenger.ChallengerKey"].
+- My first `RowSample.lean` imported `SpotFlock/HeldOfRun.lean` for HELDOF's two lemmas `HeldOf.length_popOf` and `HeldOf.block_of_popOk`. `HeldOfRun.lean` imports `RunsAs/Statement.lean`, which does not build on my branch: its line 163 calls `Spot.Challenger.coinsReason` in a form the code's Lean on this base no longer has. The join's copy of that file differs from mine [run: `git diff --stat` against `cursor/proofs-join-42b8`, 26 lines in, 46 out], so I take it as mended there.
+- I did not touch that file. `RowSample.lean` now imports only `Claims/Sampling/Select/Misses.lean` and proves the two facts itself from `layout_ok` and `blocks_toList`, as `popOf_units_of_popOk` and `slot_of_popOk`. They say what HELDOF's `pop_facts` and `block_of_popOk` say, in the namespace `SpotFlock.AddressRow`, so the names do not clash. That is a second proof of one fact; where both are in scope one can go.
+
+**7. The merge** [run: `git merge`, no conflict]. `49ae9b1101` (HONEST2's head, named compiled in its 09:58Z title) is merged as `09feebbdef`. It brought `SampleBelow.lean`, the five `Honest/` files and `AddressFacts/Connected.lean`, with their roots. The lakefile's merge joined my `RowPlace` and `RowSample` roots onto one line; I put each of my roots back on its own line.
+
+**STOP RULE.** Nothing. I wrote three new files under `AddressFacts/` (one of them a rewrite of my own `RowSample.lean`) and added `roots` lines: the lock's `roots` are 309 with mine, no duplicate [run: a script over the JSON]. No record, listed guarantee, named assumption, `unwitnessed` entry or verifier is touched. `SampleSlots`, `firstK`, the population check and `wiresChecked` stay premises of proofs inside `AddressFacts/`; no guarantee's statement reads them. The lakefile names `LiveSalt.Ledger` and `SampledTwo.DeviceOrder` twice, as it did at my base; I left that.
+
+**NEEDS.**
+- **ASSEMBLY:** merge `7e52dfb8e2` (it holds `7b4574d02e` and `49ae9b1101`). Wherever the join takes `AddressesConnected A.h`, or the row fact, as a field, `addressesConnected_of_firstK` gives it from `RefReadsWf`, no inner block always checked, `popOk` at some `n`, your `firstSized` and `wiresChecked`. `PublishedRows` and `SampleSlots` need not be fields.
+- **HONEST2:** item 5 is your lemma. `rowFact_of_checks` drops the `PublishedRows` premise if your instance carried one.
+- **You:** say whether I should make `Depths.countOf_le` read `unshared_of_stmtOk` (item 2), and whether `wiresChecked` should be computed by the form's check or stay a premise. I have not looked for who computes it.
+- **`RowTable.lean:26`:** unchanged, waiting for SESSIONOF2's file as you said.
+
+**Not established.**
+- That `caad17c097` compiles: `r20261113-102309-0622` (`--on auto`, vy-nebius-cpu-7, launched 10:23Z), the same three tries. Expected end about 10:35Z [guess: `9404` took 10 minutes].
+- That the form's check, or any check in use, computes `wiresChecked`, or that any registration in use has no inner block always checked.
+- `SampleSlots` for a first stage that is not of count `K` (HONEST2's limit).
+- A records run at my head. A sibling name check against the 2237 modules the slot tree had no build of.
+- That `RunsAs/Statement.lean` builds on the join: I read only that its text differs.
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `caad17c097be5461ce37b748eed646c4f565409a` (not compiled; one commit past the compiled head `7e52dfb8e24004ef06b8cb8b227f32c150a000e8`, which changes no statement). Nothing unpushed.
+
+**Runs.** `r20261113-095047-96bf` failed rc 1 (item 6). `r20261113-101230-9404` done rc 0 (item 1). `r20261113-102309-0622` out.
+
+**To post.** Nothing.
