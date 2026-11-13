@@ -94,20 +94,21 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     ops = s.encode(ctx, s.noise(ctx), spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike),
                    Tile(tuple(range(t)), tuple(range(t))))
     assert s.admissible(ctx, ops)
-    atoms, zeros, elements = D.tile_debit(ops.a.codes, ops.b.codes, formed(ops))
+    atoms, zeros, elements, mends = D.tile_debit(ops.a.codes, ops.b.codes, formed(ops), formed(ops, "b"))
     assert (atoms, zeros) == D.chain_debit(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes) and zeros == 0
     assert elements == elements_by_definition(ops)
-    debit = D.debit_units(atoms, elements, zeros=zeros)
+    debit = D.debit_units(atoms, elements, zeros=zeros, mends=mends)
     cap = s.cap * s.credit_of(Shape(t, k, t))
     if spike:
         assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
     else:
-        assert elements == 0 and debit < cap / 10
+        assert elements == mends == 0 and debit < cap / 10
 
 
-def formed(ops) -> list[tuple[int, list[int], int]]:
-    return list(zip(ops.a.alpha, ops.a.x, ops.a.beta))
+def formed(ops, side: str = "a") -> list[tuple[int, list[int], int]]:
+    f = getattr(ops, side)
+    return list(zip(f.alpha, f.x, f.beta))
 
 
 def elements_by_definition(ops) -> int:
