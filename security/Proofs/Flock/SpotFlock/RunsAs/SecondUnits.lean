@@ -16,7 +16,7 @@ registration's own ports at their own roots (`Spot.Record.lessOwnReads`).
 * `checksAt_nil`: none of the record's checks fails, the sample's aside, exactly where `UnitsAt` holds at the reads
   they are handed.
 * `secondChecked_units`: what `secondChecked` accepts keeps the registration's rules R1–R8, has its sample a sample
-  of the law it is handed, has `UnitsAt` at the registration's own reads less its own ports' at their own roots, and
+  of the sampling design it is handed, has `UnitsAt` at the registration's own reads less its own ports' at their own roots, and
   has verdicts that accept.
 -/
 
@@ -71,7 +71,7 @@ private theorem accept_of_ite {α β : Type} {b : Bool} {r : String} {x : Core.O
   · exact ⟨rfl, by simpa using h⟩
 
 /-- **What the two-stage form's last step accepts** (`VStar.Recursive.SampledTwo.secondChecked`): the registration
-keeps R1–R8 against the verifier `v`; the sample is a sample of the law `law` the step is handed, over the registered
+keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `law` the step is handed, over the registered
 population; the units hold at the reads the step hands the record's checks, the verdicts' own for the registration's
 own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of `openedRoots`);
 and the verdicts accept. -/

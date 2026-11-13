@@ -15,8 +15,8 @@ audit's challenger released in the family its parameters name after the interior
 so no premise of the form's refusing extra bytes is needed here, unlike the first stage's.
 
 **What it rests on**, each a named `Prop` taken as a hypothesis:
-* `SecondShown`: the play's log shows the second stage's bytes released in the second draw's family after its digest.
-  It is the meeting of the form's own draw (`OneStageZk.coinsOf`) with the cut's `LogIsDevice`.
+* `SecondShown`: the play's log shows the second stage's bytes released in the second sample's family after its digest.
+  It is the meeting of the form's own sample (`OneStageZk.coinsOf`) with the cut's `LogIsDevice`.
 * `DevSecond`: the coin map's reading of round `j + 1` starts with the second stage's bytes from coin `j`'s first byte
   (the coin map's to prove).
 * `StagesOfBytes`: every byte string of at most `R` coins' bytes is `R` coins' bytes followed by zeros.
@@ -32,8 +32,8 @@ namespace Verity.SampledTwo
 open Claims
 open Lean (Json)
 
-/-- **The second stage's draw on a case**: the family the interior audit's parameters name for its challenger, and the
-interior registration's digest, after which the form draws the second stage's bytes (`OneStageZk.coinsOf`). -/
+/-- **The second stage's sample on a case**: the family the interior audit's parameters name for its challenger, and the
+interior registration's digest, after which the form samples the second stage's bytes (`OneStageZk.coinsOf`). -/
 def secondDraw (k : Case) : Option (String × ByteArray) := do
   let p ← (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson).toOption
   let e ← (VStar.Recursive.SampledTwo.evidenceOf k.evidence).toOption
@@ -44,14 +44,14 @@ def secondDraw (k : Case) : Option (String × ByteArray) := do
 /-! ## What the statement rests on -/
 
 /-- **The play's log shows the second stage's bytes**: on a play the form accepts whose log is the device's, the bits of
-the second stage's bytes start the coins the log shows released in the second draw's family after its digest. -/
+the second stage's bytes start the coins the log shows released in the second sample's family after its digest. -/
 def SecondShown (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ i it, inputOn C o = some i → i.interior = some it →
     ∃ label after, (C o).bind secondDraw = some (label, after) ∧
       Properties.Challenger.bitsOf it.source <+: (Verity.Sampled.freshCoins label after o.log).flatten
 
-/-- **The coin map reads rounds `1` to `stage` from the second draw's releases**: on a play the form accepts, where bytes
-`b` of at most `stage` coins' length start the coins the log shows released in the second draw's family after its
+/-- **The coin map reads rounds `1` to `stage` from the second sample's releases**: on a play the form accepts, where bytes
+`b` of at most `stage` coins' length start the coins the log shows released in the second sample's family after its
 digest, and carry some of coin `j`'s bytes, the coin map's coin for round `j + 1` starts with them. -/
 def DevSecond (A : Live₂) (C : CaseOf) (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : Prop :=
   ∀ o, FormAccepts C o → ∀ label after (b : ByteArray), (C o).bind secondDraw = some (label, after) →

@@ -117,8 +117,8 @@ theorem statementReads_reads (l : List Json) : ReadsOf l (Spot.SecondStage.state
           exact Or.inr ⟨j, hj, s, hs, (port, e), hpe', hval, rfl⟩
     | _ => exact hb
 
-/-- **A read the verifiers of record report is a statement's, and `readOk` passed it**: under a passing check, each
-`(v, r)` the verifiers of record report either has a root that prints as null (a value reported under two roots is
+/-- **A read the verifiers report is a statement's, and `readOk` passed it**: under a passing check, each
+`(v, r)` the verifiers report either has a root that prints as null (a value reported under two roots is
 reported so), or is the value and root of a registered read `e`, at a port `port`, of one of the statements, which
 `SecondStage.readOk` passed against its template's part. -/
 theorem reported_stated {allow : Bool} {own : Spot.SecondStage.Own} {ss : Array Json}

@@ -524,7 +524,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     for a flipped bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time
     edited after signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
     and no profile is issued; a session's public part is its commitment, its verdict and its coin openings.  The sessions'
-    coins are `SEED`'s, in the honest audit and in every control, so which blocks a control's sessions draw, and with them
+    coins are `SEED`'s, in the honest audit and in every control, so which blocks a control's sessions sample, and with them
     its count of wrong answers and its verdicts, are the same on every run (`MC_CHANGED`)."""
     bench, live = _bench(), _live()
     assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu

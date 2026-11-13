@@ -76,7 +76,7 @@ def law_problem(law: Mapping[str, Any], population: int) -> str | None:
     return strata_problem(law, population)
 
 
-#: Lean `Draw.RAN_OUT`: the refusal of a draw whose source runs out before it ends.
+#: Lean `Draw.RAN_OUT`: the refusal of a sample whose source runs out before it ends.
 RAN_OUT = "the randomness source ran out"
 
 
@@ -420,13 +420,13 @@ def _window_root(window: Any) -> bool:
 
 
 def draw_seed_salt(coins: ChallengerCoins, window: str) -> bytes:
-    """A window's seed salt, drawn at the window's open, before it serves: the first coin of the challenger's
+    """A window's seed salt, sampled at the window's open, before it serves: the first coin of the challenger's
     `SEED_SALT_FAMILY` (`coins`, over that family of the window's session), opened after the window's open root `window`
     (lowercase hex, from the challenger's signed open) and read whole (`OwnRandomness`), with no derivation. The open
     root is the only root a window has before it serves, so the salt is fixed before the window serves, and no
     sample reads its family: a sample's coins stay their own family's, released after the registration's commitment.
     Raises `CoinError` for coins of another family, a window root in another form, or a family with a coin open already
-    (a window's salt is drawn once, and nothing redraws it)."""
+    (a window's salt is sampled once, and nothing resamples it)."""
     record = coins.record if isinstance(coins, ChallengerCoins) else None
     if record is None or record.label != SEED_SALT_FAMILY:
         raise CoinError(f"a window's seed salt is a coin of the challenger's {SEED_SALT_FAMILY} family")
