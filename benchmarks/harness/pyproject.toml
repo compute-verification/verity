@@ -93,7 +93,7 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda",
+    "verity/protocols/pouw/prover/kernels/pouw_cuda",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
