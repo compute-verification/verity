@@ -146868,3 +146868,30 @@ All on `--on auto`, the sweep laid over a clone of #9735's head, as before.
 **Not done, and not checked.** Nothing was run, here or on a node. I did not read the kernel's CUDA, only the CPU model the verifier replays. I did not count a noise line at sm_120's prices. I did not check that an honest tile fits the 1/1,000 cap with the mends.
 
 **State.** #9735: marked by you at 13:47Z, untouched by me since my 13:40Z. The witness waits on mend 2's form. Nothing of mine is running. Mailbox read at 14:43Z; nothing newer than your 14:07Z.
+
+
+## ADDRROW2, Fri 13 Nov 14:43Z: `addressesConnected_of_matches` on the scratch: COMPILED in one try, rc 0 (`cursor/proofs-addrrow2-unlinked-scratch-681e` at `b3889e4076680015bf206bba7fa3e47f2bd304dd`, `r20261113-142845-1c3c`). Nothing else changed; I end with no timer, as your 14:07Z says.
+
+**In plain words.** On the scratch tree, which holds the join's tip, GATHER's clause and the held-copies file, the address premise at the form's own copies is now a compiled statement with no premise about the wires. It compiled in the one try, with the siblings check and no extra axiom.
+
+Clock: `date -u` read 14:43Z when I wrote this. Mailbox: your 14:07Z (`4911c42663d7`), by the hook at 14:25Z and in the mailbox file; nothing newer [run: `git show` of the mailbox at 14:43Z].
+
+**The statements as compiled** [run: `r20261113-142845-1c3c`, vy-nebius-cpu-14, rc 0, at `b3889e4076`]. New file `security/Proofs/Flock/SpotFlock/HeldOfAddresses.lean` on the scratch (it imports `HeldOfWires.lean` and `AddressFacts/RowUnlinked.lean`), in the namespace `SpotFlock`:
+- `theorem addressesConnected_of_matches {i : Spot.Run.Input} {it : Spot.Run.Interior} {h : Held} (hm : SpotFlock.RunsAs.HeldMatches i it h) (hWf : RefReadsWf h) (hna : ∀ v, h.reg.always v = false) {n K : ℕ} (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hK : firstK h.reg.first = some K) : AddressesConnected h := addressesConnected_of_derived hWf hna hp hK hm.wires`.
+- A second line I added, since the held-copies file is merged: `theorem addressesConnected_of_heldOf {u : SpotFlock.HeldOf.Unread} (hh : SpotFlock.HeldOf.heldOf i it u = some h) (hWf) (hna) (hp) (hK) : AddressesConnected h := addressesConnected_of_derived hWf hna hp hK (SpotFlock.HeldOf.wires_of_heldOf hh)`. It takes no `HeldMatches`, so no premise on the parts.
+- **Verdict: "lean exit 0 in 474 s"; siblings clean; "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".** No warning on the file.
+- The scratch branch: the merge of `8be6ff6e48f4` (`9576a7075d`, no conflict), then the file and its two root lines (`b3889e4076680015bf206bba7fa3e47f2bd304dd`). On my VM, on that tree [run]: the five boundary and tree test files, 119 passed.
+
+**What is left as a premise at those copies** [read]: `hWf`, `hna`, `hp` and `hK`. Of these, `hna` holds by construction of the copies `heldOf` builds (`HeldOf.lean:139` sets `always := fun _ => false`); I did not prove that line here.
+
+**STOP RULE.** Nothing. Scratch only; no statement or named assumption of a `lean-audit.json` changed, and no verifier code changed by me.
+
+**NEEDS.** One: **your word when the join holds GATHER's clause.** Then I merge that tip into `cursor/proofs-addrrow2-5e1b`, take the scratch's `RowUnlinked.lean`, and can add `HeldOfAddresses.lean` there if you say so.
+
+**Not established.** On the join and on my branch, `wiresChecked h = true` (or the false hypothesis `ReadersUnlinked`) is still what the address premise rests on; the form without it is on the scratch only. The scratch tree was compiled at this file and what it imports, no other file.
+
+**Pushed.** `cursor/proofs-addrrow2-unlinked-scratch-681e` at `b3889e4076680015bf206bba7fa3e47f2bd304dd`, scratch. Unchanged: `cursor/proofs-addrrow2-5e1b` at `d5889c79d6cdd6ab7b38fc4984453dec78bda5e7`, `cursor/proofs-addrrow2-heldwires-681e` at `8be6ff6e48f403091d70372e28260bffc9b255ae`, `cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`. Nothing is uncommitted.
+
+**Runs.** `r20261113-142845-1c3c` (vy-nebius-cpu-14): done, rc 0. Earlier: `r20261113-133857-2491` and `r20261113-134107-b389`, rc 0.
+
+**To post.** Nothing from me.
