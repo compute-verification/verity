@@ -36,9 +36,10 @@ agree with the run's (`MessagesFixedAgreed`), and there the frame's play is read
 `messagesFixedAgreed_of_readAt` takes the messages fixed on the plays `ReadAt` holds of.
 
 What this does not prove: `LastSlotFree`. The session-round locator puts the `k`-th opening of a session's rep 1
-stream on slot `R + 1 + k` at `R` rounds a rep, so the one release it can put on the last slot, `2 R + 1`, is a rep 1
-stream's opening after `R` earlier ones. `lastSlotFree_run` states it of the session-round locator alone. The premises
-`PlayAccepts`, `SessionMsgs` and `RoundsHeldAt` are the join's.
+stream on slot `R + 1 + k` at `R` rounds a rep only for `k < R`, so it puts no release on the last slot, `2 R + 1`, of
+a session of at least two rounds (`SessionCoins.locOf_ne_last`). `lastSlotFree_run` states it of the session-round
+locator alone, and `LastSlot.lean` proves it from the sessions' rounds. The premises `PlayAccepts`, `SessionMsgs` and
+`RoundsHeldAt` are the join's.
 -/
 
 @[expose] public section
