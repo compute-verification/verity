@@ -305,13 +305,6 @@ owner = "compute-research"
 day = "2026-11-24"
 
 [[not_yet]]
-path = "verity/definitions/"
-to = "its protocol part to verity/circuits/, its served part to the vLLM adapter"
-owner = "top"
-day = "2026-11-15"
-note = "two Lake packages move with Sunday's chain; its served part waits for the vLLM adapter's snapshot and may land 2026-11-16"
-
-[[not_yet]]
 path = "verity/claims/"
 to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
 owner = "soundness"

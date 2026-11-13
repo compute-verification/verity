@@ -61,17 +61,9 @@ KEEP_FILE = HERE / "dead_code_keep.json"
 
 PACKAGES = ("verity_vllm",)
 CENSUS_PACKAGES = PACKAGES
-#: the Definitions that moved from the package to `verity_vllm.definitions` (circuits', held to the keep-list as it stood): in the
-#: graph and the census, each file keyed by its repository path
-DEFINITIONS = REPO / "verity" / "definitions"
-#: what of `DEFINITIONS` moved from the package: the modules at its top and these packages of it; any other package there is core's
-MOVED_OUT = frozenset({"numerics", "registry", "tests"})
-#: the modules at its top that stay with core when the served Definitions leave it: core's, as its other packages are
-CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 _TOPS = "|".join(PACKAGES + ("tests",))
-_DEFINITIONS_MODULE = re.escape(".".join(DEFINITIONS.relative_to(REPO).parts))
-TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
-PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
+TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS})(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
@@ -102,35 +94,33 @@ ARTIFACT_KEEP: dict[str, str] = {
 SHELL_MODULE_RE = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 SHELL_PY_RE = re.compile(r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_]+\.py)(?![\w])")
 SHELL_SH_RE = re.compile(r"(?<![\w.-])((?:[A-Za-z0-9_./$-]+/)?[A-Za-z0-9_]+\.sh)(?![\w])")
-SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
+SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)})(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- files
 def py_files() -> list[Path]:
     out: list[Path] = []
-    for top in [ROOT / t for t in PACKAGES + ("tests",)] + [DEFINITIONS]:
+    for top in [ROOT / t for t in PACKAGES + ("tests",)]:
         for p in sorted(top.rglob("*.py")):
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
-            if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
-                continue                                             # verity_vllm.definitions' own __init__ is verity.ml's, not a Definition's
-            if top == DEFINITIONS and (parts := p.relative_to(top).parts)[0] not in MOVED_OUT and (len(parts) > 1 or parts[0] in CORE_TOPS):
-                continue                                             # core's: neither in the graph nor in the census
+            if p.name.endswith(SIDECAR):
+                continue
             out.append(p)
     return out
 
 
 def relpath(p: Path) -> str:
-    """``p`` from ``adapters/vllm``, or from the repository outside it (the moved Definitions)."""
-    return p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).as_posix()
+    """``p`` from ``adapters/vllm``."""
+    return p.relative_to(ROOT).as_posix()
 
 
 def path_of(rel: str) -> Path:
-    return REPO / rel if rel.startswith("verity/") else ROOT / rel
+    return ROOT / rel
 
 
 def in_census(rel: str) -> bool:
-    return rel.split("/")[0] in CENSUS_PACKAGES or rel.startswith("verity/definitions/")
+    return rel.split("/")[0] in CENSUS_PACKAGES
 
 
 def modname(p: Path) -> str:

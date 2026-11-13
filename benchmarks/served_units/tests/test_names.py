@@ -95,7 +95,7 @@ def tree(root: Path, files: dict[str, str]) -> None:
 
 #: the stand-in tree: files under each of the key's paths, and outside them
 FILES = {"benchmarks/served_units/stage.py": "s", "benchmarks/served_units/window.py": "w",
-         "verity/circuits/a.py": "a", "verity/definitions/sub/b.py": "b", "verity/commitments/c.txt": "c",
+         "verity/circuits/a.py": "a", "verity/circuits/sub/b.py": "b", "verity/commitments/c.txt": "c",
          "verity/protocols/p.py": "p",
          "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e",
          "tools/verity/circuit_check/src/circuit_check/f.py": "f", "verity/core/g.py": "g"}
@@ -138,7 +138,7 @@ def test_key_agrees(monkeypatch, repo):
         (repo / f).write_text("changed")
         assert both() == k0, f"{f} is outside the staging tree's key"
     keys = {k0}
-    for f in ("benchmarks/served_units/stage.py", "verity/definitions/sub/b.py", "adapters/vllm/verity_vllm/d.py",
+    for f in ("benchmarks/served_units/stage.py", "verity/circuits/sub/b.py", "adapters/vllm/verity_vllm/d.py",
               "tools/verity/circuit_check/src/circuit_check/f.py"):
         (repo / f).write_text("changed")
         keys.add(both())

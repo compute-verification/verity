@@ -12,7 +12,7 @@ Every copy inside ``verity_vllm`` is a violation, keyed ``(file, "duplicate-body
 n copies has n entries in ``allowlists/p13_duplicate_bodies.json`` and the dedup that keeps one deletes them all.  A body
 that the provers' side of ``verity`` already has is keyed with detail ``"verity"``, and only the integration's copies
 are violations: ``verity``'s is the one to keep.  That side is the importable modules, tests aside, of the directories
-its units are in (``PROVER_PLACES``) and of each package of ``verity/definitions`` that is not the integration's.
+its units are in (``PROVER_PLACES``).
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ NAME = "p13_duplicate_bodies"
 RULE = "P13 (no duplicate function bodies)"
 KIND = "duplicate-body"
 MIN_LINES = 9
-#: where the provers' side of ``verity`` is, from ``verity/``, beside the packages of ``verity/definitions``
+#: where the provers' side of ``verity`` is, from ``verity/``
 PROVER_PLACES = ("circuits", "commitments", "protocols/accounting/certifier/prover",
                  "protocols/accounting/poub/verifier/commitments/gates", "protocols/accounting/pous/prover",
                  "protocols/accounting/pouw/prover")
@@ -172,7 +172,6 @@ def _is_module(p: Path, root: Path) -> bool:
 def prover_files() -> tuple[Path, ...]:
     """The modules of the provers' side of ``verity`` (module docstring)."""
     roots = [R.CORE_PKG / d for d in PROVER_PLACES]
-    roots += sorted(d for d in R.DEFINITIONS.iterdir() if d.is_dir() and d.name not in R.MOVED_OUT | R.SKIP_DIRS)
     verifiers = [R.CORE_PKG / d for d in VERIFIER_PLACES]
     return tuple(p for root in roots for p in R.library_files(".py", root)
                  if _is_module(p, R.CORE_PKG) and not any(p.is_relative_to(v) for v in verifiers))

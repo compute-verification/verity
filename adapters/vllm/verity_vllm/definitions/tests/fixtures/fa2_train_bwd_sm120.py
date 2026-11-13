@@ -1,5 +1,5 @@
-"""Cuts `fa2_train_bwd_sm120.npz` from the capture `verity.definitions.evidence` names `cc12_fa2_backward_capture`: the words
-of torch's flash attention backward on cc 12.0 under deterministic algorithms, its `out/bwd.npz`.
+"""Cuts `fa2_train_bwd_sm120.npz` from the capture `verity_vllm.definitions.evidence` names `cc12_fa2_backward_capture`:
+the words of torch's flash attention backward on cc 12.0 under deterministic algorithms, its `out/bwd.npz`.
 
     python fa2_train_bwd_sm120.py CAPTURE/out/bwd.npz
 
@@ -31,7 +31,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.definitions.registry.fa2_train_bwd import train_sdpa_backward
+from verity_vllm.definitions.registry.fa2_train_bwd import train_sdpa_backward
 
 #: name -> (capture case, which of its heads, (B, H), rows)
 ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621)),

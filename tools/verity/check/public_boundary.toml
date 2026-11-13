@@ -50,9 +50,6 @@ ml = [
     "verity/commitments/{identity.py,indexed.py,keyed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/circuits",
-    "verity/definitions/{__init__.py,boolean.py,call_scope.py,circuits,commitments,cross_call.py,encoding.py,evidence.json}",
-    "verity/definitions/{evidence.py,kernels,numerics,ops,private_circuits,pyproject.toml,README.md,registry,replay.py}",
-    "verity/definitions/{silicon,tests,tiny.py,word.py}",
     "adapters/vllm/verity_vllm/definitions",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)

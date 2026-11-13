@@ -57,8 +57,8 @@ security/: the definitions, models and proofs of the guarantees
 ------------------------------------------------
 Python and CUDA: the provers, and Python that mirrors the Lean
   verity/protocols/NAME/prover; flock/prover: Flock, the proof system's prover
-  verity/circuits; verity/commitments, with crypto and randomness
-  verity/definitions: ops, silicon semantics, targets, kernels, private_circuits
+  verity/circuits, with ops, silicon semantics, targets, kernels, private_circuits
+  verity/commitments, with crypto and randomness
 ~~~
 
 `tools/` and `infra/` sit outside the layers.

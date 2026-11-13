@@ -185,7 +185,7 @@ def _static(v: Any) -> Any:
 
 
 # A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
-# and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
+# and not the registry, which is the vLLM adapter's (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:

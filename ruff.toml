@@ -9,8 +9,8 @@
 # for the directories that were brought to them and off everywhere else, by the first exception below: a function added
 # there without its types is a finding like any other. Ruff ignores by path and has no select by path, so the rules are
 # selected for every file and the exception names where they are not ignored.
-# Two lints hold the findings to lists that only shrink: adapters/vllm/tests/lint/test_ruff.py the integration's (and
-# verity/definitions'), tests/lint/test_repo_ruff.py every other tracked file's, per (file, rule). The ratchet gate
+# Two lints hold the findings to lists that only shrink: adapters/vllm/tests/lint/test_ruff.py the integration's,
+# tests/lint/test_repo_ruff.py every other tracked file's, per (file, rule). The ratchet gate
 # (adapters/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree, and fails a
 # PR whose own Python outside the integration's lint gains a finding under its base's copy. The formatter stays off.
 target-version = "py312"

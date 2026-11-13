@@ -1,7 +1,7 @@
 """The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints.
 
-An edge is one import statement in a library module that names another library module (``verity_vllm``'s, or the
-Definitions that moved from its ``program`` layer to ``verity_vllm.definitions``, which keep that layer): module-level and
+An edge is one import statement in a library module that names another library module (``verity_vllm``'s, the
+served circuits' Definitions in ``verity_vllm.definitions`` among them, in the ``program`` layer): module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
@@ -42,7 +42,7 @@ LAYER = {
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
-    "verity_vllm.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
+    "verity_vllm.definitions": "program",                        # the served circuits' Definitions, held to P9 as they stood
     "verity_vllm.program.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.config": "config",
@@ -63,7 +63,7 @@ LAYER = {
 OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
-LIBRARY_PACKAGES = ("verity_vllm", "verity_vllm.definitions")
+LIBRARY_PACKAGES = ("verity_vllm",)
 
 #: The property harnesses.
 PROPERTY_MODULES = ("verity_vllm.properties",)
@@ -106,13 +106,6 @@ def modules() -> dict[str, str]:
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
-@lru_cache(maxsize=None)
-def core_packages() -> tuple[str, ...]:
-    """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
-    return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
-                 if (init := d / "__init__.py").is_file() and not R.in_library(init))
-
-
 def _resolve(target: str, known: dict[str, str]) -> str | None:
     parts = target.split(".")
     for i in range(len(parts), 0, -1):
@@ -140,14 +133,14 @@ def edges() -> tuple[Edge, ...]:
                 if node.level:
                     anchor = pkg.split(".")[: len(pkg.split(".")) - node.level + 1]
                     base = ".".join([*anchor, *([base] if base else [])])
-                targets = [name if name in known or in_group(name, core_packages()) else base
+                targets = [name if name in known else base
                            for name in (f"{base}.{a.name}" for a in node.names)]
             else:
                 lit = R.dynamic_module(node) if isinstance(node, ast.Call) else None
                 if lit:
                     targets = [lit]
             for t in targets:
-                if not in_group(t, LIBRARY_PACKAGES) or in_group(t, core_packages()):
+                if not in_group(t, LIBRARY_PACKAGES):
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:

@@ -941,7 +941,7 @@ def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
     {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
     {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
     {G.REPO_RUFF_CONFIG: None},
-    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"verity/definitions/")', '"verity/definitions/", "tools/")')},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')},
 ], ids=["ignore", "exclude", "deleted", "lint-code"])
 def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
     both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})

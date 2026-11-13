@@ -7,10 +7,8 @@ form "because the name is in this list" is a structural leak).  The inventory (A
 found 98 such decision points, ~68 structural; v2 retires them phase by phase.  This test pins the current set so that it
 can only shrink.
 
-What is scanned: every ``*.py`` under ``adapters/vllm/verity_vllm`` and, of ``verity/definitions``, the modules at
-its top and its ``registry`` (the Definitions that moved from the package, keyed by their repository paths; a package core
-keeps in that directory is not scanned) except ``tests/`` directories and
-``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
+What is scanned: every ``*.py`` under ``adapters/vllm/verity_vllm`` (the served circuits' Definitions in its
+``definitions/`` among them) except ``tests/`` directories and ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
 message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and a module's ``__models__`` marker (the models it
 exists for, ``verity_vllm.glue``) are not rule positions and are ignored.
 
@@ -52,10 +50,9 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # adapters/vllm
 REPO = ROOT.parents[1]
-#: (base, directory): the package, and the Definitions that moved from it to `verity_vllm.definitions` (circuits', held to this
-#: list as it stood), each file keyed by its path from its base; and the packages scanned at the directory's top, where only
-#: some are (the Definitions' directory holds core's packages beside the ones that moved from the package)
-SCAN = ((ROOT, "verity_vllm", None), (REPO, "verity/definitions", frozenset({"registry"})))
+#: (base, directory): the package, each file keyed by its path from its base; and the packages scanned at the directory's
+#: top, where only some are
+SCAN = ((ROOT, "verity_vllm", None),)
 # relayout: program/kernels/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
 SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"})
 SKIP_FILES = frozenset({"engine_profile.py"})
@@ -64,8 +61,6 @@ SKIP_FILES |= {"relations.py", "sampling_rng.py", "gemm_target_correspondence.py
                "compiled_relations.py", "compiled_norm_literal.py"}
 #: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name
 SKIP_PATHS = frozenset({"verity_vllm/engine/profiles/cases.py"})
-#: the modules at the Definitions' top that stay with core when the served ones leave it, not scanned as its other packages
-CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 
@@ -292,8 +287,7 @@ def iter_files() -> list[Path]:
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS
                                  and (packages is None or Path(dirpath) != base / top or d in packages))
             out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES
-                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS
-                       and not (packages is not None and Path(dirpath) == base / top and fn in CORE_TOPS))
+                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS)
     return out
 
 

@@ -68,7 +68,7 @@ export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/
 # KEY: the staging tree's digest, over the Python under KEY_PATHS, the list window.py's KEY_PATHS repeats. A path the tree no
 # longer holds would leave the key without what was under it, and a statement staged before a change there would be proved
 # as current: the run stops instead
-KEY_PATHS="benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
+KEY_PATHS="benchmarks/served_units/stage.py verity/circuits verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
 for p in $KEY_PATHS; do
   [ -e $REPO/$p ] || { echo "prove_time.sh: no $p in $REPO, a path of the staging key: correct KEY_PATHS in" \
     "benchmarks/served_units/prove_time.sh and window.py together"; exit 1; }

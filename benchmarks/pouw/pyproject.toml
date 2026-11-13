@@ -71,7 +71,7 @@ untraced = [
 # test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
 # package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
-# (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
+# (verity_vllm.definitions' boolean.py), which loads no registry module for a Program already Boolean.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",

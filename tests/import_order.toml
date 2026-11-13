@@ -19,7 +19,7 @@ order = [
     ["verity/commitments"],
     ["verity/protocols/proofs/flock/verifier"],
     ["verity/protocols/interface"],
-    ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py", "verity/definitions"],
+    ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py"],
     ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"],
     ["verity/device.py", "verity/hardware"],
     ["verity/commitments/windows"],
@@ -299,7 +299,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/definitions",
     "verity/circuits/call_scope.py",
     "verity/circuits/cross_call.py",
     "verity/circuits/tiny.py",

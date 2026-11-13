@@ -90,4 +90,4 @@ declines that input, and the reference computes it.
 
 ## Tests
 
-`tests/` is the package's suite (`uv run tools/verity/check/suites.py verity/definitions`).
+`tests/` is the package's suite (`uv run tools/verity/check/suites.py adapters/vllm/verity_vllm/definitions`).

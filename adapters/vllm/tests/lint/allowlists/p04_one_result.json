@@ -28,6 +28,6 @@
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_no_rule", "detail": "msg.startswith"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
-    {"file": "adapters/vllm/verity_vllm/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
+    {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

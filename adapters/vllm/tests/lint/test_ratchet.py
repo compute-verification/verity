@@ -61,14 +61,12 @@ def test_new_and_stale_entries(tmp_path, monkeypatch) -> None:
     assert R.new_violations("x", found[:2]) == [] and R.stale_entries("x", found[:2] + found[3:]) != []
 
 
-def test_the_moved_definitions_are_scanned_under_their_repository_paths() -> None:
-    p = R.DEFINITIONS / "registry" / "a.py"
-    assert R.rel(p) == "adapters/vllm/verity_vllm/definitions/registry/a.py" and R.module_name(p) == "verity_vllm.definitions.registry.a"
-    assert R.rel(R.PKG / "program" / "b.py") == "verity_vllm/program/b.py"
-    assert R.in_library(p) and R.in_library(R.DEFINITIONS / "a.py") and R.in_library(R.PKG / "program" / "b.py")
-    assert not R.in_library(R.DEFINITIONS / "another" / "a.py") and not R.in_library(R.CORE_PKG / "a.py")
-    moved = R.library_files(".py", R.DEFINITIONS)
-    assert moved and all(map(R.in_library, moved)) and set(R.library_files()) >= set(moved)
+def test_the_served_definitions_are_scanned_as_the_package() -> None:
+    p = R.PKG / "definitions" / "registry" / "a.py"
+    assert R.rel(p) == "verity_vllm/definitions/registry/a.py" and R.module_name(p) == "verity_vllm.definitions.registry.a"
+    assert R.in_library(p) and not R.in_library(R.CORE_PKG / "a.py")
+    served = [f for f in R.library_files() if f.is_relative_to(R.PKG / "definitions")]
+    assert served and not [f for f in served if "tests" in f.relative_to(R.PKG).parts]
     assert not any(map(R.in_library, R.library_files(".py", R.CORE_PKG)))
 
 
