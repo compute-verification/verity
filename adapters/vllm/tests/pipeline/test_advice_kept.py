@@ -16,6 +16,7 @@ from itertools import product
 from typing import Any
 
 import pytest
+from verity.protocols.certifier.verifier.arith_encode import CW
 
 from verity_vllm.pipeline.advice_code import by_class as BC
 from verity_vllm.pipeline.advice_code import codec as V
@@ -206,6 +207,24 @@ def test_the_kept_segments_follow_the_last_windows_tail():
             SC.decode(CV.pack(V.string_of(wins, reg, sent, moved)[0])[0], record, reg)
 
 
+def test_the_decoder_reads_each_count_from_the_window_the_replay_charges_it_to():
+    """The window the decoder takes a step's counts from, the earliest that releases an output no row had emitted when
+    the step began, is the one `codec.charged` gives that step off the replay that ran: the terms a string decodes to
+    are `codec.kept_terms`' of its replay, window by window. That rests on each request's release buckets being in
+    order, and a request whose buckets decrease is refused by name."""
+    for K, asy, (tick, order, shared) in product((1, 3, 5), (False, True), ((False, (0, 1, 2), 0), (True, (0, 1, 2), 0),
+                                                                           (False, (1, 0, 2), 0), (False, (0, 1, 2), 4))):
+        record, reg, served = _case(K, asy=asy, tick=tick, order=order, shared=shared)
+        with KP.emitting() as emitted:
+            rp, _, _ = V.replay_record(record, reg, reg.engine, list(order), lambda i, k: True, served.kept)
+        terms = V.kept_terms(record, reg, list(order), rp, emitted)
+        assert _terms(SC.encode(served, record, reg), record, reg) == terms and len(terms.windows) > 2
+    q = record.requests[0]
+    assert replace(q, release=(q.release[0],) * len(q.output)).release == (q.release[0],) * len(q.output)
+    with pytest.raises(V.AdviceCodeError, match="^request q0: its outputs' release buckets decrease$"):
+        replace(q, release=(*q.release[:-2], q.release[-1] + 1, q.release[-1]))
+
+
 def test_without_a_draft_every_string_is_the_one_it_was():
     """With no draft registered the schedule's string is `codec.encode`'s of the I1 v0 it decodes to, with no kept
     term in any window, and its bytes are the ones this code gave such a record before it carried kept counts."""
@@ -319,6 +338,46 @@ def test_a_request_admitted_before_its_bodys_window_is_carried_where_no_length_i
     assert any(i == 2 for ks in _terms(data, late, unsent).windows[:2] for i, _ in ks)
 
 
+def _with_l(reg: V.Registered, bits: int) -> V.Registered:
+    """`reg` with ℓ = `bits`."""
+    return V.Registered(reg.engine, reg.stop_ids, reg.row_order, reg.T, reg.book, bits, reg.tick, reg.send_lengths)
+
+
+def test_a_drafted_string_over_the_registered_length_is_refused_by_name_at_encode_and_unread_at_decode():
+    """A string over the registered ℓ is neither written nor read. With ℓ one bit under a drafted string,
+    `schedule_code.encode` refuses it itself, with or without its decode back: by name, with the string's bits, ℓ and
+    how many of its windows' charges fit. `schedule_code.decode` and `bits_by_window` refuse it before they read a
+    bit, so other bytes of its length get the same refusal. With ℓ its bits, all three take it. Without a draft both
+    encoders refuse the same way."""
+    record, reg, served = _case(3, tick=True)
+    data = SC.encode(served, record, reg)
+    charge, n = V.bits_by_window(data, record, reg), 8 * len(data)
+    assert list(charge.values()) == [17, 11, 4, 4] and n == 40 and _with_l(reg, 1 << 23) == reg
+    short, exact = _with_l(reg, n - 1), _with_l(reg, n)
+    written = ("^the string is 40 bits, over the registered ℓ = 39: its 4 windows are charged 36 bits, and the first 3 of them "
+               "32, the most that fit under ℓ; end the session by then, or register a larger ℓ$")
+    for check in (True, False):
+        with pytest.raises(V.AdviceCodeError, match=written):
+            SC.encode(served, record, short, check=check)
+    for string in (data, b"\xff" * len(data)):
+        for read in (SC.decode, V.bits_by_window):
+            with pytest.raises(V.AdviceCodeError, match="^40 bits, over .* ℓ = 39$"):
+                read(string, record, short)
+    assert SC.encode(served, record, exact) == data and SC.encode(served, record, exact, check=False) == data
+    assert SC.decode(data, record, exact) == served and V.bits_by_window(data, record, exact) == charge
+    with pytest.raises(V.AdviceCodeError, match="^the string is 40 bits, over the registered ℓ = 7: .* the first 0 of them 0, "):
+        SC.encode(served, record, _with_l(reg, 7), check=False)
+    record, reg, served = _case(0)
+    data = SC.encode(served, record, reg)
+    advice, n = V.decode(data, record, reg), 8 * len(data)
+    short, exact = _with_l(reg, n - 1), _with_l(reg, n)
+    for check in (True, False):
+        for encode, said in ((V.encode, advice), (SC.encode, served)):
+            with pytest.raises(V.AdviceCodeError, match=f"^the string is {n} bits, over the registered ℓ = {n - 1}: its 4 "):
+                encode(said, record, short, check=check)
+            assert encode(said, record, exact, check=check) == data
+
+
 def test_put_and_get_mirror_each_other():
     """Random counts of several requests under each K, their rows interleaved as steps interleave them, go through the
     coder and come back, as one segment charged to its window, and a segment cut short is refused."""
@@ -401,3 +460,45 @@ def test_a_second_segment_is_charged_to_its_window_and_none_leaves_the_string_as
     for coder in (CV.Encoder(book), CV.Decoder(b"", 0, book)):
         with pytest.raises(ValueError, match="^a second segment of window 0, and 0 windows are coded: call window\\(\\) first$"):
             coder.segment(0)
+
+
+def test_a_windows_charge_of_2_to_the_20_with_its_kept_segment_is_refused_by_name(monkeypatch):
+    """The certifier counts a window's charge in `arith_encode.CW` = 20 bits, so a charge is under 2^20, its second
+    segment counted. One window's kept counts take 24 bits. Where its first segment and length terms come to
+    2^20 − 25 the window is charged 2^20 − 1 and its string decodes; where they come to 2^20 − 24, which alone is taken,
+    `window_code.encode` refuses the window by name, and so does the decoder, on the string a coder with a wider count
+    writes, where it ends the kept segment. A tail that alone reaches 2^20 is refused at the field that reaches it."""
+    assert CW == 20 and CV.CW is CW
+    book, K = CV.Book.uniform(), 3
+    cs = [(7 * j) % (K + 1) for j in range(40)]
+    terms = KP.Terms((sum(cs) + len(cs),), (tuple((0, c) for c in cs),))
+
+    def tail(last: int) -> list[tuple[int, int]]:
+        return [(0, 32)] * 32766 + [(0, last)]
+
+    def read(string: CV.Encoded, last: int) -> tuple[list[int], list[int]]:
+        d, counts = CV.Decoder(string.bits, string.nbits, book), KP.Counts(K, terms.outputs)
+        assert CV.decode_windows(d, [[n for _, n in tail(last)]])[0] == [CV.Window()]
+        d.segment(0)
+        got = [counts.get(d, 0) for _ in cs]
+        d.finish()
+        return got, d.lens
+
+    under = CV.encode([CV.Window()], book, [tail(18)], KP.coder(K, terms))
+    assert CV.encode([CV.Window()], book, [tail(18)]).lens == ((1 << CW) - 25,) and under.lens == ((1 << CW) - 1,)
+    assert read(under, 18) == (cs, [(1 << CW) - 1])
+    assert CV.encode([CV.Window()], book, [tail(19)]).lens == ((1 << CW) - 24,)
+    said = (f"^window 0: its charge is {1 << CW} bits, and the certifier counts a window's charge in 20 bits, so it is under "
+            f"{1 << CW}; register a shorter window, so that less is charged to one$")
+    with pytest.raises(ValueError, match=said):
+        CV.encode([CV.Window()], book, [tail(19)], KP.coder(K, terms))
+    with monkeypatch.context() as wider:
+        wider.setattr(CV, "CW", CW + 1)
+        at = CV.encode([CV.Window()], book, [tail(19)], KP.coder(K, terms))
+        assert at.lens == (1 << CW,) and read(at, 19) == (cs, [1 << CW])
+    with pytest.raises(ValueError, match=said):
+        read(at, 19)
+    with pytest.raises(ValueError, match=said):
+        CV.encode([CV.Window()], book, [tail(19 + 24)])
+    with pytest.raises(ValueError, match=f"^window 0: its charge is {(1 << CW) + 13} bits, "):
+        CV.encode([CV.Window()], book, [tail(19 + 24 + 13)])
