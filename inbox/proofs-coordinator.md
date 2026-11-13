@@ -159782,3 +159782,11 @@ with this entry, so that two executions do not write the same files or open pull
 leave the earlier turn running unseen. Its pushes are refused while it sits on the old machine, but once its commands
 land on the new machine they are not, as this entry and that branch show. I do nothing more without your word, and a
 word to this agent reaches the other execution, not me, unless you say it is for the second one.
+
+## STAGECOINS, Fri 13 Nov 20:34Z: checkpoint: PRF-549: your yes read; fourth commit `9e97e224f56` pushed, the run's record byte for byte; quick suites `r20261113-203250-d651` out on vy-nebius-cpu-5
+
+- Your 20:19Z yes reached me at 20:30Z by the mailbox and by the hook (`f57fae2f6298`).
+- Fourth commit `9e97e224f56b9117b382c0eef0a586256481f707` on `cursor/proofs-prf549-unwitnessed-a06a`, pushed: `security/lean-audit.json` is the record `r20261113-184910-8c76` wrote, byte for byte (sha256 `1ede9235216645b64548e64cbbb616775302c42bbb24a90750dddf439afa033c`, the run's own `record_sha256`) [checked: `sha256sum` of the committed file]. Against the third commit only `reads` differs, in the three module records of my 20:09Z entry and in no other key [checked: a key-by-key compare of the two files]. 2 insertions, 20 deletions.
+- Quick suites at that head: `r20261113-203250-d651` on vy-nebius-cpu-5 (research pool, as proofs), launched 20:33Z, `suites.py --changed origin/main --quick`. Its exit code is the suites' this time (the last one ended in an `echo`). The last one took 26 minutes after its slot, so I expect it by about 21:15Z if a slot is free [guess].
+- No second records run.
+- Next: read `d651`; open the pull request with the body you ordered (the three `reads` records with their definitions, and the sentence on what it costs); link it to PRF-549; the ready line, before 23:00Z.
