@@ -46,7 +46,9 @@ Issue: PRF-600. The fourth of its pull requests: the proofs of the eight stateme
 
 - **The two proof files elaborate, on the three axioms only**, on vy-nebius-cpu-11 at `80f04b1def7f`: `r20261113-035213-962c` (`Spot/Period.lean`, `lean exit 0`, "none of its 63 theorems uses an axiom beyond propext, Classical.choice and Quot.sound") and `r20261113-035417-2795` (`Spot/PeriodLedger.lean`, the same of its 4). The head after them changes eight lock lines.
 - **Their imports build there** (`2795`): `Proofs.Properties.Challenger.Window` and `Lines`, `Properties.Spot.Period`, `Properties.Spot.PeriodLedger`.
+- **`Proofs.Properties.Challenger.Drawn` elaborates**, the other module that imports `Window`, from which `line_of_device` was lifted: `r20261113-043328-5c31` on vy-nebius-2 at `73ab10a29a`, `lean exit 0 in 594 s`, "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- **The head is `73ab10a29a` plus a merge**: #9581's reworded docstring sentence for `Numbered` and the same words in `LedgerOfDevice`'s `unstated` line. No term changes.
 - **On the head, by hand**: `tests/test_lean_packages.py`, 34 passed.
-- **Not run on the head**: the Lean check (the kernel's replay and the locks' rules), `Proofs.Properties.Challenger.Drawn`, which also imports `Window`, and the quick tier. No ready line until they are in.
+- **Not run on the head**: the Lean check (the kernel's replay and the locks' rules) and the quick tier. So of what "proved" asks, two hold (the files elaborate; the axioms are the three) and two do not yet (a full check's replay through the kernel; a reader other than the prover on the statements).
 
 Refs PRF-600

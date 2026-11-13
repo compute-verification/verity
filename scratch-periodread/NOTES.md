@@ -227,3 +227,24 @@ Reuses `hexOf_inj` (Proofs/Flock/Bytes.lean:161), `collisionIn_ne_none`, `break_
 
 Next: read 2101, 1199, PR 3's run; fill the bodies; ready lines #9595 then #9581; try R8, open, ready line;
 #9625's quick tier and Lean check as the coordinator says.
+
+## State at Fri 05:02Z (read this first on a new machine)
+
+Heads (all pushed):
+
+- #9595 `cursor/proofs-prf600-period-audit-9c4e` `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`. Build and difftests: `r20261113-034210-2101` rc 0. Quick tier `r20261113-040405-1199` on vy-nebius-2, in its slot since 04:31:00Z. Ready line when it ends.
+- #9581 `cursor/proofs-prf600-period-statements-e2a7` `e230e76f63423740f73b9e69bff0cfe6a32e3376` (`a441d99476` plus the docstring sentence of the 04:50Z word). `87ae` rc 0 at `a441d99476`. Ready line after #9595's.
+- #9625 `cursor/proofs-prf600-period-proofs-4c9a` `2f3c3e6022e189a2f94be90f1d3d067eda6995d6` (`73ab10a29a` plus the merge plus the restored lock clause). `Drawn` try `r20261113-043328-5c31` rc 0 at `73ab10a29a`. Ready line after #9581's.
+- #9637 `cursor/proofs-r8-rows-sentence-5d1c` `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`. Ready line written 04:34Z.
+- (l) `cursor/proofs-prf600-period-signed-7d2e` `ade5505e0edd4a46ae8729cabcc924f1ae623e26`, worktree `wt-l`, not compiled. First try `r20261113-050027-499f` on vy-nebius-2, launched 05:00:25Z. Body in `l-body.md` (has a `CHECKS` placeholder). No pull request yet: open it unmarked once the file elaborates on the three axioms, with `research queue open --head cursor/proofs-prf600-period-signed-7d2e --issue PRF-600`.
+
+Words since 04:10Z:
+
+- 04:24Z: (l) YES as sized (`Chained` an explicit hypothesis, own finder, `findBreak` and `readHashed` untouched, a pull request of its own on #9625); `OthersElsewhere` stays; `Drawn` built before #9625's ready line.
+- 04:50Z: the device's ledger facts stay hypotheses until Tue 17 Nov; no law into `History`; the docstrings say "a lemma of the modelled device once the model builds that device's whole ledger". The tree leaves out the issue id and the lane's name; the bodies name PRF-490. No `unwitnessed` lock entry without asking.
+
+Things that bit:
+
+- `verity lean try`'s local waiter leaves with exit 79 after about 1200 s while the run goes on: follow with `research fetch RUN --all` and read `status.json`.
+- Merging up the stack, the lock's merge driver takes theirs on an `unstated` line both sides changed: diff the lock against the old head after every merge.
+- One try at a time. A try that waits 15 minutes on vy-nebius-2 is cancelled and sent to vy-nebius-cpu-11.
