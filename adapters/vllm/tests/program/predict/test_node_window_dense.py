@@ -8,6 +8,7 @@ unit is a proof block Flock's composer proves, and the Circuit passes its wiring
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 
 import pytest
@@ -178,3 +179,64 @@ def test_left_free(program):
         IF.check_proof_block(ST.template(specs["TokenSelect"]).fn)
     with pytest.raises(ValueError, match="commit u16 words"):
         ST.template(specs["StopCheck"])
+
+
+def _after(family: str, lower, prefix: str, extra):
+    """`FAMILIES` with ``family``'s lowering ``lower`` followed by ``extra(w, tid, at, units)`` on its last allocation of
+    the template whose id starts ``prefix``."""
+    def lowering(w, j, node):
+        before = {t: len(a) for t, a in w.allocs.items()}
+        lower(w, j, node)
+        ((tid, (at, n, _fam)),) = [(t, a[-1]) for t, a in w.allocs.items() if t.startswith(prefix) and len(a) > before.get(t, 0)]
+        extra(w, tid, at, n)
+    return {**FAMILIES, family: lowering}
+
+
+PEER = NW._Free([("peer", "peers", "peers_0")])
+RESIDUAL = ("AllReduceRmsNormMnnvl", ND.allreduce_norm, "AllReduceResidualMnnvl_v1")
+ALLREDUCE = ("AllReduceMnnvl", ND.cols, "AllReduceMnnvl_v1")
+
+
+@pytest.mark.parametrize("which, extra, match", [
+    (RESIDUAL, lambda w, t, a, n: w.b.feed(t, "parts", a, n, (NW.Row(t, a, "o0", COLS),), ((n, 1),)),
+     "fed row by row, cut 8 ways, and whole"),
+    (RESIDUAL, lambda w, t, a, n: w.feed(t, "parts", a, PEER, (n,)), "fed row by row, cut 8 ways, and whole"),
+    (RESIDUAL, lambda w, t, a, n: w.feed_rows(t, "parts", a, [PEER] * 4, (n,)), "cut 4 ways, and 8 ways before"),
+    (ALLREDUCE, lambda w, t, a, n: w.feed_rows(t, "parts", a, [PEER] * 8, (n,)), r"row 1 of units from \d+ fed twice \(free"),
+    (RESIDUAL, lambda w, t, a, n: w.feed_rows(t, "parts", a, [PEER] * 8, (n,)),
+     r"row 0 of units from \d+ fed twice \((free, then wired|wired, then free)\)"),
+], ids=["fed-whole", "left-free-whole", "two-cuts", "row-fed-twice", "row-wired-and-free"])
+def test_row_fed_refusals(program, which, extra, match):
+    """The frame refuses by name, before `_Builder.settle`, a row-fed port also fed whole (a wire or a whole free port), a
+    port row-fed at two cuts, and a row of a unit fed twice: free twice, or wired and free."""
+    with pytest.raises(NW.Unexpressible, match=match):
+        NW.node_window(program, families=_after(*which, extra))
+
+
+def test_row_fed_cut_kept(program):
+    """After `_Builder.settle`, a row-fed port's cut is still the one `feed_rows` gave it, else the window is refused."""
+    w = NW.NodeWindow(program, FAMILIES).lower()
+    (tid,) = [t for t in w.b.fns if t.startswith("AllReduceResidualMnnvl_v1") and "SHOT=2" in t]
+    w.b.cuts[tid]["parts"] = 4
+    with pytest.raises(NW.Unexpressible, match=r"cuts changed after `feed_rows`: .*parts 8"):
+        w.circuit()
+
+
+def _rewired(circuit: IF.Circuit, make) -> IF.Circuit:
+    (i, x), *_ = [(i, x) for i, x in enumerate(circuit.wires) if x.reader.startswith("AllReduceResidualMnnvl_v1")
+                  and x.port == "parts" and x.cut == (0, 1)]
+    return dataclasses.replace(circuit, wires=circuit.wires[:i] + (make(x),) + circuit.wires[i + 1:])
+
+
+def test_wires_refused_on_their_own(window):
+    """What the Circuit's construction refuses with no help from the frame: a row-fed wire on a row past the port's cut
+    (``cut``), and one whose writer row isn't the reader row's width (``width``). A wire on a row that exists and is its
+    width, but the wrong one (rank r's partial on row i ≠ r), passes both; no structure check catches it."""
+    circuit, _ = window
+    head = _tid(circuit, r"Gemm_v2\{K=6144,N=1,.*\}")
+    with pytest.raises(ValueError, match=r"rows \[8, 9\) of parts's 8"):
+        _rewired(circuit, lambda x: IF.Wire(x.reader, x.port, x.writer, x.out, x.at, x.radix, x.base, x.step, (8, 1)))
+    with pytest.raises(ValueError, match="a row of parts is 192 words and o0 1"):
+        _rewired(circuit, lambda x: IF.Wire(x.reader, x.port, head, "o0", x.at, x.radix, 0, x.step, x.cut))
+    moved = _rewired(circuit, lambda x: IF.Wire(x.reader, x.port, x.writer, x.out, x.at, x.radix, x.base, x.step, (3, 1)))
+    assert moved.wires != circuit.wires

@@ -32,8 +32,10 @@ rather than its coordinates. An `AllGather_v1` moves words and computes nothing,
 The window is completeness only: that it computes what serving ran is held by the units' proofs on their committed rows.
 Refused by name (`Unexpressible`): a Program with no weights record, an input that is neither the prompt, the weights nor a
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
-a gather whose rows are not one width or of which no whole number within a gather unit divides the row, and at `_Builder.settle`, every template whose ports
-aren't cut a writer row or whose unit Flock's composer wouldn't prove.
+a gather whose rows are not one width or of which no whole number within a gather unit divides the row, a port row-fed
+at two cuts, and at `NodeWindow.circuit`, a row-fed port also fed whole or a row of a unit fed twice, then at
+`_Builder.settle`, every template whose ports aren't cut a writer row or whose unit Flock's composer wouldn't prove, and
+after it a row-fed port whose cut isn't its `feed_rows` cut.
 """
 from __future__ import annotations
 
@@ -166,6 +168,8 @@ class NodeWindow:
         #: each gathered row by the writer rows it holds, and each first-level chunk by its first writer row
         self.wholes: dict[tuple[Row, ...], Row] = {}
         self.chunks: dict[Row, tuple[tuple[Row, ...], Row]] = {}
+        #: each port `feed_rows` fed, by template and port: its cut and the rows it fed, ``(row, first unit, end unit, how)``
+        self.row_fed: dict[tuple[str, str], tuple[int, list[tuple[int, int, int, str]]]] = {}
         self.lowered = False
 
     # ---- walking the Program
@@ -323,7 +327,8 @@ class NodeWindow:
                   shape: Sequence[int]) -> None:
         """Units ``at`` on (``shape``, as `feed`) read port ``port`` cut ``len(grids)`` ways, its row i from ``grids[i]`` (a
         `take` result, one row a unit): a wired row is wired, a free one left free (`Free`, its ``rows``), so a port whose
-        other rows are other ranks' partials still has its own row wired."""
+        other rows are other ranks' partials still has its own row wired. Refused at once: a port row-fed at another cut
+        before; and at `circuit`, a port also fed whole and a row of a unit fed twice (`_check_rows`)."""
         k, count = len(grids), math.prod(shape)
         if k == 1:
             self.feed(tid, port, at, grids[0], shape)
@@ -332,8 +337,12 @@ class NodeWindow:
         words, n = dict(lay.rows)[port], dict(zip((p for p, _ in lay.rows), lay.outer))[port]
         if words % k or n % k:
             raise Unexpressible(f"{tid} {port}: {n} elements, {words} words, cut {k} ways")
+        cut, fed = self.row_fed.setdefault((tid, port), (k, []))
+        if cut != k:
+            raise Unexpressible(f"{tid} {port}: row-fed cut {k} ways, and {cut} ways before; a port is cut one way")
         self.b.cuts.setdefault(tid, {})[port] = k
         for i, grid in enumerate(grids):
+            fed.append((i, at, at + count, "free" if isinstance(grid, _Free) else "wired"))
             if isinstance(grid, _Free):
                 for kind, fam, name in grid.sources:
                     self.free.append(Free(tid, port, at, count, kind, fam, name, (i, 1, k)))
@@ -442,7 +451,10 @@ class NodeWindow:
         b = self.b
         if not b.fns:
             raise Unexpressible(f"{self.name}: no family of the Program's has a lowering, so the window has no unit")
+        self._check_rows()
         b.settle()
+        if bad := [f"{tid} {port} {k}" for (tid, port), (k, _) in self.row_fed.items() if b.cuts.get(tid, {}).get(port) != k]:
+            raise Unexpressible(f"{self.name}: {len(bad)} row-fed ports' cuts changed after `feed_rows`: " + "; ".join(bad))
         roots, openings = b.merged()
         reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)),
                             tuple(roots), tuple(openings))
@@ -451,6 +463,22 @@ class NodeWindow:
         return IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
                           registered=reg, blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
                           order=IF.ordered(b.units, wires, starts) if wires else None)
+
+    def _check_rows(self) -> None:
+        """Refuse, naming each, a port `feed_rows` fed that is also fed whole (`_Builder.feed`, or left free whole by
+        `feed`), and a row of a unit it fed twice (wired twice, free twice, or wired and free)."""
+        whole = set(self.b.read_rows) | {(f.tid, f.port) for f in self.free if f.rows[2] == 1}
+        why = [f"{tid} {port}: fed row by row, cut {k} ways, and whole" for (tid, port), (k, _) in self.row_fed.items()
+               if (tid, port) in whole]
+        for (tid, port), (_k, fed) in self.row_fed.items():
+            end: dict[int, tuple[int, str]] = {}
+            for i, lo, hi, how in sorted(fed):
+                if i in end and lo < end[i][0]:
+                    why.append(f"{tid} {port}: row {i} of units from {lo} fed twice ({end[i][1]}, then {how})")
+                if i not in end or hi > end[i][0]:
+                    end[i] = (hi, how)
+        if why:
+            raise Unexpressible(f"{self.name}: {len(why)} row-fed ports fed past their rows: " + "; ".join(why))
 
     def census(self, circuit: IF.Circuit) -> dict[str, Any]:
         """The window's digest (SHA-512 of its description); by the family that emitted them, its units, templates and wire
