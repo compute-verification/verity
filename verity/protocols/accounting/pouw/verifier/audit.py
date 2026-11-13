@@ -28,14 +28,14 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.protocols.accounting.pouw.verifier.salt import pouw_salt, pouw_window
+from verity.errors import ProtocolError
 from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.commitments import domains, hm96
 from verity.commitments.gates import sha512 as sha512_gates
-from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.errors import ProtocolError
-from verity.protocols.accounting.pouw.verifier.salt import pouw_salt, pouw_window
+from verity.commitments.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
 from .protocol import DomainError, Matmul, PoUWScheme, Tile, fold_roots, tagged
