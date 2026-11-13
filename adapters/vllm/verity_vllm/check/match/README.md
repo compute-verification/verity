@@ -19,7 +19,10 @@ docstring says what it holds.
 What the integration's other packages import, module by module; each module lists these names in its `__all__`.
 `Options` and `main` of `global_match`, `batch_decomp` and `program_dag`, which the command line takes from a
 command's module. `derived_shape` of `derived_index`, which `batch_decomp` hands on under the same name.
-`cross_rank_check`, `commit_binding`, `load_recorder` and `own_producers_from_record` of `rank_match`.
-`ROUTED_FAMILIES`, `pick_strata`, `check_picks`, `fold_pairs`, `coverage_of_unreplayable`, `routed_expected`,
-`is_embedding_site`, `spec_key` and `words` of `xrank_collectives`. `program_compare` is a command too and declares no
-`__all__` yet. No file outside the integration imports this package.
+`cross_rank_check`, `commit_binding`, `load_recorder`, `own_producers_from_record` and `same_module_path` of
+`rank_match`; the last says when two module paths name one module, and `pipeline.tp.links` hands it on under the same
+name. `ROUTED_FAMILIES`, `pick_strata`, `check_picks`, `fold_pairs`, `coverage_of_unreplayable`, `routed_expected`,
+`is_embedding_site`, `spec_key` and `words` of `xrank_collectives`. `MODELLED_ENGINE` and `compilation_facts` of
+`declaration`: the engine conditions a workload Program models and the facts of a declared compilation block, which
+`pipeline.global_program` hands on under the same names. `program_compare` is a command too and declares no `__all__`
+yet. No file outside the integration imports this package.
