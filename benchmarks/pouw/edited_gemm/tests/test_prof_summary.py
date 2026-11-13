@@ -2,16 +2,9 @@
 the bench didn't time shown as nan."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("prof_summary", HERE.parent / "prof_summary.py")
-P = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = P
-_spec.loader.exec_module(P)
+import prof_summary as P
 
 MS = {"plain": 1.0, "cplain": 1.1, "cduo": 1.3, "tK": 1.2, "formA": 0.1, "bsp": 0.2, "genU": 0.05, "td_bfus": 1.75}
 

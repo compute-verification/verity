@@ -343,8 +343,8 @@ class Writer:
 
     def measurement_file(self, rel: str) -> str:
         """Names one file of the run's detailed records in the result's `measurement_files` and returns it: a path relative
-        to `out` and inside it, as `evidence` is, which `research` keeps with the run. A file is named once, here or as an
-        artifact."""
+        to the result's directory and inside it, as `evidence` is, which `research` keeps with the run. A file is named
+        once, here or as an artifact."""
 
         return self._name("measurement_files", rel)
 
