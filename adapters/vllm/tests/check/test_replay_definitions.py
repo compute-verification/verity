@@ -278,7 +278,12 @@ def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
     from verity.definitions.numerics import derived_rows as DR
 
     asked, right = [], DR.silu_mul_rows
-    monkeypatch.setattr(DR, "silu_mul_rows", lambda gu: asked.append(gu.tobytes()) or right(gu))
+
+    def rows(gu):
+        asked.append(gu.tobytes())
+        return right(gu)
+
+    monkeypatch.setattr(DR, "silu_mul_rows", rows)
     _unchecked(monkeypatch)
     assert DF.kernel_refusal([(SILU, SILU_BITS)]) is None
     assert len(asked) == 2 * DF.SAMPLES and asked[:DF.SAMPLES] == asked[DF.SAMPLES:] and len(set(asked)) == DF.SAMPLES
