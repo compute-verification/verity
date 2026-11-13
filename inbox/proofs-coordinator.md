@@ -158863,3 +158863,51 @@ This closes item 5 of my 19:23Z entry; nothing else in that entry changes. Mailb
 - That the branch passes on today's `main`. The run is at its base, `fa3e619ee146`. Nothing the branch touches changed on `main` since [run: `git diff --stat`, in the 19:23Z entry].
 
 **Next.** No run of mine is out, and the timer is removed. The branch `cursor/proofs-onsite-fixture-docs-dde5` waits for your word on which case; then `research queue open`, if you say so.
+
+## SESSIONOF2, Fri 13 Nov 20:03Z: no listed guarantee's own record moves under the switch; `security`'s lock moves in two `reads` lines, committed and pushed at `3a7fe4d0b1af`; the properties lock is still to come and its run is out
+
+SESSIONOF2 (bc-21526b41-3d76-5d8c-87fa-3839a84ce464), to the coordinator. This closes the question under STOP RULE of my 19:28Z entry for `security`'s lock. #9776 is at `3a7fe4d0b1af`, unmarked, and not ready yet.
+
+**In plain words.** The tool rewrote `security`'s lock and I compared it with the committed one before pushing. Only the record of the changed definition moved, the kind you called expected. The first run then ran out of time before the second lock, so a second run is out for that one. The suites ended with the two failures I already fixed and nothing else.
+
+### STOP RULE
+Nothing new. For `security/lean-audit.json` the answer to 19:28Z is: no guarantee's own text or `unfolded_hash` moved `[run + derived]`.
+
+**1. `security`'s regenerated lock** `[run: `r20261113-175338-b748`; compared on my VM]`
+- The whole file differs from the committed one in two lines, both under `reads["CoreProtocol.Protocol"]`:
+  - `digest`: `2885ef43476c…` to `cae02bb00526…`
+  - `definitions["Core.canonicalJson"]`: `84d6d8a26a16…` to `8549ab14bf1d…`
+- Guarantees: 1,137 before and after, none added or removed, and no record differs in any field (`signature`, `type_hash`, `unfolded_hash`, premises, assumptions).
+- With the record regenerated the tool's own audit of `security` says "AUDIT: PASS", 1,137 guarantees, axioms `propext`, `Classical.choice`, `Quot.sound`.
+- The check still files it as a change to what four guarantees say (the four of 19:28Z), and prints the definition's new text for the landing message. It is in #9776's body under "Records", with the four names and their owners.
+- Committed as the tool wrote it, commit `3a7fe4d0b1af`, file of `@lean`. `tests/test_lean_packages.py` on my VM: 35 passed.
+
+**2. The first records run was cut at its limit** `[run]`: cancelled at 19:58:57Z, inside the audit of `security/Properties`, so that lock is not regenerated.
+- Why it was slow `[read: its build logs]`: each audit of `security` built 485 modules of the proofs package again, among them the long ones (`…Noise.Gram` 1,590 s, `…PearlPlus.Witnesses` 1,026 s), because the first audit's build reaches the artifact cache only after the package's step ends. Two audits of 51 and 56 minutes.
+- Memory, the whole run: peak 26.5 GiB by proportional size, 104.5 GiB by the sum of resident sizes, under `--mem-gb 32`.
+- `security/Properties/lean-audit.json` holds the same two old values under `reads` `[read]`, so I expect the same two lines there `[guess]`.
+
+**3. The suites at `fa5eabe347da`** `[run: `r20261113-180009-568e`, ended 19:47:55Z]`: "66 suites: 64 passed (0 cached), 2 failed". The two are the grader's pin of the proofs lakefile, restored at `59e90438b7e4`. Peak 8.9 GiB by proportional size under `--mem-gb 24`.
+
+**4. Out now, both at `3a7fe4d0b1af`, both on cpu-1 by `--on auto`; they overlap**
+- `r20261113-200014-7d41`: `lean_changed.py --records security/Properties --update`, `--mem-gb 32 --max-min 120`. By the tool's own line it audits `security/Properties` (with the proofs package), then `security` (with the proofs package). So one run gives the properties lock, the check of `security` with its committed record, and the first build of the proofs package with the root in the lock alone.
+- `r20261113-200124-a38f`: `suites.py --changed 5eb1231b2558 --quick`, `--mem-gb 24`.
+- After the properties record is committed, the head moves by that lock alone. I then run `suites.py --changed 3a7fe4d0b1af --quick` at the final head, which runs only the suites that lock reaches, and write the ready line.
+
+**5. `main`** `[run]`: at `f479876a8758`; no `Move:` or `Layout-move:` line since `5eb1231b2558`; none of the change's 15 files is touched there; `git merge-tree` of `3a7fe4d0b1af` with it has no conflict.
+
+### NEEDS
+1. **You:** nothing to decide. For your note to soundness: three of its listed guarantees read the changed definition and their own records do not move.
+2. Still open: the link to PRF-490; the friction note's line; whether you want the lakefile's root after all (the root is in the lock alone now; the run of section 4 says whether that builds).
+
+### To post
+Nothing.
+
+### Not established
+- The properties lock's regenerated record.
+- That the proofs package builds with the root in the lock alone.
+- The suites at `3a7fe4d0b1af` and at the final head.
+- The Lean check with the kernel replay.
+
+### Heads, all pushed
+`cursor/proofs-sessionof2-parser-carried-e464` `3a7fe4d0b1affb4fbc9f6c96bc19b8ce883c557e` (pull request #9776). Runs out: `r20261113-200014-7d41` (records, cpu-1, ends by about 22:01Z at the latest), `r20261113-200124-a38f` (suites, cpu-1, by about 22:02Z).
