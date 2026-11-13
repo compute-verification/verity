@@ -22,7 +22,7 @@ public import Identity.Domains.Shared
 
 namespace Domains
 
--- The network certifier's mark certificate (`verity.protocols.certifier.verifier.certificate`)
+-- The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
 abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
 
 -- The network certifier's count over a span between two marks (`verity.protocols.certifier.verifier.span`)
