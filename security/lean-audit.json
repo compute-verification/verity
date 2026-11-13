@@ -20125,6 +20125,42 @@
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
   },
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_honest :",
+    "  And",
+    "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
+    "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "        List.nil))",
+    "    (And",
+    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512",
+    "        (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "            List.nil).commit)",
+    "      (And",
+    "        (NetTiming.WindowsPlaced",
+    "          (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "              fun x x_1 x_2 => List.nil).partition",
+    "          0 Fin.elim0 Fin.elim0 Fin.elim0)",
+    "        (And",
+    "          (∀ (i : Fin 0),",
+    "            NetTiming.CheckedUnique i.elim0.prog i.elim0 i.elim0.design NetTiming.Witness.trivLay 1",
+    "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
+    "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
+    "            (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
+    "              (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
+    "              (fun x => Unit.unit) fun p =>",
+    "              (NetTiming.recordingCode NetTiming.Witness.noFormat p.fst fun c => c.elim).fst)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.FaultyGate"],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "e5d728b16b07ec8845a4b694c1503fe2f91fafb37eea4cc5ed97f2fc8d582feb"
+  },
   "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
@@ -20161,42 +20197,6 @@
     "reads": []
    },
    "type_hash": "a2e3c2d055b64a79c4efe5cf53e85cd98aa12a6933fab37ed85927a11f19aebf"
-  },
-  "NetTiming.Witness.PeriodLeakChecked_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.Witness.PeriodLeakChecked_honest :",
-    "  And",
-    "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
-    "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
-    "        List.nil))",
-    "    (And",
-    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512",
-    "        (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
-    "            List.nil).commit)",
-    "      (And",
-    "        (NetTiming.WindowsPlaced",
-    "          (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
-    "              fun x x_1 x_2 => List.nil).partition",
-    "          0 Fin.elim0 Fin.elim0 Fin.elim0)",
-    "        (And",
-    "          (∀ (i : Fin 0),",
-    "            NetTiming.CheckedUnique i.elim0.prog i.elim0 i.elim0.design NetTiming.Witness.trivLay 1",
-    "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
-    "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
-    "            (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
-    "              (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
-    "              (fun x => Unit.unit) fun p =>",
-    "              (NetTiming.recordingCode NetTiming.Witness.noFormat p.fst fun c => c.elim).fst)))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["NetTiming.FaultyGate"],
-    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
-   },
-   "type_hash": "e5d728b16b07ec8845a4b694c1503fe2f91fafb37eea4cc5ed97f2fc8d582feb"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
