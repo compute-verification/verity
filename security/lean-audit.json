@@ -332,7 +332,7 @@
   },
   "NetTiming.MonitoringPeriodChannelReg": {
    "owner": "@network-accounting",
-   "digest": "23f1f033133e643e62d0c88cf1bf65dacee93d89b3ab06989c88caa72d91eea4",
+   "digest": "026bdd8b3470934387fe4985a28460616ca0d1b113da45232e01b3cff9636b5d",
    "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as MonitoringPeriodChannel states it over the schedules."
   },
   "NetTiming.MonitoringPeriodEscapes": {
@@ -2481,7 +2481,7 @@
   },
   "NetTiming.ExecutionPhaseGoodChecked": {
    "owner": "@network-accounting",
-   "digest": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148",
+   "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
    "issue": "NET-313",
    "due": "2026-11-30"
   },
@@ -19516,16 +19516,18 @@
    "type_hash": "1af5ebd4c7e149600198539a16cce9712821d3cf8c439a62f76517cd999755bc",
    "unfolded_hash": "16b44efd2c5b76e02f6bf3d39ad731205ec663d1502d7c3b3202f6797f405919"
   },
-  "NetTiming.SecurityProofs.PeriodLeakCharged": {
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakCharged": {
    "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakCharged : NetTiming.Guarantees.PeriodLeakCharged"],
+   "signature": [
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [
      "Claims.Sampling.CommitmentScheme.Binds",
      "NetTiming.KraftWeights",
-     "NetTiming.PeriodChannelReg",
+     "NetTiming.MonitoringPeriodChannelReg",
      "NetTiming.RecordFormat.ReadsBy",
      "NetTiming.WindowsPlaced"
     ],
@@ -19537,18 +19539,46 @@
     ],
     "reads": ["NetTiming.RegisteredInputsHeld"]
    },
-   "type_hash": "bb37a95a6f4316619127947715a93056d1297368c6b9e53d94e4e6efb4c670e3",
-   "unfolded_hash": "d1e8576db201c464aa280df9f0dacc7dc17e7c03a2b3133728dd7591b04f5978"
+   "type_hash": "553e9325251d1aa30c640604220c13d234254d68df612fae1d65cacc77e110f5",
+   "unfolded_hash": "babe1ba9cac0867ad38703c22dca281694f923faec62650dbac6e0ca25ef00b8"
   },
-  "NetTiming.SecurityProofs.PeriodLeakChecked": {
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked": {
    "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakChecked : NetTiming.Guarantees.PeriodLeakChecked"],
+   "signature": [
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [
      "Claims.Sampling.CommitmentScheme.Binds",
-     "NetTiming.PeriodChannelReg",
+     "NetTiming.MonitoringPeriodChannelReg",
+     "NetTiming.RecordFormat.ReadsBy",
+     "NetTiming.WindowsPlaced"
+    ],
+    "open": [
+     "Claims.SamplingGeneric.Compiled.KS",
+     "NetTiming.CertifierRegisters",
+     "NetTiming.CheckedUnique",
+     "NetTiming.CheckedWitness",
+     "NetTiming.ExecutionPhaseGoodChecked",
+     "NetTiming.ScopeAcc",
+     "Verity.Assumptions.TrustedHost"
+    ],
+    "reads": ["NetTiming.RegisteredInputsHeld"]
+   },
+   "type_hash": "fa3270274579278ff66d020a5b50e9b329ae1d85bc2a6fb7c5d23395099b7455",
+   "unfolded_hash": "2c0ee7b6ea004260b0733d37324213a722ee42368261251f0c96a18672023abf"
+  },
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.CommitmentScheme.Binds",
+     "NetTiming.MonitoringPeriodChannelReg",
      "NetTiming.RecordFormat.ReadsBy",
      "NetTiming.WindowsPlaced"
     ],
@@ -19558,23 +19588,24 @@
      "NetTiming.CheckedUnique",
      "NetTiming.CheckedWitness",
      "NetTiming.ScopeAcc",
-     "NetTiming.WindowGoodChecked",
      "Verity.Assumptions.TrustedHost"
     ],
     "reads": ["NetTiming.RegisteredInputsHeld"]
    },
-   "type_hash": "47d75336b422e05159fe97d9e86e5f611ed8d6e5b0f22ede9258d4473bfeec05",
-   "unfolded_hash": "809c3ada30bc417a4b5f7e9bccab62c83213d381c176561407bb38232aaadb72"
+   "type_hash": "dc4794f5603639f5286ff3954d6d7767359723ca9465282f68b30561973f579a",
+   "unfolded_hash": "cfb649b309cfbc5b38caac3b121f6af967ff39cea3b2fddaa63b31bc2a4b5c82"
   },
-  "NetTiming.SecurityProofs.PeriodLeakFails": {
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost": {
    "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakFails : NetTiming.Guarantees.PeriodLeakFails"],
+   "signature": [
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [
      "Claims.Sampling.CommitmentScheme.Binds",
-     "NetTiming.PeriodChannelReg",
+     "NetTiming.MonitoringPeriodChannelReg",
      "NetTiming.RecordFormat.ReadsBy",
      "NetTiming.WindowsPlaced"
     ],
@@ -19583,39 +19614,14 @@
      "NetTiming.CertifierRegisters",
      "NetTiming.CheckedUnique",
      "NetTiming.CheckedWitness",
+     "NetTiming.ExecutionPhaseGoodChecked",
      "NetTiming.ScopeAcc",
      "Verity.Assumptions.TrustedHost"
     ],
     "reads": ["NetTiming.RegisteredInputsHeld"]
    },
-   "type_hash": "229c8394e4eef92bec015880e76f158e0789227c888788d277214e93a47b473e",
-   "unfolded_hash": "8d9fd66b2714394256249772b2a576d8570afb99c2f878ef6eec5fd9fe963f6e"
-  },
-  "NetTiming.SecurityProofs.PeriodLeakFailsAtMost": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PeriodLeakFailsAtMost : NetTiming.Guarantees.PeriodLeakFailsAtMost"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [
-     "Claims.Sampling.CommitmentScheme.Binds",
-     "NetTiming.PeriodChannelReg",
-     "NetTiming.RecordFormat.ReadsBy",
-     "NetTiming.WindowsPlaced"
-    ],
-    "open": [
-     "Claims.SamplingGeneric.Compiled.KS",
-     "NetTiming.CertifierRegisters",
-     "NetTiming.CheckedUnique",
-     "NetTiming.CheckedWitness",
-     "NetTiming.ScopeAcc",
-     "NetTiming.WindowGoodChecked",
-     "Verity.Assumptions.TrustedHost"
-    ],
-    "reads": ["NetTiming.RegisteredInputsHeld"]
-   },
-   "type_hash": "cb3476bf80031cbb222c67eaae9c5846b40cd65bdf685bd4c8f244baddbe027e",
-   "unfolded_hash": "8e3334c96ed0e5511b9a069029d18683547e9abbd70ce3e08269f9fbfca194cd"
+   "type_hash": "ed40cc4507a50d883849d5f744ed6f55ce0b6295ae867b9496d07c8679f26550",
+   "unfolded_hash": "c36c2e2bc6625c97d17eebe099354b605782d4a6de31726a6f2194599b2bb247"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -20221,10 +20227,10 @@
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
   },
-  "NetTiming.Witness.PeriodLeakCharged_honest": {
+  "NetTiming.Witness.MonitoringPeriodLeakCharged_honest": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakCharged_honest :",
+    "NetTiming.Witness.MonitoringPeriodLeakCharged_honest :",
     "  And",
     "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
     "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
@@ -20244,7 +20250,7 @@
     "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
     "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
     "            (And",
-    "              (NetTiming.PeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True)",
+    "              (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True)",
     "                (Finset.instSetLike.coe Finset.univ) Set.univ",
     "                (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
     "                (fun x => Unit.unit) fun p =>",
@@ -20268,12 +20274,12 @@
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
     "reads": []
    },
-   "type_hash": "76bd2746410e754f07f149c3a09cb7ef90f688aae059cb836a18fc1ac6520c3b"
+   "type_hash": "9f6be6456d647efb3321991e4d7eb8cf3f4bd452ab39aae0ab188fe9ba0e55ae"
   },
-  "NetTiming.Witness.PeriodLeakCharged_kraft_exclusion": {
+  "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakCharged_kraft_exclusion :",
+    "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion :",
     "  And (Nonempty Bool)",
     "    (And (Real.instLE.le 0 0)",
     "      (And (Claims.SamplingGeneric.Compiled.KS id (Claims.Witness.SamplingGeneric.posL Bool))",
@@ -20294,7 +20300,8 @@
     "                  (NetTiming.Witness.bitFmt.ReadsBy (fun x => NetTiming.Witness.bitFmt.read NetTiming.Witness.oneSched)",
     "                    fun x s => Eq s NetTiming.Witness.oneSched)",
     "                  (And",
-    "                    (NetTiming.PeriodChannelReg NetTiming.Witness.bitFmt (fun x s => Eq s NetTiming.Witness.oneSched)",
+    "                    (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.bitFmt",
+    "                      (fun x s => Eq s NetTiming.Witness.oneSched)",
     "                      (Finset.instSetLike.coe (Finset.instSingleton.singleton Unit.unit)) Set.univ",
     "                      (fun x => NetTiming.Witness.oneSched) id (fun v => NetTiming.Witness.failedAt0 (v Unit.unit))",
     "                      fun p =>",
@@ -20338,7 +20345,8 @@
     "                                                (fun x => Claims.Witness.SamplingGeneric.notPart) fun x => 0))).cast",
     "                                        (instHMul.hMul 1 (Nat.cast 1)))",
     "                                      (∀ (i : Fin 1),",
-    "                                        NetTiming.WindowGoodChecked id (Claims.Witness.SamplingGeneric.posL Bool) 1 1 1",
+    "                                        NetTiming.ExecutionPhaseGoodChecked id",
+    "                                          (Claims.Witness.SamplingGeneric.posL Bool) 1 1 1",
     "                                          (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
     "                                          (fun x => Finset.instEmptyCollection.emptyCollection)",
     "                                          (fun x x_1 => And True True) 1",
@@ -20357,12 +20365,12 @@
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
     "reads": ["NetTiming.RegisteredInputsHeld", "Verity.Assumptions.TrustedHost"]
    },
-   "type_hash": "03e604afa7520c88448dd86f1dbfdefa443c20d9e0b9187b598c48c7c43f7341"
+   "type_hash": "43469443778df3c41bb213ed8b429c5f9f2c559cf73701223f0f1ca1af8dab7e"
   },
-  "NetTiming.Witness.PeriodLeakCharged_nontrivial": {
+  "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakCharged_nontrivial :",
+    "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial :",
     "  Not",
     "    (instLEENat.le",
     "      (Set.ofPred fun z =>",
@@ -20385,7 +20393,7 @@
     "                          (fun x => Claims.Witness.SamplingGeneric.notPart) fun x => 0))).cast",
     "                  (instHMul.hMul 1 (Nat.cast 1)))",
     "                (∀ (i : Fin 1),",
-    "                  NetTiming.WindowGoodChecked id (Claims.Witness.SamplingGeneric.posL Bool) 1 1 1",
+    "                  NetTiming.ExecutionPhaseGoodChecked id (Claims.Witness.SamplingGeneric.posL Bool) 1 1 1",
     "                    (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
     "                    (fun x => Finset.instEmptyCollection.emptyCollection) (fun x x_1 => And True True) 1",
     "                    (Claims.Witness.SamplingGeneric.posStmt Bool.false) (fun x => Bool.false)",
@@ -20402,12 +20410,12 @@
     "open": [],
     "reads": ["NetTiming.RegisteredInputsHeld"]
    },
-   "type_hash": "9694c4eb131481102561449540cefc3cf4557982b8656a3cb183e3b1562c165a"
+   "type_hash": "b55cfda04eca7fdfa62314c0d28303824ba66790f771836aff7c4f76491a66de"
   },
-  "NetTiming.Witness.PeriodLeakChecked_honest": {
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_honest": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakChecked_honest :",
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_honest :",
     "  And",
     "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
     "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
@@ -20426,7 +20434,7 @@
     "            NetTiming.CheckedUnique i.elim0.prog i.elim0 i.elim0.design NetTiming.Witness.trivLay 1",
     "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
     "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
-    "            (NetTiming.PeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
+    "            (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
     "              (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
     "              (fun x => Unit.unit) fun p =>",
     "              (NetTiming.recordingCode NetTiming.Witness.noFormat p.fst fun c => c.elim).fst)))))"
@@ -20438,12 +20446,12 @@
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
     "reads": []
    },
-   "type_hash": "68f47edace8ba47666620eae67f250df3890c3bdb06f34be7701d119ce6324c2"
+   "type_hash": "e5d728b16b07ec8845a4b694c1503fe2f91fafb37eea4cc5ed97f2fc8d582feb"
   },
-  "NetTiming.Witness.PeriodLeakChecked_nontrivial": {
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakChecked_nontrivial :",
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial :",
     "  Not",
     "    (Real.instLE.le",
     "      (Claims.PrBad FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
@@ -20477,10 +20485,10 @@
    },
    "type_hash": "a2e3c2d055b64a79c4efe5cf53e85cd98aa12a6933fab37ed85927a11f19aebf"
   },
-  "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion": {
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_readsBy_exclusion": {
    "owner": "@network-accounting",
    "signature": [
-    "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion :",
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_readsBy_exclusion :",
     "  And (Nonempty Bool)",
     "    (And (Real.instLE.le 0 0)",
     "      (And (Claims.SamplingGeneric.Compiled.KS id (Claims.Witness.SamplingGeneric.posL Bool))",
@@ -20499,7 +20507,7 @@
     "                    NetTiming.recordingCode NetTiming.Witness.bitFmt p.fst (NetTiming.Witness.bitArr Bool.false))",
     "                  fun p => NetTiming.recordingCode NetTiming.Witness.bitFmt p.fst (NetTiming.Witness.bitArr Bool.false))",
     "                (And",
-    "                  (NetTiming.PeriodChannelReg NetTiming.Witness.bitFmt (fun x x_1 => True)",
+    "                  (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.bitFmt (fun x x_1 => True)",
     "                    (Set.instSingletonSet.singleton Unit.unit) Set.univ NetTiming.Witness.admSched (fun x => Unit.unit)",
     "                    (fun v => NetTiming.Witness.lateAt0 (v Unit.unit)) fun p =>",
     "                    (NetTiming.recordingCode NetTiming.Witness.bitFmt p.fst (NetTiming.Witness.bitArr Bool.false)).fst)",
@@ -20526,8 +20534,8 @@
     "                          (Set.ofPred fun z =>",
     "                              And (Set.instMembership.mem Set.univ z)",
     "                                (∀ (i : Fin 1),",
-    "                                  NetTiming.WindowGoodChecked id (Claims.Witness.SamplingGeneric.posL Bool) 1 1 1",
-    "                                    (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
+    "                                  NetTiming.ExecutionPhaseGoodChecked id (Claims.Witness.SamplingGeneric.posL Bool) 1 1",
+    "                                    1 (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
     "                                    (fun x => Finset.instEmptyCollection.emptyCollection) (fun x x_1 => And True True) 1",
     "                                    (Claims.Witness.SamplingGeneric.posStmt Bool.false) (fun x => Bool.false)",
     "                                    Claims.Witness.SamplingGeneric.posTops",
@@ -20550,7 +20558,7 @@
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
     "reads": ["NetTiming.RegisteredInputsHeld", "Verity.Assumptions.TrustedHost"]
    },
-   "type_hash": "c3f48cefd02438a99334cc483d74aa562428484bc909c74f982be7bc20bb3ec2"
+   "type_hash": "d5d7ce762898d65e3c2f770e8b4911002a6433be4ae890368dc3b115cc067a78"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -38967,20 +38975,20 @@
     "NetTiming.Guarantees.MonitoringPeriodLeakAccepted": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772"
    }
   },
-  "Definitions.NetworkCertifier.Guarantees.PeriodChecked": {
-   "digest": "9bb4514c70197d545de07ab6cfe6d8bc812eab331b889f9764caab894e22544a",
+  "Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked": {
+   "digest": "5cc5a0902cdff241c87b818058d5d56c665c7dff77e16a2ed66aca8545cdcc4b",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakChecked": "71c1c458d0d11fdb8674710c0f8c95e17e3c32913d177766c02e1cb84ac06cb6",
-    "NetTiming.WindowGoodChecked": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148"
+    "NetTiming.ExecutionPhaseGoodChecked": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
+    "NetTiming.Guarantees.MonitoringPeriodLeakChecked": "0514e091ba75381ca158bdce275897274510306ec1b95363b86eb56344a46ad9"
    }
   },
-  "Definitions.NetworkCertifier.Guarantees.PeriodFails": {
-   "digest": "d970089afe850b87e794086107bbf69941dc9e3c66cb7be925c6760160782f98",
+  "Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails": {
+   "digest": "532b7326d756177c75c2919189111713c01b775a03bab8196c9e17339e8ec75f",
    "definitions": {
     "NetTiming.FailsBelow": "2b3db080ef46bbe327762eb67c8b1988ff1b7b060f2d10fe0bee2382e5e6f341",
-    "NetTiming.Guarantees.PeriodLeakCharged": "c074b66d1491526d6303ac0fe3e5d10568605bc76ff0d7a78b2df77dc089d504",
-    "NetTiming.Guarantees.PeriodLeakFails": "e89cb7d44be6d187b6ebc13bf874dffc9ea69f81f1b27d514d5e8d547029ed4a",
-    "NetTiming.Guarantees.PeriodLeakFailsAtMost": "905e6df7fb88319228bcbf185950bd27b9df456a4e0d1907172903d2da54c0b6",
+    "NetTiming.Guarantees.MonitoringPeriodLeakCharged": "9b33064f43f35caf2ae3e5bd6b051abbb20e57d871f9847a449f26cc7ba2ca70",
+    "NetTiming.Guarantees.MonitoringPeriodLeakFails": "77621ef27bca544e69ed63dac10f381d5665cf0cdfca7178a90e404e18e97411",
+    "NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost": "4418316655521d5bb2e1a0ca7faa83a65c602858d10ea1f55edd7b40cb12d8d0",
     "NetTiming.KraftWeights": "ed6bfca95f74411ed152b4d1f18953af0625c62829211552356ddfee9cfd9485",
     "NetTiming.failCount": "9a543078524e5cc988f4f5320ac30aa39d4e7592909a44bc9cf144615ec73341",
     "NetTiming.failPatterns": "642aa48bc4f54c1f32ac28b1cb574d76c492c0474127ade76af3a202328e9b45"
@@ -39033,17 +39041,17 @@
     "NetTiming.SameRegistration": "8429cc0f7aa35a113597b5d61becf814dd398483b71b3aa633f976567dc17395"
    }
   },
-  "Definitions.NetworkCertifier.PeriodChecked": {
+  "Definitions.NetworkCertifier.MonitoringPeriodChecked": {
    "digest": "be28dc91c83c150ea78dba58647d3a3f84630f0360bd35e28973949ae0626a06",
    "definitions": {
     "NetTiming.RLeakCertifierChecked": "12b3ad6bc5c82747fab7cb5caa7fce96bfa7bc6f15e245fc3abca3ff0a163a8c",
     "NetTiming.certifierRun": "2560a26e13ea705b5d504cd775df468e6b4c17ee2792ec6389008467f2266ec7"
    }
   },
-  "Definitions.NetworkCertifier.PeriodConditions": {
-   "digest": "e5ae4acbd31cf1611be670f41156b00c7d3d60ef442031046ad4cf65e9496a03",
+  "Definitions.NetworkCertifier.MonitoringPeriodConditions": {
+   "digest": "ebe9eedcd17e5e13a3e32b717e56182c348a896e690e872b0b62ef1c78ac3754",
    "definitions": {
-    "NetTiming.PeriodChannelReg": "23f1f033133e643e62d0c88cf1bf65dacee93d89b3ab06989c88caa72d91eea4",
+    "NetTiming.MonitoringPeriodChannelReg": "026bdd8b3470934387fe4985a28460616ca0d1b113da45232e01b3cff9636b5d",
     "NetTiming.RecordFormat.ReadsBy": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
     "NetTiming.WindowsPlaced": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
     "NetTiming.windowsCount": "a8a5d1eed48debde81802ce4f07c6155717c55655b8800a6439815d221d4e399"
