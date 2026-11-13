@@ -869,7 +869,7 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
     (tmp_path / "pkg" / "fx" / "small.json").write_text("{}\n")
     reg = {"art:" + "a" * 64: "pkg/fx/small.json", "art:" + "b" * 64: "pkg/fx/big.proof", "art:" + "c" * 64: "other/big.bin",
            "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (tmp_path / "artifacts.json").write_text(json.dumps(reg))
     S = _suites(monkeypatch, tmp_path)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
@@ -904,7 +904,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     if absent:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (root / "artifacts.json").write_text(json.dumps(reg))
     (root / ".gitignore").write_text("__pycache__/\n")
     _git(root, "init", "-q")
     _git(root, "add", ".")
@@ -1086,7 +1086,7 @@ def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetche
     _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
                                  "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
     (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "registered")
@@ -1681,16 +1681,16 @@ def test_an_edit_to_a_nested_suite_reuses_the_outer_suites_pass_and_reading_it_u
 
 
 def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
-    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `artifacts.json` for
     repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (root / "artifacts.json").write_text("{}\n")
     (tests / "test_registry.py").write_text(
         "import os, subprocess, sys\n\ndef test_registry():\n"
-        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures/artifacts.json')\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'artifacts.json')\n"
         "    open(p).read()\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
     _git(root, "add", ".")
@@ -1698,7 +1698,7 @@ def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     assert "cached  pkg" in _run_suite(root, tmp_path).stdout
-    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    (root / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
