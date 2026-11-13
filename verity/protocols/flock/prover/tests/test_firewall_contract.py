@@ -19,7 +19,7 @@ from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity_flock import firewall_transcript as FT
 from verity_flock import rec_live as RL
 
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 LEAN = Path(__file__).resolve().parents[5] / "verity/protocols/flock/verifier"
 BIN = LEAN / ".lake/build/bin/flock-firewall"
 
