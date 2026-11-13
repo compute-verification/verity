@@ -63,7 +63,22 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
-           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
+           # pins and vectors that record their sources' paths, which `pins.py` and their tests read at those paths
+           "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json",
+           "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+# the verifier pod's install directory, a checkout of the tree (`tools/research/src/research/pods/nebius/verifier/`)
+root_prefixes = ["/opt/vy-verifier/current/"]
 
 [split]
 # references to a directory this move splits that stay right: "old file: old directory" = why
