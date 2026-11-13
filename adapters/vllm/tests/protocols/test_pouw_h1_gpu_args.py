@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.spot.device import remote as R
+from verity.protocols.proofs.spot.device import remote as R
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_gpu as G

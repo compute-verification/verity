@@ -22,11 +22,11 @@ from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import dead_free as DF
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as RG
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import boundary_tables as BT

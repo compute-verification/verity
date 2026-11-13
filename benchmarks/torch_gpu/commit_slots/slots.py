@@ -208,7 +208,7 @@ def fresh_salt_key() -> bytes:
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
     """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
-    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.pouw.verifier.audit.hm96_salt``)."""
+    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.accounting.pouw.verifier.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
 
