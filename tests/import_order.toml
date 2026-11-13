@@ -68,15 +68,6 @@ directory = "verity/configuration/config"
 owner = "ci"
 
 [[distribution]]
-directory = "benchmarks/rho"
-owner = "training"
-date = "2026-11-16"
-
-[[distribution]]
-directory = "benchmarks/nci"
-owner = "compute-accounting"
-
-[[distribution]]
 directory = "verity/composite/device/live_challenger"
 owner = "proofs"
 
@@ -663,11 +654,6 @@ paths = [
     "verity/protocols/reporting.py",
 ]
 trusted = true
-loaded_by = [
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_operating.py",
-    "benchmarks/rho/tests/test_params.py",
-]
 
 [[place]]
 paths = [
@@ -766,10 +752,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/flock/prover/tests/test_audit_profile.py",
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_envelopes.py",
-    "benchmarks/rho/tests/test_held_to_core.py",
-    "benchmarks/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
 ]
 
