@@ -1,7 +1,7 @@
 """`verity bench exfiltration`: GLM-5.3's exfiltration capacity over a monitoring period at a share of total compute
-(10% by default), in GB, as two parts side by side with every input labelled measured, modeled or assumed. It
-computes neither part itself: it composes the two calculators that do, and runs on any machine that reaches the
-store, with no GPU and no node.
+(10% by default), in GB, as two parts side by side with every input labelled measured, modeled, simulated, assumed,
+missing or run, not proved. It computes neither part itself: it composes the two calculators that do, and runs on any
+machine that reaches the store, with no GPU and no node.
 
 * **The share of total compute** is given (`--share`) and assumed. Beside it the command prints the share a served
   two-stage run measures (`served_share`, `--served-run`): the audit's GPU-seconds on the run (its proving, staging,
@@ -184,7 +184,7 @@ PRINTED = {RUN_NOT_PROVED: "run (Python verifier, not proved)"}
 #: an input's marks: `missing` is a served run's field its record lacks, which the share it would measure is not claimed
 #: without; `RUN_NOT_PROVED` is never `measured`, which a verdict is only where its record names the Lean guarantee
 #: that proves its verifier (`proved_by`)
-MARKS = ("measured", "modeled", "assumed", "missing", RUN_NOT_PROVED)
+MARKS = ("measured", "modeled", "simulated", "assumed", "missing", RUN_NOT_PROVED)
 #: the record whose runs hold the verdicts on the stop class, each verdict's record one JSON object a line of
 #: `VERDICTS_FILE` in a run's files
 VERDICTS = "exfiltration-glm53-stop-verdicts"
@@ -1314,7 +1314,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{_n(net['GB'])} GB.",
         *_security(head["binding"]),
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
-        + _listed([f"{marks['modeled']} modeled", f"{marks['assumed']} assumed",
+        + _listed([f"{marks['modeled']} modeled", f"{marks['simulated']} simulated", f"{marks['assumed']} assumed",
                    *(f"{marks[m]} {PRINTED.get(m, m)}" for m in ("missing", RUN_NOT_PROVED) if marks[m])]) + ".", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
@@ -1416,8 +1416,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
                     "planner's rows of record in the evidence store, beside the network certifier's part, with every "
-                    "input labelled measured, modeled, assumed, missing or run, not proved. Every figure carries the "
-                    "error summed over "
+                    "input labelled measured, modeled, simulated, assumed, missing or run, not proved. Every figure "
+                    "carries the error summed over "
                     f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
                     "amount.")
     ap.add_argument("--json", action="store_true", help="print the document (value, unit, inputs, parts, periods)")
