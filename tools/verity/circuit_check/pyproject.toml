@@ -288,7 +288,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon",
+    "verity/circuits", "verity/circuits/ops", "verity/circuits/silicon",
     "verity/commitments/gates",
     "verity/protocols/flock/prover/python/verity_flock",
     "verity/circuits/private_circuits",

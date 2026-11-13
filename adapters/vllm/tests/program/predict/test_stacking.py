@@ -1,4 +1,4 @@
-"""property/v1 (`verity.definitions.circuits.stacking`) on real bf16 Programs, the weights as the registered store: Llama-3.2-1B's step (the
+"""property/v1 (`verity.circuits.stacking`) on real bf16 Programs, the weights as the registered store: Llama-3.2-1B's step (the
 traced Build `test_predict` pins) and a small request (a prefill of 3 rows, then a decode step), and Qwen3-30B-A3B's step (a
 mixture of experts). Each is refused for its bf16 tensor-core steps, every served MAC in one: a rounding of 544 operand bits,
 past B (``operand-bits``), and budgeted with the rest of its units by class. A change to a Definition these Programs call moves
@@ -12,8 +12,8 @@ import random
 
 import pytest
 from verity.circuits.program import Program
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census, step_ends
+from verity.circuits import stacking as P
+from verity.circuits.census import census, step_ends
 from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 
 from tests.program.predict.test_predict import FIX, _phi
