@@ -516,6 +516,12 @@ class RemoteChallenger:
             raise ValueError(f"a challenger's address is HOST:PORT, not {address!r}")
         return cls(socket.create_connection((host, int(port))), secret)
 
+    def layout(self) -> dict:
+        """The session's layout, ``{epoch, families, scheme}``: what a withheld session's hello answers (`layout_json`),
+        and the layout of the commitment any other's does."""
+        scheme, epoch, families = self._layout
+        return {"epoch": epoch, "families": [[label, n] for label, n in families], "scheme": scheme}
+
     def _end(self, why: str) -> CoinError:
         self._ended = why
         self._wire.sock.close()
