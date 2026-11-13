@@ -127220,3 +127220,39 @@ Nothing.
 - Everything my 07:03Z entry listed stands: `OtherRoots` at no play, `PrintsInOrder` of no device, no records run at my head, the earlier period's signature.
 
 Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Runs: `4159` cancelled (duplicate), `4405` cancelled (could not start), `6145` done rc 0 (the slots' status), `r20261113-071814-640b` running on vy-nebius-cpu-2.
+
+## ONSITE, Fri 13 Nov 07:21Z: both ready lines (#9674, #9602); item 3 passes; new since #9618 landed: on today's `main` the carve's moved tree needs one hand commit, the world's needs none
+
+**Ready line:** #9674, head `b446d85535be7db03b30eb9dec7cbeec564cb1cb`, branch `cursor/proofs-world-map-interface-4d1c`. `main` (`b843a10af48a`) is in it and nothing else [read: `git log origin/main..HEAD`, three commits, all mine]. It merges onto `main`'s tip `2e99b1cf48b8` with no conflict [run on my VM: `git merge-tree`].
+- Ratchet gate `2e99b1cf48b8..b446d85535be`: passed [run on my VM, 07:04Z].
+- The changed suites' quick tier at the head: 3 of 3 [run `r20261113-055641-89f9`, rc 0].
+- Certificate at the head: a pure move, 6 renames, 11 path-only edits; rerun changes nothing; `resolve_check.py` 0 issues; 402 Lake paths resolve before and after; 0 `__init__.py` deleted; 4 pins regenerated, 0 stale after [run `r20261113-055642-6740`, rc 0; Lake paths and the count on my VM].
+
+**Ready line:** #9602, head `c0ebc52445e29770af76e108d33759ec6259295a`, branch `cursor/proofs-compose-lists-map-6c1e`. `main` (`8ef93f01963c`) is in it and nothing else [read: `git log origin/main..HEAD`, seven commits, all mine]. It merges onto `main`'s tip `2e99b1cf48b8` with no conflict [run on my VM: `git merge-tree`].
+- The changed suites' quick tier at the head: 13 of 13 passed, 147.3 min of test time [run `r20261113-041521-46a8`, cpu-14, rc 0].
+- Ratchet gate `2e99b1cf48b8..c0ebc52445e2`: passed [run on my VM, 07:04Z].
+- Certificate at the head: as in my 04:28Z entry [run `r20261113-041056-ac16`]. On its moved tree with pins, 17 of 17 suites passed [run `r20261113-042954-f29b`, rc 0].
+- **Read the next section before you mark it:** its head's `main` is from before #9618 and #9651.
+
+**3. The fast path of `security/Properties` and `security/Proofs`: passes** [run `r20261113-054946-f77d`, cpu-10, rc 0, result `lean-fast/v1`, outcome `pass`].
+- `lean_changed.py --records verity/protocols/interface/world` on the moved tree `bdb345158461`.
+- `core_world` at its new place: PASS, 1 module. `security`: PASS, 730 modules, 1137 guarantees. `security/Properties`: PASS, 107 modules, 536 guarantees. `security/Proofs`, built under both from the rewritten manifests: PASS, 4051 modules. `failures: []` in all three reports [read: the run's `audit.json` files].
+- It is the fast path: no kernel replay and no tests, as its last line says. The device's own check, with the replay, passed in `r20261113-061854-8b4b` (my 06:24Z entry).
+- So items 1 to 4 all pass. Nothing stopped.
+
+**New on `main` since 06:45Z, and what it does to the moves.** `main` went from `b843a10af48a` to `2e99b1cf48b8` in one batch that holds #9651 (the tree test's fix) and #9618 (vllm's: the import order as one listing, `tests/import_order.toml`, held byte for byte to its generator by `tests/test_boundaries.py`).
+- **The world's move needs nothing more** [run on my VM, on a scratch merge of #9674's head with `2e99b1cf48b8`]: the mover moves the same 6 files; `tests/test_boundaries.py`, `tests/test_tree.py`, `tests/test_lean_packages.py` and `tests/test_doc_paths.py` by name: 69 passed; `import_order.py --check`: "the same".
+- **The carve's two moves need one hand commit after them** [run on my VM, on a scratch merge of both heads with `2e99b1cf48b8`]. Without it three tests of `tests/test_boundaries.py` fail on the moved tree: the listing's rows for `verity/protocols/remote` and `verity/protocols/onsite` hold no file, its place `verity/protocols/remote` holds no Python, and the listing is not what the generator writes. The commit:
+  - in `order`, those two rows become the one row `["verity/protocols/compose"]`;
+  - the `[[place]]` with path `verity/protocols/remote` names `verity/protocols/compose`;
+  - then `uv run tools/verity/check/import_order.py`, which only moves that place to its sorted position.
+  - With it the same four test files pass, 69 passed, and `tests/test_examples.py` 12 passed. It can't go before the move: a row for a directory with no tracked file fails the same test.
+  - It is in #9602's body now, with the quick tier's and the moved tree's results. The head did not move.
+- **This is every lane's, not only ours** [derived]: any move that empties a directory the listing's `order` or a `[[place]]` names needs the same hand commit. top's chain has such moves; I have not read which.
+- **On a node** [run `r20261113-070550-96f0`, cpu-14, running]: on that merge the three maps certify in order (19 renames and 33 edits, 13 and 33, 6 and 11), each rerun changes nothing, `resolve_check.py` 0 issues on each, `tests/test_tree.py` rc 0. Its staged tree is the tree I made on my VM (`ca7e049de5be`). It is regenerating pins, then runs `repository`, which I expect to fail on those three tests since it has no hand commit. When it ends I run `repository` on a node on its pins commit with the hand commit on top.
+- **#9651 is on `main`**, so `configurations_map.toml`'s exclusion of `tests/test_tree.py` does nothing there, and its comment about the test's example is no longer true of `main`. I take both out in a small change after #9602 lands (it cannot be made against `main` before). Say if you would rather have it in #9602 now: that moves its head and its quick tier is 2 h 45 min of a node.
+- `CORE_TREES` is gone with #9618, so "`protocols/remote` out of `CORE_TREES`" is void; the hand commit above replaces it.
+
+**My machine was replaced** between 06:26Z and 07:01Z. Nothing was unpushed. I retook `~/wt/.pen` at 07:02Z; no other loop held it.
+
+**Not established:** the hand commit on a node; any Lean check of the carve's moved tree; a kernel replay of `security` on the world's moved tree.
