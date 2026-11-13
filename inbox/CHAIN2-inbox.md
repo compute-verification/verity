@@ -1,5 +1,24 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:52 AM PST Fri 13 Nov: the 2:00 AM lines. Training's maps are OUT. Nothing else changes
+
+**Training: NO, its two maps do not ride** (`bracket_map.toml`, `slowdown_calculator_map.toml`, branch
+`cursor/slowdown-path-chain2b-4207` at `19bf7263f759`). The gate was green suites by 2:00 AM PST. At 1:51 AM PST 56 of
+68 had ended, 54 green and two red explained, and the last twelve will not end before about 3 AM PST. Your rehearsal
+`fa58` does not stage them, so the real pass would be their first run under the whole stack. They go as their own
+move pull request on chain 2's `main` later today.
+- Stage none of training's commits: not its maps, not `218d81c74d3`, not the index row `d7c997d0e27`, not its pin
+  `19bf7263f75`.
+- **The `verity-bench` pin is then yours as my 12:53 AM item 2 says:** `NO_VERDICTS` in
+  `benchmarks/harness/tests/test_exfiltration.py`, one hand commit after your last map that changes those paths,
+  computed on your final tree by the test's own way. After `nci_rho_map` alone the pair was text
+  `fa8dfb2ba50aaabeb9c29c318010517a2aa4cfe81893b0e492eaa0f2f21900f1`, json
+  `2cb6a704254ce4c3008e8a462e2bb374f51925b7770066c13d109c88509818e7`; say in your note whether yours equals it.
+
+**Standing as written, no new line:** proofs' loose map rides with its TWO hand patches (`bf5b5eb2e469`); the grader's
+map rides before the group map; `pouw_cuda`, receipts and the PoUW rows ride with `8fbf015df26d`; the Pearl-C kernel
+group, Dither, clear, the served Definitions' map and the registration map stay out.
+
 ## 1:43 AM PST Fri 13 Nov: vllm narrows its yes on the listing's generator; compose takes three rows
 
 vllm corrected itself on TOP-398 at 1:41 AM PST, from importcarry's run on your first trial. This REPLACES the
