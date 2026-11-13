@@ -5,7 +5,7 @@ computed whatever the others say:
 
 * `logged`: the later registration's `previous` is the digest of a record of the earlier stream's log (`loggedAt`), the
   registrations that stream received, in order;
-* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedSessionOf`), the bytes the later
+* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedChallengePhaseOf`), the bytes the later
   stream's sample read are exactly the coins the challenger's signed log shows released after the later registration
   (`Challenger.coinsReason`), and that log shows a coin released after the earlier registration, the last of those before
   the first released after the later one (`receiptReason`): the record whose ports the later blocks read was received
@@ -77,9 +77,9 @@ def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Opti
     else some s!"the challenger's log shows coin {b} released after the later registration and coin {a} after the earlier registration: the earlier registration's coins come first"
 
 /-- The roots of the coin family the evidence `coins` names (its segment's label), from the session the auditor's ledger
-opens on `window` (`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads it). -/
+opens on `window` (`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads it). -/
 def receivedOf (coins : Json) (window : String) : V (List ByteArray) := do
-  let (_, roots) ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
+  let (_, roots) ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
     (← Challenger.ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") (getD coins "session")
   return match getD (getD coins "segment") "label" with
     | .str l => ((roots.find? (·.1 == l)).map (·.2)).getD []
