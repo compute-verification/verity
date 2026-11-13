@@ -1012,6 +1012,45 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
     assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
 
 
+def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tmp_path, monkeypatch):
+    """`check.json`'s `audit_windows` is the audit's verdict of each execution phase, whole. Of a session's two, the
+    second, where a connection fails closed, is refused with that problem and the first accepted, while `problems`
+    gives the problem's text without its execution phase; a run the audit accepts has each one accepted, with no
+    problem. And where the audit has more problems than the 50 `problems` keeps, `audit_windows` has them all."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+
+    def run(name: str, answers: list[bytes]) -> dict:
+        out = tmp_path / name
+        out.mkdir()
+        _run(out, tmp_path / f"key-{name}", requests, answers, windows=args.windows, params=p, id_payload=p.payload,
+             arrive=dict(enumerate([0, 0, 1, p.window])))
+        (out / "client.json").unlink()
+        return ws.check(out)
+
+    result = run("ends", responses)
+    assert result["accepted"] and result["audit_windows"] == [
+        {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": True, "problems": []}]
+
+    result = run("fails", responses[:3] + [_response([" a"])])
+    why = "connection 4 failed closed (format) at egress cell 0"
+    assert not result["accepted"] and result["problems"] == [f"audit: {why}"]
+    assert result["audit_windows"] == [
+        {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": False, "problems": [why]}]
+
+    audit = ws.audit
+
+    def many(*records) -> dict:
+        verdict = audit(*records)
+        verdict["windows"][1]["problems"] += [f"problem {i}" for i in range(60)]
+        return verdict
+
+    monkeypatch.setattr(ws, "audit", many)
+    result = ws.check(tmp_path / "fails")
+    assert len(result["problems"]) == 50 and result["problems"][:2] == [f"audit: {why}", "audit: problem 0"]
+    assert result["audit_windows"][1]["problems"] == [why] + [f"problem {i}" for i in range(60)]
+
+
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
     """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the network certifier's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults

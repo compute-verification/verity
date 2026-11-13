@@ -131,6 +131,9 @@ and writes no `traffic.json`, `client.log` or `client.json`.
   execution phase's certificates and registrations and the audit. That each cell reached its client in its bucket, and
   that a client's bytes are the records', is the client's to check, from its own log against the run: the summary's
   `requests`, `ended` and `cells_in_their_bucket` count no connection.
+- *Where a refused run says why.* `check.json`, with the run's witness: `problems` names a record the relay didn't
+  certify or register by record and window, and `audit_windows` each execution phase the audit refused with its
+  problems (a connection failed closed, by ordinal and reason; one cut with no `END`).
 - *What it establishes.* The records cover the connections that crossed the relay. A server reached by another
   route is in none of them ("What it can't enforce here").
 
@@ -1024,7 +1027,9 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
 
 
 def check(run: Path) -> dict:
-    """The offline check of a served run (the module docstring's `check`)."""
+    """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
+    each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
+    gives as ``audit: PROBLEM`` without their execution phase, among its first 50."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -1107,7 +1112,7 @@ def check(run: Path) -> dict:
         **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
-            "connections": rows}
+            "audit_windows": verdict["windows"], "connections": rows}
 
 
 def table(result: dict) -> str:
