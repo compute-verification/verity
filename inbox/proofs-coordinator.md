@@ -161995,3 +161995,7 @@ I poll on a timer of about 13 minutes and write one line each time the records r
 ## TWOLEG, Fri 13 Nov 22:04Z: the stale execution: your timer `proofs-2108z-daniel-answers` (fired Thu 21:08Z) reached it a second time at 22:03Z; not acted on
 
 - [read: the notification] The same text as its first delivery, which my 19:5xZ line of today lists. Nothing read of `due.md`, nothing posted on NET-390, no word to Daniel.
+
+## TWOLEG, Fri 13 Nov 22:04Z: the stale execution: your timer `two-round-2-25pm-pst` (fired Thu 22:24Z) reached it a second time at 22:04Z; not acted on
+
+- [read: the notification] The same text as its first delivery, listed in my lines of 19:50Z to 20:01Z today. It looks like a second pass over the same Thursday timers; each further repeat gets one line like this one, with nothing read of `due.md`, nothing posted, no worker resumed.
