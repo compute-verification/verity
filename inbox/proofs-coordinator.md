@@ -146792,3 +146792,79 @@ ordered scratch `ce5c28d0ad2` with TWOLEG's rule B (`c8bfe0d0102`) merged, which
 coin-tree case refuse it, as the script expects. 9:47 wall, 3.51 GB peak. The twenty-template play follows in the same run.
 At the ordered scratch `ce5c28d0ad2` with no rule B, the same play is refused at "registered" (14:30Z line). The entry
 comes by 15:45Z.
+
+
+## RATING, Fri 13 Nov 14:43Z: by reading, no run: my sweep does not take `pearl-c-sm120-v1-h3` as it stands (about 90 lines, all in my own file); the scheme lacks nothing. But three of the four classes rest on the H100's 14-bit cut and by reading do not exist at the 26-bit adder, so their rows would rate nothing. A row is about 2 minutes at 8192³ and 17 to 30 at k = 65,536. Nothing launched
+
+**In plain words.** The code side is small and the rows are cheap, so the date is not at risk from the sweep. The risk is what the rows would mean. Review 1's raised adder, its planted skip and my two-raiser tile all work by making the H100's adder throw away small products. sm_120's adder keeps 12 more bits, so at the same plants it throws nothing away, the cheap programs output wrong words, and there is nothing for the debit to refuse or miss. Only the dead-pair class should carry over as built. A rating at sm_120 of "the classes as found" would therefore say "not rateable" for three of them, and would not be a red team of the 26-bit atom.
+
+Everything below is at #9735's head `4d4950f1bb9` and my sweep at `90876d15ebb` (`cursor/proofs-rating-09fd`).
+
+### 1. Does the sweep take the scheme as it stands? No
+
+[read] `benchmarks/pouw/dead_pairs_sweep.py` names the H100 on 14 lines: `C.set_atom("hopper")`, `PearlC(forming="v1", device=H100)` three times, `H100.atom.step` five times, and `H100` passed to `scalar_chain`, `FT._flags`, `D.tile_debit` (twice) and `D.debit_units`. Its bound uses `T.RHO` (1/400) for the cap, and its programs are priced by `T._raised_cost`, `T._dead_pair_cost` and my `raised_cost_at`, which read `H100.prices`, `CAST = 32`, `INT32 = 64` and `LINE = 24_000`.
+
+### 2. What is missing, and in whose code
+
+| What you asked about | State at #9735's head | Whose lines |
+| --- | --- | --- |
+| The scheme's code | Present. `PearlC(forming="v1", device=SM120)` names itself `pearl-c-sm120-v1-h3`. Forming, admitting, the ticket words, the tile rule (`clear_work.tile_cap`), the debit with its mends (`pearl_c_debit`) and the batch forms (`fast_tile`) all take the device as an argument. Of the conditions that send `fast_tile` back to the scalar code, the ones that depend on the device are an atom of more than one group or under 7 bits, and a device without promotion; sm_120 is one group, 26 bits, g = 4. | none |
+| Its prices | Present: `SM120_PRICES` (FP32 add 8, BF16 2, forming 40 credited and 1 A-only), Lean's `Prices.sm120`. | none |
+| The device record | Present: `SM120`, atom `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32, width 26, zero exponent −133), g = 4, k up to 2^16. The census module has the same atom (`C.set_atom("sm120")`). | none |
+| The cap | Present: `SM120.cap` = 1/1,000, which the scheme reads as `scheme.cap`. | none |
+| The sweep's device | Missing: a `--device` option in place of the 14 uses, and `sch.cap` in place of `T.RHO`. | mine, about 30 lines |
+| The programs' prices at sm_120 | Missing: twins of the three cost functions at W1's sm_120 prices (`W1Prices.sm120`: MAC 1, FP32 8, a cast's code 8, INT32 16; `sm120Loop`: FP32 1047/125). I would keep the noise line's bound at 24,000: every sm_120 price is at or under the H100's, so it stays an upper bound. | mine, about 40 lines |
+| The dead-pair tile under the rule | Missing at either device: the sweep puts the raised and two-raiser tiles through the scheme's rule, and the dead pairs only through a words check. The H100 rating held that class by the PR's tests alone, as my 13:40Z said. | mine, about 20 lines |
+
+- So: no line of compute-accounting's code, none of #9735's, none of the test module. All of it is my sweep, on my branch.
+- [read] What is missing and is not code: the proofs. #9735's Lean covers the H100 record only, as its body says, and the record's own stand-in line reads "P1 and the debit not yet re-derived for the 26-bit atom". A rating at sm_120 rates the Python check, not a Lean statement.
+- **One choice that is not mine: which price record.** The scheme as it stands credits and debits at `Prices.sm120` (FP32 8, A-only forming 1). The deployed guarantee (`GapSm120v1LoopCast8p72Rev1Cap1000_8192`) assumes TT_OUT at `devSm120v1 Prices.sm120Loop` (FP32 8.376, A-only forming 2) on `W1Device.sm120Loop`. The scheme takes `prices=`, so a row can carry both for one more pass of the rule (about 1.5 minutes at 8192³). Unless told otherwise I would print both.
+- [read] TT_OUT's event at sm_120 is (1 − 1/1,000)·credit > cost/(1 − 1/400): the cap changes, the gap stays 1/400 (`TTOutPearlCDevRev1W1`).
+
+### 3. What the reading found: three of the four classes are the H100's
+
+[inference from the atom's model, `group_sum_total_batch`; not run] The adder aligns every product and the accumulator to the largest exponent among them and keeps `width` bits, so its unit is 2^(top − 13) at 14 bits and 2^(top − 25) at 26 bits: 4,096 times finer at sm_120.
+
+| Class | What it rests on at the H100 | The same plants at sm_120 | My expectation |
+| --- | --- | --- | --- |
+| Raised adder, one atom a group | Three 448² products leave the accumulator at 602,112, so the unit is 64 and every ordinary product (under 64) is cut to zero | The unit is 1/64. Ordinary products survive, so the atoms the program leaves out add to the word | program's words wrong; not rateable |
+| Planted cross-group skip | The same cut, so the skipped atoms add only ±160² and cancel across a pair of groups | The skipped atoms add their ordinary products too; nothing cancels | program's words wrong; not rateable |
+| Two-raiser tile (PRF-612) | Two raisers leave 401,408, unit 32 | Unit 1/128 | program's words wrong; not rateable |
+| Dead pairs | Two ±448² products set the unit at 8, so each live product is cut on its own and the sums are exact | The unit is 1/512, E4M3's smallest step. Each live product is still cut on its own, the same in the program's atom, and the sums stay exact while the total fits 24 bits: up to 7 planted groups | program's words equal; the rule's verdict is what a run gives |
+
+- Confidence: high for the first three (the cut is off by 12 bits, and noise-alone codes are up to 8 by the module's own text). Medium for the dead pairs: I followed the sums by hand and did not run them.
+- On the dead pairs the mend charges 112 MACs a planted group-word (28 dead pairs an atom), and the cap is a 1/1,000 share where the H100's is 1/400. So I expect the rule to refuse it. [guess until run]
+- What this does not say: that sm_120 has no class. It says these four were built for another adder. A class for the 26-bit atom would be a new design, and my rules say I design nothing without your word.
+
+### 4. What one row costs
+
+One row is one whole 64 × 64 tile at one salt. [run] for the H100 scheme, from the laps my runs recorded; [inference] that sm_120 costs the same, since the batch forms do the same array operations at either width.
+
+| Row | Batch forms | Scalar reference |
+| --- | --- | --- |
+| 8192³ | 84 to 117 s: about 2 minutes (`r20261113-123655-6a3c`, nine tiles) | 2,333 s: 39 minutes (`r20261113-125237-4851`) |
+| k = 65,536, n = 8,192 | about 1,000 s: 17 minutes | 4,928 s: 82 minutes (`r20261113-075654-009e`) |
+| k = 65,536, n = 8,192 and n = 65,536 | 1,668 to 1,806 s: 28 to 30 minutes (the tile is formed once, the rule runs once an n) | not run with both |
+
+- Of the 17 minutes at k = 65,536: forming 49 s, the ticket words 10 s, the programs 12 s, the debit 148 s, the rule 730 to 800 s.
+- A words-only check on a 4 × 4 tile (`--scheme`, `--raised-scheme`, the scheme's scalar code) is seconds: the scalar reference forms a row in 0.5 s and a word in 7 ms.
+- [read] `test_pearl_c_vllm.py` holds the batch forms, the batch debit and the batch tile debit with its mends to the scalar ones on `pearl-c-sm120-v1-h3`, so I do not expect them to fall back. If they did, the scalar column applies.
+
+### 5. The rows I would run first, on your yes
+
+1. **Whether each class exists at sm_120.** One run, about 5 minutes: the dead-pair program (1 group) and the two raised-adder programs (20 groups, both fills) on 4 × 4 tiles at k = 8,192, three salts, words against the scheme's own; and one whole two-raiser tile, off-centre, at 8192³, salt 0, with the rule. It prints, for each program, how many words equal the reference's. This settles section 3 by a run.
+2. **The honest tile and the dead pairs under the rule at 8192³.** A Gaussian tile and the dead-pair tile, three salts, both price records: about 20 minutes in one run, or 7 in three side by side. It gives the mends an honest tile pays at the 1/1,000 cap, which nothing has measured, and the rule's verdict on the one class that carries over.
+3. **The same two at k = 65,536, both n,** dead pairs at 7 groups: three runs side by side, about 30 minutes each.
+4. Any class whose words turn out equal in row 1 against my expectation: three salts at 8192³, then at k = 65,536, as the H100 rating went.
+
+All on `--on auto`, the sweep laid over a clone of #9735's head, as before.
+
+### For your 20:00Z answer on the date
+
+- Fri 20 Nov holds for "the four classes as found, at sm_120, three salts, 8192³ and k = 65,536, both price records". After your yes: the change to my sweep, then row 1 within the hour and rows 2 and 3 the same day.
+- It does not hold for "a red team of the 26-bit atom", if that is what compute-accounting means by a rating at sm_120. That needs someone to build a class for that atom first. I can say after row 1 whether the as-found rows leave anything to rate.
+- Text for PRF-612, if you want it: "RATING's sweep takes sm_120 after a change to the sweep alone; the scheme needs nothing. By reading, three of the four classes rest on the H100's 14-bit cut and do not exist at the 26-bit adder; only the dead pairs carry over. Rows as found by 20 Nov: yes. A red team at sm_120: not in that."
+
+**Not done, and not checked.** Nothing was run, here or on a node. I did not read the kernel's CUDA, only the CPU model the verifier replays. I did not count a noise line at sm_120's prices. I did not check that an honest tile fits the 1/1,000 cap with the mends.
+
+**State.** #9735: marked by you at 13:47Z, untouched by me since my 13:40Z. The witness waits on mend 2's form. Nothing of mine is running. Mailbox read at 14:43Z; nothing newer than your 14:07Z.
