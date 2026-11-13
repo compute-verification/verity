@@ -1,10 +1,10 @@
 """Dead-code census of `adapters/vllm`: static import reachability from the declared entry points (`census_roots.txt`), optionally
 merged with a dynamic `sys.modules` record from the pod.  `tests/test_no_dead_modules.py` runs the static part on every test run against
-the shrink-only keep-list `dead_code_keep.json`; this tool is the long form (classes, the deletion plan, artifacts) for a cleanup pass.
+the shrink-only keep-list `dead_code_keep.json`; this tool is the long form (classes, the deletion plan) for a cleanup pass.
 Its output is not committed: write it anywhere with --out.
 
     cd adapters/vllm
-    python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json] [--git-dates]
+    python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json]
     python tests/dead_code_census.py --tests-for MODULE... [--out /tmp/tests_for.json]
 
 ROOTS (`census_roots.txt`, reviewed by hand): shell entry points (paths or globs: every sweep runner and negatives runner by rule), Python
@@ -29,8 +29,7 @@ CLASSES (per module of the census packages):
 
 DELETION PLAN: a non-LIVE module is kept when the keep-list names it (fixture generators and reference models that tests of LIVE
 modules import, other lanes' protected paths, next-candidate clusters), otherwise deleted.  A test file goes when it imports a deleted
-module, directly or through another deleted test (fixpoint); the harness dir never goes.  Artifacts: an unreferenced file (no tracked
-file of the whole repo names it or an ancestor directory) is deleted only inside ARTIFACT_DELETE_SCOPES, and never a `.sh`.
+module, directly or through another deleted test (fixpoint); the harness dir never goes.
 
 TESTS FOR A SET (`--tests-for D`, the tests that go with a deletion): each test-tree file reaches the library modules it names
 itself (an import, a string naming a module or its path, a `verity-vllm` command's name in a file that runs the CLI) and those
@@ -48,7 +47,6 @@ import fnmatch
 import json
 import os
 import re
-import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -88,14 +86,6 @@ RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vll
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
 #: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path
 SIDECAR = ".circuit-check.py"
-
-ARTIFACT_DELETE_SCOPES = ("verity_vllm/ops/fixtures/",)
-#: Unreferenced by name but read through a name pattern (file -> the reader).
-ARTIFACT_KEEP: dict[str, str] = {
-    **{f"tests/regression/expected/{r}.json": "harness contract read as expected/<row>.json" for r in (
-        "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager", "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager",
-        "smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager")},
-}
 
 SHELL_MODULE_RE = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 SHELL_PY_RE = re.compile(r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_]+\.py)(?![\w])")
@@ -408,73 +398,6 @@ def all_shell_refs(g: Graph) -> dict[str, set[str]]:
     return out
 
 
-def git_dates(rels: list[str]) -> dict[str, str | None]:
-    out: dict[str, str | None] = {}
-    for rel in rels:
-        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", str(path_of(rel))], cwd=ROOT, capture_output=True, text=True, check=False)
-        out[rel] = r.stdout.strip() or None
-    return out
-
-
-# ---------------------------------------------------------------------------------------------------------------------------- artifacts
-def artifact_refs() -> dict[str, dict]:
-    """Every tracked non-.py file under the integration: which tracked files of the WHOLE repo name it -- by basename, or by one of its
-    ancestor directories (data read by directory / glob)."""
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split("\n")
-    self_files = {"adapters/vllm/tests/dead_code_census.py", "adapters/vllm/tests/dead_code_keep.json"}
-    files = [f for f in files if f and not f.endswith(".py")]
-    out: dict[str, dict] = {}
-
-    def grep(needle: str) -> list[str]:
-        r = subprocess.run(["git", "grep", "-l", "-I", "-F", "--", needle], cwd=REPO, capture_output=True, text=True, check=False)
-        return [x for x in r.stdout.split("\n") if x and x not in self_files]
-
-    dir_cache: dict[str, list[str]] = {}
-    for f in files:
-        self_rel = f"adapters/vllm/{f}"
-        refs = {x for x in grep(os.path.basename(f)) if x != self_rel}
-        dir_refs: dict[str, list[str]] = {}
-        parts = f.split("/")[:-1]
-        for i in range(len(parts), 0, -1):
-            d = "/".join(parts[:i])
-            if d in ("",) + PACKAGES + ("tests",):
-                continue
-            if any(p.suffix == ".py" for p in (ROOT / d).iterdir()):
-                continue                                             # a code directory being named is not a reference to its data files
-            if d not in dir_cache:
-                dir_cache[d] = [x for x in grep(d + "/") if not x.startswith(f"adapters/vllm/{d}/")]
-            if dir_cache[d]:
-                dir_refs[d] = dir_cache[d]
-        out[f] = {"bytes": os.path.getsize(ROOT / f), "referenced_by": sorted(refs), "directory_referenced_by": dir_refs}
-    return out
-
-
-def artifact_plan(arts: dict[str, dict], deleted_files: set[str]) -> dict:
-    """Fixpoint: an artifact is unreferenced when every file naming it (or an ancestor directory) is itself deleted.  In scope -> delete;
-    out of scope -> report.  Shell scripts are entry points: never in the plan."""
-    gone = {f"adapters/vllm/{p}" for p in deleted_files}
-    deleted: dict[str, str] = {}
-
-    def unreferenced(e: dict) -> bool:
-        return not [x for x in e["referenced_by"] if x not in gone] and \
-            not any([x for x in xs if x not in gone] for xs in e["directory_referenced_by"].values())
-
-    changed = True
-    while changed:
-        changed = False
-        for f, e in arts.items():
-            if f in deleted or f in ARTIFACT_KEEP or f.endswith(".sh") or not unreferenced(e):
-                continue
-            if f.startswith(ARTIFACT_DELETE_SCOPES):
-                deleted[f] = "referenced by nothing" if not e["referenced_by"] else "referenced only by deleted files: " + ", ".join(e["referenced_by"])
-                gone.add(f"adapters/vllm/{f}")
-                changed = True
-    out_of_scope = sorted(f for f, e in arts.items() if f not in deleted and f not in ARTIFACT_KEEP and not f.endswith(".sh") and unreferenced(e))
-    return {"deleted": deleted, "deleted_bytes": sum(arts[f]["bytes"] for f in deleted),
-            "unreferenced_out_of_scope": {f: arts[f]["bytes"] for f in out_of_scope},
-            "unreferenced_shells": sorted(f for f, e in arts.items() if f.endswith(".sh") and unreferenced(e))}
-
-
 # ---------------------------------------------------------------------------------------------------------------------------- tests of a set
 CLI_MODULE = "verity_vllm.pipeline.cli"
 #: a string that names a module, maybe with a name in it (`module.attr`, `module:attr`)
@@ -632,7 +555,7 @@ def report_tests_for(items: list[str], out: str | None) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- census
-def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> dict:
+def build(imported: set[str] | None) -> dict:
     g = Graph()
     roots_by_mod, roots_by_shell, unmatched = resolve_roots(g)
     roots = set(roots_by_mod)
@@ -671,15 +594,13 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
                 changed = True
     broken = sorted((rel, x) for rel, m in g.mod_of.items() if m not in deleted_mods and rel not in deleted_tests
                     for x in g.edges.get(m, ()) if x in deleted_mods or g.file_of[x] in deleted_tests)
-    aplan = artifact_plan(artifact_refs(), {g.file_of[m] for m in deleted_mods} | set(deleted_tests)) if with_artifacts else None
 
-    dates = git_dates(sorted(prod)) if with_dates else {}
     modules: dict[str, dict] = {}
     for rel, m in sorted(prod.items()):
         c = "LIVE" if m in live else "TEST-ONLY" if imported_by_tests.get(m) else "DEAD"
         e = {"module": m, "package": rel.split("/")[0], "class": c, "static_reachable": m in static,
              "dynamically_imported": bool(imported and m in imported), "n_imported_by_tests": len(imported_by_tests.get(m, ())),
-             "imported_by_tests": sorted(imported_by_tests.get(m, ()))[:8], "loc": loc(path_of(rel)), "last_commit_date": dates.get(rel),
+             "imported_by_tests": sorted(imported_by_tests.get(m, ()))[:8], "loc": loc(path_of(rel)), "last_commit_date": None,
              "referenced_by_shell": sorted(shell_refs.get(m, ())), "root_via": sorted(roots_by_mod.get(m, ())), "protected": protected(rel),
              "live_only_via_profiles": m in live and m not in live_sans_profiles and m not in profiles_mods,
              "why": g.why(roots, m) if m in static else None}
@@ -716,7 +637,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
         "live_only_via_run_config_skipped_stages": {g.file_of[m]: loc(path_of(g.file_of[m])) for m in sorted(skipped_only)},
         "live_only_via_profiles": sorted(rel for rel, e in modules.items() if e["live_only_via_profiles"]),
         "modules": modules,
-        "artifacts": aplan,
+        "artifacts": None,
     }
 
 
@@ -724,8 +645,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--imported", default=None, help="the pod's sys.modules record (a list, or {'modules': list | {module: ...}})")
     ap.add_argument("--out", default=None, help="write the full census JSON here (not committed)")
-    ap.add_argument("--git-dates", action="store_true", help="record last_commit_date per file (one git log per file)")
-    ap.add_argument("--artifacts", action="store_true", help="index every non-.py artifact against the whole repo (git grep; needs a checkout)")
     ap.add_argument("--tests-for", nargs="+", metavar="MODULE", default=None,
                     help="instead of the census, what deleting these modules (dotted, or paths from adapters/vllm; a package "
                          "or directory is every module under it) does to the tests: the files that go, and those to edit "
@@ -739,7 +658,7 @@ def main(argv: list[str] | None = None) -> int:
             doc = json.load(f)
         mods = doc.get("modules", doc) if isinstance(doc, dict) else doc
         imported = set(mods if isinstance(mods, list) else mods.keys())
-    census = build(imported, a.git_dates, a.artifacts)
+    census = build(imported)
     if a.out:
         with open(a.out, "w") as f:
             json.dump(census, f, indent=1)
@@ -758,10 +677,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"roots: {r['n_roots']} modules from {len(r['shells'])} shells + entries; unmatched entries {r['unmatched']}; non-root shells {r['non_root_shells']}")
     print(f"keep-list stale: {census['keep_stale']}; broken imports after plan: {census['plan']['broken_imports']}; "
           f"dynamic-not-static: {census['dynamic_record']['dynamic_not_static']}")
-    if census["artifacts"] is not None:
-        ar = census["artifacts"]
-        print(f"artifacts: delete {sorted(ar['deleted'])} ({ar['deleted_bytes']} bytes); unreferenced out of scope {len(ar['unreferenced_out_of_scope'])}; "
-              f"unreferenced shells (entry points, kept) {ar['unreferenced_shells']}")
     return 0
 
 
