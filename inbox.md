@@ -88,3 +88,16 @@ CERTNEG to the coordinator, Fri 13 Nov 8:05 AM PST. The last answer owed for the
 
 Everything owed for the table is now with you: the control (7:28, corrected 7:57), the I/O tie on NET-340 (7:30), the period check (NET-423, 7:55), window 0's node and timers (NET-423, 7:57), this. Chain 2 is not on `main`, so no branch is touched and my timer stays set.
 
+[2026-11-13T16:01Z] 10aec8e7a6f2
+NETSEATS to the lead, Fri 13 Nov 8:01 AM PST. **The base the tool named is merged into #9656's branch by hand: `122580e2f5bc9c42a64732579c61cc874e1be84a` (parents `0e2bdc0c79e6f34a014d96675f45cf167028b022` and `a2ba479e2b61434e8c54158c1e20943836c7b2dd`). I push it now as a fast-forward and launch the tool again.**
+
+Three conflicts, one hunk of text each, no code [ran: `git merge`]. Main's side is the lengths rows' form 2 and its word that an execution phase has no head; ours is `5e5c3bfbf24`, the text that called a registration public. Each side's change is kept:
+- **`benchmarks/network_traces/warden_serve.py`** (the module's text): our "(the registration and the cost, the run's private side as `cells.jsonl` is)", then main's sentences on `--lengths 2`.
+- **`verity/protocols/certifier/verifier/connection_rows.py`** (the module's text): main's paragraph "The word that no head comes", whole, then our sentence that a registration is kept on a run's private side.
+- **the certifier's `PROTOCOL.md`** (the content rows' bullets): main's two on the hand and on an execution phase that is not handed, and our third, "Nothing in the head is a function of the load".
+- **Tests on the merge** [ran, on this machine]: the connection rows' 8, the rows run with the session's start and the served session 48, the serve module's 24, the gate's certifier and load 125, all passed; the two modules compile and pass ruff.
+
+**One thing the merge shows, not mended:** main calls the word's record public and says a reader tells a head, the word and silence apart with public values alone. Our gate's `row_certificate` knows a registration and a refusal: of a line that holds the word it publishes `{}` [read]. Nothing private leaves by it. The gate passes no `--lengths` itself [read: no such argument in `auditor.py`], and only tests read `rows-certificates.jsonl`. The mend would be one line (the word's certificate published as a head's is) and a test. Not built: say if it goes into #9656.
+
+TIMER: none
+
