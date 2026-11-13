@@ -146,8 +146,49 @@ def test_a_commit_off_mains_first_parent_line_is_refused_before_any_request(tmp_
 def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, repo):
     git(repo[0], "remote", "remove", "origin")
     p, out, calls = probe(tmp_path, repo)
-    assert p.returncode == 3 and "can't read origin/main's first-parent history" in p.stdout
+    assert p.returncode == 3 and "can't fetch main's first-parent history from (no origin)" in p.stdout
     assert calls == []
+
+
+def run_clone(tmp_path: Path, repo: tuple[Path, str], *, at: str) -> tuple[Path, Path]:
+    """A run's clone as research makes one on a node: the node's bare repository (the fixture's origin, its HEAD naming
+    no branch, as `git init --bare` leaves it there), a source root cloned from it while its main stood at `at` (`remote.py`'s
+    `_git_ship_script`), and the run's clone of that source root (`clone.py`'s `make`), detached at the fixture's head.
+    The bare's main is the fixture's head again afterwards, as a later launch's push leaves it."""
+    r, head = repo
+    bare, root, clone = tmp_path / "origin.git", tmp_path / "src", tmp_path / "clone"
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/ship")
+    git(bare, "update-ref", "refs/heads/main", at)
+    git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(root))
+    git(root, "checkout", "-q", "--detach", head)
+    git(bare, "update-ref", "refs/heads/main", head)
+    git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(root), str(clone))
+    git(clone, "checkout", "-q", "--detach", head)
+    return root, clone
+
+
+def test_a_run_clone_reads_main_from_the_bare_repository_not_its_source_roots_frozen_copy(tmp_path, repo):
+    """The source root's origin/main stood at the head's parent when it was made; the bare's main has the head since."""
+    parent = git(repo[0], "rev-parse", "HEAD~1")
+    root, clone = run_clone(tmp_path, repo, at=parent)
+    assert git(root, "rev-parse", "refs/remotes/origin/main") == parent
+    p, out, calls = probe(tmp_path, (clone, repo[1]))
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert f"main from {tmp_path / 'origin.git'} at {repo[1]}" in p.stdout
+    assert (out / "main.probe.txt").read_text().split() == [repo[1], parent]
+    assert [c.split()[-1] for c in calls] == ["pubkey", "pins", "ledger", "status"]
+
+
+def test_a_run_clone_whose_bare_repository_cant_be_reached_refuses_and_never_reads_the_frozen_copy(tmp_path, repo):
+    """The source root's frozen origin/main holds COMMIT, so a fallback to it would pass: the probe refuses instead."""
+    root, clone = run_clone(tmp_path, repo, at=repo[1])
+    gone = tmp_path / "gone.git"
+    git(root, "remote", "set-url", "origin", str(gone))
+    p, out, calls = probe(tmp_path, (clone, repo[1]))
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert f"can't fetch main's first-parent history from {gone} (fetch.probe.log)" in p.stdout
+    assert "relaunch from a checkout fetched just before (git fetch origin main)" in p.stdout
+    assert calls == [] and not (out / "main.probe.txt").exists()
 
 
 def test_a_dry_probe_sends_nothing(tmp_path, repo):
