@@ -3,9 +3,22 @@ the cross-rank families of a world: what the Commit's cross-rank pass and the qu
 
 from __future__ import annotations
 
-from verity.definitions.registry.b1_tp2 import AllGather, AllGather2, AllReduce, AllReduce2, EmbeddingShard, all_gather, all_reduce
-from verity.definitions.registry.tp_allreduce import (AllReduceCustom, AllReduceMnnvl, AllReduceMultimem, AllReduceNcclTree,
-                                                      AllReduceRmsNormMnnvl)
+from verity.definitions.registry.b1_tp2 import (
+    AllGather,
+    AllGather2,
+    AllReduce,
+    AllReduce2,
+    EmbeddingShard,
+    all_gather,
+    all_reduce,
+)
+from verity.definitions.registry.tp_allreduce import (
+    AllReduceCustom,
+    AllReduceMnnvl,
+    AllReduceMultimem,
+    AllReduceNcclTree,
+    AllReduceRmsNormMnnvl,
+)
 
 
 def collective_kind(family_or_id: str) -> str | None:
@@ -44,3 +57,6 @@ def evaluated_cross_rank(family_or_id: str, families: frozenset[str] | set[str] 
     by its routed Definition.  The one rule both the rank's unreplayable sites and the record's `evaluated_by` read."""
     fam = str(family_or_id or "").split("{", 1)[0]
     return fam in families or collective_kind(fam) == "all_reduce"
+
+
+__all__ = ["collective_kind", "trailing_operands", "cross_rank_families", "evaluated_cross_rank"]

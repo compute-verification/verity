@@ -26,22 +26,35 @@ import json
 from pathlib import Path
 
 import pytest
+from verity.circuits.defs import bind
+from verity.definitions.registry import moe as MOE
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
-from verity.circuits.defs import bind
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.observe.fold.profiles import generic
-from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_FUSED, TRITON_EXPERTS
-from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.observe.events import Note, Root, RunHeader
 from verity_vllm.observe.fold.patterns import triton_name
+from verity_vllm.observe.fold.profiles import generic
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    K_FUSED,
+    TRITON_EXPERTS,
+)
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (
+    MoEFusedSharedExpertsFp8,
+)
 from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, Transparent, resolve_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Shared,
+    Transparent,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import read_log, split_steps
-from verity.definitions.registry import moe as MOE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_moe_l3.rank0.jsonl.gz"
 CONFIG = Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json"
@@ -62,7 +75,7 @@ WEIGHTS = {"gate": f"{PRE}.gate.weight", "bias": f"{PRE}.gate.e_score_correction
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def config() -> tuple[dict, int]:
     """The scope's config and block G for one TP8 rank."""
     cfg = json.loads(CONFIG.read_text())
@@ -74,17 +87,18 @@ def config() -> tuple[dict, int]:
 
 
 C, G = config()
-H, I, SI, E, TOPK, RSF = C["H"], C["I"], C["SHARED_I"], C["NUM_EXPERTS"], C["TOPK"], C["ROUTED_SCALING_FACTOR"]
+H, INTER, SI, E, TOPK, RSF = C["H"], C["I"], C["SHARED_I"], C["NUM_EXPERTS"], C["TOPK"], C["ROUTED_SCALING_FACTOR"]
 
 
 def profile():
     return dataclasses.replace(Q3.PROFILE, config=C, patterns=[MoEFusedSharedExpertsFp8(C, group=G), ResidualAddPattern()])
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _resolved():
     """step -> (StepEvents, resolutions) under the recorded header."""
-    header, roots, out = None, {}, {}
+    roots: dict[int, list[Root]] = {}
+    header, out = None, {}
     for pre, step in split_steps(read_log(FIXTURE)):
         header = next((e for e in pre if isinstance(e, RunHeader)), header)
         collect_roots(pre, roots)
@@ -97,7 +111,7 @@ def _resolved():
 def test_fixture_is_layer_3_of_rank_0_of_the_h200_capture():
     events = list(read_log(FIXTURE))
     p = next(e for e in events if isinstance(e, RunHeader)).profile
-    assert (H, I, SI, E, TOPK, RSF, G) == (6144, 2048 // WORLD, 2048 // WORLD, 256, 8, 2.5, 128)
+    assert (H, INTER, SI, E, TOPK, RSF, G) == (6144, 2048 // WORLD, 2048 // WORLD, 256, 8, 2.5, 128)
     assert p["case"] == "GLM53" and (p["model"]["repo"], p["model"]["revision"]) == ("zai-org/GLM-5.3", REVISION)
     assert p["model"]["config_sha256"] == hashlib.sha256(CONFIG.read_bytes()).hexdigest()
     assert p["vllm"]["commit"] == "d9105ea80" and p["parallelism"]["tensor_parallel_size"] == WORLD
@@ -140,8 +154,8 @@ def test_recorded_shared_scope_folds_as_recorded_on_the_served_tiles(step):
     assert [c.spec.id for c in computes] == [
         gate, f"{linear}{{K={H},N={2 * SI}}}", f"SiluMul_v2{{I={SI}}}", f"{linear}{{K={SI},N={H}}}",
         bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="block").id,
-        f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
-        f"Fp8GroupQuantUe8m0_v1{{K={I},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+        f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},{fp8}}}", f"SiluMul_v2{{I={INTER}}}",
+        f"Fp8GroupQuantUe8m0_v1{{K={INTER},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     assert [c.rows for c in computes] == [M] * 6 + [P, P, P, P, M]
     assert all(_fits(c) for c in computes)
     gc, m1, silu, m2, router, qr, up, rs, rq, down, msum = computes
