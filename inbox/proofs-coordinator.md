@@ -116753,3 +116753,88 @@ Each command takes `--challenger local`, `loopback:HOST:PORT` or `gate:USER@HOST
 - What a single standing challenger's ledger looks like across the two commands.
 - That the changed copies of `c6bd`'s kept files are each refused (running), and `b025`'s rerun.
 - Anything on the engine or on cards in my runs.
+
+## SESSIONCOINS, Fri 13 Nov 03:10Z: `SessionCoins.lean` compiled in a run (`e062`, vy-nebius-2); `SessionHeld.lean` compiled but for one theorem of 19, which ran out of heartbeats and is now split in three; the bound on openings is proved from the check, so COINMAP owes nothing for it; the next try `ce92` is in line
+
+### In plain words
+
+In the two-stage audit, each inner block of the second stage is proved in a proof session whose coins come from the auditor's device. My piece shows those coins are that session's own.
+
+The first of my files compiled in a real run. It holds the statement of the piece and the argument that each session's coins sit in its own tree. The second file, which ties that argument to what the two-stage check accepts, compiled except for one theorem. That theorem did not fail on its logic: Lean ran out of its work budget on it. I cut it into three smaller steps and the next run tries them.
+
+The premise I named at 02:22Z, that no opening the check read is of more than 65536 coins, is now a theorem of mine, taken from the check itself. So the proof that the device's coins are each session's asks nothing more about openings, of anyone.
+
+### Branch
+
+`cursor/proofs-sessioncoins-e4a0` at `1f7546b61b`, pushed. Since 02:22Z: `81b37bfa16`, `f4e5a29d18`, `27224ea1d3` (section 3), `fb1dbe5e1d` (section 2), and the merge of TWOLEG's `b6d988648b`. Nothing is unpushed.
+
+### Mailbox
+
+Read at 03:05Z. Nothing after your 02:14Z word. No answer to the 02:22Z offer to stop this loop, so I go on.
+
+### 1. What `e062` showed [run]
+
+`r20261113-021820-e062`, vy-nebius-2, `SessionHeld.lean --siblings` at `8225ed4a00`. It waited 2 minutes for a Lean place and built from 02:20Z to 02:54Z: 11,476 jobs, because the place's cache was 772 files behind. It ended rc 1.
+
+- `SessionCoins.lean` built: `Built Proofs.Properties.Verity.SampledTwo.SessionCoins (11s)`, with warnings only (older lemma names, one linter). It holds `stmtReadsNone`, `coinsRead_sessions`, `located_own`, `located_one` and `coinsAgree_sessions`.
+- It has no axiom probe yet. A try probes only the file it is given, and that was `SessionHeld.lean`, which failed before its probe. I wrote no `sorry` and no axiom in it [read].
+- `SessionHeld.lean`: 18 of its 19 theorems compiled, among them `membersNamed`, `membersAccepted`, `closes_after`, `located_own_accepted` and `located_one_accepted`. One error: `interiorReads` hit `(deterministic) timeout at whnf, maximum number of heartbeats (200000)`.
+
+So your 07:00Z milestone, one session's coins compiled in a run, stands on this: `located_own` (a session's located coins are its own tree's) built in `SessionCoins.lean`, and `located_own_accepted` (the same on what the form accepts) compiled as a theorem in a file that failed elsewhere. It is not met in full until `SessionHeld.lean` compiles whole and both files have a clean probe.
+
+### 2. The one failure, and the change [read]
+
+`interiorReads` says: where the form accepts, the interior audit's log is read. Its proof was one chain of twenty steps. I could not find one heavy step by reading: each also appears in `membersNamed`, which compiled, or in `Sampled`'s `logRead_isSome`, which compiles on `main` at the default budget. So I split it (`fb1dbe5e1d`):
+
+- `accepted_ran`: what the form's acceptance gives (the case, the parameters, the evidence, the second-stage commitment, its coins, the members' run).
+- `lines_read`: over any one-stage audit, its log's lines are read at its coins. It follows `logRead_isSome` step for step and has a budget of 1,000,000 with the reason written above it.
+- `interiorReads`: the two put together, with every argument named.
+
+No statement changed. The split has not compiled anywhere; the VM has no stand-in for these lemmas. The next run is its test.
+
+### 3. `ReadFits` is proved, from the check [read; the walk checked on a stand-in on the VM]
+
+New file `SampledTwo/SessionFits.lean` (165 lines, a root in the lakefile):
+
+- `coinTreesOf_fits`: where `Spot.Challenger.coinTreesOf` returns, each tree's spec passes `isTreeSpec`, and each opening's line among the log's lines has `n` at most `MAX_BLOCK` = 65536. It is one walk through `coinTreesOf`'s loop, as `Lines.trees_log` on `main` walks it.
+- `readFits`: where the form accepts, each opening in the log it read is of at most 65536 coins. It takes `membersNamed` and `Sampled`'s `readLog_round`.
+- `sessionsFit_of` in `SessionDev.lean` now takes no premise about openings.
+
+Stand-in check on the VM: a loose file with `coinTreesOf`, `isTreeSpec` and `LoggedTree` copied word for word and the JSON readers left opaque. `coinTreesOf_fits` passes there on `propext`, `Classical.choice` and `Quot.sound` alone [run, stand-in]. `readFits` passes there with `readLog_round` and `membersNamed` stubbed. Not compiled in a run.
+
+### 4. Runs and machines [run]
+
+| Run | Machine | What | Wait | State |
+| --- | --- | --- | --- | --- |
+| `r20261113-021820-e062` | vy-nebius-2 | `SessionHeld.lean --siblings` at `8225ed4a00` | 2 min | failed rc 1 at 02:54Z (section 1) |
+| `r20261113-030442-ce92` | vy-nebius-2 | `SessionAgrees.lean --siblings` at `fb1dbe5e1d` | 4 min so far | in line, not building |
+
+`ce92` builds `SessionCoins.lean`, the new `SessionHeld.lean` and TWOLEG's `DevAgrees.lean` as imports, then compiles and probes `SessionAgrees.lean`. If it has not started by 03:15Z I cancel it and send it again, as your 02:14Z word says. It is at the head before the merge of TWOLEG's `b6d988648b`; that merge changes `Steps.lean` and the form, not the statements I read (`accepted_steps`, `inputAt_ok`) [read]. One try is out.
+
+After it, one at a time: `SessionFits.lean`, then `SessionHeld.lean` and `SessionCoins.lean` for their own probes.
+
+### 5. For others [relayed]
+
+- [CUT](bc-3962ebaa-08a6-5499-874d-4f589f4e1b1c)'s `held_size` compiles (its 02:23Z entry, `CutHeld.lean` at `bb96dbb00a`). Every theorem of mine that takes `HeldSize` takes it as `hsz`; [ASSEMBLY](bc-20b18121-d066-5cc6-989c-3dbdcb1942b8) can hand it `fun _ _ _ h => Verity.SampledTwo.held_size h`. I do not import CUT's branch for it.
+- [TWOLEG](bc-434423a4-04be-59f4-8feb-5ac9c9b2ad71)'s `DevAgrees.lean` has no verdict yet (`aed4` still running at 03:07Z). `SessionAgrees.lean` reads it, so `ce92` fails there if it does.
+
+### STOP RULE
+
+Nothing. No listed guarantee, lock, accept or `Sampled.lean` touched, and no file of another lane's edited.
+
+### NEEDS
+
+1. [COINMAP](bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a): nothing about openings any more (section 3). `SessionDev.lean` still waits on your `CoinStages.lean` compiling; I merge your branch and try it then.
+2. Coordinator: nothing.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- No axiom probe of any file of mine has run.
+- `SessionHeld.lean` with the split, `SessionFits.lean` and `SessionAgrees.lean` have not compiled in a run. `SessionDev.lean` has not compiled at all, and is not a root.
+- The session's table `tab t` is still a parameter of every statement here; which string it is waits on MESSAGES.
+- `devFirst_stage` and `devSecond_stage` are not tied to `dev_congr`; that is in `SessionDev.lean`'s part and waits on COINMAP.
+- A session whose member tree opened before an earlier session signed is not excluded by anything of mine; that hole is as the 01:44Z entry left it.
