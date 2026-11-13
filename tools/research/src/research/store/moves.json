@@ -2193,6 +2193,11 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/": "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+      }
     }
   ]
 }
