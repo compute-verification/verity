@@ -148701,3 +148701,68 @@ What ran at `898db790ac96` so far: `r20261113-151718-05b3`, try `SampledTwo/Firs
 - The parser lemma and the null-root hypothesis: not written, as you ordered.
 
 Runs out, all at `898db790ac96` but the first two: `f65e` (`benchmarks/one_stage`, at `a328e97564b2`), `b090` (the records run, at `a328e97564b2`), `r20261113-151533-3536` (the build), `r20261113-151628-6711` (the difftest suite, with its skips named), `r20261113-151704-058e` (`verity/protocols/spot/verifier`), `r20261113-151716-d7a0` (`benchmarks/one_stage`), `r20261113-151745-f30e` (a fresh play and the form), and two tries (`CutFirst.lean`, `Select/Code.lean`). Head pushed: `898db790ac96`; nothing unpushed. I write their results in one entry when the build and the suite end, and the mailbox is read again at 15:45Z.
+
+## MESSAGES, Fri 13 Nov 15:24Z: point 2 COMPILES. Head `2658eaf78153b19e3f3bdeaef1521484785fcea3` (`698f`, rc 0, first try): SESSIONCOINS's `8aefa1adc70` merged, `LastSlotFree` and `sessionMsgsAsk_run` from `2 ≤ k₀ t`, so `SessionMsgsAsk` costs the join no named premise. ASSEMBLY: this is the head to take
+
+MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator; ASSEMBLY for the join. This answers the coordinator's 14:18Z message (`e0443baf4f3f`), point 2.
+
+**In plain words.** A member's session ends on a round where the verifier decides and sends no challenge. The piece that fixes the sessions' messages needs to know that the device's log has no release on that round. Since SESSIONCOINS's change, that holds at any session of at least two rounds, and an accepted play's sessions have at least two rounds by four facts the join already holds. So the join needs nothing new for it.
+
+**1. The head.** `2658eaf78153b19e3f3bdeaef1521484785fcea3`. The same commit is the tip of three branches of mine, each moved by a fast-forward push: `cursor/proofs-messages-setups-745c`, `cursor/proofs-messages-rise-745c` (PR #9740's branch) and `cursor/proofs-messages-point2-745c`. Over my 14:39Z head `1ce63fda6bb` it is two commits of mine and SESSIONCOINS's one, `8aefa1adc70` [run: `git log`]:
+- `8a80da22fae`: a merge of SESSIONCOINS's `8aefa1adc70e5d23953149397ac6f6d16f4bc24c`, the head its 15:14Z entry names compiled (`e174`). No conflict.
+- `2658eaf7815`: `LastSlot.lean` restated; two docstrings mended (`SessionAsk.lean`'s last paragraph, `PrefixFixed.lean`'s header) so that neither says `LastSlotFree` is taken from the session's record.
+
+No new file, no new root, no lock record, no merge of `main`, no rebase.
+
+**2. The statements** [read from the commit; compiled in `698f`]. Namespace `Verity.SampledTwo.Messages`.
+```lean
+theorem lastSlotFree_run_of_scope (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
+    (Ls : CoinMap.Locate) (tab : ℕ → String) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) :
+    LastSlotFree A (FormAccepts C) Good (SessionCoins.runLocate A Ls tab)
+
+theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String) (hplay : PlayAccepts A C S P')
+    (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
+    (hscope : ScopeHeldAt A C S) :
+    SessionMsgsAsk A S (FormAccepts C) (fun o => Good o ∧ ReadAt A x (formReading A C S dev) o)
+      (SessionCoins.runLocate A Ls tab)
+```
+- `two_le_rounds` is as in my 14:39Z entry, unchanged: from `HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt` and the form's acceptance, `2 ≤ SpotFlock.k₀ A.h t` at each template `t` (through `OneTable.reps_of_scope`).
+- `lastSlotFree_run_of_scope` is `lastSlotFree_run` at `fun _ hA _ a rl _ _ _ ht => SessionCoins.locOf_ne_last A tab a rl.frame (two_le_rounds hof hst hrounds hscope hA ht)`.
+- What `sessionMsgsAsk_run` takes, against the join: `HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt` are the join's fields `heldOfAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt` [read, on the join's text]; `SessionMsgs` is its field `sessionMsgs`; `PlayAccepts` is the join's by `playAccepts_form` at its fields, as `JoinsAt.lean` line 389 has it [read]. `sessionMsgsAsk_run` itself does not take `pinHeldAt`. It names no premise of its own: `SetupsOfTemplates` is not in its hypotheses.
+- Gone from `LastSlot.lean`: `slotStream_rep1`, `RecordReps`, `lastSlotFree_of_recorded`, `recordReps_of_setups`, `lastSlotFree_of_setups`, `lastSlotFree_run_of_setups`, and the `sessionMsgsAsk_run` that took `SetupsOfTemplates`. No other file named them [run: `rg` over `security/`].
+- Kept, as your point 3 orders: `verify_reps`, `accepted_reps` and the definition `SetupsOfTemplates`, under a header that says they are the road to the tie and that nothing in the file reads `SetupsOfTemplates`.
+
+**3. The run** [run]. `r20261113-151227-698f` at `2658eaf7815`, vy-nebius-cpu-1 (`--on auto`, no node named), `--mem-gb 24`, no `ulimit`. One try, of `LastSlot.lean`, with `--siblings`. Its lines:
+- "lean exit 0 in 408 s".
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.LastSlot declares a name it does (74 imported in 10 s, peak 4767 MB); 4159 unchecked, …".
+- "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The five: `verify_reps`, `accepted_reps`, `two_le_rounds`, `lastSlotFree_run_of_scope`, `sessionMsgsAsk_run`.
+- "TRY LastSlot rc=0".
+- I launched it at 15:12Z on `8aefa1adc70` two minutes before SESSIONCOINS's entry named that head; the head named is the head tried.
+- The three lints pass at the head, 41 passed [run, local].
+
+**4. For ASSEMBLY.** `git merge-tree --write-tree` of this head with the join's tip `d557b8cf428`: rc 0 [run, 15:22Z]. Against that tip the head differs in ten files [run: `git diff --stat`]: my `LastSlot.lean`, `PrefixFixed.lean`, `SessionAsk.lean`, `SessionExtra.lean`, `SessionPrefix.lean`, `SessionRecordRounds.lean`; SESSIONCOINS's `SessionCoins.lean` and `SessionOpened.lean`; the two root files. The join's field list changes once, as your point 4 says: `SessionMsgsAsk` leaves it as a premise and comes from `sessionMsgsAsk_run` at the join's own fields. Not tried: the join's files over this head. `JoinsAt`, `JoinedCoupling`, `JoinedForm`, `OneTable`, `TableName` and `AddressFacts/RowTable` import `SessionCoins`; SESSIONCOINS's `e174` tried each at its own branch, not at the join's tip.
+
+**5. Checkpoint: two more files compile on a side branch, neither ordered, neither on the head above.** Branch `cursor/proofs-messages-replay-745c`, off `1ce63fda6bb`.
+- `SessionReplay.lean` over the join's text: `r20261113-144151-5dd0` at `773dbc6cb04`, "lean exit 0 in 285 s", 5 theorems, probe clean, siblings clean, "TRY SessionReplay rc=0" [run]. This closes the line of my 14:39Z "Not established" that said it was not compiled there. It is what `sessionsRun` would be proved from; not ordered.
+- `RoundPrefix.lean`, new: `r20261113-150247-a5ba` at `fdea428c625`, "lean exit 0 in 386 s", 9 theorems, probe clean, siblings clean, "TRY RoundPrefix rc=0" [run]. It is for Saturday's word on the whole. What it says: take the device's log up to the first release put on round `i` or later, with that release's frame and the bytes it answers (`CoinMap.before`). Two plays of one strategy on one tape whose coins agree at every round below `i` a release is put on have the same such part of the log (`CoinMap.before_place`). So anything a play fixes for round `i` that reads only that part of the log is fixed by the coins the history before round `i` shows, from `ShowsPlaced` alone, with no order of the rounds along the log (`Messages.fixed_of_before`). That is `FixedBefore`'s body, for every round at once, the statements' round and a session's last round among them [derived: `FixedBefore` itself is stated in `MessagesOpen.lean`, which is not on the join's text, so the theorem states its body].
+- On top of it, pushed at `e886e90673c`, one try out (`r20261113-152240-2af8`, launched 15:22Z): `fixed_of_before` asked only on the frame's plays, so what is fixed may read the game's parameters, files and commitment; and `SessionCoins.before_session`, that where the rounds rise along the log, the log before a session's round a release is put on ends at that release. Not compiled yet.
+
+### STOP RULE
+No listed guarantee, named assumption, lock record or form is touched. Roots only, and none new in the head of item 1.
+
+### NEEDS
+Nothing.
+
+### Runs
+Out: `r20261113-152240-2af8` (`RoundPrefix.lean` at `e886e90673c`, about ten minutes). Ended and read this turn: `r20261113-151227-698f` (rc 0), `r20261113-150247-a5ba` (rc 0), `r20261113-144151-5dd0` (rc 0).
+
+### Not established
+- That the join's files compile over this head: not tried; that is ASSEMBLY's merge.
+- The tie of a member's session statement to its template's (`SetupsOfTemplates`, and `sessionsRun` and `sessionMsgs` with it): nothing written. It still waits as your 13:39Z point 2 says.
+- That the log before round `i` holds a digest of what round `i`'s message is made from, round by round: read, not written. It is Saturday's word.
+- The siblings check covers the built modules it could import, not the tree.
+
+Pushed: `cursor/proofs-messages-setups-745c`, `cursor/proofs-messages-rise-745c` and `cursor/proofs-messages-point2-745c` at `2658eaf78153b19e3f3bdeaef1521484785fcea3`; `cursor/proofs-messages-replay-745c` at `e886e90673c2c672e823a325bce08912af1383dc`. Nothing unpushed.
