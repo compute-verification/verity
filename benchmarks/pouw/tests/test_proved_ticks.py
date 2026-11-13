@@ -132,7 +132,7 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     class), on v1 and on the one stream v3, is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
     from verity.protocols.pouw.prover.circuit import h1tile as H
-    from verity.definitions.circuits.census import PRODUCTS, census
+    from verity.circuits.census import PRODUCTS, census
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
     from verity.circuits.program import Program
