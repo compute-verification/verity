@@ -110157,3 +110157,42 @@ Nothing.
 * The coin family the run checks comes from the evidence's segment, not the parameters.
 * An earlier period's signature passes the run's coin check. This known hole is noted in `FirstCoins`' docstring and not worked around.
 * `SecondShown` on two windows: see NEEDS 1.
+
+## ASSEMBLY, Fri 00:03Z: nothing new compiled yet; ea84 waited 26 min for a Lean slot on vy-nebius-2 and never started; `projection_of` adapted to TWOLEG's 052eb3aba5 and retried as r20261113-000208-baa1
+
+A Lean slot on vy-nebius-2 kept me waiting more than ten minutes. The try `r20261112-233252-ea84` waited 26 minutes in the slot line and its check never started [run]. At 23:57Z there were 18 checks ahead of it [run]. I cancelled it because TWOLEG's head moved to `052eb3aba5` while it waited, and that changed `ProjectionOf`'s statement [read]. ea84 would have tried a statement that no longer exists.
+
+What changed in the base and how I adapted [read]:
+- `CoinMapLaw` now carries an agreement `Ag : Exchange → Coins A x → Prop` inside its event. Its second clause is gone.
+- `DevAgrees` is new: on an accepted play with `Good` and `Ag`, every release the log holds for a read round agrees with the run's coin.
+- `CoinsAgree` replaces `CoinsRead` in `ProjectionOf`. The coin the check reads agrees with whatever the device's release agrees with.
+
+`projection_core` now takes `CoinMapLaw … Ag hide` whole, and its coins premise is conditioned on `Ag` [read]. Its good event is `(Acc ∧ Good) ∧ Ag`; the mismatch event drops `Ag`, which only widens it [derived]. `projection_of` builds the coins premise from `DevAgrees` (the `d` argument of `CoinsAgree`) and `CoinsAgree` at the first, second and sessions groups. The statements' group is refused by `StmtReadsNone` [derived]. Nothing in `CouplingOf` or `MajorityBound` changed [read].
+
+Branch `cursor/proofs-assembly-992e`, head `19e555b9d3`, pushed; nothing is left unpushed [run]. It merges `052eb3aba5`, and the lakefile roots are each on their own line again [run]. The new try `r20261113-000208-baa1` runs both files on vy-nebius-2 with 12 GB, launched at 00:02Z [run]. Its ETA depends on the slot line [guess].
+
+The line owed at 00:30Z, one per `Prop` the assembly reads:
+- `CoinMapLaw`: the period's play is the frame's play at uniform tape and coins, with `Ag` holding, up to `hide`.
+- `DevAgrees`: releases agree with coins at `Ag`, on accepted, `Good` plays.
+- `CoinsAgree` at the first, second and sessions groups: the coin read agrees as the release does.
+- `StmtReadsNone`: no coin is read at the statements' round.
+- `MessagesFixed`: a message mismatch on `Acc ∧ Good` costs at most `miss`.
+- `CutBound`: a sampled accept with `¬ Good` costs at most `terms`.
+- `AcceptsRun`: an accepted play with agreeing coins and the frame's messages gives the run's accept.
+- `StmtAt`: the check reads the frame's statement.
+- The wiring: a sampled accept at `θ` is `Acc`.
+- `CouplingOf` reads `ProjectionBound` and `MajorityBound`.
+
+### STOP RULE
+Nothing. No lock edits; only my two files and my lakefile lines changed [run].
+
+### NEEDS
+Lean slots on vy-nebius-2. The line has been more than ten minutes for me twice tonight.
+
+### To post
+For infra, from the coordinator: the proofs line on vy-nebius-2 held 18 to 34 checks ahead between 23:38Z and 23:57Z. One more tree or two would shorten it.
+
+### Not established
+- `projection_of` at `19e555b9d3` has not compiled; baa1 is its try.
+- `coupling_of` compiled at `90c7138f46` (`r20261112-231352-fea0`) but not yet at the new base. baa1 retries it.
+- The earlier-period signature hole in `CutBound` stays open, as the docstring says.
