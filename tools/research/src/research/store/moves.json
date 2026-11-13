@@ -2259,6 +2259,12 @@
       "paths": {
         "security/Proofs/Properties/Challenger/Session.lean": "security/Proofs/Properties/Challenger/ChallengePhase.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/nci/": "benchmarks/nci/",
+        "verity/protocols/inference_only/rho/": "benchmarks/rho/"
+      }
     }
   ]
 }
