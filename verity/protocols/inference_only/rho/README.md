@@ -168,7 +168,7 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   | reading | (H) is asked | fixed before the period | a block over it | the count |
   |---|---|---|---|---|
   | one `β_x`, with the threshold `w` | once, at `k + word · w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | `HECharged` at the best set of blocks |
-  | one `β_x` at the top cap, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HECharged` at every block |
+  | one `β_x` at the top budget, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HECharged` at every block |
   | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
 
 - `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,

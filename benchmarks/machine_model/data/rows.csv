@@ -153,7 +153,7 @@ ROW_STSM8T_X4,measured,r20261016-152445-483c,STSM.8.MT168.4 0.031249/SM/clk + 2%
 ROW_TLDW1,measured,r20261016-152445-483c r20261016-152916-75d5,"any TLD writing 1 word(s) a lane 0.851997/SM/clk + 2% (tex2, tldc, VF3f)"
 ROW_TLDW2,measured,r20261016-152445-483c r20261016-152916-75d5 r20261017-063107-835c,"any TLD writing 2 word(s) a lane 0.424598/SM/clk + 2% (tex2, tldc, VF3f); TLD2 refitted to 8.676 SMSP-cycles from VF3q-16 (ld_tld2_bcast_q16_w32 alone at 0.4518/SM/clk, + 2%; FACET-BREAK)"
 ROW_TLDW4,measured,r20261016-152445-483c r20261016-152916-75d5,"any TLD writing 4 word(s) a lane 0.3804/SM/clk + 2% (tex2, tldc, VF3f)"
-ROW_SULDI,measured,r20261016-152445-483c r20261016-152916-75d5,any SULD instruction 0.2492/SM/clk + 2% (VF3f SULD1; the TEX cap)
+ROW_SULDI,measured,r20261016-152445-483c r20261016-152916-75d5,any SULD instruction 0.2492/SM/clk + 2% (VF3f SULD1; the TEX bound)
 ROW_LDSMR1,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any LDSM form with 1 register(s) a lane, plain or converting, 0.499414/SM/clk + 2% (lmmix)"
 ROW_STSMR1,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any STSM form with 1 register(s) a lane, plain or converting, 0.499071/SM/clk + 2% (lmmix)"
 ROW_LDSMR2,measured,r20261016-155818-6862 r20261016-160400-26d0,"any LDSM form with 2 register(s) a lane, plain or converting, 0.499477/SM/clk + 2% (lmmix)"
