@@ -189,10 +189,10 @@ from pathlib import Path
 from typing import Any
 
 import leak_bounds as LB
-from verity.protocols.certifier.verifier import class_charge as CC
-from verity.protocols.certifier.verifier import connection_rows as C
-from verity.protocols.certifier.verifier import content_rows as CT
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.accounting.certifier.verifier import class_charge as CC
+from verity.protocols.accounting.certifier.verifier import connection_rows as C
+from verity.protocols.accounting.certifier.verifier import content_rows as CT
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 #: the record, in the evidence store, of the runs that hold the stop class's verdict records
 RECORD = "exfiltration-glm53-stop-verdicts"

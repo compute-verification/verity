@@ -24,12 +24,12 @@ sys.path.insert(0, str(HERE))
 import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import stop_verdicts as SV  # noqa: E402
-from verity.protocols.certifier.verifier import class_charge as CC  # noqa: E402
-from verity.protocols.certifier.verifier import connection_rows as C  # noqa: E402
-from verity.protocols.certifier.verifier import content_rows as CT  # noqa: E402
-from verity.protocols.certifier.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.certifier.verifier.warden import WardenParams  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import class_charge as CC  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import connection_rows as C  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import content_rows as CT  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
 
 LINK = "responses"
 ZEROS = bytes(64)
