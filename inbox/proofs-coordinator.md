@@ -146394,3 +146394,213 @@ right one, because honest sessions are in no period today.
   `r20261113-142140-a923` was refused at once (that machine takes a run only through a pool).
 - Pen: `~/wt/.pen`, owner line of 14:13Z. Mailbox read 14:17Z, 532 lines, nothing new there; the 14:25Z and 14:28Z
   messages came by the hook.
+
+## FRAME, Fri 13 Nov 14:38Z: the carry's dry run against #9734 at `942e1ef43899`: six of the seven branches cross the 28 moves (three `clean`, three `clean-skipped`); the join is refused at the chain's first move in two files and crosses `clean` once they are settled, which needs one merge of `main` and your word; #9480 and #9504 land inside the join; the runbook holds your 14:28Z points; #9681's draft is written
+
+Each claim says where it comes from: [run] a node's run, [local] this machine (git only), [read] the file, [text] a grep, [git], [derived] my reasoning. Nothing was pushed but this file's entries and the lane's note. The dry run's commits are scratch commits in the runs' clones and in this machine's object store, on no branch of the remote.
+
+**What needs your word, first.**
+
+1. **The join cannot be carried as it is.** `restack.py` stops for it at chain 2's first move, at the step that merges that move's base, in two files: `adapters/vllm/verity_vllm/engine/sampler_capture.py` and `benchmarks/one_stage/a5.py`. They are the join's two conflicts with today's `main`. The tool's own fix is one hand merge of `main` into the join. That is against your 07:22Z rule as written ("Do not merge `main`"), so it is yours to allow, and ASSEMBLY's to make, with vllm reading the first file. It can be made today, before chain 2 lands. Section b.2.
+2. **Neither #9555 nor #9441 may land before the pass.** If #9555 lands on today's `main`, `restack.py` refuses the join outright (`based-after`, at the last move), and chain 2 itself no longer merges onto `main`. Their marks should be withdrawn now and set again at the carried heads. Section d.
+3. **A node's clone cannot push, and it is removed when the job ends.** The real pass needs the results brought back; the dry run did it with a `git bundle` under `$OUT`. Section e, step 3.
+4. **#9480 and #9504 land inside the join, not on their own.** Each conflicts with the base and with #9555, carried as well as today, in `benchmarks/one_stage/two_stage_small.py` and `two_stage_small.sh`; the join holds them settled. Section c.4. It needs vllm's word for #9504.
+5. **Ask top and comms for the order chain 2, then #9737, then the pass.** #9737 is three more moves. Section e, the last part but one.
+6. **The dry run broke infra's rule of 14:09Z before I had read it:** seven abreast, twice, on vy-nebius-cpu-1, scratch in the default temp directory. Both runs ended. Section a.
+
+**a. What ran, on which head, and what it cost.**
+
+- **The head used: #9734 at `942e1ef43899e98e66aa76e138a2ae184df396c8`,** as I found it at 13:15Z. [git] At 13:35Z the pull request's head moved to `bf7cbe637b4b`: one commit more, "Tests: one_stage's stand-in tree names the composites' moved directories", one file (`benchmarks/one_stage/tests/test_served_verdicts.py`), no move, `restack.py` unchanged. Of our branches, #9480 and #9504 change that file; the others do not. By your 14:28Z message it is now `031af1f38001`: two commits more, no move. [git] The merges of section c.2 were made against all three heads.
+- **28 moves to cross, not 24.** [git] `main` (`053b8e50fe8a`) already has four moves every branch of the list lacks (`config_map`, `settings_map`, `bench_instances_map`, `flat_files_map`, landed with #9697 at 07:48Z), and the chain adds 24: seven by `rename.py` (`terms_map` and the six period maps) and 17 by `layout.py`.
+- **On a node, and why.** One branch crosses a move by running the move's script on a checkout of the whole tree, once for the check of the move and once on the branch, so one branch is up to 56 script runs. The runs are `research run --on auto --cwd clone`, launched from a local commit whose parents are the eight heads, because a node's clone cannot fetch from GitHub and holds only the commits it was shipped. [run `r20261113-131709-564d`, the probe]
+- **The runs.**
+  - `r20261113-132209-837c`: stopped in 4 seconds. A node's clone has no git identity and `restack.py` makes commits ("Author identity unknown"). The job now sets `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`. [run]
+  - `r20261113-132522-85a4` (vy-nebius-cpu-1): the seven branches as they are today, then the merges and the refusals. [run] 487 seconds to the join's refusal, 3,641 to 3,708 seconds for the other six, then its own summary of merges and of the tool's refusals; 3,010 seconds in all.
+  - `r20261113-133704-d053`: cancelled by me after 2 minutes. Its scratch settlement of the join merged before `restack.py` had registered the clone's merge drivers, so a lock merged as text and stopped it.
+  - `r20261113-133904-17c1` (vy-nebius-cpu-14): the base, #9713 and the join with a scratch settlement. [run] 2,937 to 2,996 seconds a branch; all three `clean`, and its own summary of the landing order.
+  - `r20261113-134510-1ba8` (vy-nebius-cpu-1): all seven, the join with the scratch settlement, and a `git bundle` of the carried commits, which I fetched and merged on this machine. [run] 2,453 to 2,515 seconds a branch, 2,520 in all; the bundle is 6 MB.
+- **The scratch settlement** is for the dry run only: `restack.py`'s own merge of the first move's base into the join, with each of the two conflicted files taken whole as `main` has it. It throws away the join's lines in those two files. It shows what the rest of the carry does once the two files are settled; it is not a settlement.
+- **What it cost.** [run: the runs' telemetry and logs]
+  - One run of a move's script on a checkout of the whole tree is about 75 seconds of one core. A branch crosses a move with two: the check that the move is what its script writes on its base, and the script on the branch. So one branch is up to 56 script runs.
+  - Seven abreast took 62 minutes when each made every check itself (run `85a4`), and 42 minutes when the first 17 to 21 checks were found kept (run `1ba8`). Processes that reach a move together each make its check: `--kept` saves only what another process finished earlier.
+  - The checks can be made first: a job of ten small processes made the last ten moves' checks in 165 seconds on 8 cores (run `r20261113-140418-3268`). Its kept checks were not found by the carries on the other node, so the checks and the carries belong on one node.
+  - **The dry run did not follow infra's rule of 14:09Z,** which I read at 14:28Z: runs `85a4` and `1ba8` each ran seven branches abreast on vy-nebius-cpu-1, overlapping from 13:45Z to 14:27Z, with the pins step on and the scratch in the default temp directory. Both ended; I did not look at the node's disk. The helper ran on vy-nebius-cpu-3 and run `17c1` on vy-nebius-cpu-14.
+
+**b. The dry run, branch by branch.**
+
+1. **Each branch.** `restack.py BRANCH --main dry/chain --dry-run --kept --json`, one process a branch, side by side. "Crossed" counts moves crossed with the move's script run on the branch; "skipped" counts moves crossed by a later move's merge alone (item 3).
+
+| Branch | Head | As it is today [run `85a4`] | With the join settled [run `1ba8`] |
+|---|---|---|---|
+| the base, #9681 | `3b05c3a3b1a7` | `clean`, crossed 28, skipped 0; 3674 s | `clean`, crossed 28, skipped 0; 2511 s |
+| #9713 | `767972c546b8` | `clean`, crossed 28, skipped 0; 3649 s | `clean`, crossed 28, skipped 0; 2513 s |
+| the join as it is | `4e986e339ad2` | `conflicted` at step `base`, move `833703ef0e1d`: `adapters/vllm/verity_vllm/engine/sampler_capture.py`, `benchmarks/one_stage/a5.py`; 487 s | not in this run |
+| the join, scratch-settled | `e819d1f4b2e8` | not in this run | `clean`, crossed 24, skipped 0; 2453 s |
+| #9555 | `38b7c6df38ba` | `clean-skipped`, crossed 24, skipped 4; 3674 s | `clean-skipped`, crossed 24, skipped 4; 2515 s |
+| #9441 | `51a2e803cb83` | `clean`, crossed 28, skipped 0; 3708 s | `clean`, crossed 28, skipped 0; 2514 s |
+| #9480 | `496aa183544b` | `clean-skipped`, crossed 24, skipped 4; 3641 s | `clean-skipped`, crossed 24, skipped 4; 2456 s |
+| #9504 | `e30d38036c11` | `clean-skipped`, crossed 24, skipped 4; 3689 s | `clean-skipped`, crossed 24, skipped 4; 2461 s |
+
+   - **Six of the seven cross as they are; the join does not** (item 2). With its two files settled, the join crosses the chain's 24 moves `clean`.
+   - No branch came out `locks-stale`, `pins-stale`, `script-failed` or `no-row`. [run]
+   - Every carried result holds the chain's head and the branch's own head, so each owner's push to it is a fast-forward. [local]
+   - The two runs agree on each branch's status and counts. [run]
+2. **The join's refusal, and what settles it.**
+   - [run `85a4`] `restack.py dry/join --main dry/chain --dry-run --kept --json`: status `conflicted`, step `base`, at the move `833703ef0e1d` (`terms_map`, the chain's first), files `adapters/vllm/verity_vllm/engine/sampler_capture.py` and `benchmarks/one_stage/a5.py`; crossed none, skipped the four moves on `main`; 487 seconds. The step merges the move's base, `92b5727aca40`, which holds `main` `053b8e50fe8a` and ten commits of the chain's own from before its first move.
+   - [local] They are the join's two conflicts with today's `main`, the ones my 13:01Z entry named. After one merge of `main` `053b8e50fe8a` into the join with the two files settled, `92b5727aca40` merges into it with no conflict.
+   - [git] The sides. `sampler_capture.py`: `main` has three vllm engine commits of 11 and 12 Nov (`cfe6af8b90b`, `8b4aa58f8b7`, `b06523e8425`); the join has `61be98c66f6` and `b798f05f05c` (12 Nov). `a5.py`: `main` has #9613, #9237 and `40a5fc29d8f` among others; the join has eight commits of 12 and 13 Nov, the last `552354cbe19`.
+   - [derived] So the join needs one hand merge of `main` before it can be carried, and the tool asks for exactly that: a based-after move is carried by "the merge of main the refusal asks of the owner". It is ASSEMBLY's, on your word, since your 07:22Z rule forbids a merge of `main`.
+3. **Four branches skip the four moves already on `main`, and the skip is right for each.**
+   - [local, by the tool's `based_after`] The join, #9555, #9480 and #9504 each share with `main` a commit those four moves' bases lack: `a2c3831345e` (it landed with #9237 at 08:07Z; the join and #9555 hold it) and `cbe0bcdd160` (it landed with #9075 at 05:45Z; the join, #9480 and #9504 hold it). The moves were made on a base older than both landings and landed at 07:48Z. So the tool skips the four for these branches and crosses them by the merge of a later move's base, without running their scripts on the branch's own lines. The base, #9713 and #9441 share no such commit and cross all 28 with the scripts.
+   - [local, text] What the skip could leave behind is an old name of those four maps in a line the branch adds. I merged each of the four branches with today's `main` and searched the merged tree for the maps' old paths and modules (`verity/configuration/config|deploy|wire`, `verity/hardware/site`, `verity/settings.py`, `fixtures/bench-instances`, and their dotted forms): no line beyond the 26 `main` itself keeps, and no file at an old path, for any of the four.
+   - A result that skipped a move is `clean-skipped`: the tool exits 1, pushes nothing for it, and prints a command that names each move it crossed. Running that command is the owner saying the skip is right.
+
+**c. The merges.**
+
+1. **Each head as it is today, merged the ordinary way into the chain's head, for comparison.** [local: `restack.py`'s `merge_trees`, with the merge drivers; the same against `942e1ef43899` and `bf7cbe637b4b`; run `837c`'s summary gave the same counts] This is what a worker would meet merging by hand, and what the carry is for.
+   - The base #9681: 2 files, `benchmarks/one_stage/two_stage.py` and `security/Proofs/Flock/SpotFlock/Code.lean`.
+   - #9713: 3 files, those two and `benchmarks/two_stage/guard.py`.
+   - The join: 19 files. `adapters/vllm/verity_vllm/engine/sampler_capture.py`; `benchmarks/one_stage/a5.py`, `two_stage.py` and `two_stage_small.sh`; `benchmarks/two_stage/guard.py`; `security/Proofs/Flock/SpotFlock/Code.lean`; `security/Proofs/Properties/Challenger/Coins.lean`; `security/Proofs/Properties/Verity/Sampled/Record/Session.lean`; `tools/pous_grader/TRUSTED.sha256`; `verity/protocols/compose/verifier/lean/tests/sampled_two.py` and `test_sampled_two_difftest.py`; under `verity/protocols/proofs/recursion/verifier/recursive/`, `SampledTwoDescMain.lean`, `SampledTwoMain.lean`, `SampledTwoOnMain.lean`, `VStarRecursive/SampledTwo.lean` and `VStarRecursive/SampledTwoDesc.lean`; under `verity/protocols/proofs/spot/verifier/`, `lean/Spot/ChallengerCoins.lean`, `lean/Spot/RecordAcross.lean` and `service.py`.
+   - #9555: 4 files, `security/Proofs/Properties/Challenger/Coins.lean`, `verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerCoins.lean`, `verity/protocols/proofs/spot/verifier/lean/Spot/RecordAcross.lean`, `verity/protocols/proofs/spot/verifier/service.py`.
+   - #9441: none.
+   - #9480 and #9504: 2 files each, `benchmarks/one_stage/a5.py` and `benchmarks/one_stage/two_stage.py`.
+2. **Each carried result against the chain's head.** [local, on the commits of run `1ba8`'s bundle]
+   - Each of the seven holds `942e1ef43899`, the head it was carried onto, so that merge is the carried commit itself.
+   - Each merges with `bf7cbe637b4b` and with `031af1f38001`, the chain's head by your 14:28Z message, with no conflict. `031af1f38001` is three commits over the head I used and adds no move. [git]
+   - **A plain merge of #9441 is clean and wrong.** #9441 as it is merges into the chain's head with no conflict (item 1), and that merge's tree is not the carried one: they differ in `security/Properties/lean-audit.json` and `verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean`. I read the lock's difference (entries of its lists in another place, and entries one side lacks); I did not read the Lean file's.
+   - No carried result has a file of its own left in a directory the chain's head has no file in, but the join: 131 files, all new directories of the join's own (the first of them `security/Proofs/Flock/SpotFlock/AddressFacts/`). I did not check each against the moved layout.
+3. **The carried join (scratch-settled) against the others, carried.** [local]
+   - Against the carried base #9681: no conflict. Against carried #9713: no conflict. Carried #9713 against the carried base: no conflict.
+   - Against carried #9555: no conflict. Against carried #9441: no conflict. Carried #9441 against carried #9555: no conflict.
+   - Against carried #9480, and against carried #9504: 2 files each, `benchmarks/one_stage/a5.py` and `benchmarks/one_stage/two_stage.py`. The first is the scratch settlement's doing at least: it threw the join's `a5.py` away. Both are the two files where #9480 and #9504 as they are conflict with the chain (item 1), which the carried join and the carried pull request each settle on their own.
+4. **The landing order, each step a merge on the one before.**
+   - **The base, then #9713, then the join (scratch-settled): no conflict at any step.** [run `17c1`'s own summary, on its own carried commits, from `942e1ef43899`]
+   - #9555, #9441, the base, #9713, in that order and with the base first: no conflict at any step. [run `85a4`'s summary from `942e1ef43899`; local from `bf7cbe637b4b`]
+   - **#9480 then stops:** `benchmarks/one_stage/two_stage_small.py` and `benchmarks/one_stage/two_stage_small.sh`. [run `85a4`, local] Pair by pair, carried #9480 and carried #9504 each conflict with the carried base and with carried #9713 in `two_stage_small.py`, and with carried #9555 in `two_stage_small.sh`; with carried #9441 they do not. [local] The join holds all of them with those files settled.
+   - **So #9480 and #9504 land inside the join, not on their own** (the runbook's step 8), or their owners settle those files by hand and the join takes the result.
+   - One thing I cannot explain yet: in run `85a4`'s summary, carried #9504 merged onto the line that #9480 had failed on with no conflict, where the pairs say one file each. Not reconciled.
+5. **`restack.py` itself on a branch left out of the pass.** [run `85a4`: the tool run on scratch lines; local: its `based_after`]
+   - Once the carried base has landed, the join as it is today and #9713 as it is today are each refused: `based-after`, crossed none.
+   - If #9555 lands on today's `main` before the chain: the chain no longer merges onto `main` (four files, section d.1), and the join and #9555's own branch are each refused, `based-after`.
+   - Once carried #9555 has landed, the join as it is today is refused (it shares `38b7c6df38ba` with `main`); the base is not. So no branch of the list is left for later.
+
+**d. Your fact (a): #9555 and #9441, marked and admitted, and the join holds #9555.** The rule is `based_after` (`tools/move/restack.py:466-474`, used at `:491`): a branch that shares with `main` a commit a move's base lacks is refused at that move, unless a later move's base holds the commit, and the last move has no later one. [read] I evaluated the tool's own functions (`moves_on`, `move_base`, `based_after`) on each case on this machine. [local]
+
+1. **If #9555 lands on today's `main`, not carried, before chain 2:**
+   - #9555 merges into today's `main` with no conflict, so the queue can take it. [local]
+   - **Chain 2 then no longer merges onto `main`:** #9734's head conflicts with that `main` in four files, `security/Proofs/Properties/Challenger/Coins.lean`, `verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerCoins.lean`, `verity/protocols/proofs/spot/verifier/lean/Spot/RecordAcross.lean` and `verity/protocols/proofs/spot/verifier/service.py`. [local] That is top's to mend, and it moves the pass later.
+   - **The join is refused by `restack.py`:** based after all 28 moves, and at the last move (`0932f6acd0a8`) it shares `38b7c6df38ba`, #9555's head, with `main`: `based-after`, no result. [local] The tool's words for the owner are "Merge instead", by hand, across 24 moves whose scripts then never run on the join's own lines. So would every branch that holds #9555's head: each worker's line on the join. #9441's branch and the base #9681 do not hold it and are not refused. [local]
+   - The way out would be top making chain 2's moves again on a `main` that holds #9555. [derived]
+2. **If #9441 lands on today's `main` before chain 2:** chain 2 still merges onto `main` with no conflict, and the join as it is today is not refused, because it does not hold #9441's head. [local] HELDOF's branch does hold it, and the join will once it takes HELDOF's merge: from then on the case is the first one, with `51a2e803cb83` as the shared commit. [derived]
+3. **If one is still in the queue when chain 2 lands:**
+   - **#9555 does not merge onto the moved `main`:** the same four files conflict. [local] By the verified queue's rule it goes into no candidate and its owner is told to carry it with `tools/move/restack.py` and mark the new head (`tools/research/src/research/vqueue_loop.py:3829-3835`). [read] So it waits, and KEYHELD carries it in the pass.
+   - **#9441 does merge onto the moved `main`, with no conflict.** [local] So the queue can take it into a candidate as it is, without the moves' scripts run on its lines. That merge would be wrong: the carried #9441 differs from it in two files (section c.2). And once it has landed that way, a branch that holds its head and is not yet carried (HELDOF's, and the join after HELDOF's merge) is refused at the last move. [derived]
+   - The queue has a command of its own for a marked pull request that lacks moves, `research queue cross`: it carries each with `restack.py` and pushes it to the pull request's branch, but only one that has a land verdict, and a pull request that holds another's head only together with that one (`tools/research/src/research/queue.py:146-157`). [read] It is the queue's owner's, not ours.
+4. **So:** both marks are withdrawn now, both branches are carried in the pass with the join, and each is marked again at its carried head. The command the queue's own refusal names for an owner: `research data label pr:9555@38b7c6df38ba ready false --by proofs`, and the same for `pr:9441@51a2e803cb83`. [read `queue.py:5716-5719`] The same holds for #9480 and #9504, which are not marked: they are not marked before the pass.
+
+**e. The carry's runbook, to hand to each worker.** "The pass" is the carry of every branch below across the moves with `tools/move/restack.py`, on one head of `main`, after chain 2 is on `main` and before any of them lands. It holds your 14:28Z message's three points. A copy is in my artifacts (`frame-carry-runbook.md`) and, with this entry, in the lane's note of the dry run.
+
+*The two rules.*
+
+- **Only `tools/move/restack.py` crosses a move. Never a plain merge of `main`, never a rebase.** A plain merge can be clean and wrong: the dry run shows it for #9441 (section c.2), and circuits warn of a branch that adds a file importing a moved module.
+- **After the carry, each owner greps the lines its branch adds for the old names** (`git diff MAIN...CARRIED`, the added lines only, for each map's old paths and dotted module names). For a branch that skipped the four moves on `main`, those four maps' names first (section b.3 has the list I used).
+
+*Who is in the pass, in the order of the batches.* Each branch's carry is independent of the others, so the order of the batches decides nothing but which results come first. Three branches abreast on one node, by infra's rule.
+
+| Batch, node | Branch | Pull request | Owner | Why it is in the pass |
+|---|---|---|---|---|
+| 1, vy-nebius-cpu-4 | `cursor/proofs-frame-connected-4e1b` (the base) | #9681 | FRAME | holds #9176, #9080, #9212, #9229, #9357; the join holds it |
+| 1 | `cursor/proofs-frame-l1-9c4e` | #9713 | FRAME | holds #9681; the join holds it but for its last commit |
+| 1 | `cursor/proofs-join-42b8`, tip `ff6ea109e06f` and ASSEMBLY's merge | none yet | ASSEMBLY | the join |
+| 2, vy-nebius-cpu-3 | `cursor/proofs-keyheld-3c9a` | #9555 | KEYHELD | the join holds its head |
+| 2 | `cursor/proofs-members-files-61d4` | #9441 | its owner | the join holds its head [local, at `ff6ea109e06f`] |
+| 2 | `cursor/proofs-heldof-couples-f083` | as it has | HELDOF | holds the join |
+| 3, vy-nebius-cpu-1 | `cursor/proofs-gather-served-select-b88b` | #9480 | its owner | the join holds its head |
+| 3 | `cursor/vllm-select20-5b1e` | #9504 | vllm | the join holds its head |
+| 3 | `cursor/proofs-accepts-partsout-3153` | as it has | ACCEPTS | holds the join |
+| 4, vy-nebius-cpu-11 | `cursor/proofs-twoleg-family-ad71` | as it has | TWOLEG | holds the join |
+| 4 | `cursor/proofs-stopdriver-family-ffc6` (B's draft) | none | B | on `main`'s base; ahead of #9699 and #9458, by your message |
+| 4 | `cursor/proofs-frame-jsoncmp-053b` | none | FRAME | shares nothing with the others; carried with the rest by your 13:15Z decision |
+
+The nodes are four of the five your message lists with free root disk; vy-nebius-cpu-2, with the least, is the spare. I did not look at any of the last five branches of the table (see "Not established").
+
+#9176, #9080, #9212, #9229 and #9357 are not carried on their own. #9681 holds their commits, the carry keeps a branch's own commits as ancestors of its result, and each of the five shows as landed once `main` holds its head.
+
+*What nobody does from now until you say the pass is done.*
+
+1. Nobody merges `main` into a branch of the list, and nobody rebases one. The one exception, on your word: the join's merge in step 2.
+2. Nobody marks or lands a branch of the list. If a mark still stands on #9555 or #9441, its owner withdraws it: `research data label pr:9555@38b7c6df38ba ready false --by proofs`, and the same for `pr:9441@51a2e803cb83`.
+3. Nobody pushes a carried result of its own making, and nobody settles a conflict by editing a carried result. A conflict is settled on the branch as it is today, and that branch is carried again.
+4. Nobody creates a directory of the new tree by hand.
+
+*The pass, in order, and who does each step.*
+
+1. **You fix the head of `main`** the pass is made on, once chain 2 is on it, and write it in the entry that starts the pass. If `main` gains another move during the pass, the pass is run again.
+2. **ASSEMBLY settles the join's two conflicts by one merge of `main` into the join:** `git merge 053b8e50fe8a` (today's `main`, before chain 2), by hand, in `adapters/vllm/verity_vllm/engine/sampler_capture.py` and `benchmarks/one_stage/a5.py`, with vllm reading the first. The join's new tip `ff6ea109e06f` has the same two conflicts. [local] It can be made today. HELDOF, ACCEPTS and TWOLEG then merge the join's new tip into their lines, not `main`.
+3. **One carrier launches the four jobs,** so that all use the one head of `main` and all results come back to one place. By your 07:22Z rule the join is ASSEMBLY's to carry; I can launch all four with the dry run's scripts if you say so. Each job, on its node:
+
+   ```bash
+   export GIT_AUTHOR_NAME=... GIT_AUTHOR_EMAIL=... GIT_COMMITTER_NAME=... GIT_COMMITTER_EMAIL=...
+   export TMPDIR="$(mktemp -d -p /workspace/research/scratch)"; trap 'rm -rf "$TMPDIR"' EXIT
+   python3 tools/move/restack.py B1 --main MAIN --kept --json > "$OUT/restack-B1.json" &
+   python3 tools/move/restack.py B2 --main MAIN --kept --json > "$OUT/restack-B2.json" &
+   python3 tools/move/restack.py B3 --main MAIN --kept --json > "$OUT/restack-B3.json" &
+   wait
+   git bundle create "$OUT/carried.bundle" <the three results> --not MAIN B1 B2 B3
+   ```
+
+   - The git identity: a node's clone has none and `restack.py` makes commits.
+   - `TMPDIR`: `restack.py` makes its scratch worktrees with `tempfile`, which follows it, so the scratch goes under `/workspace` and the trap removes it. This is infra's rule; **the dry run did not follow it** (section a).
+   - The branches' commits: a node's clone cannot fetch, so the job is launched from a local commit whose parents are `MAIN` and the heads.
+   - The bundle: a node's clone cannot push and is removed when the job ends.
+   - Three abreast, each making every move's check itself, is about an hour a batch (section a). A first step that makes the checks alone brings the carries to about half of that.
+4. **The carrier reads every branch's status before anything is pushed.**
+   - `clean`: carried.
+   - `clean-skipped`: carried, with the four moves already on `main` skipped. The tool pushes nothing for it and prints a command that names each move it crossed; running that command is the owner saying the skip is right, after the grep above.
+   - `locks-stale`: carried, and a Lean lock took `main`'s side. A records run on the result regenerates it before any mark.
+   - `conflicted`, `pins-stale`, `script-failed`, `no-row`, `based-after`: not carried. The owner mends the branch as it is today, and it is carried again.
+5. **The carrier makes the merges of section c on the results:** each with `main`, the carried join with each of the others, and the landing order step by step. A conflict stops the pass.
+6. **The carrier publishes each carried commit to a new branch** by a plain push to a new name. **Each owner then moves its own branch to its carried commit by a plain push.** It is a fast-forward, because the carried commit holds the branch's head. No force.
+7. **Each owner makes a records run at its carried head** before any ready line (`security/Proofs` at least, and every lock a `locks-stale` result names), then the suites its change reaches.
+8. **The marks, in the landing order:** #9681; #9713 once #9681 is on `main`; #9555 and #9441 as their owners say; then the join's own pull request. **#9480 and #9504 land inside the join, not ahead of it** (section c.4): the carried join holds their heads, so each shows as landed when the join's pull request lands.
+
+*What happens to a mark when its head is carried.* [read `tools/research/src/research/queue.py:160-194`]
+
+- A mark and a land verdict pass to a new head only when its own change is the old head's, by `git patch-id --verbatim` of its diff from its merge base with `main`.
+- Across a move the verified queue passes them only from a head that has a land verdict of its own, and only when the carried head's own change is exactly the old one mapped across the moves. "A mark alone carries across no move."
+- So a carried head with no land verdict behind it is marked again. One whose lock or pins were regenerated after the carry is marked and reviewed again, whatever it had.
+- A mark left on an uncarried head when chain 2 lands is not safe: section d.3.
+
+*What we need from vllm for #9504.*
+
+1. Not to mark, land, rebase or merge `main` into `cursor/vllm-select20-5b1e` before the pass.
+2. Its branch in the pass, and afterwards its own plain push of that branch to the carried commit.
+3. A reading of the join's settlement of `adapters/vllm/verity_vllm/engine/sampler_capture.py`. `main`'s side is three engine commits of 11 and 12 Nov (`cfe6af8b90b`, `8b4aa58f8b7`, `b06523e8425`); the join's side is `61be98c66f6` (the greedy select's units laid out on the logits' device) and `b798f05f05c` (the boundary commitment of the select's inputs). [git]
+4. Its word that #9504 lands inside the join. On its own it conflicts with the base and with #9555, today and carried (section c.4).
+
+*What #9737 does to the order.* [read: its body; derived from the rule, not run] #9737 is comms' word maps for "the auditor's devices": three commits made by `tools/move/rename.py` on `main` `053b8e50fe8a`, 258 files. They are three more moves, made on a base from before chain 2, so comms makes them again on the `main` they land on. For us:
+
+- **If they land before the pass,** the pass crosses them with the rest, 31 moves in one run. This is the order to ask for: chain 2, then #9737, then the pass.
+- **If they land after our last branch has landed,** nothing of ours crosses them.
+- **If they land in between,** every branch of ours not yet landed is carried a second time, across those three, and `based_after` may skip or refuse one that holds a carried sibling which landed after comms made its moves. So not in between.
+
+*How #9681 lands with five open pull requests inside it.* [read `queue.py:2310-2322`, `:5678-5719`] The queue holds a pull request behind an open one whose head it contains and that is not marked, unless the same owner made both. All six carry the line `Lane proofs`, so #9681 does not wait for the five, and none of the five is marked. [read: `research queue status`, 13:29Z]
+
+**f. The draft of #9681's title and body** is `pr-9681-title-body-draft.md` in my artifacts, and in the lane's notes as `20261113T1415Z-draft-frame-pr-9681-title-body.md`. The pull request is not touched. Its order is the one you asked: what #9357's part changes in what `SpotKSTwo` and `SpotExfilTwo` say (the program, what counts as served, and the premises), what #9681's own part adds, with `SampledKSTwo`, the lock records that move, then #9176's refusal `second-inputs` and one paragraph each for #9212, #9229 and #9080. Three things in it for you:
+
+- **`SampledKSTwo`'s statement does not change.** [read: the same text at `053b8e50fe8a` and at `3b05c3a3b1a7`] What #9681 does is file two of its premises, `SamplingDeploy.Code.ReplayCap` and `SamplingDeploy.RegMatchesTwo`, under `domain` instead of `open`, and prove both at SPOT[Flock]'s code (`replayCap_wired`, `regMatchesTwo_wired`).
+- **A correction to my 13:01Z item f.2.** I gave #9357's `reads` counts (7 new, 1 gone, 8 changed). At #9681's head against its merge-base with `main`, the lock's `reads` gain five modules, re-record five and lose none; `Proofs.Flock.SpotFlock.FrameIsBuilt` is not gone there. Three guarantee records change, one is new, none is gone; `unwitnessed`, `witnesses`, `witnesses_assumed`, `deployed` and `trust_gap` are the same. [local: the two locks compared]
+- **Two sentences of "What is not established" come from #9357's body and may be out of date** now that #9176 and #9229 are under the same head: that the address premise is false at the served design, and that the model rejects every run at a served partition over the largest size class. They are marked in the draft; their owner should confirm or strike them. Two places are left to fill at the carried head: the records run and the suites.
+
+**Not established.**
+
+- **The real pass.** Nothing was carried for real and nothing was pushed. The results hold for #9734 at `942e1ef43899`, and the merges for `bf7cbe637b4b` too; the head may still move, and a new move on the chain is a new pass.
+- **The join's own settlement of its two files.** The scratch one takes `main`'s side whole, so what the carry does to the join's own lines in `sampler_capture.py` and `a5.py` is not shown.
+- **Whether anything builds or passes at a carried head.** No build, no Lean check, no suite and no records run at any of them: a carry is git and the moves' scripts only. No carry came out `locks-stale` or `pins-stale`, which says the locks merged, not that their records are current.
+- **The five branches I did not carry:** HELDOF's, ACCEPTS's, TWOLEG's, B's draft and my draft branch `cursor/proofs-frame-jsoncmp-053b`. I did not look at the first four at all, so their place in the table is from your message alone. The join was carried at `4e986e339ad2`, not at its new tip `ff6ea109e06f`, which I only merged against the first move's base.
+- **Whether #9555 or #9441 has a land verdict,** which decides whether `research queue cross` would take either: I read `research queue status` only, which says "ready … admitted" for both.
+- **Whether a node's kept checks are shared between nodes.** The helper job's were not found by the carries on another node; I did not look further.
+- **The two sentences of #9681's draft taken from #9357's body** (section f), and its two places left to fill.
+- **Why carried #9504 merged onto run `85a4`'s line where the pairs say it conflicts** (section c.4), and whether the carried join's conflict with carried #9480 and #9504 in `two_stage.py` is more than the scratch settlement's doing.
+- **What #9737 does,** beyond its body and the rule: I ran nothing on it.
+- **Whether `research run` may name a node** for each batch as the table does; my runs used `--on auto`.
