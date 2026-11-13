@@ -190,7 +190,8 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     """restack.py runs each head's own code, which needs none of the queue's GitHub and Slack credentials nor the store's keys a
     node's run reads marks with: it sees none of them, and `gh` finds no stored login.  It merges with `main`'s drivers, the
     environment `cross_drivers` gave `cross_one`."""
-    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "RESEARCH_STORE_CONFIG"):
+    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "R2_BUCKET", "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_ACCESS_KEY_ID",
+              "CLOUDFLARE_API_TOKEN", "STORE_INDEXER_DATABASE_URL"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     seen: dict[str, str] = {}
     monkeypatch.setattr(Q, "run_group", lambda argv, cwd, left, env=None: seen.update(env or {}) or (1, "refused"))
