@@ -6232,9 +6232,10 @@ def test_a_spec_s_audit_hears_whether_its_prover_s_sample_matched_once_it_has_en
 def test_every_step_of_an_audit_that_compiles_reads_the_tree_at_the_fixed_path_and_its_report_says_where(
         tmp_path, monkeypatch):
     """A module compiles to the same bytes wherever its tree is only if every step that compiles it reads the tree at
-    `FIXED` (`sandbox.sh --at`): the plugins step, the build, the roots' build and the sampled recompile. The report's
-    `bound`, under which the artifact cache reads the build's `setup.json` paths, is the words the build steps were
-    handed. A package outside `TREE` is bound by none of them, and its report says so."""
+    `FIXED` (`sandbox.sh --at`): the plugins step, the build, the roots' build and the sampled recompile, which compiles
+    each sampled module's source there against the seal. The report's `bound`, under which the artifact cache reads the
+    build's `setup.json` paths, is the words the build steps were handed. A package outside `TREE` is bound by none of
+    them, and its report says so."""
     tree = tmp_path / "tree"
     pkg = tree / "p"
     (pkg / "P").mkdir(parents=True)
@@ -6251,7 +6252,7 @@ def test_every_step_of_an_audit_that_compiles_reads_the_tree_at_the_fixed_path_a
     def fake_run(argv, cwd, log=None, timeout=0, on_line=None):
         steps.append(argv)
         Path(log).write_text("")
-        return (1, "") if "--overlay" in argv else (0, "")
+        return (1, "") if "--setup" in argv else (0, "")
 
     def binds(argv: list[str]) -> list[str] | None:
         box = next(i for i, a in enumerate(argv) if a.endswith("/sandbox.sh"))
@@ -6266,11 +6267,20 @@ def test_every_step_of_an_audit_that_compiles_reads_the_tree_at_the_fixed_path_a
         steps.clear()
         monkeypatch.setattr(A, "TREE", at)
         rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=False)
-        assert rep["failure_codes"] == ["sampled"], rep["failures"]
-        assert [s[-1] for s in steps[:3]] == ["dep/plugin:shared", "build", "+P"] and "--overlay" in steps[3]
-        assert [binds(s) for s in steps] == [bound] * 4, \
-            "the plugins step, the build, the roots' build and the sampled recompile"
+        assert rep["failure_codes"] == ["lean"], "the seal finds no `.olean`, so the audit ends before its sample"
+        assert [s[-1] for s in steps] == ["dep/plugin:shared", "build", "+P"]
+        assert [binds(s) for s in steps] == [bound] * 3, "the plugins step, the build and the roots' build"
         assert rep["bound"] == bound
+        steps.clear()
+        (seal := tmp_path / "seal").mkdir(exist_ok=True)
+        (olean := seal / "P.olean").write_bytes(b"")
+        stand_in = type("Seal", (), {"dir": seal, "moved": lambda self, p: olean, "mapped": lambda self, p: olean,
+                                     "bin": lambda self, name: ["env", name]})()
+        fails, _ = A.sampled_recompile(pkg, ["P"], tmp_path / "work", set(), stand_in, log=lambda s: None)
+        assert [f.code for f in fails] == ["sampled"] and len(steps) == 1, (fails, steps)
+        assert binds(steps[0]) == bound, "the sampled recompile"
+        src = steps[0][steps[0].index("lean") + 1]
+        assert src == str(A.fixed(pkg / "P.lean")) if bound else Path(src).resolve() == (pkg / "P.lean").resolve(), src
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -6462,12 +6472,15 @@ def test_a_bound_build_gives_a_module_the_same_bytes_wherever_its_tree_is(tmp_pa
     assert "Built" not in build(third, True, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}")
     assert parts(third) == x
     before = files_of(third / ".lake" / "build")
-    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w1", set(), [], log=lambda s: None)
+    (tmp_path / "graph").mkdir()
+    sealed = A.Sealed(third, (third / "lean-toolchain").read_text().strip(), tmp_path / "seal").take(
+        ["P"], {}, tmp_path / "graph", log=lambda s: None)
+    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w1", set(), sealed, log=lambda s: None)
     assert fails == [] and rep["modules"] == ["P", "P.M"] and rep["by_graph"] == [], rep
     assert files_of(third / ".lake" / "build") == before, "the build is never written"
 
     monkeypatch.setattr(A, "TREE", tmp_path / "another-tree")
-    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
+    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w2", set(), sealed, log=lambda s: None)
     assert fails == [] and rep["by_graph"] == ["P.M"], "outside the tree it is compiled at its own path, as before"
 
 

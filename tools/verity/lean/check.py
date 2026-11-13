@@ -4607,11 +4607,13 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     (`audit`'s ``built``), a dependent's build may rewrite its `.lake`. Each sampled module is compiled from its source by
     the toolchain's `lean`, on the seal's search path (`Sealed.bin`) with a setup that names no import's files
     (`sampled_setup`), so every import it loads is the seal's copy. It runs in the build sandbox, writable only in its own
-    directory under ``work``/`sampled`, where it writes its outputs, `SAMPLE_CORE_SHARE` of ``threads`` (the build's
-    `LEAN_NUM_THREADS`, which each `lean` is given, else the cores) at a time. Every output (`SAMPLED_OUTPUTS`) must be in
-    both the seal and the recompile or in neither, and equal byte for byte; where only `PATH_PARTS` differ, the module's
-    parts must be one object graph but for strings that are absolute paths ending in the module's source path
-    (`olean_graph.differs`): Lean keeps a message's file in `olean.server`, so a build at another path differs there. A
+    directory under ``work``/`sampled`, where it writes its outputs, and reads its source at `FIXED` as the build read it
+    (`bound`), `SAMPLE_CORE_SHARE` of ``threads`` (the build's `LEAN_NUM_THREADS`, which each `lean` is given, else the
+    cores) at a time. Every output (`SAMPLED_OUTPUTS`) must be in both the seal and the recompile or in neither, and equal
+    byte for byte; where only `PATH_PARTS` differ, the module's parts must be one object graph but for strings that are
+    absolute paths ending in the module's source path (`olean_graph.differs`): Lean keeps a message's file in
+    `olean.server`, so a build at another path, one from before builds were bound at `FIXED` or one of a package outside
+    `TREE`, differs there. A
     failure names the module and its file, the report's `mismatched` lists each module failed so ({module: its package's
     directory}, the package's own and never its seal's), which a records run has Lake compile before it audits again
     (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them.
@@ -4673,14 +4675,16 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         plans.append((m, d))
     lean, n = sealed.bin("lean"), threads or cores()
     rep["jobs"] = jobs = max(1, min(len(plans), int(n * SAMPLE_CORE_SHARE)))
+    at = bound([pkg / ".lake", *(keyed[m].package.dir / ".lake" for m, _ in plans)])
     log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile against its seal, "
         f"{jobs} at a time")
 
     def compile(m: str, d: Path) -> tuple[int, str]:
         (o := d / mk.path_of(m, ".olean")).parent.mkdir(parents=True, exist_ok=True)
-        return run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), "--ro", str(sealed.dir), str(d), "--",
+        src = keyed[m].package.file(m)
+        return run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), "--ro", str(sealed.dir), *at, str(d), "--",
                     *lean[:-1], *([f"LEAN_NUM_THREADS={threads}"] if threads else []), lean[-1],
-                    str(keyed[m].package.file(m)), "-o", str(o), "-i", str(o.with_suffix(".ilean")),
+                    str(fixed(src) if at else src), "-o", str(o), "-i", str(o.with_suffix(".ilean")),
                     "-c", str(o.with_suffix(".c")), "--setup", str(d / "setup.json"), "--json"],
                    keyed[m].package.dir, d / "lean.log")
 
