@@ -46,6 +46,7 @@ theorem paramsOfJson_deployed {j : Json} {p : Params} (h : paramsOfJson j = .ok 
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals try contradiction
+  all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
   all_goals try (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h;
     exact membersParamsOfJson_deployed (by assumption))
 

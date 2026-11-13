@@ -104,11 +104,20 @@ def ONE_DEFINITION : String :=
 def ONE_KEY : String :=
   "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
 
-/-- The refusal of public outputs: no verdict this form computes reports any. -/
+/-- The refusal of parameters whose two stages name one coin family (`familiesApart`). -/
 def SAME_FAMILY : String :=
   "the boundary and the interior name one coin family: each stage's coins are a family of their own, released " ++
     "after their own registration's digest"
 
+/-- The stages' coin families as the check reads them (`inputOf`), the boundary's `b` and the interior audit's `i`:
+apart when both are named and differ. -/
+def familiesApart (b i : Option String) : Bool := b.isSome && b != i
+
+#guard familiesApart (some "draw/0") (some "draw/second/0")
+#guard !familiesApart (some "draw/0") (some "draw/0")
+#guard !familiesApart none none
+
+/-- The refusal of public outputs: no verdict this form computes reports any. -/
 def OUTPUTS_REFUSED : String :=
   "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 
@@ -183,14 +192,13 @@ def paramsOfJson (j : Json) : V Params := do
   let key := getD (getD (getD j "boundary") "challenger") "key"
   if key matches .null then throw ONE_KEY
   if !jeq key (getD (getD ip "challenger") "key") then throw ONE_KEY
-  let label := getD (getD (getD j "boundary") "challenger") "label"
-  if (label matches .str _) && jeq label (getD (getD ip "challenger") "label") then throw SAME_FAMILY
   let interior ← paramsAt (Json.mkObj (without ip "proofs"))
   let circuits ← Spot.Run.templateCircuits (getD ip "proofs") interior.verifier.query
   let .obj _ := getD it "replay" | throw "the interior's replay is not a program object"
   let replay ← Spot.Program.parse (← Flock.canon (getD it "replay")).toUTF8
   let audit ← OneStageZk.membersParamsOfJson
     (Json.mkObj (without ip "proofs" ++ [("proofs", Json.mkObj [("members", getD it "members")])]))
+  if !familiesApart (bp.challenger.map (·.2)) (audit.base.challenger.map (·.2)) then throw SAME_FAMILY
   let some members := audit.members | throw "the interior audit names no members"
   for m in members do
     if !circuits.any (·.2.1 == m.own.circuit) then throw (MEMBER_CIRCUIT m.name)

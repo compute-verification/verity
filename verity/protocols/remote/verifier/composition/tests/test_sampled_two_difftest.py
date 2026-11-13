@@ -102,7 +102,6 @@ CHANGES = {
     "interior-no-challenger": lambda p: _set(p, ("interior", "params", "challenger"), DROP),
     "interior-other-key": lambda p: _set(p, ("interior", "params", "challenger", "key"), _key(1)),
     "interior-params-empty": lambda p: _set(p, ("interior", "params"), {"challenger": p["interior"]["params"]["challenger"]}),
-    "interior-same-family": lambda p: _set(p, ("interior", "params", "challenger", "label"), "draw/first"),
     "interior-no-window": lambda p: _set(p, ("interior", "params", "window_root"), DROP),
     "interior-proofs": lambda p: _set(p, ("interior", "params", "proofs"), {"templates": "x"}),
 }
@@ -122,7 +121,7 @@ def test_the_form_s_own_refusals_are_reached() -> None:
     refusals = [T.refusal(change(base())) for change in CHANGES.values()]
     assert all(isinstance(e, D.Reject) for e in refusals), refusals
     reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
-    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.SAME_FAMILY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
+    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
         assert own in reasons
 
 

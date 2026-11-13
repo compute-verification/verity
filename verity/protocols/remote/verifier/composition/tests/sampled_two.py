@@ -2,7 +2,7 @@
 parameters' parse in the Lean's order, through the interior's template circuits.
 
 The form's own refusals (`split`'s form, the keys, `OUTPUTS_REFUSED`, a rule that is not two-stage, the challenger's
-name, the declared items, `ONE_DEFINITION`, `ONE_KEY`, `SAME_FAMILY`) are mirrored word for word. The parts it hands to the one-stage
+name, the declared items, `ONE_DEFINITION`, `ONE_KEY`) are mirrored word for word. The parts it hands to the one-stage
 audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Select.Rule.ofJson`, `decode_params` for
 `OneStage.paramsParsed`, `template_circuits` for `Run.templateCircuits`), which that difftest holds to the Lean by verdict;
 `reason_mirrored` says which reasons are the form's own. Past the template circuits (the replay program, the members'
@@ -24,8 +24,6 @@ TWO_STAGE = "two-stage"
 ONE_DEFINITION = ("the boundary program's proof blocks under its query are not one stratum: the two-stage form's replay "
                   "blocks are one Definition's, so a share of them by count is a share by weight")
 ONE_KEY = "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
-SAME_FAMILY = ("the boundary and the interior name one coin family: each stage's coins are a family of their own, "
-               "released after their own registration's digest")
 OUTPUTS_REFUSED = "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 PARAM_KEYS = ["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"]
 INTERIOR_KEYS = ["members", "params", "replay", "values"]
@@ -95,9 +93,6 @@ def params_of_json(j: Any) -> dict:
     key = _get(_get(j["boundary"], "challenger"), "key")
     if key is None or key != _get(_get(ip, "challenger"), "key"):
         raise Reject(ONE_KEY)
-    label = _get(_get(j["boundary"], "challenger"), "label")
-    if isinstance(label, str) and label == _get(_get(ip, "challenger"), "label"):
-        raise Reject(SAME_FAMILY)
     interior = params_at({k: v for k, v in ip.items() if k != "proofs"} if isinstance(ip, dict) else {})
     try:
         ONE_STAGE.service.template_circuits(_get(ip, "proofs"), interior["query"])
