@@ -140360,3 +140360,118 @@ MEMBERS's run-wide costs (the tables three times a member, `Blobs.get`'s compare
 - That nothing outside `membersRun` and `coinsOf` reads a blob in the per-member form. I read every `bs.get` and `tablesOf` on its path: `tablesHeld`, `statementOf`, `fileOf`, `rootBTables`, `sessionEvidence`, `step`, `filesOf`.
 
 Next, unless you say otherwise: Part 3, the draft on `cursor/proofs-firstaccept-streamed-<hex>` off MEMBERS's switch head, statement and definitions first.
+
+## [2026-11-13T12:25Z] ACCEPTS: DRAFT, not for merge: `partsSizedAt_of_formAccepts` COMPILES at `c60474f2325e1474cd4925128882d5e1b2df89b8` on `cursor/proofs-accepts-partsfit-37e3`, from `HeldOfAt` alone (run `f98b`, rc 0, 35 theorems, probe and siblings clean), by ONE new refusal `interior-parts` in `Spot.Run.interiorSteps` with the new `Spot.Run.cellParts`; new lemmas `interiorSteps_parts`, `replayCells_size`, `templateCircuits_names`, `paramsOfJson_circuits`, `inputOf_circuits`, `circuits_of_formAccepts`, `cells_heldOf`, `cells_size_heldOf`, `partsAt_heldOf`, `names_of_formAccepts`; `Spot/Run.lean` is on `main` and no listed guarantee's record moves by my read; no Python mirror, and no run of the verifier with the refusal
+
+**What the branch is.** `cursor/proofs-accepts-partsfit-37e3`, five commits off my compiled head `f3462236a6` (the one the
+join holds), two files: `verity/protocols/spot/verifier/lean/Spot/Run.lean` (+11, −3) and
+`security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean`. Not merged into the join, no pull request, no lock edit,
+no Python.
+
+**The refusal** [run: compiled]. In `Spot.Run.interiorSteps`, right after `interior-population` and before the window
+check:
+
+```lean
+let strata ← Partition.strata v.program v.query
+if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
+  return .error ("interiors", #["interior-parts"])
+```
+
+with `ids ← Select.templateIds v.query` (the check's templates, which the line above it already read),
+`ns ← Select.replayCells it.replay v.query`, and the new
+
+```lean
+def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStage.Part :=
+  ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
+```
+
+So the interior's strata must be, in the check's order, one per template, named by its id, each the one range of
+`q · ns[t]` slots from `q · Σ_{s<t} ns[s]`. It adds one refusal on the path to an accept and changes nothing else, so
+it accepts nothing it did not accept [read]. The strata and their parts are what the run already computes for the
+second stage (`interiorAudit`: `parts := SecondStage.parts sample.size strata`), read one step earlier. Two verdicts
+that were not accepts change their text, which the mirror has to copy: a strata read that throws now throws at
+`interiors`, before `interior-window` and R1 to R8 are reported, and strata that make no parts, which the second
+stage refused as `second-cells`, are now refused as `interior-parts`.
+
+**Is it HELDOF's `partsFit`?** The same comparison, not the same definition [read]. `partsFit h q strata` is
+`decide (SecondStage.parts q strata = some (partsAt h q))` over the held copy `h`, which lives in the proofs tree and
+the verifier cannot read. `cellParts` is `partsAt` in the verifier's own terms, and `partsAt_heldOf` (below) proves the
+two equal for the copies `heldOf` builds. My first draft compared with the names of `it.circuits` instead; that would
+have refused every run whose params name no `proofs` (the parser returns no circuits there), runs that pass today, so I
+changed it to the check's template ids before any try of it counted.
+
+**The file and the records.** `Spot/Run.lean` is on `main` today (`053b8e50fe` at my last fetch) [read]. By my read of
+the Properties lock on `main` and on the join, the only definitions of module `Spot.Run` a listed guarantee's record
+reads are `Spot.Run.digest?` and a private `hexDigit`, and a module's digest is made from those definitions' digests
+(`tools/verity/lean/merge.py`), not from the file. `interiorSteps` is in no record, so **no record of a listed guarantee
+moves** [read; no records run]. A guarantee listed later whose statement reads the run through `FormAccepts` would carry
+`interiorSteps` in its record, and this edit would move that one [derived].
+
+**The lemmas**, all in `AcceptsTop.lean`:
+
+- `interiorSteps_parts`: an `interiorSteps` that returns an interior passed the comparison, at its `ns`, `ids` and
+  `strata`.
+- `replayCells_size`: `replayCells` returns one count per template id.
+- `templateCircuits_names`: `Run.templateCircuits` returns no circuits or circuits named by the check's template ids in
+  its order. `split` has no equations for the parser's match on `#["templates"]`, so the proof unfolds that matcher by
+  its name, `Spot.Run.templateCircuits.match_9`, as `CoinTie.lean` does for `repCoins`, and cases on its test of the
+  key. An edit of the parser that renumbers its matchers breaks this proof, loudly.
+- `paramsOfJson_circuits`, `inputOf_circuits`, `circuits_of_formAccepts`: an accepted play's `it.circuits` are
+  `Run.templateCircuits`' at its interior's query.
+- `cells_heldOf`, `cells_size_heldOf`, `partsAt_heldOf`: the held copy `heldOf` builds has the replay cells' counts,
+  one per circuit, and its `partsAt h q` is `cellParts q (it.circuits.map (·.1)) ns`.
+- `names_of_formAccepts`: at an accepted play `it.circuits.map (·.1) = ids`. Where the parser read no `proofs` the held
+  copy has no cell, so the check names no template.
+- `partsSizedAt_of_formAccepts (hof : HeldOfAt A C) : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K`.
+
+With `partsHeldAt_of_accepts` (on the join) this gives `PartsHeldAt A C` from `HeldOfAt A C` alone:
+`partsHeldAt_of_accepts hof (partsSizedAt_of_formAccepts hof)` [derived: one line, not compiled as a theorem].
+
+**The Python mirror** [read; I wrote none]. It goes in `verity/protocols/spot/verifier/service.py`,
+`Stream.register_interiors`, inside its `checks()`, right after the `interior-population` refusal (line 2103 on this
+branch): refuse `interior-parts` unless `second_stage.parts(len(first.units), strata)` (`second_stage.py:361`) is the
+list `(template, q · Σ_{s<t} n_s, n_t)` over `self.templates` and `self.cells`. In `Stream` the interior program is the
+challenger's own (`self.interior_program`, line 2136, built from those two lists template-major), so there the
+comparison holds by construction; the refusal can fire only in the Lean run, which reads the params' program.
+
+**The difftest** [read]. `verity/protocols/spot/verifier/lean/tests/test_difftest.py`: `_interior_steps` (line 1677)
+is the Python model of `Run.interiorSteps` that the Lean is held to. It needs the same refusal after its
+`interior-population` line (1696), and `test_a_two_stage_run_reaches_every_step` (line 6866) a row beside
+`interior-population`'s in its `steps` table (line 6935). Until then the model accepts an interior the Lean refuses.
+
+**Runs** [run], each `verity lean try security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean --siblings --on auto`:
+
+- `r20261113-105124-9b76` (`b7288fb7d6`): rc 1, a proof error of mine.
+- `r20261113-113415-6ee2` (`9777a8781d`): lean exit 1 in 936 s; one theorem of 35 failed, `templateCircuits_names`.
+- `r20261113-115339-2246` on cpu-1 (`50bca2d38dd`, the lemma under a premise `TemplateCircuitsNamed`, the parser's
+  property unproved): exit 0 in 666 s wall, 33 theorems, axiom probe clean, siblings clean (2790 imported, 1327
+  unchecked).
+- `r20261113-120737-7238` on cpu-7 (`cf7f02ac690`, the premise proved and dropped): exit 0 in 360 s wall, lean exit 0
+  in 316 s, 35 theorems, axiom probe clean, siblings clean over the 178 modules built there (3939 unchecked).
+- `r20261113-121502-f98b` on cpu-14 (`c60474f2325`, the same statements; `templateCircuits_names`' proof names the
+  one matcher): exit 0 in 415 s wall, lean exit 0 in 372 s, 35 theorems, axiom probe clean, siblings clean (1940
+  imported, 2177 unchecked), no warning in the file. **This is the compiled head.**
+
+The VM rebooted a third time at 11:19:45Z; the worktrees were rebuilt from the pushed branches and nothing was lost.
+
+## STOP RULE
+
+No stop.
+
+## NEEDS
+
+- Coordinator: your ruling on whether this goes to the join. Nothing of it is merged, and I merge nothing before it.
+- The form's owner, after that ruling: the Python mirror and the difftest's row, at the places above.
+- Nothing from soundness.
+
+## Not established
+
+- No run of the compiled verifier with the refusal: not the difftest, not an honest two-stage play, not the demo. That
+  an honest interior passes `interior-parts` is by reading `Stream.interior_program` and `SecondStage.partOf`, not by a
+  run. If the strata's names are not the check's template ids in its order, every honest play is refused.
+- A check with a template its replay block has no instance of (`ns[t] = 0`) is refused by `interior-parts`: no stratum
+  makes a part of no slots. I did not read whether the run accepted such a play before.
+- No records run, no caps test, no `check`. "No record moves" is by reading the lock.
+- Whether the draft merges cleanly with the join's tip was not tried; it is cut from `f3462236a6`.
+- The siblings probe of the compiled head's run covers the 1940 modules built on that machine and leaves 2177
+  unchecked.
