@@ -76,7 +76,7 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
     (H0, 1024, [(5, 3, 2), (5, 9, 4)], (), True, None),
 ], ids=["h3-256-none", "h3-256-one", "h3-256-two-over-4rho", "h3-256-two-voluntary", "h3-256-three-rows",
         "h3-256-tile-over-rho", "h3-1024-one", "h3-1024-two-over-rho", "h0-1024-two"])
-def test_the_hidden_and_clear_caps_agree(scheme, k, at, voluntary, accepted, why):
+def test_the_hidden_and_clear_bounds_agree(scheme, k, at, voluntary, accepted, why):
     """Each case's verdict is the hidden bound's and the clear path's, and the clear reason names the bound that refuses
     it: a row over 4ρ at k = 256 (or over ρ at k = 1,024) under -h3 is refused by both and accepted once given up as
     voluntary, a row within 4ρ but over ρ is accepted by both, a tile over ρ is refused by both, and -h0 bounds the tile
@@ -87,7 +87,7 @@ def test_the_hidden_and_clear_caps_agree(scheme, k, at, voluntary, accepted, why
 
 
 @pytest.mark.slow
-def test_the_hidden_and_clear_caps_agree_on_random_flags():
+def test_the_hidden_and_clear_bounds_agree_on_random_flags():
     """Random flag placements at k = 256 under -h3 (up to three flags in a row, up to five in the tile, each in an atom
     block of its own so that `T.flag_words` flags no other word, a random row voluntary): the hidden and clear verdicts
     agree on every tile, and both verdicts occur."""
