@@ -989,6 +989,12 @@ namespace MendSim
 theorem aligned_toDef (w : ℕ) (E : ℤ) (t : Evaluate.TC.Fp8Atom.Term) :
     Evaluate.TC.Fp8Atom.aligned w E t = Pouw.Fp8Atom.aligned w E (termToDef t) := rfl
 
+/-- One group's cut flags at an exponent, on the evaluator's model and on the Definitions'. -/
+theorem cutMap_toDef (w : ℕ) (E : ℤ) (L : List (Fin 256 × Fin 256)) :
+    (L.map fun x => Evaluate.TC.Fp8Atom.aligned w E (Evaluate.TC.Fp8Atom.product x.1 x.2) == 0) =
+      L.map fun x => Pouw.Fp8Atom.aligned w E (Pouw.Fp8Atom.product x.1 x.2) == 0 :=
+  List.map_congr_left fun x _ => by rw [aligned_toDef, product_toDef]
+
 /-- The check's cut flags (`Rule.cutFold`, on the evaluator's grouped-sum model) are the Definitions' (`Mend.cutFold`),
 on every pipeline, incoming value and operand codes. -/
 theorem cutFold_toDef (p : Evaluate.TC.Fp8Atom.Pipeline) (gs : List ℕ) (v : Evaluate.TC.Fp8Atom.Value)
@@ -1030,9 +1036,7 @@ theorem cutFold_toDef (p : Evaluate.TC.Fp8Atom.Pipeline) (gs : List ℕ) (v : Ev
           (Pouw.Fp8Atom.product x.1 x.2) == 0) ++
         Mend.cutFold (pipelineToDef p) gs (Pouw.Fp8Atom.groupStepTotal p.width p.zeroExp (valueToDef v)
           ((ab.take size).map fun x => Pouw.Fp8Atom.productTotal x.1 x.2)) (ab.drop size)
-    rw [ih, groupStepTotal_toDef, hps, hE]
-    congr 1
-    exact List.map_congr_left fun x _ => by simp only [aligned_toDef, product_toDef]
+    rw [ih, groupStepTotal_toDef, hps, hE, cutMap_toDef]
 
 /-- The check's cut flags of one H100 atom step are `Mend.cuts` at `hopperE4m3K32` on its operands' codes. -/
 theorem cuts_eq (acc : ℕ) (a b : List ℕ) :
