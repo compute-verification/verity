@@ -886,7 +886,7 @@ struct TypeCsc {
 
 struct Types {
     /// The key the device holds this build's slot types' CSC (set 0), its unit's CSR (set 1) and its level walk's rows (set 2) under (`FcTypeUploads`,
-    /// prove_circuit.cuh): drawn once from a counter that only goes up, so no two builds share one, and a set is read from the
+    /// prove_circuit.cuh): sampled once from a counter that only goes up, so no two builds share one, and a set is read from the
     /// host only while the device lacks it. A freed host array can then never be taken for another's, as an address could.
     types_gen: u64,
     logs: Vec<i32>,

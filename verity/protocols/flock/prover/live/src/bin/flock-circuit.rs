@@ -496,7 +496,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
     side_tables(Side::Fresh, st, inst, draw, count)
 }
 
-/// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
+/// Whose sampled statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
 /// the prover's tables after it each keep their own, never the other's; every other caller builds its own ([`Stmt::drawn`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side { Fresh, Verifier, Prover }
@@ -516,7 +516,7 @@ fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, St
     cache.drawn(st, n, id)
 }
 
-/// One side's statement cache as its sessions have used it so far (null under `FC_STMT_CACHE=0`): its lookups and the drawn
+/// One side's statement cache as its sessions have used it so far (null under `FC_STMT_CACHE=0`): its lookups and the sampled
 /// statements it holds, each built once, so `1 - held / lookups` is its hit rate.
 fn stmt_cache_seen(side: Side) -> Value {
     let cache = match side {
@@ -1374,8 +1374,8 @@ fn salt_buffer(_: &mut Vec<SaltBuf>, _: &mut Vec<SaltBuf>, n: usize, fill: &mut 
 }
 
 /// The read-ahead's own pool: FC_SALTS_THREADS threads (default: one a core; 0: rayon's global pool, the witness build's) at
-/// nice FC_SALTS_NICE (default 19), so its draws take the cores the witness build leaves idle, not a share of its cores. A
-/// sample that finds its tree not yet read reads its own on the caller's pool, so no draw waits on the read-ahead's priority.
+/// nice FC_SALTS_NICE (default 19), so its samples take the cores the witness build leaves idle, not a share of its cores. A
+/// sample that finds its tree not yet read reads its own on the caller's pool, so no sample waits on the read-ahead's priority.
 fn salts_pool() -> Option<&'static rayon::ThreadPool> {
     static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
     POOL.get_or_init(|| {
@@ -4140,7 +4140,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
     // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
     // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
-    // server, whose Lean draws them
+    // server, whose Lean samples them
     let after = std::env::var("FC_SALTS_AFTER").as_deref() == Ok("1");
     let ahead_salts = plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
         && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0");
@@ -6146,7 +6146,7 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
 /// `zk_firewall_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
 /// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
 /// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. One
-/// firewalled session asked for the device (`--gpu`) in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with
+/// ZK server session asked for the device (`--gpu`) in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with
 /// the recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept. The refusal is decided
 /// from the witness mode before any witness is built, so a build without the device holds it too (`device_build` false:
 /// the session's `--gpu` reaches nothing of a device before it is refused); a device build runs the case on the device.
@@ -7105,14 +7105,14 @@ impl Jobs {
 fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw: Option<&ReleaseArgs>,
               emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
     let t_start = Instant::now();
-    // a one-table device prover outside the ZK server runs each session's front (Register, its drawn statement, its witness,
+    // a one-table device prover outside the ZK server runs each session's front (Register, its sampled statement, its witness,
     // Hello) on a thread and connection of its own, beside the previous session's reps. Its reps wait for those ([`Turn`]), so the
     // device proves one session at a time, in order, and each session's verdict is awaited on its thread. A verifier that takes
     // one session at a time holds the next session at its Register (`serve --concurrency 3` takes the session awaiting its
     // verdict, the one proving and the next one's front). FC_FRONT_AHEAD=0: one session after another
     let front_ahead = base.gpu && base.tables <= 1 && fw.is_none()
         && base.front_ahead.unwrap_or_else(|| std::env::var("FC_FRONT_AHEAD").as_deref() != Ok("0"));
-    // the prebuild is for the registered statement, which a drawn session doesn't prove; a front ahead builds the session's own
+    // the prebuild is for the registered statement, which a sampled session doesn't prove; a front ahead builds the session's own
     let pipeline = !front_ahead && base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
     let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
     // FC_HOST_PREPIN=1: the first session's witness is built before any other's and pins `depth` more buffers of its mapped
@@ -7691,7 +7691,7 @@ fn serve_queue(c: Composite, path: &str) {
 /// is loaded with (as `--tmpl-unit`), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
 /// reader thread loads each circuit and builds its population's statement once, and a population's instance file once
 /// for its consecutive sessions, while earlier sessions prove. The sessions run in order through one prove loop
-/// ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements, and `FC_STMT_CACHE` keeps each drawn
+/// ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements, and `FC_STMT_CACHE` keeps each sampled
 /// statement for the process. The first W sessions are warm. Each session's `LIVE` record carries its label. No salt refs
 /// or session tables, and a templated unit comes on its circuit's line, not `--tmpl-unit`.
 ///

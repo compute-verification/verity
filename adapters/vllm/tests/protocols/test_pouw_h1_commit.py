@@ -564,7 +564,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
     (`registration._earlier`). The named record R is chained right after W and registers each round's A table and
     input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
-    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
+    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the sampling coin opens, and core's
     ROOTS1 steps pass on it."""
     previous, named = "12" * 64, _Named("12" * 64)
     record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
@@ -607,7 +607,7 @@ def _fails(run):
 def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
                                                                                                 named, why):
     """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
-    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its draw coin stays
+    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its sampling coin stays
     unopened, its transcript says why, and its release raises ValueError, the window's visible refusal."""
     with pytest.raises(ValueError, match="the window names no Commit record"):
         _window(tmp_path, monkeypatch, commit_record=named)
