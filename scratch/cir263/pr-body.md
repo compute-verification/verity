@@ -64,7 +64,7 @@ All four unchecked are `vectors/none`, on word Definitions bound at 6,144 and on
 - `r20261113-035227-475a` (`repository`, whole, at `78884a1b8a`): 352 passed, 0 failed.
 - `r20261113-040826-9fec` (`verity-vllm`, whole, at `78884a1b8a`): 14,979 passed, 18 failed, 485 skipped. All 18 are the sibling capture's tests (17 in `test_glm53_bf16_gemm_capture.py`, 1 in `test_sampled_replay_glm53_rows.py`) seeing `glm53-mtp` in `MODELS` once the new test file imported the eh_proj capture. `ce09de03c3` fixes it.
 - `r20261113-052134-678c` (`repository`, whole, at `ce09de03c3`): 352 passed, 0 failed.
-- `r20261113-052846-14e2` (`verity-vllm`, whole, at `ce09de03c3`): <counts>.
+- `r20261113-052846-14e2` (`verity-vllm`, whole, at `ce09de03c3`): 14,998 passed, 0 failed, 485 skipped.
 - <the captures of record: run id, head, rows and words compared, words that differ>.
 
 ## Not run

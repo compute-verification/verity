@@ -10,8 +10,7 @@ A turn starts on a new machine with a new clone on `main`; only what is pushed s
   capture puts its shape in the sibling's `MODELS` only while a run or a scan lasts (at `78884a1b8a` the import did it, and
   `verity-vllm` r20261113-040826-9fec failed 18 of the sibling's tests on the third model: 14,979 passed, 18 failed). At
   `ce09de03c3`: the ratchet gate `failures: []`; `repository` r20261113-052134-678c 352 passed, 0 failed; `verity-vllm`
-  r20261113-052846-14e2 (its counts are in `checkpoint.md`; if the last lines there do not give them, read `research status`
-  and fetch it). No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
+  r20261113-052846-14e2 14,998 passed, 0 failed, 485 skipped. No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
 - Tonight's lease (Fri 03:15Z, r20261113-031522-215e at `920597d5ca7f`, `jobs/card_row.sh`): every comparison that ran found
   0 differing words (eh_norm 25,165,824 words; indexer_logits 290,933 words), but no record was sealed (the schemas were not
   registered) and eh_proj stopped at its first split launch (the probe). So nothing of tonight is a capture of record; the
