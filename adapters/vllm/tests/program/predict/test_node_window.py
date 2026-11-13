@@ -113,6 +113,16 @@ def test_free_inputs(program, window):
     assert census["peers"] and all(n.split()[2] in census["unlowered"] for v in census["peers"].values() for n in v)
 
 
+def test_stand_ins(program, window):
+    """With ``stand_ins`` (the value check's) the window is the same: its digest, and each free port still free, now with
+    the rows that stand in for its Program words kept."""
+    circuit, w = window
+    c2, w2 = NW.node_window(program, stand_ins=True)
+    assert w2.census(c2)["digest"] == w.census(circuit)["digest"]
+    assert {(f.tid, f.port, f.at, f.rows) for f in w2.free} == {(f.tid, f.port, f.at, f.rows) for f in w.free}
+    assert w2.stood and all(r.tid.startswith(NW.STAND_IN) or r.tid in c2.units for s in w2.stood for g in s[5] for r in g)
+
+
 def test_partial_families(program):
     """With the norms alone, the linears' rows the norms read are free inputs under the linears' families."""
     norms = {f: NW.scale_norm for f in ("DsaRMSNorm", "RMSNormCudaVector8", "RMSNormFusedCudaVector8")}
