@@ -122198,3 +122198,58 @@ My 05:17Z guess was wrong: the `have h' := …; exact h'` form of `vocab_finder_
 - Anything at MEMBERS' `cursor/proofs-members-subset-391b` (`ae80f367e6`), which I merge next.
 - The axiom probe of every file at this one head (the probes were at the heads named in my 05:17Z entry; the files' proofs have not changed since, except `Apart` and `WindowPasses`, probed here).
 - That any of these theorems says something of a play.
+
+## CUT, Fri 13 Nov 05:21Z: five of the cut's files compile over TWOLEG's tip; `CutFirst.lean`'s two failing lemmas are rewritten and in a try; the machine was replaced, and this loop holds the pen
+
+RUNCOINS, ASSEMBLY, STAGECOINS: lines for you are under item 3.
+
+In plain words: the cut's files that read an accepted play's logs and order compile on top of TWOLEG's latest form. The one file that still fails, `CutFirst.lean`, fails in two lemmas that only show the parameters name a challenger key at the deployed parameters. Both are rewritten and pushed, and one try now builds them, then `CutAccept.lean` (the file that turns `FirstShown` and `OrderShown` into theorems). Nothing new is compiled yet.
+
+STOP RULE: none reached. No change to a listed guarantee, a named assumption or what the verifier accepts; no lock entry is added.
+
+**The machine was replaced under my turn [run].** At 05:11:59Z `~/wt` did not exist. At 05:12:07Z I made `~/wt` and `~/wt/.pen` (`mkdir` succeeded), so this loop holds the pen. The other loop's local commit `5f496fd0d0` and its `~/wt/.pen/from-other-loop.md` went with the old machine and are not on this one, so I never read them. I redid the fix from the errors the runs printed. My worktrees are rebuilt from the pushed `8ce13e23d3`.
+
+**What try 13 showed [run].** `r20261113-043720-e0dc` (vy-nebius-cpu-12, at `62f0284f05`, my merge of TWOLEG's `1f211470c7`) ended rc 0 overall:
+- `CutOrder.lean` (15 theorems), `Cut.lean` (7), `CutPrints.lean` (23), `CutHeld.lean` (10) and `CutRead.lean` (8): lean exit 0 each. Each axiom probe printed "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound", and siblings were clean.
+- So `inputOf`'s fields and the form's new last step (`secondCheck`) break no proof of mine (your 03:25Z item 2).
+- `CutFirst.lean`: lean exit 1. "2 of its 11 theorems failed: `members_deployed`, `form_audit`". The errors are `CutFirst.lean:66:55: Tactic assumption failed` and `CutFirst.lean:79:7: Dependent elimination failed`.
+- `CutAccept.lean` at that commit failed on two things. TWOLEG's `Ordered.lean:49:10` and `:51:10` (`rw [hx] at h` finds no `extendsHead first second` in `h`, whose `match (Json.arr first, Json.arr second)` is not reduced). And `CutFirst`, which it imports.
+- `r20261113-040419-e51c` (vy-nebius-2, at `fc93fee9c7`, before the merge): `CutFirst.lean` lean exit 1 in 844 s, failing only in `members_deployed`. `CutOrder.lean` lean exit 0 in 646 s with a clean probe. Its later tries were still in vy-nebius-2's line when I last looked.
+
+**What I changed [derived from those errors; not compiled].**
+- `8ce13e23d3`: `CutAccept.lean` no longer imports `Ordered.lean` or `Shown.lean`. It proves its own `ordered_order` over `stagesOrdered`, reducing the pair `match` with `dsimp only` before the `rw`. I checked that script on a core-Lean copy of `stagesOrdered`, where it passes. It also proves its own `evidence_coins` over `evidenceOf`. It reads only TWOLEG's `Steps.accepted_ordered` and `Steps.orderReason_none`, which compiled in a018 and in my try 13.
+- `b69d0b4b22`: in `CutFirst.lean`, two fixes.
+  - `members_deployed` now names the parsed parameters (`obtain ⟨q, hq, h⟩`) before `Limits.paramsOfJson_deployed hq`, as TWOLEG's `Deployed.lean` does. The old `exact … (by assumption)` let Lean take the parameters from the goal's structure update.
+  - `form_audit` now goes through `mvcgen` with a spec for each call in `paramsOfJson`, after `Ledger.checked_ok`'s pattern (`of_triple`, `ok_spec` for `membersParamsOfJson`). The old script's `repeat' split` stopped before the end of `paramsOfJson`, so its last `cases h` met an equation that is not between constructors.
+  - Each keeps the old script as a first alternative. I checked the `mvcgen` script on a core-Lean copy of `paramsOfJson`'s shape (an output match, an `if`, a `mapM`, the `SAME_FAMILY` refusal, a `for` loop); it passes there.
+
+**Your 05:12Z items.**
+1. Done as above: fix pushed at `b69d0b4b22`. One try of `CutFirst.lean`, then `CutAccept.lean`: `r20261113-051846-0e0c` on vy-nebius-cpu-12. It should end about 05:50Z (in try 13, `CutFirst` took 545 s).
+2. Noted: I keep a waiting try unless another machine's line is shorter.
+3. Who reads me:
+   - ASSEMBLY: `CutOrder.lean` compiled again at `62f0284f05`. `CutAccept.lean` holds `firstReads θ`, `orderShown θ` and `cutBound_accept`. It is not compiled; it compiles in `0e0c` or it does not.
+   - STAGECOINS: there is no two-case `LogRead`. Your 03:00Z item 4 had me drop `CutStages.lean`, so `LogRead` keeps its one compiled form (`CutRead.lean`, compiled again in try 13), and with `null` first-stage coins refused nothing splits.
+   - RUNCOINS: please write the `coinsCode … = none` lemma at the join. `CutFirst.lean` already has `run_coins`, `refused_symbol` and `coinsCode_none`; the last of these is what a `none` code gives.
+   - `interiorLogged` and the one-root half of `draws₁`, `draws₂`: I take them next, after `0e0c`. I state them from `LogIsDevice` and `PrintsInOrder` in a new file. I have read their statements on the join (`SessionCoins.InteriorLogged`, `CoinMap.StageDraws`) and written nothing yet.
+4. Noted. No file of mine states any of the five ledger facts: the cut's one premise about the device is `PrintsInOrder`, and it reaches no listed guarantee. I add no lock entry, `unwitnessed` or other.
+
+Events not mine: none this turn. The hook delivered your 04:50Z message (soundness's ruling on the five facts) to this turn; I read it, and it changes nothing I built.
+
+The premises the cut names now:
+- At `cutBound_order` (compiled): `FirstReads θ`, `OrderShown θ`, `PrintsInOrder`, `Wired`, `SignsPlay`.
+- At `cutBound_accept` (not compiled): `PrintsInOrder`, `Wired`, `SignsPlay`.
+
+My 04:32Z heading ran two minutes ahead of the clock (pushed at 04:30:15Z). This heading's time is from `date -u` at 05:20Z.
+
+NEEDS: none.
+
+To post: nothing.
+
+Not established:
+- `CutFirst.lean` and `CutAccept.lean` have not compiled. Whether `mvcgen` takes every call in the real `paramsOfJson` with the specs given is not known until `0e0c`'s verdict.
+- Every theorem over the form's accept holds of no run until TWOLEG's honest play passes.
+- `PrintsInOrder` is proved of no device.
+- The known hole stands, as the docstrings say: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
+- The run id of the try the old machine's loop launched at 04:47Z (`CutAccept` alone, at `8ce13e23d3`) went with that machine's log. That try fails on `CutFirst` either way.
+
+Head: `b69d0b4b22` (`cursor/proofs-cut-9323`), pushed; nothing unpushed.
