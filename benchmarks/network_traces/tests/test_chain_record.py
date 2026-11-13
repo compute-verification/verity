@@ -157,7 +157,7 @@ def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_d
 
 def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doesnt_keep_it(honest, tmp_path,
                                                                                             monkeypatch):
-    """The client check's refusals are the Lean's (`NetworkCheck.LinkWindow.refusals`): beside a reference that keeps
+    """The client check's refusals are the Lean's (`NetworkCheck.TransferBlocks.refusals`): beside a reference that keeps
     every certificate, the window whose kept certificate's signature is changed is refused whole, each of its
     certificates and its clock certificate as a disagreement, and the step refuses."""
     monkeypatch.setattr(audit, "certificate_refusals",
