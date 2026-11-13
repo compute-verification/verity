@@ -159877,3 +159877,38 @@ Each is a file under `security/Proofs/Flock/SpotFlock/` importing a file the exp
 - That the lock is right at this tip: `6706` is out.
 - That the one-stage suite and the adapter's tests pass with rule B's form. The adapter's tests last passed at `7aeba81f536e`, the one-stage suite at the carried head.
 - A kernel replay at any head of the join.
+
+## WIDELEAF, Fri 13 Nov 20:34Z: #9108 is pushed at `b48abf90aacb`, carried onto `main`; three runs at that head, the records run ends between 21:30Z and 22:25Z
+
+**No ready line yet [run].** The head is `b48abf90aacb5e3a6cb84a6262e235c6dc977d3b`, pushed at 20:19Z as a fast-forward of `16757e170166` (no force). It holds `main` at `f479876a87581c572c7b7b74ba2f23aa95785851`, which is `origin/main` at 20:32Z [run]. Nothing at this head has been compiled yet: the three runs below are its first build. The ready line follows the records run's verdict, the records commit and the body, so 22:15Z holds only if the records run passes at its first build and ends by about 21:45Z [derived].
+
+Runs, all at `b48abf90aacb`, all `--pool research --as proofs`:
+
+| run | node | what | state at 20:33Z | expected end |
+|---|---|---|---|---|
+| `r20261113-202414-3c9d` | vy-nebius-cpu-12 | `lean_changed.py --records verity/protocols/proofs/flock/verifier --update`, 32 GB | running, slot r4 since 20:29Z [run] | 21:30Z to 22:25Z [derived: yesterday's two records runs took 60 and 115 minutes]; its cap is 23:29Z |
+| `r20261113-202244-644d` | vy-nebius-cpu-12 | `suites.py --changed f479876a8758… --quick`, 12 GB | running, slot r3 since 20:23Z [run] | about 20:50Z to 21:15Z [derived: yesterday's took 24 minutes] |
+| `r20261113-203040-caca` | vy-nebius-cpu-3 | `lean_changed.py --build` of Spot's root module and `Spot/OneStageZk.lean`, 12 GB | waiting at 20:34Z: cpu-3 is 8 GB short of memory, one run ahead of it [run]; if it has not started by 20:45Z I move it to cpu-12, one copy | a few minutes after it takes a slot [guess] |
+
+- **The records run audits four packages, by its own first line [run]:** Flock's verifier, the network certifier's verifier Lean, `security` (with `security/Proofs`) and `security/Properties` (with `security/Proofs`). That is every Lake package this pull request touches but one.
+- **The one it leaves out is Spot's verifier [run].** Its lock lists no guarantee, so no records run takes it and there is no record of its to regenerate; its Lean check is the third run, which builds the package's root module and so every module of it, not only the one file this pull request changes.
+- **32 GB, not 12, for the records run [read]:** it builds `security/Proofs` whole, and the README's line for a records run asks 32. The other two ask 12.
+
+How the head was made [run]:
+
+- `tools/move/restack.py` carried the branch across all 30 moves in two passes around one merge by hand, `173cc77040e8`, at the third move's base `a2ba479e2b61`, where it stopped on the two files you named and no other. Its result is `54e7a491eb71`, status `clean`, with no pin and no lock stale.
+- On top, one commit of my own, `b48abf90aacb`: `main`'s two new table files (`security/Proofs/Flock/Claims/KS/ZkKSTable.lean`, `ZkKSTableNumbers.lean`) read the masked level 0 at the statement's version. Five lines, **not compiled until the records run [read]**.
+- `pins.py --stale`: exit 0, nothing stale.
+- Against `origin/main` the head changes 305 files: 278 under `security/Proofs`, 19 under Flock's verifier, 1 of `security/Definitions`, the two locks, the retired-terms allowlist, the agreement README, two of the prover's tests and Spot's one file. No file outside this pull request's own.
+- Both locks came through `merge.py`'s driver with `main`'s guarantees: `security/lean-audit.json` lists 1,137 as `main`'s does.
+
+Three runs I cancelled by id before they started, each for its node, none a second copy [run]:
+
+- `r20261113-201959-703b` (the records run, cpu-7): every research slot there is in a window until 23:48Z.
+- `r20261113-202209-1cc1` (cpu-8) and `r20261113-202441-ffa1` (cpu-11), Spot's build: no memory free on either (119 GB and 316 GB short).
+
+**WRONG, mine:** my 19:57Z entry said restack "has passed the seventh" move. It was on the seventh. Nothing rested on it.
+
+For your book, no action of mine: #9339's records run `r20261112-192648-5007` ended exit 0 on cpu-7 [run]. I did nothing on #9339.
+
+I end my turn here and set no timer. On your resume I read the three verdicts, list every lock record that moved beyond `reads`, commit the kept records, rewrite the body and write the line. If a build fails, one line at once with the file.
