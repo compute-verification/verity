@@ -1419,6 +1419,10 @@
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStateEmpty": {
+   "honest": ["Properties.NetworkPeriod.rowsOkHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStateEmpty_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6122,6 +6126,9 @@
    "unfolded_hash": "3251577cd79f945a5c35049ecfa3a73e59648cc0157fc9c1dcebf35bb367ac36"
   },
   "Properties.NetworkPeriod.rowsStateEmpty": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateEmpty_nontrivial": {
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateTied": {
