@@ -1,4 +1,4 @@
-"""The repository's `verity/metadata/v0` files (`verity.circuits.metadata`): core's `verity/definitions/ops/metadata.json` and the vLLM
+"""The repository's `verity/metadata/v0` files (`verity.circuits.metadata`): core's `verity/circuits/ops/metadata.json` and the vLLM
 registry's `metadata.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
 calling each specialization the circuit-check catalog reaches of that Definition; and each entry sits in its owner's file.
 
@@ -20,7 +20,7 @@ from verity.circuits.program import Program
 
 ROOT = Path(__file__).resolve().parents[4]
 FILES = {
-    "core": ROOT / "verity" / "definitions" / "ops" / "metadata.json",
+    "core": ROOT / "verity" / "circuits" / "ops" / "metadata.json",
     "vllm": ROOT / "verity" / "definitions" / "registry" / "metadata.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")

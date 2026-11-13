@@ -14,7 +14,7 @@
 #pragma once
 #include <cstdint>
 
-#include "../../../verity/definitions/kernels/sha512.cuh"
+#include "../../../verity/circuits/kernels/sha512.cuh"
 
 namespace p2keys4 {
 
