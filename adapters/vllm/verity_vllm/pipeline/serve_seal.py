@@ -21,22 +21,24 @@ naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/bin
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
 ``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
 `port_identities`), with no second tensor under an identity the port is (`copies_beside_port`) and no port position other
-than its rows ran (`positions_off`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
-shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
+than its rows ran (`positions_off`), and the context carries the row's required manifest by its path, its Program digest and its
+``manifest_digest`` (a manifest naming no digest is refused, `manifest_refusal`), the manifest's ``op_path_aliases``, which the
+opened store resolves a shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
-the window closed. With ``--retain-exclude hidden_m1`` (`RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
+the window closed. With ``--retain-exclude hidden_m1`` (`serve_release.RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
 are committed as before, same leaves and roots, but not copied off the device, so the bundle's store doesn't hold them and its
 manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
 ``fa*.m1`` identity, and C2 and the oracle compare skip them), and a read of one is refused by name.
 
-A window is sealed off the engine loop (`Sealer`), over a view of the committer that holds the window's own per-step state,
+A window is sealed off the engine loop (`seal_stages.Sealer`), over a view of the committer that holds the window's own per-step state,
 with the pinned blocks its values sit in lent out of the committer's pool until the seal has read them (`thaw`): the view
-the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
-or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
-tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
-thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `serve_guard.DiskFloor`
-keeps the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
+the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's first thread before its
+seal, or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The
+registered tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the
+sealer's second thread, beside the next window's finalize, while the engine serves the window after; the bytes it writes are
+the ones an inline seal writes. `serve_guard.DiskFloor` keeps the serve dir's filesystem above a floor: a window whose seal
+would take it under is not sealed.
 
 A seal on the sealer's thread shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of
 entries at a time (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time
@@ -51,9 +53,7 @@ import copy
 import functools
 import gc
 import json
-import threading
 import time
-from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,7 +63,8 @@ from typing import Any
 from verity_vllm.commit import json_chunks as JC
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError
+from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS = step_rows.NAME
@@ -79,77 +80,11 @@ SERVED_WINDOW = "verity-vllm/served-window/v1"
 DECLARED_COMMITTER = "native_collect_v2b"
 
 
-@dataclass(frozen=True, kw_only=True)
-class RetentionOptions:
-    """serve-openai's ``--retain-exclude`` and ``--retain`` (its ``retention`` group, `retention_refusal`, `retention_record`)."""
-    retain_exclude: str = option("--retain-exclude", env="VERITY_RETAIN_EXCLUDE", default="", metavar="FAMILIES",
-                                 help="rows-sha512: commit these value families without retaining them (sets VERITY_RETAIN_EXCLUDE, as "
-                                      "the Commit's --retain-exclude does): the attention interiors only, hidden_m1 (fa2_hidden_m1, "
-                                      "fa3_hidden_m1), which no reader of a sealed window opens. Their leaves and roots are the "
-                                      "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
-    retain: str = option("--retain", default="host", choices=("host", "device"),
-                         help="rows-sha512: where a window's committed values wait for its draws. host (the default): the pinned host "
-                              "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's draw-gated "
-                              "release empties, keeping on host only the leaves some subprotocol drew; a full pool makes the step wait")
-    retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
-                                     help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
-                                          "every window awaiting its release and the open one, so at least --window-gb")
-    release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
-                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
-                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
-                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
-                                     "through --draws-dir")
-    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
-                            help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
-
-
-def retention_record(opts: Any, com: Any) -> dict[str, Any]:
-    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
-    r = opts.retention
-    return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
-            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
-
-
-def retention_refusal(opts: Any) -> str | None:
-    """Why ``opts.retention`` can't hold (None: it can): ``--retain-exclude`` names attention interiors only, and the Commit under
-    rows-sha512, whose committer leaves them on the device; ``--retain device`` the Commit under rows-sha512 too, with a pool of at
-    least ``--window-gb``."""
-    r = opts.retention
-    if r.retain == "device":
-        if not opts.commit:
-            return "--retain device holds the windowed collector's committed values on the device: it needs the Commit (drop --no-commit)"
-        if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
-            return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
-                    "beside those awaiting their release")
-        if getattr(opts, "seal", False) and not getattr(r, "release_after", ""):
-            return ("--retain device --seal: a window is sealed only after its draw-gated release, so name the subprotocols whose draws "
-                    "it waits for (--release-after)")
-    if getattr(r, "release_after", ""):
-        if r.retain != "device" or not getattr(opts, "seal", False):
-            return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"
-        from verity_vllm.pipeline.serve_release import protocols_of
-        try:
-            protocols_of(r.release_after)
-        except ValueError as e:
-            return str(e)
-    spec = r.retain_exclude
-    if not spec:
-        return None
-    from verity_vllm.commit.committer.host_retention import HIDDEN_M1_FAMILIES, retain_exclude_families
-
-    if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
-        return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "
-                f"{sorted(HIDDEN_M1_FAMILIES)} (hidden_m1), which no reader of a sealed window opens")
-    if not opts.commit:
-        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit (drop --no-commit)"
-    return None
-
-
 def scheme_refusal(opts: Any) -> str | None:
     """Why ``opts`` can't commit under rows-sha512 (None: it can): it needs the row's manifest and a token budget of whole
     step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`), is predict's
     (`serve_row.row_refusal`), committing or not."""
-    if why := retention_refusal(opts):
+    if why := SL.retention_refusal(opts):
         return why
     if opts.required_manifest and (why := row_refusal(opts.required_manifest)):
         return why
@@ -183,7 +118,21 @@ def manifest_of_record(opts: Any) -> dict[str, Any]:
     loads it."""
     from verity_vllm.commit.partition import require_partition
 
-    return require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    man = require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    if why := manifest_refusal(opts.required_manifest, man):
+        raise UsageError(why)
+    return man
+
+
+def manifest_refusal(path: str | None, manifest: Mapping[str, Any]) -> str | None:
+    """Why a sealed window can't record the row's required manifest ``manifest``, read from ``path`` (None: it can): its context
+    binds the manifest by its Program digest and its own digest, ``manifest_digest`` over its identities, both of which predict
+    row writes into it."""
+    if missing := [k for k in ("program_digest", "manifest_digest") if not isinstance(manifest.get(k), str) or not manifest[k]]:
+        return (f"the row's manifest {path} names no {' and no '.join(missing)}, and a sealed window binds its manifest by "
+                "it: pass the row's Build of record (`verity-vllm predict row --row ROW --out DIR`, --required-manifest "
+                "DIR/manifest.json)")
+    return None
 
 
 def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool | None) -> list[str]:
@@ -490,6 +439,8 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     out.mkdir(parents=True, exist_ok=True)
     pd = v.program_digest.hex()
     manifest = v.manifest
+    if manifest is not None and (why := manifest_refusal(v.manifest_path, manifest)):
+        raise ValueError(why)
     port = v.port
     with gc_paused():
         binder = served_binder_of(manifest, sorted(v.layouts), v.ports, v.has_port) if manifest is not None else None
@@ -508,8 +459,8 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
         drop(bmap["entries"])
     t_map = time.perf_counter()
     of_record = {} if manifest is None else {
-        "required_manifest": {"path": v.manifest_path, "program_digest": manifest.get("program_digest"),
-                              "digest": manifest.get("digest")},
+        "required_manifest": {"path": v.manifest_path, "program_digest": manifest["program_digest"],
+                              "manifest_digest": manifest["manifest_digest"]},
         "op_path_aliases": dict(manifest.get("op_path_aliases") or {})}
     hashed: dict[str, str] = {}
     unretained = {RB.NOT_RETAINED: nr} if (nr := v.unretained()) else {}
@@ -676,65 +627,3 @@ def committed_bytes(com: Any) -> int:
     steps: about what its seal writes (the retained values and their tree levels)."""
     return sum(int(s.n_bytes) for s in list((getattr(com, "_done", None) or {}).values()))
 
-
-class Sealer:
-    """Seals closed windows off the engine loop: one thread runs each window's job (its finalize and records when the close
-    detached it, then its seal and its line in seals.jsonl) in window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
-    (the pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for
-    every job. A job's own failure is its window's: the next one still runs."""
-    process: Any = None                                  # the `seal_process.SealProcess` its seals run in (`seal_process.ProcessSealer`)
-
-    def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
-        self.hold_bytes, self.clock = int(hold_bytes), clock
-        self.held = 0                                    # committed bytes of the windows queued or sealing
-        self.errors: list[str] = []
-        self._cv = threading.Condition()
-        self._jobs: deque = deque()
-        self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
-        self.thread.start()
-
-    def submit(self, job: Callable[[float], Any], nbytes: int = 0) -> float:
-        """Queue ``job``, which holds ``nbytes`` of a window's values until it returns and is called with the seconds the caller
-        waited for room; returns them too."""
-        t0 = self.clock()
-        with self._cv:
-            while nbytes and self.held and self.held + nbytes > self.hold_bytes:
-                self._cv.wait()
-            waited = self.clock() - t0
-            self.held += int(nbytes)
-            self._jobs.append((functools.partial(job, waited), int(nbytes)))
-            self._cv.notify_all()
-        return waited
-
-    def _run(self) -> None:
-        while True:
-            with self._cv:
-                while not self._jobs:
-                    self._cv.wait()
-                job, nbytes = self._jobs[0]
-            if job is not None:
-                try:
-                    job()
-                except Exception as e:  # noqa: BLE001
-                    self.errors.append(f"{type(e).__name__}: {e}"[:300])
-            with self._cv:
-                self._jobs.popleft()
-                self.held -= nbytes
-                self._cv.notify_all()
-            if job is None:
-                return
-
-    def drain(self) -> None:
-        with self._cv:
-            while self._jobs:
-                self._cv.wait()
-
-    def close(self) -> None:
-        """Every job run, then the thread ended."""
-        with self._cv:
-            self._jobs.append((None, 0))
-            self._cv.notify_all()
-        self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
