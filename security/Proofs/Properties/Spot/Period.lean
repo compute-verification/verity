@@ -173,9 +173,7 @@ theorem partition_toList {α : Type} (p : α → Bool) (xs : Array α) :
   mvcgen invariants
   · ⇓⟨cur, bs, cs⟩ => ⌜bs.toList = cur.prefix.filter p ∧ cs.toList = cur.prefix.filter fun a => !p a⌝
   all_goals simp_all
-  all_goals first
-    | assumption
-    | simp_all +zetaDelta
+  all_goals assumption
 
 theorem partition_eq {α : Type} (p : α → Bool) (xs : Array α) :
     xs.partition p = (xs.filter p, xs.filter fun a => !p a) := by
@@ -300,9 +298,7 @@ theorem windowsIn_ok {p : Params} {r : Read} {ws : Windows} (h : windowsIn p r =
       Except.ok.inj hg
     subst hw
     exact ⟨hname, rfl, rfl, rfl⟩
-  · first
-      | cases hg
-      | simp [throw, throwThe, MonadExceptOf.throw] at hg
+  · cases hg
 
 theorem windowsIn_spec (p : Params) (r : Read) :
     ⦃⌜True⌝⦄ windowsIn p r ⦃⇓? ws => ⌜windowsIn p r = .ok ws⌝⦄ := ok_spec _
@@ -601,7 +597,6 @@ theorem windowAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins :
   all_goals first
     | exact Or.inl ⟨_, _, by assumption, rfl⟩
     | exact Or.inr ⟨_, rfl⟩
-    | fail "windowAt_raw: neither an accept nor an undecided"
 
 /-- One step of the check along the windows, from the state `st` to `st'` at the window `w` with the evidence `we`:
 the window is added with one audit `a`, which is the check's audit at `w` after the records in `st`, and its record

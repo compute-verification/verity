@@ -26,13 +26,7 @@ open Properties.Challenger.Lines (SeqInv checked_lines verifyLedger_seq seq_of_t
 
 theorem unsignedText_eq {line : Json} {e : LedgerEntry} {s : String} (he : ledgerEntry? line = some e)
     (hs : Flock.canonUtf8 (Core.Record.unsigned e.entry) = .ok s) : unsignedText line = some s := by
-  first
-    | simp [unsignedText, he, hs, Except.toOption]
-    | (unfold unsignedText
-       rw [he]
-       show (Flock.canonUtf8 (Core.Record.unsigned e.entry)).toOption = some s
-       rw [hs]
-       rfl)
+  simp [unsignedText, he, hs, Except.toOption]
 
 /-- What `read` read of the ledger where it returns: a list of lines that reaches the monitoring period's end, each
 line an entry, entry `i` numbered `i` and signed under the key. -/
