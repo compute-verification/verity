@@ -596,6 +596,46 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
         (71, "1x1", None), (2, "gate_up", None), (6, "gate_up", "134217728"), (70, "down", "16777216")]
 
 
+def a_call(real_rows: int, n: int, k: int, k_kept: int, cells: int, **uncredited: int) -> dict:
+    """A per-call split's call as `uncredited_words` reads it: `cells` credited cells at |K| = `k_kept`, and its
+    uncredited MACs by cause, kept_width the real words' side channels."""
+    return {"call": 0, "real_rows": real_rows, "n": n, "k": k, "k_kept": k_kept, "checked_macs": cells * k_kept,
+            "uncredited_macs": {**dict.fromkeys(C.ROWS, 0), **uncredited,
+                                "kept_width": real_rows * n * (k - k_kept)}}
+
+
+def test_the_uncredited_words_are_the_words_touched_counted_by_hand(store, tmp_path, capsys):
+    """The fixture's split excludes 4 A rows of call 6 (n = 16,384) and 1 of call 70 (n = 2,048): 4 x 16,384 + 2,048
+    words. On 4 real rows of 6 words, an excluded B row's block of 2 columns leaves 8 cells, its MACs over k; with one
+    of k = 10 channels on the side, every one of the 24 real words holds an uncredited MAC, where the MACs over k are
+    (8 x 9 + 24) / 10 = 9.6."""
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN, "--per-call") == 0
+    assert printed(capsys)[1]["per_call"]["uncredited_words"] == 4 * 16_384 + 2_048 == 67_584
+    assert C.uncredited_words(a_call(4, 6, 10, 10, 16, excluded_b=8 * 10)) == 8
+    assert C.uncredited_words(a_call(4, 6, 10, 9, 16, excluded_b=8 * 9)) == 24
+    assert C.uncredited_words(a_call(4, 6, 10, 10, 24)) == 0
+    assert C.uncredited_words(a_call(4, 6, 10, 9, 24)) == 24
+    with pytest.raises(C.Unreadable, match="call 0 holds checked MACs that are no whole number of cells at its kept"):
+        C.uncredited_words({**a_call(4, 6, 10, 10, 16), "checked_macs": 161})
+
+
+def test_the_uncredited_words_are_the_calls_own_sum_over_every_call(store, tmp_path, capsys):
+    """The total is each call's words summed over every call of the split, not only the calls printed: with call 70
+    given one side channel, its 4 real rows of 2,048 words all count."""
+    def side(doc: dict) -> None:
+        c = doc["uncredited"]["calls"][2]
+        c.update(k=c["k"] + 1, macs=c["macs"] + c["real_rows"] * c["n"],
+                 uncredited_macs={**c["uncredited_macs"], "kept_width": c["real_rows"] * c["n"]})
+        resum(doc)
+    store.add(RUN, a_record(tmp_path, VERIFY=side))
+    assert bench(store, "--from", RUN, "--per-call", "--top", "1") == 0
+    got = printed(capsys)[1]["per_call"]
+    calls = json.loads((tmp_path / "record" / C.VERIFY).read_text())["uncredited"]["calls"]
+    assert [c["call"] for c in got["top"]] == [71]
+    assert got["uncredited_words"] == sum(C.uncredited_words(c) for c in calls) == 4 * 16_384 + 4 * 2_048
+
+
 @pytest.mark.parametrize("edits, why", [
     ({"VERIFY": None}, "the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
                        "verifier side of the per-call give-up is on main"),

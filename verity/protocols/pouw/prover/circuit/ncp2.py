@@ -44,11 +44,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from verity.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
-import verity.definitions.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.definitions.ops.fp32  # registers F32Mul_v2, Bf16Add_v1
 import verity.definitions.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
 from verity.definitions.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
 
