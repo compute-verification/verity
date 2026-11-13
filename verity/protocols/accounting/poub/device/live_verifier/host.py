@@ -72,9 +72,10 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-session SID`, the
   setup the block challenger kept for its PoUS session SID (`<root>/parties/pous/setups/SID.json`, the store that session
   bound), with `--fixture` the fixture store's in the pinned tree (`PARTY_FIXED`), and with neither the gate refuses it,
-  so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
-  `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
-  t1). A lane
+  so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`.
+  `party_log wipe|pous|bw [LOG]` reads the sessions and each one's stdout as the host kept it, on the host only
+  (`sudo vy-verifier-gate party_log ...`): the gate refuses it over ssh to every key, named or not, since a party's log
+  holds what its device received and signed. A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
@@ -738,9 +739,9 @@ LOG_NAME = re.compile(r"\d{8}T\d{6}Z\.jsonl")
 
 
 def gate_party_log(rest: list[str], host: Host) -> dict:
-    """`party_log wipe|pous [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as the
-    host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock), so a
-    reader takes them from the challenger's host and never through the card. Any key reads it."""
+    """`party_log wipe|pous|bw [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as
+    the host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock).
+    Root on the host reads it; `gate` refuses it over ssh (`PARTY_LOG_REFUSED`)."""
     names = {n for n, _, _ in PARTIES.values()}
     if not rest or rest[0] not in names or len(rest) > 2 or (len(rest) == 2 and not LOG_NAME.fullmatch(rest[1])):
         raise Refused(f"party_log {'|'.join(sorted(names))} [LOG]")
@@ -1002,7 +1003,9 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
          "| bw_party (--pous-session SID | --fixture) [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
-         "| party_log wipe|pous [LOG]")
+         "| party_log wipe|pous|bw [LOG] (root on the host only)")
+PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate party_log ...), never over ssh: a party's "
+                     "log holds what its device received and signed, which no key takes off the host")
 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
@@ -1039,6 +1042,8 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
     own = hooks.get("own") or own_by_auditor
     pinned = hooks.get("pinned")
     try:
+        if verb == "party_log" and not admin:
+            raise Refused(PARTY_LOG_REFUSED)
         if verb in ("run", "replay", "stop", "close", "compose", *PARTIES) and by is None:
             raise Refused("this key reads only: a run is started, replayed, stopped, a registration closed or a hand-off "
                           "composed with a lane's own gate key, which infra registers for it (send infra the public half)")
