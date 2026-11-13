@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity.protocols.certifier.verifier.arith_encode import CW
+from verity.protocols.accounting.certifier.verifier.arith_encode import CW
 
 from verity_vllm.pipeline.advice_code import by_class as BC
 from verity_vllm.pipeline.advice_code import codec as V

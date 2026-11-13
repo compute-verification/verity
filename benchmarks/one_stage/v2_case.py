@@ -53,7 +53,7 @@ from pathlib import Path
 import a5
 from composite import canonical, write_private
 
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 ID = "verity/sampled-proofs/one-stage/v2"
 TREE = Path(__file__).resolve().parents[2]

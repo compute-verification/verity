@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import CoinError
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError
 
 from tests.protocols import challenger_host as CH
 from verity_vllm.commit.challenge import challenge_positions
