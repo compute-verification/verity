@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import types
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -186,6 +186,22 @@ def test_an_occurrence_that_holds_no_tensor_is_counted_apart():
     sink(key, (None, 3))
     assert sink.counts == {key: 2} and sink.non_tensor == {key: 2} and sink.shapes == {} and sink.dtypes == {}
     assert sink.to_json()["sites"] == [{"module": key[0], "kind": key[1], "slot": key[2], "occurrences": 2, "shapes": [], "dtypes": [], "non_tensor": 2}]
+
+
+def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
+    """A hook reads its site's slot at each call: `out` or the k-th member of what its module returns, `in[k]` of its arguments.
+    A slot of another form, and one past what the call holds, is installed and hands the sink nothing."""
+    model = Tiny()
+    second = P.AcquisitionSite("producer_output", "blocks.0.norm", "1")
+    sites = [P.AcquisitionSite("producer_output", "blocks.0.proj", "hidden"), P.AcquisitionSite("producer_output", "blocks.0.norm", "2"),
+             P.AcquisitionSite("producer_output", "logits", "0"), P.AcquisitionSite("consumer_input", "embed", "out"),
+             P.AcquisitionSite("consumer_input", "logits", "in[1]"), second]
+    sink = OccurrenceSink()
+    inst = install_from_plan(cast(P.AcquisitionPlan, types.SimpleNamespace(chosen_sites=lambda: sites, unsupported=[])), model, sink=sink)
+    assert inst.installed == sites and not inst.missing
+    model(torch.tensor([[1, 2, 3]]))
+    assert sink.counts == {second.key(): 1} and sink.shapes == {second.key(): [[1, 3, 4]]}
+    inst.remove()
 
 
 def test_promoted_consumer_pre_hook_only():
