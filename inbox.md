@@ -64,3 +64,118 @@ TERMGB to the lead, 6:43 PM PT, Thu 12 Nov. #9501's merge, built ahead on a scra
 
 Least sure of: whether #9467's reader and mine agree on every record they both accept. I have not compared them case by case; I read only that both name the same label and that the harness hands the calculator no `stop`.
 
+[2026-11-13T02:44Z] d6b2e61d10a3
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 6:44 PM PST. **NET-284 Part 2 holds. The record's own writer at my head states K = 26,400 = 384 + 384 + 25,600 + 32 on Monday's kept output, open by name and resting on neither tie; 1,696 only as conditional on both ties; no period figure. The record of record is run `r20261113-020913-e274`'s.**
+
+Marks: [ran] I ran it and read the output, [read] I read it, [argued] I reason it and did not run it.
+
+## 1. The branch
+
+- `cursor/network-accounting-view-rows-675b` at `cb691107a07c` (tree `a77a1e1b9b71`), pushed. Seven commits on `388d80e41fa0`, 13 files. My 4:47 PM PST line said eight: that was wrong. [ran]
+- No pull request. `cursor/net-onsite-memory-reads-84f9` is still at `db45e589e10f`. [ran]
+
+## 2. Piece 1: the record's words, old beside new
+
+Read off the two records as printed. [read]
+
+| | Monday's record, run `r20261109-084127-4ca1` | The record written again, run `r20261113-020913-e274` |
+|---|---|---|
+| K and its terms | 3,569,093,997,856 = 384 + 384 + 3,569,093,996,160 + 896 + 32 | 26,400 = 384 + 384 + 25,600 + 0 + 32 |
+| Figure of record | 3,569,093,998,545: K plus 689 bits for the tied audit's advice | 26,400, "and nothing added to it" |
+| What it is called | "the figure of record: K as the period's check states it, the tight form" | "It bounds a count expression and is no leak bound" |
+| What it rests on | open on 20 names, one of them `NetTiming.SecurityProofs.PeriodTiedCount`; its phase's cell reads `how: proved` | "K rests on neither of the scan's ties", open on 14 premises by name: `view-cut`, `period-checked`, `answers-verified` and eleven of the base's |
+| With both ties | not given | 1,696 = K − 25,600 + 896, "given only as conditional on them and never as the check's"; `conditional_on` is `state-tied`, `view-tied` |
+| A week, a month, a year | cells for a node, a datacenter and the world, each "scaled" | `periods` is `missing`: "nothing is scaled, pooled or summed from it" |
+
+- The premises are the five you ruled: `view-cut`, `period-checked`, `answers-verified` under 26,400; `state-tied`, `view-tied` under 1,696. Each is open, `discharged_by` and `stated_by` empty. Which figure a premise is under is one field (`charge`). [read]
+- The words give no Lean name the tree's locks don't list. No leaf of the record holds `ScanViewCut`, `PeriodLeakChecked`, `PeriodTiedCount` or 27,296. [ran]
+- The gate is ONSITEMAIN's (`ANSWERS`, `GIVEN`, `ANSWERS_VERIFIED`). I built no second one. [read]
+- The double count: one sentence, with the bound min(b, T), in the docstring of the terms (`Period.lean`) and in the part-sampled test's. The count is not made exact; `RowsKBoundsCount` is unchanged. [read; the Lean builds, run `r20261113-004246-f1c0`]
+
+## 3. Your 4:23 PM condition: the label on every row
+
+- **Fields, on each row of K:** `reading`, `what`, `bounds`, `open`, `conditional_on`. `bounds` says K bounds a count expression and is no leak bound. `open` holds `view-cut`, `period-checked`, `answers-verified` in the check's reading. A reading with both ties holds `state-tied`, `view-tied` in `conditional_on`, and its `what` says "which no check holds". [read]
+- The lab record gives the figure with both ties a phase only, under its own heading. No table or line holds two readings, and nothing is their sum. [ran, the test below]
+- **One test a writer** [ran, run `r20261113-004357-3ee3`]:
+  - `benchmarks/network_traces/tests/test_leak_bounds.py::test_no_row_of_K_leaves_the_calculator_without_its_readings_label`
+  - `benchmarks/network_traces/tests/test_chain_record.py::test_no_row_of_leak_leaves_without_its_readings_label`
+  - `benchmarks/network_sim/tests/test_onsite.py::test_no_row_of_K_leaves_the_record_without_its_readings_label`
+- **Removed on purpose, seven ways, each caught** [ran, on my machine]: a row without `open`; a row without `bounds`; `answers-verified` left out of the check's reading; the words that K is no leak bound taken out; the lab record's rows made without the label; the figure with both ties printed in the zone's line of K; a table's label line removed.
+
+## 4. Piece 2: the test on names
+
+- `benchmarks/one_stage/tests/test_onsite_record.py::test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list`. [ran, run `r20261113-004357-3ee3`]
+- **Three names broken on purpose, each caught with the fix in its message** [ran, on my machine]:
+  - a premise's `discharged_by` renamed to `Properties.NetworkPeriod.rowsKBoundsCounted`;
+  - a guarantee of `RESTS_ON` renamed to `NetTiming.SecurityProofs.PeriodLeakChecked`;
+  - a premise's `stated_by` set to `NetTiming.Guarantees.PeriodLeakChecked`.
+  - The message: "no lock of this tree lists it as a guarantee, so the Lean check replays no such theorem: take the name out, leaving its premise open and saying in words what would discharge it".
+- **Your question on `shape.frozen`:** the rule does not read a statement under a lock's `shape.frozen` as listed. It reads each lock's `guarantees` and nothing else, and the test pins that. On `origin/main`, `NetTiming.Guarantees.PeriodLeakChecked` is under `shape.frozen` of `security/lean-audit.json` and not under `guarantees`. So after a merge of `main` the rule still refuses that name in `stated_by`. I did not widen it. [ran, at `7e70df68bd18` and `e86d9204135c`]
+- A defect of mine from Part 1, found while writing the test: the message for an unlisted name took the name of an existing constant (`UNLISTED`), so a member's reason in the record read as the lock's message. Fixed in `6ea2ab1c2a`; a test holds each word to its own constant. [ran]
+
+## 5. Piece 3: Monday's record written again
+
+- **Of record:** run `r20261113-020913-e274`, exit 0. `out/record/onsite.json`, 64,536 bytes, sha256 `e79c285e1e0b7696b71d9a55b66094c82b4e304b404200af328978ff2d511164`. Beside it `out/record/what-changed.md`. Both are in the run's record in the evidence store. [ran]
+- **The earlier writing:** run `r20261113-004043-cdb6`, exit 0, sha256 `11e0b1af8b8829b45d6541205037c681afd85d780232c809eadc298742e7f1b5`. It stays where it is, in its own run's record. [ran]
+- **The two records differ in `run` and in nothing else** [ran, leaf for leaf, in the job and again on my machine]: one leaf of 566 in the published form; 8 bytes of the raw files, the run id's.
+- **`of_record` is leaf for leaf Monday's**, `holds` true. [ran]
+- **By the record's own writer, unchanged**, at `cb691107a07c`. Nothing of Monday's kept data is patched: the kept directories' listings hash the same before and after the writer. [ran, in the job]
+- **The circuit file, your four conditions** [ran, in the job on the node]: composed again in the job's scratch in 560 s (569 s in the first run). Hash line, before the writer ran: "the file's sha512 cf24115f9f1ae9c49a8694c1946c4c3ec1b70646c1c33c35ce483e4e5caecf550fa21651bfbbf366a28fb2260d066003bde5c36c970ca489f5c2bdcc2d6b69b6 | the case's proofs.circuit [the same] | SAME". Removed again once the record was written. It is in no artifact and no run's `out/`.
+- **Where the old record stays:** in run `r20261109-084127-4ca1`'s own record, `out/record/onsite.json`, as that run published it. **Telling them apart:** by `run`; by `bound.K`; by `bound.of_record.with_ties`, which only the new one has; by `periods`, cells there and `missing` here. `what-changed.md` says so.
+- **The old K's origin** is in `what-changed.md`, not in the tree: 3,569,093,997,856 is the base tree's check on the same case.
+- **The composite, as you ruled at 5:18 and 5:43 PM PST,** is in `what-changed.md` [read, whole]: my sentence word for word; the fields by origin; the acceptance a development executable's; no Lean file of `main` names the composite; the lock's guarantee `Verity.remote_network_no_pouw_soundness_of_subprotocols` has no named assumption and takes the three subprotocols' targets as hypotheses until each is proved. The job checks each sentence before it writes it and exits 13 otherwise.
+- The composite's file the writer read is Monday's kept file byte for byte (sha256 `20647ed430c7ac30…`). [ran, in the job]
+
+## 6. Runs, each launched once, main's launcher, the tree as an input
+
+Every run's first line names commit `cb691107a07c` and tree `a77a1e1b9b71`. None was in the pool `network`. [ran]
+
+| Run | What | Exit |
+|---|---|---|
+| `r20261113-020913-e274` | the record, of record | 0 |
+| `r20261113-004043-cdb6` | the record, earlier writing | 0 |
+| `r20261113-004246-f1c0` | `lake build`: network, onsite, certifier device | 0 |
+| `r20261113-004357-3ee3` | nine suites: 103, 580, 1,226, 30, 38, 26, 275, 30, 95 passed, 1 skipped | 0 |
+| `r20261113-004429-11e1` | the certifier's suite, 1,041 passed, 1 skipped; composition's, 34 passed | 0 |
+| `r20261113-004443-bae1` | the `repository` suite: 176 passed, 4 failed | 1 |
+| `r20261113-004319-805f` | the lock's fast path: 24 findings | 1 |
+
+- **One launch refused, no run made** (told you at 5:55 PM PST): my shell's `PYTHONPATH` made `research` the branch's package. The guard now in the launch command stops that.
+- **"Main's launcher", exactly:** on my machine the VM's checkout of `main` hands over to `origin/main`'s `research` code; the source shipped to the node is a clean checkout at `7e70df68bd18`; the job never runs the unpacked tree's `research` package.
+- **The job's inputs:** the lane's notes, `lanes/network-accounting/net-284-part2-record-job/` (notes commits `e8be01dba1`, `6a0438552f`), and each run's own record under `inputs/`.
+
+## 7. Your other questions
+
+- **The lock's findings, by name** [ran, set against set]: this head's run has 24, four in `Security/Properties` and 20 in `Security`. They are Tuesday's run's 24 (`r20261110-005206-4e1d`), name for name. The four in `Security/Properties`, each among them: `MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest`, and `leafFirstBlock`, `roundsOpenAfterRoots`, `rowBound` of `Pouw.SecurityProofs.Lead.Commit`. None names the network certifier's or the period check's Lean. The lock is unchanged: the run's copy is the tree's byte for byte.
+- **The base's nine names on `origin/main`** [ran, `git grep` at `7e70df68bd18` and at `e86d9204135c`]: no Lean file states any of them: `CircuitCounts`, `CircuitCountsAt`, `FilesOf`, `PhaseParsed`, `RowsTiesOrdered`, `SampledCodeRuns`, `SharedRootsParsed`, `TiedExposed`, `WrongBounds`.
+- **The `repository` suite's four failures** are the base's. Run `r20261110-022633-87a1`, at the base tree, shows the same four with the same lines [ran, the two logs' failure lines set beside each other]:
+  - `tests/lint/test_repo_env_reads.py::test_no_new_reads`
+  - `tests/lint/test_repo_lane_text.py::test_no_new_lane_text`
+  - `tests/lint/test_repo_ruff.py::test_no_new_findings`
+  - `tests/test_domains.py::test_every_entry_is_read_or_still_written`
+  - None names a file I changed; my diff touches nothing under `tools/` or `tests/`.
+
+## 8. What I did not check
+
+- A full Lean check with the kernel replay. The fast path ran; it has none.
+- The composite composed again over the changed check. No composite has accepted the changed check's answer.
+- The base tree's writer as a control in the job: the node holds no shipped base tree. In its place, 13 sections of the new record are Monday's leaf for leaf.
+- The `research` suites, and a `repository` run at `db45e589e10f` itself: the base's run is at Monday's tree.
+- The seven importers' tries from Part 1, not rerun: Part 2 changes one Lean docstring.
+
+## 9. For you to rule or know
+
+- **The onsite record prints both figures in one object** (its `ONSITE` line and `--beside`). Your condition 4 named the calculator and the lab record, so I left the record's own line. Say if it applies there too.
+- **`bound.is` and `periods.missing` say "a labelled number"** (the onsite line's words); `bounds` says "bounds a count expression". Both are in the record.
+- **`advice_charge.charged.share` (0.9697) is still written:** a ratio inside K, not a period figure.
+- **`with_ties.open` names `entries-cut`, `state-tied`, `view-tied`,** and the record carries no words of their own for them.
+- **The record's `tree` field is Monday's serving commit,** not the writing tree. `what-changed.md` says so.
+- **Three rows more than Monday's** (PoUS, the bandwidth audit, the wipe: missing, not run): the onsite head's writer lists them.
+- **The record's published form holds node names,** as Monday's did. I copied it nowhere.
+- **Key renames a reader of the JSON meets:** `prog` to `reading`, `terms.free_per_block` to `readings`, `per_phase.with_ties` to a zone's `with_ties`.
+- **"Leak bound" stays in a module's name, a subcommand and two README lines** (`leak_bounds.py`, `chain_record.py leak`). Renaming them is wider than Part 2.
+
+Next: nothing of mine is open on Part 2. One comment is on NET-284.
+
+TIMER: none
+
