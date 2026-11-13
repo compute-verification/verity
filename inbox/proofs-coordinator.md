@@ -132766,3 +132766,28 @@ Clock: `date -u` read 09:28Z. Pen: mine. Mailbox: nothing after your 06:09Z. Thi
 - **Unchanged:** no `GAP`; `RowFact` and `RefReadsWf` are the two hypotheses left of the addresses premise; no records run at my head and no ready line.
 
 I end the turn with one timer, for about 10:20Z.
+
+## RATING, Fri 13 Nov 09:28Z: the scalar reference agrees at k = 65,536: on one whole tile every compared field equals the batch forms' row, so the figure owes nothing to the fast forms
+
+In plain words. The rows I gave for an inner dimension of 65,536 ran on the fast forms of the scheme's code. I sent one of those tiles through the slow reference forms as well, to see whether the fast forms had anything to do with the result. They did not. The reference admits the same rows, passes the same tile under the deployed tile rule, flags the same atoms, charges the same debit, and both cheap programs produce its words bit for bit at the same cost. Both programs still beat the bound.
+
+- **The run** [run: `r20261113-075654-009e` on vy-nebius-cpu-1, exit code 0, 07:57:21Z to 09:19:29Z, at my head `87855f3d375a0895f8a7c98e9a6fdb929fad13b2`]. One whole 64 × 64 tile: m = 8,192, k = 65,536, n = 8,192, 170 planted groups, the Gaussian fill, the first salt, with `--scalar`, which leaves `fast_tile`'s batch forms out. Forming 535 s, ticket words 230 s, my separate count of the debit 1,393 s, the tile rule 2,751 s: 4,922 s on one core, 82 minutes. My estimate was 80.
+- **What it shows on that tile** [run: the same run]: `admissible` is true; `clear_work.check_opened` returns no failure; the planted codes are as designed; 3,284 atoms are flagged and none is in a planted group; the debit is 164,000 units against a cap of 847,708; the one-atom program runs 1,538 of 2,048 atoms and costs 68,305.7 units a word, the skip-only program runs 1,708 and costs 73,745.7, against a credit of 82,784 and a bound of 82,370.6; both programs' words equal the reference's on 4,096 of 4,096.
+- **Against the batch forms** [run: compared with the first salt's two rows in `r20261113-071548-3f9f`]: all 19 fields I compare are identical for both programs (admitted, the tile rule's verdict, words equal, words, the scalar-chain sample, atoms run, the reference's atoms, flagged, flagged in planted groups, later zeros, elements, debit, cap, cost, credit, bound, fires, planted codes as designed, the largest other code in later atoms). The batch forms took 492 s for the same tile at two values of n; the reference took ten times that at one.
+- **What is still not the reference's in that run** [read: my own code, `benchmarks/pouw/dead_pairs_sweep.py`]: the count of flagged atoms inside planted groups reads `fast_tile._flags`, and I hold its total to the reference's `tile_debit` by an assertion, which passed. The two programs' words come from the census's bit-exact atom, and their costs are my count at the cost model's prices, as before. In this mode the 64-word sample compares the reference's chain with the reference's own words, so it adds nothing here; it is the check that matters in the batch runs.
+
+### To post (replaces line 5 of my 07:41Z entry's list)
+
+5. [run] The tile rule ran on the served verifier's batch forms on all 18 tiles. On one tile at k = 65,536 (first salt, Gaussian fill, n = 8,192) and on one at 8192³ it also ran wholly on the scalar reference, with the same verdict and the same figures in every compared field: `r20261113-075654-009e` (82 minutes of one core) and `r20261113-075222-db8d`.
+
+### Mailbox, read 09:25Z: your 08:12Z and 08:30Z messages
+
+- **The mend.** I do nothing on it until you give me its pull request's number. On their note that my tests compute the debit inline: that is true of the three tests in the request's test file, which use the census's replica. It is not true of the rows above. The mode that produced them, `--raised-pearlc`, takes the forming, the check, `clear_work.check_opened` and `pearl_c_debit.tile_debit` from whatever tree it runs in, so the same command at the mend's head answers your first question on the same three salts, provided the mend changes the scheme's Python. If the mend is only in the Lean or in a test's replica, the command will show no change, and I will say which it is.
+- **The second read.** I start now on your question 1, by reading the two statements at `628b73892e6`, and I look at whether the repricing is on #9577 yet for questions 2 and 3. I report what can be said at that head and mark what must wait for the head with the repricing and for the mend.
+
+### Not established
+
+- The other two salts, the zero fill and n = 65,536 on the reference at this depth: about 82 minutes of one core each; the batch forms' rows cover them.
+- Everything the second read is for.
+
+One platform note: at 09:25Z this machine handed me twenty completion notices of other workers' sessions. None was mine and I acted on none. The machine was new; my branch and entries were all on the remote and nothing was lost.
