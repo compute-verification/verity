@@ -120198,3 +120198,56 @@ The first of these was true of my 03:30Z path as well; I had not run that test o
 **Runs out:** `r20261113-041521-46a8` (ETA 06:00Z). `r20261113-041056-ac16` (its pins step, ETA 04:30Z). I set no timer; resume me for the ready line when `46a8` ends.
 
 Scratch branches of mine on the remote, to delete when the move is staged on `main`: `cursor/proofs-scratch-chain-verifier-7c3e` (the rehearsal's base), `cursor/proofs-scratch-carve-staged-on-main-ff60` (the old path's staged commits).
+
+## RELAX, Fri 13 Nov 04:28Z: ready to mark #9636 at a287d4bf124738d270ac605e153805169f5d73ee
+
+R7's pull request is open, unmarked: https://github.com/compute-verification/verity/pull/9636, branch `cursor/proofs-r7-certified-b6a0`, head `a287d4bf124738d270ac605e153805169f5d73ee`, 35 files (+1,345 −328) against `main`, GitHub says mergeable [run: `research queue open ... --issue PRF-548 --by proofs` at 04:22Z, then `gh pr view 9636`; `research queue status` prints it "not marked ready"]. At that head the records run passes on the committed locks without regenerating either, all nine tries pass with a clean axiom probe, and the quick tier is 72 of 73 suites with one red, `research`, the node's two tests that fail at `main` too. One thing for you to decide before the mark: it conflicts with one marked head of ours, #9549, in one record literal of `Spot/OneStage.lean` (below). I mark nothing.
+
+**The head.** `a287d4bf1247` is the merge of `main` `4a7291116e11` into the branch; nothing is committed after it [run: `git status -sb`, `git ls-remote`: origin's branch is at the same sha]. No interface network's worker or CERTSTOP reads has changed since `8592d9d7c429` (`certified=`'s shape, the code `R7-certified`, the audit record's check `certified`) [derived: no commit since touches them].
+
+**Records.** `r20261113-030458-e51a` (vy-nebius-2, `lean_changed.py --records security --update`): done, exit 0; `security: check.py exit 0 in 1753 s`, `security/Properties: check.py exit 0 in 1498 s`, both `AUDIT: PASS`, no update pass [run: `research status r20261113-030458-e51a --on vy-nebius-2`, its stdout]. So the locks committed in `a7b27f9f8a2c` (copied unedited from `r20261113-015226-cc14`, before the merge) are what a records run writes at this head [derived]. Fast path: no kernel replay [read: the run's log].
+
+**Every changed lock record, against `main` `4a7291116e11`** [run: `lockdiff.py` and `readsdiff.py` on `git show 4a7291116e11:<lock>` against the head's]:
+- `security/Properties/lean-audit.json`, `guarantees`: none differs. `Properties.Spot.acceptMeans` keeps its signature and both hashes (type `b7d2aff5…`, unfolded `91f2a4fe…`, owner @proofs).
+- `security/Properties/lean-audit.json`, `open`: one digest, `Properties.Spot.ExpectsV2`, `5decb60f…` → `29c8a440…`; its issue and due date as they were.
+- `security/Properties/lean-audit.json`, `reads`, four modules:
+  - `Properties.Spot`: new `CertifiedHeld`, `OpenedRegistered`; gone `SameRoots`; changed `ExpectsV2`, `R1`, `R7`, `Registered`, `UnitsProved`, `publicOf`.
+  - `Spot.OneStage`: new `CERTIFIED_KEYS`, `CERTIFIED_REFUSED`, `Public.complete`, the private `certifiedOf`; changed `Public`, `check`, `paramsOfJson`, `paramsParsed`, `publicJson`, `recordChecks`.
+  - `Spot.Record`: new `allRan`, `certifiedCheck`, `subDict`; changed `checks`.
+  - `Spot.Registration`: new `Verifier.certified`, `Verifier.v2`, `certifiedHeld`; changed `Verifier`, `check`, `checkOutputs`.
+- `security/lean-audit.json`: only `reads` of the three `Spot.*` modules, the same definitions.
+- Whose each is [derived from each branch's diff]: #9458's are `publicOf`, `Public`, `Public.complete`, `publicJson`, `allRan`; #9023's are `UnitsProved`, `OpenedRegistered` for `SameRoots`, `subDict`, `checks`; the rest are this change's.
+- Equal to `main`'s in both locks: `guarantees`, `witnesses`, `unwitnessed`, `deployed`, `trust_gap`, `domain`, `assumptions`, `meaning`, `claims`. No new named assumption, no new open premise, no entry added to a trust gap.
+- Thirty guarantees read the compiled check's moved definitions (`Properties.Spot.acceptMeans`, `bernoulliBounds`, `digestIsRecord`, `tablesRegistered`, the remote configuration's `acceptComplies` and `acceptInferenceOnly`, and the `Verity.*` soundness family with their honest and nontrivial witnesses); none of their own records moves.
+- What Daniel's yes of 12 Nov covers is what `acceptMeans` reads: `ExpectsV2` widened, `R1`, `R7`, `CertifiedHeld` inside `Registered` (this change), and `publicOf` with `complete` (#9458). Under Option A the check `certified` is not in the listed statement [read: `security/Properties/Spot.lean` at the head].
+
+**Tries.** `r20261113-030550-5811` (vy-nebius-cpu-12, `lean_changed.py --try FILE --siblings` over the nine changed Lean files): done, exit 0; each file lean exit 0, no sibling declares a name it does; axiom probe clean on every theorem: `Spot/Registration.lean` 9, `Spot/Record.lean` 4, `security/Proofs/Properties/Spot.lean` 83, `Spot/Pinned.lean` 4, `SpotFlock/Code.lean` 15; `Spot/OneStage.lean`, `Spot/Run.lean`, `Spot/Pieces.lean` and `security/Properties/Spot.lean` hold no theorem [run: `research status r20261113-030550-5811 --on vy-nebius-cpu-12`, its stdout].
+
+**Quick tier.** `r20261113-030533-7f6f` (vy-nebius-2, `suites.py --changed 4a7291116e11 --quick`): ended rc 1, "73 suites: 72 passed (0 cached), 1 failed" [run: its stdout]. The one red is `research`: 4,848 passed, 2 failed, both in `tests/test_auto.py` (`test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool`, `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`); the same two fail there at `main` in `r20261113-012506-c977` [run, earlier] and are the node's, on CI-489 [relayed: your 02:00Z]. Passing: `verity/protocols/spot/verifier` 920, `benchmarks/one_stage` 1,037, `verity-network-traces` 679, `verity-vllm` 14,576, `verity-core-sampled-proofs` 325, the certifier's network verifier 90, `repository` 382, `benchmarks/scan_cost` 27 [run]. The test of `test_kept_compose_cache.py` that failed once at `3c020f77568d` passed here [run]; my 03:09Z entry has its `To post`.
+
+**Retired terms.** Per file, `main` `4a7291116e11` against the head, over the files the pull request changes: no file has more sites than on `main`, six have fewer, total 3,947 → 3,933 [run: `retired_vs_main.py`]. My own commits on this change's files: 20 added, 21 removed [run: `retired_count2.py`].
+
+**Markdown caps.** `markdown_caps.py origin/main HEAD`: one file over its cap, `verity/protocols/spot/verifier/README.md`, 50,290 bytes against 49,152; it warns, rc 0 [run]. `main`'s copy is 49,340, already over; #9458's head is 48,831; my commits add one line of 114 bytes [run: `wc -c` on each]. The body says so.
+
+**Merged trees.** The head holds `main` `4a7291116e11`, #9458's head `049c5875989c` and #9023's `6b782d972ec4` [run: `git merge-base --is-ancestor` for each]. `git merge-tree --write-tree` of the head [run, 04:25Z]:
+- with `main` as it is now, `00479a6c442a`: clean. `main` has moved 128 files since the merge; none is one of the pull request's 35, neither lock moved, and the one Lean file among them (`security/Proofs/Properties/Nci/LeafWidthsPart.lean`) is read by none of this change's files [run: `git diff --name-only`, `rg`].
+- with sixteen of the lane's seventeen marked heads: clean. #9075 `cbe0bcdd160d`, #9149 `4a31b967c594`, #9209 `4c8742d0d449`, #9332 `5a6be198a5ed`, #9346 `949c03c3a7a1`, #9373 `54d0d016ab78`, #9458 `049c5875989c`, #9486 `93817fbb2f8a`, #9496 `92579572ddcb`, #9513 `0f8509915503`, #9526 `0fc74f2ddd8c`, #9527 `c837a39a8c1b`, #9537 `44b84839217d`, #9584 `ae80f367e6a2`, #9596 `7764f46a6233`, #9620 `cf3cc78666ce`.
+- **with #9549 `e0c95da40383` (branch `cursor/carry-8731-dc90`, the interior's history tables): one conflict**, in `verity/protocols/spot/verifier/lean/Spot/OneStage.lean`, the record literal that ends `paramsParsed`. Mine adds `certified` to the verifier's fields (`declared, seedSalt, pool, tied, certified },`); theirs adds `tables` to the parameters on the next line (`delta, challenger, tables }`). The resolution is both lines [read: the merge tree's conflict block, three lines a side]. Its other seven files merge by themselves, the two locks among them [run]; whichever of the two lands second regenerates the locks anyway, since both move `Spot.OneStage`'s `reads` [derived].
+- I have not built on #9549's head. Say which you want: (i) mark #9636 as it is and whoever is behind merges `main` after the other lands, or (ii) I merge #9549's head now, resolve that literal as above, and rerun records, the try of `Spot/OneStage.lean` and the quick tier (about 50 minutes of runs once they have places [guess, from tonight's]).
+
+**The pull request still holds #9458's fifteen files**, as the body says, until #9458 lands (it is marked, admitted, open at `049c5875989c`) [run: `gh pr view 9458`, `research queue status`]. After that this pull request is the twenty files of its own change [derived].
+
+**The four checks of the proof.** Elaborates: yes (`5811`). Axioms clean: yes (`5811`). Kernel replay: no (fast path; the candidate's Lean check replays). Red-teamed by another agent: no.
+
+**Network's date** (Fri 5 PM PST): holds; the pull request is open with its runs [derived].
+
+**Not established.**
+- The kernel replay, and a red team by anyone but me.
+- The rows: a reversed file and an `o1` shifted by one are accepted; and a member with no unit drawn has no reported read. Both are in the body under "not established" [read: the body].
+- Whether the cause of `test_kept_compose_cache.py`'s one failure is the race I read; I did not reproduce it.
+- Two runs I launched before `main` moved (`r20261113-024621-9395`, `r20261113-025332-d8d5`) are cited nowhere.
+- Your word on the certified-rows design's STOP RULE (my 02:09Z); I build neither part before it.
+
+I end this turn here: nothing of mine is running or in line, and there is nothing left to write until your word on #9549 or the design. Branch pushed at `a287d4bf124738d270ac605e153805169f5d73ee`; the body, its template and the helper scripts are in the notes store (`lanes/proofs/20261113T0423Z-report-relax-drafts.md`).
+
+For the table: RELAX | R7 #9636 open, unmarked, `a287d4bf1247` | records `e51a` pass on committed locks; tries `5811` 9/9, axioms clean; quick tier `7f6f` 72/73 (`research`, the node's) | no guarantee's own record moves; `ExpectsV2`'s digest and four `reads` modules move | conflicts with #9549 in one literal of `Spot/OneStage.lean`: your call | kernel replay no, red team no
