@@ -153,9 +153,9 @@ theorem get_ofArray {F : Array ByteArray} {d w : String} {b : ByteArray}
   obtain ⟨a, hd, h⟩ := ebind_ok h
   try dsimp only at h
   by_cases hc : (a.size != 64 || Flock.hexOf a != d) = true
-  · rw [if_pos hc] at h
+  · rw [ite_eq_left hc] at h
     first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  · rw [if_neg hc] at h
+  · rw [ite_eq_right hc] at h
     cases hf : (_root_.Core.Blobs.ofArray F).entries.find? (·.1 == a) with
     | none =>
       rw [hf] at h
@@ -168,7 +168,9 @@ theorem get_ofArray {F : Array ByteArray} {d w : String} {b : ByteArray}
           | (cases h; rfl)
           | (simp only at h; cases h; rfl)
           | (simp [bind, Except.bind, pure, Except.pure] at h; exact h)
-      have h1 : (e1 == a) = true := Array.find?_some hf
+      have h1 : (e1 == a) = true := by
+        have h' := Array.find?_some hf
+        exact h'
       have hm : (e1, e2) ∈ F.map fun b => (Flock.Sha512.hash b, b) := Array.mem_of_find?_eq_some hf
       obtain ⟨f, hfF, hfe⟩ := Array.mem_map.1 hm
       obtain ⟨he1, he2⟩ := Prod.mk.inj hfe
