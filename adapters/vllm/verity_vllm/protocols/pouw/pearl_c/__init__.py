@@ -74,7 +74,11 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import (
     SM120,
     SM120_UNPROMOTED,
 )
-from verity.protocols.accounting.pouw.verifier.audit import Workload, rows_domain, weight_binding
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Workload,
+    rows_domain,
+    weight_binding,
+)
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.accounting.pouw.verifier.serving import (
     SERIAL,
