@@ -130079,3 +130079,41 @@ The switch is a small change to the verifier. But it makes two statements that s
 After the switch, a driver must run each sampled member's session on the window's own challenger session, one after another, with a key at the deployed parameters, and hand the check every member's files. The test driver does this already. The served harness does not.
 
 A real run also needs a served window that may be audited. And the check today reads every member's circuit into memory at once, which is more than 200 GB on Thursday's window.
+
+## [2026-11-13T08:25Z] ACCEPTS: head `7e7f0609ad` on `cursor/proofs-accepts-7d08` COMPILES WHOLE over TWOLEG's NAMED head `1e20910586` (`r20261113-081453-fb83`: `AcceptsTop.lean` "lean exit 0 in 333 s", its 12 theorems' axiom probe clean), no `sorry` in it; ASSEMBLY: MERGE `7e7f0609ad`: ONE conflict on `42bba26494` (`AcceptsOfSteps.lean`, take TWOLEG's), and `JoinsAt.lean` needs TWO fields changed and one line (below); it brings TWOLEG's `1e20910586` and RUNCOINS's `ad1c6637c1`
+
+**In plain words.** TWOLEG named its head at 08:12Z, so the hold in my 08:08Z entry is over. My files compile on that head. Where the two-stage form's check accepts a play, `SpotFlock.V` accepts the run, under ten named premises; the join can now drop one field it asks today (`recordsRead`, proved) and swap one (`recordsHeldAt`) for the two it follows from.
+
+**Compiled** [run], vy-nebius-cpu-5, `r20261113-081453-fb83` at `7e7f0609ad` (worktree clean, head pushed before launch), rc 0:
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: lean exit 0 in 333 s"
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: axiom probe: none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.AcceptsTop declares a name it does"
+- Built under it with no error: my other twelve modules, TWOLEG's `Steps` at `1e20910586`, RUNCOINS's `RunsAs` files that I import (`OfCheck` among them), HELDOF's `HeldOf` as the join holds it.
+- The same at the commit before TWOLEG's last one: `r20261113-080542-5ee6` at `590a1c0ccd`, rc 0, "lean exit 0 in 395 s", the same probe line. `AtStmt`, `Within` and `RecordNames` build there with no warning.
+
+**What `7e7f0609ad` is** [read: `git log fb397cda5d..7e7f0609ad`]. `b63b045150` (my 08:06Z entry), then one commit that removes the tactics the linter found never run (`AtStmt`, `RecordNames`, `Within`), then the merge of `1e20910586`, then one `-` more in two patterns that read `inputAt_ok` (`Accepts.lean:78`, `AcceptsTop.lean:84`). No statement changed since the 07:59Z entry.
+
+**ASSEMBLY, the merge into `42bba26494`** [run: `git merge-tree --write-tree 42bba26494 7e7f0609ad`].
+- One conflict: `SampledTwo/AcceptsOfSteps.lean`, add/add. The join's copy is TWOLEG's file of `870cc9da1b` under its new name (blob `eaa5e1251e`); mine is TWOLEG's at `1e20910586` (blob `42249e93a2`). Take mine. Merging `1e20910586` alone into the join gives the same conflict and one more on `Accepts.lean` (the rename collision) [run]; through my head `Accepts.lean` merges by itself to my file.
+- `Spot/Run.lean`, `Accepts.lean`, `AcceptsTop.lean`, the lakefile and the lock merge with no conflict; `Run.lean` comes out as the join's own blob (`3a84c46bfc`).
+- `JoinsAt.lean` then does not compile until it is mended, because `playAccepts_form` changed [read: the join's `JoinsAt.lean:264`, `:266`, `:385`]:
+  - fields: `recordsHeldAt : RecordsHeldAt A C` becomes `heldOfAt : HeldOfAt A C` and `portsDistinctAt : PortsDistinctAt C`; `recordsRead : RecordsRead C` goes (it is `recordsRead C`, a theorem);
+  - line 385: `playAccepts_form A C _ P' h.heldAt h.twoHolds h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt h.scopeHeldAt h.pinHeldAt h.sessionsRun`;
+  - line 156 reads `input_of_accepts` by position and needs no change (the record's conjunct is still third).
+- `HeldOfAt` and `PortsDistinctAt` are `AcceptsTop.lean`'s. `PortsDistinctAt` is the premise the coordinator's 07:22Z mail to me keeps named in the join ("`PortsDistinctAt` stays named where `recordOk` is derived, in the two-stage join").
+- Lock roots: of my modules `Accepts`, `RecordNames`, `JpWalk`, `AtStmt` are lock roots; the other nine are lakefile roots only and yours to add (`AcceptsTop` imports the other eight, directly or through them).
+
+**One premise more that can go, not done** [read: HELDOF's `HeldOfRun.lean` at `dc45145249`, RUNSAS's `PopulationOf.lean`]. `TwoHolds A.h` follows from `HeldOfAt` at any accepted play: `acceptedTwo_of_formAccepts` gives `AcceptedTwo i it j`, and HELDOF's `twoHolds_of` at `dc45145249` takes `heldOf i it u = some h` and that. On the join `twoHolds_of` still has its older statement (it asks `popOk`), so I write the six lines once HELDOF's newer head is on the join, not before: a call written now breaks when it lands. Then `acceptsRun_form` asks nine, and `JoinsAt.twoHolds` can be a theorem.
+
+**STOP RULE.** Nothing. No listed guarantee's statement, no named assumption and nothing the verifier accepts changed by my hand; my lock edits are `roots` and `JpWalk`'s `compile_time` entry only.
+
+**NEEDS.**
+- ASSEMBLY: merge `7e7f0609ad` and mend `JoinsAt.lean` as above, or tell me to write that mend on a branch off the join.
+- HELDOF: say when a head with `twoHolds_of (hh) (ha : AcceptedTwo i it j)` is named for the join.
+- Coordinator: nothing to decide.
+
+**Not established.** That any of the ten premises holds of a real play. That the join compiles with my head: I ran one file's try on my own tree, not the join's. That the whole Lean check passes at `7e7f0609ad` (nine of my modules are not under a lock root there).
+
+**Runs.** Ended, rc 0: `fb83`, `5ee6`. Nothing out.
+
+**Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; inbox titles read to MEMBERS's 08:23Z; none since 08:08Z names me.
