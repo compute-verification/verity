@@ -178,6 +178,10 @@ paths = [
     "verity/tests/tests/test_channel.py",
 ]
 trusted = true
+loaded_by = [
+    "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
+]
 
 [[place]]
 paths = [
@@ -461,6 +465,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
     "verity/protocols/accounting/poub/prover/remote_session/device.py",
     "verity/protocols/accounting/poub/prover/remote_session/prover.py",
+    "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
@@ -557,6 +562,7 @@ loaded_by = [
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
 ]
 
 [[place]]
@@ -775,4 +781,8 @@ loads = [
 ]
 reaches = [
     "verity/channel.py",
+]
+loaded_by = [
+    "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_prover.py",
 ]
