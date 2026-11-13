@@ -158352,3 +158352,82 @@ STOP RULE: this entry holds item 3 (the ports' keys lemma) with its try's verdic
   1 (`0db5`), the form's file 4 (`45b8`). 56 theorems, the same counts as at `590ec81d3ea3` before the carry.
 - I hold nothing out now. Nothing more goes on `cursor/proofs-twoleg-ruleb-ad71` (`7635c47d68cf`) or on
   `cursor/proofs-twoleg-family-ad71` (`b2602169f807`). On `_placed` (your 18:42Z): STOPDRIVER's mend stands for me.
+
+## MESSAGES, Fri 13 Nov 19:50Z: checkpoint: the word line is fast-forwarded to FRAME's carried head and holds step 3's first half on top: fact 9 at the play's log compiles (`ecfc`, rc 0, before the carry); the reps' rounds (facts 9 and 10) are written and their try is out (`e1d2`, the first build on the carried word line)
+
+**In plain words.** FRAME's table 8 is read. My word line now starts from the carried head, with five commits of
+mine on top. Fact 9 compiles. A session's rounds between its first and its last now have their two statements
+(`ShowsAt`, `Explains`), from two hypotheses I name and do not prove. Whether that file compiles is not known yet.
+
+**1. The word line**
+
+- [git] `cursor/proofs-messages-word-745c` went from `c4ddda089f44` to FRAME's
+  `873a752808a1b973259ba34e27e60bcb5c69352f` by a fast-forward push, no force. No merge of `main`, no rebase.
+- [git] Five commits of mine on top, cherry-picked from my side branch with no conflict. Head:
+  `e3460c14f01afbc8c0506135a1c10fa7e68ff68d`.
+- [run, local] The tree's eleven lint files at that head: "129 passed".
+- The side branch `cursor/proofs-messages-answers-745c` (`dd18164b143`) is behind the word line and gets nothing more.
+
+**2. Fact 9 at the play's log: `SessionAnswers.lean` compiles**
+
+- [run: `r20261113-192051-ecfc`, rc 0] "lean exit 0 in 741 s"; "none of its 9 theorems uses an axiom beyond propext,
+  Classical.choice and Quot.sound"; the sibling check finds no clash.
+- That run was at `ed5973130d5` on the side branch, cut from `c4ddda089f44`: before the carry. The same text is on the
+  word line, and `e1d2` builds it again there.
+- [run: `r20261113-185653-b00f`, rc 1] The try before it refused one theorem of nine, `recordDigest_round`. Cause
+  [local, a two-file mock]: in a `module` file a `match` restated in a proof is the theorem's own matcher, not the
+  definition's, so a rewrite by it finds nothing. Mended by splitting the goal's own match.
+- What it gives: `LogAnswers`. On an accepted play, a release of the play's log put on round `k` of session `t`
+  answers the digest the `t`-th session record gives that round: `linkAfter` at the first, `msg_sha512` at a rep's.
+- I changed neither `located_opened` nor `MembersHeld`.
+
+**3. The reps' rounds: `SessionMiddle.lean`, written, try out**
+
+- [run: `r20261113-194623-e1d2`, vy-nebius-cpu-9, launched 19:46Z, waiting for a slot at 19:49Z] No verdict yet.
+- [read] The carry brought the mend's `MembersHeld.opened`, which asks that the round be the link's or a rep's
+  (`j ≤ 2 * repsOf (K t)`). My use of it passes that bound; `RoundsRecorded` carries it.
+- What the file states, 15 theorems and 5 definitions [written; the core steps mock-checked locally, the rest not]:
+  - `mid_digest`: at a one-table session the masked verdict accepts under SHA-512 digests, the digest the record gives
+    a rep's round is the SHA-512 of the bytes the session's message carries there after its tag.
+  - `logOpened_of`: the play's log has a release on each round before a session's last.
+  - `showsAt_session_mid`, `explains_session_mid`: at a rep's round of the form's reading, with `Dg` the bytes the
+    release on the round answers and `raw` the message less its tag, `ShowsAt` and `Explains` hold.
+- It rests on two hypotheses, named in the file's own "Not established here":
+  - `RecordsCover`: the check read a session record for each template.
+  - `MsgsOfRecords`: the messages the session reading reads of template `t` are those of the `t`-th record the check
+    read, at a one-table SHA-512 setup the masked verdict accepts, of `2 + 2 · repRounds` rounds.
+- [read: `LastSlot.lean` on the carried head] `SetupsOfTemplates` is the nearest thing stated, and it is not proved
+  there either. `MsgsOfRecords` asks more: the statement that sets the session up, SHA-512 digests, and the messages.
+- [read: `SessionMsgs.lean`] At `SessionMsgs.sessionReading` the messages are read at `filesAt`: the first session of
+  the statement that names template `t`'s member. The records the check read are the statements' sessions in the
+  evidence's order. That the two orders agree is the tie I do not have.
+
+**4. Next, in order**
+
+- Read `e1d2` and mend what it refuses.
+- The last round: fact 11 is a theorem on the log the check read (`closes_after`, `SessionHeld.lean`). I lift it to
+  the play's log and read the closing's bytes off the log before the round.
+- The first round's `ShowsAt` from fact 9 (`recordDigest_link`). Its `Explains` and the last round's wait for step 4:
+  both messages are read at the session's statement.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock record. Two module names are added to the roots
+lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json`.
+
+## NEEDS
+
+- From ASSEMBLY or SESSIONOF2, a yes or no: is the join's session reading `SessionMsgs.sessionReading`, and does any
+  file on the join tie template `t`'s session to the `t`-th of the statements' sessions? If yes I prove
+  `RecordsCover` and the order part of `MsgsOfRecords` from it. If no they stay hypotheses of my piece.
+- Nothing from you. I go on with step 3 on the word line.
+
+## Not established
+
+- That `SessionMiddle.lean` compiles. Its try is out.
+- That the carried word line compiles. `e1d2` is the first build on it and has no verdict.
+- That `SessionAnswers.lean` compiles on the carried head: `ecfc` ran before the carry.
+- `RecordsCover` and `MsgsOfRecords`: hypotheses, not theorems.
+- `ShowsAt` and `Explains` at a session's first and last rounds, and at the statements' round.
+- That `Dg` and `raw` as a session's rounds need them, with the statements' digests carried along, fit together:
+  nothing is assembled.
