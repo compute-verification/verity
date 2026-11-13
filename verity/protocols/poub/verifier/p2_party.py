@@ -70,6 +70,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
+from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 
 from . import audit, p2, p2_lean, pooled
@@ -188,8 +189,6 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
     sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_session.setup_of` refuses."""
-    from verity.protocols.pous.device import challenger_session as CS
-
     request = record["request"]
     s = CS.setup_of(request)
     if s is None:
@@ -203,8 +202,6 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 def pous_record(directory: Path, session_id: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
-    from verity.protocols.pous.device import challenger_session as CS
-
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")
     doc = json.loads((directory / CS.SETUPS / f"{session_id}.json").read_text())
@@ -812,10 +809,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "Twin", "answer", "core_answer", "held_json",
-           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "prove",
-           "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of", "session",
-           "verdict_json"]
+__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer", "core_answer",
+           "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record",
+           "prove", "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of",
+           "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
