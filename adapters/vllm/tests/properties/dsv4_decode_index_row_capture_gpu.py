@@ -238,7 +238,7 @@ def selection() -> dict[str, Any]:
                            "sources": sources(Path(vllm.__file__).parent)}
     rec["checks"] = {"attn_cls": cls is F.DeepseekV4FlashMLAAttention, "backend": cls.backend_cls is SM.DeepseekV4FlashMLABackend,
                      "row": F.compute_global_topk_indices_and_lens is CU.compute_global_topk_indices_and_lens,
-                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and KERNEL_BLOCK // RATIO == R.DSV4_DECODE_INDICES["c4"]["BS"],
+                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and R.DSV4_DECODE_INDICES["c4"]["BS"] == KERNEL_BLOCK // RATIO,
                      "triton": rec["triton"] == TRITON, "sources": rec["sources"]["ok"]}
     rec["ok"] = all(rec["checks"].values())
     return rec

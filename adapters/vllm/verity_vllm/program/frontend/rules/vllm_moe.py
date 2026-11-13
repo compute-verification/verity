@@ -728,7 +728,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
             if v.num_valid != nv or v.block_m != sc.get("BLOCK_SIZE_M"):
                 return f"schedule {v} vs launch num_valid_tokens={nv} BLOCK_SIZE_M={sc.get('BLOCK_SIZE_M')}"
             route = v.route
-        if route.M * route.TOPK != nv:
+        if nv != route.M * route.TOPK:
             return f"route pairs {route.M}x{route.TOPK} != num_valid_tokens {nv}"
         return route
 

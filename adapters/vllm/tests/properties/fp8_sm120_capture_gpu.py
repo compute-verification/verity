@@ -563,7 +563,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
         rec["statics_ok"] = (L["block_shape"] == [Gm, Gm] and L["flags"] == [True, False, False, False, False] and not L["bias"]
                              and L["mul_routed_weight"] == (kind == "w2") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and L["KB"] == 32 and not L["SWAP"] and L["config"] == H.BATCH_INVARIANT_CONFIG
-                             and K == (HIDDEN if kind == "w13" else inter) and N == (2 * inter if kind == "w13" else HIDDEN))
+                             and (HIDDEN if kind == "w13" else inter) == K and (2 * inter if kind == "w13" else HIDDEN) == N)
         rec["operands_ok"] = bool(fed)
         launches.append(rec)
         sel = torch.as_tensor(used, device="cuda")
