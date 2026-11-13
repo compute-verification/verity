@@ -16,8 +16,8 @@ two premises stated once:
   collide with the registered files is accepted (`twoHolds_of_formAccepts` at `heldOfAt_goodCase`).
 
 `units` is the premise `UnitsWired`: at the audit statement, partition and design the verifier reads, the vocabulary's
-units are the replay blocks under `readX`. `joins`, `extract`, `caps`, `opens`, `collisionResistant` and `delta` are
-taken as they are; `caps`, like `units`, at what the verifier reads.
+units are the replay blocks under `readX`. `joins`, `extract`, `caps`, `opens`, `collisionResistant`, `blobCR` and
+`delta` are taken as they are; `caps`, like `units`, at what the verifier reads.
 
 ## What this does not show
 
@@ -67,10 +67,11 @@ theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A 
     (hcr : Claims.ExpectedCR FlockDeploy.sha512
       (bindFinder V A x θ F c σ (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
         (collOfOpen V θ F c openOf) dColl))
+    (hblob : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ (V.registered θ)))
     (hdelta : V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
       ENNReal.ofReal (A.errAt x
           (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg).P) +
-        (joinBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+        (joinCRBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
           bindBound V A x θ F c σ
             (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl) ≤
         V.delta θ .sampled (V.cost θ F c σ)) :
@@ -90,6 +91,7 @@ theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A 
       caps := hcaps s Pt dd hs hPt hdd
       opens := hopens
       collisionResistant := hcr
+      blobCR := hblob
       delta := hdelta }⟩
 
 end Verity.SampledTwo

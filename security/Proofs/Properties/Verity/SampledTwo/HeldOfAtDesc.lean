@@ -45,9 +45,9 @@ reference statements:
 
 ## What this does not show
 
-* `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsOfSent` gives `RefsAt` at the
-  reference statements of one accepted play, or two of the blobs sent differ under one SHA-512, where every accepted
-  play passed the tables' check at one registration; the form's check runs it only at a member a statement names.
+* `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsOfSent` gives `RefsAt` per play at
+  the reference statements of files the statement is given, or the play's blobs and those files differ under one
+  SHA-512 (`RefsAtOr`); the form's check runs the tables' check only at a member a statement names.
 * That the form's check calls `descOk`: it does not.
 -/
 

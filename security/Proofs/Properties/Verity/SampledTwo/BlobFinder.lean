@@ -10,7 +10,8 @@ public import Proofs.Properties.Verity.SampledTwo.Cut
 between the play's blobs and the files `B₀` (`BlobsCollide`). `blobFinder` outputs that collision: on a uniform tape
 of the play it hashes the play's blobs and `B₀`'s, and outputs the first pair that differs and has one digest
 (`blobPair`). `prob_collide_le` puts the sampled verdict accepting on a play whose blobs collide with `B₀` under its
-collision probability, the term the join's bound would add (`joinBound`) for the plays `HeldOfAtOr` leaves out.
+collision probability, and `cutBound_avoid` leaves those plays out of a cut at that term, the one the join's bound adds
+(`joinBound`) for the plays `HeldOfAtOr` leaves out; under `ecr/sha-512` at the finder it is at most `blobBound`.
 
 The vocabulary names no such finder: `fileFinder` and `publicFinder` compare the committed files with the registered
 ones, once a strategy; this one compares each play's blobs with `B₀`. Its premise is `ecr/sha-512` at it, at its
