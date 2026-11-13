@@ -18,8 +18,9 @@ the deployed scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs 
 The session's statement is any `FlockDeploy.Raw` whose fields are the member's (`MemberFields`: the statement
 `verity/flock-circuit`, the member's circuit and public files, the blobs' lookup tables, `--zk`, one table, the member's
 program, and no `--work`, `--stratified`, `--closure` or `--public-inputs`) and whose JSON files read back as the member's
-(`ReadsBack`: its partition object, its registered reads and the record's sample). The statement the sessions' reading
-builds (the member's statement with each value printed by `Flock.RecordText.printT`) has these fields by definition.
+(`ReadsBack`: its partition object, up to `PartSame`, its registered reads and the record's sample). The statement the
+sessions' reading builds (the member's statement with each value printed by `Flock.RecordText.printT`) has these fields
+by definition.
 
 * `statement_ok` (the member's statement): `Member.statement` passing is `statementOf`'s statement at the member's
   files and registered reads (`StepAt.ofOwn`).
@@ -33,8 +34,8 @@ builds (the member's statement with each value printed by `Flock.RecordText.prin
 What the statements here take as hypotheses, besides the form's accept:
 * `decode w.encode = some w`: the statement's bytes read back as its fields, which holds wherever each length fits its
   8-byte word (`Verity.Recursive.Part.decode_encode_fits`);
-* `ReadsBack`: the verifier's JSON parser reads the statement's partition object, registered reads and sample as the
-  values the form read;
+* `ReadsBack`: the verifier's JSON parser reads the statement's registered reads and sample as the values the form
+  read, and its partition object as the form's or as an object alike it, which is what a printed object reads back as;
 * in `memberSession_ok`, the shape: the statement's tables have the `m` of its template's reference statement's.
 -/
 
@@ -46,6 +47,7 @@ open Lean (Json)
 open Flock (V)
 open Verity.Recursive.BaseSetup (bind_ok)
 open Verity.Sampled.Record (SessionMatch)
+open Flock.PartCong (PartSame)
 
 private theorem throw_ne {α : Type} (e : String) (a : α) : (throw e : V α) ≠ .ok a := fun h => by cases h
 
@@ -209,10 +211,11 @@ structure MemberFields (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member)
   publicInputs : w.publicInputs = none
 
 /-- **A session statement's JSON files read back as what the form read**: the verifier's parser reads its partition
-object as the member's, its registered reads as the member's (none where the member has none), and its sample, once
-normalized (`Flock.norm`), as the sample of the session's record `record`. -/
+object as the member's or as an object alike it (`PartSame`: what a printed object reads back as), its registered
+reads as the member's (none where the member has none), and its sample, once normalized (`Flock.norm`), as the sample
+of the session's record `record`. -/
 structure ReadsBack (w : FlockDeploy.Raw) (m : _root_.Spot.OneStageZk.Member) (record : String) : Prop where
-  partition : w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok (some m.own.partition)
+  partition : ∃ P, w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok P ∧ PartSame P (some m.own.partition)
   registered : w.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok m.own.registered
   draw : ∃ D, w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok D ∧ D.map Flock.norm = Flock.Witness.recordDraw record
 
@@ -257,6 +260,7 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
       SessionMatch si (_root_.Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs) rd ∧
       si.read.draw = Flock.Witness.recordDraw record := by
   obtain ⟨D, hD, hDn⟩ := hb.draw
+  obtain ⟨P, hP, hPs⟩ := hb.partition
   have hreg := registered_of_reads hb.registered hrd
   have hfind : Flock.Tags.byName? w.statement = some Flock.Tags.circuit := by
     rw [hf.statement]
@@ -265,22 +269,22 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
   refine ⟨?hi, ?_, ?_⟩
   case hi =>
     unfold FlockDeploy.Raw.ins
-    simp only [hfind, hf.zk, hf.osCoins, hpl, hD, hb.partition, hf.workTable, hf.closure, hf.work, hreg,
+    simp only [hfind, hf.zk, hf.osCoins, hpl, hD, hP, hf.workTable, hf.closure, hf.work, hreg,
       Option.mapM_none, Bool.true_and, Bool.false_eq_true, ↓reduceIte]
     rfl
   · exact
-      { zk := by first | rfl | exact hf.zk
+      { zk := by rfl
         stmtTags := rfl
         tags := rfl
         circuitFile := hf.circuit
         publicFile := hf.publicFile
         count := hf.count
         tables := hf.tables
-        partition := rfl
+        partition := hPs
         program := hf.program
-        work := by first | rfl | simp [hf.work]
+        work := by rfl
         stratified := hf.stratified
-        closure := by first | rfl | simp [hf.closure]
+        closure := by rfl
         publicInputs := hf.publicInputs
         registered := rfl
         readRegistered := rfl }

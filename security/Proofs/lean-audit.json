@@ -307,6 +307,8 @@
   "Proofs.Flock.SpotFlock.ReadsCheck",
   "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps",
   "Proofs.Properties.Verity.SampledTwo.MemberChecks",
+  "Proofs.Properties.Verity.Sampled.Record.PartCong",
+  "Proofs.Properties.Verity.Sampled.Record.PartSame",
   "Proofs.Properties.Verity.SampledTwo.RecordNames",
   "Proofs.Properties.Verity.SampledTwo.JpWalk",
   "Proofs.Properties.Verity.SampledTwo.AtStmt",
