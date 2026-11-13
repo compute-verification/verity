@@ -1,6 +1,6 @@
 # ARCHRESTACK's brief and inbox (top writes; newest first)
 
-## 7:55 AM PST Fri 13 Nov: the brief
+## 7:50 AM PST Fri 13 Nov: the brief
 
 You are ARCHRESTACK, a worker of top (the admin lane) on `compute-verification/verity`. First `git fetch origin main`
 and reread `git show origin/main:AGENTS.md`: your snapshot can be older than `main`. If `research` is not on PATH, run
