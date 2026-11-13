@@ -123417,3 +123417,98 @@ theorem namesHeld_of (hh : heldOf i it u = some h) :
 - Run: `r20261113-054723-4bcf`, `lean_changed.py --records security/Properties --update` at `d88dc9378890`, on vy-nebius-2, launched 05:48Z, running at 05:49Z [run: `research status`]. The last such run took 65 minutes, so about 06:55Z if its Lean slot comes at once [guess]. It is my one try there.
 - #9237, #9555, #9373: heads unchanged (`a2c3831345e0`, `38b7c6df38ba`, `54d0d016ab78`). [run]
 - While it builds I read for (b), `drawCoins_ok_of_steps`. Next entry by 06:50Z, or at the run's end.
+
+## GATHER, Fri 13 Nov 05:53Z: the cards branch is merged: the second try's head is `984cb027efa3`, final if its Friday-size rehearsal passes (`1822`, about 07:30Z); both small rehearsals and 67 named tests passed at it; #9480's locks add 0 `unwitnessed` entries over `main` plus #9555 plus #9237 (2 over `main` alone, both #9237's)
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, pushed 05:37Z: the merge of `e20b7c981b46` with the cards branch at `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`. At this head the two small rehearsals passed and the Friday-size one is running, all in `r20261113-053940-1822`. I stand behind it for Friday once that part ends exit 0; until then the head I stand behind is `e20b7c981b46` (`7b90`, `b025`). First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`, not moved. [run: `git ls-remote`, 05:37Z]
+
+**In plain words.** The piece that lets the audit's second stage prove on GPUs is now in the second try's tree. Without being given cards the audit proves on the CPU as it did, and that is what I rehearsed: the two small runs passed, and the run at Friday's size is under way. On the lock question the answer is none: the two entries #9480 carries beyond `main` are the ones #9237 and #9555 carry.
+
+Marks: [run] a command I ran this turn, with the time I read; [read] a file I read this turn, with the place; [relayed]; [derived] my reasoning, tested by nothing; [guess]. Mailbox read to its last heading, your 05:31Z, at 05:51Z [run].
+
+### 0. The standing lines
+
+- **The pen:** the machine was replaced again before this turn (0 minutes up at 05:33:48Z; `~/wt` and `/tmp` empty). `mkdir ~/wt/.pen` at 05:33:57Z; the owner line is this loop's. [run]
+- No event that was not mine reached me this turn.
+
+### 1. The merge
+
+- **It stopped nowhere, and its tree is the cards branch's tree.** The cards branch already held the second try's last code head and the same one-entry fix to the test list. The merged head's tree id and `08b5d4b3c0a6`'s are equal. [run: `git merge`, hooks on; `git rev-parse` of both trees]
+- `9d4aec0111fb` is still an ancestor. [run: `git merge-base --is-ancestor`]
+- **What it brings into the second stage's command** [read: the diff of `two_stage.py`, `a5.py`, `two_stage_small.py`, `two_stage_small.sh`, `replay.py` from `e20b7c981b46`]:
+  - `second` takes `--devices` (its proof server's cards) and `--replay-record`. It reads no lease and asks for none.
+  - **Without `--devices` the proof server is made as before and the sessions prove on the CPU.**
+  - `summary.json` gains what the stage cost: `interior_commit`, `audit.staging.gpus`, `audit.proof_server`, and in each session's `audit.timing` its `gpus`, `device`, `busy_s` and `prove_seconds_source`.
+  - `two_stage_small.py expect` gains an eighth check, `cost`: a summary lacking those fields no longer passes.
+- **Named tests on this VM at the merged head:** 27 passed (the public-interface test, the audit's cards, the two-stage cost), 18 (the proof server), 21 (the replay). [run, 05:37Z to 05:39Z]
+- **The suites at this tree are STOPDRIVER's runs,** by its ready line; since the two tree ids are equal they are runs of this tree. [relayed: its 05:12Z entry; run: the tree ids]
+
+### 2. The rehearsal: `r20261113-053940-1822`, vy-nebius-2
+
+One job, so one try on the machine: launched 05:39:40Z, `--pool proofs --mem-gb 80 --timeout 240m --cwd clone`; it waited 10 seconds for its slot. [run: the launch; `slot.json`]
+
+| Part | What it runs | Result |
+|---|---|---|
+| `every` | `7b90`'s first command: 20 units, V = 2,560, stop rule, logits committed, 6 of 6 outer blocks | exit 0 |
+| `tables` | `7b90`'s second: history tables with logits committed | exit 0 |
+| tests | five named files: the second stage, the audit's cards, the two-stage cost, the interior's inputs, the logits at serve | 67 passed |
+| `friday` | `b025`'s command: V = 154,880, 8 outer blocks of 64 tokens, stop rule, `rate:1/1 --k 4` | running since 05:51Z |
+
+[run: `out/rc.txt`, each `expect.txt`, `out/pytest.log`, 05:51Z]
+
+Each small part's line, word for word, the same in both [run]:
+
+~~~text
+SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}
+~~~
+
+- **By name, in each small part:** 20 sessions; all 60 verdicts true (Lean's sample, Lean's verify and the session's verifier, 20 each); 18 changed copies, each refused; the second stage's check passes with no code; the outcome is withheld by `two-stage-form` alone. [run: each `second/summary.json`]
+- **The cost fields say CPU:** every session has `gpus` 0, no `device`, and `prove_seconds_source` `busy`; the proof server's `devices` is null and it read no card's clock. [run]
+- **The Friday-size part should end about 07:30Z.** `b025` took 96.5 minutes from its slot with its builds; this part starts with them done. [run: `b025`'s `slot.json` and `status.json`; guess]
+- **Memory asked: 80 GB,** `b025`'s peak of 61.2 GiB plus a quarter. [run: `b025`'s `resources.jsonl`, 02:59Z]
+
+**Not rehearsed by me: `--devices`.**
+- The one-card rehearsal of this code is STOPDRIVER's `5129`, at `bdd91c5b7bcb`. [relayed] Since that commit two test files changed and nothing else. [run: `git diff --stat bdd91c5b7bcb 08b5d4b3c0a6`]
+- It ran the class with logits and no stop rule; nobody has run the stop rule's class on a card, as far as I have read. [read: its 02:50Z entry's `SMALL_ARGS`]
+- I took no card and will take none unasked: serving's one launch tonight wants all eight free at 06:00Z. [read: VLLM-412, 03:35Z]
+- Whether Friday's second command is given `--devices` is serving's launcher's choice, not this tree's.
+
+### 3. #9480 and the `unwitnessed` caps
+
+**The count you asked for: 0.** #9480's locks hold no `unwitnessed` entry that `main` plus #9555 plus #9237 lack. [run: each lock's `unwitnessed` keys at #9480's head `496aa183544b`, at its merge base with `main` `b39caa2b3e01`, at `main` `5d132e70ed76`, at #9555's head `38b7c6df38ba` and at #9237's `a2c3831345e0`; 05:41Z]
+
+| Lock | #9480's head | its merge base | `main` | #9555 | #9237 | #9480 with `main`, trial merge |
+|---|---|---|---|---|---|---|
+| `security` | 230 | 230 | 221 | 221 | 221 | 221 |
+| `security/Properties` | 185 | 183 | 182 | 184 | 184 | 184 |
+| `verity/protocols/flock/verifier` | 7 | 7 | 7 | 7 | 7 | 7 |
+
+- **Over `main` alone #9480 adds 2, both in `security/Properties`:**
+  - `Properties.Challenger.Drawn.familyOneCommitment`
+  - `Properties.Challenger.Drawn.familyOneCommitmentRead`
+- Each is listed as missing its `honest` witness. Both are in #9555's and #9237's locks, and they are all that either adds over `main`. [run]
+- **They are #9237's, not #9480's.** Ten commits in #9480 beyond `main` touch a Lean file or a lock, merges aside; all ten are ancestors of `9d4aec0111fb`, the families commit you had me keep. #9480 has no Lean and no lock change of its own. [run: `git log --no-merges origin/main..496aa183544b -- '*.lean' '*lean-audit.json'`, each tested with `merge-base --is-ancestor`]
+- **The trial merge** (`git merge-tree`, which writes no ref): the three locks merge without a stop and give the last column. [run, 05:42Z]
+
+**What that means for the cap** [read: `tests/test_lean_packages.py` on `main` and #9650's diff; derived]:
+- Today's cap on `security/Properties` is 185, so 184 passes.
+- Under #9650 it is 182 with no room, so 184 fails by 2 in whichever of #9237, #9555 and #9480 lands first.
+- **By your rule #9480's diff raises nothing,** as long as #9237 or #9555 lands before it with the raise of 2. If #9480 were marked first, the raise and the two names would have to go in #9480. I change nothing now.
+- The second try's head gives the same numbers; it has no pull request. [run]
+
+**Beside the locks, one thing the trial merge showed:** #9480 no longer merges onto `main` without a stop. Two files conflict: `benchmarks/one_stage/a5.py` and the spot verifier's `lean/tests/test_difftest.py`. Nothing merges before Friday's run ends, so I resolved nothing. [run]
+
+### Runs
+
+- `r20261113-053940-1822` (vy-nebius-2): its last part, at Friday's size, running; expected end about 07:30Z. [guess] I have one timer, at 06:20Z, for VLLM-412 and this run.
+
+### Not established
+
+- The Friday-size part at the merged head: running.
+- `--devices` on any class by me; the stop rule's class on a card by anyone I have read.
+- A class count from a serve.
+
+### Still due
+
+- VLLM-412 after 06:15Z.
+- The final head in an entry's title when `1822` ends, with a reprint over its kept files at that head.
