@@ -56,9 +56,7 @@ theorem populationOk_count {q : ℕ} {p : Spot.SecondStage.Part} {hd : Json}
   unfold Spot.SecondStage.populationOk at hp
   split at hp
   · simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
-    first
-      | exact ⟨_, ‹_›, eq_of_beq hp.1.1⟩
-      | exact ⟨_, ‹_›, by simpa using hp.1.1⟩
+    exact ⟨_, ‹_›, eq_of_beq hp.1.1⟩
   · cases hp
 
 /-- **A port of a checked inner block's session that no registered read is named like shares no rows, and the
@@ -142,15 +140,11 @@ theorem publishedRows_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wirin
     exact (portNamed_spec hq).2.1
   refine ⟨hc1.2, fun pop hpop => ?_⟩
   have hlt' : portNamed h (templateOf h.ms r.u) rp.row < r.sts[0].c.ports.size := by
-    first
-      | (rw [← h0]
-         exact hlt)
-      | exact h0 ▸ hlt
+    rw [← h0]
+    exact hlt
   have hpop' : _root_.Flock.HmOut.loadPublic r.ins.read.tags r.sts[0].c r.ins.read.I.publicFile = .ok pop := by
-    first
-      | (rw [← h0]
-         exact hpop)
-      | exact h0 ▸ hpop
+    rw [← h0]
+    exact hpop
   have hnr : ∀ own, r.ins.registered = some own → ∀ reg ∈ own,
       reg.name ≠ r.sts[0].c.ports[portNamed h (templateOf h.ms r.u) rp.row]!.name :=
     fun own hown reg hmem hn => regNamed_ne_none (by rw [h0]) hown hmem hn hno
@@ -161,16 +155,10 @@ theorem publishedRows_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wirin
   have hleaves : (pubPort r.sts[0]!.c pop (portNamed h (templateOf h.ms r.u) rp.row)).leaves =
       _root_.Flock.PortRoots.countOf pop (portNamed h (templateOf h.ms r.u) rp.row) := rfl
   refine ⟨hleaves.trans (hcnt.trans hn), ?_⟩
-  first
-    | exact congrArg
-        (fun L : _root_.Flock.Bridge.LeafMap =>
-          L.ref (portNamed h (templateOf h.ms r.u) rp.row) (unitOf r.ins.read.draw (r.n h)))
-        (_root_.Flock.Bridge.LeafMap.ofPublic_none (c := r.sts[0]!.c) pop.n hnone)
-    | (unfold rowAt
-       rw [_root_.Flock.Bridge.LeafMap.ofPublic_none _ hnone]
-       first
-         | rfl
-         | done)
+  exact congrArg
+    (fun L : _root_.Flock.Bridge.LeafMap =>
+      L.ref (portNamed h (templateOf h.ms r.u) rp.row) (unitOf r.ins.read.draw (r.n h)))
+    (_root_.Flock.Bridge.LeafMap.ofPublic_none (c := r.sts[0]!.c) pop.n hnone)
 
 /-- **The published rows** (`PublishedRows`), from the wiring facts. -/
 theorem publishedRows_of_wiring (W : Wiring h) : PublishedRows h :=

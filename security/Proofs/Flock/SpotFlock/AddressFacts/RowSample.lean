@@ -49,9 +49,7 @@ theorem units_of_layout {p : _root_.Spot.Program} {q : Json} {l : _root_.Spot.Sl
     exact h1.trans hlenU
   have hpopOf : _root_.Spot.Slots.popOf l = pop.toList.flatMap (·.toList) := by
     subst hlpop
-    first
-      | rfl
-      | simp [_root_.Spot.Slots.popOf, List.flatMap]
+    rfl
   have hcount : _root_.Flock.TemplateQuery.population rs = (_root_.Spot.Slots.popOf l).length :=
     ((congrArg List.length hpopOf).trans hlenB).symm
   rw [_root_.Properties.Spot.SecurityProofs.units_eq p q rs he, hcount]
@@ -64,9 +62,7 @@ theorem layout_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ}
   | error e =>
     unfold _root_.Spot.Slots.popOk at hp
     rw [hl] at hp
-    first
-      | cases hp
-      | simp at hp
+    cases hp
 
 /-- Under the population check at `n`, the layout's population slots name the units `0` to `n - 1`, in order. -/
 theorem popOf_units_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ} {l : _root_.Spot.Slots.SlotOrder}
@@ -74,10 +70,7 @@ theorem popOf_units_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ} {l :
     (_root_.Spot.Slots.popOf l).map (·.unit) = (List.range n).map some := by
   unfold _root_.Spot.Slots.popOk at hp
   rw [hl] at hp
-  first
-    | exact of_decide_eq_true hp
-    | (simp only [decide_eq_true_eq] at hp
-       exact hp)
+  exact of_decide_eq_true hp
 
 /-- Under the population check at `n`, the layout's population has `n` slots. -/
 theorem popOf_length_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ} {l : _root_.Spot.Slots.SlotOrder}
@@ -101,9 +94,7 @@ theorem slot_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ} {l : _root_
   obtain ⟨rs, -, pop, hlpop, -⟩ := _root_.Properties.Spot.SecurityProofs.layout_ok p q l hl
   have hpopOf : _root_.Spot.Slots.popOf l = _root_.Properties.Spot.SecurityProofs.popBlocks pop := by
     subst hlpop
-    first
-      | rfl
-      | simp [_root_.Spot.Slots.popOf, _root_.Properties.Spot.SecurityProofs.popBlocks, List.flatMap]
+    rfl
   have hbl : l.blocks.toList = _root_.Properties.Spot.SecurityProofs.popBlocks pop ++
       _root_.Properties.Spot.SecurityProofs.popBlocks (_root_.Properties.Spot.SecurityProofs.inputClass p) := by
     subst hlpop
@@ -119,12 +110,9 @@ theorem slot_of_popOk {p : _root_.Spot.Program} {q : Json} {n : ℕ} {l : _root_
   refine ⟨(_root_.Properties.Spot.SecurityProofs.popBlocks pop)[ρ], ?_, ?_⟩
   · rw [← Array.getElem?_toList, hbl, List.getElem?_append_left hρ', List.getElem?_eq_getElem hρ']
   · have h1 := congrArg (fun L : List (Option ℕ) => L[ρ]?) hu
-    first
-      | (simp only [List.getElem?_map, List.getElem?_eq_getElem hρ', List.getElem?_range hρ, Option.map_some,
-          Option.some.injEq] at h1
-         exact h1)
-      | (simp [List.getElem?_eq_getElem hρ', List.getElem?_range hρ] at h1
-         exact h1)
+    simp only [List.getElem?_map, List.getElem?_eq_getElem hρ', List.getElem?_range hρ, Option.map_some,
+      Option.some.injEq] at h1
+    exact h1
 
 /-- **The first stage samples slots that name themselves** (`SampleSlots`), from the run's population check at `n`
 and a first stage that samples below `n`. -/
