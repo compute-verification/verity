@@ -3,7 +3,6 @@ module
 public import Definitions.Hash.Basic
 public import Mathlib.Tactic.Attr.Core
 import Mathlib.Tactic.Push
-import Mathlib.Tactic.SplitIfs
 
 /-!
 # Merkle trees (`Flock.Merkle`)
@@ -124,18 +123,20 @@ theorem hm96LeafPair_spec (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) (c 
       (xorBytes (E.dig (H (E.col c'))) (K.mask y')).length := by
     simp only [xorBytes, List.length_zipWith, hL, K.mask_len]
   unfold hm96LeafPair
-  split_ifs with ho hy
+  by_cases ho : hm96LeafIn H E K c y = hm96LeafIn H E K c' y'
   · have ho' : K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))) =
         K.leafPrefix ++ (xorBytes (E.dig (H (E.col c'))) (K.mask y') ++ E.dig (H (K.saltPrefix ++ y'))) := ho
-    obtain ⟨hb, -⟩ := List.append_inj (List.append_cancel_left ho') hbl
-    rw [← hy] at hb
-    have hx := xorBytes_inj (by rw [hL, K.mask_len]) (by rw [hL, K.mask_len]) hb
-    exact ⟨fun e => hc (E.col_inj e), E.dig_inj hx⟩
-  · have ho' : K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))) =
-        K.leafPrefix ++ (xorBytes (E.dig (H (E.col c'))) (K.mask y') ++ E.dig (H (K.saltPrefix ++ y'))) := ho
-    obtain ⟨-, hs⟩ := List.append_inj (List.append_cancel_left ho') hbl
-    exact ⟨fun e => hy (List.append_cancel_left e), E.dig_inj hs⟩
-  · exact ⟨ho, h⟩
+    obtain ⟨hb, hs⟩ := List.append_inj (List.append_cancel_left ho') hbl
+    rw [ite_eq_left ho]
+    by_cases hy : y = y'
+    · rw [ite_eq_left hy]
+      rw [← hy] at hb
+      have hx := xorBytes_inj (by rw [hL, K.mask_len]) (by rw [hL, K.mask_len]) hb
+      exact ⟨fun e => hc (E.col_inj e), E.dig_inj hx⟩
+    · rw [ite_eq_right hy]
+      exact ⟨fun e => hy (List.append_cancel_left e), E.dig_inj hs⟩
+  · rw [ite_eq_right ho]
+    exact ⟨ho, h⟩
 
 /-- hm96's salted leaf scheme (`hm96Leaf`), for digests of the mask's length. -/
 def Leaf.hm96 (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) : Leaf Col (List UInt8) D H where
