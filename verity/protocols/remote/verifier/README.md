@@ -11,9 +11,8 @@ registered circuit is inference, not training).
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
-premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), and the composed statement still
-takes it as a hypothesis; its claim is on the Program the policy's check judges, and `Vocab.Holds` lists what that
-leaves unsaid of the committed files.
+premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
+and the composed statement still takes it; `Vocab.Holds` lists what it leaves unsaid of the committed files.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Dampener*` means
