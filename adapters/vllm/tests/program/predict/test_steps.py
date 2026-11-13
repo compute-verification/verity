@@ -15,7 +15,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
@@ -745,7 +745,7 @@ def _class_g(hf_home: Path, rank: int = 0, engine: dict | None = None, layers: i
     """GLM-5.3's B8 row of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
     with `layers` its first `layers` decoder layers), registered with class G's engine limits (`engine` over them, None dropping
     one; `edit` over φ's other parts)."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cfg = (HF_CONFIG_DIR / "GLM53.config.json").read_bytes()
@@ -760,7 +760,7 @@ def _b8_window() -> tuple[I1.Advice, dict, dict]:
     """The B8 row's recorded schedule as one window's advice and certified bodies, and the launch context its Build traced each
     request shape at (`launch_context.shape_contexts`): its requests at their realized arrivals, each engine step's rows in
     admission order (the scheduler's, which the launch keeps for its decodes), each request to its max_tokens (ignore_eos), greedy."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     reqs = LC._requests(w)
     order = sorted(range(len(reqs)), key=lambda i: reqs[i]["arrive_step"])
     steps = [[(i, LC.start_at(reqs[i], e), LC.rows_at(reqs[i], e)) for i in order if LC.rows_at(reqs[i], e)]
@@ -801,7 +801,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
 def _chunked_b8(budget: int, threshold: int) -> tuple[I1.Advice, dict, list]:
     """The B8 row's requests (their realized arrivals, prompts and max_tokens, greedy, ignore_eos) as one window's advice under a
     scheduler of `budget` tokens a step and a long-prefill threshold of `threshold` (`_scheduled`), its bodies and its steps."""
-    reqs = LC._requests(json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text()))
+    reqs = LC._requests(json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text()))
     steps = _scheduled([(r["arrive_step"], r["prompt_len"], r["max_tokens"]) for r in reqs], budget, threshold)
     advice, ingress = _session([(r["prompt_len"], r["max_tokens"], {**GREEDY, "max_tokens": r["max_tokens"], "ignore_eos": True})
                                 for r in reqs], steps)
