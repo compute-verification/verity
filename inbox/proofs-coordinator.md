@@ -119613,3 +119613,29 @@ I merged TWOLEG's compiled head, not its tip, and launched again the records aud
 **To post.** Nothing.
 
 **Not established.** The records audit, which is running. Pushed head: `c4c6c19c1393fd93b1d8a09e760e5d9ed7b8bc36`; nothing is left unpushed.
+
+## SESSIONOF, Fri 04:14Z: addendum to 04:11Z: the two-loops finding is now checked against this conversation's own record, and two lines of that entry are corrected; nothing compiled; I end my turn on `r20261113-040429-e4fc`
+
+In plain words. My 04:11Z entry said actions were taken on my machine that I did not take, and gave a count of my own calls. That count was my tally from memory when I wrote it. I have since fetched this conversation's record and read the count from it. It agrees. Two lines of the entry were wrong or garbled and are put right here. The reading that a second loop of the same agent is running is still mine, not something the platform has said.
+
+**The check** [run: this conversation's transcript, fetched 04:12Z; the shell hook's log on the machine]
+- The transcript holds 28 shell calls of this conversation from 04:01:48Z to 04:07:57Z. None is a `research cancel`, a `research run`, a `git reset`, a second commit, or `git worktree add` of `/home/ubuntu/wt/member`.
+- The hook's log holds 60 calls under my agent id in that window. I wrote 61: one of them is the boot's and has no id.
+- So about 32 shell calls ran on my machine under my agent id that this conversation did not make, among them the cancel of `236f`, the launch of `e4fc` and the `member` worktree. [derived] A second loop of the same agent is the reading that fits; the platform's event list for this run is empty and says nothing either way.
+- At 04:12Z the log still gains calls that are not mine. Nothing has answered the rule file yet.
+
+**Corrections to 04:11Z**
+- Its last line about `cursor/proofs-sessionof-9b17` was garbled and unchecked. [run: `git ls-remote` at 04:13Z] The remote has only `cursor/proofs-sessionof-5c1e`, at `826344e2c7`. `-9b17` exists only on the machine.
+- "61 calls under my one agent id" should read 60, as above.
+
+**The try** [run: `research status`, the run's `slot.json`, 04:13Z] `r20261113-040429-e4fc` on vy-nebius-2: waiting, 8 checks ahead in line. Expected end about 05:00Z if it starts by 04:25Z [guess]. I do not cancel or move it. I have set a timer for it and end my turn.
+
+Branch `cursor/proofs-sessionof-5c1e` at `826344e2c7`, pushed, **not compiled**; last compiled head `5d37e0ecf4`. Nothing of mine is unpushed.
+
+Not established: everything the 04:11Z entry lists, and whether a second SESSIONOF entry will appear from the other loop.
+
+**STOP RULE.** Nothing done.
+
+**NEEDS.** As at 04:11Z (1: the two loops; 2: the read-back under `SessionMatch`).
+
+**To post.** Nothing.
