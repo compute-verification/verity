@@ -158265,3 +158265,48 @@ STOP RULE: this entry holds item 3 (the ports' keys lemma) with its try's verdic
 - The end of `r20261113-174342-acec`, the run at the first two commits, which my 18:35Z entry did not have: outcome `failed`, on `security` (the three lines); `security/Proofs` PASS; `security/Properties` PASS, `check.py` exit 0, 0 files changed [run, fetched 19:07Z].
 - One thing differs from your order; say no if you want it otherwise. I open the pull request with my VM's pull-request tool, not with `research queue open`: my VM's standing rules forbid creating a pull request through `gh` or a wrapper of it, and `open` calls `gh pr create`. The queue admits such a pull request: its author is `danielreuter`, one of `AUTHORS`, and 28 of the last 300 pull requests were opened this way [read: `queue.py`, `gh pr list`]. The body carries the same lines (`Refs PRF-549`, `Lane proofs`, the `Goal` line `open` would write). I check the head's 40 hex before and after, I do not mark it, and I link the issue with `research queue link N --issue PRF-549`.
 - Next: `8c76`'s verdict and what `--update` wrote; the fourth commit if the `reads` record needs one; the pull request; the ready line.
+
+## STOPDRIVER, Fri 13 Nov 19:46Z: at the merged head the named tests PASS but one: the form REFUSES the kept play
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+**1. `r20261113-182809-7f56`, vy-nebius-cpu-11, at `b678f3affc5a`, ended 19:27Z, exit 1** [run]
+
+- Its last line: `RC one_stage=0 verifier=0 place_difftest=0 run_placed=0 composition_kept=1 others=0 root=0`.
+- The driver's four files 53 passed, the three tests of `test_stop_audit.py` among them. The verifier's two files
+  152. TWOLEG's place difftest 105. The nine other files 88. The root's four files 48: the lint that failed at
+  `5f0288f9993c` passes with my mend `b678f3affc5a`.
+- `run_placed` 1 passed: the difftest that holds the mended `_placed` to Lean's `Run.placed`.
+- `composition_kept` 1 failed: `test_the_form_accepts_one_honest_play_with_its_switch_on` on the kept play
+  `art:ed3b2d96…`. `sampled-two-on check` gives rc 1, verdict reject, by "two-stage: the boundary names a family
+  other than the one its record's layout names: a class's first stage reads one family of its session".
+
+**2. What the one failure is**
+
+- It is what TWOLEG's 16:50Z section 5 and my 17:49Z entry said it would be, in the same words, now by a run.
+- [derived] It is the hold's own, with or without B: the test runs two Lean executables on the kept files and no
+  Python of B's, and B holds no Lean. So B alone does not reach it.
+- [run] The same test passes on a play made at this head by B's driver (`1ee0`, my 18:58Z entry).
+- So of what your step 6 names, at the merged head: the three tests of `test_stop_audit.py` pass, the play passes,
+  B's tests pass, the composition test passes on a fresh play and fails on the kept one.
+- The cure is the test's own: keep a fresh play. One is ready: `r20261113-182809-1ee0`'s `out/form` on
+  vy-nebius-cpu-11, 58 MB, of which the circuit is 56 MB: `params.json`, `commitment.json`, `evidence.json` and
+  five blobs.
+- I have kept no fixture. [read] ACCEPTS's 19:40Z entry says its change refuses the kept case again (its
+  parameters name no head), so a play kept now is replaced when that joins. On your word I keep `1ee0`'s as one
+  commit on my hold branch and rerun the test on it.
+
+**3. B's changed suites at `ca7a92c69852`** [run]
+
+- `c4f7` at 19:45Z: 80 of 88 suites back, 80 passed; `verity-vllm` 17,152 passed and 479 skipped. Eight are not
+  back: circuit-check, `research`, `verity-numerical`, `verity-core-evaluate`, `verity/circuits`,
+  `verity/commitments`, `verity/commitments/windows`, `verity/definitions`.
+- B's pull request opens when it ends with no failure of B's. No word from you on dropping `requirement`'s line, so
+  it stays.
+
+### Not established
+
+- Whether circuit-check and the seven other suites pass at `ca7a92c69852`: `c4f7`.
+- Whether the kept play is refused at TWOLEG's hold alone: derived above, not run.
+- Nothing has run at `bf701e54dc6e`. It differs from `b678f3affc5a` by B's three input lists only.
