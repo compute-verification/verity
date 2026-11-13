@@ -292,12 +292,6 @@ owner = "proofs"
 day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/protocols/reporting.py"
-to = "into verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/cards/*.toml"
 to = "hardware/"
 owner = "compute-research"
@@ -400,14 +394,6 @@ path = "verity/claims/"
 to = "deleted; its two readers (PoUS's verifier/protocol.py, spot's device/challenger.py) keep what they need"
 owner = "top"
 day = "2026-11-14"
-
-[[not_yet]]
-path = "verity/periods/"
-to = "verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-arriving = true
-note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
 path = "fixtures/artifacts.json"

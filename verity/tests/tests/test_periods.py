@@ -1,11 +1,13 @@
-"""`verity.periods`: spans, cuts and the monitoring period, their JSON, and the monitoring periods results are
-presented for."""
+"""`verity.protocol`'s monitoring periods: spans, cuts and the monitoring period, their JSON, and the monitoring
+periods results are presented for at the δs their bounds are stated at."""
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
-from verity.periods import MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
+from verity.protocol import DELTAS, MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
 
 
 def test_a_span_stops_after_its_last_tick():
@@ -76,6 +78,10 @@ def test_the_json_round_trips_and_accepts_only_what_it_writes():
 
 def test_the_monitoring_periods_are_a_week_a_month_and_a_year():
     assert MONITORING_PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
+
+
+def test_the_bounds_are_stated_at_a_hundredth_and_a_millionth():
+    assert DELTAS == (Fraction(1, 100), Fraction(1, 10 ** 6))
 
 
 @pytest.mark.parametrize("seconds, block_s", [(10, 3), (9, 3), (2, 3), (0, 1), (7, 7)])

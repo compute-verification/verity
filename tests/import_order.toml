@@ -373,12 +373,6 @@ reaches = [
 
 [[place]]
 paths = [
-    "verity/periods",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/protocols/certifier/device",
 ]
 
@@ -648,17 +642,6 @@ trusted = true
 
 [[place]]
 paths = [
-    "verity/protocols/reporting.py",
-]
-trusted = true
-loaded_by = [
-    "verity/protocols/inference_only/rho/rho/params.py",
-    "verity/protocols/inference_only/rho/tests/test_operating.py",
-    "verity/protocols/inference_only/rho/tests/test_params.py",
-]
-
-[[place]]
-paths = [
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/candidates.py",
     "verity/protocols/spot/costfit.py",
@@ -773,6 +756,8 @@ paths = [
     "verity/config.py",
     "verity/party.py",
     "verity/protocol.py",
+    "verity/tests/tests/test_periods.py",
+    "verity/tests/tests/test_periods_difftest.py",
 ]
 trusted = true
 loads = [

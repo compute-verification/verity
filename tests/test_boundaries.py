@@ -74,11 +74,11 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 DEPENDENCIES = {"numpy"}
 #: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
-#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
-#: reporting grid.  Within them, what may use numpy.
+#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and a
+#: protocol's manifest with the monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/spot",
-               "verity/protocols/reporting.py")
+               "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
