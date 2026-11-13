@@ -1620,6 +1620,18 @@ def test_a_waiter_asks_only_the_other_machines_pools_and_moves_only_where_it_wou
     assert gone[0] is None and "no answer in 30 s" in gone[1]
 
 
+def test_the_probe_is_built_from_the_few_files_auto_names_and_no_other_of_the_source_tree(tmp_path):
+    """An asker asks again by `auto.READS` of the commit its launch shipped, not a checkout of it: a file `read` came to read
+    beside them would fail every such ask."""
+    for path in auto.READS:
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_bytes((REPO / path).read_bytes())
+    assert auto.share_cpus(tmp_path) == auto.share_cpus(REPO) is not None
+    assert auto.payload(tmp_path, 4, auto.share_cpus(tmp_path), [auto.SPILL_POOL], lean=True, peers=True) == \
+        auto.payload(REPO, 4, auto.share_cpus(REPO), [auto.SPILL_POOL], lean=True, peers=True)
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_file()) == sorted(auto.READS)
+
+
 def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path, monkeypatch):
     """`elsewhere` needs each machine's peers; a launch's own placement doesn't, and its documents stay as they were."""
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))

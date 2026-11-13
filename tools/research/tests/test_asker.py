@@ -59,6 +59,7 @@ class World:
         self.m = {"run": RUN, "root": str(self.root), "home": A, "pool": "research", "git": "/no/repo", "commit": "c" * 40,
                   "cpus": 4, "mem_gb": 16, "lean": None, "wait_s": wait_s, "sends": {}, "launch": {}}
         monkeypatch.setattr(asker, "see", lambda d: (json.loads(json.dumps(self.runs[d.name])), self.reached))
+        monkeypatch.setattr(asker, "files", lambda git, commit, paths: contextlib.nullcontext((tmp_path / "files", tuple(paths))))
         monkeypatch.setattr(asker, "tree", lambda git, commit: contextlib.nullcontext(tmp_path / "tree"))
         monkeypatch.setattr(asker, "ask", self.ask)
         monkeypatch.setattr(asker, "launch", self.launch)
@@ -75,11 +76,13 @@ class World:
         if (event := self.at.pop(self.minute(), None)):
             event()
 
-    def ask(self, source: Path, m: dict, tried: dict):
+    def ask(self, source: tuple, m: dict, tried: dict):
+        assert source == (self.root.parent / "files", auto.READS), "an ask reads the few files `auto.read` does, in no checkout"
         self.asked.append((self.minute(), dict(tried)))
         return self.answers.pop(0)
 
     def launch(self, source: Path, m: dict, twin: dict, wait_s: float) -> dict:
+        assert source == self.root.parent / "tree", "a twin ships a checkout of the commit"
         self.launched.append({**twin, "wait_s": wait_s, "recorded": self.record()["twin"]})
         self.runs[twin["run"]] = waiting(None)
         return {"phase": "launched"}
@@ -400,6 +403,17 @@ def test_the_twin_is_the_same_request_from_the_shipped_commit_on_the_other_machi
             "job_user", "gpus", "store_read")
     assert {k: kw[k] for k in rest} == {k: what[k] for k in rest} and kw["job_namespaces"] == ()
     with pytest.raises(OSError, match="no checkout of dddddddddddd"), asker.tree(str(repo / ".git"), "d" * 40):
+        pass
+    # an ask reads the shipped commit's files with no checkout: the few `auto.read` reads, as the launch shipped them
+    (repo / "big").mkdir()
+    (repo / "big" / "other.py").write_text("x\n")
+    subprocess.run([*git, "add", "."], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-qm", "more"], cwd=repo, check=True)
+    with asker.files(str(repo / ".git"), shipped, [Path("job.py")]) as few:
+        assert [p.relative_to(few) for p in few.rglob("*")] == [Path("job.py")] and (few / "job.py").read_text() == "shipped\n"
+        assert str(few) not in subprocess.run(["git", "worktree", "list"], cwd=repo, capture_output=True, text=True).stdout
+    assert not few.exists()
+    with pytest.raises(OSError, match="no files of "), asker.files(str(repo / ".git"), shipped, [Path("big/other.py")]):
         pass
 
 

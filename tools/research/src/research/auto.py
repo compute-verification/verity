@@ -120,6 +120,8 @@ LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 #: through it, so a late twin goes only where the first's machine is named (`elsewhere`)
 PEERS_FILE = "/etc/vy/peers"
 LEAN_SLOT_PY = Path("tools/verity/check/lean_slot.py")
+#: the files of a source tree `read` reads: all a caller that has a commit and no checkout of it need hand it (research.asker)
+READS = (DESCRIPTION, SLOT_PY, LEAN_SLOT_PY)
 
 
 def lean_pool(command: list[str], env: list[str] = ()) -> str | None:

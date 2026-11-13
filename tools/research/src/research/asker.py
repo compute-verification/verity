@@ -4,11 +4,11 @@ when another machine's pool would start the run now it launches the run's late t
 A pool run `--on auto` placed carries a pair (slot.py's `--twin`, the run's own id), and `research run` leaves one asker of
 that launch behind (`leave`): a detached process on the launching VM that holds what the launch shipped in its memory alone.
 At minute FIRST_ASK_MIN of its life, then every ASK_EVERY_MIN minutes, it looks at the run (`see`). While the run waits
-and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`) from a checkout of the commit the launch
-shipped (`tree`), never from what the launching checkout holds by then. The answer is a pool that has a place now for a
-job of this run's CPUs and memory, as a waiter with its ask finds the line there (`auto._pool`), not a count of free
-slots. There it launches the same request (`launch`) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then
-lets one of the two run: the twin runs only if it claims the pair on the first's machine before the first takes a slot,
+and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`) by the files of the commit the launch
+shipped (`files`: the few `auto.read` reads, no checkout), never by what the launching checkout holds by then. The answer
+is a pool that has a place now for a job of this run's CPUs and memory, as a waiter with its ask finds the line there
+(`auto._pool`), not a count of free slots. There it launches the same request (`launch`) from a checkout of that commit
+(`tree`, made only for a launch) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then lets one of the two run: the twin runs only if it claims the pair on the first's machine before the first takes a slot,
 and the first leaves its line once it finds the claim. A twin waits in its line no longer than ASK_EVERY_MIN minutes, or
 what is left of the first's wait: it was sent where it would start now, and one that hasn't started by then leaves, as
 one that can't reach the first's machine does at once. A machine whose twin left unrun is asked for no other twin of the
@@ -37,7 +37,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -139,10 +139,31 @@ def see(run_dir: Path) -> tuple[dict, bool]:
 
 
 @contextlib.contextmanager
+def files(git: str, commit: str, paths: Iterable[Path]) -> Iterator[Path]:
+    """A temporary directory holding ``paths`` of ``commit`` alone, from the repository ``git`` (its common git dir), removed
+    on the way out: what an ask reads of the tree the launch shipped (`auto.READS`), without a checkout of the whole tree
+    at every ask. OSError when they can't be read."""
+    import io
+    import tarfile
+
+    top = Path(tempfile.mkdtemp(prefix="research-asker-"))
+    try:
+        r = subprocess.run(["git", f"--git-dir={git}", "archive", "--format=tar", commit, "--", *map(str, paths)], cwd=top,
+                           capture_output=True)
+        if r.returncode:
+            raise OSError(f"no files of {commit[:12]} from {git}: {r.stderr.decode(errors='replace').strip()[-300:]}")
+        with tarfile.open(fileobj=io.BytesIO(r.stdout)) as tar:
+            tar.extractall(top, filter="data")
+        yield top
+    finally:
+        shutil.rmtree(top, ignore_errors=True)
+
+
+@contextlib.contextmanager
 def tree(git: str, commit: str) -> Iterator[Path]:
     """A checkout of ``commit`` from the repository ``git`` (its common git dir), as a detached worktree in a temporary
-    directory, removed on the way out: what the launch shipped, whatever the launching checkout holds by now. OSError when
-    the commit can't be checked out."""
+    directory, removed on the way out: what the launch shipped, whatever the launching checkout holds by now, for a twin's
+    launch to ship. OSError when the commit can't be checked out."""
     top = Path(tempfile.mkdtemp(prefix="research-asker-"))
     at = top / commit[:12]
     try:
@@ -157,8 +178,8 @@ def tree(git: str, commit: str) -> Iterator[Path]:
 
 
 def ask(source: Path, m: dict, tried: dict[str, str]) -> tuple[tuple[str, str] | None, str]:
-    """Ask `auto` again for launch ``m``, from its tree ``source``: the pool of another machine that would start the run now
-    (`auto.elsewhere`), or None, and why. A machine in ``tried`` reads as what it says there."""
+    """Ask `auto` again for launch ``m``, by its tree's files in ``source`` (`files`): the pool of another machine that would
+    start the run now (`auto.elsewhere`), or None, and why. A machine in ``tried`` reads as what it says there."""
     from . import auto
 
     docs = auto.read(source, m["cpus"], peers=True, **({"lean": True} if m["lean"] else {}))
@@ -287,20 +308,21 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
         asked: dict[str, Any] = {"at": _utc(now()), "after_min": round((now() - (_epoch(slot.get("since")) or began)) / 60)}
         rec["asks"].append(asked)
         try:
-            with tree(m["git"], m["commit"]) as source:
-                if changed := [p for p, h in m["sends"].items() if _sha256(p) != h]:
-                    raise OSError(f"--send {', '.join(changed)} changed since the launch, and a twin ships the same request")
+            if changed := [p for p, h in m["sends"].items() if _sha256(p) != h]:
+                raise OSError(f"--send {', '.join(changed)} changed since the launch, and a twin ships the same request")
+            with files(m["git"], m["commit"], auto.READS) as source:
                 target, asked["said"] = ask(source, m, tried)
-                if target is None:
-                    continue
-                twin = {"run": runs.new_run_id(now()), "machine": target[0], "pool": target[1], "from": m["home"], "of": m["run"],
-                        "why": slot["why"], "after_min": asked["after_min"], "at": asked["at"], "state": "launching"}
-                twin["said"] = (f"moved from {m['home']}'s {m['pool']} pool, where {m['run']} waited {twin['after_min']} min "
-                                f"({twin['why']}), to {twin['machine']}'s, which would start it now ({asked['said']})")
-                rec["twin"] = twin
-                beat(every)                                    # before the launch: no twin is ever launched unrecorded
+            if target is None:
+                continue
+            twin = {"run": runs.new_run_id(now()), "machine": target[0], "pool": target[1], "from": m["home"], "of": m["run"],
+                    "why": slot["why"], "after_min": asked["after_min"], "at": asked["at"], "state": "launching"}
+            twin["said"] = (f"moved from {m['home']}'s {m['pool']} pool, where {m['run']} waited {twin['after_min']} min "
+                            f"({twin['why']}), to {twin['machine']}'s, which would start it now ({asked['said']})")
+            rec["twin"] = twin
+            beat(every)                                        # before the launch: no twin is ever launched unrecorded
+            with tree(m["git"], m["commit"]) as source:
                 sent = launch(source, m, twin, max(min(over - now(), every), 1))
-                twin["state"] = "launched" if sent.get("phase") == "launched" else "refused"
+            twin["state"] = "launched" if sent.get("phase") == "launched" else "refused"
         except Exception as e:  # noqa: BLE001  (an ask or a launch that failed is recorded, and the run keeps its place)
             asked["error"] = f"{type(e).__name__}: {e}"
             if twin:
