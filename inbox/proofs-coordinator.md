@@ -138097,3 +138097,72 @@ After the answer: the pull request is one command, and the rating's three salts 
 - Nothing here rates the mend.
 
 Branch `cursor/proofs-rating-debit-4ba7` at `b9888ce74a0`, pushed. Mailbox read at 11:30Z (116 lines, last change 10:37Z).
+
+
+## ADDRROW2, Fri 13 Nov 11:42Z: COMPILED HEAD `ddb519ad9672dfb561120eef660c35605afcf100` on `cursor/proofs-addrrow2-5e1b`: `ScopeTable.lean` MOVED to `security/Proofs/Flock/SpotFlock/` (`r20261113-112305-b2d0`, rc 0, eight files). ASSEMBLY: merge this head. On the join's tip the public-boundary edges go from 8 to 7 with no new edge, and the certifier test stays green. STOP on the `gather` lemma AS ASKED: it is FALSE at three small programs (`r20261113-113204-2853`); the half that is true is stated below, not yet proved.
+
+**In plain words.** The file that holds the one-table lemma now sits with SPOT's own analysis, so the public export no longer needs a file it leaves behind for it. Every file that reads it compiles. Then your second item: you asked for a lemma saying that the wires and links the verifier derives from the outer block's (replay block's) Definition always pass `wiresChecked`. They do not always. I ran the verifier's own two functions on three small programs and each gives a wire whose reader port a link names too. So `wiresChecked` cannot become a lemma at the form's own copies without either a check, which you ruled out for now, or a new premise about the registered program's names. Half of `wiresChecked` is true of every derived list and needs no premise; I state it below and prove it next unless you say otherwise.
+
+Clock: `date -u` read 11:40Z when I wrote this. Mailbox: your 11:04Z, by the hook at 11:20Z and in the mailbox file; nothing newer [run: `git show` of the mailbox at 11:40Z]. Correction to my last entry: its title said 10:53Z and it was pushed at 10:52Z. My machine was replaced between turns: at 11:20Z `~/wt/.pen` was gone, so I made it and rebuilt both worktrees from the pushed branches; nothing was lost. The turn was started by three notices about other workers' tasks (MEMBERS, ADDRROW, ONSITE); they are not mine and I acted on none.
+
+**1. The move** [run: `git mv`, `git show --stat ddb519ad96`]. One commit, five files, five lines:
+- `security/Proofs/Properties/Verity/SampledTwo/ScopeTable.lean` is now `security/Proofs/Flock/SpotFlock/ScopeTable.lean`. Its two theorems keep their names and their namespace (`Verity.SampledTwo.oneTable_of_shape`, `Verity.SampledTwo.oneTable_of_sessionOk`); I added one sentence to its docstring saying so. git records it as a rename at 96%.
+- `OneTable.lean` line 3 and `AddressFacts/RowTable.lean` line 26 import `Proofs.Flock.SpotFlock.ScopeTable`.
+- The lakefile root and the lock's root are renamed in place. The lock's `roots` still holds 310 entries with no duplicate; nothing else in the lock changed.
+- SESSIONOF2's branch is still at `b49c6e4061`, so the file's text had not moved [run at 11:41Z: `git fetch`, then `git rev-parse origin/cursor/proofs-sessionof2-7c3a` gives `b49c6e40619f`]. No file of the new name existed on my branch, the join, SESSIONOF2's branch or `main` [run: `git ls-tree`].
+
+**2. What compiled** [run: `r20261113-112305-b2d0`, `--on auto`, vy-nebius-cpu-2, launched 11:23Z, `done rc=0 class=SUCCESS` observed 11:38Z; lines quoted from its `stdout.log`], at `ddb519ad9672dfb561120eef660c35605afcf100`, each file with `--siblings`:
+- `SpotFlock/ScopeTable.lean`: "lean exit 0 in 53 s"; "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `AddressFacts/RowTable.lean`: "lean exit 0 in 124 s", 9 theorems. `RowPlace.lean`: 73 s, 18. `RowSample.lean`: 54 s, 8. `RowPublished.lean`: 29 s, 5. `RowFirst.lean`: 206 s, 3. Each with the same probe line.
+- `SampledTwo/OneTable.lean`: "lean exit 0 in 174 s", 3 theorems. `SampledTwo/TableName.lean`: "lean exit 0 in 55 s", 3 theorems. Same probe line.
+- No name collides: each sibling check says "no built module of its package that doesn't import [it] declares a name it does", over 1880 to 1927 built modules; 2282 to 2329 were unchecked for want of a build in that tree. So the name check covers the built part of the package, not all of it.
+- Warnings in files I own: the same three as before (`RowTable.lean:185`, `RowPlace.lean:160` and `:171`). None in the moved file.
+
+**3. The two boundary checks on a trial merge into the join's tip** [run, on my VM: Python scans of import lines, no Lean; a scratch worktree at `6247d2ddfc` (`cursor/proofs-join-42b8`, 11:13Z), then `git merge ddb519ad96` there, pushed nowhere and removed after].
+- The merge has no conflict, the lakefile included: the join keeps the root on the line it shares with `SessionAgrees`, and git rewrote it there. No stale root is left [run: a count over the merged lakefile and lock].
+- `tests/test_boundaries.py`: "59 passed" on the tip alone and "59 passed" with my head. The certifier test is green on both.
+- `tools/verity/check/public_boundary.py`: "8 edges, 8 new" on the tip alone, the first being `AddressFacts/RowTable.lean:26 … -> security/Proofs/Properties/Verity/SampledTwo/ScopeTable.lean`. With my head: "7 edges, 7 new", that line gone and the other seven the same. **No new edge.**
+- I also ran `tests/test_lean_packages.py`, `test_tree.py`, `test_lean_vocabulary.py` and `test_doc_paths.py` there, since a file changed directory: "60 passed, 6 warnings" on both.
+
+**4. STOP (your item 2): the lemma as you asked for it is false** [run: `r20261113-113204-2853`, `--on auto`, vy-nebius-cpu-1, `done rc=0`; a scratch file made inside the run's own clone, in no branch, evaluated `SecondStage.linksOf` and `SecondStage.wiresOf` with `#eval` and `#guard`; "lean exit 0 in 14 s"]. You asked: for copies whose links and wires are `replayLinks …` and `replayWires …`, `wiresChecked` holds. `wiresChecked` says two things of each wire: (i) no link names the wire's reader port, and (ii) the first wire at that port has this wire's writer port. (ii) is true of every derived list. (i) is not. Three programs, each the verifier's own example of a chain (`Pair_v0` called on the outer block's `x`, a second template called on `Pair_v0`'s output, the outer block returning the second template's output) with one name changed:
+- **A parameter named like an output port.** The second template's parameter is named `o0`. Printed: links `[(Pair_v0, x, x), (Triple_v0, o0, o0)]`, wires `[(Triple_v0, o0, Pair_v0, o0)]`. The return's link and the wire name one port, `Triple_v0`'s `o0`.
+- **Two parameters of one name.** The second template has parameters `a` and `a`, the first reading the outer block's `w`, the second `Pair_v0`'s output. Printed: links `[(Pair_v0, x, x), (Both_v0, a, w), (Both_v0, o0, o0)]`, wires `[(Both_v0, a, Pair_v0, o0)]`.
+- **Two definitions under one descriptor id.** The second template's id is `Pair_v0` too. Printed: links `[(Pair_v0, x, x), (Pair_v0, o0, o0)]`, wires `[(Pair_v0, x, Pair_v0, o0)]`.
+- With the names apart (`x`; `a` and `b`; `Triple_v0`) the same three programs give no such wire. The four `#guard` lines of each kind passed.
+- **Can the form see such a program?** The first two: yes as far as I can read. The program's decoder takes a parameter as `[name, type]` and tests no name (`Circuits/Program.lean:748`, `paramsOf`); it refuses a duplicate only among a record type's fields [read]. The third: not from a decoded program, whose `definitions` is a JSON object, but a lemma over an arbitrary `Prog` must say so [derived].
+- **No other clause refuses them** as far as I can read: `portsOnce` tests the ports of the members' circuits, which are the reference statements' circuits (`memberCircuit h t := stmtOf (h.xS₀ t)`), not the program's parameters, and nothing I found ties the two [read].
+- So: making `wiresChecked` hold at the form's own copies with no premise needs a check. The smallest is one clause in `SecondStage.wiresOk`, `(linkOf own w.template w.port).isNone`, beside the one it has for the writer port. That is a verifier change and FRAME's file; I wrote none of it.
+
+**5. What I can prove without a check, stated before any proof** [derived; nothing of this is compiled]. New file `AddressFacts/RowWires.lean`, no change to the verifier's code, no call added.
+- `def AddressRow.wiresUnlinked (h : Held) : Bool := (h.wires.getD #[]).all fun w => (heldLink h w.template w.port).isNone`. In words: no link names a wire's reader port.
+- `theorem AddressRow.gather_keys (h : Spot.SecondStage.gather port same units xs = some out) : (out.toList.map fun e => port e.1).Nodup`. In words: `gather` gives one entry a port.
+- `theorem AddressRow.wiresChecked_of_unlinked {h : Held} {P : Flock.Program.Prog} {key : String} (hw : h.wires = Spot.SecondStage.replayWires P key) (hu : wiresUnlinked h = true) : wiresChecked h = true`.
+- What it buys: at the form's own copies `hw` is `rfl` (`HeldOf.lean:143`), so the premise `wiresChecked` shrinks to `wiresUnlinked`, which is word for word the clause item 4 would add to `wiresOk`. When that clause lands, the premise is gone with no further proof here.
+- Size: about 150 lines, one fold over `gather`'s step. First try by 12:45Z [guess].
+
+**6. What I do NOT start without your word** [derived]. The other half, `wiresUnlinked` from the program:
+- `theorem wiresUnlinked_of_replay (hl : h.links = replayLinks P key rec) (hw : h.wires = replayWires P key) (hN : PortsNamedOnce P.defs D) : wiresUnlinked h = true`, where `PortsNamedOnce` says of the outer block's templates the three things item 4's programs break: two of one descriptor id are one definition, a template's parameter names are distinct, and none is `o<j>`.
+- It trades one premise for another of the same kind. `wiresChecked` at the form's own copies is already a function of the registered program alone (the record changes only a link's `value`), and so is `PortsNamedOnce`; the form tests neither.
+- It is long: it needs that `gather` accepts a port only if its first share starts at unit 0 (`fits` and `pushRun`), and that `callersOf` gives two callers of one definition different first units, which is a loop invariant over a `for` in `Id.run`. About 400 lines, 4 to 6 hours with remote compiles [guess].
+- My recommendation: do item 5, not item 6, and record the one clause of item 4 as the fix.
+
+**7. Your item 3 (the connected program).** I know nothing that makes either way plainly wrong. The row fact is stated at the address map of the connected form (`RowFact h (wireMap h) (returned h) (addressOf h)`), so it serves a statement at `codeConnected` as it stands and would need restating for `SpotFlock.code`, where the side-by-side theorem (`SpotFlock.ksTwo_spot`) reads `SpotFlock.Addresses` (`SlotsAt.lean:322`: one address a gate, with no wire map) and not `AddressesConnected` [read: `SamplingGeneric/Guarantees.lean:63` and `:124`, `AddressesWired.lean:233`]. So if the way out is a statement of `Live₂.L` at the connected program, my lemma is used as it is; if it is a lemma carrying the conclusion to `SpotFlock.code`, my lemma is still the premise of what is carried.
+
+**STOP RULE.** Nothing. The move changes no statement, no name, no named assumption and no record: five lines, of which two are imports, two are `roots` and one is a docstring. The verifier's code is untouched.
+
+**NEEDS.**
+1. **Coordinator: a word on item 6** (prove the second half under a premise on the program's names, or leave it). Until then I do item 5.
+2. **Coordinator, for soundness or FRAME, not for today:** the one clause of item 4 in `wiresOk`. With it and item 5, `wiresChecked` leaves the premises of `addressesConnected_of_firstK`.
+
+**Not established.**
+- Nothing of items 5 and 6 is compiled; item 5 is a statement and a plan.
+- `wiresChecked h = true` is still a premise of `rowFact_of_firstK` and `addressesConnected_of_firstK`, computed by no check, and false at some programs the decoder takes (item 4).
+- I did not run the decoder on item 4's programs: they are built as values, not decoded from JSON. That the decoder takes them is from reading `paramsOf`.
+- The boundary checks ran on a local trial merge at `6247d2ddfc`, not on a head ASSEMBLY pushed.
+- The sibling check covers the built modules only (item 2).
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `ddb519ad9672dfb561120eef660c35605afcf100`, compiled (item 2). Nothing is uncommitted.
+
+**Runs.** `r20261113-112305-b2d0` done rc 0 (item 2). `r20261113-113204-2853` done rc 0 (item 4). None out.
+
+**To post.** Nothing.
