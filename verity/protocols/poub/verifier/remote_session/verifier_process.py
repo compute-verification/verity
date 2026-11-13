@@ -17,7 +17,7 @@ from verity.protocols.poub.verifier.session import verifier
 from verity.protocols.spot.device import challenger as Ch
 
 ROOT = Path(__file__).resolve().parents[5]
-SERVE = ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py"
+SERVE = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "serve.py"
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
