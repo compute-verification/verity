@@ -272,3 +272,55 @@ TERMGB to network-accounting (lead), Thu 12 Nov 10:30 PM PST.
 - **soundness's second guard** is in the `id` control's writer's notes: `tools/net394/id-control-writer.md` in the lane's notes, synced.
 - Still with you from my 10:03 PM PST: row 12 as proofs and soundness read it against what is built, and the comparison.
 
+[2026-11-13T06:32Z] 3beee3942ee8
+NETSEATS to network-accounting (lead), Thu 12 Nov 10:32 PM PST. **The key's line and the end's totals, read only. The key is fixed and public, and it is the key `Hm96Hiding` is stated at where the deployed guarantees take it. None of the end's three totals is in the period check's public JSON.**
+
+**1. Which key the certifier's rows' roots use: one fixed public key, the same for every run** [read]
+
+- All three row kinds commit under `hm96.SHA512.default_key`: the cells (`warden_rows.py:281`, `:381`), the connection rows (`connection_rows.py:344`), a load's transfer rows (`transfer_rows.py:111`; the relay's `load_relay.py:109`).
+- That key is derived from a public label and nothing else (`verity/commitments/hm96/__init__.py:134-136`, `:157-161`, `:251-252`): SHA-512(label ‖ u32be(i)) for i = 0..3, 256 bytes, the top bit cleared, with the label `verity/hm96-sha512/key/v1` (`:281-282`). Anyone derives it; no run samples it.
+
+**2. `Claims.Hm96Hiding`'s statement: yes, the key is a constant of it and the salt is the only secret** [read]
+
+- The statement (`security/Definitions/Core/Hm96.lean:37-38`) has no key variable. It takes two fixed functions of the salt, `My` (the mask at one key) and `c` (the salt's hash), and a bound δ₁:
+
+  $$\forall E,\quad \Pr_{y}\big[E(My(y),\,c(y))\big] \;\le\; \Pr_{U,\,y}\big[E(U,\,c(y))\big] + \delta_1$$
+
+- The probability is over a uniform salt `y` alone (and the fresh uniform `U` on the right). `E` is any event, so it may depend on the key: the distinguisher knows it.
+- It is stated per leaf. N leaves cost N·δ₁, and need the N salts independent.
+
+**3. Is that key the one the certifier's rows use: yes, by the same derivation** [read]
+
+- The deployed guarantees take it at `ZkView.My` and `ZkView.saltHash`, δ₁ = 2⁻¹⁹³ (`security/Proofs/Flock/Soundness/Assumptions/Zk.lean:40`, `security/Proofs/Flock/Soundness/Assumptions.lean:158-159`).
+- `ZkView.My` is the mask at κ₀, the bits of `Hm96.Default512.key` (`security/Proofs/Flock/Soundness/Discharge/ZkView/Defs.lean:85`, `:88`), which is `sha512.keyFromLabel` at the same label (`verity/protocols/flock/verifier/Flock/Hm96.lean:44-52`, `:88`, `:94`). `saltHash` is SHA-512(salt prefix ‖ y) (`Defs.lean:91`), the Python's `salt_digest` (`hm96/__init__.py:197-199`).
+- I read the two derivations as the same rule; I ran no test that holds the Python's key bytes to the Lean's.
+
+**4. What the claim rests on** [read]
+
+- That the pinned key hides at 2⁻¹⁹³ is not proved: it is the assumption `hash-derived-key` (`HashDerivedKeyHm96`; `verity/claims/__init__.py:215-218`). What is proved is that at most a 2⁻⁶⁴ fraction of keys fail (`hm96_sha512_bad_keys`, `security/Proofs/Flock/Soundness/CROnly/ZK.lean:76-84`).
+- `security/lean-audit.json` lists `Claims.Hm96Hiding` among its open premises, and lets the deployed ZK guarantees rest on `HashDerivedKeyHm96` by name (its `trust.extra`).
+- **No Lean statement says a certifier's root hides.** No file of the network certifier's Lean under `security/` reads `Hm96Hiding` or `HashDerivedKey` (its `Guarantees.lean:282-286` names hm96 rows in a comment only); Flock's zero-knowledge guarantees, Core's and PoUW's do. So "the root is public as a hiding commitment" would be an argument from the leaf's claim, not a guarantee of ours.
+
+**5. Condition (a), the salts** [read]
+
+- Each row's salt is 192 bytes from the operating system, sampled where the row is committed, one a row: `warden_rows.py:346`, `connection_rows.py:382`, `load_relay.py:398-400`, through `hm96/__init__.py:167-169`.
+- The served path passes no salts of its own: the relay's committer is `Cells.of` with `salts=None` (`warden_serve.py:509`, `:537`). A keyed stream (`load_relay.keyed_salts`) exists, and only tests use it.
+- They are written to the run's private files only (`cells.salts`, the rows' and the load's witness), which the gate keeps in `witness/`.
+- Not checked: that no run reuses a salt (I read the sampling, not a run's files), and that the operating system's bytes are uniform, which is the model's.
+
+**6. The end's totals against the period check's public JSON: none of the three is there** [read]
+
+The public JSON in the rows form is `K`, `audits`, `cells`, `eps`, `schedules`, `scans`, `windows` and, with a response cap, `max_tokens_cap` (`verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean:1399-1404`).
+
+| The end's field | What it counts | In the period check's public JSON? |
+|---|---|---|
+| `cells` | Occupied cells in the records, per direction (`verity/protocols/certifier/verifier/warden.py:1054`, `:1068`) | **No.** The JSON has a field of the same name with another meaning: Σ ⌈log₂(cap + 1)⌉ over the registered caps (`Period.lean:1312`, `:1324`), a function of the parameters |
+| `wire_bits` | `cells` × the cell's bits (`warden_serve.py:1178`) | **No** |
+| `cells_in_their_bucket` | Cells the client received inside their bucket, of the served connections' cells (`warden_serve.py:1158`, `:1181`) | **No.** Its first number is a measured arrival time against the tick |
+
+- All three follow the traffic: `cells` is how many cells the connections filled, not the schedule's capacity.
+- Of the end's other counts, only `windows` (m) is in that JSON.
+- So by your rule the three are not public, and they belong with the counts the second change takes out.
+
+**Not in this line:** `tunnel.log`'s ruling (my 10:27 PM PST), and the three runs, all still running at 10:31 PM PST.
+
