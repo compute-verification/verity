@@ -19,6 +19,7 @@ accepted run was refused at neither (`checks_of_accepted`).
 namespace SpotFlock.RunChecks
 
 open Lean (Json)
+open SpotFlock.HeldOf (namesOf)
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 8000000 in

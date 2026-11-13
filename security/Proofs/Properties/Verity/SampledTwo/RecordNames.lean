@@ -28,6 +28,7 @@ namespace SpotFlock.RecordNames
 
 open Lean (Json)
 open Spot.Registration
+open SpotFlock.HeldOf (namesOf)
 
 /-! ## Code lists -/
 
