@@ -10,11 +10,12 @@ hold in their `--json` under `spot_holes`).
 * **A hole is closed in a run** only where the run's code holds its fix (`closes`, the one check every reader uses): the
   fix's commit is an ancestor of the run's own commit, the one the run's record names (`source.commit`); no commit
   between them reverts the fix or a merge that brought it in, by git's own revert line (a revert a later revert undoes
-  doesn't count); and the fix's own patch still applies in reverse at the run's tree. An ancestor reverted is open,
+  doesn't count); and every line the fix added is still in its file at the run's commit, following a rename (a line
+  counts stripped, from `SHORTEST` characters, and not when it is a comment alone). An ancestor reverted is open,
   naming the revert. A run whose record names no commit, whose tree was dirty, whose commit this repository doesn't
-  hold, or whose tree no longer takes the fix's patch in reverse is "not known" there, never guessed; the line says
-  which, for a missing commit how to fetch it, and for a patch that no longer reverses the commits since that touch
-  the fix's files, one of which, if it keeps the fix, is declared after it.
+  hold, or whose tree lacks a line the fix added is "not known" there, never guessed; the line says which, for a
+  missing commit how to fetch it, and for a missing line its file, up to three such lines and the commits since that
+  changed them, one of which, if it keeps the fix, is declared after it.
 * **Over several runs** a hole is open if no fix is declared for it or it is open in any of them, else not known if it
   is not known in any (or no run was read), else closed. The label is `SPOT soundness` only when every hole is
   closed, otherwise `SPOT`.
@@ -27,14 +28,13 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import tempfile
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, settings
+from verity_bench import jobs
 
 HOLES = ("redrawn sample", "re-committed execution phase")
 FIXES = Path(__file__).resolve().parent / "data" / "spot_holes.json"
@@ -48,6 +48,9 @@ LABEL, SOUND = "SPOT", "SPOT soundness"
 REVERTS = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
 #: the tree a root commit's patch is taken against
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+#: an added line, stripped, counts toward the fix's presence only from this length and when it isn't a comment alone
+SHORTEST = 8
+COMMENTS = ("#", "//", "-- ", "/*", "*/", "* ", "/-", "-/")
 
 
 def fixes(path: Path | None = None) -> dict[str, tuple[str, ...]]:
@@ -72,9 +75,8 @@ def _chain(fix: str | Sequence[str]) -> tuple[str, ...]:
     return (fix,) if isinstance(fix, str) else tuple(fix)
 
 
-def _run(root: Path, *args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, errors="surrogateescape",
-                          env=env)
+def _run(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, errors="surrogateescape")
 
 
 def _git(root: Path, *args: str) -> int:
@@ -111,41 +113,96 @@ def _bringing(root: Path, fix: str, commit: str) -> list[str]:
     return [row[0] for row in rows if len(row) > 2 and row[1] not in after]
 
 
-def _reversed_at(root: Path, fix: str, commit: str) -> str | None:
-    """None where the fix's own patch applies in reverse to the tree at ``commit`` (or is empty), else why not."""
+def _counted(line: str) -> bool:
+    return len(line) >= SHORTEST and not line.startswith(COMMENTS)
+
+
+def _added(root: Path, parent: str, fix: str) -> dict[str, list[str]]:
+    """Each file the fix leaves (by its path at the fix) with the lines it added there that count, stripped."""
+
+    patch = _run(root, "-c", "core.quotePath=false", "diff", "-M", "--unified=0", "--no-color", "--no-ext-diff",
+                 "--no-textconv", parent, fix)
+    if patch.returncode:
+        raise ValueError(f"`git diff {parent} {fix}` exited {patch.returncode}: {patch.stderr.strip()}")
+    added: dict[str, list[str]] = {}
+    path, in_hunk = None, False
+    for line in patch.stdout.splitlines():
+        if line.startswith("diff --git "):
+            path, in_hunk = None, False
+        elif not in_hunk and line.startswith("+++ "):
+            target = line[4:].rstrip("\t")
+            path = None if target == "/dev/null" else target.removeprefix("b/")
+        elif line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and path and line.startswith("+") and _counted(text := line[1:].strip()):
+            added.setdefault(path, []).append(text)
+    return added
+
+
+def _renamed(root: Path, fix: str, commit: str) -> dict[str, str]:
+    """Each path at ``fix`` that ``commit`` holds under another name, by git's rename detection."""
+
+    out = _run(root, "-c", "core.quotePath=false", "diff", "-M", "--name-status", "-z", "--diff-filter=R", fix, commit)
+    fields = out.stdout.split("\0")
+    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3) if fields[i].startswith("R")}
+
+
+def _missing_at(root: Path, fix: str, commit: str) -> str | None:
+    """None where every line the fix added that counts (`_counted`) is still in its file at ``commit``, following a
+    rename; else why not, naming the file, up to three of its lines that are gone and the commits that took them."""
 
     parent = f"{fix}^" if _git(root, "cat-file", "-e", f"{fix}^") == 0 else EMPTY_TREE
-    patch = _run(root, "diff", "--binary", parent, fix)
-    if patch.returncode:
-        return f"`git diff {parent} {fix}` exited {patch.returncode}"
-    if not patch.stdout:
+    try:
+        added = _added(root, parent, fix)
+    except ValueError as e:
+        return str(e)
+    renamed: dict[str, str] | None = None
+    gone: list[tuple[str, str | None, list[str]]] = []
+    for path, lines in added.items():
+        where: str | None = path
+        if _git(root, "cat-file", "-e", f"{commit}:{path}"):
+            renamed = _renamed(root, fix, commit) if renamed is None else renamed
+            where = renamed.get(path)
+        held = set() if where is None else {
+            line.strip() for line in _run(root, "show", f"{commit}:{where}").stdout.splitlines()}
+        if lost := list(dict.fromkeys(line for line in lines if line not in held)):
+            gone.append((path, where, lost))
+    if not gone:
         return None
-    with tempfile.TemporaryDirectory() as tmp:
-        env = {**settings.environ(), "GIT_INDEX_FILE": str(Path(tmp) / "index")}
-        (Path(tmp) / "fix.patch").write_text(patch.stdout, errors="surrogateescape")
-        if _run(root, "read-tree", commit, env=env).returncode:
-            return f"`git read-tree {commit}` failed"
-        check = _run(root, "apply", "--cached", "--reverse", "--check", str(Path(tmp) / "fix.patch"), env=env)
-    if check.returncode:
-        return (f"the fix's own patch (`git diff {fix[:12]}^ {fix[:12]}`) doesn't apply in reverse at the run's tree: "
-                f"lines it changed were changed again since, so whether that tree still holds it can't be told. "
-                + _since(root, parent, fix, commit))
-    return None
+    path, where, lost = gone[0]
+    total = len(set(added[path]))
+    place = (f"{path} is gone at the run's commit, with the {total} line{'s' * (total != 1)} the fix {fix[:12]} added "
+             "to it" if where is None
+             else f"{len(lost)} of the {total} line{'s' * (total != 1)} the fix {fix[:12]} added to {path} "
+                  f"{'is' if len(lost) == 1 else 'are'} not in "
+                  f"{where if where == path else f'{where} (renamed from {path})'} at the run's commit")
+    shown = "; ".join(f"`{line}`" for line in lost[:3])
+    others = f"; so are lines it added to {len(gone) - 1} other file{'s' * (len(gone) != 2)}" if len(gone) > 1 else ""
+    paths = [path] + ([where] if where and where != path else [])
+    since = _run(root, "log", "--format=%h", f"{fix}..{commit}", "--", *paths).stdout.split()
+    took = {sha for line in lost[:3] for sha in _run(
+        root, "log", "--diff-merges=first-parent", "--no-patch", "--format=%h", f"-S{line}", f"{fix}..{commit}", "--",
+        *paths).stdout.split()}
+    named = [sha for sha in since if sha in took]
+    merge = (f"The fix's commit {fix[:12]} is a merge, so the lines it added are all it brings to its first parent, in "
+             f"{len(added)} file{'s' * (len(added) != 1)}: declare the commit whose first parent is the base its change landed on (its landing "
+             "merge). ") if len(_run(root, "rev-list", "--parents", "-n", "1", fix).stdout.split()) > 2 else ""
+    return f"{merge}{place}, among them {shown}{others}. " + _hint(
+        named or since, fix, commit, "changed those lines" if named else "touched its file")
 
 
-def _since(root: Path, parent: str, fix: str, commit: str, most: int = 8) -> str:
-    """The commits of ``fix..commit`` that touch the files the fix changed, and how to declare one that keeps it."""
+def _hint(touched: list[str], fix: str, commit: str, did: str, most: int = 8) -> str:
+    """The commits of ``fix..commit`` named for the lines a fix added that are gone, and how to declare one that keeps
+    the fix."""
 
-    paths = _run(root, "diff", "--name-only", parent, fix).stdout.split()
-    touched = _run(root, "log", "--format=%h", f"{fix}..{commit}", "--", *paths).stdout.split() if paths else []
     if not touched:
-        return f"No commit of {fix[:12]}..{commit[:12]} touches its files."
+        return f"No commit of {fix[:12]}..{commit[:12]} touched its file."
     if len(touched) == 1:
-        return (f"{touched[0]} touches its files since: if {touched[0]} keeps the fix, add it to this hole's commits in "
+        return (f"{touched[0]} {did} since: if {touched[0]} keeps the fix, add it to this hole's commits in "
                 f"{FIXES.name}")
     shown = ", ".join(touched[:most]) + (f" and {len(touched) - most} more" if len(touched) > most else "")
-    return (f"{len(touched)} commits touch its files since, newest first: {shown}. If one of them keeps the fix, add it "
-            f"to this hole's commits in {FIXES.name}, after the last")
+    return (f"{len(touched)} commits {did} since, newest first: {shown}. If one of them keeps the fix, add it to this "
+            f"hole's commits in {FIXES.name}, after the last")
 
 
 def closes(root: Path, fix: str | Sequence[str], commit: str) -> dict:
@@ -153,9 +210,9 @@ def closes(root: Path, fix: str | Sequence[str], commit: str) -> dict:
     commits in order (the fix, then each that rewrote its lines and keeps it), each an ancestor of the next, which is
     refused otherwise; the last is the one read. `closed` only where it is an ancestor of ``commit``, no commit of
     ``last..commit`` reverts a listed commit or a merge that brought the last in (a revert that a later revert undoes
-    doesn't count), and the last's own patch still applies in reverse at ``commit``'s tree; `open` where it is no
-    ancestor or is reverted (the why names the revert); else `not known`, with why (for a patch that no longer
-    reverses, the commits since that touch its files). The one check every caller uses."""
+    doesn't count), and every line the last added is still in its file at ``commit`` (`_missing_at`); `open` where it
+    is no ancestor or is reverted (the why names the revert); else `not known`, with why (for a missing line, its file
+    and the commits since that changed it). The one check every caller uses."""
 
     chain = _chain(fix)
     for which, sha in (("run's", commit), *(("fix's", c) for c in chain)):
@@ -192,7 +249,7 @@ def closes(root: Path, fix: str | Sequence[str], commit: str) -> dict:
             what = (("the fix" if sha == chain[0] else f"the fix's later commit {sha[:12]}") if sha in chain else
                     f"the merge {sha[:12]} that brought it in")
             return {"status": OPEN, "why": f"reverted by {r[:12]}, which reverts {what}"}
-    if why := _reversed_at(root, fix, commit):
+    if why := _missing_at(root, fix, commit):
         return {"status": UNKNOWN, "why": why}
     return {"status": CLOSED, "why": None}
 
