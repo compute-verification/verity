@@ -97,7 +97,9 @@ theorem rowsOut_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     rw [hm]
     obtain ⟨c, hc⟩ : ∃ c, _root_.Flock.HmOut.parseCommit r.tags r.I.circuitFile r.I.tables = .ok c := by
       cases hD : _root_.Flock.Desc.parseStmt r.tags r.I.circuitFile r.I.tables with
-      | error e => first | (rw [hD] at hps; cases hps) | cases hps
+      | error e =>
+        rw [hD] at hps
+        cases hps
       | ok D =>
         have h1 := _root_.Flock.Desc.parseStmt_stmt hD
         unfold _root_.Flock.HmOut.parseStmt at h1
@@ -105,7 +107,9 @@ theorem rowsOut_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
         cases hi : r.tags.isTmpl <;> simp only [hi, Bool.false_eq_true, ↓reduceIte] at h1 ⊢
         · exact ⟨_, h1⟩
         · cases hp : _root_.Flock.HmOut.parseTmpl r.tags r.I.circuitFile r.I.tables with
-          | error e => first | (rw [hp] at h1; cases h1) | cases h1
+          | error e =>
+            rw [hp] at h1
+            cases h1
           | ok c => exact ⟨c, rfl⟩
     have hcirc : r.circ = c := by
       simp only [_root_.Flock.Readable.Read.circ, _root_.Flock.ProvedScope.circuitOf, hho, ↓reduceIte, hc]
