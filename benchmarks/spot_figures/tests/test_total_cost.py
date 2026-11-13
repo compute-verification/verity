@@ -369,7 +369,7 @@ def test_the_designs_beside_a_line_say_what_no_session_holds():
 
 def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monkeypatch):
     """`limits` counts what a design asks of the code that runs a second stage: the lines of session coins its
-    sessions write (2 a session and `TABLE_LINES` a table, at least) and the bytes its second draw reads (a stream of
+    sessions write (2 a session and `TABLE_LINES` a table, at least) and the bytes its second sample reads (a stream of
     2 k width(n) + 64 for each block type in each sampled replay block), and names the first limit met: a session's
     tables, then the release log's lines, then one layout's bytes; none where it is within all three."""
     cells = [Cell(100.0, 16.0, prove=1e-3, fixed=5.0, cap=64, commit_bytes=2.0, table=64),

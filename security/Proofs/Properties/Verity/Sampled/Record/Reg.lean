@@ -22,10 +22,10 @@ public import Std.Data.String.ToNat
   parses as the parameters' verifier's program and its query is their verifier's (`SetsUp.params`).
 * **The population is `PopMatches`' count** (`units_of_popMatches`): where the descriptor parses and its layout under
   the query is laid out, `Partition.units` of the program and query is the `n` of `PopMatches`.
-* **The design at the law's text is the law the draw reads** (`slotDesign_lawText`, `slotDesign_designSlots`): over the
-  verifier's program and query of `n` units, where `lawAt` reads the law `L`, `slotDesign` under the rule
-  `law (lawText L)` is `L`'s one-stage design and then `all`, at a subset law of at least one unit. `parseDesign` names a
-  law that `deriveLaw` and `flockLaw` read as they read the verifier's (`deriveLaw_congr`, `deriveLaw_none`,
+* **The design at the sampling design's text is the sampling design the sample reads** (`slotDesign_lawText`, `slotDesign_designSlots`): over the
+  verifier's program and query of `n` units, where `lawAt` reads the sampling design `L`, `slotDesign` under the rule
+  `law (lawText L)` is `L`'s one-stage design and then `all`, at a subset sampling design of at least one unit. `parseDesign` names a
+  sampling design that `deriveLaw` and `flockLaw` read as they read the verifier's (`deriveLaw_congr`, `deriveLaw_none`,
   `deriveLaw_some`, `flockLaw_subset_text`, `flockLaw_bernoulli_text`).
 -/
 
@@ -67,7 +67,7 @@ theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.
     exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
 
 /-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
-their verifier's program and its query is their verifier's, at the parameters whose verifier's law the draw reads over
+their verifier's program and its query is their verifier's, at the parameters whose verifier's law the sample reads over
 the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
@@ -95,7 +95,7 @@ theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_
   rw [(laysOut_units _ _ hlays).2, ← length_popUnits, hperm.length_eq, List.length_range'] at hsum
   rw [hsum]
 
-/-! ## The design at the law's text -/
+/-! ## The design at the sampling design's text -/
 
 theorem sort_law_k :
     _root_.Spot.sortStrings #["k", "law"] = _root_.Spot.sortStrings #["law", "k"] :=
@@ -128,7 +128,7 @@ theorem getD_law_of_kindOf {law : Json} {s : String} (h : kindOf law = s) (hs : 
     rw [hs', h]
   · exact absurd h.symm hs
 
-/-- **`deriveLaw` reads only a law's kind and `k`.** -/
+/-- **`deriveLaw` reads only a sampling design's kind and `k`.** -/
 theorem deriveLaw_congr (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {a b : Json}
     (hl : _root_.Spot.getD a "law" = _root_.Spot.getD b "law")
     (hn : _root_.Spot.nat? (_root_.Spot.getD a "k") =
@@ -162,7 +162,7 @@ theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab :
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at hc
     exact hc.1
 
-/-- **`deriveLaw`'s expansion is the law's kind at its `k`**, of at least one unit. -/
+/-- **`deriveLaw`'s expansion is the sampling design's kind at its `k`**, of at least one unit. -/
 theorem deriveLaw_some {p : _root_.Spot.Program} {q law : Json} {tbl : Option Json} {L : Flock.Draw.Law}
     (h : _root_.Spot.Draw.deriveLaw p q law tbl = .ok (some L)) :
     ∃ k, _root_.Spot.nat? (_root_.Spot.getD law "k") = some k ∧ 1 ≤ k ∧
@@ -257,7 +257,7 @@ theorem flockLaw_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a ≤ b) :
   simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **`lawAt`'s steps**: the verifier's law's expansion, the law `flockLaw` reads from its law object, and the
+/-- **`lawAt`'s steps**: the verifier's law's expansion, the sampling design `flockLaw` reads from its sampling design object, and the
 expansion where there is one. -/
 theorem lawAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
     (h : lawAt v n = .ok L) :
@@ -273,7 +273,7 @@ theorem lawAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Dr
   obtain ⟨fl, hf, h⟩ := bind_eq_ok.1 h
   exact ⟨d, fl, hd, hf, (Except.ok.inj h).symm⟩
 
-/-- **A law's text**, as a selection rule names it (`Select.Rule.law`): `kind:K` for a `subset`, `stratified` or
+/-- **A sampling design's text**, as a selection rule names it (`Select.Rule.law`): `kind:K` for a `subset`, `stratified` or
 `work` law of `K` units, and `bernoulli:NUM/DEN`, each number in `Nat.repr`'s digits. -/
 def lawText : Flock.Draw.Law → String
   | .subset k => "subset" ++ ":" ++ Nat.repr k
@@ -281,9 +281,9 @@ def lawText : Flock.Draw.Law → String
   | .stratified k _ => "stratified" ++ ":" ++ Nat.repr k
   | .work k _ => "work" ++ ":" ++ Nat.repr k
 
-/-- **The design at the law's text is the law `lawAt` reads**: over the verifier's program and query of `n` units,
-where `lawAt` reads the law `L`, `slotDesign` under the rule `law (lawText L)` is `L`'s one-stage design, then `all`,
-at a subset law of at least one unit. -/
+/-- **The design at the sampling design's text is the sampling design `lawAt` reads**: over the verifier's program and query of `n` units,
+where `lawAt` reads the sampling design `L`, `slotDesign` under the rule `law (lawText L)` is `L`'s one-stage design, then `all`,
+at a subset sampling design of at least one unit. -/
 theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : lawAt v n = .ok L)
     (hk : ∀ k, L = .subset k → 1 ≤ k) :
@@ -315,7 +315,7 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
       rw [← hd]
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
-/-- **v2's design at the law's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
+/-- **v2's design at the sampling design's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
 `A`'s law, the design under `law (lawText A.design)` is `designSlots A`. -/
 theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.design)
