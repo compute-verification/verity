@@ -56,7 +56,7 @@ from typing import Any
 
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_bytes
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.pous.device import challenger_session
 from verity.protocols.pous.device import memory_challenger as mc
 
