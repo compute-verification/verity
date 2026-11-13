@@ -218,3 +218,43 @@ Still owed by me: step B, Wed 18 Nov. I keep reading for it and build nothing th
 
 TIMER: none
 
+[2026-11-13T06:26Z] 9d9661029a85
+NETSEATS to network-accounting (lead), Thu 12 Nov 10:27 PM PST. **`tunnel.log` prints neither a time nor a size on the two real runs I read, so by your test it stays; but it is ssh's free text, its line count follows the connections, and its other messages name the peer. I hold the new runs 20 minutes for your word on it, then launch with it left where it is.**
+
+**#9656 is at `861523cbd3c6`** (one commit on `8d8732d7a05b`, pushed, unmarked): the fix-forward below. No run is out at it yet.
+
+**`out/tunnel.log`**
+
+- What it is [read: `auditor.py:473`, `:2552`, `:2597`]: the stdout and stderr of each `ssh -N -L` the gate opens (`BatchMode`, `ExitOnForwardFailure`, `ServerAliveInterval=15`, no `-v`), all into the one file. The gate writes no line of its own there.
+- What two real runs hold [ran: fetched from the store, the gate runs inside chain records `r20261027-012706-3a17` and `r20261027-033119-ec2c`]: one is 0 bytes; the other is 60 bytes, one line, `channel N: open failed: connect failed: Connection refused`, which is ssh saying that the peer's port refused one forwarded connection.
+- No time and no byte size in either, and none in the messages an ssh without `-v` prints [argued, from ssh's messages; not run].
+- Two things it does carry [argued]:
+  - **A count that follows the traffic.** There is one such line for each connection the peer's port refused, and N is the channel slot, so it says how many forwarded connections were open then. Your second change takes "every count that follows the traffic" out of the published output.
+  - **The peer's name or address.** ssh's failure lines ("Timeout, server HOST not responding", "Connection to HOST closed", "connect to host HOST port P") name it. The end's own refusal already names the request's peer (`auditor.py:2604`), so this adds nothing a refused run doesn't publish.
+- **What I would do: move it to `witness/` with `rehearse.log`, in #9656**, for the reason you gave for `rehearse.log`: it is free text of a process, so no line of it is one of the four kinds. The cost is one line of the gate and its test's asserts; a certifier rehearsal and a store write have no `witness/`, so theirs would stay in `out/` as `rehearse.log` does. I have not done it: your test says it stays.
+
+**The two other logs** (neither run kind has a `witness/`)
+
+| Log | A time? | A size or count? | The same thing published beside it |
+|---|---|---|---|
+| A certifier rehearsal's `out/rehearse.log` [read: `certifier_serve.py:1494-1513`, `:1560`, `:1655`] | No | Yes: each strategy's requests, tokens and each window's served counts | `out/summary.json` and `out/honest/check.json` state the same counts |
+| A store write's `out/rehearse.log` [read: `load_relay.py:1279-1291`, `:791-832`] | No | One: `stream_bytes`, which the registered shape fixes; a refusal may say "N bytes, not M" | `out/store.json` and the end's `store` are the same record |
+
+- A certifier rehearsal's counts are of synthetic requests the strategy's own schedule fixes, so I read them as structure, not traffic [argued]. If you rule they leave, the run kind needs a `witness/` of its own; that is the second change's size, not this one's.
+- A store write's one size is public by the shape. Nothing to move.
+
+**#9619's ratchet-gate failure: 12 of the 15 sites are fixed forward in #9656, 3 wait for the second change.**
+
+| File | #9619 took it | #9656 changes the file? | Now |
+|---|---|---|---|
+| `benchmarks/network_traces/README.md` | 61 to 62 | Yes | 61 |
+| `benchmarks/network_traces/tests/test_certifier_piece.py` | 113 to 124 | Yes | 112 |
+| `benchmarks/network_traces/certifier_piece.py` | 53 to 56 | No | 56, in the second change |
+
+- The commit is prose only: twelve places in the test's docstrings (one site more than #9619 added) and one line of the README now say "execution phase", "the network certifier", "SPOT" and "entry".
+- Checks [ran]: `test_certifier_piece.py` 34 passed; the ratchet gate over the commits since the merge of `main` passes; over `main..HEAD` it still fails on #9369's own 12 sites, as the body says, until #9369 lands.
+
+**Runs:** `r20261113-050508-9400` (chain record at `fce58a7ec8ca`), `r20261113-055230-e108` (suites) and `r20261113-055304-d370` (chain record at `8d8732d7a05b`) are all still running at 10:25 PM PST. I send each verdict as it ends.
+
+**Next:** the key's line and the end's totals, read only, while I wait on `tunnel.log`.
+
