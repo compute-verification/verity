@@ -113722,3 +113722,27 @@ Mailbox read at `bea8cf9117bb`: your 02:00Z three answers, taken (below). Heads 
 **Not established.** That `accept_read`'s body, `Links.lean`'s four project lemmas and `Order.lean` on the new verifier Lean compile. That the difftest of the link-first piece passes (in `79a2`). That Lean answers the twin's new row (no tree holds both). Whether soundness takes the refusal into #9520. Nothing of `Reads.lean`.
 
 **To post:** nothing.
+
+## MAJORITY, Fri 02:08Z: r20261113-014235-7384: my three files build at `65810fa781` and the `--siblings` check passes; the records audit is blocked again by a base file, `SampledTwo/DevAgrees.lean`, which does not build at TWOLEG's `99da2b9189`
+
+With TWOLEG's newer head merged, all three of my files still compile, and the two-stage file's new names clash with nothing in its package. The lock check still cannot run. The records run builds the whole proofs package, and another of the base's files, `SampledTwo/DevAgrees.lean`, now fails there. That file is not mine, so I can't run the lock check until its owner fixes it.
+
+**1. The records audit.** [run] `r20261113-014235-7384` on vy-nebius-cpu-11 took a slot at 01:46Z, three minutes after launch. `--records security/Proofs` exited 1. The package's build failed in exactly one module, `Proofs.Properties.Verity.SampledTwo.DevAgrees`:
+- line 40:67: "Unknown constant `List.take_append_eq_append_take`";
+- line 39:21: unsolved goals;
+- line 54:2: `omega` could not prove the goal;
+- line 70:2: maximum recursion depth reached.
+
+[run] The audits of `security` and `security/Properties`, which require `security/Proofs`, failed on the same build, so no record was compared. [read] "Some required targets logged failures" names only `DevAgrees`, so every other module built, `Majority`, `SampledTwo.Majority` and `Recursive.Target` among them.
+
+**2. The siblings check.** [run] In the same job, `--try SampledTwo/Majority.lean --siblings` exited 0, with Lean done in 28 s. Its siblings line: "no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.Majority declares a name it does (2562 imported…); 1497 unchecked, with no build of their source as it is". So modules that don't build on this tree, `DevAgrees` among them, went unchecked. Axiom probe: none of the 6 theorems goes beyond propext, Classical.choice and Quot.sound.
+
+**3. The lock, by reading.** [read] `security/lean-audit.json` lists 52 `Verity.Recursive` names, every one defined outside the files this piece changes, and `security/Proofs/lean-audit.json` lists none. [derived] So none of their records can move. That is a reading, not the run you asked for.
+
+**STOP RULE.** None found.
+
+**NEEDS.** For TWOLEG, or whoever owns `SampledTwo/DevAgrees.lean`: it does not build at `99da2b9189`. It names `List.take_append_eq_append_take`, which the toolchain here (v4.34.0) does not have, and the errors at 39, 54 and 70 follow. Once a head builds, I merge it and rerun the records run, which takes about 20 minutes on cpu-11.
+
+**To post.** Nothing.
+
+**Not established.** The records run itself. The siblings check against the 1,497 modules that had no build. The two premises left for soundness (`ReadsBind` and `hX`). The earlier period's challenger signature hole, still open. Pushed head: `65810fa781`; nothing is left unpushed.
