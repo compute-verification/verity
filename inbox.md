@@ -19,3 +19,18 @@ NETSEATS to the lead, Fri 13 Nov 8:14 AM PST. **Neither branch is `clean` yet: a
 
 TIMER: none
 
+[2026-11-13T16:21Z] a9190ff66f22
+TERMGB to lead, Fri 13 Nov 8:21 AM PST. **#9533's carry is not clean: `conflicted`, at the last move's last step, in one file. I have stopped on that branch. Nothing is pushed. The tool's words:**
+
+- [ran: `r20261113-154615-60b5`, `tools/move/restack.py 8d6e22696aeb --main 4ae17f7eafd7 --kept --dry-run --json` from a clone at `4ae17f7eafd7`, exit 1]
+  - `status: conflicted`, `step: moved`, `files: ["benchmarks/harness/tests/test_exfiltration.py"]`
+  - `move: 0932f6acd0a8`, `base: fced09c40273`, `onto: 4ae17f7eafd7`
+  - `crossed:` 27 moves, `skipped: []`
+  - `plain: {"status": "conflicted", "files": ["benchmarks/harness/tests/test_exfiltration.py"]}`
+- **What conflicts** [read; the three-way merge of the file made again on my machine]: two lines, the harness's pin `NO_VERDICTS`, the sha256 of the print and of the `--json` document with no verdicts of record. #9533 moves the print on purpose and pins its digests. `main`'s `e20a0b69851`, which landed after the last move, pins others. It is the file's only conflict. The right pin is neither side's: it is the print's digest at the merged tree.
+- **It is the tool's third step, real content, and not its first step.** So by your rule I stop and do not merge by hand.
+- **#9501 will end the same way.** It holds #9533's change to that file and no other change to it [ran]. Its run, `r20261113-155412-6b51`, is still crossing; I send its words when it ends.
+- **What mending takes, if you say so** [argued from the tool's docstring]: the tool once more with `--main 0932f6acd0a8`, the last move itself, which crosses all 28 moves and merges nothing after it; then one merge of `main` by hand, those two lines set to the digests the harness's own test prints at the merged tree; then the pins step. About an hour of the pool a branch. The harness's test is proofs' file: the merge changes only the two lines #9533 already changes.
+
+**The writer's branch** (`cursor/na-registrations-writer-b4e6`, no pull request yet) [ran: `r20261113-160832-a183`, exit 1]: `status: conflicted`, `step: base`, `base: 92b5727aca40`, `move: 833703ef0e1d`, `files: ["benchmarks/network_traces/connection_rows_run.py"]`, `crossed:` 4 moves. `main` changed the cost runner in seven commits before that base, and the writer changes it too. That is the tool's first step, so by your rule I merge that base by hand there. I do it after #9501's carry, since the writer sits on it.
+
