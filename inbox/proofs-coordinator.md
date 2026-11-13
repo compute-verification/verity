@@ -152511,3 +152511,29 @@ I commit nothing more on either. The first is the hold: a run's family is the on
 ### Not established
 
 - That the five tests pass at the carried head, and that the suites my change touches pass their quick tier there: the two runs say, about 17:25Z. [guess]
+
+## HELDOF, Fri 13 Nov 17:05Z: ruling 2's first step, by reading: `B₀ := V.registered θ` can meet `hx₀` and `hT₀`; no two-stage instance defines it today; one finding for soundness on how the one existing instance builds it
+
+New branch for item 3: `cursor/proofs-heldof-blob-f083`, cut from `a7319a232b319179f766c435d9f2b8c68130c670`. Nothing on it yet.
+
+**What `hx₀` and `hT₀` read** [read]:
+- The parameters are a function of θ. On every accepted play at θ the case decodes to `paramsAt θ`: `caseOf s` reads `paramsAt s.params` (`Cut.lean:80`), `CaseIsSent` ties the case to `caseOf o.sent`, and `JoinsAt.wiring` holds at `o.params = θ`. So `P` in both is `paramsAt θ`.
+- `hx₀` (`refStmtsOf P (ofArray B₀) = some xs₀`) reads, for each template `t`, the circuit file and the public file under `memberOf P t`'s own digests (`refRawOf`: `bs.get m.own.circuit`, `bs.get m.own.pub`, `HeldOfFiles.lean:48`). It also reads the pinned tables the blobs hold (`OneStageZk.tablesOf bs`). `Core.Blobs.ofArray` pairs each file with its SHA-512, and `get` finds the first file under a digest.
+- `hT₀` (`HoldsRegisteredTables m₀.own (ofArray B₀)`, `Properties/Spot/Tables.lean:30`) reads template 0's circuit file under its digest. It requires the pinned tables `B₀` holds to be exactly that circuit's lookups, with no other pinned table.
+
+So an array that is a function of θ alone meets both: the circuit and public files of every template of `paramsAt θ`, under their digests, appended, with template 0's circuit's pinned tables [derived]. `xs₀` is then `refStmtsOf (paramsAt θ) (ofArray B₀)`, also a function of θ.
+
+**Which array of the vocabulary that is: `V.registered θ`** [read].
+- `registered : ByteArray → Array ByteArray` is a field of `Vocab`, "the registered files, fixed by the parameters" (`Game.lean:680`). Only `fileFinder` and `publicFinder` read it (`Game.lean:870–878`). The vocabulary has no separate public-files array.
+- Nothing fixes its contents for the two-stage form. The one instance that defines it is the one-stage form's `registeredOf θ` (`Proofs/Properties/Verity/Sampled/Instance.lean:140`): a file under `programDigestOf θ`, one under `publicDigestOf θ`, and that circuit file's pinned tables. Those are the one-stage parameters' two files, not the two-stage members' files.
+- No two-stage instance of `registered` exists (`git grep`).
+- So: `B₀ := V.registered θ` in `JoinsAt`, `joinBound` and `CouplesAt`. `hx₀` and `hT₀` become two fields about the registration at `V.registered θ`. A two-stage instance meets them by defining `registered θ` as the array above.
+- The registration log itself (`Definitions/Core/Site.lean:195–222`) registers θ's values by committed root, the builder, and each day's circuit by program digest. It holds no file bytes. So in Lean the registered files exist only as `V.registered`.
+
+**The finding for soundness** [read; the consequence derived]: the one existing instance builds the registered files by `fileWith h := if hx : ∃ f, h = some (sha512 f) then some hx.choose else none` (`Sampled/Instance.lean:125`). That is a file chosen from the existence of a preimage of the digest, fixed for each θ. A `blobFinder` at such a `B₀` holds a file nobody wrote down. If the registered file and the chosen preimage differ, an honest play's blob collides with `B₀`, and `blobCR` cannot hold. This is the shape of the `collOf` rule one level down: a chosen preimage instead of a chosen pair.
+
+What I take from it: the two-stage instance must define `registered θ` as the registered bytes, as data, and not by `fileWith`. Item 3 does not depend on it, since `B₀` is `V.registered θ` whatever the instance is. The one-stage `registeredOf` is not mine; I don't touch it.
+
+**Not a STOP**: an array that is a function of θ alone meets `hx₀` and `hT₀`, and the vocabulary names it. I start item 3's Lean now, with `B₀ := V.registered θ` fixed in the statements.
+
+Also [read]: the one-stage instance's `CostsRead` (`Sampled/Instance.lean:149`) charges one call per sent blob to `V.cost`, which answers my 16:18Z guess about route (ii). Route (ii) is not taken in any case.
