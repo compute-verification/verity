@@ -12,11 +12,11 @@ import itertools
 import random
 
 import pytest
+from verity.circuits.refs import Affine, Explicit, Refs, Strided
 
 from verity_vllm.observe.events import DTYPE_BYTES, StorageAlloc, ViewDesc
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
 from verity_vllm.observe.fold.views import row_view
-from verity.circuits.refs import Affine, Explicit, Refs, Strided
 
 DEV = "cuda:0"
 
@@ -99,13 +99,14 @@ def test_single_dtype_random_program_matches_oracle():
                 dalloc = rng.choice([1, 2])
                 dst = rand_view(rng, dalloc, N, dtype, shape=src.shape)
                 exp = [storage.get((alloc, e)) for e in logical_elems(src)]
-                if any(r is None for r in exp):
+                held = [r for r in exp if r is not None]
+                if len(held) != len(exp):
                     with pytest.raises(Unresolved):
                         m.move(src, dst)
                     continue
                 m.move(src, dst)
                 for j, e in enumerate(logical_elems(dst)):
-                    storage[(dalloc, e)] = exp[j]
+                    storage[(dalloc, e)] = held[j]
         # final sweep: every element and a few random views
         for alloc in (1, 2):
             full = ViewDesc(alloc, 0, (N,), (1,), dtype, DEV)
@@ -220,8 +221,8 @@ def test_mixed_width_random_program_matches_byte_oracle():
             else:
                 expected = []
                 for e in logical_elems(v):
-                    cells = [bytes_.get(e * w + b) for b in range(w)]
-                    ok = all(c is not None for c in cells) and len({(c[0], c[1]) for c in cells}) == 1 \
+                    cells = [c for c in (bytes_.get(e * w + b) for b in range(w)) if c is not None]
+                    ok = len(cells) == w and len({(c[0], c[1]) for c in cells}) == 1 \
                         and cells[0][3] == w and all(c[2] == b for b, c in enumerate(cells))
                     expected.append(cells[0][4] if ok else None)
                 check_read(m, v, expected)
@@ -231,8 +232,8 @@ def test_mixed_width_random_program_matches_byte_oracle():
             v = ViewDesc(1, 0, (NB // w,), (1,), dtype, DEV)
             expected = []
             for e in range(NB // w):
-                cells = [bytes_.get(e * w + b) for b in range(w)]
-                ok = all(c is not None for c in cells) and len({(c[0], c[1]) for c in cells}) == 1 \
+                cells = [c for c in (bytes_.get(e * w + b) for b in range(w)) if c is not None]
+                ok = len(cells) == w and len({(c[0], c[1]) for c in cells}) == 1 \
                     and cells[0][3] == w and all(c[2] == b for b, c in enumerate(cells))
                 expected.append(cells[0][4] if ok else None)
             check_read(m, v, expected)

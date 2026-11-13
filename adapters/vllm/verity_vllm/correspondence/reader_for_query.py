@@ -46,18 +46,24 @@ from __future__ import annotations
 import dataclasses
 import re
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
-from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
-
+from verity_vllm.correspondence.runtime import (
+    SCHEMA,
+    CallCorrespondence,
+    RuntimeCorrespondence,
+    correspondence_digest,
+    occurrence_views,
+    read_program_document,
+)
 from verity_vllm.query.program_view import ProgramView, param_reads
 
 __all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",
-           "held_module_paths", "SOURCES"]
+           "held_module_paths", "call_name_of"]
 
-SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
 
 
@@ -109,8 +115,9 @@ def call_place(slots: Iterable[tuple[Any, Any]]) -> tuple[int | None, tuple[int,
     """A Call's row and columns from its located return slots, (leaves, shape of the tensor they land in) each: the row of that tensor
     every slot lies in, when one; and for a Call of one slot that covers part of the row, the columns it covers.  (None, None) when no
     slot is located or one spans rows."""
-    places = [row_place(leaves, shape) for leaves, shape in slots]
-    if not places or None in places or len({p[0] for p in places}) != 1:
+    found = [row_place(leaves, shape) for leaves, shape in slots]
+    places = [p for p in found if p is not None]
+    if not places or len(places) != len(found) or len({p[0] for p in places}) != 1:
         return None, None
     r, c0, c1, w = places[0]
     return r, ((c0, c1) if len(places) == 1 and c1 - c0 < w else None)
@@ -137,6 +144,17 @@ def call_name_of(rec: CallCorrespondence) -> CallName:
     if rec.collective is not None and rec.member == rec.collective.kind:
         return CallName(rec.module, rec.node or "", "", row, rec.member)
     return CallName(rec.module, rec.node or "", rec.member or "", row, "")
+
+
+def _return_shape(r: Mapping[str, Any], outs: Sequence[Any], ins: Sequence[Any]) -> Any:
+    """The recorded shape of the tensor a return slot holds: its fx output's, or its written argument's view's; None where the
+    occurrence records neither."""
+    if r.get("output") is not None:
+        return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
+    wa = r.get("written_arg")
+    written = ins[wa] if wa is not None and wa < len(ins) else None
+    view = written.get("view") if written else None
+    return view.get("shape") if view else None
 
 
 def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[int], dict[int, int], dict[int, tuple[int, int]]]:
@@ -170,15 +188,8 @@ def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[in
         if rets and all(r.get("output") is None and r.get("written_arg") is None for r in rets):
             tensorless.append(k)
         elif rets:
-            outs, ins = o.get("outputs") or [], o.get("inputs") or []
-
-            def shape(r: Mapping[str, Any]) -> Any:
-                if r.get("output") is not None:
-                    return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
-                wa = r.get("written_arg")
-                return ((ins[wa] or {}).get("view") or {}).get("shape") if wa is not None and wa < len(ins) else None
-
-            r, cols = call_place([(x["leaves"], shape(x)) for x in rets if x.get("leaves") is not None])
+            outs, ins = occurrence_views(o, "outputs"), occurrence_views(o, "inputs")
+            r, cols = call_place([(x["leaves"], _return_shape(x, outs, ins)) for x in rets if x.get("leaves") is not None])
             if r is not None:
                 rows[k] = r
             if cols is not None:
@@ -245,13 +256,14 @@ def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[di
         c = P.call(cid)
         pairs = {_holder(m, f.rsplit(".", 1)[0]) for v in param_reads(c) if (f := fields.get((v.call, v.port))) is not None}
         if not pairs:
-            pairs = {holder_of[v.call] for v in c.reads if v.call >= 0 and v.call in holder_of}
-            pairs = {(h, x) for h, x in pairs if m == h or m.startswith(h + ".")}
-        if len(pairs) != 1 or None in pairs:
+            near = {holder_of[v.call] for v in c.reads if v.call >= 0 and v.call in holder_of}
+            pairs = {(h, x) for h, x in near if m == h or m.startswith(h + ".")}
+        pair = next(iter(pairs)) if len(pairs) == 1 else None
+        if pair is None:
             if any(m == h or m.startswith(h + ".") for h in holders):
                 unresolved[m] += 1
             continue                                     # else no holder of this path resolved: not a held path we know
-        h, x = next(iter(pairs))
+        h, x = pair
         holder_of[cid] = (h, x)
         holders.add(h)
         out[cid] = dataclasses.replace(n, module=x + m[len(h):])
@@ -280,9 +292,10 @@ class Correspondence:
         #: of the row (`call_place`); empty under the fallback
         self.rows: dict[int, int] = {}
         self.columns: dict[int, tuple[int, int]] = {}
-        if table is not None or document is not None:
+        doc = table.doc if table is not None else document
+        if doc is not None:
             if table is None:
-                recorded, tensorless, self.rows, self.columns = recorded_names(document)
+                recorded, tensorless, self.rows, self.columns = recorded_names(doc)
             else:
                 recorded, tensorless = {}, []
                 for rec in table:
@@ -300,7 +313,7 @@ class Correspondence:
             self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}
             self.tensorless = frozenset(tensorless)
             self.source = "correspondence"
-            self.digest: str | None = digest or correspondence_digest(table.doc if table is not None else document)
+            self.digest: str | None = digest or correspondence_digest(doc)
         else:
             self.names = {c.id: parse_call_name(c.name) for c in P.calls}
             self.source = "v1_annotations"
@@ -308,7 +321,7 @@ class Correspondence:
         self.names, self.held = held_module_paths(P, self.names)
 
     @classmethod
-    def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> "Correspondence":
+    def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> Correspondence:
         """The Program's correspondence from its Build dir: the record when the Build carries it, else the v1-annotation fallback.  A
         record that fails to load / mismatches its recorded digest is a `problem` carried on the table (and into the manifest header)."""
         document, digest, problem = read_program_document(program_dir) if program_dir else (None, None, None)
@@ -360,5 +373,5 @@ class Correspondence:
         `attention_impls_declared` keys (predict's, `program.predict.naming`)."""
         if not result_json:
             return ()
-        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared") or {}
-        return tuple(str(k) for k in obs)
+        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared")
+        return tuple(str(k) for k in obs) if obs else ()

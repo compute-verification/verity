@@ -132,7 +132,11 @@ def test_the_products_hand_cublas_k_and_n_multiples_of_16(monkeypatch, m, k, n):
     gen = torch.Generator().manual_seed(m * k + n)
     a, b = (torch.randint(-127, 128, shape, generator=gen).float() for shape in ((m, k), (n, k)))
     shapes, real = [], A.E.int_mm
-    monkeypatch.setattr(A.E, "int_mm", lambda x, w: shapes.append((x.shape, w.shape)) or real(x, w))
+
+    def int_mm(x, w):
+        shapes.append((x.shape, w.shape))
+        return real(x, w)
+    monkeypatch.setattr(A.E, "int_mm", int_mm)
     assert torch.equal(A.int_mm(a, b).long(), a.long() @ b.long().T)
     ((xs, ws),) = shapes
     assert xs[1] == ws[1] and xs[1] % 16 == 0 and xs[1] >= k and ws[0] % 16 == 0 and ws[0] >= n

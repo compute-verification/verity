@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import dataclasses
 
-from verity_vllm.observe.events import StepLink, StepStart
-from verity_vllm.observe.fold.fold import fold, instance_nodes
-from tests.observe import test_fold_synthetic as TFS
 from verity.circuits.types import Array, Value
+
+from tests.observe import test_fold_synthetic as TFS
+from verity_vllm.observe.events import StepLink, StepStart
+from verity_vllm.observe.fold.fold import fold
 
 memory = TFS.memory  # the fixture (real memory model when importable, else the in-test stub)
 
@@ -35,12 +36,12 @@ def test_fold_discards_partial_prefill_samples(memory):
     assert r.sampled == {TFS.REQ: [(1, TFS.SAMPLED[0]), (2, TFS.SAMPLED[1])]}
     assert r.discarded == {TFS.REQ: [(0, 11, 0)]}
     assert r.body.ret_type == Array(2, Value(32))
-    ts = {m["step"]: m["node"] for m in instance_nodes(r, spec_prefix="TokenSelect_v1")}
+    ts = {m["step"]: m["node"] for m in TFS.instance_nodes(r, spec_prefix="TokenSelect_v1")}
     assert sorted(ts) == [0, 1, 2]                                   # the discarded sample's TokenSelect instance IS in the Program
     assert list(r.body.ret) == [("n", ts[1], 0), ("n", ts[2], 0)]    # ... but is not returned
     consumers = [k for k, nd in enumerate(r.body.nodes) if any(("n", ts[0], 0) in list(a.refs) for a in nd.args)]
     assert consumers == []                                           # ... and nothing reads it (no StepLink fed it back)
-    emb2 = instance_nodes(r, spec_prefix="Embedding_v1", step=2)[0]["node"]
+    emb2 = TFS.instance_nodes(r, spec_prefix="Embedding_v1", step=2)[0]["node"]
     assert list(r.body.nodes[emb2].args[0].refs) == [("n", ts[1], 0)]  # the decode row carries the SERVED token
     assert any("discarded by the engine" in n for n in r.notes)
 
