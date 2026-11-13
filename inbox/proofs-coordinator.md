@@ -151078,3 +151078,448 @@ Your 16:04Z names #9713. It is `cursor/proofs-frame-l1-9c4e` at `767972c546b8`, 
 ### State
 
 No run out, no code written, no branch for the profile yet. FRAME's pass (`r20261113-155839-6e94`) is due back about 16:50Z; I read the table then and set a timer of at most 30 minutes if it is not there. Next entry by 17:25Z.
+
+## STOPDRIVER, Fri 13 Nov 16:24Z: the first way: our commands take the class as they are; the premise; `tie_first`
+
+The 15:47Z order, in one entry: A, B and C. The 16:04Z addition is read, and nothing is pushed to B's branch. [read]
+
+The commit read is `origin/main` `4ae17f7eafd7`, which holds chain 2. [read] `origin/main` moved to `f54194bbb196`
+while I read, and it changes none of the files named here. [run: `git diff --stat` over them is empty] A line number
+is that commit's unless the line says "B's head", which is `46811047714e` on its old base `053b8e50fe8a`.
+
+The runs are five scripts of about one second each on this VM, pure Python on that commit's code: the stop rule's
+reference, the tie's reference, the replay side's reader of a capture, and what a sample reads of the challenges.
+[run] Nothing ran on a node, and nothing built a stream: that needs the Lean verifier's executable. [read]
+
+Network's and vllm's text is marked [relayed] wherever I rest on it without having found it in the code.
+
+One correction to my 16:09Z entry. It called the replay block's return `b.ids`. The record names that port `o0`;
+`Layout.ids` and `id_rows` are the adapter's names for what it holds (`boundary_rows.py:47-49`). [read]
+
+### A. Our stop class under the first way
+
+#### A.1 What our side reads of a stop class, place by place
+
+1. Who decides which spans a stop class holds, and in which order. The adapter does, and nothing of ours.
+   - `adapters/vllm/verity_vllm/pipeline/boundary_stop.py:141-158` (`Stop.word`): a span is a stop class's only where
+     the engine's finish is "stop" or "length" and the rule's word on its zero-padded row is the count served, with
+     the engine's finish. [read]
+   - `boundary_stop.py:161-171` (`filed`): such a span goes to `(P, T, True)` and every other to `(P, O, False)`,
+     "each class's spans in admission order". [read]
+   - `boundary_windows.py:182-192` (`close`) and `:202-217` (`_run`): a window is the requests finished at one close
+     of the serve, no execution phase of the certifier's, and its directory is `p<P>-o<O>` or `p<P>-o<O>-nostop`.
+     [read]
+   - Changes: all three. Whose: vllm's adapter. [derived]
+   - Our commands take `commit.json`'s `spans` as a count and slot r as row r (`boundary_rows.py:595-614`,
+     `layout_of`). [read] They read no release of a request and no order. [run: `rg` finds neither word of a
+     request in `two_stage.py` or `stop_audit.py`]
+2. Where the `-nostop` filing is read on our side. None of these changes. [derived]
+   - `benchmarks/one_stage/verdict_record.py:105-106` (`class_of`): a verdict's class is named `-nostop` where its
+     window has a `stop` and `stopped` is not true. [read]
+   - `benchmarks/harness/verity_bench/exfiltration.py:241` (`CLASS_NAME`), with `:235` and `:625`: the name's form.
+     [read]
+   - `benchmarks/one_stage/two_stage.py:901`: a class gets a stop sample where its `commit.json` says `stopped`
+     true. [read]
+   - `benchmarks/one_stage/stop_audit.py:166`: a class whose layout is no stop class is refused. [read]
+   - What says `stopped` is the prover's `commit.json` (`boundary_rows.py:614`, `held=c.stopped is not False`).
+     [read] A tied class that says false has no stop record and so no tie record. [derived] What notices is whoever
+     asks for the class's four verdicts, and nothing in our two commands. [derived]
+3. `window_place.of` (B's head, `verity/protocols/spot/verifier/window_place.py:31-50`; it is not on `main`). No
+   change. [derived]
+   - `stopped` still does work. A span the certifier did not release is filed without a stop block
+     (`boundary_stop.py:161-171`), so an untied class of the same two sizes can sit in the window beside the tied
+     one, and the bit keeps their two places apart. [read; derived]
+   - `blocks` is 1 for the stop record and 0 for the boundary record, as now. [read]
+   - A record whose window says any `population` but "stop" has no place (`window_place.py:44-47`). [read] That is
+     the tie's record, in part C.
+4. The registration check that holds `population`. No change, and it is ours. [derived]
+   - `verity/protocols/proofs/spot/verifier/one_stage/registration.py:346-351` (`R2-population`) compares the
+     record's `population` with the proof blocks of the challenger's population program. [read]
+   - The stream builds that program at the record's own N (`service.py:1901-1907`, `:1961-1967`). [read]
+   - So it counts the class's spans as the record states them, held to the record's own program and ports. The
+     verifier has no count of its own for a class. [derived] For the stop record N is one stop block a span
+     (`boundary_rows.py:382`). [read]
+   - Under the first way the count that matters is the head's count of rows in the class, public under form 2
+     (`connection_rows.py:73-74`). [read] Nothing of ours compares the two. [read]
+   - The tie's registration would. Its reads of `b.egress` and `b.stop` are output values, and R7 refuses one where
+     the port's leaf count is not the value's rows (`registration.py:88-91`, `:803-808`, `R7-output`). [derived]
+5. What the stop audit assumes of the class. No change, and it is ours. [derived]
+   - `stop_audit.py:8-13`: one flat statement over the class's N stop blocks. Block i reads row i of `b.request`
+     and of `b.egress` and returns row i of `b.stop`, all three as registered reads. [read]
+   - `two_stage.py:399-413` (`stop_spec`) and `:416-438` (`stop_first`): the stop stream's log starts with the
+     class's boundary record, and the stop record registers after it. [read]
+   - It assumes a stop class under the verifier's own rule, and 32 outputs or more, since Flock's composer takes the
+     statement only with an `ids` row of 112 bytes (`stop_audit.py:11-13`). [read]
+   - It reads no finish, no `at`, no order and no release. [run: `rg` finds no "finish" in the file]
+   - Its entries `request-row` and `stop-rule` are null (`stop_audit.py:44-45`). [read]
+   - One dependence, in the adapter's file and not in ours: the prover's half opens the class's rows through the
+     adapter's `port_rows` (`stop_audit.py:168`), which today raises on a span of a stop class that `Stop.word`
+     gives no word (`boundary_rows.py:538-543`). [read] A row the engine left early is such a span until vllm's mend
+     to `Stop.word`, which it says is its own under either way. [relayed]
+
+#### A.2 The sentence for network
+
+"Under the first way our stop class is whatever rows the adapter commits at (P, T): our two commands read a count
+and take block j at row j, and they read no order, no kind and no finish, so they need nothing changed to accept a
+class that holds the head's n releases in release order. What does not yet take such a class is the replay that
+feeds the compute audit's second stage: it cannot reproduce a row the engine left early." [derived]
+
+The replay is ours (`benchmarks/serve_tax/replay.py`), and B.1 has the run behind the second half. [read] The
+sentence is about our files: the rows reach our stop audit through the adapter's `port_rows`, which needs vllm's
+mend first (A.1, point 5). [read]
+
+#### A.3 vllm's three asks of network
+
+1. `content_rows.file` leaves out a `FAIL` with `at` = 0. Ours depends on it, for completeness only. [derived]
+   - Today `file` reads the request's bytes and the length of the ids, and no end
+     (`content_rows.py:314-322`). [read] So such a release is filed.
+   - A row with no id served has an all-zero return, and "no replay reproduces it" (`boundary_rows.py:239-241`).
+     [read] The replay side refuses a span of no unit. [run: `Span.padded` raises "holds 0 units ... not 1 to its
+     size class's 8"]
+   - So a tied class that held such a row could not answer a sample that drew it. [derived]
+   - An `END` row always has an id: the rule's n is at least 1 (`stop_rule.py:105-108`). [derived]
+2. Ingress refuses `max_tokens` 0. Nothing of ours depends on it. [derived] The fact is as vllm says: under a
+   response cap a request is refused only where the field is unreadable or above the cap (`warden.py:904-906`).
+   [read]
+3. Each P once, at O = T, with the cap at most T. Nothing of ours depends on it. [derived]
+   - A place is named by both sizes, and our commands take any O. [read]
+   - A stop block's statement and a tie's exist only from O = 32 (`stop_audit.py:11-13`,
+     `response_tie.py:70-76`). [read] So a tied class at T = 8 has neither, and vllm's 200,000 rows at T = 8 are a
+     run of the reference. [relayed; derived]
+
+Finish 0, which you asked for by name.
+
+- With `max_tokens` from 1 to T the rule never gives it. The cap is min(`max_tokens`, room), at least 1 and at most
+  T, so n is at most T (`stop_rule.py:103-111`). [derived] Every case I ran at T = 8 with `max_tokens` from 1 to 8
+  has finish 1, 2 or 3; `max_tokens` 0, 9 and 2^31 give (8, 0). [run]
+- It is still reachable in a stop class, at O = T or not. The word is the rule's on `b.request`'s `max_tokens`,
+  which the server commits and nothing holds to the certified request (`boundary_stop.py:26-28`). [read] A server
+  that writes 0 there has a correct stop block, and the stop audit proves it and accepts: it reads no finish.
+  [derived]
+- Where it is refused: by the tie's first check, and nowhere else on the verifier's side
+  (`response_tie.py:34-36`). [read] The tie's reference on a finish-0 word gives verdict 0 and the count
+  0xFFFFFFFF, a row the certifier signs none of. [run] The tie is in no Spec and has no statement
+  (`response_tie.py:3-4`). [read]
+- For an honest serve the adapter's own `port_rows` raises on a span the rule does not end as served
+  (`boundary_rows.py:538-543`). [read] That is the prover's tool, and no check.
+
+#### A.4 The four conditions of the 6:24 AM PST post
+
+- The fourth, that nothing holds the filing. The first way removes it as it was stated, and puts one thing in its
+  place. [derived]
+  - It said: nothing holds a request filed `-nostop` to be one the rule does not end. A tied class has no such
+    sibling under the first way, so there is no kind left to hold. [relayed; derived]
+  - In its place: that the class's rows are the head's n releases, row j the head's row j. Nothing of ours holds
+    that. [read]
+  - The tie would hold both. The count, by its registration (A.1, point 4). The order, because block j's row has to
+    open the head's `response.i` at row j (`response_tie.py:12-15`). [derived] So the fourth becomes part of the
+    first condition, the tie's reads, and network's statement carries it.
+- The third, that nothing holds the committed rows to the certified request. It stays, word for word. [read]
+  - What closes it is unchanged: the request tie for `b.request`, and the pin for `--stop`. [derived]
+  - What it lets through while open gets wider. On a `FAIL` row the tie's one check is `at` at most n, and n is the
+    rule's count on a request row the server writes. [read]
+  - With the request row as served, the check has teeth: a row with a stop id at position 1 has the word (2, 1), and
+    a `FAIL` at `at` = 5 is refused. [run] With `ignore_eos` and `max_tokens` 8 written into the request row, the
+    same ids have the word (8, 2), and `at` = 5 passes. [run of the reference over no stop id, which is what the
+    block reads where the row sets `ignore_eos`: `boundary_stop.py:7-8`]
+  - Today that check covers only a `FAIL` after the engine finished. Under the first way it covers every `FAIL` row
+    of a tied class. [relayed; derived]
+  - So the first way does not change what the third costs to close. It raises what the third costs while open: the
+    `FAIL` rows' one check rests on it entirely. [derived]
+
+### B. The widened premise
+
+#### B.1 A `FAIL` row the engine left after k ids, in a tied class
+
+What is committed for it, by the adapter's functions on `main`:
+
+- `b.egress`: the k ids, then zeros to O. Under a rule the row has no count and no finish in it
+  (`boundary_rows.py:223-230`). [read; run: k = 3 at O = 8 gives `[5, 9, 11, 0, 0, 0, 0, 0]`]
+- The replay block's return, the record's port `o0`, where the class commits its ids: the k ids, then the last
+  one again (`boundary_rows.py:47-49`, `:237-245`). [read; run: `[5, 9, 11, 11, 11, 11, 11, 11]`] Below I call it
+  the return.
+- `b.stop`: the rule's word on the `b.egress` row and the request row. [read]
+- So k is in no committed value. A zero from k up cannot be told from a served id 0. [derived]
+
+The stop audit's block.
+
+- It proves: `b.stop`'s word is `StopRule16_v1` on the row's committed ids and its committed request row, at the
+  verifier's own stop ids and length (`stop_audit.py:8-13`). [read]
+- On this row the word counts past k: n is min(`max_tokens`, room), with finish 2 or 3. [run: k = 1 with
+  `max_tokens` 4 gives (4, 2), vllm's figure; k = 3 with 8 gives (8, 2); k = 3 with 5 gives (5, 2)] Where 0 is a
+  registered stop id the padding reads as a stop: n = k + 1, finish 1. [run]
+- It does not prove: that any id is the Program's; that the request row is the certified request; that the row is
+  the head's row j; anything of k or of `at`. [read]
+
+The tie's block, which is network's, for the whole picture.
+
+- On this row: verdict 1, count `at`, and the response row holds the ids below `at`. [run: `at` = 3 gives count 3
+  and `[7, 7, 7, 0, ...]`; `at` = 2 gives count 2]
+- It passes for every `at` up to n, also above k. [run: `at` = 5 on a row of 3 ids gives count 5, with zeros as
+  ids 4 and 5] That row opens the head only where the certifier released two ids 0 there. [derived] An honest
+  server has `at` at most k: the certifier releases only cells the server sent, one id a `DATA` cell
+  (`warden.py:61-63`). [read; derived]
+
+The two-stage compute audit.
+
+- The first stage registers the boundary record's roots and samples spans. It reads no value. [read: `main`
+  `two_stage.py:357-371`] The row is one span of the population, drawn like any other. [derived]
+- The second stage's replay block on `main` is a stand-in: instances of one check template, in the two-stage
+  serve one token select an id, where block j reads logits row j and returns id j (`boundary_rows.py:63-68`,
+  `adapters/vllm/README.md:99-101`, `interior_rows.py:205-207`). [read] "So the interior holds the token selection
+  and not the model's layers." [read]
+- The logits rows are the replay's own, registered by the interior after the first stage's sample. The one
+  boundary port the second stage reads is the return (`two_stage.py:67-74`). [read]
+- `b.egress`, `b.request` and `b.prompt` are read at no check. "Nothing ties the two values to each other while the
+  replay block is a stand-in that reads neither" (`boundary_rows.py:60-61`). [read]
+- So, to your question. Does the compute audit prove that the row's ids are the Program's outputs? Below k: no.
+  From k to `at`: no. From `at` to n: no. [derived] For any position it proves at most that the return's id is
+  the select of some logits row the prover registered after the sample. [read] And the return is another value than
+  the `b.egress` the tie reads. [read]
+- On `main` every two-stage run is refused last, whatever its rows (`second_stage.py:90`, `FORM = False`;
+  `:1245`, `two-stage-form`). [read]
+
+Where the row is drawn and its ids from k up are zeros: accept or refuse, and at which check.
+
+- No check of the verifier's reads the zeros. They are in `b.egress`, which the second stage does not read. They
+  cause neither an accept nor a refusal. [read]
+- The honest prover cannot answer on `main`. The replay runs each request to its own end and applies no abort
+  (`benchmarks/serve_tax/replay.py:196-221`). [read; run: `rg` finds no "abort" in the file] So it selects more
+  than k ids, and the replay side's reader refuses them: `interior_rows.py:221-224`, reached from
+  `two_stage.py:573` (`spans_of`). [read]
+- I ran that reader: 6 ids replayed against 3 served is a ValueError, "the replay selected 6 ids and serving
+  emitted 3, 3 of them different: it didn't reproduce the span". [run] That is the prover's own tool, before
+  anything is committed, and no check of the verifier's. The class then has no interior and no second stage.
+  [read]
+- A capture cut to the k ids served passes the reader. Its blocks from k up are copies of block k − 1, and its
+  padded output is the committed return row for row. [run: 3 units; `[5, 9, 11, 11, 11, 11, 11, 11]`, equal to
+  `id_rows`' rows]
+- No check of the verifier's reads how many ids a capture holds: the replay block has O instances whatever k is.
+  [derived] So up to the last refusal, `two-stage-form`, the audit accepts the row where the capture stops at the k
+  ids served. [derived]
+- This is not new with the first way. Today such a row is in a `-nostop` class, with the same replay. The first
+  way moves it into the tied class. [derived]
+
+#### B.2 The premise as we would state it
+
+The population: every row of a tied class, which is every release the certifier files in the class in an execution
+phase, whether it ended in an `END` or in a `FAIL`. [relayed for the filing]
+
+The premise:
+
+"For each row of a tied class, the compute audit holds the committed ids below the row's count to be the registered
+Program's outputs on the committed request. The count is the stop word's n on a row that ended in its `END`, and the
+certifier's `at` on a row that ended in a `FAIL`. From the count up it holds nothing, and on a `FAIL` row it cannot:
+the engine may have left the request before n, and the committed ids there are padding." [derived]
+
+Nothing in the tree holds it today, for any row and at any position (B.1; `response_tie.py:58`: "Nothing in the
+tree holds it today, for either kind of class"). [read]
+
+On vllm's wording.
+
+- It is right about the population. The docstring's "failed after the engine finished it"
+  (`response_tie.py:40`) becomes every `FAIL`. [read]
+- The claim a row is not wider. The tie's count on a `FAIL` row was `at` already, and the premise was always "the
+  committed ids below the count" (`response_tie.py:57`). [read] The ids from `at` up were never under it.
+- What is new is a constraint on the Definition still to be written: it cannot say "the block returns the row's n
+  ids". It has to read a count (B.3). [derived]
+
+Our guarantee over a class.
+
+- No bound is proved for the two-stage form yet. `FORM` is off for that reason: "a statement form the soundness
+  proof does not cover" (`second_stage.py:71-72`, `:91-92`). [read] What follows is about the bound the form is to
+  give.
+- A `FAIL` row is a member. The population is the class's spans as registered, and under the first way those are
+  all the filed rows. [read; relayed]
+- The bound is over proof blocks: at confidence 1 − δ, at most a share ε of the population's replay proof blocks
+  fail their check. [derived] It is not over positions of ids.
+- Of a `FAIL` row's ids from `at` up it says nothing about `b.egress`. Of the return it says each is the select
+  of a logits row, which on an honest row is the last served id again. [read; run]
+- Once the replay block is the Program, the blocks from k up compute the Program's next ids, and none equals a
+  committed zero. [derived] So the Definition has to keep those positions out of what it compares. Otherwise an
+  honest `FAIL` row has blocks that are wrong, and the class's ε counts them. [derived]
+
+#### B.3 The class's request Definition
+
+- Whose. `boundary_rows.py:63` calls the replay block "a stand-in until the class's request Definition lands".
+  [read] The layout takes its check from the adapter, and the adapter builds each served workload's circuit. [read]
+  The registry gives `adapters/vllm/` to vllm and `adapters/vllm/verity_vllm/program/` to circuits. [read] So it is
+  vllm's, on circuits' Program. [guess]
+- What it would have to say, for this premise. [derived]
+  - One replay block a row: from the row's committed request and prompt and the registered weights, the Program's
+    ids.
+  - A return held to `b.egress` itself, and no longer to a second value beside it.
+  - Held only below a count, and the count read from a value the audits hold: the stop record's `b.stop` on an
+    `END` row, and the certifier's end row on a `FAIL` row, as a certified input.
+  - So the compute audit's second stage would read one row of the certifier's head. That is a certified input, as
+    the release stamp is, and no import of the certifier.
+  - The other way is a count k that the server commits as advice, charged at log₂(T + 1) bits a `FAIL` row, with
+    the tie checking `at` at most k. That changes `ResponseTieStop`, which vllm's way says stays as it is.
+- Its size. The count's gate and the return's link: tens of lines of Definition, and 100 to 200 lines of adapter
+  and tests. [guess] The body is the served model's own steps for up to T ids. How much of that is written for a
+  served workload I did not read: not known from me, and it is vllm's and circuits' to say. I can read it by 21:00Z
+  if you want a figure from this lane.
+
+#### B.4 What I could not establish
+
+It is the list under "Not established" at the end, which is this entry's last section.
+
+### C. `tie_first` in `two_stage.py`
+
+#### C.1 What it would be
+
+Read against `stop_first` (`main` `two_stage.py:416-438`; B's head `:479-503`): a one-stage stream of the tie's
+block whose log starts with the class's boundary record and then its stop record, as the challenger logged them;
+the tie's record registered on it, with `previous` the stop record's digest; and the sample. [derived]
+
+The record it registers. [derived from `response_tie.py:6-15` and `boundary_stop.py:174-207`]
+
+- Its program: the class's `ResponseTieStop{O}`, one block a row. Its population: the head's count of rows in the
+  class.
+- Two reads of logged records, as output values: `egress` is the boundary record's `b.egress`, and `stop` is the
+  stop record's `b.stop`. R7's output form names a record of the log by its digest (`registration.py:88-93`).
+  [read] So the log has to hold both records.
+- The certifier's two tables: `end` reads the head's `end.i`, and `o1` is committed under the certifier's salts and
+  registered as a read of the head's `response.i` (`response_tie.py:12-15`). [read]
+- One-stage's registered values have three kinds of domain and no other (`served.py:17-28`). [read] A table under
+  the certifier's own domain is none of them.
+- The form that exists for it: a port of the record at the certifier's root and domain, the challenger's copy taken
+  from the head it checked. The ingress tie registers the certifier's cells that way (`tie_service.py:6-13`).
+  [read] So `end` and `o1` would be ports of the tie's record at the head's roots, and `o0` its one fresh port.
+  [derived]
+
+Which family and root it reads. There are two shapes.
+
+- (a) Under `All`. It reads no challenges. [run: 0 bytes at 1, 4 and 37 blocks] It needs no family, no place and no
+  session of the challenger's. The certifier's ingress tie samples this way (`tie_service.py:372`). [read] The
+  record's sampling design is `subset` at k = N, which reads as 1/1 (`Spot/Select.lean:186`). [read]
+- (b) At `rate:1/1`, as the stop sample can be run. It reads challenges though its sample is every block. [run: 82
+  bytes for one block, 136 for four] So it needs a family reserved when the window's session starts, and a place.
+
+What "the stop audit's session" can mean. Three things, and today's code has this to say of each.
+
+1. A session of the challenger's that is the stop audit's own. There is none. `stop_audit.py` opens no session. The
+   stop sample reads the family of its place in the window's one session, which `_first_all` opens on the window's
+   run for every class's two samples (B's head `two_stage.py:968-1082`; `main` `:889-903`). [read]
+2. The stop blocks' proof session (`stop_audit.py:207`). The tie cannot be in it: "each form is a circuit file and
+   a session of its own" (`response_tie.py:97`). [read]
+3. The stop stream. A stream has one check, and it refuses a record of another program (R2). [read] The tie's
+   stream can start from the stop stream's log, and that is the one sense in which it is "in" anything of the stop
+   audit's. [derived]
+
+What must be true for the cap network counts.
+
+- If the cap counts the challenger's sessions: a window has one for every class's first-stage sample and stop
+  sample (`two_stage.py:902`), and each class's second stage opens one of its own on the interior's run
+  (`two_stage.py:995-997`, `:1032-1033`). [read] The stop audit adds none. [read] So network's "one stop audit a
+  stop class" counts a session that is not there today. [derived]
+- The tie adds none under (a). [derived]
+- Under (b) it adds none only if its family is reserved when the window's session starts and that session is still
+  open when the tie registers. The tie cannot register before the head exists, and the head is signed an execution
+  phase after the one it covers (`connection_rows.py:66-67`). [read] The window's session starts and shuts down
+  inside one `first` command (B's head `two_stage.py:999`, `:1081`), and "a challenger opens a root once"
+  (`two_stage.py:997`). [read] So (b) adds none only if `first` runs after the head is signed and takes the head as
+  an input. [derived]
+- The other way under (b) is a session of the tie's own on a root of its own, as the second stage has. Then the tie
+  adds one a tied class. [derived]
+- If the cap counts proof sessions behind the ZK server: the tie adds one statement a tied class, and "the tie adds
+  none" is false. [derived]
+- Which of the two the cap counts I could not find in the tree.
+
+Whether the tie's record's window names a place.
+
+- `stop_record` builds its window as the boundary's items and `"population": "stop"`
+  (`boundary_stop.py:204`). [read] A tie record built the same way would say another `population`.
+- B's `window_place.of` raises on that (B's head `window_place.py:44-47`). [read] `Stream._placed` then holds the
+  sample to no family (B's head `service.py:2185-2196`), and `held_family` has no family to hold it to (B's head
+  `two_stage.py:299-304`). [read]
+- So as B stands, a tie's sample is not held by place. Under (a) that is right: it has no family. [derived]
+- Under (b) it needs a third kind of place. The formula has one number a class that no sample has: `blocks` 1 with
+  `stopped` 0, which `of` refuses today. [read] Giving that number to a tied class's tie blocks changes no place
+  that exists. [derived] It changes `window_place.py`, so the blob TWOLEG's difftest names, and `Spot/Place.lean`.
+
+What it needs from network before it can be written.
+
+1. The record's shape, and its builder, as `boundary_stop.stop_registration` and `stop_record` are for the stop
+   record: which ports are the head's, which class of the schedule a compute class (P, T) is, and the window's
+   items (the link and the execution phase). [derived]
+2. The checked head as an input of the command: the registration document, with the key and session
+   `connection_rows.check_registration` takes (`connection_rows.py:510`). [read]
+3. Its word on (a) or (b). [derived]
+4. vllm's adapter filing by execution phase in release order. Without it row j is not the head's row j. [relayed]
+
+The Definition is there: `ResponseTieStop`, with its circuit-check sidecar. [read]
+
+My reading is (a). [derived] Every tie block is proved at the only rate the row takes (`exfiltration.py:244`,
+`RATE = "1/1"`). [read] A sample that reads no challenges needs no family before the head exists, and it leaves the
+window's session and the cap alone.
+
+#### C.2 Its size, its files and its place in the order
+
+- Under (a): `tie_spec` and `tie_first` in `benchmarks/one_stage/two_stage.py`, about 60 lines with their
+  docstrings. [guess] The two stop functions are 40 lines (B's head `:462-503`). [read]
+- Its tests, in `benchmarks/one_stage/tests/test_two_stage_driver.py`: about 130 lines. [guess] The three tests of
+  the stop sample are 170 (B's head `:619-786`). [read] They build a stream, so they run on a node only.
+- The record's builder, if it is ours and not network's: about 40 lines and 60 of tests. [guess]
+- Under (b), add: `window_place.py`, about 10 lines and 3 rows of its test; `_first_all`, a third family a tied
+  class and the head as an input, about 40 lines and 60 of tests; and TWOLEG's `Spot/Place.lean` with its difftest.
+  [guess]
+- Its place: last of ours, after chain 2 (on `main`), the cards piece, B, #9699, #9458 and the record's three
+  fields. Each of those edits `two_stage.py`. [read] It cannot start before network's record shape, and its first
+  run needs network's T1. [relayed; derived]
+- Under (a) it rests on none of B's code. It only follows B in the file. [derived]
+
+#### C.3 Whether the compiled form needs anything
+
+- The compiled two-stage form needs nothing. The tie's record is a one-stage record. [derived]
+- The compiled one-stage run takes it as it is under (a). The rule `all` and R7's output form are in Lean
+  (`Spot/Select.lean:162`, `:186`; `Spot/Registration.lean:361-371`). [read] I did not run them on a record that
+  reads two logged records.
+- One Lean piece needs a case under (a): `across`, which `stop_audit.py:329` runs for its `cross-stream-order`
+  entry. It refuses a read that names no family (`Spot/RecordAcross.lean:112-122`, `NO_FAMILY`). [read] On
+  TWOLEG's branch, at `b57566318669`, it also refuses a later record whose window names no place when a family is
+  named (its `Spot/RecordAcross.lean:144-155`). [read]
+- So a tie's audit record that wants Lean's word that its `previous` is in the earlier log needs `across` to take
+  a record sampled under `all`: about 15 lines of Lean and 3 rows of its difftest. [guess] Without that the entry
+  is left out, or it is Python's and not of record. [derived]
+- Under (b): `Spot/Place.lean` takes the third kind in the same change as `window_place.py`. [derived]
+- So it is Python only, like B, under (a), but for that one case of `across`. [derived]
+
+### Branches
+
+- `cursor/proofs-stopdriver-family-ffc6` at `46811047714e`: unchanged, and nothing pushed to it. [run]
+- No code changed this turn. The scripts are one-off files outside the tree. [run]
+- B's carry, your 16:04Z word. FRAME's table names no carried commit and no new branch for B at 16:24Z: its 16:00Z
+  entry says the two free lines go with the join's job or after it. [read] So I move nothing. I end this turn as the
+  15:47Z order says and set no timer. On a resume I read FRAME's table first, and from 18:00Z with no row for B I
+  carry it on a node, as that word says. [derived]
+- TWOLEG's `origin/cursor/proofs-twoleg-family-ad71` moved to `b57566318669`, a merge of the join with `main` at
+  `053b8e50fe8a`. It still holds `window_place.py` as my blob `12a54e8f5073`, byte for byte. [run]
+
+### Not established
+
+- No stream and neither audit was run on a row the engine left early. What I ran are the pure Python pieces: the
+  rule's reference, the tie's reference, `captured`, `Span.padded`, `id_rows` and `egress_row`.
+- That the gates of `StopRule16_v1` and of `ResponseTieStop` give what their references give on these rows. I ran
+  the references, not circuit-check.
+- What the stream records for a first stage whose drawn span never gets an interior. I read that the prover's
+  tool refuses before anything is committed, and did not run the stream to its proof deadline.
+- Whether a replay can leave a request where the engine left it. I read that `replay.py` has no such step, and ran
+  nothing on an engine.
+- Whether a prover's cut capture is the only way past the reader, or whether the capture itself can be made at k
+  ids by an honest replay. The cut one I built by hand.
+- vllm's adapter change is unwritten. "The stop class holds the head's n releases in release order" is relayed.
+  Nothing in the tree lines a serve's window up with an execution phase, and no code I read orders spans by
+  release.
+- That the tie's registration refuses a class whose count is not the head's, more rows or fewer. I derived it
+  from R7's output form and did not run it.
+- Whether one record can register the certifier's two tables as its own ports beside two output values. The
+  ingress tie does the first and the stop record the second. Nothing does both, and I ran neither.
+- Which cap network counts sessions against. I found none in the tree by that description.
+- Whether 0 is a registered stop id of the served model. If it is, the word on a zero-padded row is (k + 1, 1).
+- What an untied class holds under the first way, and `ResponseTieNoStop`. I did not read further than the
+  docstring.
+- TERMGB's read of vllm's three asks. I have not seen it.
+- Every size in B.3 and C.2 is a guess. The request Definition's body I did not size at all.
+- Whether `content_rows.file` should also leave out a `FAIL` whose `at` is 1 or more and whose engine served no id.
+  An honest server has none, since `at` is at most k. I did not look for a server that is not honest there.
