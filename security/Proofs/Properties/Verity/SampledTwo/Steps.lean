@@ -17,7 +17,8 @@ accepts at the switch `form` (`accepted_steps`):
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
   run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`), and on two windows the
   first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
-  `interiorUnshown_roots`);
+  `interiorUnshown_roots`), and the stages' sessions are in order on one ledger (`stagesOrdered`, by
+  `accepted_ordered`, read by `orderReason_none` and `Ordered.stagesOrdered_order`);
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -80,7 +81,9 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
       sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
-      OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out } = .accept pub prof := by
+      ∃ law, secondLawOf p run = .ok law ∧
+        secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } =
+          .accept pub prof := by
   unfold checkBlobsAtWith at h
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
@@ -95,9 +98,43 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     obtain ⟨run', hr, hp⟩ := bind_ok hp
     obtain ⟨u, hs, hp⟩ := bind_ok hp
     obtain ⟨u', hu, hp⟩ := bind_ok hp
+    obtain ⟨u'', -, hp⟩ := bind_ok hp
+    obtain ⟨law, hl, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
-    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
+    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, law, hl, htwo⟩
+
+/-- **An accepted two-stage check found the stages' sessions in order** (`stagesOrdered`). -/
+theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stagesOrdered p e = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨u, ho, -⟩ := bind_ok hp
+    cases u
+    exact ho
+
+/-- **The stages' order holds** where `orderReason` finds no fault: the first stage's session has an end line, the
+second stage's a reserve line, and the end's `seq` is below the reserve's. -/
+theorem orderReason_none {ended reserve : Option Spot.Challenger.LedgerEntry} (h : orderReason ended reserve = none) :
+    ∃ en r, ended = some en ∧ reserve = some r ∧ en.seq < r.seq := by
+  cases ended with
+  | none => simp [orderReason] at h
+  | some en =>
+    cases reserve with
+    | none => simp [orderReason] at h
+    | some r =>
+      by_cases hlt : en.seq < r.seq
+      · exact ⟨en, r, rfl, rfl, hlt⟩
+      · simp [orderReason, hlt] at h
 
 /-- **Neither stage's bytes run past one coin's**, where `stagesFit` passed. -/
 theorem stagesFit_le {ξ ξ₂ : ByteArray} {u : Unit} (h : stagesFit ξ ξ₂ = .ok u) :
