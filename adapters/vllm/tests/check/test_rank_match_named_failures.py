@@ -199,7 +199,9 @@ NO_MAPPING = [["pass"], "PASS", 1, True, [], "", 0]
 OTHER_TYPES = [   # (what the record states in place of a count or of its list of mismatches, the error the check raises)
     ({"collectives_checked": "two"}, ValueError), ({"collectives_checked": [2]}, TypeError),
     ({"fused_norm_unfused_left_to_commit": "none"}, ValueError), ({"tensors_digested": "eight"}, ValueError),
-    ({"pass": False, "mismatches": {"step": 0}}, KeyError), ({"pass": False, "mismatches": 3}, TypeError),
+    ({"pass": False, "mismatches": {"step": 0}}, KeyError), ({"pass": False, "mismatches": 3}, TypeError), ({"mismatches": 3}, TypeError),
+    ({"digest_mismatches": {"rank": 1}}, KeyError), ({"digest_mismatches": 3}, TypeError),
+    ({"n_mismatches": "many"}, ValueError), ({"n_digest_mismatches": "many"}, ValueError),
 ]
 
 
@@ -220,6 +222,15 @@ def test_a_provenance_whose_counts_are_no_numbers_or_whose_mismatches_are_no_lis
         RM.cross_rank_check(colls, recorder=recorder, provenance={**BOUND, **stated}, recorder_sha256=DIGESTS)
     as_text = dict(BOUND, collectives_checked="2", tensors_digested="8")
     assert RM.cross_rank_check(colls, recorder=recorder, provenance=as_text, recorder_sha256=DIGESTS)["verdict"] == "PASS"
+
+
+def test_a_passing_provenance_whose_mismatches_are_a_mapping_passes_and_its_digest_mismatches_fail_by_their_count():
+    """Today's answer, held and not judged: the list of mismatches is read only for its length and its first item."""
+    colls, recorder = _world()
+    listed = dict(BOUND, mismatches={"step": 0})
+    assert RM.cross_rank_check(colls, recorder=recorder, provenance=listed, recorder_sha256=DIGESTS)["verdict"] == "PASS"
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=dict(BOUND, digest_mismatches=[{"rank": 1, "k": 0}]), recorder_sha256=DIGESTS)
+    _only(res, "provenance", '1 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}')
 
 
 def test_an_empty_provenance_record_fails_by_name_on_everything_it_does_not_state():
