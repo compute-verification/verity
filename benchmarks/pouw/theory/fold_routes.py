@@ -37,6 +37,7 @@ import itertools
 import random
 import struct
 import sys
+from collections.abc import Sequence
 
 from exact_kit.checks import Checks
 
@@ -153,7 +154,8 @@ def _is_lop3(target, pool, must: str | None = None) -> str | None:
     return None
 
 
-def single(target, pool, only: set[str] | None = None, must: str | None = None) -> str | None:
+def single(target: Sequence[int], pool: dict[str, Sequence[int]], only: set[str] | None = None,
+           must: str | None = None) -> str | None:
     """The first modelled instruction that computes `target` (over the pool's test vectors) from pool operands, or None.
     `only` restricts to those templates (and skips LOP3); `must` to instructions reading that operand."""
     if only is None:
@@ -174,7 +176,7 @@ def single(target, pool, only: set[str] | None = None, must: str | None = None) 
     return None
 
 
-def two(target, pool) -> str | None:
+def two(target: Sequence[int], pool: dict[str, Sequence[int]]) -> str | None:
     """A two-instruction program for `target`: some single instruction v1 over the pool, then one over pool + v1 that
     reads v1. An existence search: the XOR-family LOP3 firsts go first, since a fold step's first instruction is its
     XOR."""
