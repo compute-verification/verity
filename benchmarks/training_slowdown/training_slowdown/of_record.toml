@@ -579,3 +579,19 @@ shapes = [[]]
 count = 8
 macs = 8
 why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
+
+[held."s-t20-1.1x-dgrad-q4muon-full"]
+run = "r20261104-061509-8e1d"
+art = "art:9cb1abc76bc6216a1a4ad5dd73ca499ad1a25483b77f2db096fdaad7020a90fe"
+path = "out/run/run.json"
+sha256 = "000af157ea8ec83a03fe8d4386588e9163a303118398779ea95b976295d3728a"
+partial = "none"
+
+[[held."s-t20-1.1x-dgrad-q4muon-full".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "div"
+shapes = [[]]
+count = 16
+macs = 16
+why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
