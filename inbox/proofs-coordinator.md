@@ -132965,3 +132965,100 @@ Clock: `date -u` read 09:35Z. Mailbox: your 09:23Z, by the hook.
 **Pushed.** `cursor/proofs-honest2-7c4e` at `49ae9b11014b613319d2c2210f8b8412eb1052bf` (written, not compiled; the last compiled head is `0faf5b2084`, which the join holds). Unpushed: the merge `d0faa0604e` alone. Run out: `r20261113-093020-f9e0`, one.
 
 **To post.** Nothing.
+
+## HELDOF, Fri 13 Nov 09:38Z: `descOk` is TRUE on a WIRED play of 2 templates (`be6b`, 8.7 s) and refuses both made cases at their own clause; the FORM REFUSES that play (a session), so its call stays out; `heldOfAt_of_desc` is STATED at `68dc23428a` with TWO premises, not one (not compiled); the unit's bound is NOT `Spot.Partition`'s count (STOP RULE); `b1b3`'s kept case is `art:c4f55898833347255b48a0031526c10391ba9d3ff2f108726bdd23adfbc71135`
+
+In plain words: the descriptor check now passes a play whose templates are wired to one another, in seconds, and still refuses the two cases made to fail. The form itself refuses that play before its run of record, at two templates as it did at twenty, so by your rule the call does not go in. The theorem you asked for is written; it needs a second premise that no check can give, and I say why below before compiling it.
+
+**1. The wired plays (your item 2).**
+- [run] `r20261113-091629-be6b`, vy-nebius-cpu-9, scratch `828e59d30d` (the work head `b1afc9fffa`, GATHER's `984cb027efa3`, my two scratch lines), `--inline --units 2 --v 256 --logits`, rc 1, the form's. Word for word:
+  - `second rc=0`
+  - `FORM_ON rc=1`, reason `two-stage: proofs: a session's verifier did not accept`; `FORM_OFF rc=1`, the same reason.
+  - `DESC rc=0`
+  - `the form refuses the play before its run of record (proofs: a session's verifier did not accept); the descriptor check reads no session`
+  - `play: descOk true on 2 templates`
+  - `play: descOk took 8711 ms`
+  - `play: descOk true, pass`
+  - `play: clauses that fail: none`
+  - `template 0: unitLog 15, upv 1, inWords 16, constPos 17152, unitIns 2048, outBits 48, bound 262144, memberOk true, requests 6, cells 4, count 1, units 24` (`GreedyChunk_v2{N=128,OFF=0}`)
+  - `template 1: unitLog 15, upv 1, inWords 32, constPos 19328, unitIns 4096, outBits 32, bound 262144, memberOk true, requests 6, cells 4, count 1, units 24` (`GreedyCombine_v2{V=256,N=128}`, the wired one)
+  - `play with template 1 named as template 0: descOk false, refused at namesOnce`
+  - `play with its interior registering a value: descOk false, refused at registersNone`
+- [run] `r20261113-091548-6cc3`, the same tree at 20 templates (`--units 20 --v 2560`): `second rc=0`; `FORM_ON rc=1` and `FORM_OFF rc=1`, the same reason; `sampled-two-desc` has run 4 minutes with no line yet. Its verdict goes in my next title.
+- **Which clauses fail on the wired play: none.**
+- **Does the model's `wiringOk` say the same: yes, by theorem, in one direction** [derived]. `heldOkDesc_of_descOk` gives `decided` at the copies `heldOf` builds, and `decided` holds `wiringOk`. It compiled again after the change below. That the model's check passing gives `descOk` is not proved and nothing reads it.
+- **Can TWOLEG's call to `descOk` go in: no.** The play is not an accepted play: the form refuses a session of it, as it does at 20 templates (`b1b3`, `23d2`, `6cc3`). With TWOLEG's one-template play accepted (`3f1b`), the refusal starts at the first wired template [derived from those plays; why is TWOLEG's].
+- **A smaller case for TWOLEG:** `be6b`'s `out/form` has two circuit blobs where `b1b3`'s has twenty. It is on vy-nebius-cpu-9 at `/workspace/research/runs/r20261113-091629-be6b/out/form` until the node evicts it, about 10:05Z [guess]; its `art:` id goes in my next title.
+- **Why `23d2` gave no verdict.** I cancelled it at 09:14Z: `sampled-two-desc` had run 18 minutes at one full core with no line. [read] `circAt` parsed every template's circuit file again at each call, so twenty templates cost four hundred parses and one more for each wired source bit. That broke the verifier-cost rule. Now `descOk` reads the templates' circuits once (`circsOf`), a parse a template whatever the count of reads (`b1afc9fffa`), and the executable prints the check's verdict and time before anything else.
+  - Not measured yet: that this makes 20 templates fast. At 2 templates the check takes 8.7 s; the form's own check takes 15 s there and 184 s at 20 [run: the files' times].
+  - [run] `HeldOfDesc.lean` at `b1afc9fffa`: "lean exit 0 in 102 s", "none of its 46 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", no sibling clash. The root `VStarRecursive.lean`: "lean exit 0 in 7 s".
+
+**2. `heldOfAt_of_desc`: the statement (your item 1), at `68dc23428a`, not compiled.**
+
+```lean
+def DescAt (C : CaseOf) : Prop :=
+  ∀ o k p c e i it, FormAccepts C o → C o = some k → Decoded k p c e → inputOn C o = some i → i.interior = some it →
+    VStar.Recursive.SampledTwoDesc.descOk p k.blobs i it = true
+
+def CopyAt (A : Live₂) (C : CaseOf) (u₀ : Unread) : Prop :=
+  ∀ o k p c e i it xs h, FormAccepts C o → C o = some k → Decoded k p c e → inputOn C o = some i →
+    i.interior = some it → refStmtsOf p k.blobs = some xs → heldOf i it { u₀ with xs } = some h → h = A.h
+
+theorem heldOfAt_of_desc {A : Live₂} {C : CaseOf} (u₀ : Unread) (hd : DescAt C) (hc : CopyAt A C u₀) :
+    ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → ∃ u, heldOf i it u = some A.h
+
+theorem heldOf_of_descOk (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it = true) :
+    ∃ xs h, refStmtsOf p bs = some xs ∧ heldOf i it { u₀ with xs } = some h
+```
+
+- **The shape.** The conclusion is `HeldOfAt A C`'s body, word for word, for any `C`. At `atStmt C x` it is `HeldOfAt A (atStmt C x)`, as ACCEPTS's 07:27Z entry says a proof for a general `C` serves. My branch has neither `AcceptsTop.lean` nor `AtStmt.lean`, and I merged nothing to get them. [guess] `exact heldOfAt_of_desc u₀ hd hc` closes the join's goal as it stands.
+- **It takes two premises. `descOk` cannot be the only one.**
+  - `DescAt` is your premise: every accepted play passes `descOk`. Once the form calls the check, the form's accept gives it.
+  - `CopyAt` is the second. `HeldOfAt` asks for one `A.h` at every accepted play. `descOk` gives that `heldOf` builds a copy at each play (`heldOf_of_descOk`, which reads no accept). It cannot say the copy is `A.h`.
+  - [read] Which copy `heldOf` builds rests on three things the play carries: its parameters, its boundary record (the population and the links) and the reference statements on its blobs. The blobs are the prover's: `CaseIsSent` has `k.blobs = Blobs.ofArray o.sent.blobs`.
+- **What each part of `CopyAt` waits on** [derived, none written]:
+  - The record: at `atStmt C x`, ACCEPTS's `inputOn_at` with `recordsRead` gives one record.
+  - The parameters: the join's choice of `C` (ACCEPTS's 07:27Z, "this is the join's choice of `C`").
+  - The reference statements: two plays whose blobs differ under one digest build two copies. So this part is a SHA-512 collision, or a named premise. No field of `JoinsAt` states it today.
+  - That `A.h` is the copy built from those three: the join's choice of `A`.
+- **My proposal.** I reduce `CopyAt A (atStmt C x) u₀` to those parts: `heldOf` reads the input through seven fields (a congruence lemma), the form's `inputAt` builds them from the parameters and the record, and the reference statements stay one named premise. That needs `AtStmt.lean` and `recordsRead` in my tree (NEEDS 2).
+
+## STOP RULE: the unit's bound is NOT the count `Spot.Partition` refuses on (your item 5) [read]
+- `Spot.Partition.checkTemplates` refuses on `templateBits`: the summed widths of the distinct gates of an instance's activation that it returns. It counts no input: the registered program keeps Input gates in the root's body.
+- `memberOk`, and `MemberFits` and `partitions_keyProg` behind it, bound `unitIns c + outBits c`: the unit's input bits and 16 bits for each output leaf it returns. In the model's member program each unit's block holds its own Input gates, and a block commits its inputs (`Prog.Boundary`).
+- So `descOk` is stricter by the unit's input bits: 2,096 against 48 and 4,128 against 32 on `be6b`. It refuses a template whose unit reads more than 262,144 less its output bits, which `Spot.Partition` accepts.
+- [derived] Nothing unsound follows: the model's partition theorem takes exactly this bound (`partitions_keyProg`'s `hw`), and the check decides it. What can go wrong is an honest registration with a wide-input unit, refused.
+- The output halves are not compared either: `outBits` counts the member circuit's output leaves at 16 bits, `templateBits` the registered Definition's return widths.
+- **I change nothing in the bound until you rule.**
+
+**3. ADDRROW2's question (your 09:23Z): "every unit the first stage proves is below the population".**
+- **Proved nowhere** [read]. `select_ok` and `Cap.select_proved` say which units `select` proves, `RunsAs.proved_select` that they are the draw's, and `Discharge.Layout.proved_lt_population` bounds a parsed draw by the population it states itself. None bounds `Select.select`'s units by `Partition.units`.
+- **It follows from `select`'s definition, in about sixty lines, and I take it** after `heldOfAt_of_desc` compiles [derived, not written]. `select` returns only where `Draw.checkDraw` has no code, and `checkDraw_nil` gives `Drawn`: the units strictly ascending, the first at least 0, the last below the population, the closure the same. Under `popOk p query n`, `Partition.units p query` is `n` by the steps of `units_of_popMatches` (`Sampled/Record/Reg.lean`). Then `block_of_popOk` gives the slot. It goes in `HeldOfRun.lean` as `SampleSlots` at a copy `heldOf` builds for an accepted run.
+- **`descOk` should not decide `SampleSlots`.** It speaks of every challenge's sample, so no check can enumerate it, and it holds at every registration that passes the run's population check. I change nothing in `descOk` for it.
+
+**4. The covering tries at `206efc8e5d`, and the root tests.**
+- [run] Four of five exit 0: `SpotFirstHit` (288 s), `AddressesHeld` (500 s, 4 theorems clean), `WiredRegX` (126 s, 4 clean), `Claim` (367 s, 3 clean).
+- [run] `SampledTwo/DevAgrees.lean` exits 1 at my head (`r20261113-090902-b215`): 3 of its 8 theorems fail, `take_flatMap`, `lt_of_mem_take_finRange`, `coinByte_of_elems`. [read] My head holds the copy from before TWOLEG's `c0216f674d` ("build on this toolchain"), which the join has. I change nothing in it; the join's copy stands.
+- [run] Three root tests fail at my head. They name `RunsAs/Steps.lean`, `RunsAs/Proved.lean` and `OwnReads.lean`, none of mine.
+
+**5. The kept cases (your item 3).**
+- `b1b3`'s `out/form` was evicted from vy-nebius-cpu-8 at 09:16:07Z and is stored: `art:c4f55898833347255b48a0031526c10391ba9d3ff2f108726bdd23adfbc71135` (26 files, 1,172,521,927 bytes). Restore: `research data fetch art:c4f55898833347255b48a0031526c10391ba9d3ff2f108726bdd23adfbc71135 --to /workspace/research/runs/r20261113-082445-b1b3`.
+- GATHER's mend of `a5.audit` and the lock (your items 3 and 4): read. My one line stays the stand-in, on the scratch branch only, and I run no records.
+
+## NEEDS
+1. A ruling on the bound (STOP RULE above).
+2. Whether `heldOfAt_of_desc` is taken with `CopyAt` as its second premise, and whether I reduce `CopyAt`. The reduction needs ACCEPTS's `82c77292dd` merged into my branch, which carries `main` up to `8ef93f0196` (02:34Z), past my base. Your 07:22Z says no merge of `main`, so I ask first.
+
+## To post
+- To TWOLEG: the two-template case at `r20261113-091629-be6b/out/form` on vy-nebius-cpu-9.
+
+## Not established
+- That `68dc23428a` compiles: tries of `HeldOfAtDesc.lean` and `HeldOfDesc.lean` are out.
+- `CopyAt` at any case map, in any of its parts.
+- `descOk`'s verdict on an accepted wired play: there is none yet.
+- Why the form refuses a session once a template is wired.
+- `SampleSlots`: not written.
+
+## Branches
+- `cursor/proofs-heldof-4c7b` at `68dc23428a`; compiled up to `b1afc9fffa`. No pull request: it lands through the join.
+- Scratch, runs only: `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d`.
