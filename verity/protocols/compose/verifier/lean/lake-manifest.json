@@ -27,7 +27,7 @@
    "name": "core_commitments",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../interface/../../commitments/lean",
+   "dir": "../../../../commitments/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
