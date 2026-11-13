@@ -22,8 +22,9 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 #: `value_inputs`' word views of the norms and scalar rows with their f32 word an input, and `tables`' `tanh_rn` region
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+#: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,
+#: which holds the kernels and the private circuits too
+CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
@@ -88,3 +89,13 @@ def test_the_boundary_names_a_foreign_import():
     assert _foreign(f"{REGISTRY}.gemm_targets", ("GemmTarget",)) == [f"{REGISTRY}.gemm_targets"]
     assert _foreign("torch", ()) == ["torch"]
     assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.circuits.defs", ("bind",)) == []
+
+
+@pytest.mark.parametrize("mod", ["verity.circuits.ops", "verity.circuits.ops.prims", "verity.circuits.silicon", "verity.circuits.targets.target"])
+def test_the_catalog_is_let_through(mod):
+    assert _foreign(mod, ()) == []
+
+
+@pytest.mark.parametrize("mod", ["verity.circuits.kernels", "verity.circuits.kernels.tc", "verity.circuits.private_circuits.universal"])
+def test_the_kernels_and_the_private_circuits_are_not_the_catalog(mod):
+    assert _foreign(mod, ()) == [mod]
