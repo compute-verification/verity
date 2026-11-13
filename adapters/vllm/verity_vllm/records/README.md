@@ -1,7 +1,7 @@
 # verity_vllm.records
 
-The records one stage writes and another reads, typed: one dataclass a record kind, whose `load` refuses a missing
-field by name. The package's docstring lists the record kinds.
+The records one stage writes and another reads, typed: one dataclass a record kind, whose `of` reads the parsed JSON
+and refuses a missing field by name. The package's docstring lists the record kinds.
 
 ## Interface
 

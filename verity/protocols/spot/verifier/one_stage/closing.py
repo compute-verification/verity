@@ -71,11 +71,11 @@ def session_files(session: Path) -> tuple[Path, list[Path]]:
     return session / "session.json", sorted(session.glob("*.bin"), key=lambda f: f.name)
 
 
-def closing_after(session: Path) -> bytes:
-    """What the session in the directory `session` is closed after: the SHA-512 of its evidence (`session_evidence` of
-    its `session_files`), the files read in chunks. Raises `ValueError` (`EVIDENCE_FITS`) as `session_evidence` does."""
-    record, reps = session_files(session)
-    sized = [(None, record), *((f.name.encode(), f) for f in reps)]
+def files_digest(record: Path, reps: Sequence[tuple[str, Path]]) -> bytes:
+    """The SHA-512 of the evidence (`session_evidence`) of a session whose record is the file `record` and whose proof
+    files are `reps`, each its name and its file, in the order given; the files read in chunks. Raises `ValueError`
+    (`EVIDENCE_FITS`) as `session_evidence` does."""
+    sized = [(None, record), *((name.encode(), f) for name, f in reps)]
     count = 1 + 2 * len(reps)
     if count >= WORD or any(f.stat().st_size >= WORD or (name is not None and len(name) >= WORD) for name, f in sized):
         raise ValueError(EVIDENCE_FITS)
@@ -95,4 +95,12 @@ def closing_after(session: Path) -> bytes:
     return h.digest()
 
 
-__all__ = ["EVIDENCE_FITS", "closing_after", "evidence_bytes", "evidence_parts", "session_evidence", "session_files"]
+def closing_after(session: Path) -> bytes:
+    """What the session in the directory `session` is closed after: the SHA-512 of its evidence (`files_digest` of its
+    `session_files`)."""
+    record, reps = session_files(session)
+    return files_digest(record, [(f.name, f) for f in reps])
+
+
+__all__ = ["EVIDENCE_FITS", "closing_after", "evidence_bytes", "evidence_parts", "files_digest", "session_evidence",
+           "session_files"]

@@ -4,17 +4,11 @@ claims."""
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import gates as G
 import numpy as np
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import gates as G  # noqa: E402
-import renorm as R  # noqa: E402
+import renorm as R
 
 
 def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():
@@ -51,7 +45,7 @@ def test_every_square_is_its_column_sums_plus_the_carry_lattice(B, L):
     F = R.Field.toy(B, L)
     assert F.p % 4 == 3 and R.is_prime(F.p) and not any(R.is_prime(q) and q % 4 == 3 for q in range(F.p + 1, B ** L))
     T = R.table(F)
-    pw = np.array([B ** l for l in range(L)], dtype=np.int64)
+    pw = np.array([B ** ell for ell in range(L)], dtype=np.int64)
     a = np.arange(F.p, dtype=np.int64)
     assert (T.y @ pw == a * a % F.p).all() and (T.digits @ pw == a).all()
     rebuilt = T.s.copy()
@@ -115,7 +109,7 @@ def test_p1024_small_digit_families_need_no_budgeted_gate():
     rnd = random.Random(5)
     for _ in range(25):
         digits = [rnd.randint(0, m) for m in [2] * 63 + [1] + [0] * 64]
-        a = sum(x << (8 * l) for l, x in enumerate(digits))
+        a = sum(x << (8 * ell) for ell, x in enumerate(digits))
         assert list((a * a % R.P1024).to_bytes(128, "little")) == R.p1024_column_sums(digits)
     assert R.is_prime(R.P1024) and R.P1024 % 4 == 3
 
@@ -132,7 +126,7 @@ def test_a_27_byte_field_has_an_exact_family_with_no_budgeted_gate_past_the_form
     rnd = random.Random(27)
     for _ in range(25):
         digits = [rnd.randint(0, m) for m in D]
-        a = sum(x << (8 * l) for l, x in enumerate(digits))
+        a = sum(x << (8 * ell) for ell, x in enumerate(digits))
         assert list((a * a % F.p).to_bytes(27, "little")) == R.p1024_column_sums(digits, 27, F.delta)
 
 
@@ -142,5 +136,5 @@ def test_p1024_carries_rebuild_the_square():
     A = [rnd.randrange(R.P1024) for _ in range(8)]
     for i, a in enumerate(A):
         s = R.p1024_column_sums(list(a.to_bytes(128, "little")))
-        y = [s[l] + (105 * c[i, 127] if l == 0 else c[i, l - 1]) - 256 * c[i, l] for l in range(128)]
+        y = [s[ell] + (105 * c[i, 127] if ell == 0 else c[i, ell - 1]) - 256 * c[i, ell] for ell in range(128)]
         assert y == list((a * a % R.P1024).to_bytes(128, "little"))
