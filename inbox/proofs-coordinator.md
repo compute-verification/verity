@@ -158069,3 +158069,25 @@ This entry restates nothing. Nothing is committed on top of `5961fa466d1e`, noth
 ### Next
 
 The suites' line. Then I wait for your word on three things: the merge of #9520's new head (it changes no file, my 18:49Z point 4), the regenerated `security/Properties` record, and the pull request.
+
+## REDRAW, Fri 13 Nov 19:34Z: ready to mark #9717 at 3e1103ded562ad68a1e8c2286491c82b7c314782, stacked on #9555
+
+The hold to 19:27Z ended with no word in my mailbox, so I stacked it as you ordered at 19:01Z.
+
+1. **Ready to mark #9717 at `3e1103ded562ad68a1e8c2286491c82b7c314782`.** [git] It is a merge of two parents: `890a84bf6067caadc9dbdf7bcc87b05cb76a294b`, #9717's head until now, and `38e1ad9938f699d92a3c8cea6d5dc990821c2e24`, #9555's marked head. Pushed at 19:27Z as a fast-forward of `cursor/proofs-honest-draw-5b2f`.
+2. **The merge changes no file, and nothing was settled by hand.** [git] Its tree is `91e539717b9b59e7999b10c52ac0ba87c882941a`, the tree of `890a84bf6067`. `git merge` printed the driver's lines on `ChallengerCoins.lean` and `Coins.lean` and the three lock lines, then "Merge made by the 'ort' strategy", exit 0. No statement of either pull request changed.
+3. **The records run with `--update` at the new head passes and writes nothing.** [run] `r20261113-192836-71e2` on vy-nebius-cpu-8: `HEAD_AT 3e1103ded562…`; "reused, nothing built: its records passed on the same Lean inputs in r20261113-165128-71b3 at ec2749859711" for `security/Proofs`, `security` and `security/Properties`; `lean-records: OUTCOME {"outcome": "pass", "package": "security/Proofs", "passes": {}, …}`; `RECORDS_EXIT 0 at 3s`. The run has no `lean-audit/` among its outputs, so there is nothing to commit. It is the same reuse as at `890a84bf6067`: nothing was built or replayed at this head.
+4. **No suite reads a change.** [run] In the same run, `suites.py --changed 890a84bf6067 --quick` says "the change from 890a84bf6067 touches 0: none".
+5. **The body says it is stacked on #9555 and lands after it.** [read] Read back from GitHub: head `3e1103ded562…`, open, not a draft. I also rewrote its stale Checks to the carried branch: the records run and 72 suites at `ec2749859711`, the reused pass and 10 suites at `890a84bf6067`, the reused pass at the head. The old "66 suites, 65 pass" and the old test path are gone.
+6. **The queue's merge of the new head is clean, and the driver now prints nothing.** [git] With the queue's own `git --attr-source=BASE merge-tree --write-tree --name-only --no-messages` at `main` `f479876a8758`: #9555 onto `main` exits 0; #9717's new head onto that exits 0 with no conflicted file and an empty stderr, tree `6b63714fb537`. #9555's head is now an ancestor of #9717's, so the pair has one merge base.
+
+### Not established
+
+- Whether your `git merge-tree` of the two old heads exited 1. Mine exited 0 (my 19:17Z entry), and I have not seen your command line.
+- Nothing at the new head was built: items 3 and 4 rest on the reuse of `71b3`'s passes at `ec2749859711` and of the 10 suites at `890a84bf6067`.
+
+### State
+
+- #9795: its records run `r20261113-190838-cc57` on vy-nebius-cpu-7 holds a Lean slot since 19:14Z and is building. The ready line follows when it is back.
+- #9728's names: mended locally as one commit over `ca0ae1a5b314`, not pushed yet. `Steps.lean` elaborates on vy-nebius-cpu-8 (`r20261113-191926-986e`, lean exit 0 in 115 s, 20 theorems, no axiom beyond the three). `Withheld.lean`'s try is building its imports. One thing you did not list: `sessionOf`, now `challengePhaseOf`, is a third old name in both files. The entry with the head follows.
+- The names run `r20261113-182631-21be` holds a Lean slot since 19:23Z. The table keeps Sat 14 Nov 18:00Z.
