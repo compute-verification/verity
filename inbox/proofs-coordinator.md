@@ -148354,3 +148354,242 @@ Clock: `date -u` read 15:21Z.
 ## MEMBERS, Fri 13 Nov 15:22Z: (a) relaunched once, timing first; nothing concluded yet
 
 One line, as ordered for (a)'s end, because its first run ended by my own cancel. [run] `r20261113-144844-74bf` (vy-nebius-cpu-6, 14:48Z, `--mem-gb 30`, read-only) parsed Thursday's parameters in the per-member form with Thursday's own key (W = 1, H = 20, found in what the audit kept) and gave every one of the 820,193 roots to exactly one of the 102,781 members; then its population check (`popHeld`) ran 12 minutes without ending, ahead of the timing of t, and would have outlasted the run's 60-minute limit. I cancelled it by its id at 15:21Z and relaunched the same job with the timing first and the population check last: [run] `r20261113-152216-f68f`, same node, same `--mem-gb 30`, same read-only reads, limit 90 minutes, so it ends by 16:52Z at the latest, before 17:30Z. The two runs did not overlap. Peak of the first: 11.2 GB. The entry at 15:45Z has the rest.
+
+## STOPDRIVER, Fri 13 Nov 15:23Z: three reads and the cards piece: no count in the record; three fields; the key
+
+By reading, as ordered: no run for any of it but `git merge-tree`, which writes nothing. Lines are `main`
+`053b8e50fe8a` unless a commit is named.
+
+### In short
+
+1. **The count is not in the verdict record.** [read] Its `rate` is K of N in lowest terms, so N cannot be
+   read back. N is the stop record's `population`, which the verdict record names by digest and does not copy.
+   It is the class's count of spans. One line would add it.
+2. **The three fields, with the key's hash in place of a word:** about 32 lines and 70 of tests, all mine,
+   under `benchmarks/one_stage/`. [derived] A pull request of its own, after B. Not in B.
+3. **The one-stage command and the key.** It takes the key from its caller when it runs against the
+   auditor's device. [read] Its checks then read the key out of evidence the same process wrote. [read] v1's
+   compiled check, the one run on Thursday's case, was handed no challenger and read no challenges. [read, and
+   relayed for what Thursday wrote]
+4. **B and the cards piece do not conflict as text.** [run] Once the cards piece's tree is on `main`, four
+   calls in one test need a source of the class's family, one line each. [run] The order you gave stands:
+   chain 2, the cards piece, B, then #9699 and #9458.
+
+### Words
+
+- The **verdict record** is one line of `verdicts.jsonl`, written by `verdict_record.py` from a command's
+  `summary.json`.
+- A **span** is a request that finished in the window. A **class** is the spans of one prompt size and one
+  output size. A stop class's **stop blocks** are one block a span, registered by the **stop record**.
+- The **evidence** of a sample's challenges is the object `{key, ledger, main, pins, segment, session}`.
+- The **key record** is the file the deployment publishes for the challenger's key (`challenger-key/v1`).
+- **v1** is `Spot.OneStage`, whose case is `case.json`. **v2** is `Spot.OneStageZk`, whose case is
+  `case-v2.json`. The **per-member form** is v2's case for a window of several members.
+- The **gate** is the service on the auditor's device that runs the challenger.
+- Each of these is as the code has it. [read]
+
+### 1. Network's question: is the count already in the record? No.
+
+- [read] A verdict record has 13 fields (`verdict_record.py` 205 to 208). None is a count.
+- [read] Its `rate` is "K of the N proof blocks its registration record registers, written NUM/DEN in lowest
+  terms" (28 to 30). The function divides both by their greatest common divisor (96 to 97). [derived] So 2 of
+  8 reads `1/4`, and so does 1 of 4. N cannot be read back from it.
+- [read] The harness's reader holds a record's `rate` to lowest terms (`exfiltration.py` 626) and a held
+  class's to `1/1` (244, 725). [derived] So the rate cannot simply be written unreduced.
+- **Where N is stated.** [read] In the stop record, field `population` (`registration.py` 182). The verdict
+  record names that record by its digest, `stream_registration`, and does not copy it. The registration check
+  holds the record's `population` to the verifier's own count (R2, `registration.py` 346 to 351).
+- [read] The stop audit's own files state it twice: `summary.json`'s `spans` (`stop_audit.py` 464) and
+  `sample.json`'s `population` (215). The writer reads the summary and copies neither.
+- **What N counts.** [read] The class's count of spans, and nothing else. The stop population is one stop
+  block a span (`boundary_rows.py` 382 to 391), and a window's spans are "the requests that finished in it"
+  (5 to 8). Each span has one row of `b.stop`. [derived] So N is also the class's count of `b.stop` rows.
+- [read] On the other piece, the second stage, the record that registers the rate is the class's boundary
+  record, and its `population` is the same count of spans (`boundary_rows.py` 370 to 375). The writer's own
+  test says so (`test_verdict_record.py` 255).
+- **The one line that would.** [derived] In `verdict_record.record`, beside `rate`:
+  `"population": registered["population"]`. With it a reader has N, and K as N times the rate. It is one line
+  of code, one of the docstring and about 6 of a test.
+- [read] The harness's reader refuses a record that lacks a field and never one that has one more
+  (`exfiltration.py` 586). It keeps the fields it lists and drops the rest (615, 630). [derived] So the new
+  field breaks nothing there, and the harness reads it only once its list names it.
+- [derived] So network's "then there is no new field" does not hold: it is one new field, or the reader is
+  handed the stop record itself.
+
+### 2. The three fields, sized again
+
+The fields are the root the session opened on, the session's id, and the SHA-512 of the challenger's key the
+evidence was checked under. The third replaces the word (`gate` or `local`) I sized at 11:43Z.
+
+**Where each is today.** [read]
+
+- The first stage's root: the boundary record's `window.run`, and the hand-off's `window_root`
+  (`two_stage.py` 929).
+- The first stage's session's id: the hand-off's `session.plan.session` (`two_stage.py` 969, `a5_coins.py`
+  797).
+- The second stage's root: its summary's `second_stage.window_root` (1049), written only once its interior is
+  registered. Its session's id: its summary's `challenger.plan.session` (1058), written only after the proofs.
+- The key: in the evidence, which the hand-off holds for the first stage and the stop sample (968, 973) and
+  `coins.json` holds for the second stage (1059 to 1060). No summary names it.
+- The key's hash is the one the ledger's own lines carry as `key_sha512` and the key record as
+  `pubkey_sha512`: SHA-512 of the public key's bytes (`challenger.py` 1579, 598 to 609).
+- The stop audit opens no session. Its sample was read in the first stage's session.
+
+**What to write.** [derived, nothing written]
+
+- `two_stage.py`, about 10 lines. A 3-line function for the hash. The hand-off names the hash for the class's
+  sample and for the stop sample. `second`'s summary names its root as soon as it is computed (1032), its
+  session's id on the stopped path too, and its own key's hash.
+- `stop_audit.py`, about 2 lines. Its summary copies the stop sample's key's hash from the hand-off.
+- `verdict_record.py`, about 20 lines. `window_root`, from the boundary record. `session`, `{root, id}` of the
+  session the record's own command opened, null where it opened none. `challenger_key`, the hash, where the
+  first stage's and the command's own agree; no record where they differ.
+- Tests, about 70 lines: `test_verdict_record.py` about 45, `test_two_stage_second.py` about 15,
+  `test_stop_audit.py` and `test_two_stage_driver.py` about 5 each.
+- [derived] About 32 lines of code and 70 of tests. At 11:43Z, with the word, it was 26 and 65. The 6 lines
+  more are the hash's function and its two call sites.
+- [derived] Why the commands compute the hash and the writer copies it: the commands hold the evidence in
+  hand. The writer is handed the hand-off and the summary, and not the second stage's `coins.json`.
+- **Whose code.** Mine: the three files and the four test files are under `benchmarks/one_stage/`, and I wrote
+  the writer.
+- **Which pull request.** [derived] One of its own, the writer's follow-up, after B. Not in B: your ruling 4
+  keeps the key out of B, and B is the family and the root. It changes `two_stage.py` and `stop_audit.py`,
+  which B, #9699 and #9458 all change, and `second`'s summary, which the cards piece changes. So it goes last:
+  chain 2, the cards piece, B, #9699, #9458, then this.
+- **What the hash is worth.** [derived] It is the key the command's own checks verified the signatures under.
+  A reader compares it with the key record's `pubkey_sha512`. A record from a development challenger carries
+  another hash, since such a challenger makes its own key. The reader needs no key of its own for that, and
+  no word.
+- [derived] What it does not give: the writer does not verify a signature. It copies what the command
+  checked. The record's `session` is null on a stop audit's record until the stop audit opens a session of
+  its own, which is item 1 of my 11:43Z entry and not part of this.
+
+### 3. The one-stage command and the challenger's key
+
+**For Daniel, in one sentence:** on `main` the one-stage command gets the challenger's key from its caller
+when it runs against the auditor's device (the auditor's key record) and makes a key of its own when it runs a
+development challenger; either way its checks read the key from evidence the same process wrote and compare
+it with nothing, and v1's compiled check, the one run on Thursday's case, is handed no challenger and reads
+no challenges.
+
+**The command, in Python.** `benchmarks/one_stage/a5.py tp`, the command of part 1 of my 13:18Z entry.
+
+- [read] It opens one session: `AC.start(a.challenger, a.window_root, ranks, ..., key_record=a.challenger_key)`
+  (`a5.py` 1733 to 1734). Its flags are `--challenger`, `--peer`, `--challenger-key` and `--main` (1799 to
+  1806).
+- [read] `--challenger gate:USER@HOST` needs `--peer` and `--challenger-key`; without them the command exits
+  (`a5_coins.py` 767 to 771). The client reads the key record (649) and returns that key when the session has
+  ended (702). The module's docstring says the same: the verifier's key is then the deployment's record, "never
+  the session's key.json" (16 to 17).
+- [read] `--challenger local` starts a development challenger and returns the key that challenger made (637).
+  `loopback:HOST:PORT` asks one on the challenger party's process and takes the key that process sends (730).
+- [read] When the session has ended, the command checks its files and the ledger under that key
+  (`trusted_session`, `pinned_session`, 806 to 813). It then puts the key into the evidence it publishes to its
+  ranks (817 to 823, 846).
+- [read] Each rank's check, `coins_outcome`, calls `coins_reason` on that evidence (`a5.py` 452, 467 to 468).
+  `coins_reason` reads the key from the evidence (`coins.py` 356 to 360). The stream hands the same evidence
+  to the Lean run (`a5.py` 417).
+- [derived] So the answer for this command is: from its caller, by way of the evidence. Against the gate the
+  key in the evidence is the key record's, because one process read the record, checked under it and wrote
+  the evidence, with no file between. Nothing compares it a second time, and there is no second copy in the
+  command to compare it with.
+- [derived] That is the difference from the two-stage path. There the first stage's evidence, key and all,
+  goes into the hand-off, a file, and another process reads the key back from it (`two_stage.py` 968, 1059).
+
+**Lean, the stream's run.** [read]
+
+- The run's `coinsCode` holds a sample's challenges through `Challenger.coinsReason coins w label after read`
+  (`Run.lean` 173 to 179). The window's root and the family are the verifier's own arguments. The key is read
+  from the evidence (`ChallengerCoins.lean` 117 to 121).
+- The property's docstring says it: "The key is the one the evidence names: this reader takes none from the
+  verifier, and what holds the evidence's to the verifier's is its caller" (`security/Properties/
+  Challenger.lean` 431 to 432).
+
+**Lean, v1's check.** [read]
+
+- v1's parameters may name a `challenger`, `{key, label}`, with the window's root (`OneStage.lean` 361 to
+  368). The field is optional: "none when the verifier samples from its own" (98 to 99).
+- With one, v1 reads the challenges from the evidence's `coins` under the parameters' key
+  (`Challenger.drawCoins key w label ...`, 475 to 478). So the key is its caller's, from the parameters.
+- With none, v1 reads no challenges and refuses evidence that carries any (480 to 481). It does not refuse
+  the parameters.
+- [read] So MEMBERS's reading holds of v2 and of the per-member form, and not of v1. v2 refuses parameters
+  that name no challenger (`OneStageZk.lean` 126 to 128, 253). v1 accepts them.
+- [read] v2 also refuses a key that is not of the deployed signature parameters (254). That holds the key's
+  shape, and not which key it is.
+
+**What the command writes for each.** [read]
+
+- For v1, `case.json`: parameters from `replay.params` and evidence from `replay.evidence` (`a5.py` 1293 to
+  1296). Neither has a `challenger`, a `window_root` or `coins` (`replay.py` 505 to 525). [derived] So v1's
+  check on that case reads no challenges and holds no key. It checks the sample it is shown against the
+  record and the verdicts.
+- For v2, `case-v2.json`: `case_coins` moves the key out of the evidence and into the parameters, with the
+  family and the window's root (`a5.py` 1383 to 1396). [derived] So v2's parameters' key is the one the
+  command held. v2 reads the challenges under it and compares it with nothing: whoever runs v2 on that file
+  holds the key only by comparing the parameters' key with its own. [relayed, your 14:39Z] That comparison is
+  the composite's, in a pull request not on `main`.
+
+**Thursday.**
+
+- [relayed: MEMBERS, 13:23Z, from SESSIONOF2's listing, run `3bdc`] Thursday's audit wrote `case.json`,
+  `case-python.json` and `case-v2-error.txt`, and no v2 case. [relayed: MEMBERS, 14:05Z, SESSIONOF2's run
+  `dad3`] v1's `check` ran on that `case.json`.
+- [derived] So the one compiled check of Thursday's window was v1's, on parameters that name no challenger.
+  It held no key and read no challenges. That the sample came from the challenger's challenges was checked
+  once, inside the command's own process while it ran, under the key that process held.
+
+### 4. B on a `main` that holds the cards piece
+
+- [run] `984cb027efa3` is a merge: its second parent is the cards branch's head `08b5d4b3c0a6`. The merge
+  brought 11 files. B changes 12. Two are in both: `benchmarks/one_stage/two_stage.py` and
+  `benchmarks/one_stage/tests/test_two_stage_second.py`.
+- [run] `git merge-tree` of B's head `46811047714e` with `984cb027efa3` reports three conflicts:
+  `sampler_capture.py`, `a5.py` and the Lean verifier's `test_difftest.py`. `main` alone with `984cb027efa3`
+  reports the same three. B changes none of them. [derived] So B adds no conflict, and both shared files merge
+  as text.
+- [run] In the merged tree B's rule stands: `resume` and `stop_audit.resume` name the family by place, and the
+  first stage reserves by place.
+- **What does not merge by itself.** [run] Friday's tree has four more calls in
+  `test_two_stage_second.py` than `main` has: three of `TS.first(..., FC.Challenger("first"))` and one of
+  `TS.stop_first(..., FC.Challenger("stop"), ...)`, at lines 372, 443, 655 and 657 of the merged file.
+  [derived] With B, `first()` and `stop_first()` refuse a source that is not of the class's family, so those
+  four tests fail until each source is made with its family, as B's own two calls in that file are. One line
+  each.
+- [run] No other file of Friday's tree calls `first()` or `stop_first()` directly. Its launchers go through
+  the command, which reserves by place.
+- [derived] So the order is as you wrote it: chain 2, the cards piece, B, then #9699 and #9458. B is restacked
+  on the cards piece after it lands, by `tools/move/restack.py`, with the four lines in the same commit, and
+  the five test files run on a node.
+- [run] The body's draft in my 15:06Z entry already has your sentence on the key: "This change holds the
+  family and the root; the challenger's key is the composite's to pin." At the restack it gains one line on
+  the four calls.
+- **For vllm, one sentence.** [guess] B's head can be named about an hour after the cards piece is on `main`:
+  the restack is mechanical, the change is four lines of one test, and the node run takes about 20 minutes;
+  the date of the run therefore rests on chain 2 and the cards piece, not on B.
+
+### 5. TWOLEG's branch, read
+
+- [read] Its head is `898db790ac96`, one commit past the one I read at 15:06Z. The commit's message says its
+  Lean run now holds a sample's family to its record's place under every rule, a one-stage run's too, "as the
+  Python stream now does", and "Not compiled". That is B's rule at `46811047714e`.
+- [run] Its `window_place.py` is still B's file byte for byte (blob `12a54e8f5073`).
+- [read] No entry of its own since 14:11Z answers the three JSON rows. I dropped no row.
+
+### Branches
+
+B `cursor/proofs-stopdriver-family-ffc6` `46811047714e`, on `main` `053b8e50fe8a`. Unchanged: #9699
+`725720f8a4a0`, #9624 `64364792ed70`, cards `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out. No timer is
+set.
+
+### Not established
+
+1. Which challenger Thursday's run named, the gate with a key record or `local`. The audit's `summary.json`
+   on its node says; I read nothing from that node.
+2. Whether Thursday's tree was `main`'s `a5.py` in the lines I cite. I read `main`.
+3. Whether N, the class's count of spans, is what network's head counts as the class's held rows. I read our
+   side only.
+4. The line counts of part 2 are estimates from reading. No line of it is written.
+5. Whether the four tests are the only ones that fail in the merged tree. I read the merged tree for calls; I
+   ran no test on it, since a merge is not mine to make before the word.
+6. What the composite's pull request does. I repeat your relay.
