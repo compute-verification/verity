@@ -136,7 +136,7 @@ from verity.circuits.boolean.forms import (
     or_reduce,
 )
 from verity.circuits.boolean.trace import definition
-from verity.definitions.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
+from verity.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
 from verity.circuits.defs import composite, primitive
 from verity.circuits.refs import array_of
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
