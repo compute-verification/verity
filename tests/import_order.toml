@@ -538,19 +538,6 @@ reaches = [
 
 [[place]]
 paths = [
-    "verity/protocols/experimental",
-]
-loads = [
-    "verity/circuits",
-    "verity/circuits/ops",
-    "verity/circuits/silicon",
-    "verity/commitments",
-    "verity/commitments/identity",
-    "verity/protocols/accounting/pouw/prover",
-]
-
-[[place]]
-paths = [
     "verity/protocols/accounting/pouw/prover",
 ]
 loads = [
@@ -622,6 +609,17 @@ paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true
+
+[[place]]
+paths = [
+    "verity/protocols/experimental",
+]
+loads = [
+    "verity/circuits",
+    "verity/circuits/silicon",
+    "verity/commitments",
+    "verity/protocols/accounting/pouw/prover",
+]
 
 [[place]]
 paths = [
