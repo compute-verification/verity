@@ -536,3 +536,66 @@ path = "out/run/run.json"
 sha256 = "9dd5878302607ff9f929e02006cc92f68c7005165a80b0f55359828a41902c16"
 partial = "none"
 step = { counted = 3, why = "the new blocks' gains sit behind their zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[1, 768]]
+count = 1
+macs = 768
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: π times each column's index plus a half"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[1, 768], [768, 1]]
+count = 1
+macs = 589824
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: those times each row's index, the DCT-II's angles"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "div"
+shapes = [[768, 768]]
+count = 1
+macs = 589824
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the angles over d"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[768, 768]]
+count = 1
+macs = 589824
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the cosines times √(2/d)"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "div"
+shapes = [[768]]
+count = 1
+macs = 768
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the first row over √2"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[768]]
+count = 1
+macs = 768
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the drawn signs' bits times 2"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[768, 768], [768]]
+count = 1
+macs = 589824
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: each column times its sign"
