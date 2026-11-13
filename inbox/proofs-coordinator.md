@@ -137414,3 +137414,98 @@ too if that one is kept and refused at B alone.
 - "No statement's reads move" and "no lock record moves" are from reading the lock files, not a records run.
 - (a) and (b) above.
 - Whether R3 lets me drop the "prints as null" side of `accepted_ownReads`; I try at the compile.
+
+## ACCOUNTS, Fri 13 Nov 11:14Z: findings 2, 3 and 1 answered, nothing written to a branch. The cap reads a link's capacity as a count of signals, which the analysis already takes as a premise, so it holds for the length terms and is not shown for `jitter`; no listed guarantee reads it. Finding 3 is about 30 lines in one file of the interface, moves no lock record, and is priced as a pull request of its own on #9593's carried head. Finding 1 is what `main` does, and #9593 already adds the sessions' covers. One STOP RULE: #9701's `View.Onsite` is false after #9593
+
+Marks: [read] a file at the commit named, [run] a command I ran now or a run by id, [derived] my reasoning, [relayed] another lane's words. Commits: `main` `053b8e50fe8a`; Site v2, [#9593](https://github.com/compute-verification/verity/pull/9593), `9eec48aab933`; soundness's [#9701](https://github.com/compute-verification/verity/pull/9701), `7df63fe36880` (its head moved from `ff78df693d0e` at 11:02Z). `Account.lean` is `verity/protocols/interface/CoreProtocol/Account.lean`. Nothing was compiled for this entry: every [run] is a search, or a guard that passed in records run `r20261113-032506-d8fc` (it built `eeef8331792a`, whose `Account.lean` is blob `94db2c088e2b`, the same as at `9eec48aab933` [run: `git rev-parse` of both]).
+
+### What you can act on
+
+1. **Finding 2 is not a STOP RULE item.** No listed guarantee says or rests on anything different under any option below. I price three; the cheapest that is never wrong is four lines.
+2. **Finding 3**: one new function and two call sites in `Account.lean`, about 30 lines with its guards, no statement, no lock record. Its own pull request, written on #9593's carried head.
+3. **STOP RULE below**: #9701 states "onsite, every boundary link is certified" of an accepted log, and proves it from `Covered`. #9593 changes `Covered`. One of the two has to change before the second of them lands. That is soundness's.
+
+### Finding 2: the cap
+
+| Question | Answer | Mark |
+|---|---|---|
+| What the code does | For a free amount with a capacity, `n := min n c`. The other column is `c - n` in `Nat`, so it is 0 with or without the cap. The cap changes one thing: the free column never prints above the capacity. | [read: `main` 449–461; #9593 560–572, same text] |
+| What `c` is for a link | The capacity of the amount's leaves over the whole period. A link's leaf is the prover's side of a split uplink (`Site.Boundary`: a node's link to the outside, or to the certifier that splits it). | [read: `main` 157, 191, 505; #9593 157, 193, 602] |
+| Which theorem reads it | None. `CoreProtocol.Account` is imported by the package's root file and nothing else; no `lean-audit.json` names it; the interface's lock has 0 guarantees. | [run: `rg` over every `*.lean` and every `lean-audit.json` at the three commits, with `CoreProtocol.Site` as the search's control] |
+| The same claim in `security/` | `Accounting.Alphabet`: "each way, at each tick, link `e` delivers one of at most `2^{β e}` signals (delivering nothing is one of them)". It is half of `Accounting.DeclaredLinks`, an open premise of the main lock, which `Accounting.SecurityProofs.B4` takes. `B4` bounds what the outside can tell apart by `jitter · buckets · certifiers + β° · (b − a)` bits, `β°` the uncertified boundary links' capacity. | [read: `main` `security/Definitions/Accounting/Confidence.lean` 165–169, `Physical.lean` 155–161, `Guarantees/Bridges.lean` 70–90; lock entries `open` `Accounting.Alphabet`, `Accounting.DeclaredLinks`, and `B4`'s `premises.open`] |
+| Is it a bound on bits sent only | No. In that premise a link's capacity counts signals, and silence is one of them. So when a cell is sent, and how many are sent, are inside the capacity, to one tick's resolution. `K` is the same kind of amount: every term is a ceiling of `log2` of a count of what the outside can tell apart. | [read: `main` `NetworkCheck/Period.lean` 177–190, 209–221] [derived] |
+| Right for `cells` and `schedules` | Yes, under `Accounting.Alphabet`: a lane's length is cells sent or not sent on the capped link. | [derived] |
+| Right for `jitter` | Not shown. `B4` adds the certifier's jitter word beside the capacity term, never under it, and the capped leaf is the half before the certifier, which the certifier's own release times never cross. | [derived from `B4`'s statement] |
+| The charge at capacity | It is the same claim. A free amount is its answers' sum plus `capacity × uncovered ticks`, in one column; a link no answer covers prints `free = capacity`. If capacity did not bound what the outside learns, those rows would be wrong before the cap is. | [read: `main` 504, 540–551; #9593 636–640, 675–686] |
+| When the cap bites | Only where the answers' summed `K` is at least the whole capacity of the ticks they cover. On the example's link of 100 Gb/s that is 6.048 × 10^16 bits for a covered week, 2.592 × 10^17 for 30 days, 3.1536 × 10^18 for 365 days. In such a row the verified column is 0 under every option. | [derived: 10^11 × 604,800; × 2,592,000; × 31,536,000 s] |
+
+So the three options you named differ only in the free column of a row whose verified column is already 0 [derived: `c - n` in `Nat`].
+
+| Option | What changes | Size | What it costs |
+|---|---|---|---|
+| A. Keep the cap, say what it rests on | `certifiedRow`'s docstring names the reading (a link's capacity counts signals) | 3 lines of docstring, no code | A row at capacity can be short by the `jitter` term |
+| B. No cap for a flow's free amount | `Amount.rows`'s flow branch passes its amount uncapped; a moment's amount (memory) keeps the cap | about 4 lines and 1 guard in `Account.lean`; no change to an account's form | A free column can print above the capacity. Never understates |
+| C. The form names the term the capacity does not hold | `Amount` gains one optional source for it; `certifiedRow` caps the rest and adds it back | about 20 lines and 3 guards in `Account.lean`, 2 in the README; network's check publishes the period's `jitter` summed (today it is per audit, `Period.lean` 179) | Exact to `B4`'s form |
+| Your first reading on NET-427: the cap on the bits-sent term only | C with `cells` and `schedules` outside the cap too | as C | Safe, and weaker than the premise gives: it uncaps two terms `Accounting.Alphabet` puts under the capacity |
+
+My pricing: B now, C if network wants the tighter column when its account lands. No lock record moves under any of them [run: the lock search above].
+
+### Finding 3: the size of what soundness asked for
+
+**The hole, as the code stands.** `Part.leaves .egress` is every boundary link (`(S.boundary none).map (·.id)`), and an answer's place picks one by id. A node's bare uplink is a boundary link, so an accepted answer that names it gets that link's certified row [read: `main` 157, 164, 479; #9593 157, 164, 600] [relayed: network's guard on `main`]. After #9593 it can no longer happen onsite: registration takes a bare uplink there only with `unmediated`, and then every link's row prints no amount (`Site.mediated`, #9593 737–739). It still happens at a Site registered remote, where `Covered` asks nothing, and `rows` is not told the configuration [read: #9593 `CoreProtocol/Site.lean` 474–475, `Account.lean` 714] [derived]. No row of this kind is printed today: no account on `main` has an egress amount but the guards' toy, and nothing calls `rows` outside its file [run: `rg` on `main`].
+
+**The change**, on #9593's `Account.lean` (1260 lines):
+
+| Where | What | Lines |
+|---|---|---|
+| after `Part.leavesAt` (165) | a new `Part.certifiable S place`: the part's leaves at the place, and of a link only one that joins a network certifier and a node of the prover's (`S.Joins k .certifier .host`, the condition `NetworkCheck.Registered.certifierLinks` uses) | about 7 |
+| `Amount.rows` (600) | `xs` from `certifiable` in place of `leavesAt`: an answer that names a bare uplink gets no row | 1 |
+| `unaudited` (678) | `covered` from `certifiable`: that link stays among the leaves no answer covers, charged at capacity as "not audited" | 1 |
+| docstrings (module, `rows`) | what a link's answer may certify | about 4 |
+| guards after 1197 | a remote Site with a bare uplink and an accepted answer naming it prints "not audited" at capacity and no certified row; the certifier's link is certified as before; an answer naming no place certifies the certifier's link only | about 12 |
+| `verity/protocols/interface/README.md` (150–160) | the same sentence | 2 |
+
+- `Part.leaves` stays every boundary link. Narrowing it instead is one line and wrong: a bare uplink would be in no part and get no row at all, so bits could leave by it uncharged [derived].
+- **Statements that move: none. Lock records that move: none.** Nothing in `security/` imports `CoreProtocol.Account`, and the change adds nothing to `CoreProtocol/Site.lean` (`Site.Joins` and its decision are there: `main` 274, #9593 333), so no `reads` record of `CoreProtocol.Site` moves [run: the lock search; `rg instDecidableJoins`].
+- To check it: one build of the interface (its guards) and the suites that read the interface, both through `research run`. No records run is owed, since no lock input changes [derived].
+- **The key is not in this.** `rows` cannot see which key a check verified under. Holding it needs the answer to publish the key and the account's form to say where (one more source on `Amount`, compared with the registered key of the certifier at the link's end as `Registered.keyRefusal` compares it): about 20 more lines and 8 of guards, and it waits on what network's check publishes. The check's parameters already hold `key` and `link` [read: `main` `Period.lean` 43, 446].
+- One more line belongs with it: #9593 takes each series' device from the auditor (`Origin.device`) and does not ask that it is the certifier on the answer's link [read: #9593 618, 721–724].
+
+**Against the three names:**
+
+| Name | Where | What it says | How the change reads against it |
+|---|---|---|---|
+| `AccountedFor` | #9701, `security/Definitions/Core/Registration.lean` 151 | Every part the Site holds, each boundary link's egress among them (`Site.parts` 63), has a protocol on the list whose account names it through `Part.leaves`. About the list, before any challenge. | Unchanged, because `Part.leaves` is unchanged. With `View.Onsite` every leaf is a certified link, so at an accepted onsite log the new condition never refuses. It bites at a remote Site, and at any Site not read from an accepted log. |
+| `CertifiedIsParams` | #9701, `security/Properties/Verity/Ties.lean` 86 (`certifiedKeys` 73) | Each link the certifier's check reads, with the check's key, is a boundary link with a certifier at an end and that certifier's registered key. No theorem reads it and no code checks it. | The change checks its link half, on the place the answer names. The key half is the paragraph above. It does not become a lemma by this: it is stated on the check's parameters, and `rows` reads the answer's profile. |
+| `CertifierRegisters` | `main`, `security/Definitions/NetworkCertifier/TapRows.lean` 79 | The certifier's records are the values at the statement's transfer gates: openings under the statement's roots. It names no Site, link id or key. An open premise, in the trust gap of `PeriodLeakAccepted`. | Not touched. Nothing in `rows` discharges any of it, and the trust gap is as it was. |
+
+**With #9593 at the carry, or after it: a pull request of its own.** It has to be written on #9593's file, since #9593 rewrites the same lines of `Amount.rows`, `unaudited` and `rows` [read: both]. But the carry is a move of paths over content ci reviewed at `9eec48aab933`; adding a change of behaviour makes the carried head something no review has seen [derived]. And nothing prints such a row meanwhile [run: above]. So: opened unmarked on the carried head once you say "carry", marked after #9593 is on `main`.
+
+### Finding 1, one line
+
+Yes, that is what `main` does: the cover is the largest single series' cover while every certified answer's bits and errors add [read: `main` 498–500, 504]. To take one series across sessions `rows` needs, for each session, where its first step falls in the period on a clock the registration holds; that is #9593's `Monitored.origin` (first step, the period's tick it starts at, the device that times it), given by the auditor, and with it #9593 adds the sessions' covers less the ticks two can share [read: #9593 553–556, 618–634] [run: the guard at 1123–1125 in `r20261113-032506-d8fc`: two sessions of 500 ticks each, placed apart, cover the 1,000-tick period and the row is 5,000 bits]. After #9593 `rows` needs nothing more; what is missing is who signs each session's start, which is network's NET-424.
+
+### STOP RULE: #9593's `Covered` against #9701's `View.Onsite`
+
+- **Before** (`main`, and what #9701 is stated against): `Covered` is "onsite, every boundary link is certified" [read: `main` `security/Definitions/Core/Site.lean` 470–471]. #9701's `View.Onsite` says the same of an accepted log's view, `Valid.onsite` proves it from the entry's `Covered`, and `Verity.SecurityProofs.RegistrationSound` is a new guarantee in its locks [read: #9701 `Registration.lean` 124–126, `security/Proofs/Core/Registration.lean` 95–106, its lock diff].
+- **After #9593**: `Covered` is "certified, or says why no certifier splits it" [read: #9593 `security/Definitions/Core/Site.lean` 577–579]. Then `View.Onsite` is false at a valid onsite log with one `unmediated` boundary link, and `Valid.onsite`'s step no longer proves [derived; the two were not compiled together].
+- **The options, priced**: (i) `View.Onsite` says "certified, or says why", and a statement that needs every link certified takes `Site.mediated` as a hypothesis; (ii) `View.Onsite` as it is, under the hypothesis that the view's Site is mediated; (iii) #9593 keeps `main`'s `Covered`, which gives up registering a stand-in link onsite. Each is a change to one definition and one proof step in #9701 for (i) and (ii), or to #9593's reviewed content for (iii).
+- #9701 is open and conflicts with `main` now [run: `gh pr view 9701` at 11:02Z]; #9593 is marked and reviewed. I change neither.
+
+### Your 06:00Z ask: does any statement on my branches read `Covered` as an onsite egress bound
+
+- **#9593: none.** `Covered` is read at its two definitions, the entry's check and refusal, three guards, and the proof that the code's and the definition's agree; none derives an amount from it. `rows` reads `Site.mediated` [run: `rg` at `9eec48aab933`: `CoreProtocol/Site.lean` 474, 503; `SiteV2Guards.lean` 100–102; `security/Definitions/Core/Site.lean` 578, 589, 614; `security/Proofs/Properties/Core/Site.lean` 437].
+- **The two lists (`1b478b7fdf27`): one docstring.** Its `Covered` is `main`'s form, and line 312 of its `CoreProtocol/Site.lean` says a composite that lists the certifier "holds every boundary link to a certifier". That is true on `main` and false over #9593. I rewrite that sentence when the lists are carried; no statement there derives an egress bound [read].
+- **Not mine, and the one that does**: #9701's `View.Onsite`, the STOP RULE above.
+
+### Not established
+
+- Nothing here was compiled: the change for finding 3 is sized from reading, and its line counts are estimates.
+- I read `B4`'s statement, not its proof, and did not read how `jitter` is timed against the Site's unit of time; whether the certifier's jitter is finer than one tick is network's to say.
+- If the certifier's outside half states no more capacity than the capped half, `Accounting.Alphabet` on that half would cap all of `K`, `jitter` included; the registration does not ask that, and I did not check any registered Site for it [derived].
+- The size of `K` over a week, a month or a year, against the capacities above: not measured by me.
+- What network's check publishes of its key.
+
+### To post
+
+A reply on NET-427, if you take these: "2: no theorem reads the cap. It reads a link's capacity as a count of signals, the reading `Accounting.Alphabet` already takes, so it holds for `cells` and `schedules` and is not shown for `jitter`; the options differ only in the free column of a row whose verified column is 0. 3: sized at about 30 lines in the interface's `Account.lean`, no lock record, a pull request of its own after Site v2; the key half waits on the check publishing its key. 1: Site v2 already adds the sessions' covers once each session's start is placed in the period."
