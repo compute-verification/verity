@@ -33,7 +33,7 @@ path = "../../../interface"
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../difftest/lean"
+path = "../../../../circuits/difftest"
 
 [[lean_lib]]
 name = "MemoryChallenger"
