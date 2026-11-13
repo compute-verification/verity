@@ -68,9 +68,9 @@ Where the records name two of either, the class is at its whole schedule and `ch
 head states those rows, and the class owes its verdicts whatever it holds.
 
 `charge` checks no signature, and `head` is its caller's. The network certifier's signature on a registration is
-checked by `connection_rows.check_registration`, under the deployment's key and session, in the offline check of a
-network certifier's run, which keeps each registration it held in a file; a caller's heads are to be read from that
-file and from nowhere else."""
+checked by `connection_rows.check_registration`, under the key and the session the auditor hands the offline check
+of a network certifier's run, which keeps each registration it held in a file that says what it was checked under;
+a caller's heads are to be read from that file and from nowhere else."""
 
 from __future__ import annotations
 

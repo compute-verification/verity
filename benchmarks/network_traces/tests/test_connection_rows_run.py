@@ -291,9 +291,9 @@ def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_
     """A run directory whose deployment record names another key than the network certifier's, a rehearsal's own:
     its certificates and its registrations are signed under that key and verify under it. Handed the hash of the
     network certifier's key, the check names the problem, the key and not the session, as its only one, and leaves
-    no file; so does its command, which exits 1. Handed the hash of the run's own key, the same directory is
-    accepted and its file is written, naming that hash: the reader holds all three execution phases on it and
-    prints the hash, which it is not told to refuse."""
+    no file; so does its command, which exits 1, with a file asked or not. Handed the hash of the run's own key, the
+    same directory is accepted and its file is written, naming that hash: the reader holds all three execution
+    phases on it and prints the hash, which it is not told to refuse."""
     monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "a rehearsal's key")
@@ -309,6 +309,8 @@ def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_
     assert (s["registered"], s["of"]) == (3, 3) and not result["accepted"] and not file.exists()
     assert ws.main(command(out, (true, session), file)) == 1 and not file.exists()
     assert json.loads((out / "check.json").read_text())["problems"] == result["problems"]
+    # the command names the problem with no file asked too, and a check handed nothing holds the run to no key
+    assert ws.main(command(out, (true, session))) == 1 and ws.main(command(out)) == 0
     # under its own key's hash: the file, which says so
     assert ws.main(command(out, (own, session), file)) == 0 and file.read_text() == earlier
     first, *lines = earlier.splitlines()

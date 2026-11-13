@@ -172,9 +172,14 @@ The records are in the evidence store, in the run files of the runs that carry
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read. Its one writer is the offline check of the network
-  certifier's run (`benchmarks/network_traces/warden_serve.py check --registrations`), which writes each
-  registration it verified under the deployment's key and session and laid again from the run's records, and no
-  file where it found a problem;
+  certifier's run, `benchmarks/network_traces/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
+  `--registrations FILE`. The auditor hands that check the SHA-512 of the network certifier's public key and its
+  session, and the check holds the run's deployment record to them: a run made under another key or session, a
+  rehearsal's own, gets no file. The file's first line says what it was checked under,
+  `{"checked_under": {"key_sha512": HEX, "session": HEX}}`; each line after it is a registration the check verified
+  under that key and session and laid again from the run's records. The check writes no file where it found a
+  problem. A file without the first line gives no head: every class is charged its whole schedule, and the line
+  says the file does not say what it was checked under;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
   changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
   the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
@@ -297,8 +302,10 @@ The lines print how the rows are charged, one line for each class of each head r
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
 record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
 signature is not checked here, but by the offline check that writes `out/registrations.jsonl`, and that file is
-unsigned: a head is as good as the run of that check. Nothing but verdicts that name a head's digest holds an
-execution phase, so a registration no verdict names holds none.
+unsigned: a head is as good as the run of that check, and as the hash and the session that run was handed. The
+lines print the hash and the session each registrations' file names; the reader holds neither and compares them
+with nothing, so a file checked under another key reads the same but for that line. Nothing but verdicts that name
+a head's digest holds an execution phase, so a registration no verdict names holds none.
 
 Where some execution phase is charged its whole schedule, the document holds apart what each row would be with every
 one held: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read
