@@ -9,8 +9,10 @@ from typing import Any
 
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry.topp_geometry import registered_splits
+
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
 
 from . import reads
 from .common import Unexpressible
@@ -93,5 +95,6 @@ def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str, sa
         raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
+    assert num_sms is not None, "a temperature above 0 on a target without num_sms is refused above"
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
              "splits": registered_splits(int(num_sms)), "rid": SEED.rid_of(request_id)}, reads.seed_of(i, request_id, seed, salt, carried))

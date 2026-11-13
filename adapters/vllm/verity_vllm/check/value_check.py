@@ -19,12 +19,15 @@ Run by `commit_delta.py --value-check` on one extra instrumented run; result in 
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine.profiles import layer_classes as LC
+
+__all__ = ["ValueChecker", "run_value_check"]
 
 
 def _cls(m: Any) -> str:
@@ -126,15 +129,15 @@ class ValueChecker:
         """After finalize(): committed bytes (opened and verified against the run root by `reader`, an `commit.opened.OpenedReader`) vs
         (T) tap clones and (R) re-execution.  A tensor whose opening does not verify is `not_verified` (FAIL)."""
         t0 = time.perf_counter()
-        res = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
-               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "not_verified": [], "by_class": {}}
+        res: dict[str, Any] = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
+                               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "not_verified": [], "by_class": {}}
         for step, taps in enumerate(self.steps):
             metas_by: dict[str, list] = {}
             for m in sorted(self.c._layouts.get(step, []), key=lambda m: m.ordinal):
                 metas_by.setdefault(m.name, []).append(m)            # repeated calls of one module -> several metas, in call order
 
-            def meta_at(key: str, call_idx: int):
-                lst = metas_by.get(key) or []
+            def meta_at(key: str, call_idx: int, metas_by: dict[str, list] = metas_by):
+                lst = metas_by.get(key, [])
                 return lst[call_idx] if call_idx < len(lst) else None
             for name, d in taps.items():
                 mc = LC.SAMPLER if name == "runner.sampler" else _cls(self.modules[name])

@@ -13,6 +13,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["WeightsRegistration"]
+
 SCHEMA = "verity-vllm/weights-registration/v1"
 #: an entry's fields: core's `registered.Registered.entry()` of a value of 16-bit words
 ENTRY = ("value", "root", "leaves", "words", "domain")

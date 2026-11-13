@@ -27,24 +27,36 @@ replay on the captured operands; the `gemm_target_correspondence` driver) is che
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
-                                          HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity.definitions.numerics import fa3_model as FA3
-from verity.definitions.registry import b1
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import attention_vocab
+from verity.definitions.ops.prims import (
+    BlackwellE4m3QmmaDot32,
+    BlackwellNvf4OmmaDot64,
+    HopperBF16WgmmaDot16,
+    HopperE4m3MmaV2Dot32,
+    HopperE4m3QgmmaDot32,
+)
+from verity.definitions.registry import (
+    attention_vocab,
+    b1,
+    fp8,
+    fp8_vocab,
+    nvfp4,
+)
 from verity.definitions.registry import cuda_rmsnorm as CR
-from verity.definitions.registry import value_inputs as VI
+from verity.definitions.registry import dense as DN
+from verity.definitions.registry import fa2_check_inf as F2
+from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import fp8, nvfp4
-from verity.definitions.registry import fp8_vocab
 from verity.definitions.registry import gemm_bias as GB
 from verity.definitions.registry import prims as P
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
+from verity.definitions.registry import value_inputs as VI
 from verity.definitions.registry.hopper import Fa3InvSum
+
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 
 
 class UnregisteredTarget(ValueError):
@@ -168,11 +180,11 @@ def gemm_bias_spec(profile, K: int, N: int):
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
     (`routed` False) or the w2 launch with the routed weight."""
-    from verity.definitions.registry import moe as M
+    from verity.definitions.registry import moe as MOE
     dot = moe_expert_dot(profile)
     if dot is None:
-        return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
-    return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
+        return bind(MOE.MoeExpertGemmW if routed else MOE.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
+    return bind(MOE.MoeExpertGemmWV2 if routed else MOE.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
 
 
 def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
@@ -214,14 +226,6 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
         raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
                                  f"Triton's step {getattr(dot, 'id', dot)!r} has no registered primitive")
     return dot
-
-
-def wgmma_tile(config: dict, swap: bool) -> bool:
-    """Whether Triton 3.7.1 lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3): the dot's M (BLOCK_SIZE_N under
-    SWAP_AB, else BLOCK_SIZE_M) is a multiple of 64 over a multiple of 4 warps and its N a multiple of 16.  Other registered
-    cc 9.0 tiles take MMAv2 (`fp8_moe.sm90_dot`)."""
-    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 16 == 0
 
 
 def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
@@ -347,11 +351,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        if s.lstrip("-").isdigit():
-            spec = int(s)
-        else:
-            import json
-            spec = json.loads(s)
+        spec = int(s) if s.lstrip("-").isdigit() else json.loads(s)
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):
@@ -652,7 +652,6 @@ def softcapped(spec, cap: float):
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
-    from verity.definitions.registry import dense as DN, fa2_softcap as F2S
     body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
     if body is None:
         raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "
@@ -684,4 +683,5 @@ __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "tar
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys",
+           "moe_fp8_tuned_tile_refusal", "graph_launch", "launch_graph", "softcapped"]
