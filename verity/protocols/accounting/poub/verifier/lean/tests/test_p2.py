@@ -24,7 +24,11 @@ from hypothesis import strategies as st
 from ra_cases import Entropy
 
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_party, receipts
-from verity.protocols.accounting.poub.verifier.codec import P2_EXPANDER, P2_POINT, P2Codec
+from verity.protocols.accounting.poub.verifier.codec import (
+    P2_EXPANDER,
+    P2_POINT,
+    P2Codec,
+)
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, leaf_hash
 

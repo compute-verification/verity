@@ -27,8 +27,18 @@ from typing import Any
 import verity_difftest as D
 from verity_difftest import protocol as P
 
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, wire
-from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    receipts,
+    wire,
+)
+from verity.protocols.accounting.poub.verifier.audit import (
+    AuditRun,
+    Params,
+    SessionError,
+)
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 from verity.protocols.proofs.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES
 from verity.protocols.proofs.spot.device.challenger import HM96, LiveChallenger
