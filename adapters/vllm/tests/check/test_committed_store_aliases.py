@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.check.replay import coverage as COV, opening as OP
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import opening as OP
 from verity_vllm.records.required_manifest import SCHEMA
 
 ROT = "model.layers.0.self_attn.rotary_emb"

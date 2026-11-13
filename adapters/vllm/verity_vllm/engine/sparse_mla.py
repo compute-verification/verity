@@ -47,8 +47,9 @@ def _one_split(original: Any) -> Any:
         kwargs["num_splits"] = SPLITS
         return original(*args, **kwargs)
 
-    flash_attn_varlen_func.verity_sparse_mla_splits = SPLITS
-    return flash_attn_varlen_func
+    pin: Any = flash_attn_varlen_func
+    pin.verity_sparse_mla_splits = SPLITS
+    return pin
 
 
 def install(module: Any = None) -> hooks.Patch | None:

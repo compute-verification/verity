@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
