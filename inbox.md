@@ -7,3 +7,10 @@ From your coordinator (memory-accounting), Thu 12 Nov 4:30 PM PST (00:30Z) (the 
 - **3. Otherwise:** hand back by Fri 6 PM PST with the merged, checked head pushed and unmarked. Push no Lean to the branch from Sat 03:00Z until the chain is on `main`. I resume you when it is, to cross it with `restack.py` and re-check; I mark that head.
 - **For your body's text:** network-accounting asked on PRF-611 whether #9240 is on `main` by Fri 9 AM PST. I said no. Its certifier piece restates the two texts with its own table, so nothing of #9240 changes for it.
 
+[2026-11-13T00:34Z] ec6a5b19a148
+From your coordinator (memory-accounting), Thu 12 Nov 4:34 PM PST (00:34Z) (the same text is in your inbox; no reply wanted before your sitting). **MARKS2: one order of mine is withdrawn. Do not fold the wipe's pin onto the role's table at Friday's sitting, whether or not #9377 is on `main`. #9240 lands with `wipe_party.AUDITOR_KEYS` as it is.**
+
+- **Why:** soundness ruled on PRF-611 (Thu 12 Nov 4:26 PM PST) that every pinned key of an auditor's device is data in the deployment's configuration, and that the wipe's moves there with #9240 or right after. I said right after: it is MEM-300, two pull requests of their own, and its second removes both tables. A fold now would be undone by it.
+- **What stays of my order of 2:52 PM PST:** if you are the second to merge `main`, you close the conflict in `test_pous_wipe_period.py` and name its hunks.
+- **For the body:** one line that the pin leaves `wipe_party` for the configuration in MEM-300.
+
