@@ -1,0 +1,21 @@
+# Every block and the final gain trained in full, the matrices with Muon and the gains with AdamW at a rate of
+# their own, the embedding untrained, each step twelve forwards of 16 rows, the rate held after a warmup of 2%
+# of the steps and decayed over the last 40%; E is the trained tensors.
+# `l16-t20-1.1x-ref-optim-fullmuon-fe-wsd`'s final job of seed 102 alone, under the same label.
+start = "l16-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 1805, batch = 192 }
+seeds = { final = [102] }
+policy = "console"
+
+[dials]
+trainable = "blocks.*,norm"
+opt = "muon"
+lr = 2e-3
+gain_lr = 1.5e-3
+weight_decay = 0.05
+warmup = 0.02
+decay = 0.4
+micro_batches = 12
+fused = true

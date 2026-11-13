@@ -20,9 +20,9 @@ each is `code h`'s, carried to the wired program by what a map that rewires the 
   (`StmtOpensWired`).
 * `ksTwo_wired`: `CompiledTwo.KS` at the wired code, from a map that rewires the members' programs where the design
   evaluates and `StmtOpensWired`.
-* `ksTwo_connected`, `exfilTwo_connected`: at the code's own wiring (`codeConnected h`), under the three premises on
-  that wiring (`WiresFirst`, `WiresMove`, `SourcesNamed`), from SPOT's own frame there and the addresses
-  (`BuiltWired`, `AddressesConnected`).
+* `ksTwo_connected`, `exfilTwo_connected`: at the code's own wiring (`codeConnected h`), from SPOT's own frame there
+  and the addresses (`BuiltWired`, `AddressesConnected`). What they read of that wiring (`WiresFirst`,
+  `SourcesNamed`) the design's evaluation decides.
 -/
 
 @[expose] public section
@@ -280,31 +280,27 @@ theorem ksTwo_wired (hW : ∀ s d, two h s = some d → (bitsProgs h.ms).Rewires
 
 /-- **The session statements open every unit they check at the connected program**: `stmtOpensWired` at the code's
 own wiring, the wiring map's rewiring read at the run's own design (`rewires_of_two`) and the addresses from
-`AddressesConnected h` at a held code whose every source bit is at a port a link or a wire names. -/
-theorem stmtOpens_connected (hF : WiresFirst h) (hS : SourcesNamed h)
-    (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
+`AddressesConnected h`, whose condition on the source bits the run's own design decides (`sourcesNamed_of_two`). -/
+theorem stmtOpens_connected (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
     StmtOpensWired h (wireMap h) (returned h) := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u hx hP hd
-  exact stmtOpensWired h (wireMap h) (returned h) hB (hA hS) (rewires_of_two hd hF) x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF
-    u hx hP hd
+  exact stmtOpensWired h (wireMap h) (returned h) hB (hA (sourcesNamed_of_two h hd))
+    (rewires_of_two hd (wiresFirst_of_two h hd)) x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u hx hP hd
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at the connected program**: `CompiledTwo.KS` at the code's own
-wiring, at a held code whose wires' writers come first (`WiresFirst`), whose every wired source bit has a gate to go
-to (`WiresMove`) and whose every source bit is at a port a link or a wire names (`SourcesNamed`): where the design
-evaluates the wiring map rewires the members' programs (`rewires_of_two`), and the sessions open the wired program
-from SPOT's own frame there and the addresses (`stmtOpens_connected`). `WiresMove` enters no step. -/
-theorem ksTwo_connected (hF : WiresFirst h) (_ : WiresMove h) (hS : SourcesNamed h)
-    (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
+wiring. Where the design evaluates, the wires' writers come first and every source bit is at a port a link or a wire
+names (`wiringOk`), so the wiring map rewires the members' programs (`rewires_of_two`), and the sessions open the
+wired program from SPOT's own frame there and the addresses (`stmtOpens_connected`). -/
+theorem ksTwo_connected (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
       (twoConnected h) (rsConnected h) (cap h)).KS FlockDeploy.sha512 :=
-  ksTwo_wired h (fun _ _ hd => rewires_of_two hd hF) (stmtOpens_connected h hF hS hB hA)
+  ksTwo_wired h (fun _ _ hd => rewires_of_two hd (wiresFirst_of_two h hd)) (stmtOpens_connected h hB hA)
 
 /-- **SPOT[Flock]'s two-stage exfiltration bound at the connected program**: `CompiledTwo.Exfil` from
 `ksTwo_connected` (`CompiledTwo.exfil_of_ks`). -/
-theorem exfilTwo_connected (hF : WiresFirst h) (hM : WiresMove h) (hS : SourcesNamed h)
-    (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
+theorem exfilTwo_connected (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
       (twoConnected h) (rsConnected h) (cap h)).Exfil FlockDeploy.sha512 :=
-  Claims.SamplingGeneric.CompiledTwo.exfil_of_ks (ksTwo_connected h hF hM hS hB hA)
+  Claims.SamplingGeneric.CompiledTwo.exfil_of_ks (ksTwo_connected h hB hA)
 
 end SpotFlock
