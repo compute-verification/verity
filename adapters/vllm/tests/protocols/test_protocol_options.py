@@ -30,6 +30,7 @@ from verity_vllm.program.frontend.target_profile import (
     TargetProfile,
     check_reuse,
 )
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
 ALL = ("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512")
@@ -183,6 +184,15 @@ def test_the_record_says_what_each_option_committed_to(monkeypatch):
     assert comp.info()["sampled-proofs:rows-sha512"]["commitment_scheme"] == "rows-sha512"
 
 
+def test_the_records_schema_is_the_registered_id_letter_for_letter(monkeypatch):
+    """A Commit's `protocols.json` on disk carries this string: the package's name for it, the registered id and what
+    `Composition.record` writes are that string, letter for letter."""
+    assert PO.RECORD_SCHEMA == PROTOCOL_COMPOSITION_SCHEMA == "verity-vllm/protocol-composition/v0"
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    with PO.install(Model(), PO.Context(stage="commit", enabled=("pous:s1",))) as comp:
+        assert comp.record("d" * 64)["schema"] == "verity-vllm/protocol-composition/v0"
+
+
 def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
@@ -259,7 +269,7 @@ SPOT = config.PROTOCOLS[2]
 (POUB,) = PO.DRIVERS
 ROW_SET = ("pous:s1", ALL[2])
 AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
-NO_REGISTRY = "verity.protocols.pouw.verifier.not_a_circuit_registry"
+NO_REGISTRY = "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry"
 #: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
 SAID = [
     ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),

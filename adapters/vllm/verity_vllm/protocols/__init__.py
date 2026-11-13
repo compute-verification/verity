@@ -63,6 +63,7 @@ from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
            "adapter", "driver",
@@ -87,7 +88,7 @@ SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 CIRCUITS = {"pouw": "verity.protocols.accounting.pouw.prover.circuit"}
 #: the sampled-proofs setting naming the executor whose sites the window's circuit is cut at (`refusals`)
 CUT = "cut"
-RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
+RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 
 parse = config.parse_protocols
 
