@@ -4,6 +4,7 @@
                                           (data/floors.csv), and every copy route's price and measured cost a word"""
 from __future__ import annotations
 
+import argparse
 import json
 import textwrap
 
@@ -12,13 +13,13 @@ from verity_machine_model.model import CLAIMS, model
 from verity_machine_model.resolve import resolve
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     s = sub.add_parser("solve")
     s.add_argument("name", nargs="?")
     s.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     name = args.name or model(args.data).current
     r = resolve(name, args.data)
     v, s = r.vector, r.solution

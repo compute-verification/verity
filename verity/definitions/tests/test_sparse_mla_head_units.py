@@ -3,9 +3,14 @@ infinities and NaNs planted in the queries, the keys and the carried state), at 
 `SparseMlaHeadScores_v1`'s running max and lanes are the block's, and `SparseMlaHeadValues_v1` on its bf16(P) and rescale, over
 the DV / G column blocks, each on its own columns of the keys' kv_c, is the block's O; a head run through such units block
 after block, each unit's outputs the next one's state, then its end on each column block, is the head (`SparseMlaHead_v1`).
+The chain a row is served as with such units (`sparse_mla.head_chain` and `sparse_mla_split.split_chain` at ``cols``) names
+exactly the units that compute the row, a split row's splits ended on each column block and combined; and the twin
+(`sparse_mla_split_twins.split_chain_rows` with ``units``) returns what the scores unit returns.
 
 The Boolean versions agree with their word views, and at the served statics each is one Flock block, read off its Calls."""
 from __future__ import annotations
+
+from collections import Counter
 
 import numpy as np
 import pytest
@@ -17,8 +22,10 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions import boolean as SW
+from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla as BM
 from verity.definitions.registry import sparse_mla as M
+from verity.definitions.registry import sparse_mla_split as W
 
 GLM = M.SPARSE_MLA_GLM53
 SMALL = dict(DR=16, DV=16, BN=16, DOT=GLM["DOT"], SCALE=0.0625)
@@ -90,7 +97,8 @@ def test_scores_then_values_on_each_column_block_are_the_head_block(NVIS: int, F
     _cut_is_the_block(SMALL, NVIS, FIRST, G, 48, 100 * NVIS + 10 * G + FIRST)
 
 
-@pytest.mark.parametrize("NVIS,FIRST,G", [(64, False, 128), (64, True, 256), (2, True, 32)])
+@pytest.mark.parametrize("NVIS,FIRST,G", [(64, False, 128), (64, True, 256), (2, True, 32), (64, True, 64), (16, True, 64),
+                                          (64, False, 64)])
 def test_the_cut_at_the_served_statics(NVIS: int, FIRST: bool, G: int) -> None:
     _cut_is_the_block(SERVED, NVIS, FIRST, G, 4, 11 + NVIS + FIRST)
 
@@ -116,6 +124,115 @@ def test_a_head_through_its_scores_and_values_units_is_the_head(T: int, G: int) 
             o[c] = list(evaluate(unit, pb, own, *(() if first else (rescale[0], o[c]))))
     end = bind(M.SparseMlaHeadEnd, DV=G, INV=GLM["INV"])
     assert [w for c in range(DV // G) for w in evaluate(end, state[1], o[c])] == list(want)
+
+
+def _row_operands(T: int, DR: int, DV: int, seed: int) -> tuple[list, list, np.ndarray]:
+    """One head's query and its T keys: Gaussian rows with specials planted in the later keys."""
+    rng = np.random.default_rng(seed)
+    qn, qr = _bf16(rng, (1, DV))[0].tolist(), _bf16(rng, (1, DR))[0].tolist()
+    return qn, qr, _planted(rng, _bf16(rng, (T, DV + DR)), BF16_SPECIALS, 0.02)
+
+
+def _through_the_chain(st: dict, T: int, NS: int, G: int, qn: list, qr: list, kv: np.ndarray) -> tuple[list, Counter]:
+    """One head of T keys in NS splits through the units `split_chain` names at ``cols`` = G, each read wired as the chain says
+    (a later scores unit to the one before's max and lanes, a values unit to its block's scores unit and to the same column
+    block's values unit before it, a column end to its split's last scores unit and its column block's last values unit, a
+    combine to the splits' column ends): the head's words, and the units it ran by descriptor id."""
+    DV, BN, inv = st["DV"], st["BN"], GLM["INV"]
+    ran: Counter = Counter()
+
+    def run(fn, *args):
+        ran[fn.id] += 1
+        return evaluate(fn, *args)
+
+    ends = []
+    for b0, b1 in W.split_blocks(T, NS, BN):
+        state: list = []
+        o: list = [None] * (DV // G)
+        for b in range(b1 - 1, b0 - 1, -1):
+            lo, hi, first = b * BN, min(T, (b + 1) * BN), b == b1 - 1
+            out = run(bind(M.SparseMlaHeadScores, NVIS=hi - lo, FIRST=first, **st), qn, qr, kv[lo:hi].ravel().tolist(), *state)
+            state, pb, rescale = [out[0], list(out[1:5])], list(out[5:5 + hi - lo]), out[5 + hi - lo:]
+            unit = bind(M.SparseMlaHeadValues, NVIS=hi - lo, FIRST=first, BN=BN, DOT=st["DOT"], G=G)
+            for c in range(DV // G):
+                own = kv[lo:hi, c * G:(c + 1) * G].ravel().tolist()
+                o[c] = list(run(unit, pb, own, *(() if first else (rescale[0], o[c]))))
+        ends.append((state, o))
+    if NS == 1:
+        (state, o), = ends
+        end = bind(M.SparseMlaHeadEnd, DV=G, INV=inv)
+        return [w for c in range(DV // G) for w in run(end, state[1], o[c])], ran
+    end = bind(W.SparseMlaSplitEnd, DV=G, INV=inv, SCALE=st["SCALE"])
+    combine = bind(W.SparseMlaCombine, NSPLIT=len(ends), DV=G, INV=inv)
+    head = []
+    for c in range(DV // G):
+        parts = [list(run(end, state[0], state[1], o[c])) for state, o in ends]
+        head += list(run(combine, [p[G] for p in parts], [w for p in parts for w in p[:G]]))
+    return head, ran
+
+
+@pytest.mark.parametrize("T,NS,G", [(37, 1, 4), (16, 1, 16), (40, 2, 8), (70, 3, 16), (33, 2, 4), (90, 2, 8)])
+def test_a_row_through_its_chain_of_scores_and_values_units_is_the_row(T: int, NS: int, G: int) -> None:
+    """`split_chain` at ``cols``: the units it names, run as the chain wires them, are `SparseMlaHeadSplit_v1` word for word
+    (NS = 1: `SparseMlaHead_v1`), on Gaussian rows with specials planted in the keys, and they are every unit it names and
+    no other, each as many times as it says; `head_chain` at ``cols`` names an unsplit row's the same."""
+    qn, qr, kv = _row_operands(T, SMALL["DR"], SMALL["DV"], 7 * T + 100 * NS + G)
+    row = bind(W.SparseMlaHeadSplit, T=T, NS=NS, INV=GLM["INV"], **SMALL)
+    got, ran = _through_the_chain(SMALL, T, NS, G, qn, qr, kv)
+    assert got == list(evaluate(row, qn, qr, kv.ravel().tolist()))
+    assert dict(ran) == {u.id: n for u, n in W.split_chain(row, cols=G)}
+    if NS == 1:
+        heads = M.head_chain(bind(M.SparseMla, T=T, NH=3, INV=GLM["INV"], **SMALL), cols=G)
+        assert {u.id: n for u, n in heads} == {u: 3 * n for u, n in ran.items()}
+
+
+@pytest.mark.parametrize("T,NS", [(272, 5), (130, 1)])
+def test_a_served_head_through_its_chain_in_columns_of_64_is_the_head(T: int, NS: int) -> None:
+    """At GLM-5.3's statics, a decode row's head (272 keys in five splits, the last of 16 keys) and a prefill row's (130 keys:
+    a first block of two keys and two full ones) through `split_chain`'s units at 64 columns are `SparseMlaHeadSplit_v1`
+    word for word, and the units run are the ones the chain names."""
+    qn, qr, kv = _row_operands(T, SERVED["DR"], SERVED["DV"], T + NS)
+    row = bind(W.SparseMlaHeadSplit, T=T, NS=NS, INV=GLM["INV"], **SERVED)
+    got, ran = _through_the_chain(SERVED, T, NS, 64, qn, qr, kv)
+    assert got == list(evaluate(row, qn, qr, kv.ravel().tolist()))
+    assert dict(ran) == {u.id: n for u, n in W.split_chain(row, cols=64)}
+
+
+def test_a_chain_of_whole_blocks_is_the_chain_without_columns() -> None:
+    """``cols`` None is the chain of whole key blocks, unit for unit, and a width that does not divide DV is refused."""
+    row = bind(W.SparseMlaSplit, T=70, NS=3, NH=2, INV=GLM["INV"], **SMALL)
+    assert [(u.id, n) for u, n in W.split_chain(row)] == [(u.id, n) for u, n in W.split_chain(row, cols=None)]
+    assert not any("Scores" in u.id or "Values" in u.id for u, _n in W.split_chain(row))
+    assert not any("HeadBlock" in u.id or "EndCols" in u.id for u, _n in W.split_chain(row, cols=8))
+    for chain, r in ((W.split_chain, row), (M.head_chain, bind(M.SparseMla, T=70, NH=2, INV=GLM["INV"], **SMALL))):
+        with pytest.raises(ValueError, match="not DV=16 columns in whole blocks"):
+            chain(r, cols=12)
+
+
+@pytest.mark.parametrize("T,NS", [(37, 1), (70, 3), (33, 2)])
+def test_the_twin_returns_what_the_scores_unit_returns(T: int, NS: int) -> None:
+    """`split_chain_rows` with ``units``: each block's bf16(P) and rescale are `SparseMlaHeadScores_v1`'s on the twin's own
+    state before it, and its m, l and O are the chain's without ``units``."""
+    DR, DV, BN = SMALL["DR"], SMALL["DV"], SMALL["BN"]
+    rng = np.random.default_rng(T + NS)
+    qn, qr, kv = _bf16(rng, (2, DV)), _bf16(rng, (2, DR)), _bf16(rng, (T, DV + DR))
+    kw = dict(T=T, NS=NS, DR_=DR, DV=DV, BN=BN, scale=SMALL["SCALE"])
+    chains, nf = TW.split_chain_rows(qn, qr, kv, units=True, **kw)
+    plain, _nf = TW.split_chain_rows(qn, qr, kv, **kw)
+    assert not nf.any()
+    for (b0, b1), chain, bare in zip(W.split_blocks(T, NS, BN), chains, plain, strict=True):
+        before: tuple = ()
+        for b, state, want in zip(range(b1 - 1, b0 - 1, -1), chain, bare, strict=True):
+            lo, hi, first = b * BN, min(T, (b + 1) * BN), b == b1 - 1
+            m, lanes, o, pb, rescale = state
+            assert all(np.array_equal(x, y) for x, y in zip((m, lanes, o), want, strict=True))
+            assert (rescale is None) == first and pb.shape == (2, hi - lo)
+            scores = bind(M.SparseMlaHeadScores, NVIS=hi - lo, FIRST=first, **SMALL)
+            keys = np.broadcast_to(kv[lo:hi], (2, hi - lo, DV + DR))
+            got = _fields(E.evaluate_batch(scores, qn, qr, np.ascontiguousarray(keys), *before), [1, 4, hi - lo] + [1] * (not first))
+            assert np.array_equal(got[0][:, 0], m) and np.array_equal(got[1], lanes) and np.array_equal(got[2], pb)
+            assert first or np.array_equal(got[3][:, 0], rescale)
+            before = (m, lanes)
 
 
 def test_the_cuts_units_take_what_they_read() -> None:
