@@ -10,6 +10,7 @@ import numpy as np
 from verity.circuits.evaluation import MissingValue, evaluate_region
 from verity.circuits.layout import Circuit, FunctionCall, resolve
 
+
 class Segments:
     """Sorted disjoint [start, end) gate ranges, each backed by a flat words array and a location record.
     Additions are buffered and sorted on first lookup (Gemm returns are one gate per coordinate)."""

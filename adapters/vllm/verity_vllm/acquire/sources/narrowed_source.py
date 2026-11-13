@@ -11,7 +11,7 @@ vLLM rotates the keys in place right after the module returns, so the gather col
 (`allreduce_norm._flush`), as at the module's own flush point; the arena committer copies it at `_acquire`.
 
 The sites are the manifest's narrowed rows, each with the `columns` its Calls record (`query.required`); a narrowed row without them,
-or two rows of one member that disagree, refuses the Commit by name.  Under an external acquisition (the compiled sources, which wrap
+or two rows of one member that disagree, refuses the Commit by name.  Under an external acquisition (the served compiled source, which wraps
 no forward) the source does not attach, and the Commit's coverage names the narrowed rows missing.
 """
 from __future__ import annotations
@@ -144,7 +144,7 @@ def applies(manifest: Mapping[str, Any] | None) -> bool:
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, *, model: Any = None) -> NarrowedRowsSource | None:
     """Attach the source to `com` when the manifest names narrowed rows; None otherwise, and under an external acquisition (the
-    compiled sources), which it says.  A manifest whose narrowed rows lack their columns is refused (exit 3)."""
+    served compiled source), which it says.  A manifest whose narrowed rows lack their columns is refused (exit 3)."""
     if not applies(manifest):
         return None
     if getattr(com, "external_acquisition", False):

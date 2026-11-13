@@ -115,7 +115,7 @@ fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
 LINK_WINDOW_BYTES = 6_291_456
-"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+"""One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
@@ -449,6 +449,8 @@ def _pct(x: float) -> str:
 
 
 def _grid() -> None:
+    from . import ledger  # here, not above: ledger imports this module
+
     gap, jitter = 50 * US, _ns(0.05)
     print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
           "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
@@ -472,7 +474,8 @@ def _grid() -> None:
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-40: s = {s} from the window's coin ({s / t_s:.0f} a second, "
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-40 (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+          f"coin ({s / t_s:.0f} a second, "
           f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
           "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
@@ -496,7 +499,8 @@ def _grid() -> None:
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
           f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
           f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
-          "stated ceiling, δ = 2^-40, g = 50 µs, J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
+          f"stated ceiling, δ = 2^-40 (it reads {ledger.DELTA_FORM}), g = 50 µs, J = 0.05 ms.  Over every tier, the "
+          "store is GB a GPU of each GPU's HBM "
           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
     print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "
@@ -523,8 +527,8 @@ def _grid() -> None:
     print()
     _sizing(gap)
     print()
-    print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
+    print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
+          "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
     print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
@@ -583,6 +587,10 @@ def _grid() -> None:
         print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
               f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
+
+__all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",
+           "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES", "HOST_READ_BYTES_PER_S",
+           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "READ_BYTES_PER_S", "SPEC_BYTES_PER_S", "log2"]
 
 if __name__ == "__main__":
     _grid()

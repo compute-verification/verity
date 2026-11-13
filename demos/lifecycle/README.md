@@ -1,6 +1,7 @@
 # Lifecycle: the onsite and remote composites, stepped through
 
-A minimal worked example of the two composite protocols, `verity/onsite/v0` and `verity/remote/v0`, run through the
+A minimal worked example of onsite, `verity/onsite/v0`, and of remote's H1 development executable
+`verity/remote/v0` (H1's period as its work, which no configuration names), run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest
 version of it in `lifecycle.py`, and nothing under `verity/` or `security/` changes.
@@ -16,13 +17,13 @@ uv run --directory demos/lifecycle pytest tests/test_lifecycle.py     # honest, 
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
-(`Spot.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+**The proofs are a stand-in**, answering under the id each composite runs for integrity (`lifecycle.SAMPLED`), in both
+sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`). `prove(statement, witness) -> proof` returns the
+sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
-server replace it (`verity/protocols/flock/prover/`, `verity/protocols/flock/verifier/`). Everything else is the repository's own code, as
-(b) says.
+It is sound for the example and not zero-knowledge, though its answer carries that id; Flock's zero-knowledge proofs
+behind the ZK server replace it (`verity/protocols/flock/prover/`, `verity/protocols/flock/verifier/`). Everything else is the repository's
+own code, as (b) says.
 
 ## Terms
 
