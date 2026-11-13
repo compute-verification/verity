@@ -54,8 +54,8 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
-from verity.protocols.poub.verifier import codec
-from verity.protocols.poub.verifier.memory_map import Header, Replay, Step
+from verity.protocols.accounting.poub.verifier import codec
+from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 
 server = D.server_fixture(PORT)
 

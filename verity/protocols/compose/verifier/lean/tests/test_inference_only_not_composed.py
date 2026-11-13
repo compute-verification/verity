@@ -33,7 +33,7 @@ KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; 
 
 def v0_names() -> set[str]:
     """v0's Lean names: `NciCheck.Protocol.protocol` while its `protocolId` is v0."""
-    text = (ROOT / "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean").read_text()
+    text = (ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Protocol.lean").read_text()
     m = re.search(r'^def protocolId : String := "([^"]*)"', text, re.M)
     assert m, "NciCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
     return {"NciCheck.Protocol.protocol"} if m[1] == V0 else set()
@@ -52,7 +52,7 @@ def lean_components(path: Path) -> tuple[list[str], list[str]]:
 
 def configuration_ids() -> list[str]:
     """The ids `parties.IDS` gives as string literals."""
-    for node in ast.parse((ROOT / "verity/protocols/spot/verifier/parties.py").read_text()).body:
+    for node in ast.parse((ROOT / "verity/protocols/proofs/spot/verifier/parties.py").read_text()).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["IDS"]:
             assert isinstance(node.value, ast.Dict), "parties.IDS is no longer a dict literal: read its ids as it is now"
             return [v.value for v in node.value.values if isinstance(v, ast.Constant)]
