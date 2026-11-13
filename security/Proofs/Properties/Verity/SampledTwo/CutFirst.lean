@@ -21,7 +21,7 @@ import all Init.Data.String.Slice
 `CutRead` takes `FirstReads θ` as a premise: on every accepted play, the parameters name a challenger key at the
 deployed LMS parameters, the case names the first session's window and family, and `drawCoins` under that key reads
 the first stage's coin evidence. This module derives it from the two-stage form's acceptance (`firstReads_of_shown`)
-on every play whose first stage's coin evidence is not `null` (`FirstShown`), in four steps:
+on every play whose first stage's coin evidence is not `null` (`FirstCoinsShown`), in four steps:
 
 * **The key** (`keyOf_some`): the form reads the interior audit's parameters with `OneStageZk.membersParamsOfJson`
   (`form_audit`), which reads them as `OneStageZk.paramsOfJson` does, and that refuses a challenger key at any other
@@ -37,7 +37,7 @@ on every play whose first stage's coin evidence is not `null` (`FirstShown`), in
   boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's, whose
   digest is the commitment's (`Properties.Spot.digestIsRecord's`). These are `firstDraws`'.
 
-`FirstShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null` first-stage
+`FirstCoinsShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null` first-stage
 coin evidence. The run of record alone passes a first stage that read no byte with `null` coin evidence, and of such a
 play the cut reads no first session (`readsLogs` is empty), so its event would fail there.
 
@@ -259,12 +259,12 @@ theorem commitment_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.P
     | (cases hce; exact ⟨_, by assumption⟩)
 
 /-- **The first stage's coin evidence is not `null`**, on every accepted play after the parameters `θ`. -/
-def FirstShown (θ : ByteArray) : Prop :=
+def FirstCoinsShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) → e.coins ≠ Json.null
 
 /-- **The first stage's coins are read under the parameters' key on every accepted play** whose first stage's coin
 evidence is not `null` (module docstring). -/
-theorem firstReads_of_shown (θ : ByteArray) (hS : FirstShown θ) : FirstReads θ := by
+theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstReads θ := by
   intro s hθ ha p c e h1
   have ha' := ha
   obtain ⟨p', c', e', pub, prof, h1', hacc⟩ := ha'
@@ -307,10 +307,10 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstShown θ) : FirstReads �
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cut with the read in its event** (`cutBound_read`), at `FirstShown θ` in `FirstReads θ`'s place. -/
+/-- **The cut with the read in its event** (`cutBound_read`), at `FirstCoinsShown θ` in `FirstReads θ`'s place. -/
 theorem cutBound_shown (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (hw : Wired V k θ) (hS : FirstShown θ)
+    (hw : Wired V k θ) (hS : FirstCoinsShown θ)
     (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) :=
   cutBound_read V k dev θ F c σ hw (firstReads_of_shown θ hS) hP hs

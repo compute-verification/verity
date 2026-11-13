@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.SampledTwo.CoinStages
 public import Proofs.Properties.Verity.SampledTwo.CoinBytes
 public import Proofs.Properties.Verity.SampledTwo.StageAlone
 public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
+public import Proofs.Properties.Verity.SampledTwo.CutAccept
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.SessionCut
 public import Proofs.Properties.Verity.SampledTwo.Reached
@@ -60,9 +61,10 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
 * **The two families distinct** (`distinctFamilies`), until the form refuses equal labels (TWOLEG).
 * **Each stage's draw is its family after one root** (`draws₁`, `draws₂`): the family is the form's to show (TWOLEG);
   one root on the play's log is the cut's with the device's history.
-* **The first stage's coins are read under the parameters' key** (`firstReads`) and **an accepted play on two windows
-  shows its sessions' order** (`orderShown`): CUT derives both from the form's accept (`CutAccept.lean`, not on the
-  join yet); `firstDrawn`, `sessionMatches`.
+* **The first stage read the cut's draw** (`firstDrawn`) and **the check's first session is the cut's**
+  (`sessionMatches`). That the first stage's coins are read under the parameters' key and that an accepted play on two
+  windows shows its sessions' order are theorems of the form's accept (`firstReads`, `orderShown`, CUT's
+  `CutAccept.lean`), no longer fields.
 * **On two windows the first session samples no coin tree** (`firstTreeless`): a named hypothesis until the form
   refuses a coin tree's line in the first session's log on two windows (TWOLEG); with `caseIsSent` it gives the
   interior's log on the play's (`SessionCoins.interiorLogged_read`, SESSIONCOINS). **The messages** (`msgOpens`,
@@ -230,10 +232,6 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   draws₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ JoinGood o) (fun o => (C o).bind firstDraw) ℓ₁
   /-- The second stage's draw is `ℓ₂` after one root, on the accepted plays `JoinGood` holds of. -/
   draws₂ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ JoinGood o) (fun o => (C o).bind secondDraw) ℓ₂
-  /-- The first stage's coins are read under the parameters' key. -/
-  firstReads : FirstReads θ
-  /-- An accepted play on two windows shows its two sessions' order in the ledger its second stage carries. -/
-  orderShown : OrderShown θ
   /-- The first stage read the draw the cut reads. -/
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
@@ -360,7 +358,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   have hCut : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
-      (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw h.firstReads h.orderShown h.ledgerInOrder h.signer)
+      (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
     (hHolds V A x θ F c σ _ _ (readsAt A.h))

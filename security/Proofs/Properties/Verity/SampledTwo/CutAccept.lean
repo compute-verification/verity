@@ -9,7 +9,7 @@ public import Proofs.Properties.Pouw.LiveSalt.Ledger
 # The cut from the form's acceptance
 
 `CutFirst` and `CutOrder` take two facts about an accepted play as premises: its first stage's coin evidence is not
-`null` (`FirstShown`), and on two windows the ledger its second stage's coin evidence carries shows the two sessions
+`null` (`FirstCoinsShown`), and on two windows the ledger its second stage's coin evidence carries shows the two sessions
 in order (`OrderShown`). The two-stage form refuses a play without them, so both are theorems here.
 
 * **The first stage's coin evidence** (`firstShown`): the case's evidence is the form's parse of the bytes sent
@@ -107,10 +107,10 @@ private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.E
        all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
        all_goals (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; intro hc; simp_all))
 
-/-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstShown`): the form's evidence
+/-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstCoinsShown`): the form's evidence
 parses only so. -/
-theorem firstShown (θ : ByteArray) : FirstShown θ := by
-  unfold FirstShown
+theorem firstShown (θ : ByteArray) : FirstCoinsShown θ := by
+  unfold FirstCoinsShown
   intro s _ _ p c e h1
   obtain ⟨b, hb⟩ := evidence_of_caseOf h1
   exact evidence_coins hb
