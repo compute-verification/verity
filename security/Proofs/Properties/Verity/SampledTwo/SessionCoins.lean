@@ -254,11 +254,11 @@ theorem same_append {pre q : List Release} (hq : ∀ r ∈ q, openTree r.frame =
       unfold Verity.Sampled.helloSpecs
       apply List.filterMap_eq_nil_iff.2
       intro r hr
-      obtain ⟨h1, h2⟩ := hq r hr
+      obtain ⟨-, h2⟩ := hq r hr
       cases hf : r.frame with
       | fresh _ => rfl
       | hello sp => exact absurd hf (h2 sp)
-      | opening _ _ _ => rw [hf] at h1; cases h1
+      | opening _ _ _ => rfl
     unfold Verity.Sampled.helloSpecs at hnil ⊢
     rw [List.filterMap_append, hnil, List.append_nil]
   · have hz : openedOf q i s = 0 := by
@@ -447,7 +447,6 @@ theorem roundOf_slot {tab : String} {name : Option String} {k j : ℕ} (h : roun
     have e2 : (2 * k + 1) % 2 = 1 := by omega
     have e3 : (2 * k + 1) / 2 = k := by omega
     simp [slotStream, e1, e2, e3]
-  · cases h
 
 theorem mem_firstsOf {x : ℕ} : ∀ (acc xs : List ℕ), x ∈ acc ∨ x ∈ xs → x ∈ firstsOf acc xs
   | acc, [], h => by simpa [firstsOf] using h
@@ -506,7 +505,7 @@ theorem find?_of_first {α : Type} {p : α → Bool} : ∀ {l : List α} {t : �
   | x :: l, 0, a, h, hp, _ => by
     simp only [List.getElem?_cons_zero, Option.some.injEq] at h
     subst h
-    simp [List.find?_cons, hp]
+    simp [hp]
   | x :: l, t + 1, a, h, hp, hb => by
     have hx : p x = false := hb 0 x (Nat.succ_pos _) (by simp)
     rw [List.find?_cons, hx]
