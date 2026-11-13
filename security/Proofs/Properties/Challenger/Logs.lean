@@ -26,7 +26,7 @@ open private isDigest strOf isTime from Spot.ChallengerSession
 namespace Properties.Challenger.Logs
 
 open Lean (Json JsonNumber)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 open Claims.Json (Same Good)
 open FlockComplete.JsonRT (good_mkObj)
 open CanonRead (distinct_of_keys)

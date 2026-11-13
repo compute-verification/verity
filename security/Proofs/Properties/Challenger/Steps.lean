@@ -46,7 +46,7 @@ namespace Properties.Challenger.Steps
 
 open Lean (Json)
 open Flock (V)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 
 /-- A list of strings reads back from its JSON strings. -/
 theorem mapM_strs {f : Json → V String} (hf : ∀ s, f (.str s) = .ok s) (lines : List String) :

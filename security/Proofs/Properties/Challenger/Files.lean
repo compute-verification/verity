@@ -29,7 +29,7 @@ open private hexAt? from Spot.ChallengerSession
 namespace Properties.Challenger.Files
 
 open Lean (Json)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 
 theorem nat?_nat (n : Nat) : nat? (Lean.toJson n) = some n := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]

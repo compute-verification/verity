@@ -30,7 +30,7 @@ open private escapesSurrogate from Spot.ChallengerSession
 namespace Properties.Challenger.Plain
 
 open Lean (Json)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 
 /-! ## Plain strings -/
 

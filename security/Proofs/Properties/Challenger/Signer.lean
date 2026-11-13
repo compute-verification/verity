@@ -23,7 +23,7 @@ open private verifies from Spot.ChallengerSession
 
 namespace Properties.Challenger.Signer
 
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 
 /-- **A signature's leaf is its first four bytes**, read as `Lms.Signature.decode` reads them. -/
 theorem leafOf_eq (data : ByteArray) (h : 4 ≤ data.size) :

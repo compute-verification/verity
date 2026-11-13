@@ -26,7 +26,7 @@ open private isDigest isBodyOf isStr isV1Window from Spot.ChallengerSession
 namespace Properties.Challenger.Bodies
 
 open Lean (Json JsonNumber)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 open Claims.Json (Same)
 open FlockComplete.JsonRT (same_str same_num same_bool)
 

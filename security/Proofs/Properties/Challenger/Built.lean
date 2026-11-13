@@ -37,7 +37,7 @@ open private isDigest from Spot.ChallengerSession
 namespace Properties.Challenger.Built
 
 open Lean (Json)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 open Claims.Json (Good Wf)
 open FlockComplete.JsonRT (get?_mkObj keys_of isSome_get?_mkObj)
 open Plain (PlainChar PlainStr canonStr_plain)

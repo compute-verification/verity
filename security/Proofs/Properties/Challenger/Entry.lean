@@ -40,7 +40,7 @@ open private escapesSurrogate isBodyOf from Spot.ChallengerSession
 namespace Properties.Challenger.Entry
 
 open Lean (Json)
-open Spot Spot.Challenger
+open _root_.Spot _root_.Spot.Challenger
 open Claims.Json (Same Good)
 open FlockComplete.JsonRT (same_str same_null same_num keys_of isSome_get?_mkObj)
 open Plain (PlainStr PlainAt canonical_canon noEscape_canon escapesSurrogate_false)
@@ -54,7 +54,7 @@ theorem qsort_strs {as : Array String} (hp : as.toList.Pairwise (· < ·)) : as.
   · have := hp i j (by simpa using hi) (by simpa using hj) hij
     simp only [Array.getElem_toList] at this
     simp [hij, this]
-  · simp [String.lt_irrefl]
+  · simp
   · have := hp j i (by simpa using hj) (by simpa using hi) hij
     simp only [Array.getElem_toList] at this
     simp [String.lt_asymm this, Nat.lt_asymm hij]
