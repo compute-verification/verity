@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 import kv as K  # noqa: E402
 import kv_twin as T  # noqa: E402
 
-from verity.protocols.poub.verifier import codec as RB  # noqa: E402
+from verity.protocols.accounting.poub.verifier import codec as RB  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/vectors").digest()
 NAMES = sorted(K.FIELDS)

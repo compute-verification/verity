@@ -33,7 +33,7 @@ from verity.circuits.codec import canonical_json  # noqa: E402
 sys.path.append(str(ROOT / "benchmarks" / "one_stage"))
 import served_verdicts as SV  # noqa: E402
 
-PERIOD_CASE = ROOT / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 #: V3c's committed window's provenance: `prove_path.py window-commit`'s class and scan state, `rows.registration`'s kind
 #: and run root, `Window.write`'s circuit record and registered roots, `rows.write`'s index leaf and order
 V3C_WINDOW = {"kind": "served", "run": "ab" * 64, "window_circuit": {"class": [4, 32, 4, 4, 16]},
