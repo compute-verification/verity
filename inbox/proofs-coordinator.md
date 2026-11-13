@@ -159681,3 +159681,42 @@ After its verdict I run the change's suites (`suites.py --changed 20936c91d40b -
 - How long `verity-flock` takes on this node, and so when either L1 run ends. If the first is still inside the same test at my next entry I say so and ask whether the second run alone (the head's) is enough for your mark.
 
 **To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57` (vy-nebius-2, slots p0 and p1). **Next entry by 21:18Z**, sooner when a suites run ends.
+
+## ADDRROW2, Fri 13 Nov 20:21Z: your 20:19Z is read: the count is 14 finders by search and 2 with the picker's choose gone, 16 of 24, and ONE QUESTION, because the seven cannot simply be left out: the picker's parameters change for every caller at once
+
+Your four points are taken: no edit to `LeafColl` before soundness's word; at `clashPickCL` and `clashPickHL` the
+picker's `choose` goes and `outCL`, `outHL` stay; rows 7, 9, 14, 16 wait with rows 1 to 3.
+
+**The count for Monday's second pull request, as you ruled it** [derived from my 19:31Z table]:
+- 14 finders by search: rows 4, 5, 6, 8, 10, 11, 12, 13, 15, 17, 18, 19, 20, 21 (`adv₀SFinderZ`, `selfSFinderZ`,
+  `adv₀FinderL`, `selfFinderL`, `adv₀SFinderL`, `selfSFinderL`, `TreeRewind.finder`, `adv₀Finder`, `selfFinder`,
+  `adv₀SFinder`, `selfSFinder`, `regFinder`, `saltFinder`, `topFinder`). None of them holds a chooser [read].
+- 2 with the picker's `choose` gone and the played outcome's left: `clashPickCL`, `clashPickHL`.
+- Not in it: the seven (rows 1, 2, 3, 7, 9, 14, 16), `leafFinder` (soundness's word), `clashPickHLO` (deleted).
+- 14 + 2 + 7 + 1 + 1 = 25. Done so far: 0. The base is written, not compiled: `Leaf` holds `pair` and `pair_spec`,
+  `openPairL` reads the scheme, the three bare base lemmas are gone (branch `cursor/proofs-addrrow2-cflock-pairs-681e`,
+  local, not pushed yet).
+
+**The question** [read: `StrictCR.lean:53–78, 175–182`]. All seven are `forkFinder … (fun d => conflictPick H (op d)
+(hcol d)) …`, and their `_le_strict` lemmas go through `forkE_conflict_le`. The search changes `conflictPick`'s
+parameters (a pair function in place of a proof that a collision exists), so the seven do not compile unless one of
+these is done. Which?
+- **(a) The seven take the new picker's two arguments in Monday's pull request, and nothing else of theirs moves.**
+  Their choosers (`plurSZ`, `plurSL`, `plurCL`, `plurS`, `plurC`) and their `lockSess… default` are not touched and
+  wait for the chooser's lemma. One picker in the tree. The chooser's change later edits another argument of the same
+  seven definitions. This is what I understood from "leave those three for LAST", and it is what I recommend.
+- **(b) The seven keep today's picker until the chooser's lemma.** Then today's `collOf`, `conflictPick` and
+  `forkE_conflict_le` stay in the tree by choice beside the search ones, under one of the two sets of names, and the
+  five bare lemmas the seven hand over stay as corollaries (`opR_conflict_collision`, `opRL_…`, `opRZ_…`,
+  `opPadsAtZ_…`, `opTauZ_…`). Two pickers until the seven move, and the second set of names is renamed or deleted then.
+- Under both, the records of the 48 readers of the session finders move in Monday's pull request (they read `Leaf`,
+  `collOf` and `adv₀SFinderZ`, `selfSFinderZ`), and move again with the chooser's change.
+
+Until you say, I write what both share, in this order: the pickers in `StrictCR.lean`, the pair functions of the
+clashes and conflicts (`CompiledSound`, `CompiledL`, `BadZ`), the 14, the two pickers of the played outcomes, the
+dead chain, `topRoot_collision`. I write the seven last under (a) so that the files compile, and I undo that if you
+rule (b). Nothing opens before your word.
+
+**Runs** (unchanged since 20:09Z but one): `r20261113-200728-983a` (cpu-12, the session finder's S try),
+`r20261113-200449-7c75` (cpu-11, the sampled half's 16 tries), `r20261113-185209-f829` (cpu-8, pull request 1's
+records run). I read them at my next checkpoint.
