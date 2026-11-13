@@ -12,7 +12,7 @@ public import Definitions.Accounting.JointLive
 in its own circuit at that circuit's part of the trace, so the units a trace doesn't bind are each circuit's own:
 
 * **A trace of the whole at either's gates** (`Circuit.traceLeft X`, `Circuit.traceRight X`): its values at `C`'s
-  gates and at `D`'s.
+  gates and at `D`'s; and two traces side by side (`Circuit.traceBeside`).
 * **The whole at a gate of either** (`Circuit.beside_isInput_left`, `beside_reads_left`, `beside_op_left`,
   `mem_beside_outputs_left`, `Partition.beside_unit_left` and their `right` forms): its own circuit's input flag,
   wires, operation, outputs and unit.
@@ -52,6 +52,11 @@ def traceLeft (X : (C.beside D).Trace) : C.Trace := fun i => (X (Fin.castAdd D.N
 
 /-- **A trace of two circuits side by side, at `D`'s gates.** -/
 def traceRight (X : (C.beside D).Trace) : D.Trace := fun j => (X (Fin.natAdd C.N j)).cast (Fin.append_right C.w D.w j)
+
+/-- **Two traces side by side**: `X` at `C`'s gates and `Y` at `D`'s. -/
+def traceBeside (X : C.Trace) (Y : D.Trace) : (C.beside D).Trace :=
+  Fin.addCases (motive := fun g => BitVec ((C.beside D).w g))
+    (fun i => (X i).cast (Fin.append_left C.w D.w i).symm) (fun j => (Y j).cast (Fin.append_right C.w D.w j).symm)
 
 theorem beside_isInput_left (i : Fin C.N) : (C.beside D).isInput (Fin.castAdd D.N i) = C.isInput i :=
   Fin.append_left C.isInput D.isInput i
