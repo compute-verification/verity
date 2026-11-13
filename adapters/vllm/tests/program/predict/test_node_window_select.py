@@ -45,7 +45,7 @@ def _units(Vs: int, rows: np.ndarray) -> np.ndarray:
         wires = {p: outs[k] for p, k, _f in u.wires}
         args = [rows[:, u.lanes[0]:u.lanes[1]] if p == "logits" else wires[p] for p, _t in u.defn.signature()[0]]
         outs[u.key] = np.asarray(evaluate_batch(u.defn, *args, kernel="reference")).reshape(len(rows), -1)
-    got = outs[("combine",)].astype(np.uint64)
+    got: np.ndarray = outs[("combine",)].astype(np.uint64)
     return got[:, 0] | (got[:, 1] << 16)
 
 
