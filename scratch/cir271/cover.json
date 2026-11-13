@@ -33855,6 +33855,8 @@
      "ks-form: refused: a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the outputs): a statement form the soundness proof does not cover",
      "--zk session FAILED:  REFUSED\t{\"statement\":\"verity/flock-circuit\",\"why\":\"MUFU table ex2 under \\\"tables\\\": No such file or directory (os error 2)\"}|"
     ],
+    "zk_refusal": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}: its statement reads ex2 in lookup slots and returns its outputs from a tail stage, a form `verify --zk` refuses (`ProvedScope.scopeOkH`); name its Boolean version SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "boolean_version_staged": false,
     "done": {
      "exit": 6,
      "seconds": 1580,
@@ -33921,7 +33923,13 @@
      "VERDICTS t019 B.statement.other-def: exit 1; setup: partition: the verifier's program is not the one the partition object names; units=None; note=None",
      "22:58:39Z t019: done: exit 6 in 1580s"
     ],
-    "outcome": "refused"
+    "outcome": "refused",
+    "needs": {
+     "source": "its own run's names.jsonl: the word form is refused under --zk; its Boolean version was not staged",
+     "stage": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+     "word_form_stage_s": 1050.0,
+     "word_form_stage_gb": 33.04
+    }
    },
    "t021": {
     "tag": "t021",
@@ -34464,6 +34472,8 @@
      "ks-form: refused: a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the outputs): a statement form the soundness proof does not cover",
      "--zk session FAILED:  REFUSED\t{\"statement\":\"verity/flock-circuit\",\"why\":\"MUFU table ex2 under \\\"tables\\\": No such file or directory (os error 2)\"}|"
     ],
+    "zk_refusal": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}: its statement reads ex2 in lookup slots and returns its outputs from a tail stage, a form `verify --zk` refuses (`ProvedScope.scopeOkH`); name its Boolean version SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "boolean_version_staged": false,
     "done": {
      "exit": 6,
      "seconds": 1490,
@@ -34530,7 +34540,13 @@
      "VERDICTS t031 B.statement.other-def: exit 1; setup: partition: the verifier's program is not the one the partition object names; units=None; note=None",
      "23:46:12Z t031: done: exit 6 in 1490s"
     ],
-    "outcome": "refused"
+    "outcome": "refused",
+    "needs": {
+     "source": "its own run's names.jsonl: the word form is refused under --zk; its Boolean version was not staged",
+     "stage": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+     "word_form_stage_s": 1039.1,
+     "word_form_stage_gb": 33.0
+    }
    },
    "t033": {
     "tag": "t033",

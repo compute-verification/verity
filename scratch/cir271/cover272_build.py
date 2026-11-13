@@ -1,4 +1,5 @@
-"""cover272_build.py COVER.json TYPES.json RUNS_DIR: CIR-272's record, `circuits/request-cover/v3`, written over COVER.json (v2).
+"""cover272_build.py COVER.json TYPES.json RUNS_DIR: CIR-272's record, `circuits/request-cover/v3`, written over COVER.json, which
+must be v2 (`git show b1595daf44d1:scratch/cir271/cover.json`).
 
 For each tag of TYPES.json (scratch/cir272/types.json on cursor/circuits-cir272-bound-6f04: the 240 card types without a
 bound accepted statement and the 18 extra units), its outcome read from its own run's files under RUNS_DIR/RUN/out/TAG
@@ -68,6 +69,8 @@ for where, (run, node) in RUNS.items():
     nr = {l.split("\t")[0]: l.rstrip("\n").split("\t")[2] for l in (out / "not-reached.tsv").read_text().splitlines() if l}
     names = {n["tag"]: n.get("error") or (n.get("census") or {}).get("error")
              for n in map(json.loads, (out / "names.jsonl").read_text().splitlines()) if n.get("tag")}
+    zk = {n["tag"]: (n.get("census") or {}).get("zk_refusal")
+          for n in map(json.loads, (out / "names.jsonl").read_text().splitlines()) if n.get("tag")}
     for tag, ix in index.items():
         if ix["list"] != where:
             continue
@@ -77,6 +80,9 @@ for where, (run, node) in RUNS.items():
         d = out / tag
         if names.get(tag):
             r["names_refusal"] = f"names.jsonl (the stager's census lookup, serving_rows.template): {names[tag]}"
+        if zk.get(tag):
+            r["zk_refusal"] = zk[tag]
+            r["boolean_version_staged"] = False
         if tag in nr:
             assert not d.exists(), tag
             r.update(outcome="not-run", why="not-reached", text=nr[tag])
@@ -112,6 +118,9 @@ for where, (run, node) in RUNS.items():
             if not st:
                 texts.append(f"stager: {err[-1] if err else ''}")
             r.update(outcome="refused", text=texts)
+            if r.get("zk_refusal"):
+                r["needs"] = {"source": "its own run's names.jsonl: the word form is refused under --zk; its Boolean version was not staged",
+                              "stage": b["boolean_version"], "word_form_stage_s": r["stage"]["wall_s"], "word_form_stage_gb": r["stage"]["maxrss_gb"]}
         recs[tag] = r
 assert len(recs) == len(index) == 258
 
