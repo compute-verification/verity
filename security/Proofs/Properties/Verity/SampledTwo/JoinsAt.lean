@@ -74,10 +74,11 @@ back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodC
   refuses a coin tree's line in the first session's log on two windows (TWOLEG); with `caseIsSent` it gives the
   interior's log on the play's (`SessionCoins.interiorLogged_read`, SESSIONCOINS). **The messages** (`msgOpens`,
   `digestBefore`, MESSAGES): no check gives either; their docstrings say what each holds of.
-* **The run of record's accept** (`playAccepts_form`'s premises): `heldAt`, `twoHolds`, `heldOfAt` (HELDOF);
+* **The run of record's accept** (`playAccepts_form`'s premises): `partsHeldAt`, `heldOfAt` (HELDOF);
   `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions'
   workers); and `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the
-  records the run held are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`), no longer fields.
+  records the run held, and that the held copies' design evaluates, are theorems (ACCEPTS's `recordsHeldAt_of`,
+  `recordsRead`, `twoHolds_at`), no longer fields.
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -261,10 +262,9 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- The held copies agree with what an accepted play's run reads (`RunsAs.HeldMatches`). -/
-  heldAt : HeldAt A C
-  /-- The held copies' two-stage design evaluates at every statement. -/
-  twoHolds : SpotFlock.RunsAs.Round2.TwoHolds A.h
+  /-- The held copies' parts are the interior program's strata's at each accepted play's replay sample
+  (`HeldOf.PartsAt`). -/
+  partsHeldAt : PartsHeldAt A C
   /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
   heldOfAt : HeldOfAt A C
   /-- Each accepted play's registrations list each port once. -/
@@ -387,7 +387,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
     (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
-      (playAccepts_form A C _ P' h.heldAt h.twoHolds h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
+      (playAccepts_form A C _ P' h.partsHeldAt h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
         h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
