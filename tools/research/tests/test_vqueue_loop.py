@@ -4928,7 +4928,7 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
 
 
-def _landed(env: Env, monkeypatch, *numbers: int, fails: bool = False) -> list[int]:
+def _closed(env: Env, monkeypatch, *numbers: int, fails: bool = False) -> list[int]:
     """Each of ``numbers`` closed on GitHub, as a member is once its candidate lands: out of the open PRs, with GitHub's read of
     one PR (`GitHub.pr`) answering it, or failing (``fails``).  Returns the numbers that read is asked, in order."""
     gh, read = env.o.gh, []
@@ -4948,7 +4948,7 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_it_fa
     """What a candidate fails off the gate is read once its runs end, after it landed, when GitHub has closed its members: the
     lane of each member whose merge ratchet-gate fails is read from GitHub's PR (`World.handle`), not from the open ones."""
     loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
-    read = _landed(env, monkeypatch, 1, 2, 3)
+    read = _closed(env, monkeypatch, 1, 2, 3)
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1, 2)})
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
@@ -4961,7 +4961,7 @@ def test_under_gate_check_a_landed_member_github_can_t_read_rings_the_step_s_own
     """A landed member whose PR GitHub doesn't answer for names no lane: the ring goes to ratchet-gate's owner in ci.toml, as
     for a member no lane owns, with one line logged, and the tick goes on."""
     loop, runs, main, sha = _off(env, monkeypatch, OTHER)
-    read = _landed(env, monkeypatch, 1, fails=True)
+    read = _closed(env, monkeypatch, 1, fails=True)
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1)})
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
@@ -4976,10 +4976,10 @@ def test_a_pr_no_longer_open_is_read_from_github_once_a_tick(env, monkeypatch):
     """`World.handle` of a PR that isn't open reads GitHub's PR once a number until the next tick's fetch, however often it is
     asked, and an open PR's handle reads none."""
     loop, _, _, _ = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"})
-    read = _landed(env, monkeypatch, 1)
+    read = _closed(env, monkeypatch, 1)
     w = loop.world
-    w.fetch()
-    assert [w.handle(n) for n in (1, 1, 2, 1)] == ["lane-1", "lane-1", "lane-2", "lane-1"] and read == [1]
+    loop.tick()
+    assert 1 not in w.prs and [w.handle(n) for n in (1, 1, 2, 1)] == ["lane-1", "lane-1", "lane-2", "lane-1"] and read == [1]
     w.fetch()
     assert w.handle(1) == "lane-1" and read == [1, 1]
 
