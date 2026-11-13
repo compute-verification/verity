@@ -1,0 +1,26 @@
+adapters/vllm/tests/acquire/test_call_boundary_source.py: one deleted at 17, 35
+adapters/vllm/tests/check/test_dense_replay_rows.py: one deleted at 10, 23
+adapters/vllm/tests/pipeline/test_manifest_pool.py: 107
+adapters/vllm/tests/pipeline/test_serving_rows_boolean.py: one deleted at 23, 34
+adapters/vllm/tests/pipeline/test_single_request_build_path.py: 106-108, 113-114
+adapters/vllm/tests/program/test_fa2_check_inf.py: 17, 147, 153
+adapters/vllm/tests/program/test_fa2_softcap.py: 16, 192, 194
+adapters/vllm/tests/program/test_fa3_check_inf.py: 19, 134, 140
+adapters/vllm/tests/query/test_cross_call.py: 21, 41, 52, 56, 58, 118, 138, 144, 154
+adapters/vllm/tests/query/test_norm_scales.py: 29, 194, 196, 199
+adapters/vllm/tests/query/test_router_softmax.py: 29, 141, 144
+adapters/vllm/tests/query/test_scale_products.py: 28, 69, 119
+adapters/vllm/tests/query/test_vocab_range.py: 19, 78
+adapters/vllm/tests/query/test_word.py: 41, 47, 133, 165, 171, 173, 175, 186, 189-190, 450, 454, 456, 476, 495, 497
+adapters/vllm/tests/tools/test_popread.py: 170, 183, one deleted at 288, 292
+adapters/vllm/tools/popread.py: 779
+adapters/vllm/verity_vllm/acquire/sources/call_boundary_plan.py: one deleted at 295, 297
+adapters/vllm/verity_vllm/pipeline/manifest.py: 46, 101-102, 140, 235-236
+adapters/vllm/verity_vllm/pipeline/program_graph.py: 51, 3 deleted at 457
+adapters/vllm/verity_vllm/query/program_view.py: 582-589
+benchmarks/bool_build_cost/run.py: 57
+benchmarks/harness/tests/test_prove.py: 1566, 1568
+verity/definitions/call_scope.py: 12-17, 19-20, 34
+verity/definitions/tests/test_call_scope.py: 2-3, 6-7, 13, 21, 23-34
+verity/definitions/tests/test_word.py: 17, 21
+verity/protocols/flock/prover/python/verity_flock/boolean_export.py: 1463

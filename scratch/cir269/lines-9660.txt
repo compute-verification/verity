@@ -1,0 +1,9 @@
+tools/verity/circuit_check/src/circuit_check/cache.py: 429-436
+tools/verity/circuit_check/src/circuit_check/cli.py: 1345-1346, one deleted at 1347, 1349
+tools/verity/circuit_check/src/circuit_check/sidecars.py: 135-136, 141-166, 271-273, 280, 282
+tools/verity/circuit_check/src/circuit_check/targets.py: one deleted at 28, 70-73, 81-82, 85, 324-358, 2 deleted at 506, 508, 2 deleted at 514, 517-518, 523-524, 657-660, 2 deleted at 662, 670, 789, 803-804, 807, 834, 858-860, 873-874, 877, 882, 885, 1090, 1093
+tools/verity/circuit_check/src/circuit_check/units.py: 514, 535
+tools/verity/circuit_check/tests/test_cache.py: 742-743, 746, 1579-1582, 1588, 1590
+tools/verity/circuit_check/tests/test_targets.py: 6-7, 275-331
+verity/definitions/registry/catalog.circuit-check.py: 1-71
+verity/definitions/registry/catalog.py: 22-23
