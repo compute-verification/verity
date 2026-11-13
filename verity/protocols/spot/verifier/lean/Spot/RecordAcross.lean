@@ -6,7 +6,8 @@ computed whatever the others say:
 * `logged`: the later registration's `previous` is the digest of a record of the earlier stream's log (`loggedAt`), the
   registrations that stream received, in order;
 * `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedSessionOf`), the bytes the later
-  stream's sample read are exactly the coins the challenger's signed log shows released after the later registration
+  stream's sample read are exactly the coins of the later stream's family (`family`, which the caller names and the
+  evidence does not) that the challenger's signed log shows released after the later registration
   (`Challenger.coinsReason`), and that log shows a coin released after the earlier registration, the last of those before
   the first released after the later one (`receiptReason`): the record whose ports the later blocks read was received
   first, and no coin that sampled one of them was released before the challenger received what fixes its rows;
@@ -22,8 +23,9 @@ stream's log holds no such record or the order is not the log's; 3 when those ho
 is missing or did not accept; 4 when those hold and that audit record accepted and is not complete: it accepted with
 entries that did not run, and is no audit of those entries, so a later record does not rest on it as on one that is.
 
-The order is read from one coin family of one session, the later sample's own: both registrations' receipts are roots
-of that family.
+The order is read from one session's signed log over every family's lines, in the log's own order (`receivedOf`). A
+family's coins follow one commitment (`Challenger.FAMILY_ROOT`), so the earlier registration's coins are another
+family's than the later sample's, and no one family's roots show both receipts.
 -/
 module
 
@@ -64,9 +66,10 @@ def loggedAt (log : Array Json) (previous : String) : Option Nat :=
 
 def UNLOGGED : String := "the later registration's previous is no record of the earlier stream's log"
 
-/-- Why `received`, a coin family's roots (the root the challenger had received when it released each coin, in order),
-does not show `earlier` received before every coin released after `later`: no coin was released after one of them, or
-the last coin after `earlier` is not before the first after `later`. -/
+/-- Why `received`, the roots a session's log shows (the root the challenger had received when it released each coin, of
+whatever family, in the log's order), does not show `earlier` received before every coin released after `later`: no
+coin was released after one of them, or the last coin after `earlier` is not before the first after `later`. A coin's
+number in the reason is its place among the log's coins, over every family. -/
 def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Option String :=
   let coinsAfter (x : ByteArray) := (received.zipIdx.filter (·.1 == x)).map (·.2)
   match (coinsAfter earlier).getLast?, (coinsAfter later).head? with
@@ -76,25 +79,49 @@ def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Opti
     if a < b then none
     else some s!"the challenger's log shows coin {b} released after the later registration and coin {a} after the earlier registration: the earlier registration's coins come first"
 
-/-- The roots of the coin family the evidence `coins` names (its segment's label), from the session the auditor's ledger
-opens on `window` (`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads it). -/
+/-- The roots of the `root` events among the release log `log`'s lines after its head, in the log's own order: for
+each coin the challenger released, of whatever family, the root it had received (`Challenger.releasedRootsOf` reads the
+same lines family by family). A line that is no event, and an event that is no `root`, give none. It checks no line's
+form: `receivedOf` reads a log only once `Challenger.trustedSessionOf` holds it. -/
+def rootLines (log : Json) : List ByteArray :=
+  match log with
+  | .arr lines => lines.toList.tail.filterMap fun
+    | .str line =>
+      match Challenger.event line with
+      | .ok e =>
+        if jsonStrIs (getD e "event") "root" then
+          match getD e "root" with
+          | .str r => (Flock.unhex r).toOption
+          | _ => none
+        else none
+      | .error _ => none
+    | _ => none
+  | _ => []
+
+/-- The roots the challenger received, one for each coin it released, over every family's lines in its signed log's own
+order (`rootLines`), from the session the auditor's ledger opens on `window`, once that session's files hold
+(`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads them). -/
 def receivedOf (coins : Json) (window : String) : V (List ByteArray) := do
-  let (_, roots) ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
-    (← Challenger.ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") (getD coins "session")
-  return match getD (getD coins "segment") "label" with
-    | .str l => ((roots.find? (·.1 == l)).map (·.2)).getD []
-    | _ => []
+  let session := getD coins "session"
+  let _ ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
+    (← Challenger.ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") session
+  return rootLines (getD session "log")
 
 def NO_LOG : String := "the challenger's session published no signed log to read the order from"
 
+def NO_FAMILY : String := "the later sample read no coins of a challenger's family"
+
 /-- Why the later stream's sample does not hold the order its registration rests on: it has no coin evidence (`coins`
-null), its coins are not the ones the challenger's signed log shows released after `later` (`Challenger.coinsReason` on
-the bytes `read`), or that log does not show `earlier` received first (`receiptReason`). -/
-def orderReason (window : String) (earlier later : ByteArray) (coins : Json) (read : ByteArray) : Option String :=
-  match coins with
-  | .null => some NO_LOG
-  | _ =>
-    match Challenger.coinsReason coins window later read with
+null), the caller names no family it read (`family` none), its coins are not the ones of that family the challenger's
+signed log shows released after `later` (`Challenger.coinsReason` on the bytes `read`), or that log does not show
+`earlier` received first (`receiptReason`, over every family's lines). -/
+def orderReason (window : String) (family : Option String) (earlier later : ByteArray) (coins : Json)
+    (read : ByteArray) : Option String :=
+  match coins, family with
+  | .null, _ => some NO_LOG
+  | _, none => some NO_FAMILY
+  | _, some label =>
+    match Challenger.coinsReason coins window label later read with
     | some why => some s!"the later sample's coins: {why}"
     | none =>
       match receivedOf coins window with
@@ -152,13 +179,15 @@ def auditVerdict (audit : Json) (previous : String) : AuditVerdict :=
         why := if !accepted then some NOT_ACCEPTED else if !complete then some NOT_COMPLETE else none }
 
 /-- What `across` reads: the window's open root the verifier holds, the earlier stream's log, its audit record (null:
-none), the later stream's registration, and the later stream's sample's coin evidence and the bytes it read. -/
+none), the later stream's registration, and the later stream's sample's coin evidence, the challenger's family the
+later stream read those coins from as the caller names it (none: it read none of a family), and the bytes it read. -/
 structure Across where
   window : String
   log : Array Json
   audit : Json
   later : Json
   coins : Json
+  family : Option String
   read : ByteArray
 
 /-- 2 when `logged` or `order` does not accept; else 3 when `audit` does not; else 4 when it does and is not complete;
@@ -194,7 +223,7 @@ def acrossFound (i : Across) : V AcrossFound := do
   let later ← Flock.WindowRecord.digest i.later
   let received := loggedAt i.log previous
   return { logged := .ofReason (if received.isSome then none else some UNLOGGED), received,
-           order := .ofReason (orderReason i.window earlier later i.coins i.read),
+           order := .ofReason (orderReason i.window i.family earlier later i.coins i.read),
            audit := auditVerdict i.audit previous, earlier := previous, later := Flock.hexOf later }
 
 /-- The verdicts on one read across streams (`acrossFound`): `{"logged", "received", "order", "audit", "case",
@@ -219,8 +248,54 @@ private def root (n : Nat) : ByteArray := ByteArray.mk #[n.toUInt8]
 #guard (receiptReason [] (root 1) (root 2)).isSome
 -- one registration named on both sides is not before itself
 #guard (receiptReason [root 1, root 1] (root 1) (root 1)).isSome
--- a sample with no coin evidence holds no order
-#guard orderReason "" (root 1) (root 2) .null (root 0) == some NO_LOG
+-- a sample with no coin evidence holds no order, and neither does one of no family
+#guard orderReason "" (some "draw/1") (root 1) (root 2) .null (root 0) == some NO_LOG
+#guard orderReason "" none (root 1) (root 2) .null (root 0) == some NO_LOG
+#guard orderReason "" none (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_FAMILY
+
+private def wide (n : Nat) : ByteArray := ByteArray.mk (List.replicate 64 n.toUInt8).toArray
+
+private def lineOf (fields : List (String × Json)) : String := (Flock.canon (Json.mkObj fields)).toOption.getD ""
+
+private def rootLine (label : String) (index : Nat) (r : ByteArray) : String :=
+  lineOf [("event", Json.str "root"), ("index", Lean.toJson index), ("label", Json.str label),
+    ("received_at", Lean.toJson (0 : Nat)), ("root", Json.str (Flock.hexOf r))]
+
+private def releaseLine (label : String) (index : Nat) (r : ByteArray) : String :=
+  lineOf [("after", Json.str (Flock.hexOf r)), ("event", Json.str "release"), ("index", Lean.toJson index),
+    ("label", Json.str label), ("released_at", Lean.toJson (0 : Nat))]
+
+private def threeFamilies : Challenger.LiveCommitment :=
+  { scheme := "", epoch := 0, families := [("window", 1), ("draw/0", 1), ("draw/1", 2)], root := wide 0 }
+
+/-- A release log as a session of three families leaves it: its head, the window's coin, the earlier registration's
+coin in one family, a coin tree's line, and the later registration's two coins in another. -/
+private def threeLines : List String :=
+  [lineOf [("event", Json.str "commitment"), ("root", Json.str (Flock.hexOf (wide 0)))],
+   rootLine "window" 0 (wide 9), releaseLine "window" 0 (wide 9),
+   rootLine "draw/0" 0 (wide 1), releaseLine "draw/0" 0 (wide 1),
+   lineOf [("event", Json.str Challenger.TREE_EVENT)],
+   rootLine "draw/1" 0 (wide 2), releaseLine "draw/1" 0 (wide 2),
+   rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2)]
+
+private def logOf (lines : List String) : Json := Json.arr (lines.map Json.str).toArray
+
+-- the log is one `Challenger.releasedRootsOf` reads, family by family
+#guard (Challenger.releasedRootsOf threeFamilies threeLines).toOption ==
+  some [("window", [wide 9]), ("draw/0", [wide 1]), ("draw/1", [wide 2, wide 2])]
+-- the same lines' roots over every family, in the log's order: the head, the releases and a coin tree's line give none
+#guard rootLines (logOf threeLines) == [wide 9, wide 1, wide 2, wide 2]
+-- the order across two families: the earlier registration's coin, then the later's two
+#guard receiptReason (rootLines (logOf threeLines)) (wide 1) (wide 2) == none
+#guard (receiptReason (rootLines (logOf threeLines)) (wide 2) (wide 1)).isSome
+-- the head is no coin's line, whatever it says; no log gives no root
+#guard rootLines (logOf [rootLine "draw/0" 0 (wide 1)]) == []
+#guard rootLines (logOf []) == []
+#guard rootLines .null == []
+-- a line that is not its own canonical JSON is no event, and neither is one that is no string
+#guard rootLines (Json.arr #[Json.str "", Json.str "{ \"event\": \"root\", \"root\": \"01\" }", Json.null]) == []
+-- `rootLines` holds a line to no more than that: the log's form is `Challenger.trustedSessionOf`'s to check, before it
+#guard rootLines (Json.arr #[Json.str "", Json.str "{\"event\":\"root\",\"root\":\"01\"}"]) == [root 1]
 
 private def audited (digest : String) (accepted : Json) (complete : Json := .bool true) : Json :=
   Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted),
