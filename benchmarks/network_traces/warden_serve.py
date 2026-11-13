@@ -124,6 +124,9 @@ writes no `traffic.json`, `client.log` or `client.json`.
   bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit
   takes; one cut from s + D on, with no `END` or `FAIL`, is refused by the audit in the link-window of its admission
   (`warden.audit`). A connection admitted by bucket windows · T − `WardenParams.span` − 1 ends inside the run.
+- *A full queue.* A connection that arrives while the queue holds the schedule's `queue` gets one `REFUSED` cell, and
+  the relay certifies no record of the link-window it arrived in, so `check` does not accept the run: a client has
+  no more connections open at once than the schedule's lanes and queue hold.
 - *What the check holds.* With no `client.json`, `check` holds what it holds of the records alone: every
   link-window's certificates and registrations and the audit. That each cell reached its client in its bucket, and
   that a client's bytes are the records', is the client's to check, from its own log against the run: the summary's
@@ -1187,7 +1190,36 @@ def _addresses(text: str) -> list[tuple[str, int]]:
     return [cs._address(a) for a in text.split(",")]
 
 
+def traffic_windows(args, params: WardenParams, model: str, out: Path) -> int:
+    """A rehearsal's traffic, written to `out` (`traffic.json`, and a `--window-per-group` run's `groups.json`), and
+    the link-windows its run lasts: to its last request's time and `--tail`, its groups' windows, and under
+    `--lengths 2` as many as admit its last request (`closing_windows`)."""
+    traffic = traffic_of(args, model)
+    (out / "traffic.json").write_text(json.dumps(traffic))
+    window_s = params.window * params.bucket_ms / 1000
+    windows = math.ceil((traffic[-1]["at"] + args.tail) / window_s)
+    if args.window_per_group:
+        grouped = groups(len(traffic), len(read_prompts(args.prompts.read_bytes(), params)), params,
+                         traffic[0]["ids"]["max_tokens"])
+        (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
+        windows = grouped[-1]["windows"][1]
+    if params.closes:
+        windows = max(windows, closing_windows(params, traffic[-1]["at"]))
+    return windows
+
+
+def own_client(me: list[str], out: Path) -> int:
+    """A rehearsal's own client, `client` as a process over the run's traffic to its end: its exit."""
+    with open(out / "client.log", "w") as clog:
+        return subprocess.run(me + ["client", "--deployment", str(out / "deployment.json"),
+                                    "--traffic", str(out / "traffic.json"), "--out", str(out)],
+                              stdout=clog, stderr=subprocess.STDOUT).returncode
+
+
 def rehearse(args) -> int:
+    """`rehearse`, and `session` (the module docstring's "A session"): the same run with no traffic and no client,
+    the relay at `--listen` for `--windows` link-windows."""
+    kept = args.command == "session"
     _check_paced(args)
     if args.prompts is not None and not args.ids:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
@@ -1222,20 +1254,12 @@ def rehearse(args) -> int:
             model = "fake"
         else:
             upstream, url = args.upstream, "http://%s:%d" % args.upstream
-            model = args.model or (await_model(url, args.load_ready_s) if load else cs.served_model(url))
-        traffic = traffic_of(args, model)
-        (out / "traffic.json").write_text(json.dumps(traffic))
-        window_s = params.window * params.bucket_ms / 1000
-        windows = math.ceil((traffic[-1]["at"] + args.tail) / window_s)
-        if args.window_per_group:
-            grouped = groups(len(traffic), len(read_prompts(args.prompts.read_bytes(), params)), params,
-                             traffic[0]["ids"]["max_tokens"])
-            (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
-            windows = grouped[-1]["windows"][1]
-        if params.closes:
-            windows = max(windows, closing_windows(params, traffic[-1]["at"]))
+            model = None if kept else \
+                args.model or (await_model(url, args.load_ready_s) if load else cs.served_model(url))
+        windows = args.windows if kept else traffic_windows(args, params, model, out)
         with open(out / "serve.log", "w") as log:
-            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
+            serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen",
+                                             "%s:%d" % args.listen if kept else "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
@@ -1246,10 +1270,7 @@ def rehearse(args) -> int:
             procs.append(serving)
             if "listening" not in json.loads(serving.stdout.readline() or "{}"):
                 raise SystemExit("serve exited before listening (serve.log)")
-            with open(out / "client.log", "w") as clog:
-                client_exit = subprocess.run(me + ["client", "--deployment", str(out / "deployment.json"),
-                                                   "--traffic", str(out / "traffic.json"), "--out", str(out)],
-                                             stdout=clog, stderr=subprocess.STDOUT).returncode
+            client_exit = None if kept else own_client(me, out)
             serve_exit = serving.wait()
     finally:
         for proc in procs:
@@ -1273,12 +1294,13 @@ def parser() -> argparse.ArgumentParser:
     c = sub.add_parser("client", help="the traffic, through the shim")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
+    se = sub.add_parser("session", help="serve at --listen for --windows link-windows with no client, then check")
     pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no network certifier")
     for q in (k,):
         q.add_argument("--dir", required=True, type=Path)
-    for q in (k, r):
+    for q in (k, r, se):
         q.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
-    for q in (t, s, c, r, pr):
+    for q in (t, s, c, r, se, pr):
         q.add_argument("--out", required=True, type=Path)
     for q in (t, r, pr):
         q.add_argument("--model", help="the endpoint's model name (default: the one /v1/models lists)")
@@ -1291,14 +1313,14 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
         q.add_argument("--users", default="user", help="the id requests' `user` names: request i's is USERS-i")
     t.set_defaults(model="model")
-    for q in (f, s):
+    for q in (f, s, se):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
-    for q in (f, r):
+    for q in (f, r, se):
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
         q.add_argument("--first-ms", type=float, default=100.0,
                        help="the fake endpoint's milliseconds to its first token, or to its whole id-form response "
                             "(past the network certifier's delay D, every connection fails late: a void run)")
-    for q in (s, r):
+    for q in (s, r, se):
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network certifier is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
@@ -1310,12 +1332,15 @@ def parser() -> argparse.ArgumentParser:
                             "each l is one of its releases that the release's server connection lost")
     schedule_flags(s, "id")
     schedule_flags(r, None)
+    schedule_flags(se, "id")
     for q in (s, r):
         crr.flags(q)
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
-    s.add_argument("--windows", required=True, type=int)
+    for q in (s, se):
+        q.add_argument("--windows", required=True, type=int, help="the run's length, in link-windows")
+    se.set_defaults(ids=True, prompts=None, window_per_group=False, load_store=None)
     s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
                    help="sample the network certifier's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
     s.add_argument("--load-heads", type=Path,
@@ -1329,9 +1354,10 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--load-workers", type=int, default=os.cpu_count() or 1, help="processes committing the load")
     r.add_argument("--load-ready-s", type=float, default=900.0,
                    help="seconds the endpoint has after the load to answer /v1/models")
-    up = r.add_mutually_exclusive_group(required=True)
-    up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
-    up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
+    for q in (r, se):
+        up = q.add_mutually_exclusive_group(required=True)
+        up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
+        up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
     pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0,
