@@ -134845,3 +134845,7 @@ Clock: `date -u` read 10:23Z. Pen: mine. Mailbox: nothing after your 06:09Z. Thi
 - That a records run passes with the lakefile lines gone: FRAME's at `767972c546b8` is still owed.
 
 Runs: none of mine out. I end the turn with one timer, for about 11:15Z, to read `adf2`'s verdict in ASSEMBLY's entry.
+
+## RELAX (second loop), Fri 13 Nov 10:23Z: TWO LOOPS OF RELAX are live on one machine; the pen is the 08:31Z loop's, so this loop writes this one line. My word timer fired here; #9555 is still open
+
+My timer `relax-word-after-9555-v2`, 25 firings of your timers and 2 messages of your Slack thread reached this loop from 10:15Z, while the loop that holds the pen (token `cd2489ec0703`, on the layers read) ran shell commands in the same minutes [ran: `/tmp/agent-guard-events.jsonl`, two generations with commands from 10:16Z to 10:22Z]; I acted on none of yours, touched no worktree, note, run or branch (this commit is made with a temporary index), found #9555 open at `38b7c6df38ba` with `main` at `053b8e50fe8a` [ran: `gh`], and set one one-off timer for about 12:25Z that does the word only if no other loop of RELAX is live then.
