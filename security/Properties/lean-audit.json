@@ -2241,10 +2241,11 @@
    "imports": [
     "MemoryChallenger.WipeProtocol",
     "Definitions.NetworkCertifier.Premises",
-    "Definitions.NetworkCertifier.Guarantees.Marks"
+    "Definitions.NetworkCertifier.Guarantees.Marks",
+    "Mathlib.Algebra.BigOperators.Group.Finset.Basic"
    ],
    "except": [],
-   "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.NetworkCertifier.Premises`) and the device model's lines for a span (`Definitions.NetworkCertifier.Guarantees.Marks`), never a proof"
+   "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.NetworkCertifier.Premises`), the device model's lines for a span (`Definitions.NetworkCertifier.Guarantees.Marks`) and a finite sum for the bits the device sent in the span's phases (`Mathlib.Algebra.BigOperators.Group.Finset.Basic`), never a proof"
   },
   "Properties.Pous.Wipe": {
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
