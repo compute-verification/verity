@@ -134,8 +134,9 @@ structure Ready : Prop where
   rows : D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
   domain : ∀ q, q < D.unroll.ports.size → (Flock.Bridge.domOf D.unroll pub q).size = 64
   leaves : ∀ q < D.unroll.ports.size, 2 ≤ (Lm D n pub).cnt q
-  roots : ∀ q q', q' < q → q < D.unroll.ports.size → (roots D n pub).getD q' [] ≠ (roots D n pub).getD q []
-  width : ∀ i, (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub) i).1 < 2 ^ 64
+  roots : ∀ q q', q' < q → q < D.unroll.ports.size →
+    (Commit.roots D n pub).getD q' [] ≠ (Commit.roots D n pub).getD q []
+  width : ∀ i, (Flock.Bridge.placeOf (Cc D hU n pi) (Commit.rows D hU n pi pub) i).1 < 2 ^ 64
 
 variable {D} in
 /-- **Every port's frame-v3 domain is 64 bytes at files that pass the ports and roots check**: the domain is the one
