@@ -3,11 +3,10 @@
 # can't cover, so this map's commit is generated and reviewed, not certified: run it after those two.
 #
 # The tokens, by kind:
-# - constants and environment variables (`WARDEN`, `WARDEN_REQUESTS`, `CR_WARDEN_RUN`, `A5_WARDEN_UNITS`): `WARDEN` as
-#   one part of the name becomes `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each
-#   form it is written in (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is
-#   `warden_map.toml`'s and no row here is keyed on it;
-# - flags and what argparse makes of them (`--warden-run` and `a.warden_run`, `--warden` and `a.warden`);
+# - constants (`WARDEN`, `WARDEN_REQUESTS`, `WARDEN_SEED`): `WARDEN` as one part of the name becomes
+#   `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each form it is written in
+#   (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is `warden_map.toml`'s and no row here is
+#   keyed on it;
 # - hyphenated names of tools, threads and scratch directories (`warden-serve`, `warden-zk`, `warden-publisher`);
 # - plurals in identifiers (`wardens`, a test's `..._the_wardens_...`);
 # - sentences in string literals (a message, a help text, a log line), which say "network certifier" as prose does.
@@ -20,7 +19,12 @@
 # - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them;
 # - the trace corpus's labels (`warden-heavy`, `warden-smallkv`);
 # - a message code makes from a kept value (`f"{label} thread"`, `f"device {device}"`), which a test spells whole: no
-#   phrase below rewords "warden thread", "warden ticker" or "device warden".
+#   phrase below rewords "warden thread", "warden ticker" or "device warden";
+# - the names a caller outside the tree sets, in a launch line or a settings file: the environment variables
+#   `A5_WARDEN_RUN`, `CR_WARDEN_RUN`, `N2_WARDEN_RUN`, `SC_WARDEN_RUN`, `A5_WARDEN_UNITS` and
+#   `WARDEN_SERVE_C_ALLOCATOR`, the flags `--warden-run` and `--warden`, and what argparse makes of the flags
+#   (`a.warden_run`, `a.warden`), so `warden_run` stays wherever it is a name. A map of their own renames them with
+#   their callers.
 #
 # Not this concept, and left as they are: as `warden_map.toml` has them.
 
@@ -95,15 +99,8 @@ files = ["*"]
 
 [words]
 "wardens" = "network_certifiers"
-"warden_run" = "network_certifier_run"
-"a.warden" = "a.network_certifier"
-# --- the constants and environment variables, each whole
-"A5_WARDEN_RUN" = "A5_NETWORK_CERTIFIER_RUN"
-"A5_WARDEN_UNITS" = "A5_NETWORK_CERTIFIER_UNITS"
-"CR_WARDEN_RUN" = "CR_NETWORK_CERTIFIER_RUN"
-"N2_WARDEN_RUN" = "N2_NETWORK_CERTIFIER_RUN"
+# --- the constants, each whole
 "PUBLIC_WARDEN" = "PUBLIC_NETWORK_CERTIFIER"
-"SC_WARDEN_RUN" = "SC_NETWORK_CERTIFIER_RUN"
 "WARDEN_COUNTS" = "NETWORK_CERTIFIER_COUNTS"
 "WARDEN_DIGEST" = "NETWORK_CERTIFIER_DIGEST"
 "WARDEN_END_S" = "NETWORK_CERTIFIER_END_S"
@@ -123,7 +120,6 @@ files = ["*"]
 "WARDEN_SCHEDULE" = "NETWORK_CERTIFIER_SCHEDULE"
 "WARDEN_SEED" = "NETWORK_CERTIFIER_SEED"
 "WARDEN_SERVED_STUBBED" = "NETWORK_CERTIFIER_SERVED_STUBBED"
-"WARDEN_SERVE_C_ALLOCATOR" = "NETWORK_CERTIFIER_SERVE_C_ALLOCATOR"
 "WARDEN_STUBBED" = "NETWORK_CERTIFIER_STUBBED"
 "WARDEN_TAIL_S" = "NETWORK_CERTIFIER_TAIL_S"
 "WARDEN_TOKENS" = "NETWORK_CERTIFIER_TOKENS"
@@ -166,6 +162,9 @@ patterns = [
     '''["'/]warden_(?:run(?!": None\}\)\))|check|endpoint|endpoint_served|certificates|cores|cores_busy|cpu_s|invol|cost|costs)["'/]''',
     'warden\.json\b',
     'warden-(?:registration|rehearse|fails|heavy|smallkv)',
+    '(?<![A-Z0-9])(?:A5|CR|N2|SC)_WARDEN_RUN(?![A-Z0-9_])',   # a variable a caller outside the tree sets, which the
+                                                      # row for `WARDEN_RUN` would reach
+    '--warden(?:-run)?(?![\w-])',                            # ... and a flag such a caller passes
     '(?m)^\| "warden", "network warden".*$',          # the Glossary's row of older names
 ]
 strings = [
