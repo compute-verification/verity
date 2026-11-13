@@ -162,7 +162,7 @@ class _Piece:
 
     def _register(self, name: str, dims: list[str], strides: list[str]) -> None:
         inner = dims[1:] if self._token(dims) else dims
-        if any(not d.isdigit() for d in inner) or strides != ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner):
+        if any(not d.isdecimal() for d in inner) or strides != ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner):
             raise self.fail(f"{name} {dims} strides {strides}: not a row-major buffer of token rows or a constant shape")
         self.shape[name] = (dims, strides)
 
@@ -187,7 +187,7 @@ class _Piece:
         bd = self.shape[name][0]
         if self._token(bd):
             W, inner = _prod(bd[1:]), dims[1:]
-            if (not self._token(dims) or any(not d.isdigit() for d in inner) or strides != [str(W)] + _contiguous(inner)
+            if (not self._token(dims) or any(not d.isdecimal() for d in inner) or strides != [str(W)] + _contiguous(inner)
                     or not 0 <= off <= off + _prod(inner) <= W):
                 raise self.fail(f"view {dims} {strides} +{off} of {name} {bd}: not a column range of its rows")
             w = _prod(inner)
@@ -247,7 +247,7 @@ class _Piece:
                 raise self.fail(f"{line!r}: reuse of an unknown buffer")
             if m.group(2):
                 dims, strides = C._dims(m.group(3)), C._dims(m.group(4))
-                if int(m.group(5)) != 0 or any(not d.isdigit() for d in dims[1:]) or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
+                if int(m.group(5)) != 0 or any(not d.isdecimal() for d in dims[1:]) or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
                     raise self.fail(f"{line!r}: reuse beyond the dead buffer's rows")
             else:
                 dims, strides = self.shape[old]
