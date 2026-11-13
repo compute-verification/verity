@@ -146,7 +146,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     if ingress or any(t.param not in held for t in reg.tables):
         raise ValueError(f"{doc.get('name')}: ingress rows, or a table over a parameter outside θ, which this count of a "
                          "block's reads doesn't take")
-    blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
     slots, steps = blocks.slots, blocks.steps
     slot, step = {}, {}
     for t, n in units.items():

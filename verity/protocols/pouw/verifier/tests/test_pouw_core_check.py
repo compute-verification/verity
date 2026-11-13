@@ -87,7 +87,7 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset or stratified draw",
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
     "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
@@ -107,7 +107,8 @@ EXPECT = {
     "answer-public-null": "evidence: answer: an accept has no reason",
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
     "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
-    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over", "answer-public-stratified": "draw: stratified:",
+    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
     "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
@@ -153,6 +154,7 @@ EXPECT = {
     "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
     "salt-session": f"salt: {CC.WINDOW_SESSION}", "salt-secret": f"salt: {CC.WINDOW_SESSION}",
 }
+EXPECT |= {long: EXPECT[short].replace("1/2", vectors.LONG_P) for long, short in vectors.LONG.items()}
 
 
 def _instance(seed: int, name: str = "honest") -> dict:
@@ -264,6 +266,24 @@ def test_a_ratio_is_written_at_any_length():
          "delta": Fraction(7, 10**5000 + 1)}
     assert CC.integrity_json(p)["delta"] == f"7/{odd}"
     assert sys.get_int_max_str_digits() == limit
+
+
+def test_a_bernoulli_rate_is_read_at_any_length():
+    """`_num_den` keeps a canonical ``num/den`` of 4,301 digits and more as written and refuses a padded or malformed one
+    by its reason, as `pOf` does, under the least limit on digits a process can set."""
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    assert len(big) == 4301 > sys.int_info.default_max_str_digits
+    limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(sys.int_info.str_digits_check_threshold)
+        for p in (f"{big}/{odd}", f"7/{odd}", f"{big}/2", f"{big}0/{big}", "0/1", "1/2", "2/4"):
+            assert CC._num_den(p, "d") == p
+        for p in (f"0{big}/{odd}", f"{big}/0{odd}", f"{big}/", f"/{odd}", big, f"{big}/{odd}/3", f"-{big}/{odd}",
+                  f"{big}/{odd} ", "01/2"):
+            with pytest.raises(CC.Refused, match=r"^d\.p: not num/den$"):
+                CC._num_den(p, "d")
+    finally:
+        sys.set_int_max_str_digits(limit)
 
 
 _WINDOW_ENTRY = "is not the registered window's entry"

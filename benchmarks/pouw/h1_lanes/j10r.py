@@ -1,4 +1,4 @@
-"""j10r.py prepare|summarize: `run.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
+"""j10r.py prepare|summarize: `leaf.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
 `PouwH1Tile_v5` (16 × 16 by default, ``H1L_RC``) proved as its statements as `pouw.leaf_lanes`' J10-R leaf stages them
 (``j10r``): each lane in `weights.chunks`(K) chunks (`PouwH1LaneZyChunk_v2`, the whole lane `PouwH1LaneZy_v2` at
 n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row into the leaf's one ok. Each statement is
@@ -6,7 +6,7 @@ n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row int
 the verifier's own `--registered` file (`leaf_lanes.registered_file` at `leaf_lanes.verifier_entries` of every
 after-sample value, `leaf_lanes.produced_values`).
 
-* **The registered values**, as `run.py`'s: ``a`` and ``b`` (each row its `h1zy.chunk_leaves`: n leaves a row, row i's
+* **The registered values**, as `leaf.py`'s: ``a`` and ``b`` (each row its `h1zy.chunk_leaves`: n leaves a row, row i's
   chunk c at n i + c), ``zy`` and ``receipt`` (`h1zy.reference` over v5 at the unit's ``call`` and ``blocks``,
   `h1window.j10r_inputs`, which is the lanes' partials' XOR).
 * **The after-sample values** (`one_stage.produced`, under the registration's digest): ``partials`` (row l lane l's
@@ -34,14 +34,15 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import run as RN  # noqa: E402
-from run import U  # noqa: E402
+import leaf as RN  # noqa: E402
+from leaf import U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
@@ -53,6 +54,9 @@ from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E40
 from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+
+if TYPE_CHECKING:
+    from verity_flock.class_statement import UnitStager
 
 RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
 RN.RC = RC
@@ -209,7 +213,7 @@ def expected(ctx: Ctx, w: World, kind: str, ln: int | None, ch: int | None) -> l
                                    lf.position, w.roots, ln, RC, ctx.n, ch, ctx.j10r)]
 
 
-def stager(ctx: Ctx, kind: str, ch: int | None):
+def stager(ctx: Ctx, kind: str, ch: int | None) -> UnitStager:
     """The statement's stager on `h1zy.statement_rows` (each input port a ``row/v2`` row of its bits, `statement_ports`),
     its output ``o0`` one ``row/v2`` row."""
     b = ctx.bound[(kind, ch)]
@@ -293,7 +297,7 @@ def run_job(job: tuple) -> dict:
     return statement(CTX, tag, CTX.worlds[wname], ln, ch if CTX.n > 1 else None)
 
 
-def prepare(args) -> None:
+def prepare(args: argparse.Namespace) -> None:
     global CTX
     t0 = time.time()
     work = Path(args.work)
@@ -386,7 +390,7 @@ def prepare(args) -> None:
                                                             "seconds")}), flush=True)
 
 
-def summarize(args) -> int:
+def summarize(args: argparse.Namespace) -> int:
     work, out = Path(args.work), Path(args.out)
     plan, prep = json.loads((work / "plan.json").read_text()), json.loads((work / "prepare.json").read_text())
     rows, opened, verdicts, known = {}, {}, {}, {}

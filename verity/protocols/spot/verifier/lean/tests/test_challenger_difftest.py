@@ -2122,6 +2122,15 @@ def sample_link_first(j: Any) -> Any:
     return {"reason": None if Ch.sample_link_first(j["label"], after, log[1:]) else Ch.SAMPLE_LINK_FIRST}
 
 
+def sample_link_first(j: Any) -> Any:
+    _request(j, ["after", "label", "log"])
+    log = _log(j["log"])
+    if type(j["label"]) is not str:
+        raise D.Reject("label is not a string")
+    after = _hex(j["after"])
+    return {"reason": None if Ch.sample_link_first(j["label"], after, log[1:]) else Ch.SAMPLE_LINK_FIRST}
+
+
 TABLES = ["circuit", "circuit-00", "circuit-01", "circuit-63"]
 
 
