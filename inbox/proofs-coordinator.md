@@ -112021,3 +112021,21 @@ My word on all sessions is unchanged: every statement is over all sessions at on
 **To post.** Nothing.
 
 **Not established.** Nothing of mine has compiled in a run. The VM checks cover stand-in definitions, not the tree's; that includes the proofs I offer for `Steps.lean`. `HeldSize`, `InteriorLogged`, `DevLocal`, `DevElems` and `LocatesSessions` are premises, not proved. `closes_after` says an opening answers the bytes that the hex of the evidence's SHA-512 decodes to (`Flock.unhex (Spot.sha512Hex ev) = .ok c.answers`); I do not prove here that those bytes are the SHA-512 itself. The earlier period's challenger signature hole is open, and nothing here reads a signature.
+
+## RUNSAS, Fri 01:21Z: `Statements.lean` compiled in `r20261112-232838-7184`; `Round2.lean`'s three errors fixed, retry `r20261113-012007-9b9a` running
+
+What compiled: my statements file, `Statements.lean`, built in the run of last night. The proof file, `Round2.lean`, failed there on three proofs. None of the failures was in the mathematics: one tactic couldn't see inside a `match`, and two arguments elaborated in the wrong order. I fixed all three, merged the moved base and RUNCOINS's new head (which now imports my definitions), and relaunched. Nothing about the second stage's statements on outer and inner blocks is proved until that run passes.
+
+- [run] `r20261112-232838-7184` (vy-nebius-2, rc 1, at `3527197c51`): `Proofs.Flock.SpotFlock.RunsAs.Statements` built (stdout line 22057), and RUNCOINS's `RunsAs.Statement` built. `RunsAs.Round2` had exactly three errors. The bridge `RoundTwoOf.lean` stopped at its imports, because `Round2` failed.
+- [read] The three errors:
+  - `checked_tables` (line 44): `simp` did not rewrite inside `Stmt.checked`'s `match s.registered`, so the `obtain` pattern met the match. The fix splits the match and uses `Option.bind_eq_some_iff` in each arm.
+  - `namesOk_of_check` (line 147): the goal, already rewritten to `core own`, fixed `check_ok_interior`'s implicit to `core own` before `hc` was read. The fix elaborates the fact first.
+  - `codesOk_of_check` (line 178): `find?_first`'s predicate was not inferred. The fix passes it explicitly.
+- [run] Every other declaration in `Round2.lean` elaborated in `7184`, its `roundTwo_of_check` included; only these three errored. But a declaration elaborating after a sibling's error proves nothing until the file passes.
+- [read] Merged into `cursor/proofs-runsas-7e3a`, clean and with my files untouched: the base `1f049180cd`, then RUNCOINS's `264cd595d8`. The head is `87d9f87c4a`, pushed. RUNCOINS's new `RoundTwo` has the argument order my bridge `stmtOk_of_check` intros, with `RegistersNone rec` for the inputs premise, so I made no bridge change.
+- [run] Retry `r20261113-012007-9b9a` on vy-nebius-cpu-12 (24 GB), at `87d9f87c4a`. It builds `Statements`, `Round2` and `Statement`, tries `Round2.lean --siblings`, then tries `RoundTwoOf.lean`. [guess] ETA 02:15–03:00Z: `7184`'s whole build took 99 minutes on vy-nebius-2, and cpu-12's cache state is unknown to me. I cancelled `r20261113-011842-cd46`, at the pre-merge `f47d4bd834`, before it started.
+- [read] `roundTwo_of_check`'s statement is unchanged by this fix. Its text comes in the entry that reports `Round2.lean` compiled.
+
+NEEDS: none new. Row B19's clauses stay as in my earlier entries: `TwoHolds` with HELDOF, `RecordsHeld` with RUNCOINS through `heldOf`, `RoundsHeld`, `ScopeHeld` and `PinHeld` open, `NamesDistinct` with HELDOF, and `InputsNone` true at the second try's design only.
+
+Not established: that `Round2.lean` and `RoundTwoOf.lean` elaborate, or that their axioms are only propext, Classical.choice and Quot.sound. That waits on `9b9a`.
