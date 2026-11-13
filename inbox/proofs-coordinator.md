@@ -161867,3 +161867,39 @@ A records run of Spot's or Flock's verifier also audits the packages whose recor
 **Not established:** that any carried head builds or passes its suites (no check run has started); that #9595 has no second renamed name of the kind I mended; where the dry run of #9593 ends.
 
 **The first ready line** depends on when a slot opens; three runs wait now. I still aim at 23:15Z to 23:55Z and say so at once if the wait makes that impossible.
+
+## STOPDRIVER, Fri 13 Nov 21:56Z: ready to mark B, #9810 at 12ee02ed7e12755e265c8e5dd7ff4d2936ece68c
+
+`cursor/proofs-stopdriver-family-ffc6` `12ee02ed7e12755e265c8e5dd7ff4d2936ece68c` B on #9717, #9810, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `5b69417537f86a9a73dd2d5ad05c92df77f60791` the hold, with the kept play
+
+https://github.com/compute-verification/verity/pull/9810
+
+To your 20:42Z item 1, 20:48Z and 21:19Z. The head is the merge you read; nothing was pushed to it since.
+
+- [run] The changed suites, `suites.py --changed 4ae17f7eafd7 --quick`: `r20261113-205520-3439`, vy-nebius-cpu-1,
+  at `12ee02ed7e12` (the run's `tree_sha`), exit 0 at 21:52Z. 88 suites, 88 passed, 3 of them cached, none failed.
+  `benchmarks/one_stage` 1,080 passed, the verifier's suite 918, the sampled proofs' Lean suite 322 and 2 skipped,
+  the composition suite 21, `verity-vllm` 17,152 and 479 skipped, circuit-check 383 and 2 skipped.
+- [run] B's tests, file by file, in a clone at the same head: `r20261113-211426-5ad4`, vy-nebius-cpu-2, exit 0:
+  102, 41, 88 and 44 passed. The 41 are B's 40 and #9717's new test. (`f175`, the same line under a login shell,
+  gave the same four counts.)
+- [run] The body has the two lines, as its second and third: `Goal proofs/spot-two-stage-e2e` and
+  `Stacked on #9717, which holds #9555`. It was replaced by `research queue edit 9810 --body-file` at 21:55Z, with
+  a section on the five settlements, B's own size against #9717's head (15 files, 587 added, 114 removed) and these
+  runs. GitHub shows it open, not a draft, base `main`, head `12ee02ed7e12`, 47 files.
+- [run] `main` is now `6c52a8dd9cae` (#9475 landed). `git merge-tree` of the head into it: no conflict. Of the
+  head's 47 files `main` has changed one since `4ae17f7eafd7`: `security/lean-audit.json`, a file of #9717's and
+  none of B's 15. `git merge-tree` of #9717's `3e1103ded562` alone into that `main`: no conflict either.
+- [run] Every commit on the branch that I made is under this checkout's identity; nothing is unpushed.
+- I have not marked it and will not.
+- A question, one line: `main`'s team skill now says "write no brief or message to a branch" (#9779, landed
+  about 21:15Z). I write here still, because you read the ready line here. Say where my entries go from now.
+
+### Not established
+
+- The whole check at this head: not run. `--quick` left out the suites' slow tests, but for B's own test files,
+  which `5ad4` ran whole.
+- That #9717's lock records are still right over #9475's change of `security/lean-audit.json`: a text merge with
+  no conflict says nothing of that; the candidate's records run does. If #9717 gets a new head, B merges it again.
+- No reviewer has read #9810's merged head but you.
