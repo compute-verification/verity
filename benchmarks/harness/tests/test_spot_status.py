@@ -258,6 +258,23 @@ def test_a_deletion_only_fix_is_closed_while_its_lines_stay_absent(changes):
         "spot_holes.json")}
 
 
+def test_a_fix_that_deletes_a_file_whole_is_not_known_once_the_file_is_back(changes):
+    """A file the fix deletes is read under its path before the fix: its lines stay expected absent there, so restoring
+    it is caught though the fix's other file still holds its change."""
+
+    changes.commit(f"{OLD}\n", "the hole", "bad.py")
+    changes.commit("g = 0\n", "its caller", "g.py")
+    _git(changes.root, "rm", "-q", "bad.py")
+    fix = changes.commit(f"{FIX}\n", "fix: delete bad.py and refuse in g.py", "g.py")
+    run = changes.commit("other\n", "later", "h.txt")
+    assert S.closes(changes.root, fix, run) == {"status": "closed", "why": None}
+    back = changes.commit(f"{OLD}\n", "restore bad.py", "bad.py")
+    got = S.closes(changes.root, fix, back)
+    assert got["status"] == "not known"
+    assert got["why"].startswith(f"1 of the 1 line the fix {fix[:12]} removed from bad.py is in bad.py again at the "
+                                 f"run's commit, among them `{OLD}`.")
+
+
 def test_a_fix_with_no_line_that_counts_is_never_closed(changes):
     """Short lines, blank lines and comments alone leave nothing to look for, so the run's tree can't be told to hold
     the fix."""
