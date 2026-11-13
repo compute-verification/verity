@@ -382,7 +382,7 @@ theorem avg_pathCharge_relK_le {lg : β → List Release} (hE : RecordsLog lg E)
 /-- **The close costs nothing**: its coin is no opening's node, as every play of a close goes on past the prover's
 next message. -/
 theorem avg_pathCharge_finish_le {E : List Release → Game Exchange} (hE' : ∀ log, GoesOn (E log)) (D : Signer)
-    (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
+    (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
     ∀ s, avg (pathCharge (openErr e E) (finish D Ds θ F c a log) s) ≤ 0 := by
   refine avg_pathCharge_send_le _ (openErr_none e openingOf_send) fun _ => ?_
   refine avg_pathCharge_coin_le _ (fun _ => 0)
