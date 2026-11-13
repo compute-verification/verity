@@ -8,7 +8,7 @@ public import NetworkCheck.Records
 public import NetworkCheck.RecordsGrid
 public import NetworkCheck.RecordsBytes
 public import NetworkCheck.Period
-public import NetworkCheck.LinkWindow
+public import NetworkCheck.TransferBlocks
 public import NetworkCheck.RowsAudit
 
 /-!
@@ -37,7 +37,7 @@ ordered otherwise than the schedule. Code: it imports only Lean, Flock's verifie
 @[expose] public section
 
 /-!
-`NetworkCheck.LinkWindow` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
+`NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
 -/
