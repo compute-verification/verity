@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 from pathlib import Path
 
+import pytest
 from research.pods import registry
 
 SKY = Path(registry.__file__).resolve().parent / "nebius" / "sky"
@@ -1233,7 +1235,7 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
 
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
-    `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
+    `artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
     without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
     import subprocess
     git_dir = tmp_path / "verity.git"
@@ -1247,7 +1249,7 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
     git("init", "-q")
     for n, reg in enumerate(({"art:old": "a"}, {"art:new": "b", "previous": {"art:new": ["art:gone"]}})):
-        (work / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+        (work / "artifacts.json").write_text(json.dumps(reg))
         git("add", ".")
         git("commit", "-q", "-m", str(n), date=n)
         git("push", "-q", str(git_dir), f"HEAD:refs/research/src/c{n}")
@@ -1294,7 +1296,7 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
 
     from research import auto
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
-    assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
+    assert "User=research\n" in unit and "python3 -m research retention gc --apply $F'" in unit and "OnUnitActiveSec=1h\n" in timer
     assert "Environment=RESEARCH_STORE=/workspace/research/store\n" in unit
     deploy = (SKY.parent / "deploy.toml").read_text()
     doc = tomllib.loads(deploy)
@@ -1312,6 +1314,161 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     assert gate() != 0, "node 2 inside a timed window: skipped"
     status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed False, window waiting False\n")
     assert gate() == 0
+
+
+CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service")
+
+
+def _copies(tmp_path: Path) -> dict[str, Path]:
+    """Two commits' directories of main's copy with the link on the first (as `research deploy install` leaves a whole tree),
+    a newer snapshot shipped from a branch, and an `ls` that offers that snapshot to whatever lists the snapshots.
+
+    Each `research` writes $FAKE_OUT: where it ran from, its PYTHONPATH, its working directory, its arguments, and the
+    version of a module it imports only at its end; with $FAKE_GATE it first says it has started and waits for its stdin
+    to close."""
+    main = ("import json, os, sys\n"
+            "if os.environ.get('FAKE_GATE'):\n"
+            "    open(os.environ['FAKE_GATE'], 'w').write('started')\n"
+            "    sys.stdin.read()\n"
+            "from research import late\n"
+            "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+            "json.dump({'from': here, 'pythonpath': os.environ.get('PYTHONPATH'), 'cwd': os.getcwd(), 'argv': sys.argv[1:], 'late': late.V},\n"
+            "          open(os.environ['FAKE_OUT'], 'w'))\n"
+            "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': True}, 'runs': {'evicted_bytes': 0}}))\n")
+    dirs = {"v1": tmp_path / "copy" / ".deploy-tree" / "clean-up" / "v1", "v2": tmp_path / "copy" / ".deploy-tree" / "clean-up" / "v2",
+            "branch": tmp_path / "snapshots" / "branch"}
+    for name, d in dirs.items():
+        (d / "research").mkdir(parents=True)
+        (d / "research" / "__init__.py").write_text("")
+        (d / "research" / "__main__.py").write_text(main)
+        (d / "research" / "late.py").write_text(f"V = {name!r}\n")
+    link = tmp_path / "copy" / "clean-up"
+    link.symlink_to(dirs["v1"])
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, text in (("df", 'echo " Avail"\necho " 2161"\n'), ("ls", f'echo listed >> "{tmp_path}/ls.calls"\necho "{dirs["branch"]}/"\n'),
+                       ("timeout", 'shift\nexec "$@"\n')):
+        (bin_dir / name).write_text("#!/bin/sh\n" + text)
+        (bin_dir / name).chmod(0o755)
+    return {**dirs, "link": link, "bin": bin_dir, "out": tmp_path / "ran.json", "ls": tmp_path / "ls.calls"}
+
+
+def _swap(link: Path, to: Path) -> None:
+    """Point the link at `to` by one rename, as the install of a whole tree does."""
+    link.with_name(link.name + ".new").symlink_to(to)
+    os.replace(link.with_name(link.name + ".new"), link)
+
+
+def test_a_clean_up_pass_runs_mains_copy_and_never_a_snapshot_a_run_shipped(tmp_path):
+    """The eviction and the collector delete, so what they run is main's code, which only `research deploy install` places:
+    each unit names the manifest's whole tree, a pass resolves that link and runs the directory it names, and no pass lists
+    the snapshots `research run` ships, where the newest is whatever branch launched last. Without the copy a pass refuses
+    and runs nothing, though a snapshot is there to be found."""
+    import shlex
+    import subprocess
+    import tomllib
+    doc = tomllib.loads((SKY.parent / "deploy.toml").read_text())
+    trees = [t for t in doc["tree"] if t["src"] == "tools/research/src"]
+    assert len(trees) == 1 and trees[0].get("whole") is True and trees[0].get("required") is True, "main's copy: one tree, whole"
+    assert trees[0]["path"].startswith("/usr/local/lib/"), "root's: a run, which writes /workspace/research as research, can't replace it"
+    for u in CLEAN_UP_UNITS:
+        unit = (SKY / u).read_text()
+        assert f"\nEnvironment=VY_RESEARCH_TOOL={trees[0]['path']}\n" in unit, f"{u} names the tree deploy.toml installs"
+        on = {n for f in doc["file"] if f.get("src", "").endswith(f"/sky/{u}") for n in f["nodes"]}
+        assert on and not on - set(trees[0]["nodes"]), f"{sorted(on - set(trees[0]['nodes']))} get {u} without the code it runs"
+    picks = [p.name for p in SKY.parent.rglob("*") if p.is_file() and p.suffix in (".sh", ".service", ".conf", ".timer")
+             and "research/tool/*" in p.read_text(errors="replace")]
+    assert not picks, f"{picks} list the tool snapshots: what a unit runs is a tree deploy.toml installs"
+
+    w = _copies(tmp_path)
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "FAKE_OUT": str(w["out"]), "VY_EVICT_GIT": str(tmp_path / "no-git")}
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_RESEARCH_TOOL": str(w["link"])}, capture_output=True, text=True)
+    ran = json.loads(w["out"].read_text())
+    assert r.returncode == 0 and r.stdout.rstrip().endswith("(v1)"), r.stderr
+    assert (ran["from"], ran["pythonpath"], ran["late"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), "v1", "/")
+    assert not w["ls"].exists(), "the snapshots were listed"
+    w["out"].unlink()
+    for missing in ({}, {"VY_RESEARCH_TOOL": ""}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy" / "absent")}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy")}):
+        r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, **missing}, capture_output=True, text=True)
+        assert r.returncode == 1 and "no research package at VY_RESEARCH_TOOL" in r.stderr and "research deploy install" in r.stderr
+        assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
+
+    line = re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1]
+    assert "${" not in line and "%" not in line, "systemd would expand it before the shell reads it"
+    argv = shlex.split(line)
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3
+
+    def gc(**extra):
+        return subprocess.run(["sh", "-c", argv[2]], env={**env, **extra}, capture_output=True, text=True)
+
+    r = gc(VY_RESEARCH_TOOL=str(w["link"]))
+    ran = json.loads(w["out"].read_text())
+    assert r.returncode == 0 and f"vy-retention-gc: research from {w['v1']}\n" in r.stderr
+    assert (ran["from"], ran["pythonpath"], ran["cwd"], ran["argv"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]), ["retention", "gc", "--apply"])
+    assert not w["ls"].exists(), "the snapshots were listed"
+    w["out"].unlink()
+    for missing in ({}, {"VY_RESEARCH_TOOL": ""}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy" / "absent")}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy")}):
+        r = gc(**missing)
+        assert r.returncode == 1 and "no research package at VY_RESEARCH_TOOL" in r.stderr and "research deploy install" in r.stderr
+        assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
+
+
+def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
+    """`--unpreserved-runs` deletes a run's only copy, so the unit passes it only where a tracked drop-in says so, which
+    deploy.toml installs on vy-nebius-2 and nowhere else."""
+    import shlex
+    import subprocess
+    import tomllib
+    conf = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
+    got = [(f["path"], f["nodes"]) for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"] if f.get("src") == conf]
+    assert got == [("/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf", ["vy-nebius-2"])]
+    sets = [ln for ln in (SKY / "retention_gc_unpreserved.conf").read_text().splitlines() if ln and not ln.startswith("#")]
+    assert sets == ["[Service]", "Environment=VY_GC_UNPRESERVED_RUNS=1"], "it sets the switch and replaces nothing of the unit"
+    assert "unpreserved" not in "".join((SKY / u).read_text() for u in CLEAN_UP_UNITS if u != "retention_gc.service")
+    w = _copies(tmp_path)
+    script = shlex.split(re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1])[2]
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "FAKE_OUT": str(w["out"]), "VY_RESEARCH_TOOL": str(w["link"])}
+    for extra, flags in (({}, []), ({"VY_GC_UNPRESERVED_RUNS": "1"}, ["--unpreserved-runs"]), ({"VY_GC_UNPRESERVED_RUNS": "0"}, []),
+                         ({"VY_GC_UNPRESERVED_RUNS": ""}, []), ({"VY_GC_UNPRESERVED_RUNS": "--force"}, [])):
+        r = subprocess.run(["sh", "-c", script], env={**env, **extra}, capture_output=True, text=True)
+        assert r.returncode == 0 and json.loads(w["out"].read_text())["argv"] == ["retention", "gc", "--apply", *flags], (extra, r.stderr)
+
+
+@pytest.mark.parametrize("unit", ["the eviction", "the collector"])
+def test_a_pass_that_started_before_an_install_finishes_on_the_directory_it_started_on(tmp_path, unit):
+    """An install of main's copy renames the link onto a new directory. A pass resolved the link once, when it started, so
+    what it imports after the rename still comes from the directory it started on, and a pass that starts after the rename
+    runs the new directory's code and nothing of the old."""
+    import select
+    import shlex
+    import subprocess
+    w = _copies(tmp_path)
+    gate = tmp_path / "started"
+    os.mkfifo(gate)
+    reads = os.open(gate, os.O_RDWR)        # so the pass's open of it never waits, and this test waits on what the pass writes
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(w["link"]), "VY_EVICT_GIT": str(tmp_path / "no-git")}
+    argv = (["bash", str(SKY / "store_evict.sh")] if unit == "the eviction" else
+            ["sh", "-c", shlex.split(re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1])[2]])
+    first = subprocess.Popen(argv, env={**env, "FAKE_OUT": str(tmp_path / "first.json"), "FAKE_GATE": str(gate)}, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        ready, _, _ = select.select([reads, first.stdout], [], [])      # it started, or it ended without starting
+        assert reads in ready and os.read(reads, 16) == b"started"      # it runs v1's code, and has not yet imported all of it
+        assert os.readlink(f"/proc/{first.pid}/cwd") == str(w["v1"]), "the pass's process names its directory, so an install keeps it"
+        _swap(w["link"], w["v2"])
+        r = subprocess.run(argv, env={**env, "FAKE_OUT": str(tmp_path / "second.json")}, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+    finally:
+        out, err = first.communicate("")
+        os.close(reads)
+    assert first.returncode == 0, err
+    ran = {n: json.loads((tmp_path / f"{n}.json").read_text()) for n in ("first", "second")}
+    assert (ran["first"]["from"], ran["first"]["late"]) == (str(w["v1"]), "v1"), "the first pass read a file installed after it started"
+    assert (ran["second"]["from"], ran["second"]["late"]) == (str(w["v2"]), "v2")
+    if unit == "the eviction":
+        assert out.rstrip().endswith("(v1)") and r.stdout.rstrip().endswith("(v2)"), "each pass's line names its directory"
+    else:
+        assert f"research from {w['v1']}\n" in err and f"research from {w['v2']}\n" in r.stderr, "each pass's line names its directory"
 
 
 def test_every_cpu_node_the_retention_collector_runs_on_gets_researchs_store_eviction_whole():

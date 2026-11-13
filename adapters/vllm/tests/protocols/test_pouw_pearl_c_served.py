@@ -27,27 +27,28 @@ import shutil
 import socket
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import Workload, salt_of, weights_root
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
 from verity.commitments.crypto import lms
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import Workload, salt_of, weights_root
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+
+from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import manifest as PPM
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
-
-from tests.protocols import challenger_host as CH
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"
@@ -227,8 +228,13 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
     """Each install's `commit_weights` samples its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
     committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
     is that W's next epoch: k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
-    keys = []
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: keys.append(salt_key) or ROOTS)
+    keys: list[bytes] = []
+
+    def weight_roots(kernel, weights, scheme, salt_key=None):
+        keys.append(salt_key)
+        return ROOTS
+
+    monkeypatch.setattr(PPD, "weight_roots", weight_roots)
     w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
     for k in range(2):
         (tmp_path / str(k)).mkdir()
@@ -236,7 +242,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
         with PO.install(model, _served(hosts[-1].open)) as comp:
             cs.append(comp.get("pouw").commitment())
         assert hosts[-1].ended() is None and RUNS[k].finished
-    assert [c["pass_index"] for c in cs] == [0, 1] and PHW.EPOCHS == {w.hex(): 2}
+    assert [c["pass_index"] for c in cs] == [0, 1] and {w.hex(): 2} == PHW.EPOCHS
     assert [h.window for h in hosts] == [{"root": PS.epoch_open_root(w, k).hex()} for k in range(2)]
     assert [c["session"]["root"] for c in cs] == [PS.epoch_open_root(w, k).hex() for k in range(2)]
     assert len(keys) == 2 and keys[0] != keys[1] and all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
@@ -260,8 +266,8 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
     assert "which it opens on its salt epoch's root (salt.epoch_open_root, over the weights' root)" in refused(
         session=None)
     opened = {"session": SID, "seq": 3, "root": "ca" * 64, "commitment": "c0" * 64}
-    assert "opens its session itself, on its salt epoch's root (salt.epoch_open_root, over the weights' root), " \
-        "committed before its salt" in refused(session=opened)
+    assert ("opens its session itself, on its salt epoch's root (salt.epoch_open_root, over the weights' root), "
+            "committed before its salt") in refused(session=opened)
     assert "opens its session itself, on its salt epoch's root" in refused(gate=None)
     assert "the window's coins come from one source" in refused(coins=Challenger(0, random.Random(0).randbytes))
     capture = PO.Context(stage="capture", enabled=(ENTRY,), settings={"pouw": {
@@ -353,7 +359,7 @@ def _kinds(gate):
     return [json.loads(line)["kind"] for line in gate.lines]
 
 
-H1_OPEN = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
+H1_OPEN: dict[str, Any] = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
 H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, rows): a salt-only session is a window "
               "H1's checks refuse (window.live_epoch_reason)")
 
@@ -385,8 +391,8 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
         _untouched(model)
         return str(e.value)
     assert f"{SCHEME}: {H1_REFUSED}" in refused(session=reserved, period=period)
-    assert f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's " \
-        "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none" in refused(session=reserved)
+    assert (f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's "
+            "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none") in refused(session=reserved)
     assert f"{SCHEME}: pouw setting 'period' is the lane's open period, its period-open body" in refused(
         session=reserved, period={"lane": "vllm"})
     assert _kinds(gate) == ["period-open", "reserve"] and RUNS == []
@@ -402,7 +408,7 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
         g = CH.Gate(PRIVATE, KEY)
         for name, lane, fields in opens:
             g.period_open(name, lane, by=lane, **fields)
-        answer, period = PHW.reserve_salt(_reserving(g), lambda: g.lines, "vllm", "vy-nebius-1", 0)
+        answer, period = PHW.reserve_salt(_reserving(g), lambda g=g: g.lines, "vllm", "vy-nebius-1", 0)
         joined = "p-pc" if opens and opens[0][1] == "vllm" else None
         assert answer["period"] == (period and period["period"]) == joined and _kinds(g)[-1] == "reserve"
         assert PO.refusals(_served(lambda *a: None, session=answer, period=period)) == ()
@@ -418,7 +424,9 @@ class _GateSession:
         self.gate, self.challenger, self.monkeypatch = gate, challenger, monkeypatch
         self.tree = tmp_path / "session"
         self.directory = self.tree / "out"
-        self.reason = self.client = self._thread = None
+        self.reason: str | None = None
+        self.client: Any = None
+        self._thread: threading.Thread | None = None
         gate.reserve(SID, families)
 
     def open(self, sid, root):
@@ -440,6 +448,7 @@ class _GateSession:
             self.reason = R.serve(sock, session, itertools.count().__next__)
 
     def end(self):
+        assert self._thread is not None, "end before open"
         self._thread.join()
         self.gate.end(SID, self.directory, self.reason is None)
         return self.reason
