@@ -147834,3 +147834,61 @@ B `cursor/proofs-stopdriver-family-ffc6` `46811047714e`, on `main` `053b8e50fe8a
    development challenger.
 5. The body's sentence on the key repeats your 14:39Z relay of soundness. I have not read the pull request it
    names.
+
+## HONEST2, Fri 13 Nov 15:07Z: the compiled head is `552a41cb4df8` (runs `8b51`, `0f3a`, both rc 0). The two stages check an inner block at EVERY play the session's verifier accepts, with NO count hypothesis: `checked_ne_nil_of_formAccepts` from `HeldOfAt` and one play the form accepts. `0 < units (base h) x` needs no place on the join's field list
+
+In plain words: all four rulings of 13:47Z are done and compiled. The lemma (ii) is proved twice. Once as ruled, with the count of inner blocks kept a hypothesis. And once without it, because the proof showed the count is only read when the second stage is refused, and that does not happen at an accepted play: the verifier's check of the session statements reads the second stage's draw, and a second stage that draws proves a unit one of the members has. The only thing that route still asks is that the registration has a template, and at the form the accepted run gives that: its own second stage drew over the outer block's cells, which are the held copies' cells, one per template. So at the session of record, under `HeldOfAt` and one play the form accepts, every play the session's verifier accepts has a non-empty set of checked inner blocks. The second of the two things your 13:29Z put on the join's field list (a non-empty sample at an accepted run) is now a theorem under `HeldOfAt`, whose descriptor premise is the first.
+
+**1. What compiled** [run: `r20261113-142841-8b51` at `667f6b1ba51a`: rc 0; `Honest/Checked` 9 theorems, `Honest/Any` 9, `Honest/AtHeldOf` 6, `SampledTwo/PremisesAt` 6; each lean exit 0, axiom probe clean, siblings clean, no warning] [run: `r20261113-150110-0f3a` at `552a41cb4df8`: rc 0; `Honest/Checked` 14 theorems, `Honest/AtHeldOf` 7, `SampledTwo/PremisesAt` 10; each lean exit 0, axiom probe clean, siblings clean, no warning; `Honest/Any` is unchanged between the two heads]
+
+- Ruling 2: `honestExists_iff : HonestExists ↔ ∃ h : Held, Premises h ∧ AcceptsPlay h` (`Honest/Any.lean`).
+- Ruling 3: `ks_of_formAccepts : A.KS` and `scope_of_accept : A.L.Scope x` (`SampledTwo/PremisesAt.lean`), on the branch off `757ef18fdc67`, the tip ASSEMBLY named.
+- Ruling 4: `Honest/Checked.lean`, with its root lines in `lakefile.toml` and `lean-audit.json`. `checked_ne_nil` and `checked_ne_nil_of_play` are the 13:42Z statements, `0 < units (base h) x` a hypothesis.
+
+**2. The statement with no count** [run: `0f3a`]
+
+```lean
+theorem checked_ne_nil_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
+    (hit : i.interior = some it) (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((SpotFlock.V A.h).k x) → FlockDeploy.Coin}
+    (hacc : (Claims.run H P (SpotFlock.V A.h) x ω r).out = .acc) :
+    A.h.reg.checked (SamplingDeploy.units (SpotFlock.base A.h) x) (SpotFlock.src (r ⟨0, SpotFlock.k_pos A.h x⟩))
+      (SpotFlock.stageSrc (SpotFlock.stageCoins A.h x r)) ≠ []
+```
+
+`units_pos_of_formAccepts` has the same hypotheses and concludes `0 < SamplingDeploy.units (SpotFlock.base A.h) x`. The steps, each a compiled theorem:
+
+- `drawn_of_play` (`Honest/Checked.lean`): at an accepted play's coins the second stage draws, where `0 < h.ms.length`. From `run_seenAt` and `stmtOk_draw`.
+- `units_pos_of_drawn`, `checked_ne_nil_of_drawn`: a drawn second stage proves a member's unit, under `AddressRow.SampleSlots h`. So `units_pos_of_play` and `checked_ne_nil_of_template` at any held copies `h` take `SampleSlots h` and `0 < h.ms.length`, and no count.
+- `sampleSlots_of_heldOf` (`Honest/AtHeldOf.lean`) and `sampleSlots_of_formAccepts`: `SampleSlots A.h` from the accepted run's population check and its first stage's count `K` (`firstK_of_formAccepts`).
+- `template_of_formAccepts`: `0 < A.h.ms.length`. The accepted run's second stage drew over `Select.replayCells`' `ns` (`accepted_steps`); `secondProblem` refuses an empty `ns` (`secondProblem_cells_pos`); those are the held copies' cells (`cells_heldOf`); `filesOk` holds one cell per template (`template_of_cells`).
+
+**3. Ruling 4's question, answered** [derived, from the compiled proofs]
+
+An accepted play gives `0 < units (base h) x` through the second stage's draw, not through the layout's count. At any held copies it needs `SampleSlots h` and `0 < h.ms.length`. At the form, `HeldOfAt` and one accepted play give both.
+
+**4. Whole-tree tests at `552a41cb4df8`** [run: the six test files, locally: 185 passed, 1 failed, `test_no_public_file_needs_one_the_export_does_not_copy`, the same seven edges as at `509d60acbad`, none in a file this branch changes]
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+Nothing. ASSEMBLY: `cursor/proofs-honest2-join-6e17` at `552a41cb4df8` is six commits over `757ef18fdc67`; it adds one root, `Proofs.Flock.SpotFlock.Honest.Checked`, on the `Honest.AtHeldOf` line of `lakefile.toml` and after it in `lean-audit.json`.
+
+## Not established
+
+- `HeldOfAt A C` itself, and that the form accepts a play: hypotheses.
+- `0 < h.ms.length` and `SampleSlots h` at held copies that are not `heldOf`'s for an accepted run: hypotheses of `checked_ne_nil_of_template`.
+- For the premises (`premises_of_formAccepts`, `ks_of_formAccepts`): `RefReadsWf A.h` and `wiresChecked A.h` stay hypotheses. For `honest_of_formAccepts`: `PlayAccepts` and the coins of `SeqCoinsRead`.
+- No records run at my head (ASSEMBLY's `r20261113-135551-1520` passes at `757ef18fdc`, which my branch sits on). No whole build. So no ready line.
+
+## Pushed
+
+- `cursor/proofs-honest2-join-6e17` at `552a41cb4df8`, every file of mine compiled at it.
+
+## To post
+
+Nothing.
