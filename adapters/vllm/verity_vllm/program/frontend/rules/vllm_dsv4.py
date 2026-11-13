@@ -21,20 +21,34 @@ the vocabulary lacks refuses by name.
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import call_args, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_sequences_of
-from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
-from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
+from verity.definitions.numerics.flashmla_twin import (
+    num_sm_parts,
+    request_splits,
+    sched_meta,
+)
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry.flashmla import FLASHMLA_DSV4
+
+from verity_vllm.program.frontend.derive import refuse
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
+from verity_vllm.program.frontend.rules.common import call_args, known, shape
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_sequences_of,
+)
+from verity_vllm.program.frontend.rules.vllm_dsa import (
+    _missing,
+    _positions,
+    _rows,
+    _static_float,
+    _table,
+    _value,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
@@ -85,7 +99,7 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
         T = len(pos)
         if (r := _value(ctx, a["q"], BF16, (T, None, None), "q")):
             return r
-        _, NH, D = shape(ctx, a["q"])
+        _, NH, D = known(shape(ctx, a["q"]))
         DR = (shape(ctx, a["cos_sin"]) or (0, 0))[-1]
         if (r := _value(ctx, a["kv"], BF16, (T, D), "kv") or _table(ctx, a["cos_sin"], DR, pos, "cos_sin", F32)):
             return r
@@ -104,8 +118,8 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
         a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         T, h = len(pos), ctx.hint_name(node)
-        _, NH, D = shape(ctx, a["q"])
-        DR = shape(ctx, a["cos_sin"])[1]
+        _, NH, D = known(shape(ctx, a["q"]))
+        DR = known(shape(ctx, a["cos_sin"]))[1]
         S = {"NH": NH, "NHP": a["padded_heads"], "DN": D - DR, "DR": DR, "QB": a["quant_block"], "EPS": float(a["eps"])}
         fn = ctx.kind("dsv4_qnorm_rope_kv_insert", node, **S)
         q, kv, cs = _rows(ctx, a["q"], 16), _rows(ctx, a["kv"], 16), ctx.coll(a["cos_sin"])
@@ -138,14 +152,14 @@ class Dsv4CompressorStateRule(OpRule):
             return "a negative position"
         if (r := _value(ctx, a["ape"], F32, (None, None), "ape")):
             return r
-        W = shape(ctx, a["ape"])[1]
+        W = known(shape(ctx, a["ape"]))[1]
         return _value(ctx, a["kv_score"], F32, (len(pos), 2 * W), "kv_score") or True
 
     def emit(self, node, ctx):
         a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         h = ctx.hint_name(node)
-        R, W = shape(ctx, a["ape"])
+        R, W = known(shape(ctx, a["ape"]))
         fn = ctx.kind("dsv4_compressor_score", node, W=W)
         rows, ape = _rows(ctx, a["kv_score"], 32), ctx.coll(a["ape"])
         score = [ctx.call(fn, rows[i][W:], ape[p % R], node=node, rule=self, name=f"{h}[t={p}]") for i, p in enumerate(pos)]
@@ -210,13 +224,13 @@ class Dsv4SparseAttnRule(StateRule):
     info = RuleInfo("Dsv4SparseAttn[vllm-dsv4]", 1, "state", applies_to="vllm_iface.dsv4_sparse_attn",
                     preconditions=("the target's compute capability is 9.0 (FlashMLA's cc 9.0 sparse kernels)",
                                    "positions are T consecutive rows continuing the layer's history (opened at its first call's first position)",
-                                   "q [T, NHP, D] bf16, NoPE [T, D - DR] e4m3, scale [T, (D - DR) / QT + 1] u8, RoPE [T, DR] bf16, sink [NHP] f32, "
-                                   "(D, DR) a registered FlashMLA geometry; cos_sin an f32 rotary cache [MAX_POS, DR] holding every position",
-                                   "ratio 1 without a compressor, or 4 or 128 with state kv and score [T, D] f32 ([T, 2D] at ratio 4), the "
-                                   "norm weight [D] bf16 and a static eps",
+                                   ("q [T, NHP, D] bf16, NoPE [T, D - DR] e4m3, scale [T, (D - DR) / QT + 1] u8, RoPE [T, DR] bf16, sink [NHP] f32, "
+                                   "(D, DR) a registered FlashMLA geometry; cos_sin an f32 rotary cache [MAX_POS, DR] holding every position"),
+                                   ("ratio 1 without a compressor, or 4 or 128 with state kv and score [T, D] f32 ([T, 2D] at ratio 4), the "
+                                   "norm weight [D] bf16 and a static eps"),
                                    "at ratio 4, (p + 1) / 4 <= topk at every position (the indexer's short path)",
-                                   "layer_name, heads, window, topk and softmax_scale static; the caches written from one module; "
-                                   "not under registered_values"),
+                                   ("layer_name, heads, window, topk and softmax_scale static; the caches written from one module; "
+                                   "not under registered_values")),
                     evidence_domain="structural; numerics: Dsv4MlaCompressC4_v1 / C128_v1, FlashMlaDecode_v1, FlashMlaGatherRow_v1, "
                                     "FlashMlaPrefill_v1")
 
@@ -245,7 +259,7 @@ class Dsv4SparseAttnRule(StateRule):
             return f"numerics_unregistered: the FlashMLA Definitions are its cc 9.0 kernels; the target is cc {tp.capability_str}"
         if (r := _value(ctx, a["q"], BF16, (T, None, None), "q")):
             return r
-        _, NHP, D = shape(ctx, a["q"])
+        _, NHP, D = known(shape(ctx, a["q"]))
         DR = (shape(ctx, a["rope"]) or (0, 0))[-1]
         G = FLASHMLA_GEOMETRY.get((D, DR))
         if G is None:
@@ -288,8 +302,8 @@ class Dsv4SparseAttnRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NHP, D = shape(ctx, a["q"])
-        DR = shape(ctx, a["rope"])[1]
+        _, NHP, D = known(shape(ctx, a["q"]))
+        DR = known(shape(ctx, a["rope"]))[1]
         G = FLASHMLA_GEOMETRY[(D, DR)]
         DN, QT, BN, DOT = D - DR, G["QT"], G["BN"], G["DOT"]
         owner = ctx.state.setdefault("dsv4_owner", {})
@@ -395,8 +409,8 @@ class Dsv4InvRopeQuantRule(OpRule):
                     preconditions=("the target's compute capability is 9.0 and tma_aligned_scales false: f32 scales (cc 10.0 packs UE8M0)",
                                    "positions a static 1-D index of num_tokens = T rows; o [T, n_groups * heads_per_group, HD] bf16",
                                    "cos_sin an f32 rotary cache [MAX_POS, 2 half_rope] holding every position",
-                                   "HD = chunks_per_head * quant_group_size, the rotary suffix quant_group_size - rope_start = 2 half_rope, "
-                                   "d = heads_per_group * HD, scale_inner = heads_per_group * chunks_per_head; fp8_max 448",
+                                   ("HD = chunks_per_head * quant_group_size, the rotary suffix quant_group_size - rope_start = 2 half_rope, "
+                                   "d = heads_per_group * HD, scale_inner = heads_per_group * chunks_per_head; fp8_max 448"),
                                    "not under registered_values"),
                     evidence_domain="structural; numerics: Dsv4InvRopeQuantHead_v1 (registry.dsv4_indexer)")
 

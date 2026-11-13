@@ -11,7 +11,11 @@ import pytest
 import torch
 
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
-from verity_vllm.commit.served_record import SAMPLER_INPUTS, SamplerInputsSource, served_rows
+from verity_vllm.commit.served_record import (
+    SAMPLER_INPUTS,
+    SamplerInputsSource,
+    served_rows,
+)
 
 
 def committer(seeds):
@@ -21,7 +25,7 @@ def committer(seeds):
                               geo_digest=b"g" * 32)
     src = SamplerInputsSource(com)
     com.attach_source(src)
-    got = {}
+    got: dict[str, list] = {}
     com._acquire = lambda name, t, job: got.__setitem__(name, t.tolist())
     return com, src, got
 

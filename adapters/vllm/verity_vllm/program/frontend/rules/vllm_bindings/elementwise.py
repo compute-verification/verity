@@ -3,22 +3,29 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (and_mul_operands, call_args, dtype_is, from_rows, row_value, rows_of, scalar_kind,
-                                                      shape)
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity.definitions.registry.dsv4_moe import limit_bits
 
+from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    and_mul_operands,
+    call_args,
+    dtype_is,
+    from_rows,
+    known,
+    row_value,
+    rows_of,
+    scalar_kind,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
+from verity_vllm.program.frontend.rules.vllm_iface import real_C, targets_for
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
 
 
 def _C_op(name: str) -> set:
-    from verity_vllm.program.frontend.rules.vllm_iface import real_C
     C = real_C()
     return {getattr(C, name).default} if C is not None and hasattr(C, name) else set()
 
@@ -67,7 +74,7 @@ class ScalarTensorMulRule(OpRule):
         fn = ctx.kind("scale_tensor", node, N=N)
         outs = [ctx.call(fn, r, scol, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
-        ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(shape(ctx, sc))}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(known(shape(ctx, sc)))}, emitted=f"{fn.id} x{len(rows)}")
 
 
 class GeluTanhAndMulRule(InPlaceRule):
@@ -86,11 +93,11 @@ class GeluTanhAndMulRule(InPlaceRule):
     def emit(self, node, ctx):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
-        I = rows[0].type.n // 2
-        fn = ctx.kind("gelu_tanh_mul", node, I=I)
+        INTER = rows[0].type.n // 2
+        fn = ctx.kind("gelu_tanh_mul", node, I=INTER)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 
@@ -122,11 +129,11 @@ class SiluAndMulWithClampRule(InPlaceRule):
     def emit(self, node, ctx):
         a = call_args(node)
         rows, lead = rows_of(ctx.coll(a["input"]))
-        I, LIMIT = rows[0].type.n // 2, float(a["limit"])
-        fn = ctx.kind("silu_mul_clamp", node, I=I, LIMIT=LIMIT)
+        INTER, LIMIT = rows[0].type.n // 2, float(a["limit"])
+        fn = ctx.kind("silu_mul_clamp", node, I=INTER, LIMIT=LIMIT)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["result"], from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 class Bf16ScalarChainRule(OpRule):
     """bf16 row-wise ops with a static Python-float constant: `aten.div.Tensor(x, C)` -> `bf16_div_scalar{N,C}`,
