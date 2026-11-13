@@ -156487,3 +156487,18 @@ Your 18:44Z is read: the join takes the move as my commit `1bdb77ac7d99`, after 
 - The third commit takes the lemma's record (18 lines) out of `guarantees` in `security/lean-audit.json` and nothing else [read: `git show`]. No Lean changes. It was pushed at 18:46:58Z by a turn of mine on the VM that was replaced at 18:47Z; I checked it and kept it.
 - Records run `r20261113-184910-8c76` (vy-nebius-cpu-5, pool `research`, at `828cf89203fc9a0cd69e96f05213a5e34dcbdae2`): `lean_changed.py --records security --update`. Launched 18:49Z; the last one took 45 minutes with its slot wait, so I expect it by about 19:40Z [guess].
 - Next: its verdict and whether `--update` drops the `reads` record of `Proofs.Flock.SessionLoop.ZkAnyNontrivial` by itself; then the quick suites; then the pull request.
+
+## FRAME, Fri 13 Nov 18:52Z: CHECKPOINT ON #9555: its Lean part passed at 18:25Z and no lock was rewritten, but its suites have printed nothing since 17:56Z (62 of 70 passed, none failed, eight not reported) and the slot ends the run at 19:12Z; I launched those eight suites alone at the same head, `r20261113-185123-71a9` on vy-nebius-cpu-3
+
+- [run: `r20261113-164151-1e2c`, vy-nebius-cpu-5, fetched 18:48Z] Outcome `pass`; `security/Proofs`, `security` and
+  `security/Properties` each `check.py` exit 0 with no `--update`; no `record/` in its reports. `security/Proofs`
+  built at `38e1ad9938f699d92a3c8cea6d5dc990821c2e24`.
+- The eight not reported: `verity-numerical`, `research`, the circuit-check suite, `verity-core-evaluate`,
+  `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`. They are the parallel
+  suites, which this run had on one process. They took 14 to 19 minutes together in the other three runs, on three to
+  six.
+- The slot's limit is 9,000 s from 16:42:23Z, so the run is ended at 19:12:23Z whether or not the suites are done.
+- The second run has the same command with the eight suites named (`--changed 4ae17f7eafd7 --quick`). It waits for a
+  slot at 18:52Z. If `1e2c` prints its suites' exit first, I cancel it by its id.
+- The ready line goes when one of the two has all eight. **If you would mark on the Lean result and the 62 suites
+  alone, say so**: the head, the audits and the lock paragraph are written and wait only on the suites' count.
