@@ -302,16 +302,18 @@ def _draft(argv: Sequence[str]) -> int:
             if k + 1 == len(argv):
                 raise ValueError(f"the server's argument {flag} has no value")
             value = argv[k + 1]
+        if name:
+            # a dotted setting's value, as vLLM's argument parser converts one: a boolean, an integer, else the text
+            word = value.lower()
+            spec[name] = word == "true" if word in ("true", "false") else int(value) if re.fullmatch(r"[+-]?\d+", value) else value
+            continue
         try:
             read = json.loads(value)
-        except ValueError:
-            read = value
-        if name:
-            spec[name] = read
-        elif isinstance(read, dict):
-            spec.update(read)
-        else:
+        except ValueError as e:
+            raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings") from e
+        if not isinstance(read, dict):
             raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings")
+        spec.update(read)
     return speculative({"speculative": spec or {"method": None}}) if named else 0
 
 

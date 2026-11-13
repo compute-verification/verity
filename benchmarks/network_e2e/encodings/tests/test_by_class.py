@@ -511,8 +511,8 @@ MTP = ("--speculative-config.method", "mtp", "--speculative-config.num_speculati
 def drafted(asy: bool, seed: int = 11):
     """The plan under the certified tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
     each with the drafts its emitting rows kept, their release times, and the tokens each executed step's rows
-    emitted. A row keeps a count drawn from `seed`, up to the drafts it carries and the outputs its request still
-    lacks, as an accept rule might; each is drawn as the tick's replay asks for it."""
+    emitted. A row's kept count is random, seeded by `seed`, up to the drafts it carries and the outputs its request
+    still lacks, as an accept rule might give; each is chosen as the tick's replay asks for it."""
     e = R.DraftEngine(**dataclasses.asdict(engine(asy)), num_speculative_tokens=K)
     (ios, times), rng = plan(), random.Random(seed)
     kept, emitted, now = [[] for _ in ios], [], {}
@@ -563,11 +563,12 @@ def with_draft(d: Path, ios, emitted, *argv: str) -> Path:
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
 def test_a_serve_with_a_draft_is_read_and_charged_by_class(tmp_path, capsys, asy):
     """The plan served under the certified tick with a draft, as a trace-corpus directory. The reader takes the draft
-    from the server's arguments, given as dotted settings or as JSON, and each row's kept count from the tokens the
-    model runner sampled for it, cut where the request ends. The report is of the serve's schedule: the string
-    decodes back to its steps and its rows' kept counts, the replay on those counts is the engine's schedule, and the
-    kept drafts are one more class, charged, beside the lengths: its bits and the rows that sent a count are in each
-    window's row and the table's last column, with its rule's line. Every other class is as without a draft."""
+    from the server's arguments, given as dotted settings (a setting turned off among them) or as JSON, and each
+    row's kept count from the tokens the model runner sampled for it, cut where the request ends. The report is of
+    the serve's schedule: the string decodes back to its steps and its rows' kept counts, the replay on those counts
+    is the engine's schedule, and the kept drafts are one more class, charged, beside the lengths: its bits and the
+    rows that sent a count are in each window's row and the table's last column, with its rule's line. Every other
+    class is as without a draft."""
     e, ios, times, emitted = drafted(asy)
     run = serve(e, ios, times, seed=1)
     d = with_draft(write_corpus(tmp_path / "tick", e, ios, times, run, tick=True), ios, emitted, *MTP)
@@ -581,6 +582,9 @@ def test_a_serve_with_a_draft_is_read_and_charged_by_class(tmp_path, capsys, asy
     as_json = with_draft(write_corpus(tmp_path / "json", e, ios, times, run, tick=True), ios, emitted,
                          "--speculative_config", json.dumps({"method": "mtp", "num_speculative_tokens": K}))
     assert R.read_corpus_trace(as_json).requests == tr.requests and R.read_corpus_trace(as_json).engine == e
+    off = with_draft(write_corpus(tmp_path / "off", e, ios, times, run, tick=True), ios, emitted,
+                     *MTP, "--speculative-config.parallel_drafting=False")
+    assert R.read_corpus_trace(off).engine == e
     out = tmp_path / "report.json"
     assert BYC.main([f"draft={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 0
     text, row = capsys.readouterr().out, json.loads(out.read_text())["rows"][0]
@@ -697,6 +701,8 @@ def test_a_draft_the_reader_cannot_read_is_refused_by_name(tmp_path, capsys):
              "the server's argument --speculative-model: the reader takes a draft from --speculative-config only"),
             ("bare", ("--speculative-config",), "the server's argument --speculative-config has no value"),
             ("list", ("--speculative-config=[1]",),
+             "the server's argument --speculative-config: its value isn't a JSON object of draft settings"),
+            ("word", ("--speculative-config", "mtp"),
              "the server's argument --speculative-config: its value isn't a JSON object of draft settings")):
         assert _refusal(corpus(name, *argv), tmp_path, capsys) == why, name
     fewer = _refusal(corpus("fewer", *MTP[:3], "1"), tmp_path, capsys)
