@@ -3,6 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.SessionAsk
 public import Proofs.Properties.Verity.SampledTwo.SessionRecordRounds
 public import Proofs.Properties.Verity.SampledTwo.RoundsRise
+public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
+public import Proofs.Properties.Verity.SampledTwo.OneTable
 public import Proofs.Properties.Verity.Sampled.MovesReach
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.DeployRoundsZk
@@ -223,5 +225,27 @@ theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionRead
       (SessionCoins.runLocate A Ls tab) :=
   sessionMsgsAsk_form A x C S dev P' Good _ hplay hsess hrounds
     (lastSlotFree_run_of_setups A C Good Ls tab hsz hI hset)
+
+/-! ## The sessions' rounds -/
+
+/-- **A template's session has at least two rounds**, where a play is accepted: the play's run of record has an
+interior (`input_of_accepts`), the reading states its session statements (`StmtsRead`), each has its template's count
+of rounds and is in scope (`RoundsHeldAt`, `ScopeHeldAt`), and the held copies' two-stage design evaluates
+(`twoHolds_at`). So the template's session sets up one table, and its rounds are the link's, the last message's and
+the table's two reps' (`reps_of_scope`). -/
+theorem two_le_rounds {A : Live₂} {C : CaseOf} {S : SessionReading} (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) {o : Verity.Exchange} (hA : FormAccepts C o) {t : ℕ}
+    (ht : t < A.h.ms.length) : 2 ≤ SpotFlock.k₀ A.h t := by
+  have hA' := hA
+  obtain ⟨k, hk, hacc⟩ := hA'
+  obtain ⟨_, inp, -, hin, -, it, _, hit, -⟩ := input_of_accepts hacc
+  have hi : inputOn C o = some inp := by
+    show (C o).bind inputOfCase = some inp
+    rw [hk]
+    exact hin
+  obtain ⟨m₂, hm₂, -⟩ := hst o inp it hA hi hit
+  obtain ⟨_, _, _, -, hk₀, -⟩ :=
+    reps_of_scope (twoHolds_at hof hA hi hit) (hrounds o m₂ hA hm₂) (hscope o m₂ hA hm₂) ht
+  omega
 
 end Verity.SampledTwo.Messages
