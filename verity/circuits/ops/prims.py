@@ -38,7 +38,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.defs import PrimitiveDefinition, primitive
 from verity.circuits.types import Array, Value
 
