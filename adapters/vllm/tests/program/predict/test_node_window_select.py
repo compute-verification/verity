@@ -25,7 +25,7 @@ from verity.definitions.registry import greedy_stages as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NSEL.FAMILIES}
 V, K, N, R = 154880, 20, 7744, 121
-#: bf16 words a small row is drawn from, so ties are common: +0, -0, 1, -1, 2, 1 + 2^-7, the least subnormal, +inf, -inf
+#: the bf16 words a small row's lanes take, so ties are common: +0, -0, 1, -1, 2, 1 + 2^-7, the least subnormal, +inf, -inf
 #: and two NaNs
 WORDS = np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x4000, 0x3F81, 0x0001, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1], np.uint16)
 
@@ -48,7 +48,7 @@ def _units(Vs: int, rows: np.ndarray) -> np.ndarray:
 
 @pytest.mark.parametrize("Vs", [200, 130])
 def test_v4_is_the_stages(Vs):
-    """On rows of a small V drawn from `WORDS` (ties, signed zeros, infinities, NaNs, a NaN first logit, an all-NaN row),
+    """On rows of a small V whose lanes are `WORDS`' (ties, signed zeros, infinities, NaNs, a NaN first logit, an all-NaN row),
     `TokenSelect_v4`, `TokenSelect_v1`, `GreedySelect_v1` and the plan's units one by one give the same token, the twin's."""
     rng = np.random.default_rng(Vs)
     rows = WORDS[rng.integers(0, len(WORDS), (48, Vs))]
