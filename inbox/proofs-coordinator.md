@@ -127040,3 +127040,64 @@ No watchdog kill and no thread failure. The only messages from my files are depr
 **To post.** For ACCEPTS: `-5c1e` at `521933e143` compiles (`0241`). `-9b17` at `8705d04b3d` has not been tried yet; it goes in the next try with the congruence.
 
 **Not established.** Whether `FormAccepts` gives `two A.h s = some d`, for fact 1. Whether `-9b17`'s `by rfl` lines at `8705d04b3d` compile. All of the congruence. Pushed heads: `-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, `-9b17` `8705d04b3de159694e4b3fffe2a294c0bb353c40`; nothing unpushed.
+
+## ADDRROW, Fri 13 Nov 07:16Z: `RowRead`, `RowKind`, `RowDraw`, `RowParse` and `RowOf` COMPILE (`9095`, `1051`, `1851`; `RowOf` at `20ab7ba677`, four premises); STATEMENT CHANGE, written and NOT compiled (`e8ced15fa9`): `rowFact_of_runs` takes three premises, the fourth (`PortReads`) is proved and its definition is gone, so HONEST2 drops `hPR`; and `RowLeaves.lean` proves `OwnLeaves` from ONE NEW DECIDED CONDITION on the wires, `wiresChecked`, because `writtenRead` alone does not pin the leaf count; their try `r20261113-070953-a243` waits for a slot on vy-nebius-cpu-12, seven ahead
+
+**In plain words.** The row theorem FRAME's assembly asks of me compiled an hour ago under four assumptions. One of the four was only about Flock's parser, and it is now a compiled theorem, so the row theorem is restated with three. I then wrote a proof of the second one: at a port a template writes and no link names, the registered read has exactly one leaf an inner block. The writer's own check does not say that. A reader's check does, and to reach a reader I found I need one more condition on the registered wires than FRAME's `writtenRead`: the wire must be one the second stage really checks. That proof and the three-premise restatement are pushed and not compiled; the node's queue is seven deep. Two assumptions are left, and I read enough tonight to say what each will take.
+
+Clock: `date -u` read 07:16Z. Branch `cursor/proofs-addrrow-d318` at `e8ced15fa9` (pushed). Mailbox read at 07:16Z, through FRAME 07:15Z: HONEST2 07:03Z is the last entry that names me; nothing from the coordinator to me after 06:09Z.
+
+**1. What compiled** [run: each run's fetched `stdout.log`; "lean exit 0" and "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound" for each file named].
+- `r20261113-062432-9095` (at `5cc811a8c9`): `RowKind.lean` 7 theorems, `RowDraw.lean` 10. `RowRead.lean` FAILED there, in `rowsOk_at`: `generalize (0 : ℕ) = f at …` also rewrote the zero of `0 < units` in the goal.
+- `r20261113-063641-1051` (at `6e70075092`, the mend): `RowRead.lean` 7 theorems; `RowOf.lean` 28 theorems, 113 s.
+- `r20261113-065004-1851` (at `20ab7ba677`, done 06:57Z): `RowParse.lean` 8 theorems, 279 s; `RowOf.lean` again, 28 theorems, 124 s, with its deprecated names and dead alternatives removed. No warning line names a file of mine.
+- [derived] So at `20ab7ba677`, the head HONEST2 merged, this is a compiled theorem:
+  `rowFact_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hS : AddressRow.Sits h) (hPR : AddressRow.PortReads) (hL : AddressRow.OwnLeaves h) (hPub : AddressRow.PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- Compiled too, in `RowParse.lean`: `portsOf_reads`, which is `PortReads` and more. Where Flock parses a registered-reads file to ports `own`, the file's `ports` is an object, and each port of `own` is an entry of it with the port's fields (FRAME's `PortFields`) whose read at every slot is the port's.
+
+**2. STATEMENT CHANGE: three premises** [read: my own file at `d47d05108c`; NOT compiled].
+- `RowOf.lean` imports `RowParse` and reads `portsOf_reads` where it took `hPR`. The definition `AddressRow.PortReads` is deleted, with my file's copy of `nat_num`.
+- New statements:
+  - `rowFact_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hS : AddressRow.Sits h) (hL : AddressRow.OwnLeaves h) (hPub : AddressRow.PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`
+  - `rowFact_of_wiring (W : Wiring h) (hS) (hL) (hPub)`, the same from one `Wiring h`.
+- **HONEST2:** your `Honest/Sits.lean` passes `hPR : AddressRow.PortReads`. It compiles against `20ab7ba677`. At my next head it does not: drop `hPR` from `rowFact_of_sits`, `honest_of_sits` and the two before it. Do not merge `d47d05108c` or `e8ced15fa9` before I say the three-premise file compiled.
+
+**3. `OwnLeaves`: written, NOT compiled, and it needs one condition more** [read: `SecondStage.lean`, `Code.lean`; my file `AddressFacts/RowLeaves.lean` at `e8ced15fa9`].
+- Why the writer's check is not enough [read: `SecondStage.readOk`, last arm]: at a template's own port the check is `sameAt e x && rowsOk …`, and `rowsOk` passes any leaf count that is a whole multiple of the slots. So the count is pinned only where another session reads the same entry of the first stage's record through a wire (`readOk`'s wired arm: `placedOk q p e (q * r.per) …` with `pw.n == r.per`).
+- Why `writtenRead` is not enough [read: `readOk`, `wireOf`, `wiresOk`]: it gives a wire `w` whose writer port is the written port. The reader's check takes the wired arm at `w`'s reader port only if no link names that port (the link arm comes first), and it takes the FIRST wire at that port (`wireOf` is a `find?`), which need not be `w`. `wiresOk` asks that no link names the wire's WRITER port; nothing asks it of the reader port.
+- The condition, decided on the auditor's copies, no run in it:
+  `def wiresChecked (h : Held) : Bool := (h.wires.getD #[]).all fun w => (heldLink h w.template w.port).isNone && (heldWire h w.template w.port).any fun w' => w'.writer == w.writer && w'.wport == w.wport`
+  Its cost is one search of the links and one of the wires for each wire: the description's, no walk over bits.
+- Is it true of a design the verifier derives? [read: `wireRuns`, `gather`; not evaluated] The second clause yes: derived wires are gathered one a reader port. The first fails only where one template's port reads a parameter of the outer block in one caller and a node's output in another; I have not evaluated it on Friday's registration.
+- What is written:
+  - `CheckedRun.own_leaves (W : Wiring h) (hwc : wiresChecked h = true) (hr : r.Ok h) … : reg.leaves = (sampleOf h r).size * h.reg.ns.getD (templateOf h.ms r.u) 0`.
+  - `AddressRow.ownLeaves_of_wires (hW : ∀ r, r.Ok h → Wiring h) (hwc : wiresChecked h = true) : AddressRow.OwnLeaves h`.
+  - `rowFact_of_wires (hW) (hS : AddressRow.Sits h) (hwc : AddressRow.wiresChecked h = true) (hPub : AddressRow.PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- The steps: `writtenRead` (from `wiring_of_two`) gives the wire; `wiresOk` makes its reader a template; `wiredRead` makes that template's session read the wire's port registered; `readOk`'s wired arm holds that read to the first entry of the writer port's name in the first stage's record, of `q · n_writer` leaves; the names are distinct (`names_nodup_of_two`), so the writer is the inner block's template; the writer's own read is held to the same entry (`sameAt`), and two leaf counts `jeq` holds to one value are one (FRAME's `nat?_of_jeq`).
+- It reads `Wiring h` for two fields, `own` (`OwnReads`) and `unwired`.
+- The file is a lakefile root and the last of the lock's `roots`, in the commit that adds it [run: `python3` at `e8ced15fa9`: 188 roots, none twice, the lock equals `check.py`'s `text` of itself, every row root a quoted lakefile root].
+
+**4. The two premises left, and what I read of each** [read; nothing written].
+- `Sits h` (where the second stage puts the checked inner block). Three things it will take:
+  - One table. `Counted` and every clause of `Sits` are about the session's FIRST table. `second-tables` gives nothing in the model: `codesOk` checks the statement against its own verdict, whose `tables` is `ONE_TABLE` by construction. What gives it is `sessionOk`'s `shapeOf xS == shapeOf (h.xS₀ t)` with FRAME's `ref_one_table` (`(shapeOf (h.xS₀ t)).length = 1` where the design evaluates), so the session sets up one statement. The step from one statement to `ins.read.I.count ≤ 1`, the form FRAME's theorems take as a hypothesis (`hc1` in `RowsOpen.lean`, `EntriesAt.lean`), is not written; Flock's setup lemmas say `sts.size = count` where `count > 1`, which would close it.
+  - The labels. `HmRow.drawn` writes the drawn file's `units.indices` as `proved.map fun u => popIdx.getD u 0`, and `second-population` holds the population's to `p.lo + i`. So instance `n`'s label is `p.lo + unitOf draw n`, which is `drawSlot`: the shape of `LabelledAt` in `Sits` is the right one. The lemma that reads `units.indices` back off the drawn header is not written (`drawn_frame` in `HeaderRoots.lean` is the model for it).
+  - The place. `second-sample` with my `proved_of_wf` gives the session's proved units as the second draw's units inside the part; `proved_of_checked` gives the slot of the checked inner block; the arithmetic on `RegTwo.blockAt` to the cell and the place in it is not written.
+  - It still needs `∀ v, h.reg.always v = false` (my 06:26Z limit), so it will be a theorem at `h.noAlways`, or under that hypothesis.
+- `PublishedRows h` (a written port, no link, no registered read): `count ≤ 1` again, then `countOf pop q = pop.n = q · n` from `second-population`, and the row is the unit's own because the port shares no rows (`second-refs`: a port that shares rows is read registered). Not started.
+- I take `Sits` next: it is in every case of the row theorem; `PublishedRows` is one corner, empty at HONEST2's instance.
+
+**5. The run** [run: the launcher's lines; `slot.json`].
+- `r20261113-070953-a243`, vy-nebius-cpu-12, pool `proofs`, `--mem-gb 24`, `--timeout 10800`, at `e8ced15fa9`: `RowOf.lean` (three premises), then `RowLeaves.lean`.
+- `slot.json` at 07:16Z: `waiting` since 07:10:19Z, "7 check(s) ahead in line". If it has no slot at 07:30Z I read the other two nodes and move it only to one with memory free.
+- Expected end: about 7 minutes after it gets a slot [guess: `1851` took 7 minutes for two files on that node].
+
+**NEEDS.**
+- Coordinator, for FRAME and HELDOF: `wiresChecked` is a condition the guarantee would rest on, so it is yours to rule. My recommendation: make it a clause of `wiringOk`, next to `writtenRead`. Without it `OwnLeaves` is not provable from what `two h` decides, and it is false at a registration whose only wire into a written port has a linked reader port. Until you rule it stays a hypothesis of `rowFact_of_wires`, and `rowFact_of_runs` keeps `OwnLeaves` as a premise, so nothing of FRAME's changes.
+
+**To post.** Nothing.
+
+**Not established.**
+- That the three-premise `RowOf.lean` or `RowLeaves.lean` compiles: both are in `a243`, which has not started.
+- `Sits h` and `PublishedRows h`, and `ins.read.I.count ≤ 1` at an accepted run.
+- That `wiresChecked` holds at Friday's registration or at any `held …`; at HONEST2's instance it should hold with no wire to check, which nobody has evaluated.
+- That `security/Proofs` builds whole or passes its records audit at `e8ced15fa9`. No ready line.
