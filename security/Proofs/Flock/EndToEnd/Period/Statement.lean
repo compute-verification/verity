@@ -176,16 +176,16 @@ namespace Period
 
 /-- **A period of `T` sampling blocks**, sampling block `t`'s audit after sampling block `t − 1`'s, against one
 prover. -/
-noncomputable def game (W : ℕ → SamplingBlock) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
+noncomputable def game (W : ℕ → SamplingBlock) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
 
 /-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
 noncomputable def run (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
-  periodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
+  monitoringPeriodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
 
 /-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
 at `s`. -/
 def Plays (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  PeriodPlays (fun t => (W t).game) 0 T s t τ
+  MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 end Period
 

@@ -7,7 +7,7 @@ public import Definitions.Pouw.Window
 
 C1, a sample that depends on the registration, is already expressed on main: `FlockSoundness.Audit.auditReg`
 (`Proofs/Flock/Soundness/Audit/RegDraw.lean`) and the keyed window's record theorem over it,
-`keyedWindowReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedDraw.lean`), which takes one
+`keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedDraw.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `δ_link(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `δ_link(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, sampled at once by a sampling design that depends on the registration, and proved call by call (`Pouw.Window`).
@@ -44,7 +44,7 @@ decision 101's keyed sample) is retired.
 
 **Discharge table**: which deployed piece discharges each premise.
 * `EscapesWithin Lw L 𝓑 0`: the service's uniform subset after the receipt (`subset:K′`, `service.py`), by
-  `ServiceEscapes`. On the retired keyed sample it was A4, A5 and M1 (`keyedWindow_escape_le`).
+  `ServiceEscapes`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_escape_le`).
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own sample, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.
