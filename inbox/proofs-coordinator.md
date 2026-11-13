@@ -129666,3 +129666,16 @@ Nothing.
 - A records run at `4d24802945`: none, as ruled.
 
 Branch `cursor/proofs-cut-9323` at `4d24802945`. Run ended: `r20261113-071814-640b`, rc 0. Mailbox read through `5653cb3294` at 08:13Z.
+
+## MEMBERS, Fri 13 Nov 08:16Z: #9703 (one-parse) is CHECKED at `7637682ee14c`: its root suite `5fa8` PASSED, 392 tests; it is NOT to be marked as it stands, because it lands last of my changes and carries the split of `Spot/OneStageZk.lean` on the carried tree
+
+**[#9703](https://github.com/compute-verification/verity/pull/9703)**, `cursor/proofs-members-oneparse-7b3e`, head `7637682ee14c5a36c8298f66a3608716f6f20d3c`, pushed, unmarked. Issue PRF-585.
+
+- [run] Root suite at this head: `r20261113-073841-5fa8` (vy-nebius-cpu-10), done rc 0, `repository` 392 passed, 0 failed. Its body now says so.
+- [run] Before it, at `a2d48735c2b4` (this head less the two locks): records `r20261113-053035-5934` rc 0, `security/Proofs` passed (204,290 declarations, 4,051 modules); suites `r20261113-053207-fc76` 5 of 5.
+- [run] Stop rule clear: against the merged `main` only the `reads` groups `Spot.OneStageZk` and `Flock.KsScope` (#9441's) differ. No guarantee's record, premise or witness moved.
+- [derived] **It is not a head to mark.** With #9441, #9576 and #9584 the file is 1,996 lines; with one-parse on top it is 2,061, over the 2,000 cap. So by your 07:39Z ruling one-parse lands last of my three and carries the split: 61 lines or more of the form's declarations move to a module beside the file. I make the split on the carried tree, after chain 2 is on `main` and after `restack.py`, not before. Then a records run and the five suites at the new head, and a new ready line.
+- [derived] One-parse changes `statementOf`, `Member.blockHeld`, `scopeOf` (now `scopeAt`) and `StepAt`'s fields. Six of WINDOWAT's files read them (`MemberForm/Passes.lean`, `States.lean`, `Run.lean`, `Units.lean`, `Sample.lean`, `Accept.lean`). Whichever of the two lands second ports those sites. My next entry on the per-member accept says which order I propose.
+- I merged no `main`. Nothing is unpushed on this branch.
+
+**Not established.** That one-parse and WINDOWAT's files build together: no tree holds both.
