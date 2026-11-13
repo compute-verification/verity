@@ -35,6 +35,8 @@ def walksOk (h : Held) : Bool :=
 
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
+theorem ok_map {ε α β : Type} (a : α) (f : α → β) : (f <$> (Except.ok a : Except ε α)) = .ok (f a) := rfl
+
 theorem error_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = .error e := rfl
 
 /-! ## A reference statement, read -/
@@ -89,7 +91,7 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
   · simp only [ht] at h; cases h
   simp only [ht] at h
   cases hpl : tags.plainLeaves
-  · simp only [hpl, Bool.false_eq_true, ↓reduceIte, pure_bind] at h
+  · simp only [hpl, Bool.false_eq_true, ↓reduceIte] at h
     rcases hj : SampledTwoDesc.jsonOf "partition" (_root_.Flock.RecordText.printT m.own.partition).toUTF8 with
       e | partition
     · simp only [hj, error_bind] at h; cases h
@@ -104,7 +106,7 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
     · simp only [hs, error_bind] at h; cases h
     simp only [hs, ok_bind] at h
     cases h
-    exact ⟨m, rfl, hc, hp, ht, hpl, rfl, hj, rfl, hr, rfl, rfl, rfl, hs⟩
+    exact ⟨m, rfl, hc, hp, rfl, hpl, rfl, hj, rfl, hr, rfl, rfl, rfl, hs⟩
   · simp only [hpl] at h; cases h
 
 /-- **Each field of a reference statement the check passes fits its length word.** -/
@@ -112,7 +114,8 @@ theorem fits_of {R : SampledTwoDesc.Ref} (hf : SampledTwoDesc.fits R = true) : (
   unfold SampledTwoDesc.fits at hf
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hf
   obtain ⟨⟨⟨⟨⟨⟨hc, hp⟩, hl⟩, hi⟩, hpa⟩, hpr⟩, hre⟩ := hf
-  refine ⟨by decide +kernel, hc, hp, hl, fun q hq => hi q hq, by decide +kernel, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨(by show Spot.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64; decide +kernel), hc, hp, hl, fun q hq => hi q hq,
+    (by show 1 < 2 ^ 64; decide), ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro b hb; cases hb
   · intro b hb; cases hb; exact hpa
   · intro b hb; cases hb; exact hpr
@@ -132,7 +135,8 @@ theorem ins_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sampl
   obtain ⟨m, -, -, -, ht, hpl, -, hj, -, hr, -, -, -, -⟩ := refOf_ok h
   rw [jsonOf_eq] at hj hr
   unfold FlockDeploy.Raw.ins
-  simp only [rawOf, ht, hpl, Bool.and_false, Bool.false_eq_true, ↓reduceIte, pure_bind, Option.mapM, hj, ok_bind]
+  simp only [rawOf, ht, hpl, Bool.and_false, Bool.false_eq_true, ↓reduceIte, pure_bind, Option.mapM_none,
+    Option.mapM_some, hj, ok_map, ok_bind]
   rw [hr]
   rfl
 
@@ -289,8 +293,7 @@ theorem stmtOf_refStmt {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List Samp
   cases rs with
   | nil => exact absurd rfl hne
   | cons R₀ rs' =>
-    rw [List.map_cons, List.map_cons, List.headD_cons, List.headD_cons, List.getD_eq_getElem?_getD,
-      List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map]
+    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map]
     cases hj : (R₀ :: rs')[t]? with
     | none => exact hall R₀ (by simp)
     | some R => exact hall R (List.mem_of_getElem? hj)
@@ -404,7 +407,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   · rw [hl, hlaw] at hd; cases hd
   rw [hl, hlaw] at hd
   simp only [Bool.and_eq_true] at hd
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hT, hne⟩, hR⟩, hmem⟩, hdes⟩, hks⟩, hks1⟩, hns⟩, hwir⟩⟩ := ⟨hd⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hT, hne⟩, hR⟩, hmem⟩, hdes⟩, hks⟩, hks1⟩, hns⟩, hwir⟩ := hd
   have hT' : p.circuits.size = it.circuits.size := beq_iff_eq.1 hT
   have hne' : rs ≠ [] := by
     intro h0
