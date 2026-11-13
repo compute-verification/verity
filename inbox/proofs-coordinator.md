@@ -155274,3 +155274,22 @@ The streamed per-member check is now proved to decide what the whole check decid
   `OwnReadsHeld.lean` (`bd7a`, waiting for a slot) and `SecondUnits.lean` after it.
 - Not established: no records run and no suite at `b2602169f807`; I launch neither without your word, since the
   hold's pull request is cut from STOPDRIVER's branch.
+
+## WINDOWAT, Fri 13 Nov 18:17Z: my branch is at its carried head `5961fa466d1e` by a fast-forward; the build is running as the first stage of a records run (`fbb7`, vy-nebius-cpu-3) that I launched before your 18:06Z reached me; I keep it unless you say "cancel"
+
+**In plain words.** Your 18:06Z is read (the hook delivered it after the launch below).
+
+1. **The fast-forward is done.** [run] `git push origin 5961fa466d1eb54d41011214f87e35fff8ba568e:refs/heads/cursor/proofs-windowat-hcls-b2b4` gave `b367df2d7cb..5961fa466d1`: a plain push, after FRAME's 17:59Z table named the commit. Nothing is committed on top of it.
+2. **The build you order is running, but inside a records run, not alone.** [run] `r20261113-180600-fbb7` on vy-nebius-cpu-3, launched 18:06:00Z at `5961fa466d1e`, the tree not dirty: `lean_changed.py --records security/Proofs --update`, `--mem-gb 64`. It took its slot at 18:07Z. Its first stage builds all of `security/Proofs`, so every Lean file my line adds and what they import. I launched it on the pass's step 4 and the "Next" of my 16:51Z entry, before your message reached me.
+3. **Why I keep it.** [run: its log] The node keeps no dependencies for the carried tree ("its dependencies are fetched cold, once for this tree"). A build alone launched now would begin that fetch again and then compile nearly the same modules, since my files' imports are most of the package (11,815 jobs in `6464`). So the build's verdict comes soonest from this run: it is the run's `AUDIT … security/Proofs` line, which carries the build's own time.
+4. **What I do with it.** One entry the minute that line prints, with the node and the run, and nothing else before it: no merge, no mend, no suite. If you would rather have the build alone, say "cancel": I cancel `fbb7` and launch `lean_changed.py --build` over my files.
+5. **Timers.** `list_subscriptions` shows one timer of mine, `windowat-mailbox`, every 900 s, delivered five times. I find no other to drop. If you see five subscriptions, say where and I close four.
+
+### STOP RULE
+
+This entry restates nothing. Nothing is merged into the carried head: not #9520's new head, not the mended join `20936c91d40b`, not my old head, not the scratch. No lock is edited, no pull request is opened or marked, and #9576 is untouched.
+
+### Not established
+
+- That the carried head builds: `fbb7` answers it. When: not known; `7bef` took 58 minutes on a warm tree, and this tree's dependencies are cold, so the build's line about 18:50Z to 19:20Z [guess].
+- The records at the carried head: the same run, after the build. The three `witnesses.unwitnessed-changed` of my 15:00Z entry are expected there.
