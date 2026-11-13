@@ -4117,7 +4117,9 @@
    "p5c": "the smallest of each never-staged family, alone in turn: FlashInferFp8Quant1x128_v2 K=1536 (t170), SparseMlaSplit_v2 T=1 (t171), DsaMqaLogits_v4 N=37 (t211); limits 3600 s",
    "p5d": "the largest: K=6144 (t100), T=9 (t179), N=60 (t237); limits 5400 s",
    "p5e": "after both ends of SparseMlaSplit_v2 passed the 64 GB job's 62 GB stage stop: its smallest end, T=1 (t171), at --mem-gb 160 (stop 156, Lean gate 150); limit 5400 s, budget 6000 s",
-   "p5f": "after both ends of DsaMqaLogits_v4 passed it: N=37 (t211), then N=60 (t237), at --mem-gb 160; limits 5400 s, budget 11400 s"
+   "p5f": "after both ends of DsaMqaLogits_v4 passed it: N=37 (t211), then N=60 (t237), at --mem-gb 160; limits 5400 s, budget 11400 s",
+   "p5g": "after SparseMlaSplit_v2 T=1 was accepted at 160 GB (stage 89.9 GiB): T=2 (t172), estimated to fit 160 GB and not 64; --mem-gb 160, limit 9000 s, budget 9600 s",
+   "p5h": "T=3 (t173), the same way; --mem-gb 160, limit 12000 s, budget 12600 s"
   },
   "estimates": {
    "v2t171": {
@@ -4131,20 +4133,207 @@
     "job_gb": 160,
     "stage_gb": 90,
     "lean_gb": 95,
-    "basis": "at 64 GB (r20261113-182723-4b4c) its stager passed 62 GB after 673 s, growing 5.58 GiB/min [measured]; over its _v3's 960.6 s of staging (r20261113-075522-59c5) [measured] about 90 GiB; at _v3's stage-to-circuit ratio (47.3 GiB to 11.3 GiB) a circuit of about 21 GiB, Lean about 95 GB: fits 156 and 150, not 62"
+    "basis": "at 64 GB (r20261113-182723-4b4c) its stager passed 62 GB after 673 s, growing 5.58 GiB/min [measured]; over its _v3's 960.6 s of staging (r20261113-075522-59c5) [measured] about 90 GiB; at _v3's stage-to-circuit ratio (47.3 GiB to 11.3 GiB) a circuit of about 21 GiB, Lean about 95 GB: fits 156 and 150, not 62",
+    "measured_at_160": "wrong: at 160 GB (r20261113-194203-51a7) its stager passed 156 GB after 1,488 s (maxrss 158.6 GiB) [measured]"
    },
    "v2t237": {
     "kind": "inferred",
     "job_gb": 160,
     "stage_gb": 133,
     "lean_gb": 140,
-    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 732 s, growing 5.12 GiB/min [measured]; its _v3 was estimated 1.61 x N=37's time (3,687 s to 2,297 s) [fitted], so about 1,545 s of staging and about 133 GiB; the same ratio gives about 32 GiB of circuit and Lean about 140 GB: fits 156 and 150 [inferred, near both]"
+    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 732 s, growing 5.12 GiB/min [measured]; its _v3 was estimated 1.61 x N=37's time (3,687 s to 2,297 s) [fitted], so about 1,545 s of staging and about 133 GiB; the same ratio gives about 32 GiB of circuit and Lean about 140 GB: fits 156 and 150 [inferred, near both]",
+    "cancelled_at_160": "r20261113-194203-51a7 was cancelled at 20:27:08Z as v2t237 began staging there: v2t211 (N=37, the smallest) passed the 160 GB job's 156 GB stage stop after 1,490 s [measured], so no estimate of N=60 fits 160 GB; v2t237's record is its 64 GB one"
    },
    "v2t179": {
     "kind": "inferred",
     "job_gb": null,
     "stage_gb": 169,
-    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 1,575 s, growing 2.37 GiB/min [measured]; _v1's staging grew about 411 s a T (966 s at T=1 to 2,611 s at T=5) [measured], so about 4,256 s at T=9 and about 169 GiB: past a 160 GB job's 156 GB stop, so not run at 160"
+    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 1,575 s, growing 2.37 GiB/min [measured]; _v1's staging grew about 411 s a T (966 s at T=1 to 2,611 s at T=5) [measured], so about 4,256 s at T=9 and about 169 GiB: past a 160 GB job's 156 GB stop, so not run at 160",
+    "at_160_from_t1": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=9 over T=1 (89.45 to 25.46 GB, fitted, +8 GB a T), about 316 GiB [inferred]: past 156, so not run at 160"
+   },
+   "v2t172": {
+    "kind": "inferred",
+    "job_gb": 160,
+    "stage_gb": 118,
+    "lean_gb": 61,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=2 over T=1 (33.54 to 25.46 GB, measured), about 118 GiB [inferred]; Lean about 61 GB by T=1's measured 46.4 GiB scaled the same way: fits 156 and 150, not 62"
+   },
+   "v2t173": {
+    "kind": "inferred",
+    "job_gb": 160,
+    "stage_gb": 147,
+    "lean_gb": 76,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=3 over T=1 (41.64 to 25.46 GB, measured), about 147 GiB [inferred]; Lean about 76 GB by T=1's measured 46.4 GiB scaled the same way: fits 156 and 150, not 62"
+   },
+   "v2t174": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 175,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=4 over T=1 (49.62 to 25.46 GB, measured), about 175 GiB [inferred]: past a 160 GB job's 156 GB stop"
+   },
+   "v2t175": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 203,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=5 over T=1 (57.45 to 25.46 GB, measured), about 203 GiB [inferred]: past a 160 GB job's 156 GB stop"
+   },
+   "v2t176": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 231,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=6 over T=1 (65.45 to 25.46 GB, fitted, +8 GB a T), about 231 GiB [inferred]: past a 160 GB job's 156 GB stop"
+   },
+   "v2t177": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 259,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=7 over T=1 (73.45 to 25.46 GB, fitted, +8 GB a T), about 259 GiB [inferred]: past a 160 GB job's 156 GB stop"
+   },
+   "v2t178": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 288,
+    "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=8 over T=1 (81.45 to 25.46 GB, fitted, +8 GB a T), about 288 GiB [inferred]: past a 160 GB job's 156 GB stop"
+   }
+  },
+  "not_run": {
+   "v2t174": {
+    "why": "estimate-past-160GB",
+    "text": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=4 over T=1 (49.62 to 25.46 GB, measured), about 175 GiB [inferred]: past a 160 GB job's 156 GB stop",
+    "estimate": {
+     "kind": "inferred",
+     "job_gb": null,
+     "stage_gb": 175,
+     "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=4 over T=1 (49.62 to 25.46 GB, measured), about 175 GiB [inferred]: past a 160 GB job's 156 GB stop"
+    }
+   },
+   "v2t175": {
+    "why": "estimate-past-160GB",
+    "text": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=5 over T=1 (57.45 to 25.46 GB, measured), about 203 GiB [inferred]: past a 160 GB job's 156 GB stop",
+    "estimate": {
+     "kind": "inferred",
+     "job_gb": null,
+     "stage_gb": 203,
+     "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=5 over T=1 (57.45 to 25.46 GB, measured), about 203 GiB [inferred]: past a 160 GB job's 156 GB stop"
+    }
+   },
+   "v2t176": {
+    "why": "estimate-past-160GB",
+    "text": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=6 over T=1 (65.45 to 25.46 GB, fitted, +8 GB a T), about 231 GiB [inferred]: past a 160 GB job's 156 GB stop",
+    "estimate": {
+     "kind": "inferred",
+     "job_gb": null,
+     "stage_gb": 231,
+     "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=6 over T=1 (65.45 to 25.46 GB, fitted, +8 GB a T), about 231 GiB [inferred]: past a 160 GB job's 156 GB stop"
+    }
+   },
+   "v2t177": {
+    "why": "estimate-past-160GB",
+    "text": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=7 over T=1 (73.45 to 25.46 GB, fitted, +8 GB a T), about 259 GiB [inferred]: past a 160 GB job's 156 GB stop",
+    "estimate": {
+     "kind": "inferred",
+     "job_gb": null,
+     "stage_gb": 259,
+     "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=7 over T=1 (73.45 to 25.46 GB, fitted, +8 GB a T), about 259 GiB [inferred]: past a 160 GB job's 156 GB stop"
+    }
+   },
+   "v2t178": {
+    "why": "estimate-past-160GB",
+    "text": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=8 over T=1 (81.45 to 25.46 GB, fitted, +8 GB a T), about 288 GiB [inferred]: past a 160 GB job's 156 GB stop",
+    "estimate": {
+     "kind": "inferred",
+     "job_gb": null,
+     "stage_gb": 288,
+     "basis": "SparseMlaSplit_v2 T=1 staged at 160 GB (r20261113-194134-b8ba) with a 89.9 GiB stager peak [measured]; scaled by _v1's stager peak at T=8 over T=1 (81.45 to 25.46 GB, fitted, +8 GB a T), about 288 GiB [inferred]: past a 160 GB job's 156 GB stop"
+    }
+   },
+   "v2t212": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=38: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=38 is past 156 GB too [inferred]"
+   },
+   "v2t213": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=39: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=39 is past 156 GB too [inferred]"
+   },
+   "v2t215": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=40: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=40 is past 156 GB too [inferred]"
+   },
+   "v2t216": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=41: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=41 is past 156 GB too [inferred]"
+   },
+   "v2t217": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=42: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=42 is past 156 GB too [inferred]"
+   },
+   "v2t218": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=43: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=43 is past 156 GB too [inferred]"
+   },
+   "v2t219": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=44: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=44 is past 156 GB too [inferred]"
+   },
+   "v2t220": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=45: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=45 is past 156 GB too [inferred]"
+   },
+   "v2t221": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=46: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=46 is past 156 GB too [inferred]"
+   },
+   "v2t222": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=47: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=47 is past 156 GB too [inferred]"
+   },
+   "v2t223": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=48: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=48 is past 156 GB too [inferred]"
+   },
+   "v2t224": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=49: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=49 is past 156 GB too [inferred]"
+   },
+   "v2t226": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=50: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=50 is past 156 GB too [inferred]"
+   },
+   "v2t227": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=51: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=51 is past 156 GB too [inferred]"
+   },
+   "v2t228": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=52: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=52 is past 156 GB too [inferred]"
+   },
+   "v2t229": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=53: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=53 is past 156 GB too [inferred]"
+   },
+   "v2t230": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=54: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=54 is past 156 GB too [inferred]"
+   },
+   "v2t231": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=55: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=55 is past 156 GB too [inferred]"
+   },
+   "v2t232": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=56: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=56 is past 156 GB too [inferred]"
+   },
+   "v2t233": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=57: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=57 is past 156 GB too [inferred]"
+   },
+   "v2t234": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=58: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=58 is past 156 GB too [inferred]"
+   },
+   "v2t235": {
+    "why": "estimate-past-160GB",
+    "text": "DsaMqaLogits_v4 N=59: the family's smallest, N=37, passed a 160 GB job's 156 GB stage stop after 1,488 s (r20261113-194203-51a7) [measured], and its largest, N=60, passed a 64 GB job's 62 GB after 732 s (r20261113-182801-c22c) [measured]; _v3's stager grows with N (46.7 to 75.6 GB over N=37-60) [fitted], so N=59 is past 156 GB too [inferred]"
    }
   }
  }

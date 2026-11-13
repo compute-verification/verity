@@ -1,0 +1,1 @@
+v2t172	census:SparseMlaSplit_v2{T=2,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},INV={"fn":"Fa3InvSum_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	9000
