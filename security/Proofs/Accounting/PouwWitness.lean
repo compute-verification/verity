@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.PouwWitness
+public import Definitions.Assumptions.Accounting
 public import Proofs.Pouw.Witness
 import Proofs.Pouw.Prob
 
