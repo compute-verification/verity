@@ -630,38 +630,44 @@ private theorem mapErrorOk {ε α : Type} {x : Except ε α} {f : ε → ε} {a 
 
 /-- **One statement's step, where the run still accepts every session after it**: the run before it accepted every
 session, and each of the statement's sessions was accepted at its member's statement
-(`MemberChecks.SessionAccepted`). It is `MemberChecks.stepMember_sessions` with the run before kept. -/
-theorem stepMember_all {slice : Spot.OneStageZk.Member → Json} {bs : Core.Blobs} {r r' : Spot.OneStageZk.Run}
+(`MemberChecks.SessionAccepted`), where the statement `st` the step reads is the member's own at its slice (`hst`).
+It is `MemberChecks.stepMember_sessions` with the run before kept. -/
+theorem stepMember_all {slice : Spot.OneStageZk.Member → Json}
+    {st : Spot.OneStageZk.Member → Flock.V Spot.OneStageZk.StepAt} {bs : Core.Blobs} {r r' : Spot.OneStageZk.Run}
     {z : Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member}
-    (h : Spot.OneStageZk.stepMember slice bs r z = .ok r') (ha : r'.all = true) :
+    (hst : ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a)
+    (h : Spot.OneStageZk.stepMember st bs r z = .ok r') (ha : r'.all = true) :
     r.all = true ∧ ∃ circuitB pubB rd, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
       (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB bs rd
         (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.stepMember at h
   have h := mapErrorOk h
   unfold Spot.OneStageZk.runFrom at h
-  obtain ⟨a, hst, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨circuitB, pubB, rd, -, -, -, -, rfl⟩ := MemberChecks.statement_ok hst
+  obtain ⟨a, ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨circuitB, pubB, rd, -, -, -, -, rfl⟩ := MemberChecks.statement_ok (hst a ha')
   rw [← Array.foldlM_toList] at h
   obtain ⟨har, hs⟩ := MemberChecks.foldl_all _ r r' h ha
   exact ⟨har, circuitB, pubB, rd, hs⟩
 
 /-- **The statements, run in order, accepting every session**: the run before them accepted every session, and each
-statement's sessions were accepted at its member's statement. -/
-theorem foldl_members {slice : Spot.OneStageZk.Member → Json} {bs : Core.Blobs} :
+statement's sessions were accepted at its member's statement, where the statement `st` the steps read is each
+member's own at its slice (`hst`). -/
+theorem foldl_members {slice : Spot.OneStageZk.Member → Json}
+    {st : Spot.OneStageZk.Member → Flock.V Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     ∀ (l : List (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)) (r r' : Spot.OneStageZk.Run),
-      l.foldlM (Spot.OneStageZk.stepMember slice bs) r = .ok r' → r'.all = true →
+      (∀ z ∈ l, ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a) →
+      l.foldlM (Spot.OneStageZk.stepMember st bs) r = .ok r' → r'.all = true →
         r.all = true ∧ ∀ z ∈ l, ∃ circuitB pubB rd, ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted
           (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB bs rd
             (z.2.population (slice z.2) pubB)) bs s
-  | [], r, r', h, ha => by
+  | [], r, r', _, h, ha => by
     obtain rfl : r = r' := Except.ok.inj h
     exact ⟨ha, fun _ hz => by simp at hz⟩
-  | z :: l, r, r', h, ha => by
+  | z :: l, r, r', hst, h, ha => by
     rw [List.foldlM_cons] at h
     obtain ⟨r₁, h₁, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-    obtain ⟨ha₁, hl⟩ := foldl_members l r₁ r' h ha
-    obtain ⟨har, hz⟩ := stepMember_all h₁ ha₁
+    obtain ⟨ha₁, hl⟩ := foldl_members l r₁ r' (fun z' hz' => hst z' (List.mem_cons_of_mem _ hz')) h ha
+    obtain ⟨har, hz⟩ := stepMember_all (hst z (by simp)) h₁ ha₁
     refine ⟨har, fun z' hz' => ?_⟩
     rcases List.mem_cons.1 hz' with rfl | hz'
     · exact hz
@@ -679,12 +685,20 @@ theorem runMembers_sessions {slice : Spot.OneStageZk.Member → Json} {ms : Arra
           (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   have e : r₁ = r := Except.ok.inj h
   rw [e] at hfold
   rw [← Array.foldlM_toList] at hfold
-  exact ⟨held, hheld, (foldl_members _ _ _ hfold ha).2⟩
+  have hst : ∀ z ∈ (sts.zip held).toList, ∀ a, Spot.OneStageZk.statementAt files z.2 = .ok a →
+      z.2.statement (slice z.2) bs = .ok a := by
+    rintro ⟨sf, m⟩ hz a hza
+    rw [Array.toList_zip] at hz
+    have hm : m ∈ held := Array.mem_def.2 (List.of_mem_zip hz).2
+    exact MemberChecks.statementAt_statement hfiles (MemberChecks.membersHeld_find hheld m hm) hza
+  exact ⟨held, hheld,
+    (foldl_members (slice := slice) (st := Spot.OneStageZk.statementAt files) _ _ _ hst hfold ha).2⟩
 
 /-- **What an accepted `membersRun` ran**: the statements' members, the challenger's trees, the order check on the
 release log, the log's lines, `membersTreesHeld` on the statements paired with their members, and `runMembers` at
@@ -698,13 +712,16 @@ theorem membersRun_ran {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.
       Spot.OneStageZk.runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs = .ok r := by
   unfold Spot.OneStageZk.membersRun at h
   simp only [Verity.Sampled.bind_ok] at h
-  obtain ⟨held, hheld, h⟩ := h
-  split at h
-  · simp only [Verity.Sampled.bind_ok] at h
-    obtain ⟨_, hthrow, -⟩ := h
+  obtain ⟨_, hs, roots, -, hrm⟩ := h
+  unfold Spot.OneStageZk.membersStructure at hs
+  simp only [Verity.Sampled.bind_ok] at hs
+  obtain ⟨held, hheld, hs⟩ := hs
+  split at hs
+  · simp only [Verity.Sampled.bind_ok] at hs
+    obtain ⟨_, hthrow, -⟩ := hs
     cases hthrow
-  · simp only [Verity.Sampled.bind_ok] at h
-    obtain ⟨ts, hts, _, hO, L, hL, _, hM, _, -, _, -, _, -, roots, -, hrm⟩ := h
+  · simp only [Verity.Sampled.bind_ok] at hs
+    obtain ⟨ts, hts, _, hO, L, hL, _, hM, -⟩ := hs
     exact ⟨held, ts, L, roots, hheld, hts, hO, hL, hM, hrm⟩
 
 /-! ## A member's session's tree lists its streams -/
