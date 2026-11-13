@@ -2,7 +2,7 @@
 
 Exact checks of the premises PoUW's resource accounting rests on: each script decides one claim a premise or a Lean
 docstring makes, exhaustively at a small width or over a modelled ISA. A script stays here only while a test or the
-Lean reads it, or a recorded run names its command.
+Lean reads it.
 
 Most of them are about the fold receipts: the duo step and the fx1 and li folds that the served H1 and J10-R designs
 absorb committed words with, and the TS premises their accounting reads (`Accounting.Assumptions.TS`: `FoldOpt`,
@@ -110,14 +110,3 @@ What each one checks, and the Lean or the test that reads it.
 - `cpw_floor.py`: the unit's floor from the sm_120 headline's Lean bound, beside what each checkpoint route adds.
 - `a2u_sat.sh` with `a2u_sat.cu`, counted by `a2u_sat_count.py`: whether a uniform-datapath instruction takes an issue
   slot beside a saturating FFMA stream (`Sheet.lean`'s `SheetDispatch`, A2u).
-
-### The lead's coins
-
-Neither script is on `exact_kit`'s registry, so `run.py` runs neither and no test does. Each prints its own result
-and writes it with `--json PATH`.
-
-- `coin_tail.py`: the lead's coin-branch tail (`Tail.coinTail_le`, `security/Proofs/Pouw/Lead/Tail/Repeats.lean`)
-  at the three points and decode, and each order's read sets on a small layout with the coins as the layout flips
-  them.
-- `adaptive_dw.py`: what a prover that branches on the coins saves on the lead's committed words, built word for
-  word for each design and each choice of data.
