@@ -294,7 +294,8 @@ active network certifier's records, both ends at the network certifier's grid an
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
 and the bound `K` it publishes. Its parameters list the keys of the link's network certifier (`"keys"`), an entry
-for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
+for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes
+(the `"session"` field: the id of the certifier's attachment to the link),
 and the start of its stretch of link-windows, in the numbers the period's `first` is in. An entry's stretch runs from
 its start up to the next entry's, and the last entry's from its start on. Link-window W of the period picks the one
 entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key, its
