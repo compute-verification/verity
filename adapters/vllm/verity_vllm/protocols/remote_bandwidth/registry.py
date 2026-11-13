@@ -46,10 +46,10 @@ from typing import Any
 import numpy as np
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
-from verity.definitions.circuits import requirement
-from verity.protocols.poub.verifier import receipts as rb
-from verity.protocols.poub.verifier.receipts import PER_LEAF, Plan
-from verity.protocols.poub.verifier.store import store_salt
+from verity.circuits import requirement
+from verity.protocols.accounting.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF, Plan
+from verity.protocols.accounting.poub.verifier.store import store_salt
 
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 from verity_vllm.protocols.remote_bandwidth.interface import (

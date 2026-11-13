@@ -332,6 +332,26 @@ def test_a_cover_may_keep_the_place_the_range_declares_for_an_entry_and_add_its_
             assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
 
 
+def test_a_list_names_a_directory_the_range_emptied_into_one_as_its_parts_or_drops_it_where_it_holds_that_one(tmp_path):
+    """The range sends both parts of `lib/defs/` into `pkg/`, which already holds a file, and leaves `lib/defs/` empty.
+    git reads that as `lib/defs/` sent whole to `pkg/`, but the mover rows its parts, so it writes the list's `lib/defs/`
+    as the parts, or drops it where the list names `pkg/` already. Each holds the files the old list held: a cover.
+    Refused: a list that drops `lib/defs/` while nothing it still has holds them."""
+    for case, old, new, ok in (("parts", '["lib/defs/", "other/"]', '["pkg/a/", "pkg/b/", "other/"]', True),
+                               ("held", '["lib/defs/", "pkg/", "other/"]', '["pkg/", "other/"]', True),
+                               ("lost", '["lib/defs/", "other/"]', '["other/"]', False)):
+        repo, base = _repo(tmp_path / case, {"lib/defs/a/x.py": "X = 1\n", "lib/defs/b/y.py": "Y = 1\n",
+                                             "pkg/z.py": "Z = 1\n", "other/w.py": "W = 1\n", "gates.toml": f"paths = {old}\n"})
+        _move(repo, "lib/defs/a", "pkg/a")
+        _move(repo, "lib/defs/b", "pkg/b")
+        _write(repo, {"gates.toml": f"paths = {new}\n"})
+        r = _check(repo, base)
+        if ok:
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, (case, r["refusals"])
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
+
+
 def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
     """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
     `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`
@@ -1029,7 +1049,7 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     assert f["path"] == "p/TRUSTED.sha256"
 
 
-MANIFEST_PIN = "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json"
+MANIFEST_PIN = "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json"
 MANIFEST = '{"packages": [{"type": "path", "dir": "../pkg/old/lean"}]}\n'
 
 

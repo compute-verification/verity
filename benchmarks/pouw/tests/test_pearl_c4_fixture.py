@@ -1,6 +1,6 @@
 """Pearl-C4's device-check fixture (`pearl_c4/fixture.py`) by its command line, as `build.sh` runs it: a format's
 directory holds the files its manifest names, at their sizes and digests, and on rows and columns across the tile its
-buffers are the scalar reference's (`verity.protocols.pouw.prover.schemes.pearl_c4`): the seeds, both operands' formed
+buffers are the scalar reference's (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`): the seeds, both operands' formed
 codes, scale bytes, α and a_E, the peel factors P_A and P_B, and C̃ and U."""
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 FIXTURE = Path(__file__).resolve().parents[1] / "pearl_c4" / "fixture.py"
 M, N, K = 128, 128, 1024

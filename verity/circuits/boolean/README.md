@@ -16,13 +16,13 @@ reaches is one of these or a 1-bit input.
   arguments' pattern, which a Definition traced with ``calls`` calls instead of writing its gates again
   (`commitments.gates.sha512.Sha512CompressFolded`, each SHA-512 compression of the hashing Definitions).
 - `gather` and `table`: a word, or the entry of a table the program brings, selected by an index, as a multiplexer tree.
-- `gf128`: GF(2^128), C-Flock's F, as integers and over `forms` (Karatsuba's 2,187 ANDs a product), which
+- `gf128`: GF(2^128), Flock's F, as integers and over `forms` (Karatsuba's 2,187 ANDs a product), which
   `ops.boolean.gf2k` registers as `Gf128Mul_v1` and every fingerprint under a live coin multiplies with.
 - `memcheck`: offline memory checking, `MemAccess_v1`, `MemEntry_v1` and `MemCheck_v1`: a log of reads and writes to
   word-addressed memories is consistent iff the fingerprints of reads ∪ finals and writes ∪ initials agree under live
   coins, every read's time is below its now and the touched list is sorted, every value private.
 
-The Boolean versions of the primitive circuits are [`verity.definitions.ops`](../../definitions/ops/README.md)'s (`ops.boolean`), and of
+The Boolean versions of the primitive circuits are [`verity.circuits.ops`](../ops/README.md)'s (`ops.boolean`), and of
 the served kernels the `boolean_*` modules of `verity.definitions.registry`; `verity.definitions.boolean.boolean_version`
 finds the one a word Definition has.
 
