@@ -3125,6 +3125,29 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
         assert not any(x.startswith("GATE") for x in lines), lines
 
 
+@pytest.mark.parametrize("live, peer, exported", [(False, None, ""), (True, None, "vy-dc-h200"), (True, "vy-peer", "vy-peer")])
+def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_there_is_a_gate(tmp_path, live, peer,
+                                                                                              exported):
+    """Under POUW=pearlplus the run's steps read Pearl+'s gate and peer from its environment as a pair, and what reads
+    them (`bench_arm.live_coins`, `bench_arm.live_draw`) refuses a peer with no gate: with PEARLC_CHALLENGER_GATE empty the
+    run exports no peer, where H1_PEER as its default had Pearl+'s verify refuse before its coin; with a gate the peer is
+    H1_PEER unless PEARLC_CHALLENGER_PEER names another. Here step 0's `predict row` says the pair it was started
+    under, then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    said = tmp_path / "pair"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && '
+                             f'{{ printf "%s\\n" "${{PEARLC_CHALLENGER_GATE-unset}}" "${{PEARLC_CHALLENGER_PEER-unset}}" > {said}; '
+                             f'exit 9; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(gate := tmp_path / "gate", FAKE_GATE)
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    assert said.read_text().splitlines() == [str(gate) if live else "", exported]
+
+
 def test_the_script_parses_whole():
     """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
     run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
