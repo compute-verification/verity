@@ -71,17 +71,13 @@ class WorkerDied(RuntimeError):
 
 
 def oom_kills() -> int | None:
-    """The cgroup's count of OOM kills (the `oom_kill` line of its `memory.events`); None where no cgroup counts them: the file is
-    absent (no cgroup v2 memory controller) or holds no such line.  A file that is there and cannot be read, or whose count is no
-    integer, raises."""
-    if not os.path.exists(CGROUP_MEMORY_EVENTS):
+    """The cgroup's count of OOM kills (the first `oom_kill` line of its `memory.events`); None where none is read: the file is
+    absent (no cgroup v2 memory controller), cannot be read or holds no such line, or the line's count is no integer."""
+    try:
+        with open(CGROUP_MEMORY_EVENTS) as f:
+            return next(int(ln.split()[1]) for ln in f if ln.split()[:1] == ["oom_kill"])
+    except (OSError, StopIteration, ValueError, IndexError):
         return None
-    with open(CGROUP_MEMORY_EVENTS) as f:
-        for ln in f:
-            fields = ln.split()
-            if fields[:1] == ["oom_kill"]:
-                return int(fields[1])
-    return None
 
 
 def dead_worker(pool: Pool, pids: set[int], oom0: int | None, workers: int, flag: str) -> str | None:

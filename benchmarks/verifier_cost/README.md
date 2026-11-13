@@ -178,6 +178,24 @@ digest and sections), with the template's size against the unrolled unit's (rows
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
+`flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
+members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
+`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
+member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
+are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
+first member, which pays the one read, and as a later member, with the memory the kept process holds between members
+(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
+Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
+`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
+alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
+counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
+circuit and public file.
+
+~~~sh
+research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
+  env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
+~~~
+
 `flock_sessions.sh census:NAME [N...]` measures the Lean verifier's seconds on a served block type's sessions, on one
 core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as
 `served_units/stage.py` stages a census type, and from the same lowering its first N blocks for each N. Per N, the CPU

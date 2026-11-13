@@ -497,10 +497,8 @@ def attempts(store=None) -> list[tuple[str, dict, dict]]:
 def measured_refusal(meta: dict) -> str | None:
     """Why a tier-2b record can't stand as a measured panel row, as `panel.py append` would refuse it, or None."""
     v, run = meta.get("verify") or {}, meta.get("run") or ""
-    try:
-        gates = int(str((meta.get("gates") or {}).get("version", "")).rsplit("/", 1)[-1])
-    except ValueError:
-        gates = 0
+    tail = str((meta.get("gates") or {}).get("version", "")).rsplit("/", 1)[-1]
+    gates = int(tail) if tail.isdecimal() else 0
     if gates < GATES_REQUIRED:
         return f"gate version {gates} predates {GATES_REQUIRED}"
     if not v.get("accepted") or "accept" not in (v.get("accept") or "").lower():

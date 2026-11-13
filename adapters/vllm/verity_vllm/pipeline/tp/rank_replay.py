@@ -109,6 +109,13 @@ def _tp_context(result: dict[str, Any]) -> dict[str, Any]:
     return tp if tp else {}
 
 
+def _attention_paths(result: dict[str, Any]) -> Any:
+    """The attention implementation paths a Program's result observed, the keys of its `attention_impls_observed`; none for a result
+    without the block.  A block that is no table has no keys to read, and the load stops there."""
+    observed = result.get("attention_impls_observed")
+    return observed.keys() if observed else ()
+
+
 def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Loaded:
     from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
@@ -139,7 +146,7 @@ def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Load
     # the export wrapper's prefix is DETERMINED from the Program's attention rows vs the implementation paths result.json observed
     # (`attention_impls_observed`) -- the same source the manifest used, so the replay addresses the map's op_paths (a rank Program
     # names `inner.model.model.layers.*`, the map `model.layers.*`; without the observed paths the heuristic strips nothing)
-    attn_paths = sorted({a for v in loaded.values() if _result(v).get("attention_impls_observed") for a in _result(v)["attention_impls_observed"]})
+    attn_paths = sorted({a for v in loaded.values() for a in _attention_paths(_result(v))})
     # the rank Programs' TP context (result.json `tp` = {"world", "rank"}): their row-parallel Gemm / EmbeddingShard rows
     # produce this rank's PARTIAL members, the collective rows the module's output -- every loaded Program must be THIS rank's
     tps = {k: _tp_context(_result(v)) for k, v in loaded.items()}
