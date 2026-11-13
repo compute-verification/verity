@@ -28,8 +28,8 @@ strategy `τ` leaves for member `m`'s session there (`seqStrat`). Member `m`'s i
 play; the window's are their images in the population (`JointAuditV5.wrongSet`), fixed by `τ` before the sample.
 
 * `JointSampledV5`, per window, `EndToEndHiddenV5`'s form: a set `W` of the population's proof blocks is incorrect in an
-  accepted run, one whose sample ended, with probability at most the sampling design's own miss of `W` (`P_a(W)` of `oneStageOf law` on the strata `ns`) plus
-  `Σ_m (ε_ks,m + ε_bind,m)`.
+  accepted run, one whose sample ended, with probability at most the sampling design's own miss of `W` (`P_a(W)` of
+  `oneStageOf law` on the strata `ns`) plus `Σ_m (ε_ks,m + ε_bind,m)`.
 * `JointShareV5`, per window, the share form: more than an `ε` share of the population incorrect in an accepted run, at
   most the most the sampling design misses of any such set plus the same terms.
 * `JointHorizonV5`, pooled over a monitoring period of `T` such windows played by one adaptive prover: except with
@@ -42,12 +42,15 @@ sampling design that samples member `m`'s part of the sample (`JointAuditV5.desi
 member with no proof block in the sample contributes nothing to `ε_bind,m` at that sample and the empty sample's knowledge term
 to `ε_ks,m`. Each member's session has one link-point count at every sample that ended (`JointAuditV5.hcls`), which the
 registration check makes so by refusing a member whose fewest and most sampled proof blocks have different counts; a
-sample that ran out samples every proof block and is asked nothing. Some outcome of the sample's coins ends the sample
-(`JointAuditV5.hend`). The named assumptions
+sample that ran out samples every proof block and is asked nothing. Nothing asks that some outcome of the sample's coins
+ends the sample: where none does, no run is accepted (`JointAuditV5.prob_accepts_of_not_ends`), no proof block of the
+window is incorrect on record (`JointAuditV5.wrongSet` is empty) and the two SHA-512 premises ask nothing (each stands
+under `Nonempty EndΩ`). The named assumptions
 are A3 (`uniform/io-getrandombytes`) for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`,
 `RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
 (`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone at the samples that ended (in a
-period, at every window's strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in `Joint/V5/Bound.lean`.
+period, at every window's strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in
+`Joint/V5/Bound.lean`.
 -/
 
 @[expose] public section
@@ -194,8 +197,8 @@ def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → F
 order; one live sample over the population of all their `nJ` proof blocks, sampled by the deployed sample on the verifier's
 one byte stream `src` under the registration's law `law` on strata of sizes `ns`, sampling `kd` proof blocks; then one
 session per member, in order. Each member's part of every sample that ended has its session's link points (`hcls`).
-That some outcome of the stream ends the sample is no field: what needs it (`memberLaw` and what is built on it) takes it
-as `Nonempty EndΩ`, and where no outcome does no run is accepted (`prob_accepts_of_not_ends`). -/
+That some outcome of the stream ends the sample is no field: what needs it (`memberLaw` and what is built on it) takes
+it as `Nonempty EndΩ`, and where no outcome does no run is accepted (`prob_accepts_of_not_ends`). -/
 structure JointAuditV5 where
   Reg : Type
   nJ : ℕ
@@ -329,7 +332,8 @@ $$P_a(W) + \sum_m (\varepsilon_{ks,m} + \varepsilon_{bind,m}),$$
 `P_a(W)` the sampling design's own miss of `W` on its strata. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the
 sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at `τ`,
-at the samples that ended. -/
+at the samples that ended. The last two are asked only where some outcome of the stream ends the sample
+(`Nonempty EndΩ`): where none does, the bound holds with no premise on the hash. -/
 def JointSampledV5 : Prop :=
   ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
     ∀ τ : Strategy w.game,
@@ -346,8 +350,9 @@ def JointSampledV5 : Prop :=
 
 /-- **A window's sample over several members, the share form.** For a window's audit as in `JointAuditV5`, every live
 prover `τ` and every share `ε`, the probability that the sample ended, flock-verify accepts the session of every member
-with a proof block in the sample and more than `ε·nJ` of the population's proof blocks are incorrect is at most the most the sampling design misses of any
-set of more than `ε·nJ` of them plus `Σ_m (ε_ks,m + ε_bind,m)`, under `JointSampledV5`'s named assumptions. -/
+with a proof block in the sample and more than `ε·nJ` of the population's proof blocks are incorrect is at most the
+most the sampling design misses of any set of more than `ε·nJ` of them plus `Σ_m (ε_ks,m + ε_bind,m)`, under
+`JointSampledV5`'s named assumptions. -/
 def JointShareV5 : Prop :=
   ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
     ∀ τ : Strategy w.game,
@@ -364,7 +369,8 @@ def JointShareV5 : Prop :=
         ENNReal.ofReal (⨆ B : {B : Finset (Fin w.nJ) // ε * w.nJ < B.card}, w.pa B.1) + w.eps
 
 /-- What a monitoring period's run records of window `idx`: whether its run accepted (`JointAuditV5.Accepts`: its
-sample ended and its sessions were accepted), its incorrect proof blocks (`JointAuditV5.wrongSet`), and whether a sampled proof block is one of them. -/
+sample ended and its sessions were accepted), its incorrect proof blocks (`JointAuditV5.wrongSet`), and whether a
+sampled proof block is one of them. -/
 structure AuditRecV5 (W : ℕ → JointAuditV5) where
   idx : ℕ
   accepted : Prop
@@ -436,7 +442,8 @@ at least `δ`, and their ANDs and output bits in all are at most the period's `m
 many windows and members the period has. Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`)
 for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at every
-strategy the window is played with on some run (`JointPeriodV5.Plays`). -/
+strategy the window is played with on some run (`JointPeriodV5.Plays`), the last two only at a window where some
+outcome of its stream ends its sample (`Nonempty EndΩ`). -/
 def JointHorizonV5 : Prop :=
   ∀ (W : ℕ → JointAuditV5) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
