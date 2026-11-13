@@ -39,7 +39,7 @@ from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
 
 PROMPT = "prompt"
 SAMPLE = 1024
-DRAW_DOMAIN = "verity/node-window/value-check/v1"
+SAMPLE_DOMAIN = "verity/node-window/value-check/v1"
 _DT = {8: np.uint8, 16: np.uint16, 32: np.dtype("<u4"), 64: np.dtype("<u8")}
 
 
@@ -644,22 +644,22 @@ def _family_of(fn: Any) -> str:
     return fn.defn.name if hasattr(fn, "defn") else fn.id.split("_v")[0]
 
 
-def draws(seed: int) -> RND.Key:
+def sample_key(seed: int) -> RND.Key:
     """The value check's key under ``seed``, from the one challenge derivation."""
-    return RND.derive(str(seed).encode(), DRAW_DOMAIN, {})
+    return RND.derive(str(seed).encode(), SAMPLE_DOMAIN, {})
 
 
 def sample(n: int, key: RND.Key, index: str, most: int = SAMPLE) -> list[int]:
-    """Up to ``most`` of ``n`` units, the draw at ``index`` of ``key`` (all of a smaller template)."""
+    """Up to ``most`` of ``n`` units, the sample at ``index`` of ``key`` (all of a smaller template)."""
     return list(range(n)) if n <= most else list(key.subset(most, n, index))
 
 
 def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SAMPLE,
         only: Sequence[str] | None = None) -> dict[str, Any]:
-    """Every template of ``ck``'s circuit: up to ``most`` units sampled under ``seed`` (`draws`, each template's draw at its
+    """Every template of ``ck``'s circuit: up to ``most`` units sampled under ``seed`` (`sample_key`, each template's sample at its
     id; all of a smaller one); a template whose outputs the frame states is checked at its sample, any other through its
     sample's readers that are (a reader's units added to its own check, up to ``most`` more)."""
-    key = draws(seed)
+    key = sample_key(seed)
     picked = {tid: sample(ck.counts[tid], key, tid, most) for tid in ck.c.ids}
     out: dict[str, Any] = {}
     extra: dict[str, set[int]] = {}
@@ -735,5 +735,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "draws", "made_up", "native_selftest", "plant_read_shift",
-           "plant_wire_row", "run", "sample"]
+__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
+           "plant_wire_row", "run", "sample", "sample_key"]
