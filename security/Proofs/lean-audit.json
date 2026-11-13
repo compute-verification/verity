@@ -19,6 +19,14 @@
   "Proofs.Properties.Pouw.Commit",
   "Proofs.Properties.Pouw.LiveSalt",
   "Proofs.Properties.Pouw.Strata",
+  "Proofs.Properties.Pouw.PearlPlus",
+  "Proofs.Properties.Pouw.PearlPlus.Open",
+  "Proofs.Properties.Pouw.PearlPlus.Witnesses",
+  "Proofs.Properties.Pouw.PearlPlus.Verdict",
+  "Proofs.Pouw.PearlPlus.Numerics",
+  "Proofs.Pouw.PearlPlus.Assembly",
+  "Proofs.Pouw.PearlPlus.Draw",
+  "Proofs.Pouw.PearlPlus.Cap",
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk",
@@ -37,6 +45,7 @@
   "Proofs.Properties.Hash.Identity",
   "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.NetworkCertifier.Records",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
   "Proofs.Properties.Spot",
@@ -57,8 +66,8 @@
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Pous.Wipe",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.Accounting.Remote",
   "Proofs.Properties.Accounting.Remote.Coins",
@@ -75,6 +84,7 @@
   "Proofs.Flock.Claims.Bridge.CustodyZkP",
   "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Properties.Verity.Sampled.Deployed",
+  "Proofs.Properties.Accounting.Remote.SubprotocolWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -158,6 +168,9 @@
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
+  "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.Coupling",
+  "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -165,14 +178,12 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
-  "Proofs.Properties.Verity.Recursive.Audit",
-  "Proofs.Properties.Verity.Subprotocols",
-  "Proofs.Properties.Verity.Coupling",
-  "Proofs.Properties.Flock.Nets"
+  "Proofs.Properties.Verity.Recursive.Audit"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
+  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session, the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -226,6 +237,10 @@
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
    "digest": "026c54a0366ac1584a9019a4e248c87c2e5ec67d27e22397ed7086aed2c74562"
+  },
+  "Proofs.Flock.Claims.Recursion.IrDepSession": {
+   "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
+   "digest": "4eb33b74f33b99a4b78c40ec39748681dc986b4c9f553e14553e3a5a64513033"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
