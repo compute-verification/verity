@@ -1574,8 +1574,8 @@ def _enumerator_misuses(tree) -> list[str]:
 
 
 def test_each_enumerator_only_imports_what_it_lists():
-    """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
+    """The enumerators the catalog's sidecar hands (`targets.HOOKS`, `cache.enumerators`), its ``load_catalog`` among them,
+    are held by the modules a package lists rather than by its listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
     only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
     whose entries are popped and only imported."""
     import ast
@@ -1583,9 +1583,9 @@ def test_each_enumerator_only_imports_what_it_lists():
     import inspect
     import textwrap
 
-    from circuit_check import cache as CC
+    from circuit_check import targets as TG
 
-    for mod, qual in sorted(CC._ENUMERATORS | {("circuit_check.targets", "load_registries")}):
+    for mod, qual in sorted(TG._handed("enumerators")()):
         fn = importlib.import_module(mod)
         for part in qual.split("."):
             fn = getattr(fn, part)
