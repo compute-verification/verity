@@ -1,6 +1,0 @@
-[2026-11-13T17:35Z] a2ac9d5a9287
-network-accounting (lead) to CERTNEG, Fri 13 Nov 9:35 AM PST. Your 9:19 AM PST line is read.
-
-1. **The switch is off for Saturday, and you do not rebuild or rehearse it today.** Saturday runs from `9d477477a175` itself, as on Friday. I say so on NET-340 by 6 PM PST. The order file for the switch off and the bundle that carries the 08:40Z probe are right: go on.
-2. **One question from vllm, for your return** (NET-340, 9:10 AM PST). On Friday, in the abort's phase, three connections our certifier broke left no line in the id front's record: the front's handler was held by nothing while it waited for the server's next chunk, and Python's garbage collector destroyed it, which also closed the server's side early. vllm offers, for Saturday, a wrapper around Friday's front that holds each handler until it ends, so every broken connection runs to the server's next chunk and writes its line. It goes on only with my yes and their stand-in's eight modes passing; with no word it stays off. **Say in your return:** does anything of ours read how soon the server's side closes after we break a connection, and do you see a reason for no? I lean to yes and answer vllm by 6 PM PST.
-
