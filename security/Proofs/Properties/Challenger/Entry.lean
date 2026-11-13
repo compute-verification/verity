@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Challenger.Plain
 public import Proofs.Properties.Challenger.Steps
+public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
@@ -22,7 +23,9 @@ another tree with the same value at each key. So:
   (`Core.Record.toJson`) holds (`toJson_vals`), so a value alike a record's entry reads as that record, its body alike
   the record's (`ofJson_alike`);
 * a printable value's canonical line reads as a value alike it (`event_of_canon`), and the canonical text of a plain
-  record entry of the ledger's form reads as an entry alike it (`ledgerEntry_of_record`).
+  record entry of the ledger's form reads as an entry alike it (`ledgerEntry_of_record`);
+* alike entries sign one message (`ledgerMessage_same`): the message reads an entry's schema and the entry without its
+  `sig` (`same_unsigned`, `canonUtf8_same`), so it does not read the `sig` (`ledgerMessage_sig`).
 -/
 
 @[expose] public section
@@ -257,5 +260,99 @@ theorem ledgerEntry_of_record {r : Core.Record} {text session tag : String} {mb 
   have hsk : sortedKeys e = true := Verity.Sampled.sortedKeys_of_wf e (FlockDeploy.same_wf_right hs)
   exact ⟨e, nb, hs, hsb, Steps.ledgerEntry_some_of_steps (r := { r with body := .obj nb }) hlen hpe hpy
     (escapesSurrogate_false (noEscape_canon hp hc)) hce hsk hof ht h4 hk hse hid (hbody _ hsb)⟩
+
+/-- A list without its `sig` pairs has none at `sig`. -/
+theorem lookup_sig (l : List (String × Json)) : (l.filter (·.1 != "sig")).lookup "sig" = none := by
+  induction l with
+  | nil => rfl
+  | cons p l ih =>
+    obtain ⟨k, v⟩ := p
+    by_cases hk : k = "sig"
+    · subst hk
+      simpa [List.filter] using ih
+    · have hb : (k != "sig") = true := bne_iff_ne.2 hk
+      have hne : ("sig" == k) = false := beq_eq_false_iff_ne.2 (Ne.symm hk)
+      simp only [List.filter, hb, List.lookup, hne, ih]
+
+/-- A well-formed tree's keys increase along its list. -/
+theorem sorted_of_wf {m : Std.TreeMap.Raw String Json} (hm : m.WF) : (m.toList.map (·.1)).Pairwise (· < ·) := by
+  rw [List.pairwise_map]
+  exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hab => compareOfLessAndEq_eq_lt.1 hab
+
+/-- **An entry without its `sig` holds the entry's other values**, and none at `sig`. -/
+theorem get?_unsigned {m : Std.TreeMap.Raw String Json} (hm : m.WF) (k : String) :
+    (Std.TreeMap.Raw.ofList (m.toList.filter (·.1 != "sig")) compare).get? k =
+      if k = "sig" then none else m.get? k := by
+  rw [CanonRead.get?_ofList (CanonRead.filter_keys (sorted_of_wf hm))]
+  split
+  · rename_i hk
+    rw [hk, lookup_sig]
+  · rename_i hk
+    rw [CanonRead.lookup_filter hk, CanonRead.get?_lookup (sorted_of_wf hm)]
+
+/-- Alike entries are alike without their `sig`. -/
+theorem same_unsigned {m : Std.TreeMap.Raw String Json} {b : Json} (h : Same (.obj m) b) :
+    Same (Core.Record.unsigned (.obj m)) (Core.Record.unsigned b) := by
+  cases h with
+  | @obj _ n hm hn hk hv =>
+    rw [CanonRead.unsigned_obj, CanonRead.unsigned_obj]
+    refine .obj Std.TreeMap.Raw.WF.ofList Std.TreeMap.Raw.WF.ofList (fun k => ?_) fun k x y hx hy => ?_
+    · rw [get?_unsigned hm, get?_unsigned hn]
+      split
+      · rfl
+      · exact hk k
+    · rw [get?_unsigned hm] at hx
+      rw [get?_unsigned hn] at hy
+      split at hx
+      · cases hx
+      · rename_i hne
+        simp only [hne, ↓reduceIte] at hy
+        exact hv k x y hx hy
+
+/-- A printable entry is printable without its `sig`. -/
+theorem good_unsigned {m : Std.TreeMap.Raw String Json} (h : Good (.obj m)) : Good (Core.Record.unsigned (.obj m)) := by
+  cases h with
+  | obj hm hg =>
+    rw [CanonRead.unsigned_obj]
+    refine .obj Std.TreeMap.Raw.WF.ofList fun k v hv => ?_
+    rw [get?_unsigned hm] at hv
+    split at hv
+    · cases hv
+    · exact hg k v hv
+
+/-- **Alike sorted values have one identity text**: `canonUtf8` writes them alike, where `canon` writes the first. -/
+theorem canonUtf8_same {a b : Json} (h : Same a b) (ha : sortedKeys a = true) (hb : sortedKeys b = true) {s : String}
+    (hc : Flock.canon a = .ok s) : Flock.canonUtf8 b = Flock.canonUtf8 a := by
+  obtain ⟨t, ht, e⟩ := CanonLine.canon_utf8 ha hc
+  obtain ⟨t', ht', e'⟩ := CanonLine.canon_utf8 hb (FlockComplete.JsonRT.canon_same a b h ▸ hc)
+  rw [ht, ht', String.toList_inj.1 (e'.symm.trans e)]
+
+/-- **Alike entries sign one message**: the message reads an entry's schema and the entry without its `sig`, which
+alike entries have alike. -/
+theorem ledgerMessage_same {I : ByteArray} {m : Std.TreeMap.Raw String Json} {b : Json} {schema : String}
+    (h : Same (.obj m) b) (hg : Good (.obj m)) (ha : sortedKeys (.obj m) = true)
+    (hs : getD (.obj m) "schema" = .str schema) : ledgerMessage I b = ledgerMessage I (.obj m) := by
+  have hsb : getD b "schema" = .str schema := same_str (hs ▸ same_getD h "schema")
+  obtain ⟨s, hc⟩ := FlockComplete.JsonRT.canon_ok_some _ (good_unsigned hg)
+  have hu : Flock.canonUtf8 (Core.Record.unsigned b) = Flock.canonUtf8 (Core.Record.unsigned (.obj m)) := by
+    have hb : sortedKeys b = true := Verity.Sampled.sortedKeys_of_wf b (FlockDeploy.same_wf_right h)
+    cases h with
+    | @obj _ n hm hn hk hv =>
+      exact canonUtf8_same (same_unsigned (.obj hm hn hk hv)) (CanonRead.sorted_unsigned ha)
+        (CanonRead.sorted_unsigned hb) hc
+  unfold ledgerMessage taggedSha512
+  rw [hs, hsb, hu]
+
+/-- A record's entry without its `sig` is the record's six other values. -/
+theorem unsigned_toJson (r : Core.Record) : Core.Record.unsigned r.toJson =
+    Json.mkObj [("body", r.body), ("kind", .str r.kind), ("prev", .str r.prev), ("schema", .str r.schema),
+      ("seq", Lean.toJson r.seq), ("session", (r.session.map Json.str).getD .null)] := rfl
+
+/-- An entry's message does not read its `sig`. -/
+theorem ledgerMessage_sig (I : ByteArray) (r : Core.Record) (sig : ByteArray) :
+    ledgerMessage I ({ r with sig := sig } : Core.Record).toJson = ledgerMessage I r.toJson := by
+  unfold ledgerMessage
+  rw [unsigned_toJson, unsigned_toJson]
+  rfl
 
 end Properties.Challenger.Entry
