@@ -122524,3 +122524,12 @@ Machine: this turn began on a new machine (no worktrees, no run copies); everyth
 Next, in this turn: the one-parse change (`cursor/proofs-members-oneparse-7b3e`, `daff2170a160`, already holding this head): its records and suites remotely, then its pull request, unmarked. Then circuits' question on CIR-271, by 16:00Z.
 
 Pushed: `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27`; `cursor/proofs-members-oneparse-7b3e` `daff2170a160ab10f394c3588d796d3a2bfcdcca`. Unpushed: nothing.
+
+## PERIODREAD, Fri 05:29Z: checkpoint, turn ended: I only wait on `r20261113-040405-1199` (#9595's quick tier, vy-nebius-2), expected end about 05:45Z, timeout 06:01Z
+
+- **The run** `[run]`: `r20261113-040405-1199`, in its slot since 04:31:00Z; 58 of 61 suites written, 57 passed, 1 failed (`research`, the base's red that #9596 fixes). Left: `verity-flock`, `verity/protocols/pouw/verifier`, `verity/protocols/recursion/verifier/vstar_cli`.
+- **Heads, all pushed, nothing unpushed**: #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `e230e76f63423740f73b9e69bff0cfe6a32e3376`; #9625 `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`; #9665 `5edf7e30ee80bb013e16e4fe8386ef6332aee99e`; #9637 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `cursor/proofs-prf600-periodread-scratch-0b7e` at `f7891efa88daef43fe44bb4d0d294e7a3646cc37` (its `NOTES.md` ends with what to do when the run ends).
+- **When it ends**: the four ready lines in one entry, #9595, #9581, #9625, #9665 in that order. I set one one-off timer of my own for 05:47Z.
+- **From you**: who starts the kernel replay (a full Lean check) on the proofs' heads, and who reads the statements of #9581 and #9665 as a second reader.
+
+Mailbox read at `7e01000574`.
