@@ -468,8 +468,12 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
-    """The tree's checkpoint pins (`config.CHECKPOINTS`); None on a tree that holds none."""
-    return str(config.CHECKPOINTS) if config.CHECKPOINTS.exists() else None
+    """The tree's checkpoint pins (`config.CHECKPOINTS`), else the working directory's `manifests/checkpoints.json`; None where
+    neither exists."""
+    for p in (config.CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
+        if p.exists():
+            return os.path.abspath(p)
+    return None
 
 
 def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
@@ -541,7 +545,8 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     why: list[str] = []
     if os.path.exists(mpath):
         try:
-            m = json.loads(Path(mpath).read_text())
+            with open(mpath) as f:
+                m = json.load(f)
             named = [m.get("program_digest")]
             listed = m.get("component_digests")
             if listed:
@@ -656,9 +661,15 @@ class Options:
     supersedes: str | None = option("--supersedes", default=None, help="the record this derivation replaces (moved aside by the caller), named in `derived`")
 
 
+def _record_at(name: str) -> Any:
+    """The document of the file `name`, opened by that name as it is given."""
+    with open(name) as f:
+        return json.load(f)
+
+
 def main(a: Options) -> int:
     if a.diff:
-        A, B = (json.loads(Path(x).read_text()) for x in a.diff)
+        A, B = (_record_at(x) for x in a.diff)
         d = diff_records(A, B)
         print(f"weights_of_record --diff: schema {d['schema'][0]} vs {d['schema'][1]}; roots as recorded {str(d['root_of_record'][0])[:16]} / "
               f"{str(d['root_of_record'][1])[:16]}; fields {d['n_fields'][0]} / {d['n_fields'][1]}; equal {d['equal_fields']}, differ {len(d['differ'])}, "
