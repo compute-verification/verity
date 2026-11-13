@@ -46,7 +46,7 @@ from verity.circuits.boundary import gate_width, in_gates
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import Program, is_input
 from verity.circuits.query_ast import GateSet
-from verity.definitions.circuits.census import census
+from verity.circuits.census import census
 
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
@@ -239,7 +239,7 @@ class StepSurvey:
     holds no Program: the one it counts takes each refused node's outputs from fields of the `run` input that no gate checks."""
     unsupported: Unsupported | None   # the step's refusal (`step_program`'s); None: the step derives, and the survey has no holes
     holes: list[dict]                 # each refused node: node, op, reason, hint and its `run` fields
-    census: dict | None               # `verity.definitions.circuits.census.census` of the step with its holes; None when `refused`
+    census: dict | None               # `verity.circuits.census.census` of the step with its holes; None when `refused`
     primitives: dict[str, PrimitiveDefinition]   # the primitives it calls, by id: what a census prices
     theta: dict                       # theta's input names, input nodes and bits
     layout: StepLayout
@@ -284,7 +284,7 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
 
 
 def primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
-    """The primitives `prog` calls, at any depth, by id: what a census (`verity.definitions.circuits.census.census`) prices."""
+    """The primitives `prog` calls, at any depth, by id: what a census (`verity.circuits.census.census`) prices."""
     out, seen, stack = {}, set(), [prog.root]
     while stack:
         fn = stack.pop()

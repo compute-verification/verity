@@ -2325,6 +2325,28 @@
         "verity/definitions/call_scope.py": "verity/circuits/call_scope.py",
         "verity/definitions/tiny.py": "verity/circuits/tiny.py"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/circuits/targets/": "verity/circuits/targets/",
+        "verity/definitions/circuits/boolean/memcheck.circuit-check.json": "verity/circuits/boolean/memcheck.circuit-check.json",
+        "verity/definitions/circuits/boolean/memcheck.circuit-check.py": "verity/circuits/boolean/memcheck.circuit-check.py",
+        "verity/definitions/circuits/boolean/memcheck.py": "verity/circuits/boolean/memcheck.py",
+        "verity/definitions/circuits/census.py": "verity/circuits/census.py",
+        "verity/definitions/circuits/constants.py": "verity/circuits/constants.py",
+        "verity/definitions/circuits/library.py": "verity/circuits/library.py",
+        "verity/definitions/circuits/operations.py": "verity/circuits/operations.py",
+        "verity/definitions/circuits/requirement.py": "verity/circuits/requirement.py",
+        "verity/definitions/circuits/requirement_units.circuit-check.json": "verity/circuits/requirement_units.circuit-check.json",
+        "verity/definitions/circuits/requirement_units.circuit-check.py": "verity/circuits/requirement_units.circuit-check.py",
+        "verity/definitions/circuits/requirement_units.py": "verity/circuits/requirement_units.py",
+        "verity/definitions/circuits/stacking.py": "verity/circuits/stacking.py",
+        "verity/definitions/commitments/gates/attest.circuit-check.py": "verity/commitments/gates/attest.circuit-check.py",
+        "verity/definitions/commitments/gates/attest.py": "verity/commitments/gates/attest.py",
+        "verity/definitions/commitments/gates/block_key.circuit-check.json": "verity/commitments/gates/block_key.circuit-check.json",
+        "verity/definitions/commitments/gates/block_key.circuit-check.py": "verity/commitments/gates/block_key.circuit-check.py",
+        "verity/definitions/commitments/gates/block_key.py": "verity/commitments/gates/block_key.py"
+      }
     }
   ]
 }
