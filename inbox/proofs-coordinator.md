@@ -139240,3 +139240,64 @@ In all `[derived]`: 96 suites, 95 passed, 1 failed, 0 not ended; 49,364 tests pa
 - The Lean check of the four packages whose audit key the move changes (ruled out for tonight).
 
 **Pushed heads** (unchanged since 11:13Z; nothing pushed since): `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone, the form the stager ran); `cursor/proofs-loosemap-0917-after-difftest` `6fc27ced33de` (not used); `cursor/proofs-loosemap-0917-hand-patch` `bf5b5eb2e469`; `cursor/proofs-loosemap-0917-on-lean-head` `f30ed1d29aff`; `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771`; `cursor/proofs-loosemap-0917-on-trial-after-difftest` `583fcd1f2122`; `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`. No run of mine is going, no timer is set, and the machine has not been replaced since 10:40Z.
+
+## ASSEMBLY, Fri 13 Nov 11:55Z: A RECORDS RUN PASSES ON THE JOIN, at `e4a00b6b85`: `76c3`, rc 0, `security/Proofs`, `security` and `security/Properties` each PASS, the two `escapes` lines accepted, the whole package built with `Pous/Component.lean` compiled from source. THE CONTROL: the try of `Component.lean` FAILS AT `main` `053b8e50fe8a` TOO (`5829`), so a try of that file says nothing about the build. THE TIP IS THREE MERGES AHEAD, at `e9346a9e70`, and NO RECORDS RUN HAS PASSED THERE: `3623` is out, about 12:40Z. `d3d8`'s seven files compile at `6247d2ddfc`. ADDRROW2's `ddb519ad96` is merged: 7 edges
+
+**In plain words.** The package builds and its three record checks pass at the head with the import line and the two `escapes` lines. The second PoUS file is not broken: the build compiles it, and the single-file try fails it even on `main`, so that try was never a witness for it. Soundness's condition is not met yet at the tip, which has HONEST2's, SESSIONOF2's and ADDRROW2's heads on top; the run that counts for it is out.
+
+**1. `r20261113-110329-76c3`, the records run at `e4a00b6b85`: done, rc 0** [run: vy-nebius-cpu-11, 11:04:00Z to 11:52:45Z; lines from its `stdout.log` and `lean-audit/audit-Proofs/build.log`]. Word for word:
+- "AUDIT … security/Proofs: PASS  209818 declarations in 4222 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees"; "AUDIT: PASS"; "lean-records: security/Proofs: check.py exit 0 in 1728 s … (219 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse".
+- "AUDIT … security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees"; "AUDIT: PASS"; "check.py exit 0 in 606 s".
+- "AUDIT … security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees"; "AUDIT: PASS"; "check.py exit 0 in 573 s".
+- "lean-records: OUTCOME {"outcome": "pass", "package": "security/Proofs", …}", with "outcome": "pass" for each of the three under "records". The run's `out/` is empty, so it regenerated no lock record [derived from the outcome word and the empty directory].
+- **It is a `lean-fast/v1` result**, as each line says: no kernel replay and no tests. It is what a records run gives; it is not the check.
+- **The build compiled both PoUS files from source:** "✔ [14500/14751] Built Proofs.Properties.Pous.MemoryChallenger.Inputs (2.0s)" and "⚠ [14741/14751] Built Proofs.Properties.Pous.Component (172s)", the second with linter warnings only.
+- **The two `escapes` lines are accepted:** the log has no `escape` line, where `adf2`'s had the two.
+- **What else the audit of `security/Proofs` reports** (your 11:40Z item 4 asks this of the next run; this is this run's):
+  - one note, in no file of the join: "1 definitions of the spec (Proofs.Pouw.Dimension.Lifting) are read by no guarantee, candidates to move out of it: Pouw.Dimension.Lifting.grid";
+  - "heartbeats: 573 overrides, 337 without a reason". By my parse of 563 of those lines, 14 are in files the join's merge base lacks, each with a reason written, and none of the lines that say "no reason given" is in a file the join adds;
+  - nothing else: no failure line, no bookkeeping line.
+- The two requirers print their standing notes and trust gaps and nothing about the join.
+
+**2. The control: the try of `Component.lean` fails at `main` too** [run].
+- **`r20261113-114908-5829`** (vy-nebius-cpu-2, 11:49:30Z to 11:52:51Z, rc 1): the same try of `Properties/Pous/Component.lean` at `main` `053b8e50fe8a37970e410ce9ffcb5694bbe4a59b`, from a detached worktree; nothing is pushed for it. "Component.lean:381:8: error: (deterministic) timeout at `whnf`, maximum number of heartbeats (200000) has been reached"; "lean exit 1 in 201 s"; "1 of its 57 theorems failed … Pous.Component.SecurityProofs.wverdict_eq".
+- The file is the same at `main`, at `0df461b1b2` and on the join [run: `git diff --stat` is empty].
+- **So, by your rule: a try of that file says nothing about the build, and only `76c3` counts.** The try fails it at three heads (`main`, `0df461b1b2`, `e4a00b6b85`) and the build passes it at `e4a00b6b85` in 172 s.
+- **Why the try and the build differ on it: not known.** Both give Lean the lakefile's three options. The try compiles a copy of the file with `lake env lean`; the build compiles it as its module. I tested nothing further. It is a fault of the try on this file, for the tool's owner; say if you want a friction note from me.
+- `Component.lean` is untouched. `e4a00b6b85` stays, as you ruled.
+
+**3. `r20261113-111312-d3d8`, seven tries at `6247d2ddfc`: rc 0** [run: vy-nebius-cpu-11, 11:13:34Z to 11:31:26Z]. Each "lean exit 0", each probe "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound":
+- `SampledTwo/Leg.lean` 419 s, 3 theorems. `Honest/Sits.lean` 179 s, 9. `Honest/Wiring.lean` 59 s, 16.
+- `Sampled/Record/PartReadsBack.lean` 49 s, 15. `Sampled/Record/KS.lean` 135 s, 3. `Sampled/Record/Pass.lean` 61 s, 7. `SampledTwo/MemberChecks.lean` 168 s, 11.
+- So SESSIONOF2's restatement of `ReadsBack.registered` breaks none of the files above it on the join. These are tries of seven files, not a build.
+
+**4. The join: `e9346a9e70`, pushed, worktree clean** [read; run for the tests].
+- `b2c8cb33f4`: **"the second stage" for "round 2"** in `Live₂.KS`'s docstring. It was the one place: no line of `Leg.lean` holds the word "round" now. Docstring only.
+- `d5979b9a64`: **ADDRROW2's `ddb519ad96` merged.** No conflict. `ScopeTable.lean` is under `security/Proofs/Flock/SpotFlock/`; `OneTable.lean:3` and `RowTable.lean:26` import it there; the root is renamed in the lakefile and in the lock, and no file names the old module.
+- `e9346a9e70`: the PoUS pin, for the lakefile's line.
+- **When I merged it.** At 11:50Z, on ADDRROW2's 11:42Z title and your 11:04Z word, after I had read `76c3`'s verdicts on `security/Proofs` and `security` and before its last package ended. Your 11:52Z ("after you have read `76c3`") reached me at 11:53Z. `76c3` ran on the source it took at its launch, `e4a00b6b85`, so the merge changes nothing of what it speaks for.
+- On my VM at `e9346a9e70`: `pytest tests/test_lean_packages.py tests/test_boundaries.py tests/test_lean_vocabulary.py tests/test_tree.py tests/test_doc_paths.py`, "119 passed"; **`public_boundary.py`, "7 edges, 7 new"**, edge 1 gone and the other seven the same lines; `lock_roots.py --check` finds nothing; `dup_names.py` the same 17 names; `pins.py --stale` prints nothing.
+- No Lean is compiled at `e9346a9e70`. What stands between it and `6247d2ddfc` is one word of a docstring and the move, whose eight files ADDRROW2's `b2d0` compiled at its own head.
+
+**5. For soundness's line: has a records run passed at a head of the join?** [run]
+- **Yes, at `e4a00b6b85`: `76c3`.**
+- **Not at the tip.** `e9346a9e70` is ahead of `e4a00b6b85` by HONEST2's `191488fbab`, SESSIONOF2's `9a548b2f97`, ADDRROW2's `ddb519ad96`, two docstring commits in `Leg.lean` and two pin commits.
+- **The run that counts: `r20261113-115115-3623`**, the records run at `e9346a9e70` (vy-nebius-cpu-1, launched 11:51Z, `--cwd clone`, 72 GB). Expected end 12:40Z [guess: `76c3` took 49 minutes beside another run on its node].
+- I hold no merge. STAGECOINS's row 7 head is not named; nothing of B is on the join.
+
+**6. The table** [read].
+- **`wiresChecked`.** It is not a field of `JoinsAt`: it is the fifth of the five facts `addressesConnected_of_firstK` takes (my 10:47Z section 3). Its row now reads: "`AddressRow.wiresChecked h = true`: stays a premise. It cannot be a lemma at the form's own copies: it is false at three small programs, each with a wire whose reader port a link names too (ADDRROW2, 11:42Z). ADDRROW2 proves the half that is true (`wiresChecked_of_unlinked`, not compiled), which shrinks the premise to `wiresUnlinked`: no link names a wire's reader port. That is word for word the one clause the form's `wiresOk` would need; the clause is with soundness."
+- The fourth of the five, `firstK h.reg.first = some K`, is no longer a field of the join: on an accepted play it would come from `firstK_of_formAccepts`. Nothing on the join calls the lemma, so nothing is written for it, as you said at 11:04Z.
+- **The paragraph for the pull request's body, with the word changed:**
+
+  > **`A.KS`, the leg's first premise, has no proof on the join.** `TwoLeg` takes, at each session of record, knowledge soundness of the compiled two-stage verifier at `SpotFlock.code`, `SpotFlock.two` and `SpotFlock.rs` of the held copies: the members' programs side by side. `Flock.Guarantees.SpotKSTwo` concludes at the connected program (`SpotFlock.codeConnected`, `twoConnected`, `rsConnected`), and no lemma carries that conclusion to the code the leg reads. At the leg's code the theorem is `SpotFlock.ksTwo_spot`, from `SpotFlock.Built` and `SpotFlock.Addresses`. `SpotFlock.CheckedRun.not_addresses_of_input_readsInterior` refutes `Addresses` at a held code with an accepted run in which a checked unit needs an input gate and the second stage reads every registered read of the unit's session off the interior record. The join proves the coupling and nothing of this premise.
+
+## Not established
+
+- The records of any package at the tip `e9346a9e70`: `3623` has no verdict. No file is compiled at that head.
+- The check at any head of the join: `76c3` is a `lean-fast/v1` result, with no kernel replay and no tests. The quick tier is not run.
+- Why the try fails `Component.lean` where the build passes it.
+- That `A.KS` holds at any session of record, and that any instance of `JoinsAt` exists: all 22 fields are premises.
+- `wiresChecked`, and `wiresUnlinked` after it: a premise, computed by no check.
+
+**Runs out:** `r20261113-115115-3623` (records at `e9346a9e70`, vy-nebius-cpu-1), 12:40Z [guess]. **Timer:** one, for it. **Next entry:** its verdict, with every line its audit reports besides the two `escapes` lines.
