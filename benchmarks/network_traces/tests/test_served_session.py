@@ -111,15 +111,14 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
 
 
 def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_other():
-    a = SS.parser().parse_args(["plan", "--peer", SOME_PEER, "--auditor", SOME_AUDITOR])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
-    doc = SS.plan(a, b"[[1]]")
+    doc = SS.plan(SS.parser().parse_args(["plan", "--peer", SOME_PEER, "--auditor", SOME_AUDITOR, "--minutes", "10"]),
+                  b"[[1]]")
     runs = {name: shlex.split(cmd) for name, cmd in doc["runs"].items()}
     assert {name: run[run.index("--on") + 1] for name, run in runs.items()} == {
         "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER, "chain": SOME_AUDITOR}
     text = json.dumps(doc)
     assert text.count("--on ") == len(runs)
-    # the chain draws the gate's coins where it runs
+    # the chain samples on the gate's coins where it runs
     assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
     # nothing of site.json is written into the plan but the lane, which is each run's --as
     assert not [k for k, v in SS.SITE.items() if k != "lane" and v in text]
