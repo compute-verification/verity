@@ -3,7 +3,7 @@
     research run --tool check --project verity --cwd clone -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/check.py
 
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by
-that commit.  A merge that changes verity/protocols/flock/ (the Lean verifier's package verity/protocols/flock/verifier/ included) or a
+that commit.  A merge that changes verity/protocols/proofs/flock/ (the Lean verifier's package verity/protocols/proofs/flock/verifier/ included) or a
 package the verifier requires by path (verity/circuits/base/, verity/circuits/lean/ and verity/commitments/lean/), other than a
 README.md or PROTOCOL.md (which nothing the agreement runs reads), needs an attempt whose `lean-agreement` step passed
 (`merge_requires`; the step runs when the run has the pinned upstream build's URLs, which `check.py --record` sends then).  A merge
@@ -21,17 +21,17 @@ from research.store.tool import Tool
 CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
                                                      "tools/verity/check/check.py"],
              produces=["check/v1"],
-             merge_requires={"lean-agreement": ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/",
-                                                 "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/",
+             merge_requires={"lean-agreement": ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
+                                                 "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
                                                  "verity/circuits/base/", "verity/circuits/lean/",
                                                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"],
-                             "lean-suites": ["verity/protocols/flock/prover/python/verity_flock/rec_vstage.py",
-                                             "verity/protocols/flock/prover/python/verity_flock/rec_outer.py",
-                                             "verity/protocols/flock/prover/python/verity_flock/rec_open.py",
-                                             "verity/protocols/flock/prover/python/verity_flock/rec_residuals.py",
-                                             "verity/protocols/flock/prover/python/verity_flock/rec_cap.py",
-                                             "verity/protocols/flock/prover/python/verity_flock/circuit.py",
-                                             "verity/protocols/spot/verifier/one_stage/registered.py",
-                                             "verity/protocols/flock/verifier/VStar/In.lean", "verity/protocols/recursion/verifier/vstar_cli/", "verity/protocols/recursion/verifier/recursive/"]},
+                             "lean-suites": ["verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
+                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
+                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_open.py",
+                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
+                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
+                                             "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
+                                             "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
+                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/recursion/verifier/recursive/"]},
              preflight=["tools/verity/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/verity/check/post_train.py"])

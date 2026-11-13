@@ -52,8 +52,8 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"

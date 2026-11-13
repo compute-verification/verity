@@ -19,9 +19,9 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array, Value
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census
-from verity.definitions.ops import prims
+from verity.circuits import stacking as P
+from verity.circuits.census import census
+from verity.circuits.ops import prims
 
 S32, S8, BIT = Value(32), Value(8), Value(1)
 E40 = B.E_WORD["2^-40"]

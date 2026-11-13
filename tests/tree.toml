@@ -1,10 +1,11 @@
-# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at four levels: the root,
-# verity/, verity/protocols/ and each protocol's directory.
+# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at five levels: the root,
+# verity/, verity/protocols/, each group's directory there and each protocol's directory.
 #
 # [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
 # the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
-# and the `verity/protocols/NAME/` entries say what each of their directories may hold.  The shape is not changed here
-# without asking top.
+# and the `verity/protocols/NAME/` entries say what each of their directories may hold; a group is a directory of
+# verity/protocols/ that holds protocols, and the `verity/protocols/GROUP/` entries say what else it may hold.  The
+# shape is not changed here without asking top.
 #
 # [[not_yet]] is what main holds and the tree doesn't: each path, where it goes (`to`), its owner and the day.  A day
 # is a date, 6 PM PST on it unless it gives a time.  A move that lands leaves its line for top to delete: the stale
@@ -148,7 +149,7 @@ day = "2026-11-13 08:00 PST"
 
 [[tree]]
 path = "verity/protocols/"
-means = "one directory per protocol, the list flat"
+means = "the protocols, in two layers on the proofs, each group a directory of its own, and compose on top"
 
 [[tree]]
 path = "verity/circuits/"
@@ -177,42 +178,54 @@ means = "a suite's configuration, where it has one"
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
 
 [[tree]]
-path = "verity/protocols/flock/"
+path = "verity/protocols/proofs/"
+means = "flock, with spot and recursion on it: what the other protocols call to prove; it uses neither layer"
+
+[[tree]]
+path = "verity/protocols/accounting/"
+means = "the accounting layer: pouw, pous, poub and certifier, for compute, memory and network, on the proofs"
+
+[[tree]]
+path = "verity/protocols/policy/"
+means = "the policy layer: inference_only, on accounting and the proofs"
+
+[[tree]]
+path = "verity/protocols/proofs/flock/"
 means = "the proof system: its Lean verifier and the ZK server, and its prover"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/spot/"
+path = "verity/protocols/proofs/spot/"
 means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/recursion/"
+path = "verity/protocols/proofs/recursion/"
 means = "one proof system's verifier proved in another's proofs, and the ZK server's release side"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/pouw/"
+path = "verity/protocols/accounting/pouw/"
 means = "proof of useful work"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/pous/"
+path = "verity/protocols/accounting/pous/"
 means = "proof of useful space"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/poub/"
+path = "verity/protocols/accounting/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/certifier/"
+path = "verity/protocols/accounting/certifier/"
 means = "network certification: the network certifier and its guarantee"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/inference_only/"
+path = "verity/protocols/policy/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
 
@@ -242,6 +255,12 @@ means = "the tests of verity/protocols' own modules, a suite of its own"
 [[tree]]
 path = "verity/protocols/pyproject.toml"
 means = "a suite's configuration, where it has one"
+
+# ---- each group's directory, beside its protocols ------------------------------------------------------------------
+
+[[tree]]
+path = "verity/protocols/GROUP/__init__.py"
+means = "the package"
 
 # ---- each protocol's directory -------------------------------------------------------------------------------------
 
@@ -377,14 +396,14 @@ day = "2026-11-15"
 note = "two Lake packages move with Sunday's chain; its served part waits for the vLLM adapter's snapshot and may land 2026-11-16"
 
 [[not_yet]]
-path = "verity/difftest/"
+path = "tools/difftest/"
 to = "its Python to tools/difftest/, its Lake package to verity/circuits/difftest/"
 owner = "top"
 day = "2026-11-15"
 note = "its Lake package moves with Sunday's chain"
 
 [[not_yet]]
-path = "verity/composite/"
+path = "verity/protocols/compose/"
 to = "verity/protocols/compose/device/live_challenger/"
 owner = "top"
 day = "2026-11-14 12:00 PST"
@@ -410,7 +429,7 @@ arriving = true
 note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
-path = "fixtures/artifacts.json"
+path = "artifacts.json"
 to = "the root"
 owner = "top"
 day = "2026-11-14 12:00 PST"
@@ -422,79 +441,79 @@ owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/pouw/clear/"
-to = "verity/protocols/pouw/verifier/"
+path = "verity/protocols/accounting/pouw/clear/"
+to = "verity/protocols/accounting/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
 [[not_yet]]
-path = "verity/protocols/pouw/receipts/"
-to = "verity/protocols/pouw/verifier/"
+path = "verity/protocols/accounting/pouw/receipts/"
+to = "verity/protocols/accounting/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
 [[not_yet]]
-path = "verity/protocols/pous/lean/"
+path = "verity/protocols/accounting/pous/lean/"
 to = "out of verity/: tools/pous_grader/, or deleted"
 owner = "memory-accounting"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/inference_only/nci/"
+path = "verity/protocols/policy/inference_only/nci/"
 to = "benchmarks/nci/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
 [[not_yet]]
-path = "verity/protocols/inference_only/rho/"
+path = "verity/protocols/policy/inference_only/rho/"
 to = "benchmarks/rho/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
 [[not_yet]]
-path = "verity/protocols/flock/pod/"
+path = "verity/protocols/proofs/flock/pod/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/sigma/"
+path = "verity/protocols/proofs/flock/sigma/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/agreement/"
+path = "verity/protocols/proofs/flock/agreement/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/tool.py"
+path = "verity/protocols/proofs/flock/tool.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/candidates.py"
+path = "verity/protocols/proofs/spot/candidates.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/costfit.py"
+path = "verity/protocols/proofs/spot/costfit.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/optimize.py"
+path = "verity/protocols/proofs/spot/optimize.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/plancheck.py"
+path = "verity/protocols/proofs/spot/plancheck.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"

@@ -52,13 +52,13 @@ import numpy as np
 import pytest
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.spot.device import challenger as C
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
+from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 from verity.commitments.windows import interface as IF
 
 HERE = Path(__file__).resolve().parents[1]
@@ -69,8 +69,8 @@ import a5_coins as AC  # noqa: E402
 import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
-LEAN = ROOT / "verity" / "protocols" / "flock" / "verifier" / ".lake" / "build" / "bin"
-BUILD = ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh"
+LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
+BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
@@ -135,7 +135,7 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
-                                                 "verity/protocols/flock/prover/python", "adapters/vllm"))
+                                                 "verity/protocols/proofs/flock/prover/python", "adapters/vllm"))
     argv = [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(window),
             "--law", DESIGN, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()

@@ -3,7 +3,7 @@
 The store's Sloth codecs, each a byte-exact Python reference, a CUDA kernel and an arithmetic twin of the kernel: the
 word codec (`codec.py`, `wc.cu`, `twin.py`; Sloth in one 61-bit word, which `benchmarks/vllm_encoded` serves), the KV
 cache's codec `verity/word-codec/kv/v0` (`kv.py`, `kv.cu`, `kv_twin.py`, and `kv_bench.py` its benchmark), which the
-bandwidth audit (PoUB, `verity/protocols/poub/verifier`) mirrors in its `codec.py`, and the wide codecs
+bandwidth audit (PoUB, `verity/protocols/accounting/poub/verifier`) mirrors in its `codec.py`, and the wide codecs
 (`wide.py`, `wide.cu`). `cuda_lib.py` is how memory accounting's benchmarks
 (`codec_tensor`, `kv_filler`, `pous`, `remote_session`, `vllm_encoded` and this one) open a built CUDA library and bind
 its functions' types; each library's table of them sits beside the script that loads it.
@@ -32,4 +32,4 @@ CPU. `run.sh` is `kv.cu`'s GPU benchmark.
 **Reads and writes:** the GPU scripts read the built kernels and write their gates, timings and profiles as JSON in their
 output directory; the suite reads only the vectors. **Backs:** the codec whose word the named assumptions
 `Accounting.Assumptions.SquaringFloor` and `ChainSum` price is `kv/v0`, and the bandwidth audit's vectors test
-(`verity/protocols/poub/verifier/tests/test_remote_bandwidth_vectors.py`) holds the audit's codec to it.
+(`verity/protocols/accounting/poub/verifier/tests/test_remote_bandwidth_vectors.py`) holds the audit's codec to it.

@@ -41,12 +41,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transformer as X  # noqa: E402
 from inputs import CARDS, I, cap  # noqa: E402
 
-from verity.protocols.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.candidates import shape_of  # noqa: E402
-from verity.protocols.spot.optimize import row_ands  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
+from verity.protocols.proofs.spot.prover.candidates import shape_of  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import row_ands  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.definitions.ops import fp32 as F, gemm as G  # noqa: E402
+from verity.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
 DELTAS = X.DELTAS
 #: each subcircuit's sampling block certifies at most this share of its units incorrect at delta = 1% (`transformer.TARGET_SHARE`)
@@ -113,8 +113,8 @@ class Template:
 
     @property
     def parts(self) -> int:
-        """The least number of parts a unit proves in within C-Flock's block (`inputs.cap`), each its share of the ANDs and
-        of every row's bytes: a unit past the block is drawn whole and proved as its parts."""
+        """The least number of parts a unit proves in within Flock's block (`inputs.cap`), each its share of the ANDs and
+        of every row's bytes: a unit past the block is sampled whole and proved as its parts."""
         if cap(0, [1] * len(self.rows)) < 1:
             raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
         p = 1
@@ -245,8 +245,8 @@ def commit_cost(ts: list[Template], r: Rates) -> float:
 
 
 def replay_cost(ws: list[SamplingBlock], m: Shape) -> float:
-    """Replaying the drawn units' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
-    the draw touches."""
+    """Replaying the sampled proof blocks' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
+    the sample touches."""
     drawn = sum(w.k for w in ws)
     return REPLAY_BLOCKS * m.block_s * (1 - exp(-drawn / m.batch))
 

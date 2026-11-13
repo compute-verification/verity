@@ -3,7 +3,7 @@ committed under each registered weight root (`window_weights.weights_registratio
 salts, a hiding commitment) are checkpoint X's, which the verifier checks before it pins those roots (`checked_pins`). It
 never commits a weight: what it computes from X is X's public digests.
 
-The tie is a window of the one proof service (`interface.Window`), one SHA-512 chain per safetensors shard of X in the
+The tie is a window of the one proof system (`interface.Window`), one SHA-512 chain per safetensors shard of X in the
 shard's byte order (`gates.sha512_stream`). The shard's header is public, so the chain starts at the verifier's own state
 after it (a supplied value: its chaining value and its pending bytes). Each tensor after it is rows of one registered weight
 parameter, and each row is a `Sha512StreamRow_v1` unit whose ``data`` port is a registered read of that row (opened against
@@ -27,7 +27,7 @@ it is refused at the pins, since the tie window holds no root of it.
 Public: the layout (the shards, their headers and tensor offsets, each parameter's rows and width), the digests and the
 registered roots. Private: the rows, their salts and every state but the first. Refused by name: a cast or a composition
 whose rows aren't its source tensors' bytes in order (1:1, fused along dim 0 and tied are), a row straddling two tensors, a
-tensor two parameters split, a row of fewer than 56 words (C-Flock proves a unit only with a row of at least 112 bytes, one
+tensor two parameters split, a row of fewer than 56 words (Flock proves a unit only with a row of at least 112 bytes, one
 that compresses before its last block), a shard of no tensor, bytes between or after the tensors, a tensor no registered
 parameter holds, a checkpoint not of record or of another model, and a template whose port would read a table's rows and
 another parameter's.
@@ -58,7 +58,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as G, registration as R
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
@@ -405,7 +405,7 @@ def _registered(phi: str, default_seed: int) -> Any:
 
 
 def _key(path: str) -> bytes:
-    """The committer's 32-byte key from ``path``, drawn fresh and written 0600 when the file is absent."""
+    """The committer's 32-byte key from ``path``, sampled fresh and written 0600 when the file is absent."""
     p = Path(path)
     if not p.exists():
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

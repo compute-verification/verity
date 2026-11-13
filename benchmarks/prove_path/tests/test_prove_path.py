@@ -47,8 +47,8 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import interface as IF, rows as CS
 from verity_difftest import settings as opt
@@ -401,7 +401,7 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified law at the K its
+    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified sampling design at the K its
     one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
     outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])

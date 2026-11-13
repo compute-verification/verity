@@ -1036,8 +1036,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1071,7 +1071,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
     adapter's refusals accept it."""
 
-    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier import verifier
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1097,9 +1097,9 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
     """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
-    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins drawn (the server
-    draws each window's); an unset ``$`` value is refused, naming it."""
-    from verity.protocols.pouw.verifier import verifier
+    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins flipped (the server
+    samples each window's); an unset ``$`` value is refused, naming it."""
+    from verity.protocols.accounting.pouw.verifier import verifier
     from verity_vllm.pipeline import serve_pearl as SPL
 
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
@@ -1177,7 +1177,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 
