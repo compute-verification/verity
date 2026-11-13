@@ -131,6 +131,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "rc": status.get("rc"),
         "signal": status.get("signal"),
         "wall_s": status.get("wall_s"),
+        "memory": status.get("memory"),
         "class": failure.get("class"),
         "certainty": failure.get("certainty"),
         "why": failure.get("why"),

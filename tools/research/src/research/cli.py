@@ -32,6 +32,10 @@
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
                                                  # itself), records the exit and publishes custody.  From any VM: as `inspect` finds runs
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
+                                                 # RUN, once it has ended: a `mem` line with the most it held (page cache left
+                                                 # out), what it asked and its memory limit, and when it would have been stopped
+                                                 # there; the figure to size --mem-gb from (research/memmark.py). `run
+                                                 # --mem-limit-gb N --as WHO` states that limit; nothing is limited by it
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine but the auditor hosts, and its records fetched here (remote.adopt)
@@ -145,6 +149,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timezone
 from pathlib import Path
 
@@ -256,6 +261,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
                     help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
                          "(first come first served, research.mem)")
+    ap.add_argument("--mem-limit-gb", type=float, default=None, metavar="N",
+                    help="state the memory limit the run's record marks it against, N GB, in place of what it asked and 128 GB "
+                         "more (128 GB for a run that asked none); never above the machine's own bound on the run. The record "
+                         "says it was stated and who stated it (--as, default $RESEARCH_LANE). It limits nothing: the mark says "
+                         "whether the run would have been stopped (research.memmark; `research status RUN` prints it)")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
@@ -276,7 +286,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
                     help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
-                    help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
+                    help="with --pool: the lane the slot names; with --mem-limit-gb: who states it (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
@@ -375,6 +385,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except waitcap.OverCap as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
+    if ns.mem_limit_gb is not None and not (ns.mem_limit_gb > 0 and ns.lane):
+        print("research run: --mem-limit-gb N states the run's memory limit: N GB, above 0, and the run's record says who stated "
+              "it, so name yourself with --as NAME (or $RESEARCH_LANE)", file=sys.stderr)
+        return 2
     if (ns.on or ns.queue) and not ns.claimed and (why := _short_bare_timeout(harness_opts)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2
@@ -635,7 +649,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     try:
         if ns.job_user:
             mode = jobuser.prepare(job_dir, store_toml)
-        rc = harness_run(a, spawn, preserver.poll) if preserver else harness_run(a, spawn)
+        rc = harness_run(a, spawn, preserver.poll if preserver else None, _memory_mark(ns, run_id, run_dir, job))
     finally:
         if mode is not None:            # before anything reads the run dir
             removed, unsafe = jobuser.finish(job_dir, jobuser.unit_name(run_id), ns.job_user, job_pw.pw_uid, mode)
@@ -976,6 +990,28 @@ def _request(remote_json: str | None) -> dict:
     except (OSError, ValueError, KeyError, TypeError):
         return {}
     return req if isinstance(req, dict) else {}
+
+
+def _stated_limit(ns: argparse.Namespace) -> dict | None:
+    """`--mem-limit-gb` as the launch request and the run's memory mark carry it: the GB and who stated them."""
+    return {"gb": ns.mem_limit_gb, "by": ns.lane} if ns.mem_limit_gb is not None else None
+
+
+def _memory_mark(ns: argparse.Namespace, run_id: str, run_dir: Path, job: dict) -> Callable[[], dict]:
+    """What the harness writes with the run's end: its memory mark (research.memmark), from the launch request, the cgroup
+    limits job.json recorded as the runner started, and the run dir's slot record and cgroup samples as they then stand."""
+    from . import memmark
+
+    req = _request(ns.remote_json) if ns.claimed else {}
+    stated = req.get("mem_limit") if ns.claimed else _stated_limit(ns)
+    if ns.job_user:
+        from . import jobuser
+
+        elsewhere = f"its own unit {jobuser.unit_name(run_id)}.service (--job-user)"
+    else:
+        elsewhere = "a GPU lease's scope (gpu-lease)" if req.get(remote.QUEUE_WORKLOAD_WRAP) or remote.gpu_lease_wrap(req) else None
+    cgroup = (job.get("environment") or {}).get("cgroup") or {}
+    return lambda: memmark.of_run(run_dir, req, cgroup, stated=stated, elsewhere=elsewhere)
 
 
 def _request_env(remote_json: str | None) -> dict[str, str]:
@@ -1453,7 +1489,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     what = dict(project=ns.project, command=command, harness_args=harness_args, cwd=None, env=env, exclusive=ns.exclusive,
                 mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait, custody_ttl=(ns.custody_ttl or "6h") if custody else None,
                 preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
-                gpus=None if queue else ns.gpus, store_read=ns.store_read)
+                gpus=None if queue else ns.gpus, store_read=ns.store_read, mem_limit=_stated_limit(ns))
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, source=source, sends=[*sends, *([urls] if urls else [])],
                             queue=queue, auto=getattr(ns, "placed", None), **what)
@@ -1856,11 +1892,13 @@ def _fmt(s: dict) -> str:
 
 
 def cmd_status(argv: list[str]) -> int:
-    from . import checkview
+    from . import checkview, memmark
 
     ap = argparse.ArgumentParser(prog="research status")
     ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
-                                           "id another VM launched is found on its machine)")
+                                           "id another VM launched is found on its machine); once it has ended, a `mem` line "
+                                           "with the most it held, what it asked and its memory limit (research.memmark): the "
+                                           "figure to size --mem-gb from")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="with RUN another VM launched: look for it on this machine only")
     ap.add_argument("--all", action="store_true", help="every run, not just the last 20")
@@ -1945,6 +1983,8 @@ def cmd_status(argv: list[str]) -> int:
             print(f"{'':<26}auto {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
+        if one and s["has_status"] and s["state"] not in R.ACTIVE:
+            print(f"{'':<26}mem  {memmark.line(s.get('memory'))}")
         for line in (check or []) if s is rows[0] else []:
             print(f"{'':<26}{line}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
