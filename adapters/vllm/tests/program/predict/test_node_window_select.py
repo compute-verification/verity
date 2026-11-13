@@ -11,7 +11,11 @@ import numpy as np
 import pytest
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
+from verity_vllm.program.predict import node_window_embed as NE
+from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_select as NSEL
+from verity_vllm.program.predict import node_window_sparse as NS
+from verity_vllm.program.predict.common import Unexpressible
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity.circuits.codec import descriptor_id
@@ -25,6 +29,7 @@ from verity.definitions.registry import greedy_stages as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NSEL.FAMILIES}
 V, K, N, R = 154880, 20, 7744, 121
+IDS = 43
 #: the bf16 words a small row's lanes take, so ties are common: +0, -0, 1, -1, 2, 1 + 2^-7, the least subnormal, +inf, -inf
 #: and two NaNs
 WORDS = np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x4000, 0x3F81, 0x0001, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1], np.uint16)
@@ -124,3 +129,29 @@ def test_select_stand_ins(program, window):
     circuit, w = window
     c2, w2 = NW.node_window(program, families=FAMILIES, stand_ins=True)
     assert w2.census(c2)["digest"] == w.census(circuit)["digest"]
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(raises=Unexpressible, strict=True,
+                   reason="node_window_multimem combines rank 0's partial in 96-word chunks, which 192-word rows cross")
+def test_joined_with_select():
+    """Every family set (`node_window`, `_dense`, `_sparse`, `_multimem`, `_embed`, `_select`) at a 43-id prompt, 2 outputs and
+    one decoder layer: only the stop check is unlowered; no row is free of the token select, the decode's 32 shard reads taking
+    ``tok`` by one wire from the prefill select's combine unit; the prefill's 1,376 reads are still row 0 of the ``SIZE=192``
+    combine's ``parts``. A strict expected failure on `node_window_multimem`'s chunk refusal until it combines such rows, as
+    `test_node_window_join.test_joined` is."""
+    families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
+    circuit, w = NW.node_window(glm_request(IDS, 1).program.fn, families=families)
+    assert w.census(circuit)["unlowered"] == {"StopCheck": 1}
+    assert not [f for f in w.free if f.family == "TokenSelect"]
+    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v1{")]
+    combine = descriptor_id(G.plan(V)[-1].defn)
+    blocks = 6144 // NE.WIDTH
+    tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
+           for x in circuit.wires if x.reader == read and x.port == "tok"]
+    assert tok == [(combine, "o0", IDS * blocks, (blocks,), 0, (0,), (0, 1))]
+    assert {(f.kind, f.name, f.at, f.count) for f in w.free if f.tid == read} == {("param", "prompt", 0, IDS * blocks)}
+    parts = [x for x in circuit.wires if x.writer == read and x.reader.startswith("AllReduceMultimem_v1")]
+    assert [(x.port, x.out, x.at, x.radix, x.base, x.step, x.cut[0]) for x in parts] == [
+        ("parts", "o0", 0, (IDS, blocks), 0, (1, IDS), 0)]
+    assert "SIZE=192," in parts[0].reader and circuit.units[parts[0].reader] == IDS * blocks * 2
