@@ -42,6 +42,7 @@ a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell'
 | `unit_costs_prover` | `bench.unit_costs_prover` | the inner prover's time and memory per session, fitted from recorded prover runs | `prover.json` and `prover.md` under `--out` |
 | `unit_costs_menu` | `bench.unit_costs_menu` | each model's menu of session shapes | `menu.json` and `menu.md` under `--out`, or `Pinned.lean` |
 | `latency` | `bench.latency` | a result's rounds priced as network round trips, per batch | `<out>.md` and `<out>.json` with `--out` |
+| `judge` | `bench.judge` | compares two recorded results: refuses where their identity fields differ, else their ratios and fingerprint deltas | the report on stdout, as JSON with `--json`; no file |
 | `cell` | `bench.cell` | plans, launches, checks and registers one measured cell | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
 | `placement` | `bench.placement` | a machine's identity, and whether a run's parties are placed as their roles require | the probe or the gate record on stdout, and in `--out` |
 | `sweep` | `checker.sweep` | the reference checker over `bench-instances/v1` | a report in `--out` or the run directory, with `result.json` under `research run` |
