@@ -155989,3 +155989,35 @@ For lean, if you pass it on: fix 2 as PRF-549 words it (`witnesses` keeps `hones
 - Whether lean's coming rule (LEAN-273) says anything of a lemma that no entry names. I read lean's 11 Nov comment, which speaks only of a lemma listed as a witness.
 
 **Asked of you:** (a), (b) or (c). On (a) I make the lock edit as a third commit, send one records run and open the pull request when it is back, well before 23:00Z if the word comes by 20:00Z. Until your word I hold: no edit, no run, no fix 1 reading.
+
+## MEMBERS, Fri 13 Nov 18:39Z: your 18:23Z is read (hook and mailbox); the cost row is written and pushed, not compiled; the split of `Spot/OneStageZk.lean` is sized and nothing of it is written: one cut, the new module's name proposed below
+
+### 1. The cost row (your item 2) [branch `cursor/proofs-members-parserow-34fd`, head `b000aeebb94`, cut from `origin/main` at `fa3e619ee146`; not compiled, not run]
+
+- Three files, the way the rows there are made: `benchmarks/verifier_cost/members_parse/Main.lean` (the timer), `members_parse.sh` (builds it in a scratch Lake package against the checkout's verifier), and a paragraph in the README.
+- What the timer does: makes N members of one range each, no unit in two; times `OneStageZk.membersOf` on them; then on the same members with one more whose range starts inside the last member's. It fails where the parse gives back other members than those made, name by name and unit by unit, or accepts the unit in two. So a faster parse is held to the same answers on both sides, and there is no test on a clock: the suite's existing test elaborates every `*/Main.lean` there and finds this one by itself [read: `benchmarks/verifier_cost/tests/test_mains.py`].
+- It is cut from `main`, so it lands with or without the twin; before the twin its rows show the quadratic time, after it the linear one. Two runs are queued, on the row's own branch at small sizes [run `r20261113-183430-b13e`, cpu-14] and on the twin's tree at 1,000 to 1,000,000 members [run `r20261113-183455-f469`, cpu-11]. Its pull request opens after the twin's.
+
+### 2. The split (your item 3): sized, not started; it waits for the two small pull requests to be open
+
+Read at FRAME's carried switch head `097b85eff21b` (`cursor/proofs-carried-members-switch-4ae1`), of which my live line `fd561fbff5b2` is an ancestor [read: `git merge-base`]. The file is 2,602 lines: 111 of module docstring, 245 declarations, 81 of them the switch's [derived: declarations named there and not on `main`].
+
+- **The switch's new declarations cannot move alone.** They sit in the middle (the files' pass and the kept program, lines 1190 to 1603) and at the end (the run's theorems), they read the old declarations above them, and the old `runMembers`, `membersRun` and the checks below read them. A module beside the file is either imported by it or imports it, so what moves is one end of the file.
+- **What I propose: one cut, at line 1604.** Everything from the first declaration through `membersFiles_eq_kept` (lines 143 to 1603: the parameters and the evidence, one statement's check, a member's statement, its files and the program kept once) goes to a new module, about 1,500 lines with its header. `Spot/OneStageZk.lean` keeps its module docstring and the rest (the run over the members, the evidence's parts, `membersRun`, the checks, `main`, the `#guard`s), about 1,140 lines, and imports the new module with `public import`. Names and namespace (`Spot.OneStageZk`) unchanged; no declaration's text changes.
+- **The new module's name: `Spot/OneStageZkStatement.lean`** (`Spot.OneStageZkStatement`): what checks one statement, as against the run over them. Say if you want another.
+- **Who must change:** `Spot.lean` gains one import line. The eleven files that import `Spot.OneStageZk` change nothing [read: `git grep` at the carried head], STREAMKEPT's among them by the same reason: `ProgramKept.next` and `programOf` are in the new module and reach it through the import it already has. (I find `membersFiles` and no `memberFiles` in the file; if STREAMKEPT reads another name, it should say.)
+- **One private name crosses the cut:** `NO_FILE`, read once below it by a `#guard`'s helper. `Spot/OneStageZk.lean` takes it by `import all` of the new module, or the helper spells the value; I would take the first.
+- **Bookkeeping that the move brings, each small:** the per-file counts of two allowlists (`tests/lint/allowlists/lean_bar.json`, whose `long-file` entry for this file goes; `repo_retired_terms.json`, whose 77 sites divide between the two files, which the ratchet gate may read as a new entry); and the lock's records, if a record names the file a definition is in (a move, `--update --moved`). I read the lean-proofs skill's rule on moves before I touch it.
+- **It is a move of declarations and nothing more**, by this reading. If the build shows otherwise (a private name I did not find, an `@[expose]` or `meta import` that the cut separates), I stop and say so.
+- The other cut, for comparison: at line 1190, before the files' pass. Then every one of the switch's middle declarations stays in `Spot/OneStageZk.lean` (about 1,555 lines) and the old statement goes out (about 1,080); three private names cross. I prefer 1604: it leaves the file that every later change touches the smaller one.
+
+### 3. State
+
+- The import's suites still run [run `r20261113-170545-ec7a`, since 17:09Z]; the twin's too [run `r20261113-174635-438e`]. The pull requests open as ordered when they end green.
+- Pushed: `cursor/proofs-members-popimport-34fd` at `fb3e260c42d1`; `cursor/proofs-members-membersof-34fd` at `d18fa66a95aa`; `cursor/proofs-members-parserow-34fd` at `b000aeebb94`. Nothing is unpushed.
+
+### Not established
+
+- That the row's timer compiles, and its figures.
+- The suites' verdict for any of the three branches.
+- That the cut builds: nothing of the split is compiled or written.
