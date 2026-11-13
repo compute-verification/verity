@@ -64,7 +64,6 @@ theorem checked_lines {ledger : Json} {key : ChallengerKey} {r : Array Win × Ar
     | (apply step_line <;> with_reducible assumption)
     | exact ⟨_, _, rfl, lines_arr ‹_›, ‹_›⟩
     | exact (rfl : ([] : List (Option LedgerEntry)) = [])
-    | fail "checked_lines: a goal mvcgen left is not closed"
 
 /-- The line at a place of a ledger whose lines are all entries is the entry at that place. -/
 theorem line_entry {lines : Array Json} {es : Array LedgerEntry}
@@ -84,7 +83,7 @@ theorem line_entry {lines : Array Json} {es : Array LedgerEntry}
 
 /-- Entry `i` of `pre` is numbered `i`. -/
 def SeqInv (pre : List LedgerEntry) : Prop :=
-  ∀ i e, pre[i]? = some e → e.seq = i
+  ∀ (i : Nat) (e : LedgerEntry), pre[i]? = some e → e.seq = i
 
 theorem seq_step {pre : List LedgerEntry} {e : LedgerEntry} (hI : SeqInv pre) (h : e.seq = pre.length) :
     SeqInv (pre ++ [e]) := by
@@ -126,9 +125,7 @@ theorem recordOfJson_seq {j : Json} {r : Core.Record} (h : Core.Record.ofJson j 
   refine of_triple (Q := fun r => ∃ n : JsonNumber, getD j "seq" = .num n ∧ r.seq = n.mantissa.toNat) ?_ h
   clear h
   mvcgen [Core.Record.ofJson, -Spec.throw_Except, throw_spec]
-  all_goals first
-    | exact ⟨_, by assumption, rfl⟩
-    | fail "recordOfJson_seq: a goal mvcgen left is not closed"
+  all_goals exact ⟨_, by assumption, rfl⟩
 
 -- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
