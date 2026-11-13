@@ -32,7 +32,7 @@ guards below hold it to that):
 Nothing here ties the link an answer names to a network certifier of the registered hardware, or the key its
 certificates verify under to that certifier's registered key (`NetworkCheck.Registered.registered` states both, and
 the period check does not call it): `Core.Account.rows` finds the link by its name among the site's boundary links, so
-a period under any key that names a host's bare uplink reads as that uplink's (the last guard).
+a period under any key that names a host's bare uplink reads as that uplink's (the guard on `up4`).
 -/
 
 @[expose] public section
@@ -67,35 +67,49 @@ namespace AccountExample
 open Core.Registration.Example (sheet locs auditor fig)
 open Core.Site (Loc Link Figure Sheet outside)
 
-/-- The registration's example site with links of its own: host `node0` behind network certifier `cert0`, a second
-host `node1` behind a second certifier `cert1`, and `node1`'s bare uplink, which no certifier splits. -/
-private def site : Core.Site :=
+/-- The links behind the two certifiers, `up0`'s capacity `β0`. -/
+private def behind (β0 : Nat) : List Link :=
+  [{ id := "up0", ends := ("node0", "cert0"), β := β0, latency := 1 },
+   { id := "up1", ends := ("cert0", outside), β := 1000000, latency := 1 },
+   { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 },
+   { id := "up2", ends := ("cert1", "node1"), β := 400000, latency := 1 },
+   { id := "up3", ends := ("cert1", outside), β := 400000, latency := 1 }]
+
+/-- `node1`'s bare uplink, which no certifier splits. -/
+private def uplink : Link := { id := "up4", ends := ("node1", outside), β := 10000, latency := 1 }
+
+/-- The registration's example site with links of its own: host `node0` behind network certifier `cert0` on a link of
+capacity `β0`, a second host `node1` behind a second certifier `cert1`, and, where `bare`, `node1`'s bare uplink. -/
+private def siteAt (β0 : Nat) (bare : Bool := true) : Core.Site :=
   ⟨[sheet],
    locs ++ [{ id := "node1", kind := .host, parent := some "site0" },
             { id := "cert1", kind := .certifier, parent := some "site0", owner := .auditor, key := "k2" }],
-   [{ id := "up0", ends := ("node0", "cert0"), β := 1000000, latency := 1 },
-    { id := "up1", ends := ("cert0", outside), β := 1000000, latency := 1 },
-    { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 },
-    { id := "up2", ends := ("cert1", "node1"), β := 400000, latency := 1 },
-    { id := "up3", ends := ("cert1", outside), β := 400000, latency := 1 },
-    { id := "up4", ends := ("node1", outside), β := 10000, latency := 1 }]⟩
+   if bare then behind β0 ++ [uplink] else behind β0⟩
+
+private def site : Core.Site := siteAt 1000000
 
 private def digest : Sheet → String := Core.Site.Registration.sha512.sheet
 
 /-- A tick of one second. -/
 private def tick : Figure := fig 1
 
-/-- A period's public output in the rows form: four link-windows, each scan sampled whole at δ = 1/100, its tied
+/-- A period's public output in the rows form: `n` link-windows, each scan sampled whole at δ = 1/100, its tied
 audit's free inputs 9,088 bits and the slot entries its incorrect proof blocks can set 896 bits. -/
-private def published : Public :=
+private def publishedAt (n : Nat) : Public :=
   rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
-    (Array.replicate 4 (({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 } : Facts), 9088, 8 * 112))
-    #[] 1 4
+    (Array.replicate n (({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 } : Facts), 9088, 8 * 112))
+    #[] 1 n
 
-/-- The period's accepted answer on `link`, its public output and profile as the check writes them. -/
-private def period (link : String) : Core.Answer :=
+/-- Four link-windows' public output. -/
+private def published : Public := publishedAt 4
+
+/-- An accepted answer on `link` whose public output is `pub`, written as the check writes it and its profile. -/
+private def periodOf (pub : Public) (link : String) : Core.Answer :=
   { protocol := protocolId, verdict := .accept, reason := none, digest := none,
-    published := some (publicJson published), profile := some (profileJson ⟨link, 4⟩) }
+    published := some (publicJson pub), profile := some (profileJson ⟨link, 4⟩) }
+
+/-- The period's accepted answer on `link`. -/
+private def period (link : String) : Core.Answer := periodOf published link
 
 private def today : Core.Answer := period "up0"
 
@@ -116,17 +130,32 @@ private def named (a : Core.Answer) (start span : Nat) (rests : List Core.Answer
 private def publishes (a : Core.Answer) (keys : List Core.Account.Key) : List Bool :=
   keys.map fun k => (k.read a).isSome
 
-/-- What the account's amount reads of answer `a`: the place, the amount, the error, the ticks covered and the steps
-named. -/
-private def reading (a : Core.Answer) : List (Option (Option String × Nat × String × Nat × Option (Nat × Nat))) :=
-  account.amounts.map fun m => (m.read tick a).map fun r => (r.place, r.amount, r.error.toString, r.ticks, r.steps)
+/-- What each amount of account `c` reads of answer `a`: the place, the amount, the error, the ticks covered and the
+steps named. -/
+private def readingOf (c : Core.Account) (a : Core.Answer) :
+    List (Option (Option String × Nat × String × Nat × Option (Nat × Nat))) :=
+  c.amounts.map fun m => (m.read tick a).map fun r => (r.place, r.amount, r.error.toString, r.ticks, r.steps)
 
-/-- The egress rows of the site registered at head `h`, over a period of 600 ticks, from `answers` read by `account`:
-each row's metric, place, standing, capacity, verified and free amounts, and error. -/
+private def reading (a : Core.Answer) : List (Option (Option String × Nat × String × Nat × Option (Nat × Nat))) :=
+  readingOf account a
+
+/-- The egress rows of site `S` registered at `head`, over a period of `ticks` ticks, from `answers` read by account
+`c`: each row's metric, place, standing, capacity, verified and free amounts, and error. -/
+private def egressOf (c : Core.Account) (S : Core.Site) (head : String) (ticks : Nat) (answers : List Core.Answer) :
+    List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+  ((Core.Account.rows S digest auditor head tick ticks [c] answers).filter fun r => r.part = .egress).map
+    fun r => (r.metric, r.place, r.status.name, r.capacity, r.verified, r.free, r.error.toString)
+
+/-- The egress rows of the site registered at head `h`, over a period of 600 ticks, from `answers` read by
+`account`. -/
 private def egress (answers : List Core.Answer) :
     List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
-  ((Core.Account.rows site digest auditor "h" tick 600 [account] answers).filter fun r => r.part = .egress).map
-    fun r => (r.metric, r.place, r.status.name, r.capacity, r.verified, r.free, r.error.toString)
+  egressOf account site "h" 600 answers
+
+/-- The terms the leak's rows name and do not price, from `answers` read by account `c`. -/
+private def unpricedOf (c : Core.Account) (answers : List Core.Answer) : List (List String) :=
+  ((Core.Account.rows site digest auditor "h" tick 600 [c] answers).filter fun r => r.metric = "leak").map
+    fun r => r.unpriced
 
 private def charged (place : String) (β : Nat) :
     String × String × String × Option Nat × Option Nat × Option Nat × String :=
@@ -148,6 +177,13 @@ private def charged (place : String) (β : Nat) :
 #guard reading (named today 120000 240000 [audit 0]) == [some (some "up0", 39936, "1/25", 240, some (120000, 360000))]
 #guard egress [named today 120000 240000 [audit 0], audit 0] ==
   [("leak", "up0", "certified", some 600000000, some 239960064, some 360039936, "1/25"), charged "up2, up4" 410000]
+-- the row names the terms its error does not price
+#guard unpricedOf account [named today 120000 240000 [audit 0], audit 0] ==
+  [["each audit's knowledge error", "each audit's collision errors"]]
+-- a link registered below `K` over the ticks the answer covers (100 a tick over 240 ticks, under `K`'s 39,936): the
+-- free amount is capped at the period's capacity, nothing is verified, and the row still reads certified
+#guard egressOf account (siteAt 100) "h" 600 [named today 120000 240000 [audit 0], audit 0] ==
+  [("leak", "up0", "certified", some 60000, some 0, some 60000, "1/25"), charged "up2, up4" 410000]
 -- it rests on the one-stage answers it names: without one of them, beside another, or with no list, it counts for
 -- nothing
 #guard egress [named today 120000 240000 [audit 0]] == egress []
