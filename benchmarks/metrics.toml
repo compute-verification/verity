@@ -191,4 +191,4 @@ unit = "the least slowdown of training run inside one inference block of the pol
 better = "higher"
 command = "research run --on auto --mem-gb 16 --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/inference_only/run.py --out \"$OUT\"'"
 every = "7d"
-goal = "accounting/inference-only-small-model"
+goal = "training/small-model-slowdown-1000"
