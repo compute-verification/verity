@@ -350,7 +350,7 @@ theorem applyOutputs_fst (c : Array String) (mine : Array Spot.Registered.Entry)
     s.1.isEmpty = false) _ (fun s o hs => ?_) _ _ hc
   obtain ⟨c, mine, held⟩ := s
   obtain ⟨v, d, p⟩ := o
-  unfold applyOutput
+  simp only [applyOutput]
   split
   · exact hs
   · split
@@ -366,7 +366,7 @@ theorem applyOutputs_values (c : Array String) (mine : Array Spot.Registered.Ent
     s.2.1.map (·.value) = mine.map (·.value)) _ (fun s o hs => ?_) _ _ rfl
   obtain ⟨c, mine', held⟩ := s
   obtain ⟨v, d, p⟩ := o
-  unfold applyOutput
+  simp only [applyOutput]
   split
   · exact hs
   · split
