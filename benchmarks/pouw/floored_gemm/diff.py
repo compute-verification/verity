@@ -14,15 +14,17 @@ and R is unchanged iff that is 0 in every row. Honest states are running sums of
 
 python3 diff.py [--trials N] [--seed S] [--json OUT]
 """
+from __future__ import annotations
 
 import argparse
 import itertools
 import json
 import sys
+from pathlib import Path
 
 import numpy as np
 
-from ref import BASE, CHAINED, emit_key, tb_key, tb_operand, u8bytes
+from ref import BASE, CHAINED, TB, TBC, emit_key, tb_key, tb_operand, tb_receipts, tbc_receipts, u8bytes
 
 VARIANTS = {"tb4": 5, "tb2": 6, "tb1": 7, "tb2w": 10, "tb1w": 11}
 CHAINS = {"tb4c": 8, "tb1c": 9, "tb2wc": 12, "tb1wc": 13}
@@ -30,7 +32,7 @@ BYTES = {5: (0, 1, 2, 3), 6: (0, 1), 7: (1,), 10: (0, 1), 11: (1,)}
 MI, NI = 2, 4   # the W tile config's warp tile (32 x 32): 8 positions, TB1 4 pairs
 
 
-def slot(kind, ni, r, c, j):
+def slot(kind: int, ni: int, r: int, c: int, j: int) -> tuple[int, int]:
     """(A row, k) of byte j of the word at row r, column c of tile ni (TB1: of pair ni // 2), as tb_operand lays it out."""
     if kind == 5:
         return (r % 8) + 8 * (c % 2), 16 * (r // 8) + 4 * (c // 2) + j
@@ -43,21 +45,22 @@ def slot(kind, ni, r, c, j):
     return r, 4 * (c // 2) + 2 * (ni % 2) + (c % 2)
 
 
-def word_key(base, mi, ni):
+def word_key(base: int, mi: int, ni: int) -> int:
     """The key position whose receipt IMMA reads tile (mi, ni)'s words."""
     return mi if base == 11 else (mi * NI + ni) // 2 if base in (7, 10) else mi * NI + ni
 
 
-def keyrow(kind, keys, mi, ni, r, c, j):
+def keyrow(kind: int, keys: dict[int, np.ndarray], mi: int, ni: int, r: int, c: int, j: int) -> np.ndarray:
+    """The row of K_t that byte j of the word at (r, c) of tile (mi, ni) is multiplied by."""
     return keys[word_key(kind, mi, ni)][slot(kind, ni, r, c, j)[1]]
 
 
-def same_row_partner(kind, r, c):
+def same_row_partner(kind: int, r: int, c: int) -> tuple[int, int]:
     """Another word of the same tile whose bytes reach the same row of R."""
     return (r + 8) % 16 if kind == 5 else r, c if kind == 5 else (c + 3) % 8
 
 
-def honest(rng, n, s):
+def honest(rng: np.random.Generator, n: int, s: int) -> np.ndarray:
     """n running sums at checkpoint s (32 s products of uniform codes on [−127, 127]), as int64."""
     tot = np.zeros(n, dtype=np.int64)
     for _ in range(s):
@@ -67,20 +70,21 @@ def honest(rng, n, s):
     return tot
 
 
-def trajectory(rng, n, S):
+def trajectory(rng: np.random.Generator, n: int, S: int) -> np.ndarray:
     """n honest trajectories T_1..T_S, [n, S]."""
     a = rng.integers(-127, 128, size=(n, S, 32), dtype=np.int64)
     b = rng.integers(-127, 128, size=(n, S, 32), dtype=np.int64)
     return np.cumsum((a * b).sum(axis=2), axis=1)
 
 
-def dbytes(T, d, js):
+def dbytes(T: np.ndarray, d: int | np.ndarray, js: tuple[int, ...]) -> np.ndarray:
     """Δb_j = b_j(T + δ) − b_j(T) for the bytes js, [..., len(js)], as u8 bytes of the s32 words."""
     u, v = T & 0xFFFFFFFF, (T + d) & 0xFFFFFFFF
     return np.stack([((v >> (8 * j)) & 0xFF) - ((u >> (8 * j)) & 0xFF) for j in js], axis=-1)
 
 
-def unchanged(kind, keys, words, T, deltas, given="some"):
+def unchanged(kind: int, keys: dict[int, np.ndarray], words: list[tuple[int, int, int, int]], T: np.ndarray, deltas: list[int],
+              given: str = "some") -> tuple[float, float, float]:
     """P[ΔR = 0] and P[ΔR = 0 | a read byte changed], over the states T [N, len(words)] (or [N, len(words), S] summed
     over S), for the words (mi, ni, r, c) and fixed differences deltas; given="every": a read byte of every word changed."""
     js = BYTES[kind]
@@ -106,12 +110,14 @@ def unchanged(kind, keys, words, T, deltas, given="some"):
     return p, cancel, float(cond.mean())
 
 
-def product_deltas():
+def product_deltas() -> dict[str, int]:
+    """The differences one skipped product a b leaves, by name."""
     return {"-1*1": -1, "-3*5": -15, "-11*13": -143, "-60*70": -4200, "-97*113": -10961, "-121*121": -14641,
             "+121*127": 15367}
 
 
-def fixed_deltas():
+def fixed_deltas() -> dict[str, int]:
+    """The fixed differences tried, by name: ±1, ±2, ± powers of two, and `product_deltas`."""
     d = {"+1": 1, "-1": -1, "+2": 2, "-2": -2}
     for k in (4, 7, 8, 12, 15, 16, 20, 23, 24, 28, 30, 31):
         d[f"+2^{k}"] = 1 << k
@@ -119,7 +125,7 @@ def fixed_deltas():
     return d | product_deltas()
 
 
-def op_maps(base):
+def op_maps(base: int) -> dict[int, np.ndarray]:
     """For each key position t, the warp-tile source (row, column, byte) of every A slot [16, k] of its receipt IMMA."""
     kdim = 32 if base in (5, 10, 11) else 16
     maps = {}
@@ -139,7 +145,7 @@ def op_maps(base):
 R_MAP = op_maps(5)[0] % np.array([16, 8, 4])[:, None, None]   # TB4's layout on one 16 x 8 tile: R's own bytes
 
 
-def sim(kind, T):
+def sim(kind: int, T: np.ndarray) -> np.ndarray:
     """Every trial's R [N, 16, 8] over a warp tile's trajectory T [N, S, 32, 32], as fgemm.cu folds it (chained or not)."""
     base, chained = BASE[kind], kind in CHAINED
     maps = op_maps(base)
@@ -157,14 +163,14 @@ def sim(kind, T):
     return R
 
 
-def tile_trajectory(rng, n, S):
+def tile_trajectory(rng: np.random.Generator, n: int, S: int) -> np.ndarray:
     """n warp-tile trajectories [n, S, 32, 32]: each checkpoint adds 32 products of uniform codes on [−127, 127], sampled as
     the rounded normal of the same variance."""
     sd = (127 * 128 / 3) * np.sqrt(32)
     return np.cumsum(np.rint(rng.normal(0, sd, size=(n, S, 32, 32))).astype(np.int64), axis=1)
 
 
-def check_slots():
+def check_slots() -> None:
     """slot() against ref.py's tb_operand, the layout the gate checks on the device: every read byte where slot() puts it."""
     rng = np.random.default_rng(0)
     blk = rng.integers(0, 256, size=(32, 32, 4))
@@ -182,10 +188,8 @@ def check_slots():
                                 assert A[ar, k] == blk[16 * mi + r, 8 * nj + c, j], (kind, mi, nj, r, c, j)
 
 
-def check_sim():
+def check_sim() -> None:
     """sim() against ref.py's tb_receipts and tbc_receipts (what the gate checks the device against) on one warp tile."""
-    from ref import TB, TBC, tb_receipts, tbc_receipts
-
     rng = np.random.default_rng(1)
     T = tile_trajectory(rng, 1, 6)
     Ts = [(T[0, s] & 0xFFFFFFFF).astype(np.uint32) for s in range(6)]
@@ -199,7 +203,7 @@ def check_sim():
         assert (got == want[:, :4]).all(), kind
 
 
-def persistent_pair_search(rng, NP=2000, top=3, NC=1000):
+def persistent_pair_search(rng: np.random.Generator, NP: int = 2000, top: int = 3, NC: int = 1000) -> dict[str, dict]:
     """Two words reaching one R row, each off by its own δ over the last Sw checkpoints of k = 4,096 (S = 128): the best
     P[R unchanged | a read byte of both words changed] (over pairs where both change in at least a quarter of the states)
     over δ pairs from ±2^k, ±(2^k + 1) and ±a b, for each unchained kind (the per-row linear model), with each word's
@@ -262,7 +266,7 @@ def main() -> int:
     if args.only == "pair-search":
         txt = json.dumps({"seed": args.seed, "persistent_pair_search": persistent_pair_search(rng)}, indent=1)
         if args.json:
-            open(args.json, "w").write(txt)
+            Path(args.json).write_text(txt)
         print(txt)
         return 0
     N = args.trials
@@ -311,7 +315,7 @@ def main() -> int:
             out["persistent"][vname][f"s0={s0}"] = row
 
     # two words, one checkpoint, in the three geometries that can share R's row
-    def geoms(kind):
+    def geoms(kind: int) -> dict[str, list[tuple[int, int, int, int]]]:
         r2, c2 = same_row_partner(kind, 5, 3)
         return {"same tile, same R row": [(0, 1, 5, 3), (0, 1, r2, c2)],
                 "same R row, other position": [(0, 1, 5, 3), (1, 2, 5, 3)],
@@ -405,7 +409,7 @@ def main() -> int:
         out["tile_sim"][vname] = res
     txt = json.dumps(out, indent=1)
     if args.json:
-        open(args.json, "w").write(txt)
+        Path(args.json).write_text(txt)
     print(txt)
     return 0
 

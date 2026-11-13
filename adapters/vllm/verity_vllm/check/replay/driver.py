@@ -81,7 +81,7 @@ from verity_vllm.check.replay.coverage import (
 )
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.fork import WorkerDied
-from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, file_args, node_runs
 from verity_vllm.check.replay.linkage import (
     arrivals_of_record,
     boundary_linkage,
@@ -157,7 +157,7 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
         wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
-        for group in r.get("args") or []:
+        for group in file_args(r):
             if wp is not None:
                 for it in group:
                     span = p_item_weight_span(it, wp)                              # a "P" progression's span, never its runs
@@ -232,10 +232,15 @@ class PoolDoesNotFit(RuntimeError):
 
 def _cgroup_memory() -> tuple[int, int] | None:
     """The cgroup's (memory.max, memory.current) in bytes; None where it states no limit: a file of `CGROUP_MEMORY` is absent (no
-    cgroup v2 memory controller) or memory.max is `max`.  A file that is there and cannot be read raises."""
-    if not all(os.path.exists(p) for p in CGROUP_MEMORY):
+    cgroup v2 memory controller) or cannot be opened, or memory.max is `max`."""
+    read = []
+    try:
+        for p in CGROUP_MEMORY:
+            with open(p) as f:
+                read.append(f.read().strip())
+    except OSError:
         return None
-    lim, cur = (Path(p).read_text().strip() for p in CGROUP_MEMORY)
+    lim, cur = read
     return (int(lim), int(cur)) if lim.isdigit() and cur.isdigit() else None
 
 
@@ -495,7 +500,8 @@ def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dic
 
 def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     """The query the manifest was built under, when it is one the population knows (`required.QUERIES`); else None (the query of record)."""
-    q = ((manifest or {}).get("query") or {}).get("query_id")
+    query = (manifest or {}).get("query")                                       # a manifest that names none was built under the query of record
+    q = query.get("query_id") if query else None
     return q if q in QUERIES else None
 
 

@@ -266,12 +266,15 @@ class TileAnchors:
         of a transposed operand) or two instances swapped is refused, at the first word that differs."""
         own_head, own_body = self.public_inputs(role, indexes, segment).split(b"\n", 1)
         head, sep, body = data.partition(b"\n")
+        refused = "--public-inputs: its header (format, instances, ports) is not the verifier's"
+        if sep != b"\n":
+            raise DomainError(refused)
         try:
-            same = sep == b"\n" and json.loads(head) == json.loads(own_head)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            same = False
-        if not same:
-            raise DomainError("--public-inputs: its header (format, instances, ports) is not the verifier's")
+            theirs = json.loads(head)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise DomainError(refused) from e
+        if theirs != json.loads(own_head):
+            raise DomainError(refused)
         if len(body) != len(own_body):
             raise DomainError("--public-inputs: length")
         if body == own_body:
@@ -363,7 +366,7 @@ class Receipt:
 def _fresh_source() -> bytes:
     """An execution phase's source: 32 fresh bytes from the operating system's CSPRNG (`secrets`), sampled once the receipt is
     complete and used for this execution phase alone (A4's model: one fresh uniform source per derivation). A test seam only:
-    production code never replaces it."""
+    no code outside the tests replaces it."""
     return secrets.token_bytes(SOURCE_BYTES)
 
 
@@ -421,9 +424,9 @@ class Ledger:
     def check_draw(self) -> None:
         """Refuse a sample from a ledger not opened from a receipt, or once the execution phase's sample has been sent."""
         if self._receipt is None or self._key is None:
-            raise DomainError("a window draws only from a ledger opened from its complete receipt (Ledger.open)")
+            raise DomainError("a window samples only from a ledger opened from its complete receipt (Ledger.open)")
         if self._sent:
-            raise DomainError("the window's draw has been sent: it draws nothing more")
+            raise DomainError("the window's sample has been sent: it samples nothing more")
 
     def commitment(self, anchors) -> bytes:
         """The call's commitment as the execution phase's receipt lists it, by call index: the only commitment its openings are
@@ -493,7 +496,7 @@ def replay_key(record: dict[str, str]):
     from .plan import DRAW_DOMAIN
 
     if record.get("domain") != DRAW_DOMAIN:
-        raise DomainError(f"the record's draw domain is not {DRAW_DOMAIN!r}")
+        raise DomainError(f"the record's domain is not {DRAW_DOMAIN!r}")
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 

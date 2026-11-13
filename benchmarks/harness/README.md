@@ -31,11 +31,13 @@ verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on
 
 ## Specs
 
-A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`; a steady-state spec is the other schema, in
+A spec is `benchmarks/harness/specs/<name>.toml` (`verity-bench/vllm-spec/v0`; a steady-state spec is the other schema, in
 its own section below): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
-`benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
-which never enter identity). Loading is strict: an unknown key (an engine setting outside `presets.ENGINE_SETTINGS`
+`benchmarks/harness/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
+which never enter identity). A command names a spec by its name or its file; a file under the directory the specs
+had of their own (`presets.FORMER_SPECS`) is the spec of that name here. Loading is strict: an unknown key (an
+engine setting outside `presets.ENGINE_SETTINGS`
 included), a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
@@ -329,7 +331,8 @@ and a target's latest label names its record. The command first pulls the remote
   (`Protocol.record`) or, without one, from the newest passing run. A run of record is read by id, from the remote where
   this machine lacks it, and every point of each run is a row. Without a record, each point of each spec takes the newest passing
   `vllm_bench_point` attempt whose `spec` and `point` params name it (the resume lookup's rule, without its one-commit
-  identity), so a newer passing run supersedes an older one; the command first pulls the remote's attempts started
+  identity; the spec by either path a run may have recorded, `served_table.spec_paths`), so a newer passing run
+  supersedes an older one; the command first pulls the remote's attempts started
   since the oldest such spec was added, the same pull as `check`'s. A result labelled `superseded_by`, an invalid
   result, a result without the row's arms, or a record run that isn't a passing point run is passed over and listed.
   Ratios are paired by rep from the result's own reps, each metric over `stock-fp8@compiled` and, where the run times

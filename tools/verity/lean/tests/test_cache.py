@@ -17,6 +17,7 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from xml.sax.saxutils import escape
 
 import pytest
@@ -1097,18 +1098,10 @@ def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the
     assert put("as-said", compiled=LCH.compiled(out)) == []
 
 
-@pytest.mark.skipif(LAKE is None, reason="no lake")
-def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
-    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
-    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
-    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
-    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
-    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
-    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
-    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
-
-    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart."""
-    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+def unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH) -> SimpleNamespace:
+    """The toy in a slot tree through the builds and repairs of
+    `test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built`, each step asserted, and the tree's
+    steps for a test that goes on from the tree they leave."""
     MK = LA.MK
     store, own = tmp_path / "artifacts", tmp_path / "lakes-own-cache"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
@@ -1177,6 +1170,63 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     rc, out = records()
     assert rc == 0, out
     assert says() == "version B 83" and held(tree) == apart("apart-b", EXTRA, CALLS_EXTRA)
+    return SimpleNamespace(tree=tree, ir=ir, z=z, a=a, edit=edit, from_own_cache=from_own_cache, repair=repair,
+                           records=records, says=says, apart=apart)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
+    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
+    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
+    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
+    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
+    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
+    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
+    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
+
+    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart."""
+    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_an_object_an_earlier_repair_kept_goes_for_being_older_than_the_c_restored_beside_it(tmp_path, monkeypatch):
+    """A repair that dropped a module's trace and `.hash` files and kept its objects left a tree where a records run
+    restores the module and takes the object, compiled from an earlier C, as built. The repair drops such an object for
+    being older than the C beside it, so the records run after it ends with every file of a tree built apart.
+
+    The rule goes by the files' times, so it holds where a restored file is a copy, with the time of its restore: in the
+    build sandbox, where a hard link from a cache into the package's `.lake` fails and Lake copies instead."""
+    LC, LA, LCH = (_load(f"kept_object_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    if not LC.sandboxed():
+        pytest.skip("no sandbox here, so Lake restores by a hard link and a restored file keeps the cache's time, which "
+                    "the repair's rule by time does not expect")
+    t = unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
+    tree, ir, z, a = t.tree, t.ir, t.z, t.a
+    edit, from_own_cache, repair, records, says, apart = t.edit, t.from_own_cache, t.repair, t.records, t.says, t.apart
+
+    edit(tree, z)
+    assert repair() == [] and "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main")
+    edit(tree, a)
+    assert "Unpacked Toy.Word" in from_own_cache() and says() == "version A 1"
+    edit(tree, z)
+    lib = tree / ".lake" / "build" / "lib" / "lean" / "Toy"
+    for f in (lib / "Word.trace", *lib.glob("Word.*.hash"), *ir.glob("Word.*.hash")):
+        f.unlink()                                                      # what the repair dropped before it dropped objects
+    rc, out = records()
+    assert rc == 0 and "Toy.Word:c.o" not in out and says() == "version A 1", \
+        "the module is restored, its object is taken as built, and the executable runs the earlier source"
+    assert repair() == ["lean-records: toy: 2 object(s) older than the C Lake compiles them from, dropped: "
+                        "Toy/Word.c.o.export, Toy.c.o.export"], \
+        "`Toy`'s too, compiled from the same C as the one restored after it: Lake compiles it once more"
+    rc, out = records()
+    assert rc == 0, out
+    # `Main`'s object is the published build's, restored from Lake's own cache: the same C, compiled under another name
+    mine, theirs = ({f: d for f, d in h.items() if not f.startswith(("ir/Main.c.o.", "bin/"))}
+                    for h in (held(tree), apart("apart-z", z)))
+    assert says() == "version Z 1" and mine == theirs
 
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")

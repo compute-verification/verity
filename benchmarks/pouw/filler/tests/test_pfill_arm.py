@@ -13,9 +13,10 @@ from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "harness"))
+import ledger
+
 FILLER = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(FILLER.parent / "harness"))
-import ledger  # noqa: E402
 
 
 def _module(name):

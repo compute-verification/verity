@@ -18,8 +18,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "reason-prefix", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "'...' in str(note.get('shard') or '')"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_export", "detail": "'...' in msg", "count": 2},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_no_rule", "detail": "msg.startswith"},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

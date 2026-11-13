@@ -1,7 +1,7 @@
 """summarize.py OUT: each config's numbers (OUT/<role>-k<K>/summary.json) and all of them (OUT/summary.json), from what job.sh
 leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean verifier's
 VERDICT lines, each Lean check held to the verdict it must give (`as_expected`), and the HZ_LEAN globs that picked the checks
-run. A row unit's checks pass `--public-inputs`, a form flock-verify refuses until its soundness proof covers it (T4): each
+run. A row unit's checks pass `--public-inputs`, a form the Lean verifier refuses until its soundness proof covers it (T4): each
 is REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and is as
 expected when not accepted, an honest check only with the refusal as its reason. A plain tile is refused once every check
 has passed, its output row holding two output ports, a form the proof does not cover: its honest checks are as expected
@@ -23,14 +23,18 @@ OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
 REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 REFUSED = "refused: "
-#: flock-verify's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
+#: the Lean verifier's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
 def load(p: Path):
+    """``p``'s JSON, or None where the job left no such file; a file that doesn't parse reads as absent and is named on stderr."""
+    if not p.is_file():
+        return None
     try:
         return json.loads(p.read_text())
-    except (OSError, ValueError):
+    except ValueError as e:
+        print(f"summarize: {p} is not JSON ({e}): read as absent", file=sys.stderr)
         return None
 
 
@@ -50,10 +54,9 @@ def med(xs):
 
 
 def session(d: Path) -> dict | None:
-    try:
-        runs = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE\t")]
-    except OSError:
+    if not (d / "prove.out").is_file():
         return None
+    runs = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE\t")]
     if not runs:
         return {"error": tail(d / "prove.err", 3) or "no LIVE line"}
     timed = [r for r in runs if not r["warm"]] or runs

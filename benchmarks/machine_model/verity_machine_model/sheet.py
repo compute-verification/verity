@@ -25,6 +25,9 @@ from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
 
+__all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "differences", "figures",
+           "lean", "lines", "literal", "moves", "omega", "reading", "relative_path", "row", "sheet", "uni"]
+
 ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
 ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
@@ -262,7 +265,10 @@ def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | No
     moves, to 1/2^steps of `top`; None if it doesn't move by `top`."""
     _, d, pi, q = _setting(s, data)
     base = _core(d, pi, q, data)
-    at = lambda x: _core(d, _own(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+
+    def at(x: float) -> float:
+        return _core(d, _own(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+
     if abs(at(top) - base) <= 1e-12:
         return None
     lo, hi = 1.0, top
@@ -294,7 +300,7 @@ def _stated(c: Const) -> bool:
     return not c.grade.startswith(("none", "measured only"))
 
 
-def _num(x: Fraction) -> str:
+def literal(x: Fraction) -> str:
     """A Lean literal."""
     return str(x.numerator) if x.denominator == 1 else f"{x.numerator} / {x.denominator}"
 
@@ -319,7 +325,8 @@ def _doc(text: str) -> list[str]:
     return _wrap(text + " -/", "/-- ")
 
 
-def _rel(s: Sheet) -> str:
+def relative_path(s: Sheet) -> str:
+    """The sheet's file, from the repository's root."""
     return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
 
 
@@ -389,7 +396,7 @@ def lean(s: Sheet, data: Path) -> str:
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
                         "channels don't list NVLink peer offload.", "")
-    out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
+    out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{relative_path(s)}`, and "
                         "the machine model's tests hold it to that output.", "")
     out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
             "noncomputable section", ""]
@@ -405,27 +412,27 @@ def lean(s: Sheet, data: Path) -> str:
     out += [*_doc("The tensor operand types with a dense peak."), "inductive Ty", *(f"  | {ty}" for ty in types),
             "  deriving DecidableEq", ""]
     out += [*_doc(f"A1, f_max: {_dec(s.fmax.value)} MHz. Grade: {s.fmax.grade}. Source: {s.fmax.source}."),
-            f"def fmaxMHz : ℝ := {_num(s.fmax.value)}", ""]
+            f"def fmaxMHz : ℝ := {literal(s.fmax.value)}", ""]
     out += [*_doc(f"The SMs A3's per-SM peaks multiply: {_dec(s.sms.value)}. Grade: {s.sms.grade}. Source: "
-                  f"{s.sms.source}."), f"def smCount : ℝ := {_num(s.sms.value)}", ""]
+                  f"{s.sms.source}."), f"def smCount : ℝ := {literal(s.sms.value)}", ""]
     for c, v in s.clocks.items():
         at = [ty for ty, p in s.peaks.items() if p.clock == c]
         out += [*_doc(f"The {s.labels[c]}, at which the {', '.join(at)} figure{'s are' if len(at) > 1 else ' is'} "
                       f"quoted: {_dec(v.value)} MHz. Grade: {v.grade}. Source: {v.source}."),
-                f"def {clock[c]} : ℝ := {_num(v.value)}", ""]
+                f"def {clock[c]} : ℝ := {literal(v.value)}", ""]
     for ty, p in s.peaks.items():
         c = s.clocks[p.clock]
         out += [*_doc(f"A3, {ty}: {_dec(p.macs)} dense MACs an SM clock, the document's dense figure, "
                       f"{_dec(p.dense[0])} × 10¹² a second, over 2 · {_dec(s.sms.value)} SMs at the "
                       f"{s.labels[p.clock]}, {_dec(c.value)} MHz (A1's f_max is "
                       f"{_dec(s.fmax.value)} MHz). Grade: {p.grade}. Source: {p.source}."),
-                f"def {peak[ty]} : ℝ := {_num(p.macs)}", ""]
+                f"def {peak[ty]} : ℝ := {literal(p.macs)}", ""]
     out += [*_doc("A3: each type's dense MACs an SM clock."), "def Ty.peak : Ty → ℝ",
             *(f"  | .{ty} => {peak[ty]}" for ty in types), ""]
     for q, w in s.pipes.items():
         out += [*_doc(f"A4, the {q} pipe: {_dec(w.value)} results an SM clock, {_dec(128 / w.value)} SMSP-cycles a "
                       f"warp instruction. Grade: {w.grade}. Source: {w.source}."),
-                f"def {width[q]} : ℝ := {_num(w.value)}", ""]
+                f"def {width[q]} : ℝ := {literal(w.value)}", ""]
     out += [*_doc("A4: each pipe's results an SM clock."), "def Pipe.width : Pipe → ℝ",
             *(f"  | .{q} => {width[q]}" for q in pipes), ""]
     out += [*_doc("Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the "
@@ -469,8 +476,11 @@ def lean(s: Sheet, data: Path) -> str:
             "  width := Pipe.width",
             "  smem _ := 0",
             ""]
+
+    def line(r: str, k: str) -> str:
+        return literal(census.get(k, {}).get(row(r), Fraction(0)))
+
     # Every class has an arm and none is a wildcard, whose equation lemmas carry side conditions `simp` must discharge.
-    line = lambda r, k: _num(census.get(k, {}).get(row(r), Fraction(0)))
     out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
                   "none."), "def tensorLine : Kind → ℝ", *(f"  | .{k} => {line('tensor', k)}" for k in kinds), ""]
     for q in pipes:
@@ -496,8 +506,8 @@ def lean(s: Sheet, data: Path) -> str:
             "  simp [Sheet.machine, census]", ""]
     # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
     # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100.
-    out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
-            "count",
+    out += [("-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
+             "count"),
             "set_option maxHeartbeats 1000000 in",
             *_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
             "theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by",
@@ -522,8 +532,8 @@ def lean(s: Sheet, data: Path) -> str:
     for c, v in s.clocks.items():
         under = v.value < s.fmax.value
         out += [*_doc(f"The {s.labels[c]} is {'under' if under else 'at most'} f_max."),
-                f"theorem {clock[c]}_{'lt' if under else 'le'}_fmaxMHz : {clock[c]} {'<' if under else '≤'} fmaxMHz "
-                ":= by", f"  norm_num [{clock[c]}, fmaxMHz]", ""]
+                (f"theorem {clock[c]}_{'lt' if under else 'le'}_fmaxMHz : {clock[c]} {'<' if under else '≤'} fmaxMHz "
+                 ":= by"), f"  norm_num [{clock[c]}, fmaxMHz]", ""]
     for ty, p in s.peaks.items():
         dense, tol = p.dense
         figure = (f"{_dec(p.sheet)} with sparsity, dense {_dec(dense)} ± {_dec(tol)}" if p.sparse
@@ -539,8 +549,8 @@ def lean(s: Sheet, data: Path) -> str:
         out += [*_doc(f"{head}: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at the {s.labels[p.clock]}, "
                       f"{_dec(c.value)} MHz, is its figure, {figure}, in 10¹² a second.{tail}"),
                 f"theorem {peak[ty]}_figure :",
-                f"    ({_num(dense)} - {_num(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
-                f"      {lhs} ≤ ({_num(dense)} + {_num(tol)} : ℝ) * 10 ^ 12 := by",
+                f"    ({literal(dense)} - {literal(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
+                f"      {lhs} ≤ ({literal(dense)} + {literal(tol)} : ℝ) * 10 ^ 12 := by",
                 f"  norm_num [{peak[ty]}, smCount, {clock[p.clock]}]", ""]
     out += ["end", "", f"end Accounting.TS.Sheets.{s.name}", ""]
     return "\n".join(out)
