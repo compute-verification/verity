@@ -4848,6 +4848,10 @@
   "Accounting.SecurityProofs.Remote.AuditRO": {
    "honest": ["Accounting.SecurityProofs.Remote.AuditRO_honest"],
    "nontrivial": "Accounting.SecurityProofs.Remote.AuditRO_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketch": {
+   "honest": ["Accounting.SecurityProofs.RateAuditTensorSketch_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5046,10 +5050,6 @@
   "Accounting.SecurityProofs.PouwLocalOff": {
    "type_hash": "14fc8839652c00b0a01f3ef7ca1a00dc6d81947286cfbe1f4de32537cd8abd99",
    "unfolded_hash": "4767dd3593e9b20f25921862923a269db3c43ec8494a3991a891b13e1cd433e6"
-  },
-  "Accounting.SecurityProofs.RateAuditTensorSketch": {
-   "type_hash": "815d06f69502065e94d00c5777538da1002429c92e4f4a936dc35cf46755df66",
-   "unfolded_hash": "501ebe7fce93dc17bb29d8cbd303f5107c2ce5cc25adaf7dcee45260f4c6206a"
   },
   "Accounting.SecurityProofs.RateChain": {
    "type_hash": "f55c90ec8a0a5d173334fd7798d680ae7b64fb946e3a516f2206592ed4b73802",
@@ -8704,6 +8704,12 @@
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketch_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial": {
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RateAuditWindows": {
