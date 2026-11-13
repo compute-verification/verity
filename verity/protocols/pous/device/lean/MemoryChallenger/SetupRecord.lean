@@ -6,15 +6,15 @@ public import MemoryChallenger.StreamedWipe
 /-!
 # The memory challenger's setup record
 
-What the memory challenger signs over a PoUS store at setup, with the key and under the session id it signs that
-session's record with (`memoryChallengerMessage`): whether setup's check passed, and the setup's published outputs, the
-number of blocks, the commitment to `W`, the salt and the root of the store's rows. `memory_challenger.SetupRecord` and
-its functions mirror this file byte for byte.
+What the memory challenger's device signs at setup, with the key and under the session id it signs that session's
+record with (`memoryChallengerMessage`): the setup's published outputs it was given, the number of blocks, the
+commitment to `W`, the salt and the root of the store's rows, against which the session's answers are checked. It says
+the device was given these, never that setup's check passed: the device sees no store and runs no check at setup.
+`memory_challenger.SetupRecord` and its functions mirror this file byte for byte.
 
-The record (`SetupRecord.value`) is raw bytes, never a digest: `SETUP_RECORD_TAG` (NUL-ended), one byte (`outcomeByte`:
-`1` when setup's check passed, `0` when it did not), the blocks as a u64 big-endian, then the commitment, the salt and
-the root, each a u64 big-endian length then the bytes (`field`). It is at least `SETUP_RECORD_TAG.size + 33 = 79` bytes
-long, so never 64 bytes, and PoUS's session record (`message`) and the wipe's (`StreamedWipe.message`) are SHA-512
+The record (`SetupRecord.value`) is raw bytes, never a digest: `SETUP_RECORD_TAG` (NUL-ended), the blocks as a u64
+big-endian, then the commitment, the salt and the root, each a u64 big-endian length then the bytes (`field`). It is at
+least `SETUP_RECORD_TAG.size + 32 = 78` bytes long, so never 64 bytes, and PoUS's session record (`message`) and the wipe's (`StreamedWipe.message`) are SHA-512
 digests, 64 bytes long: no setup record is either (`SetupRecord.value_ne_pous`, `SetupRecord.value_ne_wipe`). The role's
 pre-image (`rolePreimage`) determines its key identifier, session and record (`rolePreimage_inj`), so a setup record's
 pre-image is never a session's or a wipe's (`setupPreimage_ne_pous`, `setupPreimage_ne_wipe`), on the bytes hashed and
@@ -23,8 +23,7 @@ with no assumption on the hash, and a setup record's message equal to one of the
 
 `setupRecordOk` checks a signed setup record against a session's scheme, public key and id: the record is under the
 session's scheme, which `schemes` accepts, and the session's key, and its signature verifies on its bytes under the
-session's id. It does not read the outcome byte: a record of a failed setup is signed like any other, and the component
-that reads it refuses it.
+session's id.
 -/
 
 @[expose] public section
@@ -39,24 +38,19 @@ open Flock
 /-- The setup record's tag, NUL-ended. -/
 def SETUP_RECORD_TAG : ByteArray := "verity-pous/memory-challenger/setup-record/v1".toUTF8.push 0
 
-/-- Whether setup's check passed, and the setup's published outputs: its number of blocks, its commitment to `W`, its
-salt and its rows' root. -/
+/-- The setup's published outputs the device was given: its number of blocks, its commitment to `W`, its salt and its
+rows' root. -/
 structure SetupRecord where
-  passed : Bool
   blocks : Nat
   commitment : ByteArray
   salt : ByteArray
   root : ByteArray
   deriving BEq, Inhabited
 
-/-- The outcome byte: `1` when setup's check passed, `0` when it did not. -/
-def outcomeByte (passed : Bool) : UInt8 := if passed then 1 else 0
-
-/-- `SetupRecord.value()`: `SETUP_RECORD_TAG ‖ outcomeByte passed ‖ u64be(blocks) ‖ [commitment] ‖ [salt] ‖
-[root]`; blocks of `2^64` or more are refused. -/
+/-- `SetupRecord.value()`: `SETUP_RECORD_TAG ‖ u64be(blocks) ‖ [commitment] ‖ [salt] ‖ [root]`; blocks of `2^64` or
+more are refused. -/
 def SetupRecord.value (r : SetupRecord) : E ByteArray := do
-  pure (SETUP_RECORD_TAG.push (outcomeByte r.passed) ++ (← beN 8 r.blocks "blocks") ++ field r.commitment ++
-    field r.salt ++ field r.root)
+  pure (SETUP_RECORD_TAG ++ (← beN 8 r.blocks "blocks") ++ field r.commitment ++ field r.salt ++ field r.root)
 
 /-- `setup_record_message(I, session, record)`: the role's message of the session and the record's bytes. -/
 def SetupRecord.message (I session : ByteArray) (r : SetupRecord) : E ByteArray := do
@@ -75,20 +69,12 @@ private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 /-- `SignedSetupRecord.to_json()`: the record's fields beside the scheme, public key and signature, in one object. -/
 def SignedSetupRecord.toJson (s : SignedSetupRecord) : Json :=
   Json.mkObj [("blocks", Lean.toJson s.record.blocks), ("commitment", hexJ s.record.commitment),
-    ("passed", Lean.toJson (outcomeByte s.record.passed).toNat), ("public_key", hexJ s.publicKey),
-    ("root", hexJ s.record.root), ("salt", hexJ s.record.salt), ("scheme", .str s.scheme),
+    ("public_key", hexJ s.publicKey), ("root", hexJ s.record.root), ("salt", hexJ s.record.salt), ("scheme", .str s.scheme),
     ("signature", hexJ s.signature)]
-
-/-- The outcome byte from JSON: `1` or `0`; any other value is not a record. -/
-def passedOfJson (j : Json) (ctx : String) : V Bool := do
-  match ← J.nat j "passed" ctx with
-  | 1 => pure true
-  | 0 => pure false
-  | n => throw s!"{ctx}.passed: {n} is neither 1 (setup's check passed) nor 0 (it did not)"
 
 def SignedSetupRecord.ofJson (j : Json) : V SignedSetupRecord := do
   let ctx := "setup"
-  pure { record := { passed := ← passedOfJson j ctx, blocks := ← J.nat j "blocks" ctx,
+  pure { record := { blocks := ← J.nat j "blocks" ctx,
                      commitment := ← hexField j "commitment" ctx,
                      salt := ← hexField j "salt" ctx, root := ← hexField j "root" ctx },
          scheme := ← J.str j "scheme" ctx, publicKey := ← hexField j "public_key" ctx,
@@ -194,14 +180,14 @@ theorem SETUP_RECORD_TAG_size : SETUP_RECORD_TAG.size = 46 := by
   decide
 
 theorem SetupRecord.value_size {r : SetupRecord} {b : ByteArray} (h : r.value = .ok b) :
-    b.size = SETUP_RECORD_TAG.size + 33 + r.commitment.size + r.salt.size + r.root.size := by
+    b.size = SETUP_RECORD_TAG.size + 32 + r.commitment.size + r.salt.size + r.root.size := by
   unfold SetupRecord.value at h
   cases hb : beN 8 r.blocks "blocks" with
   | error e => simp [hb, bind, Except.bind] at h
   | ok n =>
     simp only [hb, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     subst h
-    simp only [size_append, field_size, beN_size hb, ByteArray.size_push]
+    simp only [size_append, field_size, beN_size hb]
     omega
 
 /-- PoUS's session record is a digest. -/
