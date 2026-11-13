@@ -124,8 +124,8 @@ the tensor, load and scalar tables, T1 and ε_tensor at L = 32, the joint rows, 
 GEMM's gates, its rate in each arm and ε_tensor at L = 32; `uniform.py census` UP, a uniform instruction's issue price
 and the IMAD forms; and `a2u.py` A2u's test. A run's own `analysis.json`, `pipe.txt`, `uniform.txt` and `a2u.txt` are
 the analysis as the run's commit had it. Each device directory's `census.csv` and `rows.csv` name the runs a line was
-written from, and `uv run machine-model eps --device sm_100 --credit floor --operands floor --q Q` (or `sm_90`) prints
-each design's ε on those lines at q* = Q.
+written from, and `uv run machine-model eps --device sm_100 --credit floor --operands floor --q Q --table` (or `sm_90`)
+prints each design's ε on those lines, with a column at q* = Q.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
@@ -136,10 +136,10 @@ that), s4 m16n8k64 a CALL (not timed).
 
 ## Measured results with no run in the evidence store
 
-These stay here until a rerun's are in the evidence store. The store holds `emp.sh`'s timing runs without the build
-runs whose `sass/` `emp.py` prices them on. The headline under a free uniform route is from an edit of the census that
-no command makes, read on the ACCEL model as it stood: today's `eps` prints other headlines. No B300 has run, and the
-probe `fpx` is not in the tree.
+These stay here until a rerun's are in the evidence store. `emp.py` prices a timing run on its build run's `sass/`: a
+timing run holds none, and the tree names no build run. The headline under a free uniform route is from an edit of the
+census that no command makes, read on the ACCEL model as it stood: today's `eps` prints other headlines. No B300 has
+run, and the probe `fpx` is not in the tree.
 
 ### Combined routes beside wgmma (`emp.sh`, 1× H200)
 
