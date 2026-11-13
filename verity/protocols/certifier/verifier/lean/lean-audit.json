@@ -4,7 +4,8 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.PeriodFilesGivenMain": "the network-period-files-given executable's entry point, the period's difftest's alone: its serve loop reads each case's finding of the scan's circuit files and answers with Core.Protocol.ofCase of NetworkCheck.Period.protocol whose check is NetworkCheck.Period.checkGiven at that finding; it defines no check, and both are audited under NetworkCheck",
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.BlobProtocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck"
  },
  "runs": {
@@ -34,6 +35,7 @@
    "imports": [
     "NetworkCheck.Check",
     "NetworkCheck.Clocks",
+    "NetworkCheck.ScanFiles",
     "CoreProtocol.Profile",
     "Flock.Program",
     "Flock.Public",
@@ -42,7 +44,7 @@
     "NciCheck.DefinitionDigest"
    ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), and the scan's circuit files' check, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
@@ -58,6 +60,11 @@
    "imports": ["NetworkCheck.Check"],
    "except": [],
    "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
+  },
+  "NetworkCheck.ScanFiles": {
+   "imports": ["CoreProtocol.Blobs", "Flock.Program", "Flock.ProvedScope", "Flock.Zk", "Spot.Bits"],
+   "except": [],
+   "why": "the scan's circuit files' check is code: the core interface's blobs (a file found by its SHA-512), C-Flock's program decoder (the scan's Program), its proved scope and its zero-knowledge verifier's parser (a file parsed as `verify --zk` parses it), and the sampled verifier's layout of a unit's file with its pass over the unit's rows, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {

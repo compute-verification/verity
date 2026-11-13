@@ -2,6 +2,7 @@ module
 
 public import NetworkCheck.Check
 public import NetworkCheck.Clocks
+public import NetworkCheck.ScanFiles
 public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
@@ -10,6 +11,7 @@ public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
+meta import NetworkCheck.ScanFiles
 meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
@@ -56,11 +58,14 @@ the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public ke
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 The rows form has, in place of `sync_set`,
 
+    "circuits": [hex, …],
     "scan": descriptor,
     "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
                  "lanes", ["max_tokens_cap",] "queue", "slots", "window"}
 
-the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
+the scan's circuit files, the SHA-512 of one a template of the scan's root, in the root's order (two at T = 1, else
+three; a list of another length is refused by name), each a blob the caller hands in (`Core.BlobProtocol`), the scan's
+Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`;
@@ -118,6 +123,13 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
+* in the rows form, the scan's circuit files are its templates' (`filesWhy`, `NetworkCheck.ScanFiles`): each file
+  `circuits` names is among the caller's blobs, a flat circuit file (a templated one is refused by name), laid out as
+  its template of the scan's Program (`Spot.Bits.check`), its unit's rows reading no input column that no port holds
+  and, in an ingress template's, every bit of its `row`. Each file is read once a period, its unit's rows once,
+  whatever the link-window's buckets or the period's link-windows. The check takes this finding as an argument
+  (`checkGiven`), and `protocol` gives it the one it reads from the blobs; without the files a rows-form period is
+  refused;
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
 * link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
   `{"kind": "served", "window": w}`;
@@ -245,6 +257,8 @@ entries' input node the value it registers as `scan/prog<j>`), which one-stage's
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
 `egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
+that the circuit files `circuits` names are the ones the scan's answers' statements were proved over (one-stage's
+registration names the scan's Program and no circuit file);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
 
@@ -446,7 +460,8 @@ def paramsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
+  ["audits", "cells", "circuits", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
+    "windows"]
 
 /-- A schedule's keys without a response cap. -/
 def scheduleKeys : List String :=
@@ -1406,18 +1421,69 @@ def publicJson (x : Public) : Json :=
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
 
-def protocol : Core.Protocol where
+/-! ## The scan's circuit files -/
+
+/-- **The rows form's scan with its circuit files**: the scan's Program, decoded as `scanOf` decodes it, and each
+template of its root, in the root's order, with the circuit file the parameters' `circuits` names for it
+(`ScanFiles.Template`: an ingress template's ingress rows are its `row`'s, and the egress template has none). -/
+structure Files where
+  program : Flock.Program.Prog
+  templates : Array ScanFiles.Template
+
+/-- The rows form's `Files`, from parameters `paramsOf` accepts: `circuits` lists the SHA-512 of one circuit file a
+template of the scan's root, in the root's order: bucket 0's, the later ingress buckets' when the link-window has them,
+and the egress bucket's (two at T = 1, else three). A list of another length is refused by name. The scan's descriptor
+is decoded here a second time: `scanOf` hands on the scan's terms and not its Program. -/
+def filesOf (j : Json) : V Files := do
+  let cs ← (← Flock.J.arr j "circuits" "the object").mapM (Flock.J.asStr · "circuits")
+  need (cs.all isDigest) "circuits: not SHA-512 digests (128 lowercase hex digits each)"
+  let prog ← (Flock.Program.decode (← Flock.canon (← Flock.J.get j "scan" "the object")).toUTF8).mapError
+    fun e => s!"scan: {e}"
+  let root ← needSome prog.defs[prog.root]? "scan: no root"
+  let keys := (templateNodes prog).toArray.map fun k => (prog.defs[root.body.nodes[k]!.fn]!).key
+  need (cs.size == keys.size) s!"circuits: {cs.size} circuit files, not one a template of the scan's root, \
+    {keys.size} (two at T = 1, else three)"
+  pure { program := prog,
+         templates := (keys.zip cs).zipIdx.map fun ((key, circuit), i) =>
+           { key, rows := if i + 1 < keys.size then ["row"] else [], circuit } }
+
+/-- **The parameters as the protocol reads them**: `Params`, and in the rows form the scan's `Files`. -/
+structure Named where
+  params : Params
+  files : Option Files
+
+def namedOf (j : Json) : V Named := do
+  let params ← paramsOf j
+  match params.form with
+  | .clock _ => pure { params, files := none }
+  | .rows .. => pure { params, files := some (← filesOf j) }
+
+/-- **Why the scan's circuit files are not its templates'**, read from the blobs `bs`, or none (`ScanFiles.why`); none
+in the clock form, which has no scan. -/
+def filesWhy (n : Named) (bs : Core.Blobs) : Option String :=
+  n.files.bind fun f => ScanFiles.why f.program f.templates bs
+
+/-- **The period's check, given its scan's circuit files' finding** `files` (why they are not its templates', or none:
+`filesWhy`'s): a finding rejects the period with its reason, and with none the period is `check`'s. This is the one
+check of a period: `protocol` calls it with the finding it reads from the caller's blobs. -/
+def checkGiven (files : Option String) (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Profile :=
+  match files with
+  | some why => .reject why
+  | none => check p c e
+
+def protocol : Core.BlobProtocol where
   id := protocolId
-  Params := Params
+  Params := Named
   Commitment := Commitment
   Evidence := Evidence
   Public := Public
   Profile := Profile
-  params := paramsOf
+  params := namedOf
   commitment := commitmentOf
   evidence := evidenceOf
   digest c := (Identity.taggedSha512 commitmentTag c.bytes).toOption.getD .empty
-  check := check
+  check n c e := checkGiven (filesWhy n .empty) n.params c e
+  checkBlobs n c e bs := checkGiven (filesWhy n bs) n.params c e
   publicJson := publicJson
   profileJson := profileJson
 

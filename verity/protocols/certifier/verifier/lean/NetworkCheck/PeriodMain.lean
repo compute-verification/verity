@@ -2,7 +2,8 @@ module
 
 public import NetworkCheck.Period
 
-/-! The `network-period` executable: `Core.Protocol.main` of `NetworkCheck.Period.protocol`, audited under `NetworkCheck`. -/
+/-! The `network-period` executable: `Core.BlobProtocol.main` of `NetworkCheck.Period.protocol`, whose `check` takes the
+scan's circuit files after the evidence; audited under `NetworkCheck`. -/
 
 @[expose] public section
 

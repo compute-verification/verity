@@ -1,5 +1,6 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period",
+  "network-period-files-given"]
 
 [leanOptions]
 autoImplicit = false
@@ -52,3 +53,8 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+# The period's difftest's alone: the period's check with the scan's circuit files' finding as each case gives it.
+[[lean_exe]]
+name = "network-period-files-given"
+root = "NetworkCheck.PeriodFilesGivenMain"
