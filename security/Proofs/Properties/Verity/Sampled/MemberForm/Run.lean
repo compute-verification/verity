@@ -5,9 +5,10 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Accept
 /-!
 # The per-member form's run is its statements' sessions' verdicts, in order
 
-`Spot.OneStageZk.runMembers` holds the statements' structure (`membersHeld`), reads every member's files
-(`membersFiles`), then folds `stepMember` over the statements, each at the statement that pass read for its member,
-and holds the units the sessions proved to the evidence's. Where it returns with every session accepted:
+`Spot.OneStageZk.runMembers` holds the statements' structure (`membersHeld`) and each statement's member to the
+sample (`sampledHeld`), reads every member's files (`membersFiles`), then folds `stepMember` over the statements,
+each at the statement that pass read for its member, and holds the units the sessions proved to the evidence's.
+Where it returns with every session accepted:
 
 * **The statements are members' in order** (`membersHeld_ok`, `HeldFrom`): each names a member of the parameters, the
   first of that name, that no earlier statement named, not before the member of the statement before it by first unit,
@@ -277,6 +278,7 @@ theorem runMembers_ok {slice : _root_.Spot.OneStageZk.Member → Json} {ms : Arr
       Verdicts bs ⟨#[], #[], #[], true⟩ l r ∧ _root_.Spot.OneStageZk.provedHeld r.proved want = .ok () := by
   unfold _root_.Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   obtain ⟨files, hfiles, h⟩ := ebind_ok h
   obtain ⟨r1, hfold, h⟩ := ebind_ok h
   obtain ⟨⟨⟩, hprov, h⟩ := ebind_ok h
