@@ -294,7 +294,7 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
     fun θ r => two_undetected H Lv hδ T K hks href hcap ε (s θ r) (herr θ r)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The cap from the two stages' rates**: where each statement in scope draws its replay sample as a uniform
+/-- **The cap from the two stages' rates**: where each statement in scope samples its replay sample as a uniform
 `Q`-subset of its `N` correct-class replay blocks and every input replay block, and its second stage samples at least
 `r₂` of every cell, `WindowCap` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
 theorem windowCap_of_rates (L : CompiledTwo Coin A) {δ r₂ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
