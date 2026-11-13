@@ -530,7 +530,7 @@ def RecVerdict (V : Vocab d α) (k : Verity.Registration.Composite) (o : Verity.
     ∃ a cb eb, SampledCase k o.sent a cb eb ∧
       Properties.Composition.DecodedAccepted
         (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray o.sent.blobs)) a cb eb ∧
-      ∃ j p, Core.canonicalJson a = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)
+      ∃ j p, Core.canonicalJson a = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr (.inl p))
 
 /-- **The recursive configuration's verdict is composite `k`'s sampled verdict**: `RecVerdict V k` is
 `Vocab.Verdict k .sampled` with the sampled case's form named. -/
@@ -625,8 +625,8 @@ structure SessionIn (V : Vocab d α) (q : Dep) (k : Verity.Registration.Composit
   names_shows : ∀ ξ s a cb eb j p e, SampledCase k (out ξ s).sent a cb eb →
     Properties.Composition.DecodedAccepted
       (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray (out ξ s).sent.blobs)) a cb eb →
-    Core.canonicalJson a = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p) →
-    VStar.Recursive.Sampled.evidenceOf eb = .ok (.inr e) →
+    Core.canonicalJson a = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr (.inl p)) →
+    VStar.Recursive.Sampled.evidenceOf eb = .ok (.inr (.inl e)) →
     Names p e (Core.Blobs.ofArray (out ξ s).sent.blobs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray (out ξ s).sent.blobs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧

@@ -4,15 +4,17 @@ public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Verity.Soundness
 
 /-!
-# SPOT refuses the recursive form, so off the one-stage form it accepts nothing
+# SPOT refuses the recursive form and accepts no two-stage audit, so off the one-stage form it accepts nothing
 
 SPOT's compiled component (`VStar.Recursive.Sampled.protocol`) refuses parameters naming the recursive form by name
 (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before their rest is read, so its parameters never decode to that form
-(`paramsOfJson_ne_inr`).
+(`paramsOfJson_ne_inr`). Parameters naming the two-stage form decode, and its check accepts none of them
+(`twoStage_refused`): with two-stage evidence the form's own check refuses while its switch is off
+(`VStar.Recursive.SampledTwo.checkBlobs_refuses`), and with evidence of another form the forms' mismatch rejects.
 
 * **A sampled verdict names the one-stage form** (`paramsAt_of_verdict`): wherever composite `k`'s sampled verdict holds
   of what the prover sent, SPOT's case decodes in the one-stage form, under the parameters `ParamsAt` reads,
-  since the components' ids are distinct (`find_case`).
+  since the components' ids are distinct (`find_case`) and no other form's check accepts.
 * **Off the one-stage form, the event has probability zero** (`recursiveForm_refused`): at parameters `θ` that name no
   one-stage parameters, no play after `θ` meets the sampled verdict, so the probability that it holds while its claim
   fails is `0`, at most the error at any strategy, for every vocabulary and composite.
@@ -25,12 +27,23 @@ namespace Verity.Sampled
 /-- **SPOT's parameters never decode to the recursive form**: `paramsOfJson` refuses it by name
 (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). -/
 theorem paramsOfJson_ne_inr (j : Lean.Json) (p : VStar.Recursive.Params) :
-    VStar.Recursive.Sampled.paramsOfJson j ≠ .ok (.inr p) := by
+    VStar.Recursive.Sampled.paramsOfJson j ≠ .ok (.inr (.inl p)) := by
   intro h
   unfold VStar.Recursive.Sampled.paramsOfJson at h
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals cases h
+
+/-- **SPOT accepts no two-stage audit**: at parameters in the two-stage form, its check accepts nothing, whatever the
+registration, the evidence and the blobs. Two-stage evidence meets the form's own check, which refuses while its switch
+is off (`VStar.Recursive.SampledTwo.checkBlobs_refuses`); evidence of another form rejects as a mismatch of forms. -/
+theorem twoStage_refused (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
+    (e : VStar.Recursive.Sampled.Evidence) (bs : _root_.Core.Blobs) (pub : Spot.OneStage.Public)
+    (prof : _root_.Core.Integrity) : VStar.Recursive.Sampled.checkBlobs (.inr (.inr p)) c e bs ≠ .accept pub prof := by
+  rcases e with e | e | e
+  · simp [VStar.Recursive.Sampled.checkBlobs]
+  · simp [VStar.Recursive.Sampled.checkBlobs]
+  · exact VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off p c e bs pub prof
 
 /-- **SPOT's case is the one its id names**: in a composition composite `k` accepted, the parameters the composition
 names for SPOT's id are those of SPOT's case, since the components' ids are distinct. -/
@@ -55,7 +68,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A sampled verdict names the one-stage form**: wherever composite `k`'s sampled verdict holds of what the prover
 sent, its parameters name SPOT's one-stage form (`ParamsAt`), since its component refuses every other
-(`paramsOfJson_ne_inr`). -/
+(`paramsOfJson_ne_inr`, `twoStage_refused`). -/
 theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
     (hv : V.Verdict k .sampled o) : ∃ p, ParamsAt o.params p := by
   obtain ⟨-, hS, P, hP, ps, c₀, evs, hd, x, hx, hx1, hacc⟩ := hv
@@ -66,13 +79,14 @@ theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite)
   have hacc' : Properties.Composition.DecodedAccepted
       (VStar.Recursive.Sampled.protocol.onBlobs (_root_.Core.Blobs.ofArray o.sent.blobs))
       x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence := hx1 ▸ hacc
-  obtain ⟨p, -, -, hp, -, -, -⟩ := hacc'
-  rcases p with p₀ | p₁
+  obtain ⟨p, c, e, hp, -, -, pub, prof, hchk⟩ := hacc'
+  rcases p with p₀ | p₁ | p₂
   · exact ⟨p₀, ps, hd.1, x.2.1, hfind, hp⟩
   · exfalso
     cases hcj : _root_.Core.canonicalJson x.2.1.params.toUTF8 with
     | error err => rw [hcj] at hp; cases hp
     | ok j => rw [hcj] at hp; exact paramsOfJson_ne_inr j p₁ hp
+  · exact absurd hchk (twoStage_refused p₂ c e (_root_.Core.Blobs.ofArray o.sent.blobs) pub prof)
 
 /-- **Off the one-stage form, SPOT accepts nothing**: at parameters `θ` that name no one-stage parameters
 (`ParamsAt`), the probability that composite `k`'s sampled verdict holds while its claim fails is `0`, so at most the
