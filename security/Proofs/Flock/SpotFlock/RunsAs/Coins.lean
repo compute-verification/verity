@@ -38,7 +38,7 @@ theorem coinsHold_read {coins record : Json} {window : Option String} {read : By
   | some w =>
     cases hd : Spot.Registration.digest record with
     | error e => simp [hd] at h'
-    | ok after => exact ⟨w, after, rfl, hd, by simpa [hd] using h'⟩
+    | ok after => exact ⟨w, after, rfl, rfl, by simpa using h'⟩
 
 /-- **Bytes the coin check passes are the device's, or a break**, where the check reads the draw under `key`. -/
 theorem fromDevice_of_reason {key : Spot.Challenger.ChallengerKey} (hc : CheckReadsDraw key)

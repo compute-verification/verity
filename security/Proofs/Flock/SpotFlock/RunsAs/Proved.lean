@@ -62,7 +62,7 @@ theorem closure_not_key {law : Json} {names : Array String} (hk : Spot.keys? law
     have h2 := (FlockSoundness.Audit.DrawExec.mem_qsort _ (· < ·) _).2 h1
     rw [show (kvs.toArray.map Prod.fst).qsort (· < ·) = Spot.sortStrings names from hk] at h2
     exact (FlockSoundness.Audit.DrawExec.mem_qsort _ _ _).1 h2
-  all_goals simp [Spot.keys?] at hk
+  | _ => simp [Spot.keys?] at hk
 
 /-- **A select under a law, with no closure map, accepted**: its law `flockLaw` accepts, its draw object is the law's
 entries with the population and the units it drew, and `checkDraw` passes it. -/
@@ -115,13 +115,18 @@ theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
   obtain ⟨names, hk, hX⟩ := flockLaw_keys hfl
   have hcl : Spot.getD (Json.mkObj ((Spot.entries law).toList ++
       [("population", Lean.toJson n), ("units", Spot.natsJson units)])) "closure" = .null :=
-    getD_mkObj_none (by simp [closure_not_key hk hX])
+    getD_mkObj_none (by simpa using closure_not_key hk hX)
   rw [hu] at hus
   simp only [Spot.natsJson, Json.arr.injEq] at hus
   subst hus
   have hx : xs = units.map fun m : ℕ => (m : Int) := by
+    have hf : (Spot.int? ∘ fun m : ℕ => Lean.toJson m) = some ∘ fun m : ℕ => (m : Int) := by
+      funext m
+      exact Properties.Spot.toJson_nat_int m
     rw [← Properties.Spot.Credited.filterMap_int_arr hxs]
-    simp [Array.filterMap_map, Function.comp_def, Properties.Spot.toJson_nat_int]
+    apply Array.toList_inj.1
+    rw [Array.toList_filterMap, Array.toList_map, Array.toList_map, List.filterMap_map, hf,
+      List.filterMap_eq_map]
   unfold Spot.Draw.proved
   dsimp only
   rw [hu, hcl]
