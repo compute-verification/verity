@@ -3658,7 +3658,8 @@ class Loop:
 
     def _off_owners(self, c: Candidate, step: str, new: dict[str, str]) -> tuple[str, ...]:
         """Who acts on what ``c`` failed of ``step`` off the gate (``new``, `_off_new`), first who acts (`reds.red_owners`): of
-        ratchet-gate, the lane of each member whose merge it fails, then the step's owner in ci.toml at ``c``; of circuit-check,
+        ratchet-gate, the lane of each member whose merge it fails, with the step's owner in ci.toml at ``c`` only when one such
+        lane is unknown or it fails no merge, since the gate itself may then be wrong; of circuit-check,
         the owner in `main`'s registry of each sidecar's pins file at ``c`` pinning a failed target (`World.pins`), and for a
         target none owns, the lane of each member whose change meets circuit-check's inputs (`queue.forces_cold`), else the
         step's owner; of another, the step's owner.  `CI` when none is known."""
@@ -3666,6 +3667,7 @@ class Loop:
         job, lanes, owners = d._step_owner(step, c.sha), [], []
         if step == RATCHET_STEP:
             lanes = [w.handle(int(k[1:])) for k in new if k != step]
+            job = None if lanes and all(lanes) else job
         elif step == CIRCUIT_STEP:
             pins = w.pins(c.sha, (_target(k) for k in new))
             by = {x: [h for p in pins.get(x, ()) if (h := d._path_owner(p))] for x in map(_target, new)}

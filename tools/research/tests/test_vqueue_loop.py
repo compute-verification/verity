@@ -4881,9 +4881,10 @@ def _circuit(*failed: str) -> str:
 
 
 def _ratchet(*failed: int) -> str:
-    """ratchet-gate's log failing the merge of each PR of ``failed``, and passing #3's, as `ratchet_gate.render` writes it."""
+    """ratchet-gate's log failing the merge of each PR of ``failed``, and passing #3's unless it fails, as `ratchet_gate.render`
+    writes it."""
     return ("ratchet gate: 3 change(s)\n" + "".join(f"  #{n} ({n:012x}): failed: grows p01.json\n" for n in failed)
-            + "  #3 (000000000003): passed: grows nothing\n")
+            + ("" if 3 in failed else "  #3 (000000000003): passed: grows nothing\n"))
 
 
 def _off(env: Env, monkeypatch, *changes: dict[str, str], decide=None, **kw) -> tuple[Loop, Runs, str, str]:
@@ -4907,12 +4908,11 @@ def _off_said(sha: str, members: str, step: str, base: str, *lines: str) -> str:
             f"{base[:12]} doesn't: {'; '.join(f'`{x}`' for x in lines)}. Nothing is held or ejected for it: fix it forward")
 
 
-def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose_merge_it_fails_and_its_owner_once(
-        env, monkeypatch):
+def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose_merge_it_fails_once(env, monkeypatch):
     """ratchet-gate is off the merge gate (policy.toml's `off_gate` at the base): the candidate passes on its check all the
-    same, and once that verdict is in, the lane of each member whose merge the gate fails (#1's and #2's, not #3's) and the
-    step's owner in ci.toml at the candidate (vllm) are rung, with the gate's line for each, once a candidate and step.  A
-    merge the gate names that is no member's (one below the base) rings nobody."""
+    same, and once that verdict is in, the lane of each member whose merge the gate fails (#1's and #2's, not #3's) is rung,
+    not the step's owner in ci.toml (vllm), since each such lane is known, with the gate's line for each, once a candidate
+    and step.  A merge the gate names that is no member's (one below the base) rings nobody."""
     loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1, 2, 9)})
@@ -4920,9 +4920,9 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert _acts(logged) == ["slim", "slim", "ring"] and logged[1]["record"]["verdict"]["state"] == PASS
     ring = logged[2]
     assert (ring["sha"], ring["step"], ring["failures"], ring["to"], ring["done"], ring["posted"]) == (
-        sha, "ratchet-gate", ["#1", "#2"], ["@lane-1", "@lane-2", "@vllm"], True, True)
+        sha, "ratchet-gate", ["#1", "#2"], ["@lane-1", "@lane-2"], True, True)
     assert ring["why"] == "off the gate: ratchet-gate failed" and ring["base"] == main and ring["members"] == [1, 2, 3]
-    assert env.posts == ["@lane-1 @lane-2 @vllm vqueue: " + _off_said(
+    assert env.posts == ["@lane-1 @lane-2 vqueue: " + _off_said(
         sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
     assert loop.tick() == [] and len(env.posts) == 1
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
@@ -4952,9 +4952,19 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_it_fa
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1, 2)})
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
-    assert (ring["failures"], ring["to"]) == (["#1", "#2"], ["@lane-1", "@lane-2", "@vllm"]) and sorted(read) == [1, 2]
-    assert env.posts == ["@lane-1 @lane-2 @vllm vqueue: " + _off_said(
+    assert (ring["failures"], ring["to"]) == (["#1", "#2"], ["@lane-1", "@lane-2"]) and sorted(read) == [1, 2]
+    assert env.posts == ["@lane-1 @lane-2 vqueue: " + _off_said(
         sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
+
+
+def test_under_gate_check_a_red_ratchet_gate_failing_a_member_of_no_known_lane_rings_the_step_s_owner_too(env, monkeypatch):
+    """ratchet-gate fails #1's merge and #3's, whose lane the registry doesn't hold: #1's lane is rung, and the step's owner in
+    ci.toml (vllm) after it, since the gate itself may be what is wrong."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1, 3)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["failures"], ring["to"]) == (["#1", "#3"], ["@lane-1", "@vllm"])
 
 
 def test_under_gate_check_a_landed_member_github_can_t_read_rings_the_step_s_owner_and_is_logged_once(env, monkeypatch):
@@ -5147,7 +5157,7 @@ def test_under_gate_check_a_red_off_the_gate_rings_beside_a_failed_verdict_and_n
         runs.state["c-6"] = ("done", 137, None)
     logged = loop.tick()
     assert logged[1]["record"]["verdict"]["state"] == verdict
-    assert [r["to"] for r in logged if r["action"] == "ring"] == ([["@lane-1", "@vllm"]] if verdict == FAIL else [])
+    assert [r["to"] for r in logged if r["action"] == "ring"] == ([["@lane-1"]] if verdict == FAIL else [])
 
 
 def test_under_gate_check_a_candidate_on_another_is_rung_about_what_that_one_s_check_passed_once_it_is_logged(env, monkeypatch):
@@ -5198,20 +5208,21 @@ def test_under_gate_check_the_steps_off_the_gate_are_its_bases_and_the_allowance
     """What a candidate fails off the gate is read by the policy its verdict and its landing are: the steps off the gate are its
     base's (one it takes off the gate itself fails it on the gate, and rings nothing off it), the allowances and the jobs'
     owners its own, as the check after it lands reads them (an allowance it adds covers its failure, one expired covers
-    nothing, and the ratchet gate's new owner is rung)."""
+    nothing, and the ratchet gate's new owner is rung of a merge whose lane is unknown, #3's)."""
     allow = '[[allow]]\nid = "circuit-check lowering/dead {}"\nowner = "circuits"\nexpires = "{}"\nreason = "red for now"\n'
     pol = (OFF_TREE["tools/verity/check/policy.toml"].replace('"ratchet-gate"]', '"ratchet-gate", "pytest"]')
            + allow.format("New_v1", "2030-06-01T00:00:00Z") + allow.format("Old_v1", "2020-06-01T00:00:00Z"))
     jobs = OFF_TREE["tools/verity/check/ci.toml"].replace('"vllm"', '"ratchets"')
-    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol, "tools/verity/check/ci.toml": jobs})
+    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol, "tools/verity/check/ci.toml": jobs},
+                                 {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
     runs.end(sha, 3, "pytest", "error: no\n", also={"circuit-check": _circuit("lowering/dead New_v1", "lowering/dead Old_v1"),
-                                                     "ratchet-gate": _ratchet(1)})
+                                                     "ratchet-gate": _ratchet(3)})
     logged = loop.tick()
     assert logged[1]["record"]["verdict"]["state"] == FAIL
     rings = {r["step"]: r for r in logged if r["action"] == "ring"}
     assert set(rings) == {"circuit-check", "ratchet-gate"} and rings["circuit-check"]["failures"] == ["lowering/dead Old_v1"]
-    assert rings["ratchet-gate"]["to"] == ["@lane-1", "@ratchets"]
+    assert rings["ratchet-gate"]["to"] == ["@ratchets"]
 
 
 def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env, monkeypatch):
@@ -5219,7 +5230,7 @@ def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env,
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1)})
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
-    assert (ring["done"], ring["shadow"], ring["to"], env.posts) == (False, True, ["@lane-1", "@vllm"], [])
+    assert (ring["done"], ring["shadow"], ring["to"], env.posts) == (False, True, ["@lane-1"], [])
     assert [r for r in loop.tick() if r["action"] == "ring"] == [] and env.posts == []
 
 
@@ -5231,7 +5242,7 @@ def test_under_gate_check_a_ring_off_the_gate_whose_post_failed_is_rung_again_by
     loop.world.post = lambda text, to=(): env.posts.append(text) or answer[0]
     (failed,) = [r for r in loop.tick() if r["action"] == "ring"]
     assert (failed["done"], failed["posted"], failed["error"]) == (
-        False, False, f"ringing @lane-1, @vllm about {sha[:12]}'s ratchet-gate failed: the next tick rings again")
+        False, False, f"ringing @lane-1 about {sha[:12]}'s ratchet-gate failed: the next tick rings again")
     answer[0] = True
     (again,) = loop.tick()
     assert (again["action"], again["done"], again["posted"], again["why"], len(env.posts)) == (
