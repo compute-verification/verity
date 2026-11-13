@@ -133,6 +133,16 @@ meta def letLemmas (pfx : String) (jp : Bool := false) : TacticM (Array Ident) :
   return out
 
 open Lean Meta Elab Tactic in
+/-- The context's hypotheses whose name starts with `pfx`, in context order: a join point's `mjpK` stays one after the
+join point is cleared of its value. -/
+meta def hypsWith (pfx : String) : TacticM (Array Ident) := withMainContext do
+  let mut out := #[]
+  for decl in (← getLCtx) do
+    if !decl.isLet && !decl.isImplementationDetail && decl.userName.toString.startsWith pfx then
+      out := out.push (mkIdent decl.userName)
+  return out
+
+open Lean Meta Elab Tactic in
 /-- The main goal's hypothesis named `n`. -/
 meta def findHyp (n : Name) : TacticM (Option LocalDecl) := withMainContext do
   return (← getLCtx).findFromUserName? n
@@ -297,6 +307,8 @@ meta partial def walkGoal (h : Ident) (ts : Array (TSyntax ``Lean.Parser.Tactic.
     let mut out := #[]
     for g in gs do
       setGoals [g]
+      let k ← n.modifyGet fun k => (k, k + 1)
+      evalTactic (← `(tactic| try rename_i $(mkIdent (Name.mkSimple s!"hc{k}")):ident))
       walkGoal h ts n
       out := out ++ (← getGoals)
     setGoals out.toList
@@ -323,11 +335,11 @@ meta partial def walkGoal (h : Ident) (ts : Array (TSyntax ``Lean.Parser.Tactic.
 open Lean Meta Elab Tactic in
 /-- `jp_walk h [xs]` walks `h : (…).isEmpty = true` down the one path on which no code is added: each branch that adds
 one is dropped (`mjpK`, `isEmpty_addCode`), each condition on the path goes into the context as `hcN`, a join point
-jumped to is unfolded once (one cleared of its value is not), and a `match` on the path is split. -/
+jumped to is unfolded once (one cleared of its value is not), and a `match` on the path is split. An `if` neither
+branch of which adds a code is split too, its condition `hcN` in each branch. -/
 elab "jp_walk" h:ident " [" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => do
   let cvs ← letLemmas "cv"
-  let ms ← letLemmas "jp" true
-  let ms := ms.map fun i => mkIdent (Name.mkSimple s!"m{i.getId}")
+  let ms ← hypsWith "mjp"
   let ts ← (cvs ++ ms).mapM fun i => `(Lean.Parser.Tactic.simpLemma| $i:ident)
   let ts := ts ++ xs.getElems
   let n ← IO.mkRef 0

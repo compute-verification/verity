@@ -269,7 +269,7 @@
   },
   "Proofs.Properties.Verity.SampledTwo.JpWalk": {
    "why": "name_lets, jp_mono, jp_body, jp_close, jp_core, jp_disch, jp_ext and jp_walk, the tactics that walk a registration check's do block by its join points (SampledTwo/RecordNames.lean's proofs that a check with no code names its registration's names): elaborators and macros that rename the context's lets and expand to simp only, dsimp only, split, apply, exact, intro, obtain, extract_lets and assumption over the module's code-list lemmas. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "0ecde3f7e3b54efd40bc3495283395d3caff4cef7c793bc08ada3cbcfeb5a6b5"
+   "digest": "50acb057ec22daf497d407fd5de6647630daacc8a17dd6af7cf342b210665ce5"
   }
  },
  "layers": {

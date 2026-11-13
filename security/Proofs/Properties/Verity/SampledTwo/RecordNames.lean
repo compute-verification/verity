@@ -299,11 +299,31 @@ def ValuesHold (g : Array Json) (mine : Array Spot.Registered.Entry) : Prop :=
   ((g.map (Spot.getD · "value")).filterMap strOf).toList.eraseDups.length = mine.size ∧
   ∀ x ∈ ((g.map (Spot.getD · "value")).filterMap strOf).toList.eraseDups, ∃ e ∈ mine, e.value = x
 
+/-- R7-values' test as `checkRegistered` writes it, at any reading `f` of a string that is `strOf`. -/
+theorem valuesHold_of {g : Array Json} {mine : Array Spot.Registered.Entry} {f : Json → Option String}
+    (hf : ∀ v, f v = strOf v)
+    (h : ¬(((g.map (Spot.getD · "value")).filterMap f).size != (g.map (Spot.getD · "value")).size ||
+          ((g.map (Spot.getD · "value")).filterMap f).toList.eraseDups.length != (g.map (Spot.getD · "value")).size ||
+          ((g.map (Spot.getD · "value")).filterMap f).toList.eraseDups.length != mine.size ||
+          !((g.map (Spot.getD · "value")).filterMap f).toList.eraseDups.all fun v => mine.any fun x => x.value == v) =
+        true) : ValuesHold g mine := by
+  obtain rfl : f = strOf := funext hf
+  unfold ValuesHold
+  generalize ((g.map (Spot.getD · "value")).filterMap strOf) = N at h ⊢
+  rw [Array.size_map] at h
+  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, Decidable.not_not, Bool.not_eq_true', Bool.not_eq_false] at h
+  obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+  refine ⟨h1, h2, h3, fun x hx => ?_⟩
+  obtain ⟨i, hi, hj⟩ := Array.any_eq_true.1 (List.all_eq_true.1 h4 x hx)
+  exact ⟨mine[i], Array.getElem_mem hi, eq_of_beq hj⟩
+
+/-- **`checkRegistered` with no code passed R7-values**: the record's `registered` is a list `ValuesHold` holds to the
+entries. The walk stops at the loops, which it does not read. -/
 theorem checkRegistered_pass {c : Array String} {got : Json} {mine : Array Spot.Registered.Entry}
     {held : Array (String × String)} {supplied : Array (String × Spot.Supplied.Rows)}
     {rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String}
-    (h : checkRegistered c got (.ok mine) held supplied rootOf = #[]) : ∃ g, got = .arr g ∧ ValuesHold g mine := by
-  have h' : (checkRegistered c got (.ok mine) held supplied rootOf).isEmpty = true := by rw [h]; rfl
+    (h' : (checkRegistered c got (.ok mine) held supplied rootOf).isEmpty = true) :
+    ∃ g, got = .arr g ∧ ValuesHold g mine := by
   unfold checkRegistered at h'
   cases got with
   | arr g =>
@@ -315,9 +335,28 @@ theorem checkRegistered_pass {c : Array String} {got : Json} {mine : Array Spot.
     jp_mono []
     clear_value jp0
     jp_walk h' []
-    trace_state
-    sorry
+    refine valuesHold_of (f := _) (fun v => ?_) hc1
+    cases v <;> rfl
   | _ => simp [Id.run, pure, isEmpty_addCode] at h'
+
+/-- **`checkOutputs` with no code passed R7-values** at the entries `applyOutputs` leaves, whose values are the
+verifier's own entries'. -/
+theorem checkOutputs_pass {c : Array String} {got : Json} {mine : Flock.V (Array Spot.Registered.Entry)}
+    {held : Array (String × String)} {supplied : Array (String × Spot.Supplied.Rows)}
+    {rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String}
+    {outputs : Array (String × String × Earlier)} {log : Array Json}
+    (h : (checkOutputs c got mine held supplied rootOf outputs log).isEmpty = true) :
+    ∃ m g m', mine = .ok m ∧ got = .arr g ∧ m'.map (·.value) = m.map (·.value) ∧ ValuesHold g m' := by
+  unfold checkOutputs at h
+  cases mine with
+  | error e => simp [isEmpty_addCode] at h
+  | ok m =>
+    have hv := applyOutputs_values c m held outputs log
+    dsimp only at h
+    generalize applyOutputs c m held outputs log = s at h hv
+    obtain ⟨c', m', held'⟩ := s
+    obtain ⟨g, hg, hvh⟩ := checkRegistered_pass (c := c') (mine := m') (held := held') h
+    exact ⟨m, g, m', rfl, hg, hv, hvh⟩
 
 /-- **What a check with no code says of the names**: the record's keys are R1's, its roots a list R3-ports holds to the
 ports, and with registered values, its `registered` a list R7-values holds to the verifier's own entries. -/
@@ -339,8 +378,30 @@ theorem checkFacts_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) 
   all_goals
     jp_mono [poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
     jp_walk h' [poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
-  trace_state
-  all_goals sorry
+  -- the branch of `if v2` the registered values rule out
+  all_goals
+    first
+    | (exfalso; exact ‹¬(!false) = true› rfl)
+    | (exfalso; exact absurd ‹(!true) = true› (by decide))
+    | skip
+  -- `hc0` is the keys' test, `hc9` R3-roots' and `hc10` R3-ports'
+  all_goals
+    have hk : Spot.keys? rec = some (if !v.registered.isEmpty then KEYS_V2 else KEYS) := by
+      rw [hv2]
+      simpa using hc0
+    have hr : ∃ rs, Spot.getD rec "roots" = .arr rs ∧ l_roots = rs := by
+      cases hr : Spot.getD rec "roots" with
+      | arr rs => exact ⟨rs, rfl, by simp only [l_roots, l_get, hr]⟩
+      | _ => exact absurd (by simp [l_roots, l_get, hr]) hc9
+    obtain ⟨rs, hrs, hl⟩ := hr
+    simp only [l_ix, hl, Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, Decidable.not_not, Bool.not_eq_true',
+      Bool.not_eq_false] at hc10
+    obtain ⟨⟨hp1, hp2⟩, hp3⟩ := hc10
+    refine ⟨hk, ⟨rs, hrs, hp1, hp2, fun p hp => ?_⟩, fun hne => ?_⟩
+    · exact Array.all_eq_true_iff_forall_mem.1 hp3 p hp
+    · first
+        | (rw [hv2] at hne; cases hne; done)
+        | exact checkOutputs_pass h'
 
 /-! ## The record names its registration's names -/
 
@@ -365,23 +426,23 @@ theorem recordOk_of_facts {rec : Json} {v : Verifier} (hf : CheckFacts rec v) (h
   unfold recordOk
   rw [Bool.and_eq_true]
   refine ⟨ports_names hn hrs h1 h2 h3, ?_⟩
+  show namesEq (namesAt rec "registered" "value") (v.registered.map (·.1)).toList = true
   cases hv : v.registered.isEmpty
   · obtain ⟨mine, g, mine', hmine, hg, hm', hv1, hv2, hv3, hv4⟩ := h7 hv
     have hvals : mine'.map (·.value) = v.registered.map (·.1) := by rw [hm', entries_values hmine]
     have hR : (v.registered.map (·.1)).toList.length = mine'.size := by
       have := congrArg Array.size hvals
       simpa using this.symm
-    refine values_names hg hv1 hv2 (by rw [hR, ← hv3, hv2]) (fun x hx => ?_)
+    refine values_names hg hv1 hv2 (by omega) (fun x hx => ?_)
     obtain ⟨e, he, rfl⟩ := hv4 x hx
     have : e.value ∈ mine'.map (·.value) := Array.mem_map_of_mem he
     rw [hvals] at this
-    simpa using this
+    exact Array.mem_def.1 this
   · simp only [hv, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hk
     have : v.registered = #[] := Array.isEmpty_iff.1 hv
-    show namesEq (namesAt rec "registered" "value") (v.registered.map (·.1)).toList = true
     unfold namesAt
     rw [registered_null hk, this]
-    rfl
+    simp [namesEq]
 
 /-- **A registration check with no code names the registration's names**, where the verifier lists each port once. -/
 theorem recordOk_of_check {rec : Json} {v : Verifier} (h : check rec v = #[])
