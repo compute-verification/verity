@@ -23,7 +23,7 @@ import Proofs.Flock.SpotFlock.Depths
 import Proofs.Flock.SpotFlock.EntriesAt
 import Proofs.Flock.SpotFlock.HeaderRoots
 import Proofs.Flock.SpotFlock.Opens
-import Proofs.Properties.Verity.SampledTwo.ScopeTable
+import Proofs.Flock.SpotFlock.ScopeTable
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
