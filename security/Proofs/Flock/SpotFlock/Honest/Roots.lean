@@ -227,7 +227,7 @@ theorem rootsWired_held (hR : RefPorts R)
         exact heldLink_held R B desc q c₀ rp.row hrow
       simp [Prog.Boundary, List.mem_filter, hout, hret]
   unfold CheckedRun.rootsWired
-  rw [if_neg]
+  rw [ite_eq_right]
   rintro ⟨-, hf⟩
   rw [hbd] at hf
   cases hf

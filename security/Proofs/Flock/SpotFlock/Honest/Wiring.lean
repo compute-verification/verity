@@ -122,7 +122,8 @@ covers, each bit it writes is at one of its ports and each of its reference read
 port of the interior registration. -/
 theorem two_of_ref (hS : _root_.Flock.ProvedScope.scopeOkH (stmtOf R.x) = true) (hR : RefPorts R)
     (hO : RefReadsNamed R B) (s : AuditStatement) :
-    two (held R B desc q c₀) s = some ⟨filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩ :=
+    two (held R B desc q c₀) s =
+      some ⟨Properties.Spot.filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩ :=
   two_held R B desc q c₀ (membersScoped_held R B desc q c₀ hS) (wiringOk_held R B desc q c₀ hR hO) s
 
 end SpotFlock.Honest
