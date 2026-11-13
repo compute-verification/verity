@@ -211,7 +211,8 @@
   "Proofs.Flock.SpotFlock.Honest.Once",
   "Proofs.Flock.SpotFlock.Honest.Needed",
   "Proofs.Flock.SpotFlock.Honest.Design",
-  "Proofs.Flock.SpotFlock.Honest.Runs"
+  "Proofs.Flock.SpotFlock.Honest.Runs",
+  "Proofs.Flock.SpotFlock.Honest.Sits"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

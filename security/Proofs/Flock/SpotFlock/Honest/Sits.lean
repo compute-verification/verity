@@ -1,0 +1,82 @@
+module
+
+public import Proofs.Flock.SpotFlock.Honest.Runs
+public import Proofs.Flock.SpotFlock.Honest.Written
+public import Proofs.Flock.SpotFlock.AddressFacts.RowOf
+
+/-!
+# The row at the instance
+
+`rowFact_of_runs` proves the row at the address map from the wiring facts of each accepted run and four premises. Two
+of them speak of a written bit at a port no link names (`AddressRow.OwnLeaves`, `AddressRow.PublishedRows`). At the
+instance every port of `R` is linked, and where the design evaluates every bit the member writes is at one of `R`'s
+ports (`written_of_two`), so no written bit is at such a port (`linked_of_two`) and both hold with nothing to check
+(`ownLeaves_held`, `publishedRows_held`).
+
+So the row at the instance's address map takes the own reads, where the second stage puts a checked proof block
+(`AddressRow.Sits`) and that Flock's parse keeps each port's reads (`AddressRow.PortReads`): `rowFact_of_sits`. The
+address premise, the design premises and `HonestExists` follow from the same three (`addressesConnected_of_sits`,
+`premises_of_sits`, `honest_of_sits`).
+-/
+
+@[expose] public section
+
+namespace SpotFlock.Honest
+
+open Claims Claims.Sampling SamplingDeploy
+
+variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
+
+/-- **A written bit's port is linked**, where the design evaluates: its row is one of `R`'s ports, and each has a
+link. -/
+theorem linked_of_two {s : AuditStatement} {d : Design.Two} (h2 : two (held R B desc q c₀) s = some d)
+    {y t : ℕ} {rp : Spot.Bits.RowPos} (hy : (y, t, rp) ∈ writtenBits (held R B desc q c₀).ms) :
+    heldLink (held R B desc q c₀) ((held R B desc q c₀).names.getD t "") rp.row ≠ none := by
+  obtain ⟨ht, -⟩ := mem_writtenBits hy
+  have hrow : R.ports.contains rp.row = true := written_of_two R B desc q c₀ h2 (y, t, rp) hy
+  have hs := heldLink_held R B desc q c₀ rp.row hrow
+  rw [name_held R B desc q c₀ ht]
+  intro e
+  rw [e] at hs
+  simp at hs
+
+/-- **No registered read is at a written port no link names**, so the leaf count asked of one is asked of none. -/
+theorem ownLeaves_held : AddressRow.OwnLeaves (held R B desc q c₀) := by
+  intro r hr own reg _ _ hw hl
+  obtain ⟨y, rp, hy, hrow⟩ := hw
+  obtain ⟨d, h2⟩ := CheckedRun.design_of_ok hr
+  rw [← hrow] at hl
+  exact absurd hl (linked_of_two R B desc q c₀ h2 hy)
+
+/-- **No written port is without a link**, so the published rows asked at one are asked at none. -/
+theorem publishedRows_held : AddressRow.PublishedRows (held R B desc q c₀) := by
+  intro r hr y rp hy hl _
+  obtain ⟨d, h2⟩ := CheckedRun.design_of_ok hr
+  exact absurd hl (linked_of_two R B desc q c₀ h2 hy)
+
+/-- **The row at the instance's address map**, from the own reads, where the second stage puts a checked proof block
+and Flock's parse of a registered-reads file. -/
+theorem rowFact_of_sits (hOwn : OwnReads (held R B desc q c₀)) (hS : AddressRow.Sits (held R B desc q c₀))
+    (hPR : AddressRow.PortReads) :
+    RowFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)) :=
+  rowFact_of_runs (fun _ hr => wiring_of_ownReads hOwn hr) hS hPR (ownLeaves_held R B desc q c₀)
+    (publishedRows_held R B desc q c₀)
+
+/-- **The address premise at the instance**, from the same three. -/
+theorem addressesConnected_of_sits (hOwn : OwnReads (held R B desc q c₀))
+    (hS : AddressRow.Sits (held R B desc q c₀)) (hPR : AddressRow.PortReads) :
+    AddressesConnected (held R B desc q c₀) :=
+  addressesConnected_of_row hOwn (rowFact_of_sits R B desc q c₀ hOwn hS hPR)
+
+/-- **The design premises at the instance**, from the same three. -/
+theorem premises_of_sits (hOwn : OwnReads (held R B desc q c₀)) (hS : AddressRow.Sits (held R B desc q c₀))
+    (hPR : AddressRow.PortReads) : Premises (held R B desc q c₀) :=
+  premises_of_row R B desc q c₀ hOwn (rowFact_of_sits R B desc q c₀ hOwn hS hPR)
+
+/-- **`HonestExists`**, from the same three and a run the instance accepts. -/
+theorem honest_of_sits (hOwn : OwnReads (held R B desc q c₀)) (hS : AddressRow.Sits (held R B desc q c₀))
+    (hPR : AddressRow.PortReads) (hA : Accepts (held R B desc q c₀)) : HonestExists :=
+  honest_of_row R B desc q c₀ hOwn (rowFact_of_sits R B desc q c₀ hOwn hS hPR) hA
+
+end SpotFlock.Honest
