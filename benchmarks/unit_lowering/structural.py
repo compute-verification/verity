@@ -39,8 +39,13 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from verity.circuits.program import Program
 
 ROOT = Path(__file__).resolve().parents[2]
 VLLM = ROOT / "adapters" / "vllm"
@@ -93,7 +98,7 @@ def refusal(unit: str, k: int, r: int, c: int) -> str | None:
     return None
 
 
-def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
+def leaf_statement(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple:
     """``unit``'s Definition (`h1zy.lane` or `h1zy.combine` over the leaf's tile, as `h1window.leaf_unit` derives it at a
     K of whole lanes) and its input rows, as `h1_lanes`' ``stager`` stages them."""
     from verity.protocols.pouw.verifier import leaf_lanes as LL
@@ -115,7 +120,7 @@ def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     return Z.combine(t), rows
 
 
-def window(U, k: int, r: int, c: int):
+def window(U: ModuleType, k: int, r: int, c: int) -> Program:
     """A served window of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
     `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every served window's
     leaf Programs at K are this one's."""
@@ -130,7 +135,7 @@ def _descriptor(program) -> bytes:
     return codec.canonical_json({x: v for x, v in codec.encode_program(program).items() if x != "annotations"})
 
 
-def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes]:
+def leaf_bind(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes]:
     """``unit``'s Definition, binding and leaf Program descriptor as a served window's verifier derives them (`credit`'s
     lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
     bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
@@ -146,7 +151,7 @@ def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes
     return HW.leaf_unit(win, k, unit), {"partition": P.digest(part), "program": part["program"]}, raw
 
 
-def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str, bind: str = "leaf") -> dict:
+def stage(U: ModuleType, unit: str, k: int, r: int, c: int, path: Path, staging: str, bind: str = "leaf") -> dict:
     """``unit``'s statement file at `path`, staged as its benchmark stages it: a tile bound to `ZERO_BIND`, a lane or
     combine to its leaf Program's binding (`leaf_bind`) or with ``bind`` ``zero`` to `ZERO_BIND`. Returns the binding and,
     for a leaf binding, the leaf Program's descriptor (``program``) and its unit's id."""
@@ -254,7 +259,7 @@ def _meta(path: Path) -> dict:
     return json.loads(line[len(b"META "):])
 
 
-def check(args) -> int:
+def check(args: argparse.Namespace) -> int:
     """`credit`'s lanes form on the lane file LANE and combine file COMBINE at K over the R × C tile, as a period that
     commits them as ``lane<K>`` and ``combine<K>`` reads them: the served window (`window`) within `lanes_shape`; each
     file's leaf Program, `h1window.leaf_program`'s descriptor, `leaf_of` the unit `leaf_unit_id` reads off the window's
@@ -303,7 +308,7 @@ def check(args) -> int:
     return 0 if rec["ok"] else 1
 
 
-def lower(args) -> int:
+def lower(args: argparse.Namespace) -> int:
     U = _h1unit(args.form)
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
@@ -419,7 +424,7 @@ def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, in
     return U.receipt_words(rc), ok
 
 
-def agree(args) -> int:
+def agree(args: argparse.Namespace) -> int:
     U = _h1unit("structural")
     if why := refusal("tile", args.k, args.r, args.c):
         raise SystemExit(why)
@@ -480,7 +485,7 @@ def agree(args) -> int:
     return 0 if rec["agree"] and rec.get("check_unit", {}).get("verdict", "syntactic") in ("syntactic", "exhaustive", "random") else 1
 
 
-def sweep(args) -> int:
+def sweep(args: argparse.Namespace) -> int:
     out = Path(args.out)
     (out / "logs").mkdir(parents=True, exist_ok=True)
 

@@ -52,9 +52,12 @@ def _ratio(p: Any) -> tuple[int, int] | None:
     return None
 
 
-def _law_problem(law: Mapping[str, Any]) -> str | None:
+def law_problem(law: Mapping[str, Any], population: int) -> str | None:
+    """Why `law` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockLaw`): exactly its keys,
+    a subset's k a natural number from one to the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified
+    or work design's strata well formed (`strata_problem`)."""
     kind = law.get("law")
-    if kind not in _LAW_KEYS:
+    if not isinstance(kind, str) or kind not in _LAW_KEYS:
         return "a one-stage law is subset, bernoulli, stratified or work"
     if set(law) != _LAW_KEYS[kind]:
         return f"a {kind} law is exactly {sorted(_LAW_KEYS[kind])}"
@@ -62,9 +65,17 @@ def _law_problem(law: Mapping[str, Any]) -> str | None:
         return None if _ratio(law["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
     if not _int(law["k"]) or law["k"] < 0:
         return f"a {kind} law's k is a natural number"
-    if kind != "subset" and not isinstance(law["strata"], list):
+    if kind == "subset":
+        if law["k"] < 1:
+            return "a subset law draws at least one unit"
+        return f"a subset draw of {law['k']} exceeds the population of {population}" if law["k"] > population else None
+    if not isinstance(law["strata"], list):
         return f"a {kind} law is expanded: its strata are a list (one_stage.draw.derive)"
-    return None
+    return strata_problem(law, population)
+
+
+#: Lean `Draw.RAN_OUT`: the refusal of a draw whose source runs out before it ends.
+RAN_OUT = "the randomness source ran out"
 
 
 class _RanOut(Exception):
@@ -121,7 +132,7 @@ class OwnRandomness:
     def read(self, n: int) -> bytes:
         b = self._source(n)
         if len(b) != n:
-            raise ValueError("the randomness source ran out")
+            raise ValueError(RAN_OUT)
         return b
 
     def uniform(self, n: int) -> int:
@@ -449,7 +460,7 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
     verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
-    problem = _law_problem(law)
+    problem = law_problem(law, population)
     if problem:
         raise ValueError(problem)
     kind = law["law"]
@@ -457,18 +468,11 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
         k = law["k"]
-        if k < 1:
-            raise ValueError("a subset law draws at least one unit")
-        if k > population:
-            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
         num, den = _ratio(law["p"])
         units = randomness.stream(2 * population * _width(den) + 64, lambda read: _bernoulli(num, den, population, read))
     else:
-        problem = strata_problem(law, population)
-        if problem:
-            raise ValueError(problem)
         units = []
         for s in law["strata"]:
             ranges, k_s = s["units"], s["k"]
@@ -484,6 +488,24 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     return out
 
 
+def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
+    """Whether `draw_first` under `law` over `population` runs out of `src`, read in order, before it ends (Lean
+    `Draw.ranOutOf`, the difftest's `ran_out` piece); ValueError where it refuses otherwise."""
+    at = 0
+
+    def source(k: int) -> bytes:
+        nonlocal at
+        at += k
+        return src[at - k:at]
+    try:
+        draw_first(OwnRandomness(source), law, population)
+    except ValueError as e:
+        if str(e) == RAN_OUT:
+            return True
+        raise
+    return False
+
+
 def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     for lo, hi in ranges:
         if j < hi - lo:
@@ -493,6 +515,6 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
 
 
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
-           "MAX_PINS", "OwnRandomness", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first", "draw_seed_salt",
-           "read_reason", "seed_salt_of"]
+           "MAX_PINS", "OwnRandomness", "RAN_OUT", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM",
+           "Segment", "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first",
+           "draw_seed_salt", "ran_out", "read_reason", "seed_salt_of"]

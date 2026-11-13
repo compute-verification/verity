@@ -26,7 +26,8 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that
   doesn't read the accumulator, are built once for its 2^j words on any circuit, Flock's (which has no common-subexpression
   pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
-* `window_word`: a 4-to-16 decode and one AND per bit and mask, so a constant m (each of the cap word's reads) costs none.
+* `window_word`: a 4-to-16 decode and one AND per bit and mask, so a constant m (each read of the inert-work bound's
+  word) costs none.
 * the salt-dead bits: the atom's builder at the support's two ends (E′ the one code c_β at all 32 positions, F the
   constant ±0x43) and the cast, on an `_Shared` view, so the 32 equal products are built once and the two ends share
   every AND that doesn't read F's sign: on sm_120 2,493 ANDs where two atom calls and casts are 20,062 (1,806 against

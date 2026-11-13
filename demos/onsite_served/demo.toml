@@ -6,7 +6,7 @@ run = "moved"
 proof = "none"
 
 [placement]
-prover = "gpu-node"            # workers, firewall and the prover: serving, committing, proving, answering the sessions
+prover = "gpu-node"            # workers, ZK server and prover: serving, committing, proving, answering the sessions
 store = "gpu-node"             # PoUS's and PoUB's store: the served weights on the card
 verifier = "auditor-host"      # the onsite check
 challenger = "auditor-host"    # the gate's challenger, and the memory challenger and bandwidth verifier

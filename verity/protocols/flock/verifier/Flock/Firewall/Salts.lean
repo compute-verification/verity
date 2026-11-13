@@ -1,9 +1,11 @@
 /-
 # The value commitments' salts, the ZK server's (live PROTOCOL.md §10.2)
 
-Every hm96 row leaf whose `b ‖ c` or root goes public is the ZK server's. The serving stack hands the server each row's
-unsalted 64-byte digest `x`, and the server derives the leaf's 192-byte salt from its own 64-byte key `k`, the commit
-session `s` it samples once every digest of the session is in, the table `j` and the leaf index `i` (`saltOf`):
+Every hm96 row leaf that commits a value and whose `b ‖ c` or root goes public is the ZK server's. A row at known
+content commits no value and is none of the server's (**Known content**, below). The serving stack hands the server
+each row's unsalted 64-byte digest `x`, and the server derives the leaf's 192-byte salt from its own 64-byte key `k`,
+the commit session `s` it samples once every digest of the session is in, the table `j` and the leaf index `i`
+(`saltOf`):
 
     y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ 0) ‖ SHA-512(… ‖ 1) ‖ SHA-512(… ‖ 2),   L = SHA-512("verity/zk-server/value-salt/v1\0")
 
@@ -24,7 +26,7 @@ Every salt message is 205 bytes and every tag message 333, under different const
 * `treesOfFile`, `readsOf`: a statement's hm96 trees, and the registrations they read: for each tree, the first
   registration on the record that holds a table at its domain, leaf count, schema and root, its record tag checked
   (`RegistrationRecord.valid`). The release side admits each registration once, oldest first, at the first statement
-  that reads it, and a statement none of whose trees a registration of the server's holds is refused
+  that reads it, and a statement one of whose trees no registration of the server's holds is refused
   (`Core.Firewall.admitReads`, `core-firewall session --salt-key`).
 * `loadKey`: the key file.
 
@@ -42,6 +44,17 @@ No request takes a salt from the stack: a commit request's body is its digests a
 statement whose leaves were made under salts of the stack's has roots no record of the server's holds, so the release
 side refuses it. A prover's witness salts must then be the server's for its proof to pass, since each leaf's `c` is the
 SHA-512 of its salt.
+
+**Known content.** A row the verifier registers itself at known content (`Flock.RegKnown`) commits no value. Its words
+and its salt are a function, fixed by the protocol under a tag of its own, of what is public before the row is made:
+protocol structure, the verifier's coins and samples, and roots registered before them. The verifier computes that
+function itself and takes the row from no file of the stack's (PoUW's ok rows: `PouwCheck.Credit.registeredFile`). So
+the leaf hides nothing and needs no secret salt, neither the stack nor the server chooses a bit of its `b ‖ c` or its
+root, and they add nothing to what was public: the service commits no such row and the leakage terms below count none.
+`Registered.checkKnown` alone does not make a row known content: it roots whatever rows and salts a `--registered` file
+names, and a row whose salt the stack chose is a value commitment under a salt of the stack's, which this rule refuses.
+The release side knows no known content: `treesOf` lists such a row's tree with the rest and `readsOf` refuses it, so a
+statement that has one passes only a loop run without `--salt-key`.
 
 **Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
 among `m` outcomes, so it leaks at most `log₂ m` bits through the choice (`Verity.ValueSalts`,

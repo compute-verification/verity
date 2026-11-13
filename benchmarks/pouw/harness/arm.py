@@ -74,6 +74,12 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
+#: what the harness's modules, `pearl_c_sm90/overhead_arm.py` and the tests read
+__all__ = [
+    "ArmError", "BenchArm", "Buffer", "DEFERRED", "GROUPS", "GateResult", "MOVABLE", "OperandSet", "PARTS", "Shape",
+    "VERSION", "Work", "check_arm", "check_gate", "check_verifier", "load", "phase_parts", "side_split",
+]
+
 VERSION = "v0.6"
 #: a call's step groups, in the order its main lane runs them; must equal verity.protocols.pouw.verifier.serving.GROUPS
 GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")

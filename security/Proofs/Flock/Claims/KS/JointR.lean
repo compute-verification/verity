@@ -46,7 +46,9 @@ Cauchy–Schwarz their term is at least the escapes' (`Escapes.term_le_mergeR`).
 bound with the escapes counted per round (`Claims.Flock.TableBoundJR`, `Claims.Flock.oneWait_of_tableBoundJR`): the
 conflict fork at round `0` gives escapes fitting per round (`Escapes.fitsR_addFork`), and their merge fits `OneWait`'s
 weight. At tables with unopened positions it follows from `ExtendJ` (`Claims.Flock.tableBoundJR_of_extend`). The
-deployed masked verifier is KS from every table's bound counted per round (`FlockDeploy.KS.zk_KS_of_tableBoundJR`),
+bound is also stated at an error for each table (`Claims.Flock.TableBoundEachR`, of which `TableBoundJR` is the instance
+at the tables' errors summed; `Claims.Flock.tableBoundEachR_of_eachAccAtR`, `Claims.Flock.tableBoundEachR_of_extend`).
+The deployed masked verifier is KS from every table's bound counted per round (`FlockDeploy.KS.zk_KS_of_tableBoundJR`),
 so from the live sessions' bound off the table on a witness lane where some run accepts and `ExtendJ`
 (`FlockDeploy.KS.zk_KS_of_liveAccWJ`).
 -/
@@ -151,6 +153,28 @@ theorem tableBoundJR_of_accAtR {H : Msg → Msg} {D : Deploy Coin Col T} {N : Ms
   obtain ⟨e, -, hf, hb⟩ := h x Ω P
   exact ⟨e, hf, hb⟩
 
+/-- **`TableBoundJR` at an error for each table** (`ε x j` for `D.εtable x`): at a table `j` and a word at its
+positions that is not `GoodTableAt`, a run accepts with probability at most `ε x j + escapes(ω)` beyond that of
+accepting and opening a position of table `j`'s word off the word. `TableBoundJR` is its instance at the tables'
+errors summed. -/
+def TableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
+    (ε : Msg → ℕ → ℝ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
+    e.FitsForkR (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (j : ℕ), j < nTab D x → ∀ C : Fin (N x j) → Col,
+      (∀ p, Ok x j (C p)) → ¬ GoodTableAt D N x j C →
+      accPr H D.V P x ω ≤ ε x j + e.term ω +
+        Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
+          ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
+
+omit [Nonempty Coin] in
+/-- **`TableBoundEachR` from the bound at each statement on accepted first runs** (`TableBoundEachAccAtR`). -/
+theorem tableBoundEachR_of_eachAccAtR {H : Msg → Msg} {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ}
+    {Ok : Msg → ℕ → Col → Prop} {ε : Msg → ℕ → ℝ} (h : ∀ x, TableBoundEachAccAtR H D N Ok (ε x) x) :
+    TableBoundEachR H D N Ok ε := by
+  intro x Ω _ _ P
+  obtain ⟨e, -, hf, hb⟩ := h x Ω P
+  exact ⟨e, hf, hb⟩
+
 /-- **Flock's one-wait bound, from every table's bound counted per round**: `oneWait_of_tableBoundJ`, the escapes
 with the conflict fork merged by round (`Escapes.mergeR`). -/
 theorem oneWait_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
@@ -173,10 +197,12 @@ theorem oneWait_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : M
   linarith
 
 omit [Nonempty Coin] in
-/-- **Every table's bound counted per round at tables with unopened positions**: `tableBoundJ_of_extend`. -/
-theorem tableBoundJR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
-    (Ok : Msg → ℕ → Col → Prop) (hne : ∀ x j u, 0 < N x j → Ok x j u → u ≠ 0) (hok : ColsOkJ H D N Ok)
-    (hext : ExtendJ D N Ok) (htab : TableBoundJR H D N Ok) : TableBoundJR H D N (orZeroJ Ok) := by
+/-- **Each table's bound at its error, counted per round, at tables with unopened positions**:
+`tableBoundJ_of_extend` at an error for each table. -/
+theorem tableBoundEachR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
+    (Ok : Msg → ℕ → Col → Prop) (ε : Msg → ℕ → ℝ) (hne : ∀ x j u, 0 < N x j → Ok x j u → u ≠ 0)
+    (hok : ColsOkJ H D N Ok) (hext : ExtendJ D N Ok) (htab : TableBoundEachR H D N Ok ε) :
+    TableBoundEachR H D N (orZeroJ Ok) ε := by
   intro x Ω _ _ P
   obtain ⟨e, hfit, hb⟩ := htab x Ω P
   refine ⟨e, hfit, fun ω j hj C hC hg => ?_⟩
@@ -187,6 +213,14 @@ theorem tableBoundJR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Ms
   · rw [h0]
     exact hne x j u (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt) (hok x Ω P ω r j p.val u ha hj p.isLt hu)
   · rwa [← hkeep p h0]
+
+omit [Nonempty Coin] in
+/-- **Every table's bound counted per round at tables with unopened positions**: `tableBoundEachR_of_extend` at the
+tables' errors summed. -/
+theorem tableBoundJR_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
+    (Ok : Msg → ℕ → Col → Prop) (hne : ∀ x j u, 0 < N x j → Ok x j u → u ≠ 0) (hok : ColsOkJ H D N Ok)
+    (hext : ExtendJ D N Ok) (htab : TableBoundJR H D N Ok) : TableBoundJR H D N (orZeroJ Ok) :=
+  tableBoundEachR_of_extend H D N Ok (fun x _ => D.εtable x) hne hok hext htab
 
 end Tables
 

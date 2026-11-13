@@ -109,6 +109,7 @@ WINDOW = P.WINDOW                  # 128 products: four k32 atoms per promotion
 SLICE = 32
 PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
+K_MIN = 1024                       # Pearl's domain: a smaller k_min, like another tile, makes a test instance
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_SEED_B.encode()}
@@ -473,7 +474,7 @@ class PearlC:
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
+    def __init__(self, k_min: int = K_MIN, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
                  hashing: str = "h3", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")

@@ -17,7 +17,7 @@ import Mathlib.Data.EReal.Inv
 coin misses every one of the window's incorrect proof blocks.
 
 * `uniformSample n k hk` is the uniform distribution on the coins, which exist when `k ≤ n`.
-* `missing n k B` is the samples that miss the wrong set `B`: a window whose incorrect proof blocks are `B` escapes on them.
+* `missing n k B` is the samples that miss the incorrect set `B`: a window whose incorrect proof blocks are `B` escapes on them.
 -/
 
 @[expose] public section
@@ -32,7 +32,7 @@ noncomputable def uniformSample (n k : ℕ) (hk : k ≤ n) : PMF (Verity.Draw.Su
     (exists_subset_card_eq (s := (univ : Finset (Fin n))) (by simpa using hk)).elim fun t ht => ⟨⟨t, ht.2⟩⟩
   PMF.uniformOfFintype _
 
-/-- The samples that miss the wrong set `B`. -/
+/-- The samples that miss the incorrect set `B`. -/
 def missing (n k : ℕ) (B : Finset (Fin n)) : Finset (Verity.Draw.Subset n k) := univ.filter fun s => Disjoint s.1 B
 
 end Population.Exfil

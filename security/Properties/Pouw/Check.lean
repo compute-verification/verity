@@ -52,7 +52,7 @@ def RecordKeeps (p : Params) (c : WindowCommitmentRecord) (f : Fixed) : Prop :=
 of the registered Program over one level, the registered partition's `N` units sampled `subset:K′`, at the window's δ,
 with `K′` units sampled; and a sample `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
-    (draw : UnitDraw) : Prop :=
+    (draw : Flock.Draw.UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
   prof.programs = #[c.program] ∧
   prof.levels = #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }] ∧

@@ -54,13 +54,18 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
     verifier = [p for p in _own(by[AGREE]) if p.startswith(build.VERIFIER + "/")]
     assert sorted({*_own(by[BUILD]), *verifier}) == sorted(CHECK.agreement_closure(files)), \
         "the agreement's key in check covers the verifier's package (the build's inputs) and its own directory"
+    docs = [f"{build.VERIFIER}/README.md", f"{build.LEAN}/README.md"]
+    assert set(docs) <= set(files) and not set(docs) & {*by[AGREE]["inputs"], *by[BUILD]["inputs"]}, \
+        "no script of the agreement and no Lake build reads a README, so editing one reruns neither"
     verify = [{"task": BUILD, "output": "flock-verify"}]
     assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[BUILD]["key"]
     assert {build.UNIT_CUT, "verity/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
         build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
         *(f for f in files if f.startswith("verity/circuits/"))}, "the script and what it imports, which reads no data"
+    code = [f for f in files if not f.endswith(".md")]
     for t in _suites(doc):
-        assert t["inputs"] == files, f"{t['id']}: check's lean-suites, keyed by the whole tree"
+        assert [f for f in t["inputs"] if not f.endswith(".md")] == code, f"{t['id']}: keyed by the whole tree but its prose"
+        assert "AGENTS.md" not in t["inputs"], f"{t['id']}: a README edit elsewhere reruns no Lean suite"
         assert t["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not t["key"]
         assert {t["vars"]["bin"] + "/" + r["output"] if r["output"] != lean_build.TREE else t["vars"]["tree"]
                 for r in t["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
@@ -213,12 +218,13 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monk
                     (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "d", "gone")\nTEST_PROCESS_GB = 9\n'),
                     ("pyproject.toml", '[project]\nname = "toy"\n'),
                     ("pkg/a/pyproject.toml", f'[project]\nname = "a"\n{pytest_}[tool.verity.tests]\nworker_gb = 3\n'),
-                    ("b/c/pyproject.toml", f"{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\n"),
+                    ("b/c/pyproject.toml", f'{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\ninputs = ["docs/x.md"]\n'),
                     ("pkg/d/pyproject.toml", f'[project]\nname = "d"\n{pytest_}[tool.verity.tests]\nparts = 3\n')):
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
+    prose = ["README.md", "b/c/NOTES.md", "docs/x.md", "docs/y.md", "pkg/a/README.md"]
     files = [*lean, build.UNIT_CUT, build.SUITES, "b/c/pyproject.toml", "pkg/a/pyproject.toml", "pkg/d/pyproject.toml",
-             "pyproject.toml"]
+             "pyproject.toml", *prose]
     monkeypatch.setattr(build, "PARTS", {"a": 2, "d": 2})
     got = {t["id"]: t for t in build.tasks(tmp_path, files)}
     parts, by_id = ["lean-suites:a:1/2", "lean-suites:a:2/2"], [f"lean-suites:d:{k}/3" for k in (1, 2, 3)]
@@ -234,7 +240,11 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monk
         "a parallel suite takes the family's slot, at its own timeout"
     assert got["lean-suites:gone"]["resources"] == {"cores": 1, "mem_gb": 9, "disk_gb": 60}, \
         "a name no suite has is listed, so suites.py's refusal of it is an error"
-    assert all(t["inputs"] == files for i, t in got.items() if i.startswith("lean-suites:"))
+    code = [f for f in files if f not in prose]
+    assert all(got[i]["inputs"] == code for i in [*parts, *by_id]), "a README edit reruns no Lean suite that reads no Markdown"
+    assert got["lean-suites:b/c"]["inputs"] == [*code, "b/c/NOTES.md", "docs/x.md"], \
+        "one that lists a `.md` keeps the Markdown under its directory and its inputs, as suites.py keys it"
+    assert got["lean-suites:gone"]["inputs"] == files, "a name no suite has keeps the whole tree"
     (tmp_path / build.SUITES).write_text("AFTER = ()\n")
     assert not any(t["id"].startswith("lean-suites:") for t in build.tasks(tmp_path, [*lean, build.SUITES])), \
         "no AFTER_LEAN, no lean-suites"

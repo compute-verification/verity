@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 
+#: what `pfill_ref.py` and the tests read
+__all__ = ["dseed", "receipt", "smix", "step"]
+
 M64 = (1 << 64) - 1
 
 
@@ -38,7 +41,10 @@ def s8_rows(seed: int, tag: int, rows: int) -> np.ndarray:
 def step(a: np.ndarray, bt: np.ndarray, c: np.ndarray) -> np.ndarray:
     """D = A B + C, then A' = D's bytes under the fixed map (the accumulator registers reread as the next A fragment)."""
     d = (c + a @ bt.T).astype("<i4")
-    b = lambda x: np.ascontiguousarray(x).view(np.int8)
+
+    def b(x: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray(x).view(np.int8)
+
     top = np.concatenate([b(d[:8, 0::2]), b(d[8:, 1::2])], axis=1)
     bot = np.concatenate([b(d[8:, 0::2]), b(d[:8, 1::2])], axis=1)
     return np.concatenate([top, bot]).astype(np.int64)

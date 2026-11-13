@@ -1,0 +1,17 @@
+# CLOCK_MONOTONIC_RAW in a Nebius virtual machine, a KVM guest on clocksource kvm-clock or tsc: the one source of its
+# numbers (verity/hardware/README.md). Each number is { value, unit, mark, source }. mark: "ceiling" (nothing run on
+# this time base exceeds it: what the model's premises need), "measurement" (a measured value, so only a lower bound on
+# the ceiling), "premise" (no page and no run bounds the number; it is assumed under the premise its source states, of
+# whom it names) or "placeholder" (none of these, open). A time base's card is the clock an auditor's device reads,
+# apart from the host it runs in: it names no host and no CPU, and this one covers every virtual machine of the
+# provider's that an auditor's device runs in. A row that uses drift.max prints the premise for its device's host, and
+# no figure of record uses it while its mark is "premise".
+
+kind = "timebase"
+sku = "nebius-vm-monotonic-raw"
+name = "CLOCK_MONOTONIC_RAW in a Nebius virtual machine, a KVM guest on clocksource kvm-clock or tsc"
+
+# The clock's rate against the SI second's: max is the most the two may differ, read the largest reading on record.
+[drift]
+max = { value = 5e-4, unit = "s/s", mark = "premise", source = "no page bounds it: the provider names the CPU a virtual machine runs on and no server, and states no tolerance for the machine's clock, so no data sheet gives this clock's rate a ceiling. The premise ClockRateWithin(host, 5e-4): over every span the auditor's device in host `host` times, its clock's elapsed reading differs from the span's real length by at most 5e-4 of it; it is assumed of Nebius, beside trusted-host. A pause or a move of the virtual machine inside a span breaks it: under kvm-clock the time the machine is stopped is missing from the raw clock (upstream QEMU sets the guest's clock back at resume to its reading at the stop, hw/i386/kvm/clock.c; this provider's own monitor is not read), under tsc what the counter does meanwhile is not established, and a move puts the guest on another host's counter. 5e-4 is the frequency drift the IA-PC HPET specification 1.0a (section 2.2, Table 1) allows the timer a PC calibrates its counter against, +/-0.05% (500 ppm) over any interval of 1 ms or more, taken whole: the guest's raw clock is the host kernel's own raw clock handed on (under kvm-clock the host's ktime_get_raw() re-anchored about every five minutes, under tsc the guest's counter over the frequency the host published at boot), the host's time daemon steers neither, and the host's kernel fixes that clock's rate once, at boot, by calibrating its counter against such a timer where the processor states no frequency for it (Linux, arch/x86/kernel/tsc.c). The figure is assumed, not derived; drift.read is 6.2% of it" }
+read = { value = 3.12e-5, unit = "s/s", mark = "measurement", source = "the larger of the two readings on record of the raw clock's rate against the hypervisor host's own steered clock (the KVM PHC, ptp_kvm), each 601 reads over 600 s: 31.2 ppm slow between the ends, 31.1 by least squares, under kvm-clock on a CPU-only virtual machine of the kind the network certifier runs in (art:6571cf662840); 7.4 ppm slow under tsc on an RTX PRO 6000 node, eight cards (art:69fb58dc1375). One reading of one host each: a lower bound on the ceiling and never a rho" }

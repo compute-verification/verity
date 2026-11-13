@@ -22,7 +22,8 @@ circuit is measured with.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Hashable
+from collections.abc import Callable, Hashable
+from typing import Any
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.reference import Trace, evaluate_region
@@ -109,10 +110,10 @@ def op_affine(c: int, coeff: tuple[int, ...]) -> PrimitiveDefinition:
                lambda v: c + sum(cf * x for cf, x in zip(coeff, v)), c=c, coeff=coeff)
 
 
-def op_mma(fa: Iv, fb: Iv, k: int, sat: bool = True, arity: int | None = None) -> PrimitiveDefinition:
-    """`Op.mma fa fb k sat`: `C + Σ_{i<k} a_i·b_i` over operands `(C, a_0 … a_{k−1}, b_0 … b_{k−1})`, clamped (`satfinite`)
-    or wrapped to s32. `arity` is its operand count, `2k + 1` unless a test asks for another."""
-    n = 2 * k + 1 if arity is None else arity
+def op_mma(fa: Iv, fb: Iv, k: int, sat: bool = True) -> PrimitiveDefinition:
+    """`Op.mma fa fb k sat`: `C + Σ_{i<k} a_i·b_i` over its `2k + 1` operands `(C, a_0 … a_{k−1}, b_0 … b_{k−1})`, clamped
+    (`satfinite`) or wrapped to s32."""
+    n = 2 * k + 1
 
     def raw(v: list[int]) -> int:
         tail = v[1:]
@@ -233,17 +234,17 @@ class Builder:
     def _s32(self, prim: PrimitiveDefinition, args: tuple[int, ...]) -> int:
         """Append a derived gate at its derived interval, refusing it (and appending nothing) outside s32."""
         lo, hi = derive_op(prim, [self.ivs[j] for j in args], 0, 0)
-        assert S32_MIN <= lo and hi <= S32_MAX, f"{prim.kind} [{lo}, {hi}] outside s32"  # type: ignore[attr-defined]
+        assert lo >= S32_MIN and hi <= S32_MAX, f"{prim.kind} [{lo}, {hi}] outside s32"  # type: ignore[attr-defined]
         return self.gate(prim, args, lo, hi)
 
     def affine(self, c: int, terms: list[tuple[int, int]]) -> int:
         """`c + Σ coeff·gate`, its declared interval the derived one (so `Proven`); asserts it within s32."""
         return self._s32(op_affine(c, tuple(cf for cf, _ in terms)), tuple(j for _, j in terms))
 
-    def mma(self, head: int, a: list[int], b: list[int], fa: Iv, fb: Iv, sat: bool = True) -> int:
-        """`head + Σ a_i·b_i`, its declared interval the derived one; asserts within s32."""
+    def mma(self, head: int, a: list[int], b: list[int], fa: Iv, fb: Iv) -> int:
+        """`head + Σ a_i·b_i` clamped to s32, its declared interval the derived one; asserts within s32."""
         assert len(a) == len(b)
-        return self._s32(op_mma(fa, fb, len(a), sat), (head, *a, *b))
+        return self._s32(op_mma(fa, fb, len(a)), (head, *a, *b))
 
     def gather(self, idx: int, column: list[int], lo: int | None = None, hi: int | None = None,
                low: int | None = None) -> int:
@@ -399,7 +400,7 @@ def ok(C: Builder, i: int, vs: list[int]) -> bool:
     r = raw(C, i, vs)
     if not (C.lo[i] <= r <= C.hi[i] and operands_ok(C, i, vs)):
         return False
-    return C.kinds[i] != "mma" or (S32_MIN <= C.lo[i] and C.hi[i] <= S32_MAX)
+    return C.kinds[i] != "mma" or (C.lo[i] >= S32_MIN and C.hi[i] <= S32_MAX)
 
 
 def in_window(C: Builder, vs: list[int]) -> bool:
@@ -486,14 +487,14 @@ def proven(C: Builder) -> list[str]:
         d = derive(C, i, ivs)
         if is_derived(kind) and not iv_within(d, lo, hi):
             errs.append(f"gate {i} ({kind}): derived {d} outside declared [{lo}, {hi}]")
-        if kind == "affine" and not (S32_MIN <= lo and hi <= S32_MAX):
+        if kind == "affine" and not (lo >= S32_MIN and hi <= S32_MAX):
             errs.append(f"gate {i} (affine): declared [{lo}, {hi}] outside s32")
         if kind == "mma":
             p = C.prims[i]
             k, fa, fb = p.k, p.fa, p.fb  # type: ignore[attr-defined]
             if len(args) != 2 * k + 1:
                 errs.append(f"gate {i} (mma): {len(args)} operands, not 2k+1={2 * k + 1}")
-            if not (S32_MIN <= lo and hi <= S32_MAX):
+            if not (lo >= S32_MIN and hi <= S32_MAX):
                 errs.append(f"gate {i} (mma): declared [{lo}, {hi}] outside s32")
             for j in args[1:1 + k]:
                 if not iv_within(ivs[j], fa[0], fa[1]):
@@ -571,6 +572,6 @@ def products(C: Builder) -> int:
 
 
 def nonlinear(C: Builder) -> int:
-    """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property's caps
-    bound: every operation but a linear map with coefficients fixed before the coins."""
+    """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property
+    bounds: every operation but a linear map with coefficients fixed before the coins."""
     return budgeted(C, fixed=True) + products(C)

@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import calculator, config, policy, starts, traced
+from . import calculator, config, policy, starts, traced, work
 from .capture import products
 from .codecs import Identity
 from .grade import per_period
@@ -61,9 +61,10 @@ PARTS = {
                     "algorithm that computes it. A row whose step has any says what share of the step's gates "
                     "that count is; the slowdown is over the step's gates, that count among them",
     "proved": "the bound's form: the statement named beside each slowdown, a lower bound on every partition of the "
-              "traced step into the policy's blocks, given its two premises and its hypotheses on the circuit, "
+              "traced step into the policy's blocks, given its premises and its hypotheses on the circuit, "
               "which the trace doesn't check",
-    "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states",
+    "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states; and of "
+               f"every batch the planned run reads, that {work.P_BATCH}, which no trace checks",
     "scaled": "the planned run: the config's steps times the traced step's gates, so the traced step stands for "
               "every step; and every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC "
               f"at the {calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the "

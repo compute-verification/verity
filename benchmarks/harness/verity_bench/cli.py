@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from verity_bench import (
     prove_records,
     served_table,
     settings,
+    spot_status,
     steady_plan,
     steady_spec,
 )
@@ -32,7 +33,7 @@ from verity_bench.vllm.table import render
 
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("spec", help="a spec under benchmarks/harness/specs, or its path")
     parser.add_argument("--local-only", action="store_true",
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
@@ -247,12 +248,18 @@ def _overhead_parser(commands: Any) -> None:
 def _prove(args: Any) -> int:
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
                               cores=args.cores, local_only=args.local_only)
+    if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
+        prove_records.record(doc, args.metrics)
     if args.steady_rows:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
+    if args.system == "spot":
+        doc["spot_holes"] = spot_status.status(spot_status.runs_of(doc["inputs"]))
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
         print(prove_records.render(doc, args.rows), end="")
+        if "spot_holes" in doc:
+            print("\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
@@ -342,8 +349,12 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+    """`metrics`: a runner's metric ids, each for the total of `prove`'s table it names (`prove_records.FIGURES`),
+    which `prove` records in a research run's result."""
+
     args = _parser().parse_args(argv)
+    args.metrics = dict(metrics or {})
     try:
         settings.validate(of_record=args.command == "_vllm-point")
         return int(args.run(args))

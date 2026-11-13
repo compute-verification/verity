@@ -10,13 +10,13 @@ import random
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.circuit import segment as SG
-from verity.definitions.circuits.census import COUNTERS, PRODUCTS, census
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
+from verity.definitions.circuits.census import COUNTERS, PRODUCTS, census
+from verity.protocols.pouw.prover.circuit import segment as SG
 
 M32 = SG.M32
 KS, S = 4, 2

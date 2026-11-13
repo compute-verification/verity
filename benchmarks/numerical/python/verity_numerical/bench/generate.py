@@ -12,32 +12,39 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY
 
+from .. import settings
+from . import census
+
+__all__ = ["SUITES", "generate", "main", "register_command", "suite", "workload_suite"]
+
+
+def _git_head() -> str | None:
+    """The commit of the checkout this file is in; None where there is no git, or the file is in no checkout."""
+    if shutil.which("git") is None:
+        return None
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                       check=False, timeout=10)
+    return r.stdout.strip() if r.returncode == 0 else None
+
 
 def _versions() -> dict[str, Any]:
-    head = os.environ.get("RESEARCH_SOURCE_COMMIT")
-    if not head:
-        try:
-            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
-                                  timeout=10).stdout.strip() or None
-        except (OSError, subprocess.SubprocessError):
-            head = None
-    return SY.versions(head)
+    return SY.versions(settings.RESEARCH_SOURCE_COMMIT or _git_head())
 
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
              provenance: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`verity_flock.synthetic.generate`, its provenance naming the run this runs under and its source commit."""
-    run = {"research_run": os.environ.get("RESEARCH_RUN_ID"), "versions": _versions()}
+    run = {"research_run": settings.RESEARCH_RUN_ID, "versions": _versions()}
     return SY.generate(sub, n, seed, out, procs=procs, chunk=chunk, provenance={**run, **(provenance or {})})
 
 
@@ -83,8 +90,6 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
     """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``: a mix entry's
     template bound to exactly its parameters), in id order; an attention head's T range is its census ``variable_ranges.T``."""
-    from . import census
-
     bound = {(s.template, json.dumps(vars(s.parameters), sort_keys=True)): s.id for s in census.SUBCIRCUITS.values()}
     sids = sorted({sid for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows for m in w["template_mix"]
                    if (sid := bound.get((m["subcircuit_template"], json.dumps(m["subcircuit_parameters"] or {}, sort_keys=True))))})
@@ -99,10 +104,11 @@ def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dic
     return out
 
 
-def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False) -> list[dict[str, Any]]:
+def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False,
+          done: Callable[[dict[str, Any]], None] | None = None) -> list[dict[str, Any]]:
     """Generate every set of suite ``name``, each under ``<out>/n<n>/sets/<name>/``; with ``digests_only`` each set's port arrays
     are removed once written (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte
-    for byte."""
+    for byte.  ``done`` is called with each set's summary as the set finishes."""
     out_sets = []
     for tid, params, n in (workload_suite() if name == "workloads" else SUITES[name]):
         sub = TM.subcircuit(tid, **params)
@@ -114,7 +120,8 @@ def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: b
                 if f.name not in ("manifest.json", "index.json"):
                     f.unlink()
         out_sets.append(s)
-        print(json.dumps({k: s[k] for k in ("set", "subcircuit", "n", "content_digest", "draws", "rejected", "seconds")}), flush=True)
+        if done is not None:
+            done(s)
     return out_sets
 
 
@@ -146,6 +153,11 @@ def parse_value(v: str) -> Any:
     return v
 
 
+def _print_set(s: Mapping[str, Any]) -> None:
+    """One line of JSON for a suite's finished set: what ``--suite`` prints as it goes."""
+    print(json.dumps({k: s[k] for k in ("set", "subcircuit", "n", "content_digest", "draws", "rejected", "seconds")}), flush=True)
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="verity_numerical.bench.generate")
     ap.add_argument("--list", action="store_true", help="the templates, their parameters and an example binding")
@@ -165,7 +177,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     if a.suite:
         if a.seed is None or not a.out:
             ap.error("--suite needs --seed and --out")
-        sets = suite(a.suite, a.seed, a.out, a.procs, a.digests_only)
+        sets = suite(a.suite, a.seed, a.out, a.procs, a.digests_only, done=_print_set)
         if a.register:
             for s in sets:
                 s["art"] = register(s["path"])

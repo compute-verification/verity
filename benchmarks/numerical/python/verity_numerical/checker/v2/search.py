@@ -16,11 +16,13 @@ import argparse
 import json
 import random
 import time
+from collections.abc import Iterable
 from dataclasses import asdict
 
-from ..ctx import Reject, Table, Z3Ctx
+from .. import search as S
+from ..ctx import Table, Z3Ctx
 from ..gadgets import Epilogue
-from ..params import REAL, Params
+from ..params import REAL, Params, Reject
 from ..search import (
     GOLDILOCKS,
     M31,
@@ -47,9 +49,10 @@ from .gadgets import (
     StateShift,
 )
 from .params import V2
+from .step import _group
 from .tables import all_tables, leadnorm_table
 
-__all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "z3_group_step_v2"]
+__all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "wrapfree_queries_v2", "z3_group_step_v2"]
 
 
 def _nz(x):
@@ -317,7 +320,7 @@ class ModZ3CtxV2(ModZ3Ctx):
     """``ModZ3Ctx`` whose lookups use the symbolic table function: the key's residue must equal some row key
     ``kk`` in ``[lo, hi)`` (in the domain), and the outputs are ``sym(kk)`` -- as a lookup argument binds them."""
 
-    def lookup(self, name, table: Table, key):
+    def lookup(self, name: str, table: Table, key: object) -> tuple[object, ...]:
         z3 = self.z3
         if isinstance(key, int) or table.sym is None:
             return super().lookup(name, table, key)
@@ -330,7 +333,6 @@ class ModZ3CtxV2(ModZ3Ctx):
 
 
 def _z3_gadget_mod(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, label: str) -> QueryResult:
-    import verity_numerical.checker.search as S
     saved = S.ModZ3Ctx
     S.ModZ3Ctx = ModZ3CtxV2
     try:
@@ -353,7 +355,7 @@ class WrapFreeZ3CtxV2(ModZ3CtxV2):
         self.wraps.append(m)
         return a - b == m * self.modulus
 
-    def boolean(self, name, b):
+    def boolean(self, name: str, b: object) -> None:
         # one congruence with a fresh bit (not Or(b = 0, b = 1) with two multipliers, one of which would be free)
         if isinstance(b, int):
             super().boolean(name, b)
@@ -368,7 +370,6 @@ def z3_gadget_wrapfree(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, 
     integer 'differs-from-reference' UNSAT is also the field result.  This is a linear query when every key is a
     linear function of range-checked quantities (the v2 shape), which is why it closes what the direct product
     query leaves UNKNOWN."""
-    import verity_numerical.checker.search as S
     ctx = WrapFreeZ3CtxV2(modulus)
     z3 = ctx.z3
     contract = spec.contract(p)
@@ -396,8 +397,10 @@ def z3_gadget_wrapfree(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, 
 
 
 def wrapfree_queries_v2(p: Params = REAL, *, timeout_ms: int = 20_000,
-                        names=("state_decode", "group_max", "state_shift", "signed_sum", "normalise", "pack", "epilogue"),
-                        moduli=((GOLDILOCKS, "F_goldilocks"), (M31, "F_m31"))) -> list[QueryResult]:
+                        names: Iterable[str] = ("state_decode", "group_max", "state_shift", "signed_sum", "normalise",
+                                                "pack", "epilogue"),
+                        moduli: Iterable[tuple[int, str]] = ((GOLDILOCKS, "F_goldilocks"),
+                                                             (M31, "F_m31"))) -> list[QueryResult]:
     return [z3_gadget_wrapfree(SPECS_V2[n], p, mod, timeout_ms=timeout_ms, label=f"{lab}, wrap-free")
             for n in names for mod, lab in moduli]
 
@@ -439,8 +442,6 @@ def z3_group_step_v2(p: Params = REAL, *, timeout_ms: int = 60_000, concrete: di
     if concrete:
         for k, v in concrete.items():
             ctx.solver.add(x[k] == v)
-
-    from .step import _group
 
     def copy_(tag):
         h = {"E": ctx.fresh(f"{tag}.E"), "acc_split": {"M_hi": ctx.fresh(f"{tag}.M_hi"), "M_lo": ctx.fresh(f"{tag}.M_lo")},

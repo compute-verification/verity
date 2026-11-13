@@ -134,13 +134,13 @@ def rate_of(p: dict, times: list[dict]) -> dict:
     loop = next(i for i, e in enumerate(ex) if counted in e)
     until = p.get("until", 0) - 1
     per_rep: dict[str, list[float]] = {}
-    stop_gap = []
+    stopped = []
     for t in times:
         cyc = statistics.median(t["cyc"])
         if until >= 0:
             # the OP_UNTIL loop ran only while the fixed role did: its trips over the stop's cycles, block by block
             per_block = [tr / st for tr, st in zip(t["trips"], t["stop"]) if st > 0]
-            stop_gap.append(statistics.median([1 - st / c for st, c in zip(t["stop"], t["cyc"]) if c > 0]))
+            stopped.append(statistics.median([1 - st / c for st, c in zip(t["stop"], t["cyc"]) if c > 0]))
         for i, e in enumerate(ex):
             for pat, n in e.items():
                 r = n * statistics.median(per_block) if i == until else n * t["iters"] * warps[i] / cyc
@@ -154,7 +154,7 @@ def rate_of(p: dict, times: list[dict]) -> dict:
             "sm_mhz": statistics.median(mhz) if mhz else None,
             "distinct_sms": min(len(set(t["smid"])) for t in times), "blocks": times[0]["blocks"],
             "throttled": any(int(t["throttle"], 16) & 0xEC for t in times),
-            "stop_gap": statistics.median(stop_gap) if stop_gap else None}
+            "stop_gap": statistics.median(stopped) if stopped else None}
 
 
 def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: list[dict], run_id: str,
@@ -183,7 +183,7 @@ def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: lis
                      "binary": binary.name, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                      "row": row or None, "words": p["words"] or None, "census": line, "tags": tags,
                      "sink": gates.get(p["name"]), "note": p["note"] or None, "blocks_asked": p.get("blocks") or None,
-                     **r})
+                     "until": p.get("until") or None, **r})
     return side
 
 

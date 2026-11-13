@@ -12,6 +12,7 @@ from pathlib import Path
 import research.merge as M
 from research.cli import main as research_main
 from test_merge_gate import CHECK_FILES, CHECKED
+from test_queue import _worktree_locks
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -306,8 +307,8 @@ def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_
 
 
 def test_the_after_landing_tree_goes_under_train_trees_when_set_else_in_the_temporary_directory(tmp_path, monkeypatch):
-    """On the control pod TMPDIR is a network volume, where the tree's add took minutes; TRAIN_TREES, which the loop sets only
-    while its local disk has room, takes it there, as it takes train.sh's, and TMPDIR stays where it is."""
+    """On the control pod TMPDIR is a network volume, where the tree's add took minutes; TRAIN_TREES, which the loops set to a
+    local disk, takes it there, as it takes train.sh's, and TMPDIR stays where it is."""
     import tempfile
 
     repo, tmp, trains = tmp_path / "repo", tmp_path / "tmpdir", tmp_path / "fast" / "trains"
@@ -324,6 +325,38 @@ def test_the_after_landing_tree_goes_under_train_trees_when_set_else_in_the_temp
     assert not list(tmp.iterdir()) and tempfile.gettempdir() == str(tmp)
     monkeypatch.setenv("TRAIN_TREES", "")
     assert (other := M._own_tree(repo, head)) is not None and other.parent == tmp
+
+
+def test_the_steps_after_a_landing_fetch_under_the_worktree_lock_and_add_their_tree_under_both_locks(tmp_path, monkeypatch):
+    """Drive's steps after a landing run in the queue's clone, where the loop adds worktrees (a move's regeneration) under
+    train.lock and the worktree lock.  A fetch reads every worktree's HEAD, which a worktree half added has as a placeholder:
+    `caught_up`'s fetch beside such an add said `bad object worktrees/…/HEAD`, logged that main can't be fetched, and that
+    landing's steps waited for the next one.  So its fetch holds the worktree lock shared, as the queue's fetches do, and
+    the after-landing tree is added under both locks, as the queue adds its own."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a")
+    _git(repo, "push", "-q", "origin", "HEAD:main", f"HEAD:{M.AFTER_LAND_REF}", f"HEAD:{M.SPEC_ALERTED_REF}")
+    _steps(monkeypatch)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+    tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", "HEAD:main")
+    monkeypatch.setenv("TRAIN_TREES", str(tmp_path / "trees"))
+    locks, real, seen = _worktree_locks(repo), subprocess.run, []
+
+    def probed(argv, *args, **kw):
+        if argv[:2] in (["git", "fetch"], ["git", "worktree"]):
+            seen.append((argv[1], *locks()))
+        return real(argv, *args, **kw)
+
+    monkeypatch.setattr(M.subprocess, "run", probed)
+    assert M.caught_up(repo, "origin", "check", log=lambda *_: None) == tip
+    tree = M._own_tree(repo, tip)
+    monkeypatch.setattr(M.subprocess, "run", real)
+    assert tree is not None and _git(tree, "rev-parse", "HEAD") == tip
+    assert seen == [("fetch", False, False, True), ("worktree", True, True, True)], seen
+    assert locks() == (False, False, False)
 
 
 def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
@@ -895,3 +928,30 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 1)  # without it, old-work archived
     assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")
+
+
+def test_the_branch_sweep_into_checked_deletes_a_branch_on_checked_but_not_main(tmp_path):
+    """Drive sweeps against its landing branch, `checked`, which `main` lags: a branch on `checked` is deleted, and one with a
+    commit beyond `checked` is kept."""
+    now = 1_800_000_000
+    repo, gh, _tips, _merge = _world(tmp_path)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    when = f"@{now - 2 * 86400} +0000"
+    for name, base in (("on-checked", "main"), ("beyond", "on-checked")):
+        _git(repo, "checkout", "-q", "-b", name, base)
+        (repo / f"{name}.txt").write_text(name)
+        _git(repo, "add", "-A")
+        subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", name], cwd=repo, check=True,
+                       env={**env, "GIT_COMMITTER_DATE": when, "GIT_AUTHOR_DATE": when})
+        _git(repo, "push", "-q", "origin", name)
+    _git(repo, "checkout", "-q", "-b", "checked", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "land on-checked", "on-checked")
+    _git(repo, "push", "-q", "origin", "checked")
+    del gh.open[1], gh.open[2]
+    for name in ("A", "B"):
+        _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 0), "neither is on main"
+    log = []
+    assert M.sweep_branches(repo, into="checked", now=now, gh=gh, log=log.append) == (1, 0)
+    assert "research merge: delete: on-checked" in log, log
+    assert {"main", "checked", "beyond"} <= _heads(repo) and "on-checked" not in _heads(repo)

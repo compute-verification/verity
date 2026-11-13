@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.poub.verifier import audit, store
 from verity.circuits import codec as circuits_codec
+from verity.protocols.poub.verifier import audit, store
 
 ROLE = "synthetic-bf16"
 NODE = b"test-node"
@@ -100,7 +100,7 @@ def test_a_salt_is_sha512_in_counter_mode_over_its_versioned_message():
         m = b"verity/store/salt/v1\0" + KEY + label + struct.pack(">Q", c)
         want = b"".join(hashlib.sha512(m + struct.pack(">I", k)).digest() for k in range(3))
         assert store.store_salt(KEY, label, c) == want
-    assert store.SALT_DOMAIN == store.SALT_VERSION.encode() + b"\0"
+    assert store.SALT_VERSION.encode() + b"\0" == store.SALT_DOMAIN
 
 
 def test_the_local_canonical_json_is_ml_circuits_codecs_on_the_shapes_pins_use():

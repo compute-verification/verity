@@ -1,0 +1,41 @@
+# The SASS gate's move: what `tools/move/layout.py --map tools/move/sass_gate_map.toml` moves and rewrites.
+#
+# `benchmarks/pouw/harness/sass_gate.py` and the pins it reads beside it, `sass_pins.json`, become
+# `verity/protocols/pouw/prover/sass_gate.py` and `verity/protocols/pouw/prover/sass_pins.json`: the gate is the
+# developer's check that a kernel binary holds no instruction the verifier's scalar model can't replay, so it lives with
+# PoUW's prover. The two rows move the two files and rewrite each path that names either.
+#
+# The move is run only on a tree where every reader loads the gate by its repository path, which the rewrite follows. A
+# reader that imports it by name with `harness/` on `sys.path` (`import sass_gate`) names no path: the tool leaves it as
+# it is, and it breaks.
+#
+# What stays: the gate's tests and their fixtures (`benchmarks/pouw/tests/`), the rest of `harness/`, and every Lean
+# file's and every kernel source's bytes ([rewrite] exclude). No root moves ([roots] old == new). No file is split,
+# added or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/pouw/harness/sass_gate.py" = "verity/protocols/pouw/prover/sass_gate.py"
+"benchmarks/pouw/harness/sass_pins.json" = "verity/protocols/pouw/prover/sass_pins.json"
+
+[retired]
+paths = ["benchmarks/pouw/harness/sass_gate.py", "benchmarks/pouw/harness/sass_pins.json"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
+# archive, files whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit
+# of that file takes it: a rewritten Lean file recompiles every module that imports it), and every kernel source, whose
+# bytes change only with its owner's build check.
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256",
+           "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h"]
+# Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+[modules]
+# the rename [paths] and [roots] imply (`layout.py --modules`): the gate as a dotted path
+"benchmarks.pouw.harness.sass_gate" = "verity.protocols.pouw.prover.sass_gate"

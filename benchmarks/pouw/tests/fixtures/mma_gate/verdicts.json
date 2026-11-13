@@ -1,36 +1,4 @@
 {
- "attn_bf16": {
-  "fast_math": {
-   "out_json": "18c835979166f0583635d7ac61a4dd4c8ae8404d56a051803ab40ab99be0fc88",
-   "rc": 1,
-   "stderr": "f12e3dc3e338a86010b84da36889bf6551e02018e484aab3ef2380116d99b115",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "pass": {
-   "out_json": "aaf9e54d2159115cbf735e0825e030b81e7ab2fd198af880263f88476d804127",
-   "rc": 0,
-   "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "stdout": "62078c0ac98dfeb1b06d286ed50aca03cea8d73d3ac4226f2af7b9ecbf944c57"
-  },
-  "pass_sm120a": {
-   "out_json": "d4ae03484c5a0977d546ab2d81e088419d2509edaec6ebe7b37e3ea64481f165",
-   "rc": 0,
-   "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "stdout": "bfedc93e76b54ccff649c60340a379d86f5607fb95ab43d77625e5a0b1c803e8"
-  },
-  "plain": {
-   "out_json": "fba1bef6d4ab21a6c2d087986fa1acb85c606136dc88d772a0a30ab714ca7e3c",
-   "rc": 1,
-   "stderr": "effc2f1d3f399c721ca88e88c51147fdc77c854bc09172815fc5695912ffd45c",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "refused": {
-   "out_json": "ccf93800c010b3db46e8878ac0ca537df751ee43b83cf907e1fce2c688348dcf",
-   "rc": 1,
-   "stderr": "c7f51b9d500a35b81adada7a816e6c6d894bee86f5c592e539af5c15e422df43",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
- },
  "pearl_c_sm120": {
   "fast_math": {
    "out_json": "bcff413b5ee26444c789507a7aebc90dec08322687c710b4aa5738f4f53966d1",
