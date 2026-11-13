@@ -22,6 +22,7 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 * `wiresFirst_held`, `heldWire_held`: there are no wires;
 * `heldLink_held`: each of `R`'s ports has a link, and every row its units read source bits at is one of them
   (`Ref.named`);
+* `popOk_held`: the boundary registration passes the run's population check at one unit;
 * `two_held`, `scope_held`: where every member's circuit is in the scope Flock's hidden-output proof covers and the
   registered wiring passes its check (`membersScoped`, `wiringOk`), the design evaluates, and every statement that
   decodes is in the two-stage scope at the compiled code;
@@ -201,6 +202,15 @@ theorem layout_held :
     (Spot.Slots.layout (held R B desc q c₀).reg.first.program (held R B desc q c₀).reg.first.query).toOption =
       some (oneLayout B.gs) := by
   show (Spot.Slots.layout B.g.program B.g.query).toOption = some (oneLayout B.gs)
+  rw [B.layout]
+  rfl
+
+/-- **The instance passes the run's population check at one unit** (`Slots.popOk`): its layout's population is the
+one proof block, unit `0`. -/
+theorem popOk_held :
+    Spot.Slots.popOk (held R B desc q c₀).reg.first.program (held R B desc q c₀).reg.first.query 1 = true := by
+  show Spot.Slots.popOk B.g.program B.g.query 1 = true
+  unfold Spot.Slots.popOk
   rw [B.layout]
   rfl
 
