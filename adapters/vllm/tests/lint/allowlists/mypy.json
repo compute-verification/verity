@@ -300,8 +300,6 @@
     {"file": "verity_vllm/config.py", "kind": "union-attr", "symbol": "done_source_refusal", "detail": "", "count": 2},
     {"file": "verity_vllm/engine/int8_attention_triton.py", "kind": "union-attr", "symbol": "_kv_launch", "detail": ""},
     {"file": "verity_vllm/engine/int8_attention_vllm.py", "kind": "arg-type", "symbol": "Int8AttentionImpl.forward", "detail": ""},
-    {"file": "verity_vllm/engine/int8_checkpoint.py", "kind": "call-arg", "symbol": "fp8_exact", "detail": ""},
-    {"file": "verity_vllm/engine/int8_checkpoint.py", "kind": "call-arg", "symbol": "fp8_served_bf16", "detail": ""},
     {"file": "verity_vllm/engine/int8_fused.py", "kind": "call-arg", "symbol": "Cfg.parse", "detail": ""},
     {"file": "verity_vllm/engine/int8_fused.py", "kind": "call-arg", "symbol": "_plan", "detail": ""},
     {"file": "verity_vllm/engine/int8_vllm.py", "kind": "arg-type", "symbol": "Int8ExpertsMethod.process_weights_after_loading", "detail": "", "count": 2},
