@@ -3,7 +3,7 @@ harness's `ControlResponder`) and `verity.protocols.accounting.pous.verifier.pro
 
     python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
-        [--seed HEX]
+        [--seed HEX] [--strict] [--lean-exe PATH]
 
 `READY.json` names the responder's port, the salt, the scheme and its parameters; `vk` is `VerifierKey.from_leaves` over
 `LEAVES.bin` (64 bytes a block, in block order).
@@ -17,10 +17,12 @@ harness's `ControlResponder`) and `verity.protocols.accounting.pous.verifier.pro
   anyway; `gaps` names what it does not cover, and `bench.py`'s certificate gate decides.  With `--strict` (P2 v3's arm)
   the memory challenger refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
-  answer's block, its time, the responder's reported device and server time, and its verdicts.  A strict audit's document
-  is judged from that record twice (`judge`), by the Lean's verdict and by `verdict`, which replays `protocol.TimedAudit` on
-  it and stays the reference; both are kept (`verdicts`), `VERDICT` names the record's (the Lean's, or the Python's where
-  the Lean can't run, as in the GPU pods' venv), and a document the two disagree on accepts nothing (`DISAGREE`).
+  answer's block, its time, the responder's reported device and server time, and its verdicts.  Every document is judged
+  from that record twice (`judge`), by the Lean's verdict (`pous-timed-audit`: `--lean-exe`, else `pous_check`'s) and by
+  `verdict`, which replays `protocol.TimedAudit` on it and stays the reference; both are kept (`verdicts`), and the record's
+  is the Lean's (`VERDICT`).  Where the Lean can't run, the document is undecided and accepts nothing; where the two
+  disagree it accepts nothing (`DISAGREE`).  A scheme no Lean judges (any but P2 v4: the band, dense) keeps the Python's
+  counts as measured, judged by no one (`NO_LEAN`), with no profile.
   Under `--clock wall`, `host_trace`
   splits every round trip over `TRACE_OVER_NS` into where its time went, on CLOCK_MONOTONIC (`hosttrace.sh`'s kernel trace
   of the same cores reads that clock), and `memory_challenger_rusage` counts the memory challenger thread's page faults and
@@ -33,7 +35,7 @@ harness's `ControlResponder`) and `verity.protocols.accounting.pous.verifier.pro
   every 10th block zeroed misses them all in an audit of 105 with probability about 1e-5).
 
 Wire: a request is `<QQ` (op, argument); an answer is a 24-byte header `<QQQ` (status, device ns, server ns) and one block.
-Exit 0 when every audit accepted, 1 otherwise.
+Exit 0 when the Lean accepted every audit, 1 otherwise.
 """
 from __future__ import annotations
 
@@ -51,7 +53,9 @@ import resource
 import shutil
 import socket
 import struct
+import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -320,11 +324,12 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
 
 
 VERDICT = "lean"
-"""The verdict of record on an audit document (`judge`): `"lean"`, `pous_check`'s `pous-timed-audit`
-(`verity/protocols/accounting/pous/verifier/check/timed_audit.py`), or `"python"`, `verdict` (protocol.TimedAudit replayed on the record,
-the reference).  `judge` runs both and records both either way.  Where the Lean can't run (`lean_unavailable`), the
-Python's is the record's and the Lean's is computed afterwards by `timed_audit.py --replay`."""
+"""The verdict of record on an audit document (`judge`): `pous-timed-audit`'s, the Lean's.  `judge` runs `verdict`
+(protocol.TimedAudit replayed on the record, the reference) beside it as a veto and records both.  Where the Lean can't
+run (`lean_unavailable`), the document is undecided: the Python's verdict is kept and decides nothing."""
 DISAGREE = "the Lean and Python verdicts disagree"
+NO_LEAN = "no Lean judges this scheme's audit"
+"""Why a document of a scheme other than P2 v4 is measured and judged by no one: both verdicts read P2 v4 records alone."""
 
 HEX = re.compile("(?:[0-9a-f]{2})*")
 
@@ -429,17 +434,35 @@ def pous_check() -> Any:
     return module
 
 
-def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
-    """`verdict`, by `pous_check`'s `pous-timed-audit`."""
+def run_lean(exe: str | os.PathLike, ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
+    """`verdict`, by the built `pous-timed-audit` at `exe` (`exe READY LEAVES AUDIT`), from files."""
+    with tempfile.TemporaryDirectory() as tmp:
+        files = [Path(tmp) / name for name in ("ready.json", "leaves.bin", "audit.json")]
+        files[0].write_text(json.dumps(ready))
+        files[1].write_bytes(leaves)
+        files[2].write_text(json.dumps(doc))
+        p = subprocess.run([str(exe), *map(str, files)], capture_output=True, text=True)
+    if p.returncode not in (0, 1):
+        raise RuntimeError(f"{Path(exe).name} failed ({p.returncode}): {p.stderr}")
+    return json.loads(p.stdout)
+
+
+def lean_verdict(ready: Any, leaves: bytes, doc: Any, exe: str | os.PathLike | None = None) -> dict[str, Any]:
+    """`verdict`, by `pous-timed-audit`: the built one at `exe`, else `pous_check`'s, which builds it."""
+    if exe is not None:
+        return run_lean(exe, ready, leaves, doc)
     return pous_check().lean_verdict(ready, leaves, doc)
 
 
 VERDICTS = {"python": verdict, "lean": lean_verdict}
 
 
-def lean_unavailable() -> str | None:
-    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or `pous_check`'s `timed_audit.py`, which
-    serves it, not loadable beside this Python, which it is where `verity_difftest` isn't importable), or None."""
+def lean_unavailable(exe: str | os.PathLike | None = None) -> str | None:
+    """Why the Lean verdict can't run in this process, or None: `exe` given and not an executable file; else no `lake`
+    on the PATH, or `pous_check`'s `timed_audit.py`, which serves it, not loadable beside this Python, which it is where
+    `verity_difftest` isn't importable."""
+    if exe is not None:
+        return None if Path(exe).is_file() and os.access(exe, os.X_OK) else f"{exe} is not an executable file"
     if shutil.which("lake") is None:
         return "lake is not on the PATH"
     try:
@@ -449,31 +472,53 @@ def lean_unavailable() -> str | None:
     return None
 
 
-def judge(ready: Any, leaves: bytes, doc: dict[str, Any], by: str | None = None) -> dict[str, Any]:
-    """`doc` under the verdict of record `by` (`VERDICT`, or the Python's where the Lean can't run): its answers' verdicts,
-    the counts, the audit of record's acceptance and the profile are the verdict's, kept as `verdict` (with `by`).  Both
-    verdicts run, and both are kept as `verdicts` (the Lean's `{"unavailable": why}` where it can't run here, `{"failed":
-    why}` where it should and raises).  Where both ran and differ, the record is a rejection, `{"rejected": DISAGREE...}`
-    naming each one's outcome.  A refused, faulted or rejected record accepts nothing (a refused one has no profile to
-    record)."""
+def lean_judges(ready: Any) -> bool:
+    """Whether a Lean judges an audit of `ready`'s scheme: P2 (`schemes.P2`, P2 v4), whose records `verdict` and
+    `pous-timed-audit` read; no Lean is written for any other."""
+    try:
+        return type(scheme_of(ready["scheme"], params_of(ready["scheme"], ready["params"]))) is schemes.P2
+    except Exception:  # noqa: BLE001 - a ready file no scheme reads is judged by neither, which faults it
+        return False
+
+
+def accepted(doc: dict[str, Any]) -> bool:
+    """Whether `judge`'s document is accepted: the Lean's verdict of record, and every audit of at least one accepted, each
+    audit run (`audits`, where the document counts them) having its record."""
+    n = len(doc.get("records") or ())
+    return ((doc.get("verdict") or {}).get("by") == VERDICT and n > 0 and doc.get("audits", n) == n
+            and doc.get("audits_accepted") == n)
+
+
+def judge(ready: Any, leaves: bytes, doc: dict[str, Any], exe: str | os.PathLike | None = None) -> dict[str, Any]:
+    """`doc` under the Lean's verdict (`VERDICT`; `pous-timed-audit` at `exe`, else `pous_check`'s): its answers' verdicts,
+    the counts, the audit of record's acceptance and the profile are the Lean's, kept as `verdict` (with `by`).  The
+    Python's verdict runs beside it as a veto, and both are kept as `verdicts` (the Lean's `{"unavailable": why}` where it
+    can't run here, `{"failed": why}` where it should and raises).  Where the Lean can't run, the record is
+    `{"undecided": why}`; where the two differ, it is a rejection, `{"rejected": DISAGREE...}` naming each one's outcome.
+    An undecided, refused, faulted or rejected record accepts nothing (a refused one has no profile to record).  A scheme
+    no Lean judges (`lean_judges`) is asked of neither: its counts stay the Python's, as measured, under
+    `{"by": None, "unjudged": NO_LEAN}`, with no profile."""
+    if not lean_judges(ready):
+        return {**copy.deepcopy(doc), "verdict": {"by": None, "unjudged": NO_LEAN}, "profile": None}
     verdicts = {"python": VERDICTS["python"](ready, leaves, doc)}
-    why = lean_unavailable()
+    why = lean_unavailable(exe)
     if why is not None:
         verdicts["lean"] = {"unavailable": why}
     else:
         try:
-            verdicts["lean"] = VERDICTS["lean"](ready, leaves, doc)
+            verdicts["lean"] = VERDICTS["lean"](ready, leaves, doc, exe)
         except Exception as e:
             log.exception("the Lean verdict raised; the record keeps it as failed")
             verdicts["lean"] = {"failed": f"{type(e).__name__}: {e}"}
-    by = by or (VERDICT if why is None else "python")
-    v = verdicts[by]
-    if "unavailable" not in verdicts["lean"] and verdicts["lean"] != verdicts["python"]:
+    v = verdicts["lean"]
+    if why is not None:
+        v = {"undecided": f"the Lean verdict can't run here ({why}), and the Python's decides nothing alone"}
+    elif verdicts["lean"] != verdicts["python"]:
         outcome = {name: {f: w[f] for f in ("accepted", "audits_accepted", "fault", "refused", "failed") if f in w}
                    for name, w in verdicts.items()}
         v = {"rejected": f"{DISAGREE}: lean {json.dumps(outcome['lean'])}, python {json.dumps(outcome['python'])} "
                          "(both in `verdicts`)"}
-    out = {**copy.deepcopy(doc), "verdict": {"by": by, **v}, "verdicts": verdicts,
+    out = {**copy.deepcopy(doc), "verdict": {"by": VERDICT, **v}, "verdicts": verdicts,
            "audits_accepted": v.get("audits_accepted", 0)}
     if "refused" not in v:
         out["profile"] = v.get("profile")
@@ -518,6 +563,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="refuse an audit the certificate does not cover (protocol.TimedAudit's default) instead of running "
                          "it as a research audit; the refusal is recorded and the exit is 1")
     ap.add_argument("--seed", default=None, help="derive each audit's challenge source from this hex seed (--clock logical only)")
+    ap.add_argument("--lean-exe", default=None,
+                    help="a built pous-timed-audit, the verdict of record (default: pous_check's, built with lake, where "
+                         "lake and verity_difftest are here; where neither is, the audit is undecided and the exit is 1)")
     a = ap.parse_args(argv)
     if a.seed is not None and a.clock != "logical":
         ap.error("--seed is for the logical clock's runs alone: a timed audit's challenges come from os.urandom")
@@ -539,16 +587,15 @@ def main(argv: list[str] | None = None) -> int:
            **audit("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu,
                    allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock,
                    research=not a.strict, seed=seed)}
-    if a.strict:
-        doc = judge(ready, raw, doc)
+    doc = judge(ready, raw, doc, a.lean_exe)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    return 0 if doc["audits"] and doc["audits_accepted"] == doc["audits"] else 1
+    return 0 if accepted(doc) else 1
 
 
-__all__ = ["ALLOWANCE_KIND", "DISAGREE", "HEADER", "OP_CHALLENGE", "OP_CLOSE", "OP_PING", "TRACE_OVER_NS", "VERDICT",
-           "VERDICTS", "LiveResponder", "LogicalClock", "audit", "calibrate", "calibrate_only", "cgroup_cpu", "host_trace",
-           "judge", "lean_unavailable", "lean_verdict", "limit_of", "main", "params_of", "quantiles", "scheme_of",
-           "seeded_source", "verdict"]
+__all__ = ["ALLOWANCE_KIND", "DISAGREE", "HEADER", "NO_LEAN", "OP_CHALLENGE", "OP_CLOSE", "OP_PING", "TRACE_OVER_NS",
+           "VERDICT", "VERDICTS", "LiveResponder", "LogicalClock", "accepted", "audit", "calibrate", "calibrate_only",
+           "cgroup_cpu", "host_trace", "judge", "lean_judges", "lean_unavailable", "lean_verdict", "limit_of", "main",
+           "params_of", "quantiles", "run_lean", "scheme_of", "seeded_source", "verdict"]
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -20,7 +20,8 @@ Every implementation passes the same gates and reports the same metrics, written
   - The decode pass over the weight set: seconds, and EWB, which is weight bytes over the pass time.
   - Encode time per segment.
   - The timed audit: accepted out of N, the worst answer, the limit.
-  - The storage profile the certificate gives an accepted audit, with its gaps.
+  - The storage profile the certificate gives an audit the Lean's verdict accepted (`timed_audit.judge`), with its gaps:
+    P2 v4's alone, since no Lean judges another scheme's audit, whose timing is a measurement with no profile.
 
 Implementations (`IMPLS`), each adding one class:
 
@@ -37,7 +38,8 @@ Implementations (`IMPLS`), each adding one class:
   counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
 * `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
   `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
-  certificate (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
+  certificate (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover,
+  and `pous-timed-audit`'s verdict decides them (`--pous-timed-audit`, else built once a run).
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
@@ -77,6 +79,7 @@ FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "
 """`pous-dense-bench`'s kernel flags in the band's run of record (the implementation at `4e491631`)."""
 SALT = bytes(range(24))
 BATCHES = ("1", "8", "32")
+VLLM_UNJUDGED = "pous-dense-bench keeps no record of its audit's answers, so no Lean judges it and no profile is issued"
 
 
 def cpus() -> int:
@@ -206,9 +209,10 @@ class Reference:
         vk = protocol.verifier_key(scheme, commitment, SALT, w=w_segments, encoded=c)
         vk_s = time.perf_counter() - t
         blocks = [b for seg in c for b in seg]
-        honest = self._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
+        honest = self._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns, judging(scheme))
         wrong = [bytes(len(b)) if i % 10 == 0 else b for i, b in enumerate(blocks)]
         negative = self._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
+        verdict = judge_audits(scheme, vk, honest.pop("record", None), getattr(a, "pous_timed_audit", None))
         k, limit = honest["k"], honest["limit_ns"]
         gate, gaps = certificate_gate(scheme, k, limit)
         from verity.protocols.accounting.pous.verifier import dense as dense_codec
@@ -220,25 +224,56 @@ class Reference:
             "implementation": {"name": self.name, "commit": a.impl_commit, "workers": a.workers},
             "segments": n, "segments_of_weight_set": segments, "blocks": scheme.params.blocks, "weight_bytes": used,
             "gates": {"round_trip": {"passed": all(ok for _, ok, _ in dec)}, "certificate": gate, "segment_tags": tags,
-                      "timed_audit": {"passed": honest["accepted"] == honest["audits"]},
+                      "timed_audit": {"passed": honest["accepted"] == honest["audits"], "verdict": verdict["verdict"]},
                       "negative_control": {"passed": negative["accepted"] == 0, "accepted": negative["accepted"]}},
             "metrics": {"decode_pass_s": decode_wall, "ewb": used / decode_wall,
                         "decode_s_per_segment": statistics.median(dt for _, _, dt in dec),
                         "encode_pass_s": encode_wall, "encode_s_per_segment": statistics.median(dt for _, _, dt in enc),
                         "vk_s": vk_s, "audit": honest, "negative_audit": negative},
-            "profile": profile_json(scheme, k, limit, gaps) if honest["accepted"] else None,
+            "profile": profile_json(scheme, k, limit, gaps) if verdict["accepted"] else None,
         }
 
     @staticmethod
-    def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
-        results = []
+    def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int, keep: bool = False) -> dict[str, Any]:
+        """`audits` in-process audits; with `keep`, their document as `timed_audit.audit` writes it (`record`), for the
+        Lean's verdict."""
+        results, records = [], []
+        respond = protocol.responder(scheme, block)
         for j in range(audits):
-            v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
-                                  experimental=True)   # an experimental scheme's profile says so
-            results.append(v.run(protocol.responder(scheme, block)))
+            source = f"bench-audit/{j}".encode()
+            v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), rtt_allowance_ns=rtt_ns,
+                                    experimental=True)   # an experimental scheme's profile says so
+            res = v.run(lambda i: (lambda b: (b, {"index": i, "block": b}))(respond(i)))
+            results.append(res)
+            records.append({"source": source.hex(), "answers": [{"index": x.report["index"], "elapsed_ns": x.elapsed_ns,
+                                                                 "block": x.report["block"].hex()} for x in res.answers]})
         elapsed = [x.elapsed_ns for r in results for x in r.answers]
-        return {"audits": audits, "accepted": sum(r.accepted for r in results), "k": v.k, "limit_ns": v.limit_ns,
-                "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
+        out = {"audits": audits, "accepted": sum(r.accepted for r in results), "k": v.k, "limit_ns": v.limit_ns,
+               "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
+        if keep:
+            out["record"] = {"root": vk.root.hex(), "clock": "wall", "deadline_ns": v.limit_ns - rtt_ns,
+                             "rtt_allowance_ns": rtt_ns, "limit_ns": v.limit_ns, "k": v.k, "strict": True, "records": records}
+        return out
+
+
+def judging(scheme) -> bool:
+    """Whether a Lean judges `scheme`'s audits (`timed_audit.lean_judges`: P2 v4 alone)."""
+    from verity.protocols.accounting.pous.device import timed_audit
+
+    return timed_audit.lean_judges({"scheme": scheme.name, "params": scheme.params.manifest()})
+
+
+def judge_audits(scheme, vk, record: dict[str, Any] | None, exe: str | None) -> dict[str, Any]:
+    """The verdict on in-process audits before any profile: for a scheme a Lean judges, their `record`
+    (`Reference._audits`'s) under `timed_audit.judge` (`pous-timed-audit` at `exe`, else `pous_check`'s), accepted when
+    the Lean accepted every audit; for any other (no `record`), unjudged (`timed_audit.NO_LEAN`) and never accepted."""
+    from verity.protocols.accounting.pous.device import timed_audit
+
+    if record is None:
+        return {"accepted": False, "verdict": {"by": None, "unjudged": timed_audit.NO_LEAN}}
+    ready = {"scheme": scheme.name, "params": scheme.params.manifest(), "salt": vk.salt.hex()}
+    doc = timed_audit.judge(ready, b"".join(vk.leaves), record, exe)
+    return {"accepted": timed_audit.accepted(doc), "verdict": doc["verdict"]}
 
 
 # ---------------------------------------------------------------------------------------------------------------- vllm-gpu
@@ -285,7 +320,6 @@ class VllmGpu:
         raw = bytes.fromhex(subprocess.run([a.python, "-c", probe, SALT.hex(), str(n)], cwd=tree, env=env, check=True,
                                            capture_output=True, text=True).stdout)
         gates["segment_tags"] = tags_gate([raw[i * 32:(i + 1) * 32] for i in range(n)], n)
-        accepted = bool(audit.get("accepted"))
         return {
             "implementation": {"name": self.name, "commit": a.impl_commit, "harness": "verity-vllm pous-dense-bench",
                                "flags": FROZEN_FLAGS, "rc": rc, "wall_s": wall},
@@ -294,9 +328,11 @@ class VllmGpu:
             "metrics": {"decode_pass_s": m["decode_s"], "ewb": m["ewb"], "plain_ewb": m["plain_ewb"],
                         "keccak_per_s": m["keccak_per_s"], "integer_share": m.get("integer_share"), "latency": m["latency"],
                         "decode_reps_s": m["decode_reps_s"],
-                        "audit": {key: audit.get(key) for key in ("audits", "audits_accepted", "k", "limit_ns", "audit_of_record",
-                                                                   "elapsed_s", "device_s", "late", "wrong", "cgroup_cpu")}},
-            "profile": profile_json(scheme, k, limit, gaps) if accepted else None,
+                        "audit": {**{key: audit.get(key) for key in ("audits", "audits_accepted", "k", "limit_ns",
+                                                                      "audit_of_record", "elapsed_s", "device_s", "late",
+                                                                      "wrong", "cgroup_cpu")},
+                                  "verdict": {"by": None, "unjudged": VLLM_UNJUDGED}}},
+            "profile": None,
         }
 
 
@@ -325,7 +361,9 @@ class BandGpu:
         k, limit = int(audit.get("k") or 0), int(audit.get("limit_ns") or 0)
         gate, gaps = certificate_gate(scheme, k, limit)
         body["gates"]["certificate"] = gate
-        body["profile"] = profile_json(scheme, k, limit, gaps + extra) if body["gates"]["timed_audit"]["passed"] else None
+        from verity.protocols.accounting.pous.device import timed_audit
+
+        body["profile"] = profile_json(scheme, k, limit, gaps + extra) if timed_audit.accepted(audit) else None
         return body
 
 
@@ -428,6 +466,9 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--p2-c-cache", default="",
                     help="the P2 arms, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
+    ap.add_argument("--pous-timed-audit", default=None,
+                    help="reference, p2-v3-gpu: a built pous-timed-audit, the audit's verdict of record (default: "
+                         "pous_check's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")

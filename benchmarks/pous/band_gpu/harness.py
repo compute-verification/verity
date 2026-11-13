@@ -28,6 +28,8 @@ One run, in order:
    - the recompute control: a fraction of `C` dropped and each challenged dropped block recomputed on the device (its key
      decoded and `W`'s block XORed in, timed together), as an adversary would; the limit minus each recomputed answer's
      recorded device time is the measured margin the certificate's headroom only models.
+   No Lean judges the band's or the dense scheme's audit (`timed_audit.NO_LEAN`): the Python's refusal fails its gate,
+   and its accept is a measurement, with no storage profile.
 6. **The step floor.** The fastest single `Π₂` call on one row over the Feistel kernels (`STEP_VARIANTS`) — the fastest honest
    kernel, an upper bound on the fastest whole call, which an attacker may beat with its best kernel and an overclock. It is
    not an upper bound on an attacker's answer: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no call, and
@@ -932,7 +934,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     facts["after"] = backend.facts()
 
     gates["timed_audit"] = {"passed": honest.get("audits") == honest.get("audits_accepted") and bool(honest.get("audits")),
-                            "rc": honest["rc"]}
+                            "rc": honest["rc"], "verdict": honest.get("verdict")}
     gates["value_control"] = {"passed": value.get("audits_accepted") == 0 and value.get("wrong", 0) > 0,
                               "accepted": value.get("audits_accepted"), "wrong": value.get("wrong")}
     gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
