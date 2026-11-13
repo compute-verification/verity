@@ -4,6 +4,8 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 
+__all__ = ["Ops"]
+
 
 @dataclasses.dataclass(frozen=True)
 class Ops:

@@ -3,11 +3,21 @@ unsupported-by-limit on synthetic interval families; then the same sweep over re
 from __future__ import annotations
 
 import pytest
-
-from verity.circuits.parts import Limits, Part
 from verity.circuits.partition import PartitionVerdict, validate_partition
-from tests.query.test_partition_stubs import (FakeProgram, IntervalSet, StubFamily, StubGateSet, family_of,
-                                                  gemm_program, members_k, synth_program, tiling, whole_body)
+from verity.circuits.parts import Limits, Part
+
+from tests.query.test_partition_stubs import (
+    FakeProgram,
+    IntervalSet,
+    StubFamily,
+    StubGateSet,
+    family_of,
+    gemm_program,
+    members_k,
+    synth_program,
+    tiling,
+    whole_body,
+)
 
 
 def fam(*sets: tuple[tuple[int, int], ...]) -> StubFamily:
