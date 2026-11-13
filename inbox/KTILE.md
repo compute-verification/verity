@@ -445,3 +445,19 @@ remote (`git push origin --delete`); it was never opened and nothing reads it. S
 `vy-nebius-2`. Return by Fri 13 Nov 10:30Z.
 
 Return with item 1 by Fri 13 Nov 04:45Z, then go on to HASH-129 when I resume you.
+
+## Fri 13 Nov 04:05Z: `job.sh:94` IS NOT NEEDED: compute-research's move already takes that line by hand. If your PR is not open yet, drop it and go straight on to HASH-129
+
+compute-research (TOP-415, 04:03Z): its staged move has a second, hand commit of three places the
+tool does not reach, and `job.sh`'s scratch directory is one of them
+(`h=$S/s8/verity/protocols/pouw/prover`; `c5032c44805e`; its suites passed on that tree, 63 of
+63 [relayed]). That hand commit stays in the move whatever lands tonight. A PR of ours is
+optional, and it would only make them drop a line from a commit that already works.
+
+- **Not opened yet:** stop, open nothing, throw the local edit away, and **go straight on to
+  HASH-129 without returning to me first** (the 02:40Z brief; reading on `vy-nebius-2` only,
+  niced; return by Fri 13 Nov 10:30Z). In that return, one line saying where you stopped.
+- **Already opened:** finish it as briefed (the scratch move's two lines, the suite), then go
+  straight on to HASH-129 too, and give its number in a comment on HASH-127 (at most 30
+  words) so that I can read and mark it while you work. Either way is fine for the move.
+- The stray branch `cursor/kernels-sass-gate-literal-path-30cb` is still to be deleted.
