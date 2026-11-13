@@ -26,6 +26,7 @@ count times a constant, from what `Zk.schedule` accepts, and the table count by 
   deployed session's (`Masked.dataE`).
 * **`Loop.nLeaves_dataE_le_max`**: so the deployed session has at most `Tags.MAX_TABLES * leafCap` leaves at every
   statement, `2^29 + 2^20 + 2^7`.
+* **`Loop.anyErr_le_dataE`**: `Loop.anyErr_le` at that constant, with no leaf count left free.
 -/
 
 @[expose] public section
@@ -139,5 +140,19 @@ theorem nLeaves_dataE_le (x : Msg) :
 theorem nLeaves_dataE_le_max (x : Msg) :
     (CoinLayer.session loopNr Masked.dataE).nLeaves x ≤ _root_.Flock.Tags.MAX_TABLES * ZkHidden.leafCap :=
   (nLeaves_dataE_le x).trans (Nat.mul_le_mul_right _ (Masked.jOf_le_max x))
+
+/-- **`anyErr` at the deployed tables is at most `errAt` at `L = Tags.MAX_TABLES * leafCap`**: `anyErr_le` with no
+leaf count left free. -/
+theorem anyErr_le_dataE (vs : (CoinLayer.session loopNr Masked.dataE).SwVals)
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
+    {Θ : Type} {Vs : VStar Θ} {θ : Θ} {q : ℕ} {δ₁ : ℝ} (hδ : hidingGap ZkView.My ZkView.saltHash ≤ δ₁)
+    (hB : Budget Masked.dataE vs L₀ real x w Vs θ q) (o : Bool) :
+    anyErr Masked.dataE vs L₀ real t x w Θ Vs θ o ≤
+      errAt t (_root_.Flock.Tags.MAX_TABLES * ZkHidden.leafCap) q δ₁ o :=
+  anyErr_le Masked.dataE vs L₀ real t (nLeaves_dataE_le_max x) hδ hB o
 
 end Claims.ZKServer.Loop
