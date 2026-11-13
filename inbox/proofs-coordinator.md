@@ -133108,3 +133108,29 @@ theorem heldOf_of_descOk (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it =
 **Runs.** Ended, rc 0: `932d`. Nothing out.
 
 **Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; inbox titles read to SESSIONOF2's 09:29Z, none since my 08:47Z entry asks anything of me. No `main` merged.
+
+## GATHER, Fri 13 Nov 09:38Z: TWOLEG's places: YES to all fourteen (the eleven and the three more), read back at the scratch head `654e34d42b`; I would resolve none otherwise
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, final; the Friday-size rehearsal `r20261113-053940-1822` ran at it and ended exit 0 [run, 07:36Z]. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544b`, pull request #9480, unchanged. I moved neither branch, merged no `main` and rebased nothing. The pen is mine [run 09:35Z]. Mail read: your 09:14Z.
+
+What I read [run 09:36Z to 09:38Z, git only, on my VM]: TWOLEG's merge commit `720b5ffcfaf` (parents `85fb1ef940c` and my `984cb027efa3`) with `git show --remerge-diff`, which prints each conflict and what was kept; then each place at the scratch head `654e34d42be5` (`cursor/proofs-scratch-twoleg-join-gather-ad71`), which holds `de592c42ef` and my `984cb027efa3` as ancestors.
+
+- **1. `a5.py`, `audit`'s `summary["staging"]`: yes.** Line 851–853 at `654e34d42b`: my comment, my `"gpus": 0`, then the join's `summary["link_points"]`. `costed` reads `audit.staging.gpus == 0`, and it is there.
+- **2. `two_stage.py`, the usage of `second`: yes.** Lines 108–110: the join's `--challenger-host HOST`, then my `[--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]`.
+- **3. `two_stage.py`, `_second`'s docstring: yes, as `c53806ae4c` left it.** Lines 1192–1199: the join's sentences on the one challenger's key, then my clause "and what it cost (module docstring: the interior's commitment by `clock`, the replay's own record's seconds)".
+- **4 to 7. `two_stage_small.py`: yes.** The file is mine byte for byte [run: `git diff --quiet 984cb027efa3 654e34d42be5 -- benchmarks/one_stage/two_stage_small.py`, exit 0].
+- **8. `two_stage_small.sh`, the header comment: yes.** Mine, which says what happens with `--logits` and without.
+- **9. `two_stage_small.sh`, the `second` command: yes.** Lines 101–103: my `"${ON_CARDS[@]}"`, `"${STOP[@]}"` and `"${KEPT[@]}"`, with the join's `--challenger-host "$W/first/challenger-host"`.
+- **10 and 11. `tests/test_two_stage_second.py`: yes.** Mine byte for byte [run: the same `git diff --quiet`, exit 0].
+- **12. `two_stage_small.sh`, `INPUTS` assigned once: yes.** Line 94 is my line, after the script reads `logits` from `serve.json`; the join's earlier assignment would have been overwritten there. The script now differs from mine in two lines only [run: `git diff 984cb027efa3 654e34d42be5 -- benchmarks/one_stage/two_stage_small.sh`]: `--challenger-host` on `second`, and `! -path './challenger-host/*'` in what the records keep. The second is right too: the header says a challenger's key or secret is never kept.
+- **13. `tests/test_two_stage_driver.py`, `kept=None`: yes.** My `_second` reads `a.kept` at the replay (`two_stage.py:1173` at `984cb027efa3`: `kept=Path(a.kept) if a.kept else None`), and `--kept` has no default but `None` (`:1246`). So `None` is what a command without `--kept` gives.
+- **14. `verity/protocols/pous/lean/TRUSTED.sha256`: yes; not a line of mine.** The pin's line follows the roots; `pins.py --regen` writes it.
+
+Beyond the places [run: counts of each name in my file and the scratch's]: `two_stage.py` and `a5.py` at the scratch hold every line of mine I looked for the same number of times as at `984cb027efa3` (`interior_commit` 2, `a.kept` 1, `a.devices` 2 and 1, `replay_record` 2, `--kept`, `--devices`, `--replay-record` 1 each, `own_reads` 3 and 7, `second-inputs` 4, `proving_of` 1, `"gpus"` 2 and 3). [relayed: TWOLEG's 09:33Z entry] My rehearsal at the scratch head, `r20261113-090352-c7d5`, ended rc 0 with all eight of `SMALL` true, and the one-stage suite passed at the head with `kept=None` (`d5ad`, "1061 passed").
+
+### Not established
+
+- I ran no test and no rehearsal at the scratch myself; the two runs above are TWOLEG's.
+- The 20-template play (`--units 20 --v 2560 --logits`) at the scratch: it raises in `a5.audit` there, by HELDOF's 08:50Z entry. That is item 2 of your 09:14Z, which I own; I start it now and name its head, or the obstacle, by 11:30Z, with item 3 in the same entry.
+
+No run of mine is running. No timer of mine is set.
