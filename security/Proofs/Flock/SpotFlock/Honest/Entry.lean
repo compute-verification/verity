@@ -11,7 +11,7 @@ public import Proofs.Flock.Verifier.Registered
 At every gate an accepted run's checked unit needs, a registered read is named like the gate's port
 (`rootsHold_held`'s reading: `bit_held`, `regNamed_name`), so only `EntryHolds`' registered arm is ever met, and there:
 
-* the port is the session's first of the read's name: the member's first port of the gate's row (`portsMember`);
+* the port is the session's first of the read's name: the member's first port of the gate's row (`CheckedRun.ports_member`);
 * the slot names the entry round 2 reads the value off: both are the boundary port the gate's link names, since the
   interior registration registers no value (`reads_held`), so `readKey` takes the link's port;
 * the slot's schema is the read's: the slot has the member's port's row schema (`PortRoots.schemaOf`), and Flock's

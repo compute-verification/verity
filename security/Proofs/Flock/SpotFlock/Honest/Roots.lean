@@ -5,8 +5,7 @@ public import Proofs.Flock.SpotFlock.NeededBits
 public import Proofs.Flock.SpotFlock.ReadsDesign
 public import Proofs.Flock.SpotFlock.AddressesAt
 public import Proofs.Flock.SpotFlock.Sessions
-public import Proofs.Flock.SpotFlock.Opens
-public import Proofs.Flock.SpotFlock.PortsMember
+public import Proofs.Flock.SpotFlock.AddressFacts.Width
 
 /-!
 # The roots half of `OneTreeFact` at the one-template instance
@@ -22,7 +21,7 @@ such gate is committed by its proof block and round 2 reads each registered valu
   the opened row of a reference read, and no port of `R` is named like an opening row (`RefPorts.row`), so an accepted
   run's interior record has no `registered` entry (`registeredEntry_none`, `reads_held`);
 * a link names the gate's row, so the session has a registered read of that name (`named_port_of_stmtOk`), and the
-  gate's port is the session's first port of that name (`portsMember`, `bit_held`). So a registered read is always
+  gate's port is the session's first port of that name (`CheckedRun.ports_member`, `bit_held`). So a registered read is always
   named like the gate's port, it is of the gate's row (`regNamed_name`), and round 2 reads it under the statement's
   roots (`readRoots`).
 
@@ -32,7 +31,7 @@ try's, whose interior registers `logits`, round 2 refuses at this instance. It i
 one stage.
 
 Taken as a hypothesis: `NeededBits` (being proved on its own). That a checked unit's session has its member's
-ports is `portsMember`.
+ports is `CheckedRun.ports_member`.
 -/
 
 @[expose] public section
@@ -117,14 +116,15 @@ variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 /-- **An accepted run's checked unit is of the one template**, where its session has the member's ports. -/
 theorem templateOf_held {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) :
     templateOf (held R B desc q c₀).ms r.u = 0 ∧ r.sts[0]!.c.ports = (stmtOf R.x).ports := by
-  have hp := portsMember (held R B desc q c₀) r hr
-  obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
-  have hlt := templateOf_lt_of_checked (held R B desc q c₀) hx hu
+  obtain ⟨m, hm, hp⟩ := CheckedRun.ports_member hr
+  obtain ⟨hlt, -⟩ := List.getElem?_eq_some_iff.1 hm
   have hl : (held R B desc q c₀).ms.length = 1 := rfl
   have h0 : templateOf (held R B desc q c₀).ms r.u = 0 := by omega
   refine ⟨h0, ?_⟩
-  rw [hp, h0]
-  rfl
+  rw [h0] at hm
+  have hm0 : (held R B desc q c₀).ms[0]? = some (stmtOf R.x, #[0, 1]) := rfl
+  rw [hm0] at hm
+  rw [hp, ← Option.some.inj hm]
 
 /-- **What round 2 holds of an accepted run at the instance**: its statement, round 1's record and the second
 stage's draw evaluate, the statement's roots are those it decodes to, and the interior registration registers no
