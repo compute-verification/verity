@@ -13,8 +13,8 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import I32Add
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import I32Add
 
 I32 = Value(32)
 TEMP, TOP_P, SEVEN, POS, EPS = 0x3F4CCCCD, 0x3F733333, 7, 255, 0x3727C5AC

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.definitions.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean.gf2k import mul
 from verity_flock import rec_sparse as RS
 from verity_flock.rec_algebra import skip_weights
 

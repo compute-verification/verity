@@ -21,12 +21,12 @@ from types import SimpleNamespace
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.types import Array
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import scalar as SC
-from verity.definitions.ops.boolean.softmax import f32_gt, ftz
-from verity.definitions.silicon import fp as FP
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean.softmax import f32_gt, ftz
+from verity.circuits.silicon import fp as FP
 from verity.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.definitions.registry import boolean_dsa as BD
 from verity.definitions.registry import dsv4_indexer as I
