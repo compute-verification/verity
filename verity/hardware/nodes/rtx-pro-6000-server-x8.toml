@@ -1,8 +1,8 @@
 # An RTX PRO 6000 node: eight rtx-pro-6000-server cards in the VM of a two-socket Xeon 6776P server. This file holds
 # what the node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs
-# it carries, the host's own memory, one table a leaf, and the interfaces that carry traffic off the node, one table
-# each. Each number is { value, unit, mark, source }, as in a card. A GPU's memory is its card's store.dram, whole,
-# and every clock and peak of a card is its card's: none is here.
+# it carries, the host's own memory, one table a leaf, and the node's ways out: the interfaces that carry traffic off
+# it, one table each, and the storage path. Each number is { value, unit, mark, source }, as in a card. A GPU's
+# memory is its card's store.dram, whole, and every clock and peak of a card is its card's: none is here.
 
 node = "rtx-pro-6000-server-x8"
 name = "An RTX PRO 6000 node: eight cards in the VM of a two-socket Xeon 6776P server"
@@ -47,3 +47,12 @@ rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the hos
 # None of the auditor's hardware sits on one, so each registers as a boundary link that no certifier splits.
 [interface.eth0]
 rate = { value = 400000000000, unit = "bit/s", mark = "measurement", source = "/sys/class/net/eth0/speed on the node's VM reads 400000 Mb/s, and ethtool the same at full duplex with the link detected (art:8e47f2512256). eth0, a device of the mlx5_core driver, is the one interface a route of the node's main tables names, the default route among them; the others are the loopback and a bridge with no device behind it, which is down. No latency of it is on record and nothing reads one, so its link registers at latency 0" }
+
+# The storage path: the node's way out that is no interface. Every disk of the node is the provider's network disk,
+# so what is written to one has left the server past every interface of the VM's, where no network certifier can
+# split it. It is stated once, naming the disk leaves that ride it, and it states no rate: its rate is the one that
+# bounds the node's disks together, the host card's disk.read_max, which nodes.leaves gives and nodes.ways_out
+# reads. A server whose drives are all its own has no such table.
+[storage]
+leaves = ["vda", "vdb", "vdc"]
+source = "each disk is a virtio_blk device the hypervisor gives the VM, with no model and no transport of its own (art:bb5d32c3c5ee), the provider's network disk: such a disk can be attached to another machine or copied through the provider, and neither passes an interface of the VM's, so a byte written to one may have left the node"
