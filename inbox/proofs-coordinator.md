@@ -128294,3 +128294,34 @@ Next: `streams_even` and `sessionsRun_replay` on `cursor/proofs-messages-f55d`. 
 **Not established:** the root suite at `7637682ee14c`; everything of the site's at `a7e04a40f373`.
 
 **Pushed:** everything. Nothing is unpushed.
+
+## CROSSCLOSE, Fri 13 Nov 07:46Z: READY: #9671 at `6ba8b4888752126f52f292551dc9a4f878216669` (CI-489's fix forward): 62 of 62 changed suites passed, and it merges onto today's `main` with no stop and passes the gate there; unmarked
+
+**Ready line: #9671 at `6ba8b4888752126f52f292551dc9a4f878216669`** on `cursor/proofs-retired-terms-aa1c`, https://github.com/compute-verification/verity/pull/9671, unmarked, `Lane proofs`, linked to CI-489. [read: `gh pr view`, 07:46Z] Open, not a draft, no label, its head is that commit, and GitHub says mergeable. The mark is yours.
+
+**The run** [run `r20261113-060509-54fa`, vy-nebius-cpu-14, read whole; its `status.json` names that commit as its source]: done, rc 0, ended 07:09:47Z.
+- **62 suites: 62 passed, 0 failed.** 56 ran (36,525 tests passed, 578 skipped); 6 are passes kept from the same inputs ("every file its run read is as it was").
+- `verity-difftest`, the suite the file is in: 153 passed, none skipped, with `test_protocol_port.py` run whole, slow tests included. So #9526's test and the older one passed against the Lean example with the constant.
+- No suite failed, so there is no owner to name.
+
+**Against today's `main`** [derived, git and one-second checks on the VM; `main` fetched 07:42Z at `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff`, 26 commits along its first-parent line past the branch's base].
+- Five landings since changed the lint's module or its list (#9450, #9618, #9658, #9657, #9668); none changed this file or its entry, which is still 23.
+- The head merges onto it with no stop (tree `9e6650ee0085`), and the merged tree differs from `main` in the one file, 5 lines added and 3 removed.
+- On a local trial merge, never pushed: `main`'s lint counts the file at 23 against 23 allowed; `ratchet_gate.py origin/main HEAD` says 1 change, 0 failed, "no retired-term site is new"; `ruff check` on the file is clean.
+- I merged nothing into the branch (your 07:22Z, line 2). It is one commit on `b843a10af48a`, as pushed before the run.
+- [guess] The suites' other inputs moved with those 26 commits; I did not rerun the tier on the newer `main`. The queue's candidate does.
+
+**The move** [read: git and `gh`, 07:46Z], since your 07:29Z says you had not read whether `verity/difftest/` moves tonight.
+- The file is still at `verity/difftest/tests/test_protocol_port.py` on `main`.
+- top's two open chains leave it there, and each merges with #9671's head with no stop: #9697 at `41c1cdf99377` and #9661 at `6e94ee8c06f3`.
+- The one open pull request that moves the harness to `tools/difftest/` is top's #9407, at `0542a4f3cd15`, last pushed Thu 20:50Z. That head stops against today's `main` on its own (60 entries), so it lands only after it is cut again. In a trial merge of it with #9671's head the test file is not among the stops, and git puts my lines at `tools/difftest/tests/test_protocol_port.py`.
+- So nothing is to carry tonight [derived]. If #9407 is cut again and lands first, I carry #9671 with `tools/move/restack.py` when you say and give a new ready line; I merge or rebase nothing across by hand.
+
+**The pull request's body** [run: `research queue edit 9671 --body-file F --by proofs`, 07:45Z]: the line that said the run had not ended now states its result and the check against `9182900fb94e`. `Lane proofs`, `Refs CI-489` and `Goal ci/landing-two-hours` are kept. The head did not change, so this needs no new mark.
+
+**Not run by me:** the slow tier beyond that one module; the Lean check, `circuit-check` and lean-agreement (the change holds no Lean, lock or circuit).
+
+**State.**
+- The machine was replaced again at 07:40:14Z; nothing was unpushed. This loop holds `~/wt/.pen` since 07:41Z. My first `mkdir ~/wt/.pen` failed because `~/wt` itself was gone, which for one command I read as "held"; with the parent made, the `mkdir` succeeded, and there is no other loop.
+- No run of mine is out. The timer `crossclose-9671-suites` is gone from my list (it was due 07:40Z); if its event still reaches me I answer it in one line. I hold no timer.
+- Your 06:26Z, 07:22Z and 07:29Z notes are read: the choice stands; no merge of `main`; a branch that crosses a move is carried with `restack.py` when you say; Daniel's words in what I write from now.
