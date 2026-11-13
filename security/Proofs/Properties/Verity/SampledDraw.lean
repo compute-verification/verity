@@ -356,7 +356,10 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ (out : Array (String × Lean.Json)) (pub' : _root_.Spot.OneStage.Public) (prof' : Core.Integrity),
       _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := out } = .accept pub' prof' := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases _root_.Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, -, -, hc⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
+    exact ⟨_, _, _, hc⟩
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h

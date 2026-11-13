@@ -868,7 +868,10 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases _root_.Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, hr, -, -⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
+    exact (_root_.Spot.OneStageZk.membersRun_held hr).2
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
