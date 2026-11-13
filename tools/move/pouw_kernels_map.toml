@@ -1,19 +1,11 @@
-# compute-accounting's GPU rows toward the architecture's tree: what `tools/move/layout.py --map
+# compute-accounting's receipts row toward the architecture's tree: what `tools/move/layout.py --map
 # tools/move/pouw_kernels_map.toml` moves and rewrites. It runs after `pouw_rows_map.toml`, on the commit that map makes,
 # and before the protocol group move; its paths are chain 1's.
 #
-# - PoUW's served Pearl-C kernels become `verity/protocols/pouw/prover/kernels/`, siblings as they were, since their
-#   includes cross: `pearl_c/`, `pearl_c_sm120/`, `served_zk/`'s `hm96_rows.cu`, and of `pearl_c_sm90/` the kernel's
-#   sources, `build.sh`, `run.py`, `fixture.py` and `sass_gate.py`. The rest of `pearl_c_sm90/` (the Python that drives
-#   vLLM or a model, its README and job scripts) and of `served_zk/` stays in `benchmarks/`.
-# - The receipt folds' one reference, `verity/protocols/pouw/receipts/`, becomes `verity/protocols/pouw/verifier/receipts/`.
-#
-# Unlike `pouw_rows_map.toml`, kernel sources are rewritten, and only where a relative `#include` names a moved path: one
-# that leaves a moved directory (`../../../verity/definitions/kernels/sha512.cuh`) or reaches into one
-# (`../../../verity/protocols/pouw/receipts/receipt_folds.cuh` from a benchmark's kernel) names its file at its new depth.
-# What stays out, each needing a code change first: `benchmarks/pouw/filler/` (a distribution of its own that loads
-# `benchmarks/`) and `benchmarks/pouw/pearl_c4/` (it imports the config package). No file is split or deleted. The
-# format is `layout_map.toml`'s.
+# The receipt folds' one reference, `verity/protocols/pouw/receipts/`, becomes `verity/protocols/pouw/verifier/receipts/`.
+# Unlike `pouw_rows_map.toml`, kernel sources are rewritten, and only where a relative `#include` reaches into the moved
+# directory (`../../../verity/protocols/pouw/receipts/receipt_folds.cuh` from a benchmark's kernel), which then names
+# the file at its new path. No file is split or deleted. The format is `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
@@ -21,28 +13,10 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 
 [paths]
 "verity/protocols/pouw/receipts/" = "verity/protocols/pouw/verifier/receipts/"
-"benchmarks/pouw/pearl_c/" = "verity/protocols/pouw/prover/kernels/pearl_c/"
-"benchmarks/pouw/pearl_c_sm120/" = "verity/protocols/pouw/prover/kernels/pearl_c_sm120/"
-"benchmarks/pouw/served_zk/hm96_rows.cu" = "verity/protocols/pouw/prover/kernels/hm96_rows.cu"
-"benchmarks/pouw/pearl_c_sm90/acc.h" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/acc.h"
-"benchmarks/pouw/pearl_c_sm90/debit_sm90.cu" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/debit_sm90.cu"
-"benchmarks/pouw/pearl_c_sm90/hash_prefill.cuh" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill.cuh"
-"benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp"
-"benchmarks/pouw/pearl_c_sm90/pearl_c_sm90.cu" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu"
-"benchmarks/pouw/pearl_c_sm90/build.sh" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/build.sh"
-"benchmarks/pouw/pearl_c_sm90/run.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/run.py"
-"benchmarks/pouw/pearl_c_sm90/fixture.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/fixture.py"
-"benchmarks/pouw/pearl_c_sm90/sass_gate.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/sass_gate.py"
 
 [retired]
 # the directories this map empties: `layout.py` refuses a tracked file under one that has no row
-paths = ["verity/protocols/pouw/receipts/", "benchmarks/pouw/pearl_c/", "benchmarks/pouw/pearl_c_sm120/"]
-
-[split]
-# A reference to a directory the map splits follows its larger part; each one here says why that is what it means
-# (`layout.py` fails on any other, and on an entry no reference needs): "old file: old directory" = why.
-"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/served_zk" = "served_zk's benchmark as a whole, which stays; only its kernel hm96_rows.cu moves"
-"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/pearl_c_sm90" = "sm90's kernel and its build, run and fixture, which move beside pearl_c_sm120; its vLLM Python stays"
+paths = ["verity/protocols/pouw/receipts/"]
 
 [drop]
 paths = []
@@ -59,10 +33,7 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
-           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
-           # its PD_HOST_EXTRA is included from pearl_c_sm120/hash_decode_host.cpp, so it names hash_prefill.cuh from
-           # there, which holds after the move
-           "benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp"]
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
@@ -70,9 +41,4 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.pouw.pearl_c" = "verity.protocols.pouw.prover.kernels.pearl_c"
-"benchmarks.pouw.pearl_c_sm120" = "verity.protocols.pouw.prover.kernels.pearl_c_sm120"
-"benchmarks.pouw.pearl_c_sm90.fixture" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.fixture"
-"benchmarks.pouw.pearl_c_sm90.run" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.run"
-"benchmarks.pouw.pearl_c_sm90.sass_gate" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.sass_gate"
 "verity.protocols.pouw.receipts" = "verity.protocols.pouw.verifier.receipts"
