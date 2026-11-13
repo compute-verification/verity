@@ -13,7 +13,7 @@ step's device views are dropped; a read of any other leaf of the step is refused
 from a recomputation. The step's tree levels and salt key stay, so a sampled leaf's opening path is whole.
 
 A failed run ends every take waiting on the pool by name (`DevicePool.fail`, from `serve_release.Draws.fail`): the step fails
-uncommitted rather than wait on a release that won't come. A window that reaches no release (its draws or its close failed) is
+uncommitted rather than wait on a release that won't come. A window that reaches no release (its samples or its close failed) is
 `discard`ed: every byte it retained dropped, its pieces freed, any read of it refused by name.
 """
 from __future__ import annotations
@@ -182,7 +182,7 @@ def release(com: Any, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
 
 
 def discard(com: Any, why: str) -> dict[str, Any] | None:
-    """A window that reaches no release (``why``: its draws failed, or its close did): every byte it retained dropped and its
+    """A window that reaches no release (``why``: its samples failed, or its close did): every byte it retained dropped and its
     pool pieces freed, so a later window's take doesn't wait on a release that won't come; a read of any of its leaves is
     refused by name. None: released already."""
     if getattr(com, "released", None) is not None:
