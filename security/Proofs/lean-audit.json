@@ -349,7 +349,14 @@
   "Proofs.Properties.Verity.SampledTwo.Undecodable",
   "Proofs.Properties.Verity.SampledTwo.WiredParse",
   "Proofs.Properties.Verity.SampledTwo.WiredScope",
-  "Proofs.Properties.Verity.SampledTwo.WiredUnits"
+  "Proofs.Properties.Verity.SampledTwo.WiredUnits",
+  "Proofs.Flock.SpotFlock.RunsAs.OwnReadsForm",
+  "Proofs.Flock.SpotFlock.RunsAs.OwnReadsHeld",
+  "Proofs.Flock.SpotFlock.RunsAs.OwnReadsOfCheck",
+  "Proofs.Flock.SpotFlock.RunsAs.OwnReadsOut",
+  "Proofs.Flock.SpotFlock.RunsAs.SecondUnits",
+  "Proofs.Flock.SpotFlock.RunsAs.StampedReads",
+  "Proofs.Flock.SpotFlock.RunsAs.VerdictsWf"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
