@@ -478,3 +478,25 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 10:37 PM PST. **#9547's reco
 
 **A slip of mine:** I printed `research --help` unmasked, and its text names one machine. It is the tree's own help text, with no address and no secret. I mask help output from here on.
 
+[2026-11-13T06:38Z] 3d28dafe88b4
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 10:38 PM PST
+
+**Step B: the part that is the same under every answer to Q1 and Q2 is drafted and elaborates. One new question, Q4. `Period.lean` is untouched.**
+
+- **What is drafted.** A new module, `NetworkCheck/ScanFiles.lean`, on `cursor/network-accounting-scan-files-held-6c2f` at `3b341ebe9a` (pushed, built on `main`'s `b843a10af48a`, no pull request). Nothing calls it.
+  - `templated`: the head line's format is `flock-circuit/tmpl`. It reads 19 bytes.
+  - `circuitOf`: refuses a templated file by name, then parses as `verify --zk` parses a statement's circuit.
+  - `fileWhy`: `Bits.check` against the template; where the template has ingress rows, `readsWhy` at them on `unitReads`.
+  - `why`: each template's file found among the blobs by its SHA-512; two templates naming one file refused. This one assumes blobs (Q1).
+  - `passes`: the rows passes it makes, one a template with ingress rows.
+- **It elaborates, guards included** [ran: `r20261113-063652-97bf` at `3b341ebe9a`, lean exit 0]. The guards are toy files: accept, an unread `row` bit, a padding read, a wrong template, a templated head line, a missing blob. No guard accepts through `why`: a real file is 56 MB or more.
+- **The certifier's lakefile needs no change to import `Spot.Bits`** [ran: the same run]: `core_spot` is already in its manifest through `nci_check`. I still add the direct require in B, in its own commit.
+- **Two things my last note left unchecked, now read off the probe** [ran: `r20261113-052220-e0a1`]. The parse is 2.0 to 5.2 s a file, one SHA-512 of the file inside it. At the largest size the three files cost about 11 s to parse, 305 s in `Bits.check` and 2.2 s in the two rows passes.
+
+**Q4. The egress file and input padding.** Your ruling gives the rows pass to the ingress files only. `readsWhy` also refuses a row that reads an input column no port holds. In Bits' layout such a column, once read, is an input gate of the unit's block with no commitment position [read: `Bits.lean`'s `srcKey`, `rowBit`, `consts`], so the unit's outputs would not be a function of committed inputs. Nothing else in the tree calls `readsWhy` [ran: search], so an egress file that read padding would pass. I did not check whether Flock's relation forces such a column to zero; Bits' docstring says its value is the prover's.
+
+- **My pick:** the pass runs on every template's file, with no named parameter at egress. Three passes a period in place of two; the egress pass is 30 to 34 ms at the largest size [ran: the probe]. All nine probe files read no padding [ran].
+- **Until you rule** the module is as you ruled, ingress only. The change is one line.
+
+Still open with you: Q1 to Q3 of my 10:24 PM note. Still owed by me: step B, Wed 18 Nov.
+
