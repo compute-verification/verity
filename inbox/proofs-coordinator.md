@@ -118697,3 +118697,32 @@ Not established: that `DeviceOrder.lean` or CUT's `CutOrder.lean` compiles; that
 **To post.** Nothing.
 
 **Not established.** That the merged head builds (`49aa` is waiting). `Within.lean` on the real tree. `hp`, that `p.rule` is two-stage (item B).
+
+## PERIODREAD, Fri 13 Nov 03:57Z: A23: `CommittedOnce`, restated as "every root committed under this registration", elaborates on the three axioms in a run (`r20261113-035213-962c`), with the other seven statements; and the `rfl` tie builds in the tree
+
+**A Lean slot on vy-nebius-2 has kept `r20261113-034210-2101` waiting 15 min** (since 03:42:37Z, 4 checks ahead at 03:57Z). It is a run, not a try, so I leave it in line. Both tries below ran on vy-nebius-cpu-11 and waited under a minute each.
+
+**1. A23.** `committedOnce : CommittedOnce` elaborates, and the axiom probe says: "none of its 63 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run: `r20261113-035213-962c`, vy-nebius-cpu-11, `verity lean try security/Proofs/Properties/Spot/Period.lean`, `lean exit 0 in 64 s`, at `80f04b1def7f`]. Of the four checks "proved" asks:
+- **Elaborates**: yes [run].
+- **Axioms only the three**: yes [run].
+- **A full `check.py` replayed it through the kernel**: no. None has run on this branch.
+- **An agent other than its prover red-teamed the statement**: no. The second reader stopped at 02:00Z on your word, and the statement changed after it.
+
+So my word on A23's day, due Fri 12:00Z, is early: **the run you asked for by Fri 22:00Z is in, at 03:53Z Fri.** What is open is the kernel replay and a reader, and neither is mine to start.
+
+**2. What `962c` and `r20261113-035417-2795` elaborated** (the second is `PeriodLedger.lean`, `lean exit 0 in 64 s`, "none of its 4 theorems uses an axiom beyond" the three) [run]:
+- `ledgerMeans`, `acceptMeans`, `committedOnce`, `othersElsewhere`, `decodedMeans`, `auditedSession`, at PR 3's statements as restated.
+- `ledgerLinesOfDevice`, and `ledgerOfDevice` at the weakened `Numbered`.
+- The try before it, `r20261113-034343-e626`, refused one of the 63, `auditedIn_root` (a predicate the elaborator guessed wrong); one line fixed it.
+
+**3. The `rfl` tie builds in the tree** [run: `e626`, `Built Spot.ChallengerSession (3.5s)`; that file on PR 4's branch is #9595's at `41a71836c3`, `git diff` empty]. `Spot.PeriodAudit`, `Properties.Spot.Period` and `Properties.Spot.PeriodLedger` build there too [run: `e626`, `2795`], so PR 3's statements elaborate as merged. #9595's own run `2101` still owes the executable and the difftests at that head.
+
+**4. Heads.** PR 4's branch `cursor/proofs-prf600-period-proofs-4c9a` at `73ab10a29a5fa5173e873bc64444f7fb2245f375`: the proofs, and each of the eight `unstated` lines now names the theorem that proves it. Not opened yet: I open it unmarked next, with its body. #9581 at `a441d994760b31af1be31043257ccc00f93ff971`, #9595 at `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`, both unchanged since 03:46Z.
+
+**5. `OthersElsewhere` still waits for your word** (03:46Z entry, point 3): mine, stated and now proved, in PR 3 and PR 4 unless you say out.
+
+**Not established.** Any kernel replay or records check of PR 3 or PR 4. Any quick tier on the three heads. That #9595's executable and difftests pass at `41a71836c3` (`2101`). The bodies of #9595 and #9581 are still the old ones; I post both when `2101` is in.
+
+**Next, in order:** `2101`; #9595's body, quick tier and ready line; #9581's body; open PR 4; the R8 sentence (the merged tree has no `RowsTiedSampled`: it accepts a tied audit at any sample and charges one sampled in part, `RowsTiedCharged`, with `RowsStateTied` beside `RowsProgWired`); (l)'s sizing.
+
+**Heads pushed:** as in point 4; scratch `208e5bbe93`. Unpushed: nothing. I can pause at any time. Mailbox read at `4adc7e8915` (03:36:03Z).
