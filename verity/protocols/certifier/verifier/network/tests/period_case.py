@@ -52,13 +52,13 @@ So is one with a stratum that samples more than the stratum holds in a level who
 moved to the other (`tied-stratum-oversampled`). So is one whose strata's sizes do not sum to its level's
 (`STRATA_SIZES`): that audit with a stratum holding more than it samples, each holding twice as many, or one holding
 and sampling one fewer (`tied-strata-sizes`).
-Every accepted answer's profile is the sample its registration states, its `population` under its `law`: an answer is
-refused whose registration states no sample (`NO_SAMPLE`: `answer-unsampled`, `audit-unsampled`, `_unsample`) or whose
-profile is another sample of its level than the registration's (`NOT_REGISTERED`: `answer-unregistered`,
-`audit-unregistered`, `_resample`); the clock form's link-window, its one unit proved, reads no sample, so the two
-scan changes are the rows form's alone. An answer's count of incorrect proof blocks is the larger of its `bound` and
-that sample's bound at its δ (`_sample_bound`), and none is refused for its `bound`: the answers' bounds are drawn
-below their samples' as well as above.
+Every accepted answer's profile is the sample its registration states, its `population` under its sampling design:
+an answer is refused whose registration states no sample (`NO_SAMPLE`: `answer-unsampled`, `audit-unsampled`,
+`_unsample`) or whose profile is another sample of its level than the registration's (`NOT_REGISTERED`:
+`answer-unregistered`, `audit-unregistered`, `_resample`); the clock form's answer for an execution phase's transfer
+blocks, its one unit proved, reads no sample, so the two scan changes are the rows form's alone. An answer's count
+of incorrect proof blocks is the larger of its `bound` and that sample's bound at its δ (`_sample_bound`), and none
+is refused for its `bound`: the answers' bounds are picked below their samples' as well as above.
 `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
@@ -1011,9 +1011,9 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
 
 
 def _sample_of(reg) -> tuple[int, dict] | None:
-    """`sampleOf`: the sample a registration states, its `population` under the design of its `law` as a profile's
-    level writes it (`Spot.Record.profileDraw`: a stratum named by its template, its size its ranges' total); None
-    where it names no `subset:k` or stratified sample."""
+    """`sampleOf`: the sample a registration states, its `population` under its sampling design as a profile's
+    level writes it (a stratum named by its template, its size its ranges' total); None where it names no
+    `subset:k` or stratified sample."""
     def get(j, k):
         return j.get(k) if isinstance(j, dict) else None
 
@@ -1023,14 +1023,14 @@ def _sample_of(reg) -> tuple[int, dict] | None:
     def nat(v):
         return v if integer(v) and v >= 0 else None
 
-    n, law = nat(get(reg, "population")), get(reg, "law")
-    kind = get(law, "law")
+    n, stated = nat(get(reg, "population")), get(reg, "law")
+    kind = get(stated, "law")
     if n is None or not isinstance(kind, str):
         return None
     if kind == "subset":
-        k = nat(get(law, "k"))
+        k = nat(get(stated, "k"))
         return None if k is None else (n, {"subset": k})
-    if kind not in ("stratified", "work") or not isinstance(strata := get(law, "strata"), list):
+    if kind not in ("stratified", "work") or not isinstance(strata := get(stated, "strata"), list):
         return None
     out = []
     for s in strata:
@@ -1053,12 +1053,13 @@ def _subset_bound(n: int, k: int, delta: Fraction) -> int:
     return n if delta == 1 and k == 0 else 0
 
 
-def _sample_bound(n: int, draw: dict, delta: Fraction) -> int:
+def _sample_bound(n: int, design: dict, delta: Fraction) -> int:
     """`sampleBound`: a `subset:k`'s bound at δ, and a stratified sample's the sum of its strata's own, each stratum
     one `subset:k_s` of its `n_s` units at δ split equally over the strata."""
-    if "subset" in draw:
-        return _subset_bound(n, draw["subset"], delta)
-    return sum(_subset_bound(s["size"], s["k"], delta / len(draw["strata"])) for s in draw["strata"])
+    if "subset" in design:
+        return _subset_bound(n, design["subset"], delta)
+    strata = design["strata"]
+    return sum(_subset_bound(s["size"], s["k"], delta / len(strata)) for s in strata)
 
 
 def _facts(what: str, reg, prof: dict, pub) -> Facts:
@@ -1068,30 +1069,31 @@ def _facts(what: str, reg, prof: dict, pub) -> Facts:
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
-    draw = lv["draw"]
-    if isinstance(draw, dict) and "subset" in draw:
-        drawn = draw["subset"]
-    elif isinstance(draw, dict) and draw.get("law") == "stratified":
-        drawn = sum(s["k"] for s in draw["strata"])
+    design = lv["draw"]
+    if isinstance(design, dict) and "subset" in design:
+        drawn = design["subset"]
+    elif isinstance(design, dict) and design.get("law") == "stratified":
+        drawn = sum(s["k"] for s in design["strata"])
     else:
         raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
     if drawn > lv["size"]:
         raise Finding(REJECT, f"{what}: profile: {drawn} sampled of {lv['size']} units: {OVERSAMPLED}")
-    for s in draw.get("strata", ()):
+    for s in design.get("strata", ()):
         if s["k"] > s["size"]:
             raise Finding(REJECT, f"{what}: profile: stratum '{s['name']}': {s['k']} sampled of {s['size']} units: "
                                   f"{STRATUM_OVERSAMPLED}")
-    if "strata" in draw and (held := sum(s["size"] for s in draw["strata"])) != lv["size"]:
+    if "strata" in design and (held := sum(s["size"] for s in design["strata"])) != lv["size"]:
         raise Finding(REJECT, f"{what}: profile: strata of {held} units in a level of {lv['size']}: {STRATA_SIZES}")
     if (sample := _sample_of(reg)) is None:
-        raise Finding(REJECT, f"{what}: {NO_SAMPLE}: its population and law name no subset or stratified sample")
-    if sample != (lv["size"], draw):
-        raise Finding(REJECT, f"{what}: profile: {NOT_REGISTERED}: its level of {lv['size']} units and its draw are "
-                              f"not the registration's {sample[0]} units under its law")
+        raise Finding(REJECT, f"{what}: {NO_SAMPLE}: it names no subset or stratified sample of a population")
+    if sample != (lv["size"], design):
+        raise Finding(REJECT, f"{what}: profile: {NOT_REGISTERED}: its level of {lv['size']} units and its sampling "
+                              f"design are not the registration's {sample[0]} units and theirs")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
-    return Facts(lv["size"], drawn, prof["delta"], max(bound, _sample_bound(lv["size"], draw, prof["delta"])), draw)
+    count = max(bound, _sample_bound(lv["size"], design, prof["delta"]))
+    return Facts(lv["size"], drawn, prof["delta"], count, design)
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
@@ -1153,7 +1155,7 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
     where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and a tied audit drawn in part, read at `TIED_DELTA` (`charged`),
+    incorrect proof blocks in its `faulty_entries`, and a tied audit sampled in part, read at `TIED_DELTA` (`charged`),
     is in the rows public's `charged` and its δ_i in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
@@ -1731,27 +1733,28 @@ def _resample(r: random.Random, size: int, k: int, strata: list[dict] | None) ->
 
 
 def _unsample(r: random.Random, rec: dict) -> dict:
-    """The registration record `rec` stating no sample (`answer-unsampled`, `audit-unsampled`): without its law or
-    its population, with a Bernoulli law, or with a law or a population one-stage's profile reads no sample of (a
-    count that is no natural number, strata that are no list, a stratum without its template, its units or its
-    count, or with an empty range)."""
-    law = rec["law"]
-    laws = [None, {"law": "bernoulli", "p": "1/2"}, {"law": "two-stage", "k": law["k"]}, law | {"law": None},
-            {k: v for k, v in law.items() if k != "law"}]
-    if law["law"] == "subset":
-        laws += [{"law": "subset"}, law | {"k": -1}, law | {"k": str(law["k"])}, law | {"k": True}]
+    """The registration record `rec` stating no sample (`answer-unsampled`, `audit-unsampled`): without its sampling
+    design or its population, with a Bernoulli design, or with a design or a population one-stage's profile reads no
+    sample of (a count that is no natural number, strata that are no list, a stratum without its template, its units
+    or its count, or with an empty range)."""
+    stated = rec["law"]
+    kind, strata = stated["law"], stated.get("strata")
+    others = [None, {"law": "bernoulli", "p": "1/2"}, {"law": "two-stage", "k": stated["k"]}, stated | {"law": None},
+              {k: v for k, v in stated.items() if k != "law"}]
+    if kind == "subset":
+        others += [{"law": "subset"}, stated | {"k": -1}, stated | {"k": str(stated["k"])}, stated | {"k": True}]
     else:
-        j = r.randrange(len(law["strata"]))
-        one = law["strata"][j]
-        at = lambda s: law | {"strata": law["strata"][:j] + [s] + law["strata"][j + 1:]}  # noqa: E731
+        j = r.randrange(len(strata))
+        one = strata[j]
+        at = lambda s: stated | {"strata": strata[:j] + [s] + strata[j + 1:]}  # noqa: E731
         lo, hi = one["units"][0]
-        laws += [law | {"strata": None}, law | {"strata": {"0": one}},
-                 at({k: v for k, v in one.items() if k != "template"}), at(one | {"template": 0}),
-                 at(one | {"units": []}), at(one | {"units": [[hi, lo]]}), at(one | {"units": [[lo, lo]]}),
-                 at(one | {"units": [lo, hi]}), at(one | {"units": [[lo, hi, hi]]}), at(one | {"k": -1}),
-                 at({k: v for k, v in one.items() if k != "k"})]
+        others += [stated | {"strata": None}, stated | {"strata": {"0": one}},
+                   at({k: v for k, v in one.items() if k != "template"}), at(one | {"template": 0}),
+                   at(one | {"units": []}), at(one | {"units": [[hi, lo]]}), at(one | {"units": [[lo, lo]]}),
+                   at(one | {"units": [lo, hi]}), at(one | {"units": [[lo, hi, hi]]}), at(one | {"k": -1}),
+                   at({k: v for k, v in one.items() if k != "k"})]
     n = rec["population"]
-    return r.choice([rec | {"law": x} for x in laws]
+    return r.choice([rec | {"law": x} for x in others]
                     + [{k: v for k, v in rec.items() if k != gone} for gone in ("law", "population")]
                     + [rec | {"population": x} for x in (None, -1, str(n), True, [n])])
 

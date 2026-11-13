@@ -50,10 +50,10 @@ being its `…Of check`: the shape rule reads the acceptance off the statement's
 its property of any period check, false at `acceptAllRows` too.
 
 The counts those terms read are the check's own, in both forms, and so is the sample each is of.
-`RegisteredSampleHeld` says the facts an accepted period's public holds of each compute audit, and of each
-link-window's scan in the rows form, are of the sample that answer's registration states, one its units hold
-(`SampleHeld`): no more sampled than the units, no stratum sampled above its size, strata whose sizes sum to the
-units. `SampleBoundCharged` says their count of incorrect proof blocks is at least that sample's bound at their δ
+`RegisteredSampleHeld` says the facts an accepted period's public holds of each compute audit, and of each scan in
+the rows form, are of the sample that answer's registration states, one its units hold (`SampleHeld`): no more
+sampled than the units, no stratum sampled above its size, strata whose sizes sum to the units.
+`SampleBoundCharged` says their count of incorrect proof blocks is at least that sample's bound at their δ
 (`SampleCharged`): one-stage's bound of a `subset:k`, and of a stratified sample the sum of its strata's own, each
 stratum one `subset:k_s` of its own units at δ split equally over the strata. Both are `AnswersAt` of every period
 `check` accepts, and `AnswersOf` is that of any period check, false at `acceptAllRows` whatever it says of an answer.
@@ -144,11 +144,11 @@ def AuditFacts (i : ℕ) (reg : Lean.Json) (x : Core.Answer) (f : Facts) : Prop 
     answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" reg prof pub = .ok f
 
 /-- The facts `f` are of the sample the registration `reg` states, a sample its units hold (`sampleOf`: its
-`population` of `n` units under its `law`, a `subset:k` or a stratified one, which the registration fixes before any
-coin): `f.units` is `n`, `f.design` is its design, which a reading at another δ reads (`Facts.readAt`), and `f.drawn`,
-the sample's count of sampled units, is at most `n`. Of a `subset:k` sample `f.drawn` is `k`. Of a stratified sample
-of strata `ss` it is the strata's `k_s` summed, no stratum samples more than it holds, and the strata's sizes sum to
-`n`. -/
+`population` of `n` units under its sampling design, a `subset:k` or a stratified one, which the registration fixes
+before any coin): `f.units` is `n`, `f.design` is its design, which a reading at another δ reads (`Facts.readAt`),
+and the facts' count of sampled proof blocks is at most `n`. Of a `subset:k` sample that count is `k`. Of a
+stratified sample of strata `ss` it is the strata's `k_s` summed, no stratum samples more than it holds, and the
+strata's sizes sum to `n`. -/
 def SampleHeld (reg : Lean.Json) (f : Facts) : Prop :=
   ∃ (n : ℕ) (d : Core.SamplingDesign), sampleOf reg = some (n, d) ∧ f.units = n ∧ f.design = d ∧ f.drawn ≤ n ∧
     ((∃ k : ℕ, d = .subset k ∧ f.drawn = k) ∨
@@ -163,7 +163,7 @@ proof blocks the bound reads, is at least the sample's own bound at `f.delta`, c
 - A stratified sample of strata `ss`: the count is at least the sum over the strata of
   `boundOf n_s (.subset k_s) (δ / S)`, `S` the number of strata. Each stratum is one `subset:k_s` of its own `n_s`
   units, δ is split equally over the strata, and the strata, each one's units and its `k_s` are the registration's.
-  The stratified rule is read nowhere as a law of the whole population. -/
+  The stratified rule is read nowhere as a sampling design of the whole population. -/
 def SampleCharged (reg : Lean.Json) (f : Facts) : Prop :=
   ∃ (n : ℕ) (d : Core.SamplingDesign), sampleOf reg = some (n, d) ∧
     ((∃ k : ℕ, d = .subset k ∧ Spot.Bound.boundOf n (.subset k) f.delta ≤ f.wrong) ∨
@@ -173,8 +173,8 @@ def SampleCharged (reg : Lean.Json) (f : Facts) : Prop :=
 
 /-- `P reg f` of every answer of a period accepted with the public `pub`, `reg` the answer's registration and `f` the
 facts the public holds of it: each compute audit `i`'s facts `pub.audits[i]`, which in the clock form are the facts of
-the audit's term `pub.units[i]`, the ones `K` sums; and in the rows form the facts of each link-window `w`'s term
-`pub.units[w]`, its scan's. -/
+the audit's term `pub.units[i]`, the ones `K` sums; and in the rows form the facts of each scan's term
+`pub.units[w]`. -/
 def AnswersAt (P : Lean.Json → Facts → Prop) (p : Params) (c : Commitment) (pub : Public) : Prop :=
   (∀ (i : ℕ) (reg : Lean.Json), c.audits[i]? = some reg →
       ∃ f : Facts, pub.audits[i]? = some f ∧ P reg f ∧
@@ -193,24 +193,24 @@ def AnswersOf (P : Lean.Json → Facts → Prop)
 
 /-- **Every answer of an accepted period is of its registration's sample, one its units hold.** If the check accepts
 a period with the public `pub`, then the facts `pub` holds of each compute audit, and in the rows form of each
-link-window's scan, are of the sample that answer's registration states (`SampleHeld`): its units and its count of
-sampled units are the registered ones, the sample names no more sampled than its units, and of a stratified sample
-no stratum samples more than it holds and the strata's sizes sum to the units.
+scan, are of the sample that answer's registration states (`SampleHeld`): its units and its count of sampled proof
+blocks are the registered ones, the sample names no more sampled than its units, and of a stratified sample no
+stratum samples more than it holds and the strata's sizes sum to the units.
 
 The check refuses an answer whose profile names more sampled than its level holds, one with a stratum that samples
 more than the stratum holds, and one whose strata's sizes do not sum to the level's; and it refuses a profile that
 is another sample than the one its registration states, so the three hold of the registered sample, whose strata,
 each one's size and its `k_s` are fixed before any coin. An answer the period check did not verify thus gives it no
-count of sampled units past the units, and no stratum the bound would read as sampled whole where it is not. That
-the strata are the level's units is the answer's own verifier's, which the period check does not read. -/
+count of sampled proof blocks past its units, and no stratum the bound would read as sampled whole where it is not.
+That the strata are the level's units is the answer's own verifier's, which the period check does not read. -/
 def RegisteredSampleHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → AnswersAt SampleHeld p c pub
 
 /-- **The count of incorrect proof blocks an accepted period charges is at least its registered sample's bound.** If
 the check accepts a period with the public `pub`, then the count of incorrect proof blocks in the facts `pub` holds
-of each compute audit, and in the rows form of each link-window's scan, is at least the bound of the sample that
-answer's registration states, at the facts' δ (`SampleCharged`). The check computes the bound itself and reads the
+of each compute audit, and in the rows form of each scan, is at least the bound of the sample that answer's
+registration states, at the facts' δ (`SampleCharged`). The check computes the bound itself and reads the
 larger of it and the `bound` the answer states, so an answer that states a smaller `bound` than its sample gives
 lowers no term of `K`: `ClockKBoundsCount` and `RowsKBoundsCount` are read at these counts. The rows form's charge
 of a tied audit reads the same sample at the period's own δ, and `RowsTiedCharged` says the same of that reading.
@@ -218,9 +218,9 @@ The facts are of that sample by `RegisteredSampleHeld`.
 
 The bound is a stratum at a time. A stratum of a registered sample is one uniform `subset:k_s` of its own `n_s`
 units, and its incorrect proof blocks are bounded at δ split equally over the strata, so the strata's bounds hold
-together except with probability δ; no step reads the strata as one law of the level's units. That the units a draw
-takes are the registered rule's under the coins is the answer's own verifier's, which the period check does not
-read. -/
+together except with probability δ; no step reads the strata as one sampling design of the level's units. That the
+units a sample takes are the registered rule's under the coins is the answer's own verifier's, which the period check
+does not read. -/
 def SampleBoundCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → AnswersAt SampleCharged p c pub
@@ -317,15 +317,15 @@ period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
   ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
 
-/-- A window record that states a sample: `population` units under the sampling design its `law` states. -/
-def sampleReg (population : ℕ) (law : Lean.Json) : Lean.Json :=
-  Lean.Json.mkObj [("population", Lean.toJson population), ("law", law)]
+/-- A window record that states a sample: `population` units under the sampling design `design`. -/
+def sampleReg (population : ℕ) (design : Lean.Json) : Lean.Json :=
+  Lean.Json.mkObj [("population", Lean.toJson population), ("law", design)]
 
-/-- The sampling design `subset:k`, as a registration's `law` states it. -/
+/-- The sampling design `subset:k`, as a registration states it. -/
 def subsetDesign (k : ℕ) : Lean.Json := Lean.Json.mkObj [("law", "subset"), ("k", Lean.toJson k)]
 
-/-- A stratified sampling design of two strata, as a registration's `law` states it: `a`, the units `[0, na)` with
-`ka` of them sampled, and `b`, the next `nb` units with `kb` of them sampled. -/
+/-- A stratified sampling design of two strata, as a registration states it: `a`, the units `[0, na)` with `ka` of
+them sampled, and `b`, the next `nb` units with `kb` of them sampled. -/
 def strataDesign (na ka nb kb : ℕ) : Lean.Json :=
   Lean.Json.mkObj [("law", "stratified"), ("strata", Lean.Json.arr #[
     Lean.Json.mkObj [("template", "a"), ("k", Lean.toJson ka),

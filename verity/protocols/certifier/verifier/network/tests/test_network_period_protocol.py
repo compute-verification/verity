@@ -309,6 +309,17 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     assert charged
 
 
+def as_facts(entry: dict) -> Facts:
+    """An entry of a public's `audits` or `charged` as the facts it writes (`_facts_json`), less their design."""
+    return Facts(entry["units"], entry["drawn"], Fraction(entry["delta"]), entry["wrong_units"])
+
+
+def sample_size(entry: dict) -> tuple[int, int]:
+    """An entry of a public's `audits` or `charged`: its units and how many of them its sample takes."""
+    f = as_facts(entry)
+    return f.units, f.drawn
+
+
 def charged(case: dict, public: dict) -> list[int]:
     """The audits of an accepted rows-form `case` its `public` charges: tied to a link-window's scan and sampled in
     part."""
@@ -364,10 +375,9 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
             s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
             assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (m, n, p.scan)
             c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
-            (read,) = pub["charged"]
-            b = read["wrong_units"]
-            assert read["delta"] == str(PC.TIED_DELTA) and b >= max(1, pub["audits"][i]["wrong_units"]), (m, n, read)
-            assert {k: read[k] for k in ("drawn", "units")} == {k: pub["audits"][i][k] for k in ("drawn", "units")}
+            (read,), own = (as_facts(f) for f in pub["charged"]), as_facts(pub["audits"][i])
+            assert read.delta == PC.TIED_DELTA and read.wrong >= max(1, own.wrong), (m, n, read)
+            assert sample_size(pub["charged"][0]) == sample_size(pub["audits"][i]), (m, n, read)
             assert [t["faulty_entries"] for t in pub["scans"]] == [
                 p.scan.entries if i in PC._tied_audits(c["audits"], reg) else 0 for reg in c["windows"]], (m, n, pub)
             assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), PC.TIED_DELTA))
@@ -383,26 +393,25 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
 def test_a_tied_audits_sample_is_read_at_the_periods_own_delta(server):
     """One sample read at two δs, each fixed before the coins: a tied audit sampled `subset:1` of its n proof blocks,
     whose answer is at δ = 1/2 with its bound there, n // 2, beside scans at δ = 2^-64. The rows form reads the same
-    sample at δ_i = 2^-64 (`charged`): n − 1 incorrect proof blocks, every unsampled one, since a set of them
-    escapes with 1/n ≥ δ_i, so its link-windows' terms charge E_w; it keeps the answer's δ and count in `audits`,
-    the answer's own reading; and its eps is the scans' δ and δ_i, each its own term, (m + 1) · 2^-64 exactly. The
-    reading keeps a count above the sample's bound, and a stratified sample's is its strata's own, summed. Lean
-    gives every such period the mirror's public."""
+    sample at δ_i = 2^-64 (`charged`): n − 1 incorrect proof blocks, every unsampled one, since the sample misses
+    any one of them with probability 1/n ≥ δ_i, so the terms of the scans it is tied to charge E_w; it keeps the
+    answer's δ and count in `audits`, the answer's own reading; and its eps is the scans' δ and δ_i, each its own
+    term, (m + 1) · 2^-64 exactly. The reading keeps a count above the sample's bound, and a stratified sample's is
+    its strata's own, summed. Lean gives every such period the mirror's public."""
     one = Facts(16, 1, Fraction(1, 2), 8, {"subset": 1})
     assert (one.at(PC.TIED_DELTA).wrong, one.at(Fraction(1, 2)).wrong, one.at(PC.TIED_DELTA).delta) == (
         15, 8, PC.TIED_DELTA)
     assert Facts(16, 16, Fraction(1, 2), 0, {"subset": 16}).at(PC.TIED_DELTA).wrong == 0
     assert Facts(16, 1, Fraction(1, 2), 8).at(PC.TIED_DELTA).wrong == 16
     assert Facts(16, 16, Fraction(1, 2), 3, {"subset": 16}).at(PC.TIED_DELTA).wrong == 3
-    law = {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 4}, {"name": "b", "size": 5, "k": 1}]}
-    assert Facts(9, 5, Fraction(1, 10), 0, law).at(Fraction(1, 2)).wrong == 3
+    assert Facts(9, 5, Fraction(1, 10), 0, strata_of(("a", 4, 4), ("b", 5, 1))).at(Fraction(1, 2)).wrong == 3
     read = 0
     for n in range(12):
         case = build("rows-tied-sampled", n, small=n % 2 == 0)
         (i,) = charged(case, reference(case)["public"])
         e = json.loads(bytes.fromhex(case["evidence"]))
         units = e["audits"][i]["profile"]["levels"][0]["size"]
-        if e["audits"][i]["profile"]["levels"][0]["draw"] != {"subset": 1}:
+        if PC._sample_of(json.loads(bytes.fromhex(case["commitment"]))["audits"][i])[1] != {"subset": 1}:
             continue
         e["audits"][i]["profile"]["delta"], e["audits"][i]["public"]["bound"] = "1/2", units // 2
         for w in e["windows"]:
@@ -413,8 +422,8 @@ def test_a_tied_audits_sample_is_read_at_the_periods_own_delta(server):
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
         pub, c = out["public"], json.loads(bytes.fromhex(case["commitment"]))
-        assert pub["audits"][i] == {"delta": "1/2", "drawn": 1, "units": units, "wrong_units": units // 2}, (n, pub)
-        assert pub["charged"] == [{"delta": str(PC.TIED_DELTA), "drawn": 1, "units": units, "wrong_units": units - 1}]
+        assert as_facts(pub["audits"][i]) == Facts(units, 1, Fraction(1, 2), units // 2), (n, pub)
+        assert [as_facts(f) for f in pub["charged"]] == [Facts(units, 1, PC.TIED_DELTA, units - 1)], (n, pub)
         p = PC.params(case["params"])
         assert [t["faulty_entries"] for t in pub["scans"]] == [
             p.scan.entries if i in PC._tied_audits(c["audits"], reg) else 0 for reg in c["windows"]], (n, pub)
@@ -609,19 +618,36 @@ def unheld(level: dict) -> str | None:
     return "sizes" if strata is not None and sum(s["size"] for s in strata) != level["size"] else None
 
 
-def registered(case: dict, c: dict, e: dict, reg: dict, x: dict) -> dict:
-    """`case` with the commitment `c` and the evidence `e` it decodes to, after the registration `reg` of `c` is made
-    to state the sample the profile of its answer `x` of `e` names: its level's size as the `population`, and as the
-    `law` the level's draw, a stratum's units the range after the last stratum's. The answer is for that
-    registration."""
+def strata_of(*ss: tuple[str, int, int]) -> dict:
+    """A stratified sampling design as a profile's level writes it, each stratum its name, its size and its count."""
+    return {"law": "stratified", "strata": [{"name": name, "size": size, "k": k} for name, size, k in ss]}
+
+
+def level_of(x: dict) -> tuple[int, dict]:
+    """The one level of the answer `x`'s profile: its size and its sampling design."""
     (level,) = x["profile"]["levels"]
-    draw, lo, strata = level["draw"], 0, []
-    for s in draw.get("strata", []):
+    return level["size"], level["draw"]
+
+
+def stated(size: int, design: dict) -> dict:
+    """A registration's `population` and sampling design that state `design` of `size` units, a stratum's units the
+    range after the last stratum's."""
+    if "subset" in design:
+        return {"population": size, "law": {"k": design["subset"], "law": "subset"}}
+    lo, strata = 0, []
+    for s in design["strata"]:
         strata.append({"k": s["k"], "template": s["name"], "units": [[lo, lo + s["size"]]]})
         lo += s["size"]
-    reg["population"] = level["size"]
-    reg["law"] = {"k": draw["subset"], "law": "subset"} if "subset" in draw else {
-        "k": sum(s["k"] for s in strata), "law": "stratified", "strata": strata}
+    return {"population": size, "law": {"k": sum(s["k"] for s in strata), "law": "stratified", "strata": strata}}
+
+
+def registered(case: dict, c: dict, e: dict, reg: dict, x: dict) -> dict:
+    """`case` with the commitment `c` and the evidence `e` it decodes to, after the registration `reg` of `c` is made
+    to state the sample the profile of its answer `x` of `e` names: its level's size as the `population` and the
+    level's sampling design as its own, a stratum's units the range after the last stratum's. The answer is for that
+    registration."""
+    size, design = level_of(x)
+    reg |= stated(size, design)
     x["commitment"] = R.digest(reg)
     return case | {"commitment": D.canonical(c).encode().hex(), "evidence": D.canonical(e).encode().hex()}
 
@@ -681,23 +707,21 @@ UNREGISTERED = {"audit-unsampled": PC.NO_SAMPLE, "rows-audit-unsampled": PC.NO_S
 
 
 def bounds(reg: dict, x: dict) -> tuple[int, dict, int, int]:
-    """Of an accepted answer `x` to the registration `reg`: its level's size and draw, the bound its public states and
-    the bound of its registration's sample at its δ (`PC._sample_bound`)."""
-    (level,) = x["profile"]["levels"]
-    size, draw = PC._sample_of(reg)
-    return level["size"], level["draw"], x["public"]["bound"], PC._sample_bound(size, draw,
-                                                                                Fraction(x["profile"]["delta"]))
+    """Of an accepted answer `x` to the registration `reg`: its level's size and sampling design, the bound its public
+    states and the bound of its registration's sample at its δ (`PC._sample_bound`)."""
+    need = PC._sample_bound(*PC._sample_of(reg), Fraction(x["profile"]["delta"]))
+    return *level_of(x), x["public"]["bound"], need
 
 
 def test_an_answer_whose_sample_is_not_its_registrations_is_refused(server):
-    """A sample's strata, each stratum's units and how many of them are drawn are the registration's, fixed before any
-    coin; only which units a draw takes comes with the answer. So a compute audit's answer in either form, and a
-    scan's, is refused by name, by Lean and by the mirror, where its registration states no `subset:k` or stratified
-    sample (no law or population, a Bernoulli law, or a count, strata, a template or a range one-stage's profile reads
-    none of) and where its profile is another sample of its level than the registered one (another `k`, a stratum
-    renamed, sampled otherwise or holding another unit, the strata as one subset or the subset as one stratum). It is
-    refused for that alone: with the registration made to state the profile's sample, Lean accepts the period with
-    the mirror's public."""
+    """A sample's strata, each stratum's units and how many of them are sampled are the registration's, fixed before
+    any coin; only which units the sample takes comes with the answer. So a compute audit's answer in either form, and
+    a scan's, is refused by name, by Lean and by the mirror, where its registration states no `subset:k` or stratified
+    sample (no sampling design or population, a Bernoulli design, or a count, strata, a template or a range
+    one-stage's profile reads none of) and where its profile is another sample of its level than the registered one
+    (another `k`, a stratum renamed, sampled otherwise or holding another unit, the strata as one subset or the subset
+    as one stratum). It is refused for that alone: with the registration made to state the profile's sample, Lean
+    accepts the period with the mirror's public."""
     seen = Counter()
     for m, why in UNREGISTERED.items():
         for n in range(6):
@@ -709,11 +733,10 @@ def test_an_answer_whose_sample_is_not_its_registrations_is_refused(server):
             answers = [("audit", reg, x) for reg, x in zip(c["audits"], e["audits"])] + (
                 [("scan", reg, w["answer"]) for reg, w in zip(c["windows"], e["windows"])]
                 if PC.form_of(m) == "rows" else [])
-            (kind, reg, x), = [(kind, reg, x) for kind, reg, x in answers
-                               if PC._sample_of(reg) != tuple(x["profile"]["levels"][0][k] for k in ("size", "draw"))]
-            draw = x["profile"]["levels"][0]["draw"]
-            seen.update([kind, why, "subset" if "subset" in draw else "stratified"])
-            if all(s["size"] for s in draw.get("strata", [])):  # a stratum of no unit has no range to register
+            (kind, reg, x), = [(kind, reg, x) for kind, reg, x in answers if PC._sample_of(reg) != level_of(x)]
+            _, design = level_of(x)
+            seen.update([kind, why, "subset" if "subset" in design else "stratified"])
+            if all(s["size"] for s in design.get("strata", [])):  # a stratum of no unit has no range to register
                 fixed = registered(case, c, e, reg, x)
                 assert reference(fixed)["verdict"] == ACCEPT, (m, n, reference(fixed))
                 verdict, out = D.replay(PORT, fixed, server)
@@ -727,9 +750,9 @@ def test_an_answers_count_is_never_below_its_samples_bound(server):
     """The count of incorrect proof blocks the period reads of an answer is the larger of the `bound` the answer
     states and the bound of its registration's sample at its δ, which the check computes itself, so an answer that
     states too small a bound gains nothing and none is refused for it: over accepted periods of both forms, every
-    compute audit's and every scan's `wrong_units` is that maximum, an answer below its sample's bound is read at the
-    sample's and one at or above it as it states, over `subset:k` samples and stratified ones, and Lean's public is
-    the mirror's."""
+    compute audit's and every scan's count in the public is that maximum, an answer below its sample's bound is read at
+    the sample's and one at or above it as it states, over `subset:k` samples and stratified ones, and Lean's public
+    is the mirror's."""
     seen = Counter()
     for m in ("honest", "rows-honest", *SAMPLED_IN_PART):
         for n in range(4):
@@ -743,10 +766,11 @@ def test_an_answers_count_is_never_below_its_samples_bound(server):
                 ("scan", reg, w["answer"], t)
                 for reg, w, t in zip(c["windows"], e["windows"], out["public"].get("scans", []))]
             for kind, reg, x, t in read:
-                size, draw, stated, need = bounds(reg, x)
-                assert (t["units"], t["wrong_units"]) == (size, max(stated, need)), (m, n, kind, t, stated, need)
-                how = "raised" if stated < need else "as stated"
-                seen.update([(kind, how), ("subset" if "subset" in draw else "stratified", how)])
+                size, design, bound, need = bounds(reg, x)
+                got = as_facts(t)
+                assert (got.units, got.wrong) == (size, max(bound, need)), (m, n, kind, t, bound, need)
+                how = "raised" if bound < need else "as stated"
+                seen.update([(kind, how), ("subset" if "subset" in design else "stratified", how)])
     assert all(seen[k, how] for k in ("audit", "scan", "subset", "stratified") for how in ("raised", "as stated")), seen
 
 
@@ -756,19 +780,13 @@ def test_a_samples_bound_is_its_stratas_own_summed():
     at most 1 and 9, each at 1/200, where their totals read as one sample, 10 of 20, would leave 5. Two strata of 4 of
     8 at δ = 1/10 leave at most 3 each at 1/20, where one-stage's bound of the strata together is 3. A level sampled
     whole leaves none."""
-    def strata(*ss):
-        return {"law": "stratified", "strata": [{"name": name, "size": size, "k": k} for name, size, k in ss]}
-
-    def count(size, draw, delta, stated):
-        law = {"k": draw["subset"], "law": "subset"} if "subset" in draw else {"law": "stratified", "strata": [
-            {"k": s["k"], "template": s["name"], "units": [[10 * j, 10 * j + s["size"]]]}
-            for j, s in enumerate(draw["strata"])]}
-        prof = {"delta": delta, "levels": [{"draw": draw, "size": size}]}
-        return PC._facts("x", {"law": law, "population": size}, prof, {"bound": stated}).wrong
+    def count(size, design, delta, states):
+        prof = {"delta": delta, "levels": [{"draw": design, "size": size}]}
+        return PC._facts("x", stated(size, design), prof, {"bound": states}).wrong
 
     tenth, bound = Fraction(1, 10), PC._sample_bound
     assert [count(10, {"subset": 3}, tenth, b) for b in (3, 4, 5)] == [4, 4, 5]
-    uneven, halves = strata(("a", 10, 9), ("b", 10, 1)), strata(("a", 8, 4), ("b", 8, 4))
+    uneven, halves = strata_of(("a", 10, 9), ("b", 10, 1)), strata_of(("a", 8, 4), ("b", 8, 4))
     assert [count(20, uneven, Fraction(1, 100), b) for b in (9, 12)] == [10, 12]
     assert [bound(10, {"subset": k}, Fraction(1, 200)) for k in (9, 1)] == [1, 9]
     assert bound(20, {"subset": 10}, Fraction(1, 100)) == 5
@@ -822,8 +840,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
         (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), Fraction(0)) + sum(
         (Fraction(f["delta"]) for f in x.get("charged", ())), Fraction(0)))
-        and [{k: f[k] for k in ("drawn", "units")} for f in x.get("charged", ())] == [
-            {k: x["audits"][i][k] for k in ("drawn", "units")} for i in (charged(drawn[ks], x) if "scans" in x else ())]
+        and [sample_size(f) for f in x.get("charged", ())] == [
+            sample_size(x["audits"][i]) for i in (charged(drawn[ks], x) if "scans" in x else ())]
         and all(f["delta"] == str(PC.TIED_DELTA) for f in x.get("charged", ()))
         for ks, a in answers.items() if ks[0] == ACCEPT for x in [a["public"]])
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)

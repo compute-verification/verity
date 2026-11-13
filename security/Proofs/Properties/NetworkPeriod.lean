@@ -27,11 +27,11 @@ its facts and every link-window's its scan's, so the public's `audits` and `unit
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
 sampling more than its level holds, a stratified one with a stratum sampling more than it holds or whose strata's
 sizes do not sum to the level's, and one that is another sample than its registration's (`factsOf_sample`), so facts
-with `drawn = units` of a registered stratified sample are of every stratum sampled whole (`strata_whole`).
+of a registered stratified sample that is sampled whole are of every stratum sampled whole (`strata_whole`).
 
 `RegisteredSampleHeld` and `SampleBoundCharged` read the same public in both forms (`check_clock`, `check_rows`): what
 `factsOf` gives of every answer (`factsOf_sample`: facts of the registered sample, with a count at least its bound,
-the larger of the stated one and `sampleBound`) holds of each audit's facts and each link-window's scan's
+the larger of the stated one and `sampleBound`) holds of each audit's facts and each scan's
 (`rowsWindowCheck_facts`), position for position (`answersAt`).
 
 `RowsCapPublished` reads the public off the acceptance, in each form.
@@ -443,7 +443,7 @@ theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.
     · omega
     · exact r st m
 
-/-- Facts of a registered stratified sample with `drawn = units` are of every stratum sampled whole. -/
+/-- Facts of a registered stratified sample that is sampled whole are of every stratum sampled whole. -/
 theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Core.Stratum} (h : SampleHeld reg f)
     (hs : sampleOf reg = some (n, .stratified ss)) (hw : f.drawn = f.units) : ∀ st ∈ ss, st.k = st.size := by
   obtain ⟨n', d, hs', hu, -, -, hd⟩ := h
@@ -458,7 +458,7 @@ theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Cor
     exact fun st m => (strata_whole ss.toList (fun st m => hle st (Array.mem_toList_iff.mp m)) 0 0 (Nat.le_refl 0)
       hk).2 st (Array.mem_toList_iff.mpr m)
 
-/-- A link-window the rows form accepts has its scan's answer's facts. -/
+/-- The rows form's check of a scan, where it accepts, has the scan's answer's facts. -/
 theorem rowsWindowCheck_facts {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
     {reg : Lean.Json} {x : Window} {u : Facts × ℕ} (h : rowsWindowCheck p s sd audits w reg x = .ok u) :
     ∃ (what : String) (prof : Core.Integrity) (pub : Lean.Json), factsOf what reg prof pub = .ok u.1 := by
@@ -705,7 +705,7 @@ theorem check_audits {p : Params} {c : Commitment} {e : Evidence} {pub : Public}
     exact ⟨hca, hea, has, rfl⟩
 
 /-- What `factsOf` gives of every answer holds of an accepted period's public: of each audit's facts, which are its
-term's in the clock form, and in the rows form of each link-window's scan's. -/
+term's in the clock form, and in the rows form of each scan's. -/
 theorem answersAt {P : Lean.Json → Facts → Prop}
     (hP : ∀ (what : String) (reg : Lean.Json) (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
       factsOf what reg prof pub = .ok f → P reg f)
