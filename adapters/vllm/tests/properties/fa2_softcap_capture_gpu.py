@@ -43,7 +43,7 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import rows as RK
 from verity.definitions.numerics import softcap_rows as SR
-from verity.definitions.ops import mufu
+from verity.circuits.ops import mufu
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import prims as P
@@ -76,7 +76,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity.definitions.ops import mufu
+    from verity.circuits.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"

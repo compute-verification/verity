@@ -83,7 +83,7 @@ verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json
 verity/protocols/certifier/verifier/tests/fixtures/cache_step_vectors.json
 verity/protocols/certifier/verifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
-verity/definitions/silicon/captures/autoproof-probe-vectors.json
+verity/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 adapters/vllm/data/logs/m1.jsonl.gz
 adapters/vllm/data/logs/m6/log.jsonl.gz
@@ -215,16 +215,16 @@ adapters/vllm/workloads/workload_llama32_1b_32x16_1req.json
 adapters/vllm/workloads/workload_phi3_mini_32x16_1req.json
 adapters/vllm/workloads/workload_qwen05_32x16_1req.json
 adapters/vllm/workloads/workload_qwen15_32x16_1req.json
-verity/definitions/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z
-verity/definitions/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz
-verity/definitions/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz
-verity/definitions/ops/tests/fixtures/tc-sm120-mxf4-2026-10-01
-verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json
-verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz
-verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json
-verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
-verity/definitions/ops/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json
-verity/definitions/ops/tests/fixtures/vectors/tc-ampere-bf16-total.json
+verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z
+verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz
+verity/circuits/ops/tests/fixtures/tc-sm120-mxf4-2026-10-01
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/cvt_special.json
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/4090/mma_special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/cvt_special.json
+verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
+verity/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total-hw.json
+verity/circuits/ops/tests/fixtures/vectors/tc-ampere-bf16-total.json
 
 # Pre-move fixture paths (the layout move, 378453fb3): a checkout that fetched fixtures before the move still holds them here,
 # and `git add -A` would sweep them in. Exact files only, so a stale gate path to a moved directory still fails test_gate_paths.
