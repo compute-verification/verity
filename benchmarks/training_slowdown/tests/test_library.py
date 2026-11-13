@@ -1,4 +1,5 @@
 import json
+import tomllib
 
 import pytest
 from conftest import calculators_count
@@ -68,6 +69,7 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     got = json.loads((tmp_path / "out" / "library.json").read_text())
     assert got["schema"] == library.SCHEMA
     assert list(got["parts"]) == ["traced", "approximated", "proved", "premise", "scaled"]
+    assert "(H) and (E)" in got["parts"]["premise"] and work.P_BATCH in got["parts"]["premise"]
     a, b = got["rows"]
     # the adapters of the start's seven matrices, rank 2, over the start's own parameters
     adapters = 2 * (4 * (16 + 16) + 3 * (16 + 32))
@@ -175,3 +177,23 @@ def test_the_library_names_its_entries_and_refuses_one_it_lacks():
         library.entries(["nope"])
     for path in library.entries():
         config.load(path, starts.registry())
+
+
+#: an entry that runs another's step, by name: the other, and the keys it writes otherwise. One that keeps the budget
+#: keeps the other's digest too, so its jobs are the other's under the same labels.
+SOURCES = {
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102": ("l16-t20-1.1x-ref-optim-fullmuon-fe-wsd", ("seeds",)),
+    "l16-t20-2x-fullmuon-fe-wsd-40326": ("l16-t20-1.1x-fullmuon-fe-wsd-5383", ("budget", "target")),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd-3884": ("xl-t20-1.1x-ref-optim-fullmuon-fe-wsd", ("budget",)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(SOURCES))
+def test_an_entry_that_runs_anothers_step_differs_from_it_only_in_the_keys_it_names(name):
+    source, keys = SOURCES[name]
+    mine, theirs = (tomllib.loads((library.ENTRIES / f"{n}.toml").read_text()) for n in (name, source))
+    assert {k: v for k, v in mine.items() if k not in keys} == {k: v for k, v in theirs.items() if k not in keys}
+    assert mine["budget"]["batch"] == theirs["budget"]["batch"]
+    if "budget" not in keys:
+        assert config.load(library.ENTRIES / f"{name}.toml", starts.registry()).digest == \
+            config.load(library.ENTRIES / f"{source}.toml", starts.registry()).digest
