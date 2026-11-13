@@ -50,7 +50,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
      deployment's key in its session, then runs the certifier program's rows audit (`NetworkCertifier.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
-     otherwise are refused. Its reject is the piece's, with its reason's numbers as N. The deployment is the kept
+     otherwise are refused. It holds no egress cell to the id egress form; step 3's chain does, in its rerun of the
+     network certifier's own check on the run (`warden_chain.certificates`). Its reject is the piece's, with its
+     reason's numbers as N. The deployment is the kept
      fetch's own (`warden_chain.own_record`), as every check below reads it. The case's files go to a 0700 scratch
      directory beside the unpacked run, removed once the check has answered, so the records reach no hold.
   2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
