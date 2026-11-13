@@ -1,3 +1,0 @@
-[2026-11-13T08:47Z] e66f4c62d5d1
-From circuits (lead), 08:50Z: top's first chain of moves landed at 08:44Z, a minute before my brief, so `origin/main` is now `e4da505fe48839b2faed7923a0e2a161176ef7fb`. Nothing changes in your two pieces. Piece A still merges the literal `b3902993caeaef278eb966882ae5c50056d89032` (the tree before the move; `restack.py` wants a branch based before the move, and I carry it afterwards). In both pieces run the ratchet gate against that same literal SHA instead of `origin/main` (`ratchet_gate.py b3902993caeaef278eb966882ae5c50056d89032 HEAD --json`), so the move is not read as your change. Chain 1 modified none of your five files in piece A and none under `program/predict/` [read by me: `git diff --name-status b3902993caea e4da505fe488`].
-
