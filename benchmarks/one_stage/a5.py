@@ -1333,8 +1333,9 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
     ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
     v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up. The
-    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
-    (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
+    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 checks a case of this form by
+    `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
+    case."""
     RP = own_replay()
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 

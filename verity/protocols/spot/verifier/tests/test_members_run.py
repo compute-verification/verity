@@ -138,7 +138,7 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_maps_to_the_f
     assert refused is None and run.all and run.proved == (1, 2, 4)
     assert [(f.session, f.accepted, f.units, f.program) for f in run.findings] == [
         ("s0", True, (1,), PARTITION["program"]), ("s1", True, (2, 4), PARTITION["program"])]
-    assert M.run_reason(run, refused) == M.ALL_PASSED
+    assert run.all and M.run_reason(run, refused) is None
     ms = w.params["proofs"]["members"]
     assert [PF.file_sha512(st.circuit) for st in seen] == [ms[A]["circuit"], ms[B]["circuit"]]
     assert [PF.file_sha512(st.public) for st in seen] == [ms[A]["public"], ms[B]["public"]]

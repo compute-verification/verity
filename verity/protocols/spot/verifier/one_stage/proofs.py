@@ -571,8 +571,8 @@ def members_v2(members: Sequence[Member],
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
     every member's files, sampled or not (`OneStageZk.membersFiles`). Two members of one name, a member of no unit or
-    one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` parses this
-    form and refuses it (`MULTI_REFUSED`); `members_parsed` holds these keys to its parsers."""
+    one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` checks a
+    case of this form by `checkMembersAt` (`members.check`); `members_parsed` holds these keys to its parsers."""
     if len({m.name for m in members}) != len(members):
         raise ValueError("two members have one name: a member's name is its own")
     for m in members:

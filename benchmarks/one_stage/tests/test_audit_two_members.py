@@ -15,8 +15,8 @@ and verified by the Lean verifier. Nothing on that path is replaced.
 * **The sessions' coin trees.** Under FLOCK_CHALLENGER=1 the two sessions run on that same challenger session
   (`a5.window_trees`): each verifier takes its tree through the audit's relay, and each session's tree is closed
   there after its evidence before the next session starts. The audit then writes its case in v2's per-member form
-  with the challenger's key, the window's root and the coins, and v2 refuses it for its form alone
-  (`members.ALL_PASSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
+  with the challenger's key, the window's root and the coins, and v2's check accepts it
+  (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
 * **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
@@ -184,15 +184,14 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
-def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_refuses_the_form_alone(tmp_path, binaries):
+def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
     """Under FLOCK_CHALLENGER=1 the audit's two sessions take their coin trees from the session the sample's coins came
     from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
-    and the per-member case names the challenger and carries its coins. On that case Lean's check passes everything
-    before the per-member form's refusal and answers `MULTI_REFUSED`, with exit 1; with one proof file of the first
-    session changed after its closing round, it refuses the session's coins as the driver's check of the log does. The
-    Python run of the form (`members.members_run`) answers the same on both: every session accepted with the units it
-    proved, which maps to the refusal, and the changed file's reason."""
+    and the per-member case names the challenger and carries its coins. On that case Lean's check accepts, with exit
+    0; with one proof file of the first session changed after its closing round, it rejects for the session's coins
+    as the driver's check of the log does. The Python run of the form (`members.members_run`) answers the same on
+    both: every session accepted with the units it proved, and the changed file's reason."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -223,7 +222,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     run, refused = twin(case, evidence)
     assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
     assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
-    assert M.case_refusal(case) == (M.run_reason(run, refused), True) == (M.ALL_PASSED, True)
+    assert M.case_check(case) == ("accept", M.run_reason(run, refused)) == ("accept", None)
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
@@ -235,7 +234,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     assert str(rep) in case["blobs"] and other["blobs"] != case["blobs"]
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
     assert twin(other, evidence) == (None, why)
-    assert M.case_refusal(other) == (M.run_reason(None, why), True) == (f"proofs: {why}", True)
+    assert M.case_check(other) == ("reject", M.run_reason(None, why)) == ("reject", f"proofs: {why}")
 
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):

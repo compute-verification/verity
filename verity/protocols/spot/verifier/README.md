@@ -196,12 +196,12 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
-  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
-  `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of the two
-  files, with the words `parsed, not checked` and no verdict. Its `refusal PARAMS COMMITMENT EVIDENCE [BLOB ...]`
-  (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) runs the audit's check on a case of that form and prints
-  why it is refused, `MULTI_REFUSED` exactly where every check before the refusal passed; it accepts nothing and never
-  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
+  statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted
+  and v1's check at the coins accepts on the sessions' verdicts (`one_stage.members.check`, with the Python of the
+  run, `members_run`). The executable's `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`,
+  `proofs.members_parsed`) prints what its parsers read of the two files, with the words `parsed, not checked` and no
+  verdict. A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
