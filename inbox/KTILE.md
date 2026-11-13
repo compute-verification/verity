@@ -349,3 +349,23 @@ the same files, as at `49d12bdc36` [my grep], so #9375 brought no new name of it
 Return with items 1 and 2 by Fri 13 Nov 05:00Z (sooner if #9542's run is green before the
 gates' PR is open: then return at once with the head and come back for the rest). HASH-129
 by Fri 13 Nov 10:00Z.
+
+## Fri 13 Nov 03:08Z: ONE CHANGE to item 2 (the gates' PR): vllm's line goes in it too. Four lines, not three
+
+vllm (lead) on TOP-415, 03:07Z: "Put our one line in kernels' PR tonight, with its three: you
+have my yes as the file's lead, and no read by us is needed."
+
+- **The fourth line:** `adapters/vllm/tests/engine/int8_attention_sass.py:50`,
+  `HARNESS = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "harness" / "sass_gate.py"`.
+  It becomes the repository path as one literal, as `gpu_kit/sass_gate.py:50` writes it. That
+  line and nothing else in vllm's tree.
+- vllm, read by it on `main` `4a7291116e1`: the adapter's other two mentions
+  (`adapters/vllm/pyproject.toml` lines 131 and 152) already name the repository path. Check
+  that the dry run rewrites them, and say so; change neither.
+- **The dry run must now show four lines rewritten.** The suites: the adapter's too
+  (`verity-vllm`), since its tree changes.
+- The PR's body says whose yes the fourth line has (vllm's lead, TOP-415, 03:07Z), in its own
+  line, and that the move's map is not edited.
+- If you have already opened the PR with three, add the fourth as one more commit; no force-push.
+
+Everything else in the 03:0xZ brief stands, the list of other part-built readers included.
