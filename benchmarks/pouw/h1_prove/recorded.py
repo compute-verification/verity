@@ -380,7 +380,7 @@ def findings_of(doc: dict) -> dict:
 
 @functools.lru_cache(maxsize=4)
 def _layout_of(descriptor: bytes) -> tuple:
-    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on a window's
+    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on an execution phase's
     descriptor, kept for `credit_registration`'s calls on the same one."""
     return CR.layout_of(descriptor)
 
