@@ -7,12 +7,13 @@ a finding.
     python benchmarks/network_traces/kind_scan.py DIR
     python benchmarks/network_traces/kind_scan.py --received OUT
 
-DIR is a piece's DIR, or its hold before the leak guard releases it: `DOCS`' files, the case as DIR/case.json (its
-commitment and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files of the rows
-form (DIR/period, `PARAMS`). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
-leaf's key path (a list's items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's,
-a stratum's, a δ's), and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
-or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
+DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the link-window's certificates among them
+(`certifier_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
+(`certifier_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
+declaration: one left in DIR is a finding. Each file's JSON is walked to its leaves, and each leaf's key path (a list's
+items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's, a stratum's, a δ's), and
+``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure) or a development check's
+field. A list's length and an object's keys are the shape of the leaves they hold. So a field
 no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number, a
 count of its requests, the advice's length.
 
@@ -50,7 +51,6 @@ from pathlib import Path
 from typing import Any
 
 from verity.configuration import wire as W
-from verity.protocols.certifier.verifier.warden import WardenParams
 
 CERTIFICATE = "certificate"
 KINDS = (*(k for k in W.KINDS if k in W.PUBLIC), CERTIFICATE)
@@ -79,18 +79,14 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
 
 #: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
-#: a window's circuit record (``verity/window-circuit/v1``) and its wires' order (``verity/wire-order/v1``): the circuit's
-#: description, every field of it structure
-RECORD = {"**": S}
 #: a registered value's entry (`registered.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: verifier's sampling design over them, the roots and registered values hiding commitments under domains of
-#: their structure; its window the provenance: a scan round's account and members, its state's reads (`stateRead`'s
-#: runs) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and salt structure and
-#: its path's siblings hiding commitments; no unit reads leaf 0), or a committed window's run root, circuit record,
-#: class, per-window values, registered roots and index leaf. The window's own number is none of them, and the advice's
-#: binding (`interface.advice_binding`) is `OPENING`'s.
+#: their structure; its window the provenance of a committed window: its run root, circuit record, class, per-window
+#: values, registered roots and index leaf. The window's own number is none of them, the advice's binding
+#: (`interface.advice_binding`) is `OPENING`'s, and a scan round's provenance has no declaration: its registrations are
+#: the case's, which is witness.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -98,11 +94,8 @@ REGISTRATION = {
     "law.strata[].units[][]": S, "law.strata[].work": S, "law.strata[].floor": S,
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
-    "window.kind": S, "window.link": S, "window.of": S, "window.members.*.template": S, "window.members.*.units[]": S,
-    "window.reads.*.*.leaf": S, "window.reads.*.*.units[]": S,
-    "window.empty.*.words": S, "window.empty.*.salt": S, "window.empty.*.path": M,
-    "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
-    "window.window_circuit.class[]": S, "window.activations.program": S,
+    "window.kind": S, "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M,
+    "window.registered_roots.*": M, "window.window_circuit.class[]": S, "window.activations.program": S,
     **under("window.activations.values.*", ENTRY),
     "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
@@ -118,29 +111,11 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: a row registration of the network certifier's (`warden_rows`): the registered layout and schedule's digest, its root a
-#: hiding commitment, and the certificate the network certifier signed over it
-ROWS = {
-    **{k: S for k in ("cell_bytes", "direction", "domain", "format", "link", "parameters", "row_schema", "rows", "value",
-                      "window", "wiring", "word_bits", "words")},
-    **{f"layout.{k}": S for k in ("buckets", "connection_slots", "first_bucket", "slots")},
-    "root": M, "certificate.digest": X, "certificate.key": X, "certificate.signature": X,
-}
-#: a record's certificate (`scan_period.CERTIFICATE_KEYS`), the network certifier's in the clear
+#: a certificate (`scan_period.CERTIFICATE_KEYS`), the network certifier's in the clear
 CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: `NetworkCheck.Period`'s rows form: the commitment, the evidence and the parameters (`scan_period.rows_case`)
-COMMITMENT = {**under("audits[]", REGISTRATION), **under("windows[]", REGISTRATION)}
-EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAGE),
-            **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
-#: the parameters, each structure: a connection's cap (``cells``) is the registered schedule's (`WardenParams.caps`)
-PARAMS = {
-    "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
-    **under("audits[].circuit", RECORD), **under("audits[].order", RECORD), "audits[].pins.*": M,
-    "cells[]": S, "circuit": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
-    **{f"lms.{k}": S for k in ("H", "N", "W", "toy")},
-    **{f"schedule.{f.name}": S for f in dataclasses.fields(WardenParams)},
-    "session": C,
-}
+#: the link-window's certificates as the piece publishes them (`certifier_piece.certificates`): its records' and its row
+#: registrations', each with its own fields alone
+CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
 #: outputs, the profile where each party ran
 ANSWER = {
@@ -166,24 +141,16 @@ REPORT = {
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
-#: the scan's answers (`scan_zk.answers`) less what `certifier_piece.PUBLIC` drops: each execution phase's answer and the
-#: registrations it is checked against
-SCAN_ANSWERS = {"format": S, "delta": S, **under("registration", REGISTRATION), "windows[].window": S,
-                **under("windows[].answer", ONE_STAGE), **under("windows[].registrations[]", ROWS)}
-#: DIR's files, each by its declaration: the case's two hex fields (`HEX`) are walked as the JSON their bytes are
+#: DIR's files, each by its declaration (`certifier_piece.PIECE_FILES` less the logs, and what `served_verdicts.py`
+#: leaves beside a piece it ran)
 DOCS: dict[str, dict[str, Any]] = {
     "answer.json": ANSWER,
+    "certificates.json": CERTIFICATES,
     "chain.json": {"chain": O},
     "chain/report/report.json": REPORT,
-    "chain/scan/answers.json": SCAN_ANSWERS,
-    "case.json": {**under("commitment", COMMITMENT), **under("evidence", EVIDENCE), **under("params", PARAMS)},
-    "period/commitment.bin": COMMITMENT,
-    "period/evidence.json": EVIDENCE,
-    "period/params.json": PARAMS,
     "piece.json": {"server": S, "rc": O, "limit": S},
-    "served.json": {"server": S},
+    "served.json": {"server": S, "source": S},
 }
-HEX = {"case.json": ("commitment", "evidence")}
 #: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's
 #: output
 TEXT = {"refused.txt": O}
@@ -308,12 +275,6 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterat
 def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> list[Finding]:
     """``doc``'s findings, as the file ``rel`` of a dir ``docs`` declares (`DOCS`, a piece's DIR), each leaf counted in
     ``kinds`` by its kind."""
-    for k in HEX.get(rel, ()) if docs is DOCS else ():
-        if isinstance(doc, dict) and isinstance(doc.get(k), str):
-            try:
-                doc = {**doc, k: json.loads(bytes.fromhex(doc[k]))}
-            except ValueError as e:
-                return [Finding(rel, k, f"isn't hex of JSON ({type(e).__name__})")]
     out = []
     for path, declared, value in _leaves(doc, [_trie(docs[rel])]):
         if not declared:

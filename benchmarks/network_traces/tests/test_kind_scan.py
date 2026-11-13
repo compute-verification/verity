@@ -1,19 +1,17 @@
 """kind_scan: what the network certifier's piece releases holds only fields of the four public kinds and the network
-certifier's certificates. A rows-form period (`period_case`'s accept, its registrations' provenance the scan's and V3c's
-committed window's, as `scan_zk` and `prove_path.py window-commit` write them) and its answer with the piece's placement
-scan clean as DIR/case.json and as the hold's three period files. A field no declaration names is a finding wherever it
-lies: the window's own number in V3c's provenance, a count of requests in an answer, an advice length beside the
-parameters, and a file DIR doesn't declare, a log among them. What either development check would feed the record
-is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
-opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
-the network certifier path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
-in its hold.
+certifier's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the link-window's
+certificates as `certifier_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s accept)
+scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
+it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no declaration names is a finding too: a
+count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
+rebuild), or any step the network certifier path doesn't run, is a finding naming the check.
 
 What a verifier on another machine receives of a served run's OUT (``--received``: the certifier's piece, V3c's audit,
 the registered compiler, the advice and weights registrations and the window circuit's count) scans clean as the run
 writes it, and anything that reads the advice or counts the window is a finding: a log left in either dir, an undeclared
 file, the advice's own length in its registration, a workload in φ, the advice's length in a count, a compile in the
-audit's summary and an advice binding in its registration."""
+audit's summary, and an advice binding in the registration V3c audited (what `records_audit.py audit --opening` opens),
+at any length, the padded width included."""
 from __future__ import annotations
 
 import fnmatch
@@ -36,13 +34,6 @@ sys.path.append(str(ROOT / "benchmarks" / "one_stage"))
 import served_verdicts as SV  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
-#: a scan round's registration provenance (`scan_zk`'s), its state's reads and row 0's opening included
-SCAN_WINDOW = {"kind": "stand-in", "link": "registered: each row port at the network certifier's signed root",
-               "of": "round honest: link-windows [0] of the network certifier's run",
-               "members": {"first": {"template": "IngressScanFirst_v3", "units": [0]},
-                           "egress-0": {"template": "EgressBucket_v1", "units": [1, 2]}},
-               "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, 1]}, "sin": {"leaf": 1, "units": [1, 2]}}},
-               "empty": {"scan/state": {"words": 4, "salt": "07" * 192, "path": "08" * 64}}}
 #: V3c's committed window's provenance: `prove_path.py window-commit`'s class and scan state, `rows.registration`'s kind
 #: and run root, `Window.write`'s circuit record and registered roots, `rows.write`'s index leaf and order
 V3C_WINDOW = {"kind": "served", "run": "ab" * 64, "window_circuit": {"class": [4, 32, 4, 4, 16]},
@@ -67,29 +58,23 @@ def period():
 
 
 def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
-    """The rows-form accept, its registrations' provenance V3c's (``v3c``) and the scan's, and its answer as the piece
-    writes it."""
+    """The rows-form accept, its audits' registrations' provenance V3c's (``v3c``), and its answer as the piece writes
+    it."""
     case = period.case("accept", 1, "rows")
     answer = period.reference(case)
     assert answer["verdict"] == "accept"
     com = json.loads(bytes.fromhex(case["commitment"]))
-    com = {"audits": [{**r, "window": v3c} for r in com["audits"]],
-           "windows": [{**r, "window": SCAN_WINDOW} for r in com["windows"]]}
+    com = {**com, "audits": [{**r, "window": v3c} for r in com["audits"]]}
     return {**case, "commitment": canonical_json(com).hex()}, answer | {"profile": answer["profile"] | {
         "placement": PLACEMENT}}
 
 
-def _dir(d: Path, case: dict, answer: dict, hold: bool = False) -> Path:
-    """DIR as the piece releases it (``case.json``, `certifier_piece.write_case`'s), or its hold (``period/``)."""
+def _dir(d: Path, case: dict, answer: dict) -> Path:
+    """DIR as the piece releases it: the answer and the certificates of the case's evidence
+    (`certifier_piece.write_case`'s), the case itself nowhere in it."""
     d.mkdir(parents=True)
     (d / "answer.json").write_text(json.dumps(answer))
-    if hold:
-        (d / "period").mkdir()
-        (d / "period" / "commitment.bin").write_bytes(bytes.fromhex(case["commitment"]))
-        (d / "period" / "evidence.json").write_bytes(bytes.fromhex(case["evidence"]))
-        (d / "period" / "params.json").write_bytes(canonical_json(case["params"]))
-    else:
-        (d / "case.json").write_bytes(canonical_json(case) + b"\n")
+    (d / CP.CERTIFICATES).write_text(json.dumps(CP.certificates(bytes.fromhex(case["evidence"]))))
     return d
 
 
@@ -97,51 +82,49 @@ def _paths(found: list[KS.Finding]) -> list[tuple[str, str]]:
     return [(f.file, f.path) for f in found]
 
 
-def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(tmp_path, period):
+def test_the_pieces_answer_and_certificates_are_of_the_public_kinds(tmp_path, period):
+    """The answer's fields are structure, the protocol's outputs and a hiding commitment, and the certificates' the
+    network certifier's; the piece releases none of the verifier's coins or samples."""
+    d = _dir(tmp_path / "d", *_case(period))
+    signed = json.loads((d / CP.CERTIFICATES).read_text())
+    assert signed["records"] and signed["rows"]
+    found, kinds = KS.scan(d)
+    assert found == [] and {k for k in KS.KINDS if kinds[k]} == {KS.S, KS.O, KS.M, KS.X}, (found, kinds)
+    assert kinds[KS.X] == len(KS.CERTIFICATE_DOC) * (len(signed["records"]) + len(signed["rows"]))
+    assert KS.main([str(d)]) == 0
+
+
+def test_the_case_its_three_files_and_the_scans_answers_are_findings_in_dir(tmp_path, period):
+    """The case as the composite reads it, the period check's three input files and the scan's answers are witness,
+    which no declaration covers: each is a finding as a file, none of its fields read."""
     case, answer = _case(period)
-    for hold in (False, True):
-        found, kinds = KS.scan(_dir(tmp_path / str(hold), case, answer, hold))
-        assert found == [] and all(kinds[k] for k in KS.KINDS), kinds
-    assert KS.main([str(tmp_path / "False")]) == 0
+    d = _dir(tmp_path / "d", case, answer)
+    (d / CP.CASE).write_bytes(canonical_json(case) + b"\n")
+    (d / "period").mkdir()
+    (d / "period" / "commitment.bin").write_bytes(bytes.fromhex(case["commitment"]))
+    (d / "period" / "evidence.json").write_bytes(bytes.fromhex(case["evidence"]))
+    (d / "period" / "params.json").write_bytes(canonical_json(case["params"]))
+    (d / "chain" / "scan").mkdir(parents=True)
+    (d / "chain" / "scan" / "answers.json").write_text(json.dumps({"format": "f", "delta": 1e-6, "windows": []}))
+    assert sorted(_paths(KS.scan(d)[0])) == [(rel, "") for rel in (
+        CP.CASE, "chain/scan/answers.json", "period/commitment.bin", "period/evidence.json", "period/params.json")]
+    assert KS.main([str(d)]) == 1
 
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
-    """The window's own number in each audit's V3c provenance (which counts the run's windows), a count of requests in
-    the period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
-    case, answer = _case(period, V3C_WINDOW | {"window_circuit": {"class": [4, 32, 4, 4, 16], "window": 3}})
-    n = len(case["params"]["audits"])
-    ev = json.loads(bytes.fromhex(case["evidence"]))
-    ev["windows"][0]["answer"]["public"]["requests"] = 7
-    case = {**case, "evidence": canonical_json(ev).hex(), "params": {**case["params"], "advice_bits": REALIZED}}
-    answer = answer | {"public": answer["public"] | {"requests": 7}}
-    want = [("answer.json", "public.requests"),
-            *[("case.json", "commitment.audits[].window.window_circuit.window")] * n,
-            ("case.json", "evidence.windows[].answer.public.requests"), ("case.json", "params.advice_bits")]
-    assert sorted(_paths(KS.scan(_dir(tmp_path / "dir", case, answer))[0])) == want
-    held = KS.scan(_dir(tmp_path / "hold", case, answer, hold=True))[0]
-    assert sorted(_paths(held)) == [("answer.json", "public.requests"),
-                                    *[("period/commitment.bin", "audits[].window.window_circuit.window")] * n,
-                                    ("period/evidence.json", "windows[].answer.public.requests"),
-                                    ("period/params.json", "advice_bits")]
-    assert KS.main([str(tmp_path / "dir")]) == 1
-
-
-def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):
-    """An advice binding (`interface.advice_binding`: the compiler and the advice's root and length) in an audit's
-    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding (each audit's) at the
-    padded width ℓ_a as at the realized length, in either layout, the finding's text holding neither length."""
-    for bits in (L_A, REALIZED):
-        v3c = V3C_WINDOW | {"compiler": {"name": "i2", "digest": "04" * 64, "commit": "05" * 20},
-                            "advice": {"root": "06" * 64, "bits": bits}}
-        case, answer = _case(period, v3c)
-        n = len(case["params"]["audits"])
-        for hold, at in ((False, "case.json"), (True, "period/commitment.bin")):
-            found = KS.scan(_dir(tmp_path / f"{bits}-{hold}", case, answer, hold))[0]
-            pre = "commitment." if not hold else ""
-            assert sorted(_paths(found)) == sorted(
-                [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")] * n)
-            assert all(f.why == KS.OPENING.why and str(bits) not in str(f) for f in found)
-    assert KS.main([str(tmp_path / f"{L_A}-False")]) == 1
+    """A count of requests in the period's answer, and beside a certificate anything else of the evidence: a
+    registration's head with a row registration's certificate, a count with a record's."""
+    case, answer = _case(period)
+    d = _dir(tmp_path / "d", case, answer | {"public": answer["public"] | {"requests": 7}})
+    signed = json.loads((d / CP.CERTIFICATES).read_text())
+    signed["rows"][0]["root"] = "0c" * 64
+    signed["records"][0]["requests"] = 7
+    (d / CP.CERTIFICATES).write_text(json.dumps(signed))
+    found = KS.scan(d)[0]
+    assert sorted(_paths(found)) == [("answer.json", "public.requests"), (CP.CERTIFICATES, "records[].requests"),
+                                     (CP.CERTIFICATES, "rows[].root")]
+    assert all("0c" * 64 not in str(f) for f in found)
+    assert KS.main([str(d)]) == 1
 
 
 def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
@@ -180,9 +163,10 @@ def test_a_file_dir_doesnt_declare_is_a_finding_a_log_among_them(tmp_path, perio
 
 def test_dirs_files_are_the_pieces():
     """Every file the piece releases but its logs has its declaration, and the logs have none: they move to the serve
-    dir's private/ before anything leaves the node (`served_verdicts.sh`'s CERTIFIER_PRIVATE)."""
-    assert {*CP.PIECE_FILES, CP.CASE, CP.CHAINED, CP.REFUSED} - set(CP.LOGS) <= set(KS.DOCS) | set(KS.TEXT)
-    assert not set(CP.LOGS) & (set(KS.DOCS) | set(KS.TEXT))
+    dir's private/ before anything leaves the node (`served_verdicts.sh`'s CERTIFIER_PRIVATE). Nor has the case, which
+    is kept there and never released."""
+    assert {*CP.PIECE_FILES, CP.CHAINED, CP.REFUSED} - set(CP.LOGS) <= set(KS.DOCS) | set(KS.TEXT)
+    assert not {*CP.LOGS, CP.CASE} & (set(KS.DOCS) | set(KS.TEXT))
     assert f"profile.placement.{CP.PREMISE}" in KS.ANSWER
 
 
@@ -212,14 +196,14 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
            "unrooted": {"lm_head": "tied to the embedding"}}
 
 
-def _out(tmp_path: Path, period) -> Path:
+def _out(tmp_path: Path, period, v3c: dict = V3C_WINDOW) -> Path:
     """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece (with the served.json a
     deferral's follow-on leaves, naming the served node it audited), V3c's audit as the run
     copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited
     and its period audit), the registered compiler, the window's advice registration in its public form
     (`served_verdicts.public_registration`), the weights registration and a class's count."""
     out = tmp_path / "out"
-    case, answer = _case(period)
+    case, answer = _case(period, v3c)
     piece = _dir(out / "pieces" / "certifier", case, answer)
     (piece / "piece.json").write_text(json.dumps({"server": "node", "rc": 0, "limit": "CERTIFIER_TIMEOUT"}))
     (piece / "served.json").write_text(json.dumps({"server": "served-node"}))
@@ -257,6 +241,24 @@ def test_what_a_verifier_receives_of_a_served_run_is_of_the_public_kinds(tmp_pat
     received = {f"{d}/*" for d in KS.RECEIVED_DIRS} | set(KS.RECEIVED)
     published = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
     assert all(any(fnmatch.fnmatchcase(p, g) for g in received) for p in published), published
+
+
+def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):
+    """An advice binding (`interface.advice_binding`: the compiler and the advice's root and length) in the
+    registration V3c audited is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding wherever
+    that registration is received (the audit's own copy, its record's and its period audit's), at the padded width ℓ_a
+    as at the realized length, the finding's text holding neither length."""
+    for bits in (L_A, REALIZED):
+        v3c = V3C_WINDOW | {"compiler": {"name": "i2", "digest": "04" * 64, "commit": "05" * 20},
+                            "advice": {"root": "06" * 64, "bits": bits}}
+        out = _out(tmp_path / str(bits), period, v3c)
+        found = KS.received(out)[0]
+        assert sorted(_paths(found)) == sorted(
+            (f"v3c-audit/{rel}", f"{pre}window.{k}") for k in ("advice", "compiler")
+            for rel, pre in (("registration.json", ""), ("window/audit.json", "registration."),
+                             ("period.json", "registration.")))
+        assert all(f.why == KS.OPENING.why and str(bits) not in str(f) for f in found)
+        assert KS.main(["--received", str(out)]) == 1
 
 
 def _edit(p: Path, f) -> None:
