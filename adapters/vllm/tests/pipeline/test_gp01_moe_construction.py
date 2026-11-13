@@ -12,7 +12,7 @@ fused-MoE construction is a declared-and-bound Program static of the workload --
 from __future__ import annotations
 
 import json
-import os
+from typing import Any
 
 import pytest
 
@@ -28,7 +28,7 @@ DENSE = {"Gemm_v1{K=2048,N=8192}": 16, "RmsNorm_v1{H=2048}": 33}
 def component(tmp_path, name: str, hist: dict | None, declared: dict | None):
     d = tmp_path / name
     d.mkdir()
-    res = {"ok": True}
+    res: dict[str, Any] = {"ok": True}
     if hist is not None:
         res["spec_histogram"] = hist
     if declared is not None:

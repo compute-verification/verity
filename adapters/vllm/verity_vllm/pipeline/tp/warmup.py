@@ -6,8 +6,9 @@ record runs hit every plan and stage bounded.  The run is never a record: its ra
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.pipeline.c2_replay import rss_kb
@@ -31,9 +32,10 @@ def run(llm: Any, run_once: Callable[[], dict[str, Any]], out: Path, kind: str, 
     off = {o["rank"]: o for o in llm.collective_rpc(warming, args=(False,), timeout=rpc_timeout)}
     (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
     print(f"[tp2commit] warm-up instrumented: {r['wall_s']:.3f}s; ranks {[(f['rank'], f['leaves'], f['errors_n'], f['errors'][:2]) for f in fin]}", flush=True)
+    # a rank whose committer reports no bounded staging (None), or reports it off, learned no plan here and has no entry
     bounded = [{"rank": f["rank"], **f["bounded_staging"], "pinned_pool_bytes": f.get("pinned_pool_bytes"), "plans_cached": f.get("plans_cached"),
                 "host_mem_kb": off.get(f["rank"], {}).get("host_mem_kb"), "errors": f.get("errors")}
-               for f in fin if (f.get("bounded_staging") or {}).get("enabled")]
+               for f in fin if f.get("bounded_staging") and f["bounded_staging"].get("enabled")]
     for b in bounded:
         print(f"[tp2commit] rank {b['rank']}: bounded staging warm-up ({kind}): learned-only steps {b.get('learned_only_steps')} "
               f"({(b.get('learned_only_bytes') or 0) >> 20} MiB discarded), transient peak {(b.get('transient_peak_bytes') or 0) >> 20} MiB "
