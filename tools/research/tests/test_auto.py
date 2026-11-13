@@ -698,8 +698,8 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
 
 def test_a_probe_a_test_starts_is_handed_no_path_of_the_machine_the_tests_run_on(tmp_path):
     """The probe reads its machine at the paths `payload` hands it, so a test that leaves one where the module names it reads
-    the machine it runs on: on a node 2 one lane had whole, a probe handed the module's HOLD_FILE answered with the node's
-    hold in place of the share its test had set up. `a_bare_machine` pins each, a path `payload` gains too: of what it hands
+    the machine it runs on: on a node 2 one lane has whole, a probe handed the module's HOLD_FILE answers with the node's
+    hold in place of the share its test set up. `a_bare_machine` pins each, a path `payload` gains too: of what it hands
     the probe, only the null device is the machine's."""
     head = auto.payload(tmp_path, 4, None, []).decode().removesuffix(auto.PROBE)
     handed = {k: ast.literal_eval(v) for k, _, v in (line.partition(" = ") for line in head.splitlines())}
