@@ -1,13 +1,13 @@
 """v2's check of a per-member case on a stand-in window of many members over few templates, through `case_files`.
 
-    members_standin.py OUT FLOCK_CIRCUIT LEAN_BIN_DIR MEMBERS...        e.g.  300 100
+    [STANDIN_KS=128,256] members_standin.py OUT FLOCK_CIRCUIT LEAN_BIN_DIR MEMBERS...        e.g.  300 100
 
-Each window holds MEMBERS members of one unit: `test_audit_two_members`' two templates (`ScaledMmS8Coordinate` at
-K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under
+Each window holds MEMBERS members of one unit: two templates (`ScaledMmS8Coordinate` at the two K's of STANDIN_KS,
+by default `test_audit_two_members`' K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under
 ``stratified:1``: a template is a stratum, so one member of each is sampled and the rest share their template's circuit
 unsampled, as a served window's members do. The served harness's audit step (``records_audit.py audit`` on a local
 challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case; `case_files.run` then runs v2's
-``refusal`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds and peak, the members' staged
+``refusal`` on it. Per window, OUT/m<MEMBERS>-k<K>-<K>/result.json holds the audit's exit, seconds and peak, the members' staged
 directories with no circuit file of their own (each a file the per-member case named before each member named its
 template's), and the refusal's line, exit, seconds and peak, with ``all_passed`` whether the line is
 `members.ALL_PASSED` (every check before the per-member form's refusal passed)."""
@@ -36,7 +36,7 @@ from verity.commitments.windows import interface as IF  # noqa: E402
 from verity.definitions.ops import gemm as G  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
 
-KS = (128, 256)
+KS = tuple(int(k) for k in os.environ.get("STANDIN_KS", "128,256").split(","))
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
 DESIGN = "stratified:1"
 RUN = "ab" * 64
@@ -67,7 +67,7 @@ def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> lis
 
 
 def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
-    d = root / f"m{members}"
+    d = root / f"m{members}-k{'-'.join(map(str, KS))}"
     d.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f"standin-m{members}-"))
     t = time.monotonic()
