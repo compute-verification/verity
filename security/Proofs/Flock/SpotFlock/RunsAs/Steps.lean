@@ -76,7 +76,7 @@ set_option maxHeartbeats 8000000 in
 /-- **A run's answer**: refused at a step, or past every step, its first stage on the challenger's bytes, its second
 stage over the first stage's proved units, round 2's audit, and the answer naming `accept` where both audits read
 accepted. -/
-private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
+private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
@@ -90,7 +90,7 @@ private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt : Json) (sym : String) (pub audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
-        Spot.Run.interiorAudit i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+        Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
           ("symbol", Json.str sym), ("public", pub), ("audit", audit)] ++ staged) ∧
         (sym = "accept" → ∃ rec_, (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true) := by
@@ -146,16 +146,16 @@ private theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {
 
 /-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
 second stage's draw, the answer whether round 2's attached record reads accepted, and one staged entry. -/
-private theorem interiorAudit_some {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
+private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
     {receipt draw law : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
-    (h : Spot.Run.interiorAudit i sample (some (it, receipt, draw, law, read)) = .ok (acc, staged)) :
+    (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, law, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
       Spot.Run.audit i it.record receipt draw law (it.provedUnits.getD (Spot.Draw.proved draw))
         (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots =
           .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
-        (Spot.SecondStage.check Spot.SecondStage.FORM (runOwn i it sample strata draw) it.statements)
+        (Spot.SecondStage.check form (runOwn i it sample strata draw) it.statements)
         (Spot.SecondStage.interiorReads (runOwn i it sample strata draw) ((it.statements.getD #[]).toList)))
         "accepted") (.bool true) := by
   unfold Spot.Run.interiorAudit at h
