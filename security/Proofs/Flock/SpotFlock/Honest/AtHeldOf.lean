@@ -32,7 +32,7 @@ that the registered wiring's check passes: each is a hypothesis here. So is a pl
 namespace SpotFlock.Honest
 
 open Claims Claims.Sampling SamplingDeploy Properties.Spot
-open SpotFlock.HeldOf (Unread heldOf heldOf_spec withFrame twoHolds_of firstOf_program)
+open SpotFlock.HeldOf (Unread heldOf heldOf_spec withFrame twoHolds_of_pop firstOf_program)
 
 /-- **SPOT's own frame, set on any copies, is built at the wired program**: neither the wire map nor the gates the
 boundary record holds read the frame. -/
@@ -71,7 +71,7 @@ theorem premises_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Int
   exact premises_of_checks (builtWired_heldOf hh) hWf (always_heldOf hh) hp' hK hwc
 
 /-- **The two-stage scope is inhabited at the copies `heldOf` builds**, by every statement that decodes, where the
-run's population check passes: the design evaluates there (`HeldOf.twoHolds_of`). -/
+run's population check passes: the design evaluates there (`HeldOf.twoHolds_of_pop`). -/
 theorem inScope_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Interior} {u : Unread} {h : Held}
     (hh : heldOf i it u = some h) {n : ℕ}
     (hp : _root_.Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) {x : Msg}
@@ -80,7 +80,7 @@ theorem inScope_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Inte
     unfold parse
     rw [hx]
     exact ⟨_, rfl⟩
-  obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 (twoHolds_of hh hp s)
+  obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 (twoHolds_of_pop hh hp s)
   exact inScope_of_two hx hd
 
 /-- **`HonestExists` at a copy `heldOf` builds**, from the facts `premises_of_heldOf` takes and one play the copy's
