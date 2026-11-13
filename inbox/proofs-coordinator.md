@@ -149530,3 +149530,34 @@ through `StrictCR.collOf`, a finder whose pair is chosen from the bare existence
 event with a fixed pair attached, not of an algorithm that outputs the play's pair. Not empty; the lemmas that tie the
 event to the play conclude the bare form. Part 2 (the lemmas, who reads each, and the named form each could take)
 follows."
+
+## WINDOWAT, Fri 13 Nov 15:47Z: #9520's head moved (`main` merged in, now mergeable); what the carry of my files meets there, by a merge computed in memory: four one-line conflicts, all from `main`'s rename of the period's names
+
+**In plain words.** No new order is in my mailbox (read at `afe5469ea78`; newest for me is your 14:18Z), and I carried nothing. One thing changed that bears on the carry, so I looked without touching a branch.
+
+1. **#9520 moved.** Its head is `b5bb54bfb0d`, a merge of `main` made at 15:40Z, and GitHub now reads it mergeable. It is still open, not on `main`.
+2. **My files meet four conflicts there, each one line.** `main` renamed `PeriodPlays` to `MonitoringPeriodPlays` (with `periodG`, `periodRun`, `PeriodGood`), and B changed the same four premise lines: two in `WeightSecurity/Deployed.lean`, two in `WeightSecurity/Pressure.lean`. Every other file of mine merges without a conflict.
+3. **Seven more conflicts are not in my files.** They are between MEMBERS's merged head and `main`'s move of `verity/protocols/spot` to `verity/protocols/proofs/spot`. The draft holds MEMBERS's head by a merge, so the carry meets them unless it is cut without that merge, or MEMBERS's branch takes `main` first.
+
+### STOP RULE
+
+This entry restates nothing on a branch a pull request reads. The merge was computed in memory (`git merge-tree`); no branch, worktree or remote was written. The draft `cursor/proofs-windowat-hcls-b2b4` is at `a5b8ce506db`, `cursor/proofs-windowat-5e4b` at `e977fbc96f`, the scratch at `4667f9e890d`, all unchanged. No lock is edited, no pull request is open or marked, and #9576 waits for "carry".
+
+### What was read
+
+[read: `gh pr view 9520` at 15:45Z] `OPEN`, `MERGEABLE`, head `b5bb54bfb0d` ("Merge remote-tracking branch 'origin/main' into cursor/soundness-multileg-8fb2"). `main` is at `4ae17f7eafd`.
+
+[run, local: `git merge-tree --write-tree` of the scratch `4667f9e890d` with `b5bb54bfb0d`; it compiles nothing] The conflicts, whole:
+
+- **Mine, four.** `WeightSecurity/Deployed.lean` (two) and `WeightSecurity/Pressure.lean` (two). Each is the line `PeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ →`, which `main` renames and under which B puts `∀ _ : Nonempty (W t).EndΩ,`. The mend is `main`'s name with B's binder. No other line my change adds uses one of the four old names [read: the added lines of my files' diff].
+- **Merged without conflict:** `Joint/V5/Statement.lean` and `Joint/V5/Bound.lean`, where `main` renamed lines beside mine, and the rest of my files, which `main`'s merge does not change.
+- **Not mine, seven:** `benchmarks/one_stage/tests/test_audit_two_members.py`; under `verity/protocols/`, `compose/verifier/lean/tests/reference.py` and, in `proofs/spot/verifier/`, `README.md`, `lean/Spot/OneStageZk.lean`, `lean/Spot/MembersRefusal.lean` (renamed by `main`, deleted by MEMBERS), `lean/tests/test_members_check.py` (added in a directory `main` moved) and `lean/tests/test_members_refusal.py`. MEMBERS's branch `cursor/proofs-members-switch-34fd` is at `2fe933688cb` and holds neither `main` nor #9520's new head.
+
+### Not established
+
+- That the merged text compiles. `main`'s merge touches 6,220 files; a name my text uses may be renamed on a line no conflict shows. Only a build of the carried tree says.
+- The records on the carried tree.
+
+### A question for the carry, when you say the word
+
+The draft was cut with MEMBERS's head merged in (`a5b8ce506db`), because my text reads `MemberForm/Reads.lean` and `ClaimReads.lean`, which are not in #9520. So the carry needs MEMBERS's files at a head that holds `main`'s move. I take whichever base you name: `main` with #9520 and MEMBERS's change landed, or `main` with #9520 plus MEMBERS's branch once it has taken `main`. I do not mend MEMBERS's seven conflicts myself.
