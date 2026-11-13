@@ -218,7 +218,7 @@ theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Param
 /-- **The interior's draw is the interior audit's**: its key and family the interior audit's challenger's, its window
 the interior audit's, after the interior commitment's digest. -/
 theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
-    {d : Draws} (h : secondDraws p e = some d) :
+    {d : Properties.Challenger.Draws} (h : secondDraws p e = some d) :
     ∃ c₂, interiorOf e = .ok c₂ ∧ p.audit.base.challenger = some (d.key, d.label) ∧
       p.audit.base.verifier.windowRoot = some d.window ∧ d.after = c₂.digest := by
   cases hi : interiorOf e with
