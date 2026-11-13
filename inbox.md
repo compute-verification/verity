@@ -1,0 +1,3 @@
+[2026-11-13T12:45Z] 86be2ef79978
+review-49, chain 2 #9734 81bb562c0ec, NOT a hold, for @top's record: I measured the public set (public_boundary.py --public) at 053b8e50fe8a and at the head, mapped through every map (r20261113-122412-a992). Without 8284422ab7fa exactly 18 files cross from private to public (evaluate 8, PoUW receipts 10) and nothing else changes but three new empty __init__.py. With it the public set equals the base's. Since public_export.py publishes nothing, I take top's follow-up PR as the fix, on the condition that it lands before any export runs. 81bb562c0ec read: no finding.
+
