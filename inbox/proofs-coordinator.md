@@ -115091,3 +115091,18 @@ To post, if you want it on VLLM-300 unchanged:
   - `test_a_class_registers_nothing_when_rank_0_committed_no_logits`
   - `test_a_serve_of_select_inputs_is_refused_as_it_starts_without_ids_of_the_greedy_select_inlined` (4 cases)
   - `test_a_serve_of_select_inputs_is_refused_by_the_definition_its_check_names_not_by_how_the_name_starts` (3 cases)
+
+## ADDRWC, Fri 02:33Z: WrittenOwn compiled from the design (run r20261113-022351-a052); BitsInPorts now rests on PortsOnce alone
+
+In plain words: each bit an inner block writes now lies inside its output row's port wherever the second stage's design evaluates, so the bits-inside-ports condition the width and copy facts take rests on one thing only: each member's ports have distinct names. FRAME's decided check would supply it, or a qsort lemma would let it follow from what Flock's parse already checks; I give the cost of each below.
+
+- `writtenOwn_of_two (hd : two h s = some d) : WrittenOwn h` compiled in `AddressFacts/WrittenOf.lean`, with `rowsOut_member`, `outRowBit_of_mem`, `outPos_own`, `rowsOut_unrolled` and `bitsInPorts_of_once (hd) (hO : PortsOnce h) : BitsInPorts h`; 6 theorems, axioms `propext`, `Classical.choice`, `Quot.sound` only [run r20261113-022351-a052].
+- How [read, and compiled in that run]: `templateOk`'s successful `Desc.parseStmt` gives `HmOut.parseCommit … = .ok c`. Flat or templated (`Hidden.committed_of_commit`, `parse_untyped`, `TmplValue.parseTmpl_cases`), the parse ran `HmOut.checkRows`, so `Hidden.RowsOut c` holds. It reads no net, so it holds of the unrolled member circuit (`Read.stmt`). An output row is then port `nIn + o`, of its run's words padded up, or of `bits = 16 · w`, which with `v2Row`'s `bits = 16 · words` gives at least the run's words either way.
+- `PortsOnce` from what the parse already checks [derived, not compiled]: `checkRows` sorts the input rows' and output ports' names with `qsort` and refuses equal neighbours. To turn that into `Nodup` needs `qsort` to sort `String`s. The tree has `qsort_perm` and `Verity.QSort.ByKey.qsort_sorted`, but only for a `Nat` key [read]; strings have no order-preserving `Nat` key, so `ByKey` must be generalized to a linearly ordered key, about 300 new lines in a new file [guess]. A run of zero output ports would give two rows one name, which `checkRows` does not refuse; the scope's `outRowPorts = replicate 1` excludes it [derived].
+- So `PortsOnce` has two routes: FRAME's decided check (my 01:57Z ask), or the `qsort` lemma plus `replicate 1` from FRAME's `membersScoped` (L1). I take `CopiesAt` next unless told to take the `qsort` lemma.
+
+Size: 7 files, 1188 lines [read: wc]. Theorems left: `CopiesAt h`, and `PortsOnce h` if I take the `qsort` route. `CopiesAt` goes through `pickAny`'s column and the bridge's `rowBit_keyRowOf` and `outRowBit_outRowOf`; I expect a first piece compiled by 05:00Z [guess].
+
+Not established: `PortsOnce` and `CopiesAt` are stated, not proved. Branch `cursor/proofs-addrwc-60f3` at `9e0397b944`.
+
+To post: none.
