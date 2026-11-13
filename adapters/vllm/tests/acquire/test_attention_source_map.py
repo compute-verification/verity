@@ -1,10 +1,12 @@
 """`verity_vllm.acquire.sources.attention_source` is built over a capture map without a check of each tap's form.  Over the
 map as registered it holds a number for the width of every tap.  A tap of its own captured at one named layer of the model
 (`layer`, where the source binds at each attention layer's call) stops the build with the `TypeError` of reading layers that
-are not there.  A tap whose last dimension reads a per-step size is built, and its width is held as the map writes it."""
+are not there.  A tap whose last dimension reads a per-step size is built, and its width is held as the map writes it.  The
+route source it is built on (`verity_vllm.acquire.sources.route_source`) reads the model's modules before the model's config."""
 from __future__ import annotations
 
 import copy
+import types
 from typing import Any
 
 import pytest
@@ -48,3 +50,13 @@ def test_a_tap_whose_last_dimension_reads_a_per_step_size_is_built_with_the_widt
     src = _build(tap_id, shape=[free, width])
     assert src.width[tap_id] == width and set(src.width) == set(src.taps)
     assert all(isinstance(w, int) for tid, w in src.width.items() if tid != tap_id)
+
+
+def test_the_route_source_reads_the_models_modules_before_its_config():
+    """A model that is no module is refused where its modules are read, whatever reading its config would raise."""
+    class Config:
+        def to_dict(self) -> dict[str, Any]:
+            raise TypeError("the config was read first")
+
+    with pytest.raises(AttributeError, match="has no attribute 'modules'"):
+        RS.RouteSource(None, types.SimpleNamespace(config=Config()), copy.deepcopy(CMAP))
