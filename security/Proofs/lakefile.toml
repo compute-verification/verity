@@ -134,4 +134,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.ReadsOnly", "Proofs.Properties.Verity.SampledTwo.Reached",
   "Proofs.Properties.Verity.Sampled.Record.PartCong",
   "Proofs.Properties.Verity.Sampled.Record.PartSame",
+  "Proofs.Properties.Verity.Sampled.Record.ReadsSame",
   "Proofs.Properties.Verity.Sampled.Record.PartReadsBack"]

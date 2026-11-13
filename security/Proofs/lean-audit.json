@@ -182,6 +182,7 @@
   "Proofs.Properties.Verity.SampledTwo.MemberChecks",
   "Proofs.Properties.Verity.Sampled.Record.PartCong",
   "Proofs.Properties.Verity.Sampled.Record.PartSame",
+  "Proofs.Properties.Verity.Sampled.Record.ReadsSame",
   "Proofs.Properties.Verity.Sampled.Record.PartReadsBack"
  ],
  "exempt": {

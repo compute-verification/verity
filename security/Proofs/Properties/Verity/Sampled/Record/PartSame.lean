@@ -46,13 +46,13 @@ open HmRow (PARTITION_V1 isSha512Hex EVALUABLE Q_CALL)
 private abbrev sub (j : Json) (k : String) : Json := (j.getObjVal? k).toOption.getD Json.null
 
 /-- Two reads of a key that a reader matching on them cannot tell apart: two refusals, or two alike values. -/
-private def AlikeE (x y : Except String Json) : Prop :=
+def AlikeE (x y : Except String Json) : Prop :=
   (∃ e e', x = .error e ∧ y = .error e') ∨ ∃ a b, x = .ok a ∧ y = .ok b ∧ Same a b
 
 /-- Two optional values that a reader matching on them cannot tell apart: both missing, or both there and alike. -/
 private def Alike (x y : Option Json) : Prop := (x = none ∧ y = none) ∨ ∃ a b, x = some a ∧ y = some b ∧ Same a b
 
-private theorem alikeE_get {j j' : Json} (h : Same j j') (k : String) : AlikeE (j.getObjVal? k) (j'.getObjVal? k) := by
+theorem alikeE_get {j j' : Json} (h : Same j j') (k : String) : AlikeE (j.getObjVal? k) (j'.getObjVal? k) := by
   cases hv : j.getObjVal? k with
   | ok v =>
     obtain ⟨v', hv', hs⟩ := h.getObjVal hv
@@ -77,9 +77,9 @@ private theorem same_sub {j j' : Json} (h : Same j j') (k : String) : Same (sub 
   · rw [e₁, e₂]; exact Same.null
   · rw [e₁, e₂]; exact hs
 
-private theorem getStr_same {v v' : Json} (h : Same v v') : v.getStr? = v'.getStr? := by cases h <;> rfl
+theorem getStr_same {v v' : Json} (h : Same v v') : v.getStr? = v'.getStr? := by cases h <;> rfl
 
-private theorem getNat_same {v v' : Json} (h : Same v v') : v.getNat? = v'.getNat? := by cases h <;> rfl
+theorem getNat_same {v v' : Json} (h : Same v v') : v.getNat? = v'.getNat? := by cases h <;> rfl
 
 private theorem asStr_same {j j' : Json} (h : Same j j') (k : String) :
     j.getObjValAs? String k = j'.getObjValAs? String k := getStr_same (same_sub h k)
@@ -93,7 +93,7 @@ private def keysOf (j : Json) : Array String :=
   | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
   | _ => #[]
 
-private theorem keysArr_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF)
+theorem keysArr_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF)
     (hk : ∀ k, (m.get? k).isSome = (n.get? k).isSome) : m.toArray.map (·.1) = n.toArray.map (·.1) := by
   have e : ∀ t : Std.TreeMap.Raw String Json, t.toArray.map (·.1) = t.keys.toArray := fun t => by
     rw [Std.TreeMap.Raw.toArray_keys]

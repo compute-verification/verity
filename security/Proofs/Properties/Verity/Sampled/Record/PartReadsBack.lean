@@ -7,13 +7,14 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 public import Proofs.Properties.Verity.Sampled.Record.PartSame
 
 /-!
-# A printed partition object reads back alike
+# A printed partition object reads back alike, and so do printed registered reads
 
 A session statement carries its partition object as the bytes of its text (`Flock.RecordText.printT`). The verifier's
 parser reads the text of a printable object (`Claims.Json.Good`: every object a well-formed tree, every number an
 integer) back as an object alike it (`FlockComplete.JsonRT.parse_print`). So `flock-verify`'s reading of the
 statement's partition (`FlockDeploy.jsonOf`) is that object up to `PartSame` (`partition_readsBack`), which is what a
-session's two readings of the partition may differ by (`Verity.Sampled.Record.SessionMatch`).
+session's two readings of the partition may differ by (`Verity.Sampled.Record.SessionMatch`). The same holds of any
+of the statement's JSON files (`printed_readsBack`), the registered reads among them (`registered_readsBack`).
 
 What makes an object printable:
 
@@ -26,7 +27,7 @@ What makes an object printable:
 So a statement whose partition is a well-formed object's printed bytes reads back alike where `canon` prints the
 object (`partition_readsBack_of_wf`, `raw_partition_readsBack`), and where the session's setup returned at it
 (`partition_readsBack_of_setup`). That the object's trees are well formed is a hypothesis throughout: nothing the
-setup checks gives it.
+setup checks gives it. The registered reads' lemma takes them printable: no check here prints them with `canon`.
 -/
 
 @[expose] public section
@@ -35,11 +36,10 @@ namespace Flock.PartCong
 
 open Lean (Json)
 
-/-- **A printed partition object reads back alike**: the bytes of a printable object's text read, as `flock-verify`
-reads a statement's partition, as an object alike it. -/
-theorem partition_readsBack {o : Json} (h : Claims.Json.Good o) :
-    ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf "partition") = .ok P ∧
-      PartSame P (some o) := by
+/-- **A printed value reads back alike**: the bytes of a printable value's text read, as `flock-verify` reads a
+statement's JSON file (`FlockDeploy.jsonOf`, whatever the file is called), as a value alike it. -/
+theorem printed_readsBack (what : String) {o : Json} (h : Claims.Json.Good o) :
+    ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf what) = .ok P ∧ PartSame P (some o) := by
   obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_print o h
   rw [FlockComplete.printJ_eq] at hp
   refine ⟨some j', ?_, .inr ⟨j', o, rfl, rfl, hs.symm⟩⟩
@@ -48,6 +48,22 @@ theorem partition_readsBack {o : Json} (h : Claims.Json.Good o) :
   rw [FlockSoundness.Discharge.Recursion.FirewallWire.fromUTF8?_toUTF8]
   simp only [hp]
   rfl
+
+/-- **A printed partition object reads back alike**: the bytes of a printable object's text read, as `flock-verify`
+reads a statement's partition, as an object alike it. -/
+theorem partition_readsBack {o : Json} (h : Claims.Json.Good o) :
+    ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf "partition") = .ok P ∧
+      PartSame P (some o) :=
+  printed_readsBack "partition" h
+
+/-- **Printed registered reads read back alike**: a statement whose registered reads are the bytes of the text of
+the verifier's (none where it has none), each printable, reads back as them or as a value alike them. -/
+theorem registered_readsBack {r : Option Json} (h : ∀ j, r = some j → Claims.Json.Good j) :
+    ∃ R, (r.map fun j => (RecordText.printT j).toUTF8).mapM (FlockDeploy.jsonOf "registered reads") = .ok R ∧
+      PartSame R r := by
+  cases r with
+  | none => exact ⟨none, rfl, .inl rfl⟩
+  | some j => exact printed_readsBack "registered reads" (h j rfl)
 
 /-! ## A well-formed value that `canon` prints is printable -/
 
