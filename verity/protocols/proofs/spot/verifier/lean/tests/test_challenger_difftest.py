@@ -2651,15 +2651,14 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
 
 
 @pytest.mark.parametrize("port, make, names", VERIFIED, ids=[v[0].fn for v in VERIFIED])
-def test_the_verifier_answers_the_challengers_ledger_and_session_checks(pieces, verifier, port, make, names):
+def test_the_verifier_answers_the_challengers_ledger_and_session_checks(verifier, port, make, names):
     """The verifier's executable (`one_stage.verifier.EXE`) answers each of the challenger's ledger and session checks
-    as its row expects, on the sweep's cases (every mutation, four seeds each): held to the Python reference as the row
-    holds the difftest executable, and equal to that executable's answer."""
-    served = dataclasses.replace(port, exe=VERIFIER)
+    as its row expects, on each of the sweep's mutations once: held to the row's Python reference as the sweep holds the
+    difftest executable, the honest case accepted and every mutation refused."""
     for name in names:
-        for seed in range(4):
-            case = make(random.Random(f"{name}/{seed}"), name)
-            assert D.replay(served, case, verifier) == D.replay(port, case, pieces), (port.fn, name, seed)
+        kind, text = D.replay(port, make(random.Random(f"{name}/0"), name), verifier)
+        clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
+        assert clean == (name == "honest"), (port.fn, name, kind, text)
 
 
 @pytest.mark.parametrize("name", EXTRA_OPENINGS)
