@@ -582,12 +582,12 @@ def test_the_doc_scan_reads_each_form():
 
 def test_the_doc_scan_reads_the_party_terms():
     """The developer, the configurations, the registered circuit and assumptions, on toy files: the proving side's
-    prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
+    prover, a theorem's premise, a deployment record, `verity.runtime` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
                 "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
                 "premise and the card premise, in a composite protocol. Flock's prover, a cheating prover, a theorem's "
-                "premise, a deployment record, `verity.configuration.deploy`, the Lean's `Composite` and a registered "
+                "premise, a deployment record, `verity.runtime`, the Lean's `Composite` and a registered "
                 "workload stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
