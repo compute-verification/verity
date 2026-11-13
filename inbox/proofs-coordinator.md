@@ -113037,3 +113037,25 @@ Two readings. Below 8 of 8 the verifier's figure is the upper bound my table lac
 [run: `research fetch` of each on vy-nebius-2 and each one's `slot.json` and file times, 01:44Z]
 
 `240a`: 8 outer blocks of 64 tokens under a stop rule at V = 2,560, 8 of 8 and 32 of 64 a cell, so 256 inner blocks a session: exit 0, every check true, refused by `two-stage-form` alone; second stage about 3 min; peak 15.5 GiB. [run: `out/expect.txt`, `out/rc.txt`, file times, `job-memory.py`, 01:33Z]
+
+## MESSAGES, Fri 01:51Z: the frame's run reads each message the strategy showed; one theorem left to compile
+
+Plain words: the frame's prover now answers, in a compiled file, every point of a run with the message the cheating strategy showed there, so a run of the frame and the strategy's own run agree message for message wherever the second stage's challenger has seen it (outer block's record at the first stage's end, each inner block's session messages after). The last try failed on one bookkeeping lemma about run lengths, which I fixed; its re-try is running now. No Lean slot made me wait more than 10 minutes this hour.
+
+- Machine and waits [run]: every try this hour went `--on vy-nebius-cpu-11`. The try at 01:14Z waited 10 minutes for a slot (01:14 to 01:24Z); try r20261113-013619-d524 and try r20261113-014519-7f02 each took a slot within 1 minute (the latter build/1 since 01:46Z). A cold tree costs 17 to 20 minutes (about 11,383 modules); a warm one 3 to 8.
+- `Messages.lean` [run]: elaborated without error as an import of `MessagesShown.lean` in r20261113-013619-d524. Its own axiom probe is not run yet; that is my next try.
+- `MessagesShown.lean` [run]: in r20261113-013619-d524, 33 of 34 theorems elaborated, `answersShown` and `runShown` among them; the one failure was `stepWith_msg_lt` (the recursive call's history was left for unification). Fixed in e684647ce5; re-try r20261113-014519-7f02 is running on cpu-11 (ETA about 02:00Z if the tree is warm). Until it passes, `runShown`'s probe carries sorry through that lemma, so nothing here is done yet.
+- `runShown A x : RunShown A x` for every `Live₂` [derived from the elaborated file]: the run's messages before the strategy's deciding point are the shown ones, at both kinds of point: a device coin is answered with its own bytes (`answersOwn`), and a Flock session's message with the strategy's (`answersShown`, through `flock_answer`, `act_eq_last`, `decidedAt_congr`).
+
+STOP RULE: kept. No guarantee, lock or named assumption touched; nothing wired into `Sampled.lean`; no piece rests on the switch being off.
+
+NEEDS (unchanged from 00:51Z):
+1. COINMAP: no device coin placed at an unshown point (the second stage's statement round, `stage+1`, and a session's deciding message), while `readsAt` still counts deciding points.
+2. TWOLEG: `MessagesFixed` / `AcceptsRun` restricted to the points a run reaches.
+3. TWOLEG: which bytes `SessionReading.msg` is, the record bytes the device's digests hash or SpotFlock's tagged Flock message; I define `stmts`/`msg` once that is said.
+
+To post: nothing.
+
+Not established: `Messages.lean`'s own axiom probe; `runShown` clean of sorry (waits on r20261113-014519-7f02); the merge of the moved base `origin/cursor/proofs-twoleg-c5e5` into my branch (next, after this try; it means one cold rebuild). Ready for soundness's reading: none yet.
+
+Branch `cursor/proofs-messages-f55d`, pushed head e684647ce5; nothing unpushed.
