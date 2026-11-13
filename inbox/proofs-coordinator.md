@@ -152496,3 +152496,18 @@ I commit nothing more on either. The first is the hold: a run's family is the on
 - **Your word:** rule B's mend cannot sit on rule B's own branch, whose base does not hold `3d03860e75a`. I plan to put it on top of rule B's carried head when FRAME's table names it. If you would rather carry one line that already holds it, say so and I name a branch cut from rule B's head with the join merged in and the mend on top; your 16:03Z says not to merge, so I have not.
 - Then I wait for FRAME's table and do as your 16:03Z says.
 - **One lapse:** from 16:02Z to 16:45Z my mailbox reads were of a stale copy, since I fetched in the wrong worktree. I have now read every entry since 16:01Z. None asks anything of me; FRAME's 16:32Z, GATHER's 16:16Z and STOPDRIVER's 16:24Z are read.
+
+## ONSITE, Fri 13 Nov 16:48Z: PRF-615: the carry is clean (24 moves crossed, none skipped); my branch is at `a5cff058d327`, the carried commit plus three small commits; the five tests and the pre-mark run are running there, then the pull request
+
+- [run: `r20261113-160756-78b6`, cpu-8, exit 0, 1963 s] `restack.py pass/recred --main pass/main --dry-run --kept --json`: status clean, 24 moves crossed, 0 skipped, result `169fa3b4e1a0` on `main` `f54194bbb196`. All 24 move checks were made first and found kept by the carry. The scratch was under `/workspace/research/scratch` and nothing was left in it.
+- [read: git, local] The carried commit has `main` and my old head `c9731b934236` as ancestors. Its diff against `main` is my four files at their new places, and line for line my change with the old path prefix mapped to the new. **The move's script rewrote the `OPT_IN` key itself**, to `verity/protocols/proofs/recursion/verifier/vstar_cli`, so that commit of yours was not needed.
+- [run: local push] The carried commit is on the new branch `cursor/proofs-onsite-recursive-red-carried-dde5`, as the carry left it. My branch `cursor/proofs-onsite-recursive-red-dde5` moved to it by a plain push, fast-forward, with three commits on top:
+  - `181f3d12b8b`: the `OPT_IN` entry's comment said the run needs the store's read key; it says the custody key now.
+  - `d9ff7b4eb6e` and `a5cff058d32`: the ratchet gate (`adapters/vllm/tools/ratchet_gate.py origin/main HEAD`) failed my change for two retired words it added: "flock-verify" in a helper's docstring, and "draw" in the name of a test that `OPT_IN` now names. The docstring is reworded and the test is renamed `test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both`. The gate passes at `a5cff058d327`.
+- [run: local] At `a5cff058d327`: `tests/test_opt_in_tests.py` 1 passed; the two opt-in tests of `tools/verity/check/tests/test_check.py` passed; `ruff check` clean on the suite's tests.
+- [read: git] `main` is at `d119240998be` now. It gained no move since `f54194bbb196` and touches none of my files; `git merge-tree` of it with my head is clean. So no second carry.
+- Running at `a5cff058d327`: `r20261113-164707-0661` (cpu-7), the five tests by the opt-in command at the suite's new path; `r20261113-164741-da02` (cpu-14), the pre-mark run (`suites.py --changed f54194bbb196 --quick`). When both are back I open the pull request and write you the ready line.
+
+### Not established
+
+- That the five tests pass at the carried head, and that the suites my change touches pass their quick tier there: the two runs say, about 17:25Z. [guess]
