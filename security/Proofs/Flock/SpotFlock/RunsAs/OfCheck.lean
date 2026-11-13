@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Statement
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Properties.Verity.SampledTwo.Steps
-import all VStarRecursive.SampledTwo
+public import VStarRecursive.SampledTwo
 
 /-!
 # The two-stage form's check, accepting, accepted a two-stage run

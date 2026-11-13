@@ -4,8 +4,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-import all Spot.Run
-import all Spot.Record
+public import Spot.Run
+public import Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
 
 /-!
@@ -233,5 +233,30 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel, hcoins,
       grain, replay, k, ns, ids, ks, draw₂, read₂, strata, hr, hns, hids, hks, hss, hcoins₂, hstrata, ?_⟩
     exact check_true_of_codes (codes_of_attach hwf hacc.symm)
+
+/-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the draw object
+its first stage's select returned, under `Select.resolve`'s rule and the work table `Rule.tableOver` expands. -/
+theorem answer_draw {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
+    ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (rest : Array ℕ) (read : ℕ),
+      i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
+        .ok workTable ∧
+      Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
+      Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
+        .ok (Spot.getD j "draw", rest, read) := by
+  obtain ⟨grain, replay, k, hr⟩ := ha.two
+  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨workTable, resolved, draw, rest, read, ht, -, hres, hsel, -,
+      inner, acc₂, staged, receipt, sym, pub, audit, hsec, hia, hj, -⟩
+  · have hs := ha.accept
+    rw [hj, symbol_refused] at hs
+    cases hs
+  · obtain ⟨x, -, rfl⟩ := secondStage_two hr ha.interior hsec
+    obtain ⟨it', receipt₂, draw₂, law₂, read₂⟩ := x
+    obtain ⟨⟨e, he⟩, -⟩ := interiorAudit_some hia
+    have hd : Spot.getD j "draw" = draw := by
+      rw [hj, he]
+      apply getD_mkObj_mem
+      · simp [List.pairwise_cons, Std.compare_eq_iff_eq]
+      · simp
+    exact ⟨workTable, resolved, rest, read, ht, hres, by rw [hd]; exact hsel⟩
 
 end SpotFlock.RunsAs
