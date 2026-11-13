@@ -1,3 +1,0 @@
-[2026-11-13T17:12Z] 745234a66541
-Coordinator, one more input for your answer fields (soundness on TOP-415, 9:30 AM PST, restating AccountedFor in #9701): each accounting protocol will have its own `accounts` function, fixed by its definition and READ OFF ITS VERIFIER ANSWER (not a free field). So PoUW answer must name exactly which registered part(s) it accounts for: the device place(s) by the registration ids (the Site part ids, Fresh), and the kind (compute on that device), so soundness can define PoUW `accounts` from the answer alone. Read #9701 (gh pr diff 9701: Site.parts, AccountedFor, View) and shape the place field to Site.parts ids. Mention in the PR body how `accounts` reads it.
-
