@@ -1,11 +1,10 @@
 
 ## circuit-check
 
-Run `r20261112-173637-e88d` on `1b61bd883e`, a check slot, rc 0 for each of its three passes. The files circuit-check reads
-here (`verity/definitions/registry/flashmla_dsv32.py`, its sidecar, `numerics/flashmla_dsv32_twin.py`, `registry/flashmla.py`,
-`numerics/flashmla_twin.py`) are unchanged from that commit to this head: the two commits after it touch only the capture
-script and its test. The update pass (`--update-pins`, run `r20261112-152809-d14e`) wrote nothing: the module defines no
-new piece.
+Run `r20261112-231418-ada0` at this head, a check slot, rc 0 for each pass. circuit-check's own update pass
+(`--update-pins`) on the sidecar ran first: 12 targets, 0 failures, and it changed no file (the module defines no new
+piece to pin). Then the three passes below. The verdicts and sizes equal those of run `r20261112-173637-e88d` on
+`1b61bd883e`, before `main` was merged in.
 
 The sidecar (`verity/definitions/registry/flashmla_dsv32.circuit-check.py`): 12 targets, 0 failures, 0 unchecked, all 12
 compared with the reference on random vectors.
