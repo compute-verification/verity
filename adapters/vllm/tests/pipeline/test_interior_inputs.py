@@ -21,9 +21,9 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.windows import links as LK
 from verity.commitments.windows import rows as CS
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import boundary_logits as BL

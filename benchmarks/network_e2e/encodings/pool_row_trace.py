@@ -33,7 +33,7 @@ import replay as RP
 import replay_input as RI
 
 from verity.commitments.gates import block_key as BK
-from verity.protocols.certifier.prover import compile_slice_v4 as V4, compile_slice_v6 as V6
+from verity.protocols.accounting.certifier.prover import compile_slice_v4 as V4, compile_slice_v6 as V6
 from verity_vllm.engine import pool_row as PR
 
 GROUP = bytes(PR.GROUP_BYTES)

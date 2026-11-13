@@ -13,7 +13,7 @@ from typing import Any
 
 from verity.commitments.windows import interface as IF, rows as CS
 
-#: flock-circuit's spec shape (`verity/protocols/flock/prover/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
+#: flock-circuit's spec shape (`verity/protocols/proofs/flock/prover/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
 #: the layout mode of a table read's templated statement (`statement`; `verity_flock.tmpl.mode_of`)

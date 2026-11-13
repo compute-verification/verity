@@ -52,7 +52,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 #: `Flock/Lookup.lean`, whose `MUFU_TABLES` Flock's Lean verifier reads from its `--archive` by SHA-512, in its order
-LOOKUP = ROOT / "verity" / "protocols" / "flock" / "verifier" / "Flock" / "Lookup.lean"
+LOOKUP = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "Flock" / "Lookup.lean"
 #: `FlockDeploy.FORMAT`, a statement encoding's first field
 FORMAT = "flock-verify-statement/v1"
 #: the flags of `verify` a statement's encoding carries no field for, or none this export reads
@@ -193,7 +193,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     where none is given), each fixed before the run: ``held.json`` and, from the params under ``run_out`` (``proofs.json``, ``references/``), each
     template's ``ref-<t>.bin`` and ``ref-<t>.reads.json``, written to ``out``. It reads no record, session or coin of
     the run: `tests/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
-    from verity.protocols.spot.verifier import second_stage as SS
+    from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
     from verity.commitments.windows.rows import expected_ports
 
@@ -251,7 +251,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int,
     spans, ``q`` replay blocks sampled and ``k`` proof blocks a cell, at ``design`` (the toy's where none is given):
     the auditor's copies (`export_registration`) and what the model reads of the run, written to ``out``; ->
     ``held.json``'s object."""
-    from verity.protocols.spot.verifier import second_stage as SS
+    from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
 
     design = design or toy_design(n, q)

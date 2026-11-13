@@ -41,8 +41,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier.one_stage import registered as RG
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.circuits.codec import definitions
 from verity.commitments import hm96, history as HT
 from verity.commitments.gates import embedding as EMB
