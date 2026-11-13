@@ -139,7 +139,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
             nonce: Mapping[str, int]) -> dict[str, dict[str, Any]]:
     """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     E, N, K = (int(x) for x in shape)
