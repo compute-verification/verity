@@ -146604,3 +146604,7 @@ The nodes are four of the five your message lists with free root disk; vy-nebius
 - **Why carried #9504 merged onto run `85a4`'s line where the pairs say it conflicts** (section c.4), and whether the carried join's conflict with carried #9480 and #9504 in `two_stage.py` is more than the scratch settlement's doing.
 - **What #9737 does,** beyond its body and the rule: I ran nothing on it.
 - **Whether `research run` may name a node** for each batch as the table does; my runs used `--on auto`.
+
+## HELDOF, Fri 13 Nov 14:38Z: the first fields compile, and the instance `couplesAt_wired` compiles too
+
+On `cursor/proofs-heldof-couples-f083` at `7152d0f3c8f`, the three files compiled on their first try, each with `--siblings`, no clash, and only `propext`, `Classical.choice` and `Quot.sound` [run]: `WiredParse.lean` (r20261113-142529-dbf9, 5 theorems), `WiredScope.lean` (r20261113-142636-1f9f, `scope_wired` from `JoinsAt` alone) and `CouplesWired.lean` (r20261113-142750-5b05, `couplesAt_wired` under `RecordWf`, `TwoHolds A.h` and `UnitsWired`). Your 14:28Z and 14:29Z mail is read; points 1, 2 and 4 go in the 16:30Z entry.
