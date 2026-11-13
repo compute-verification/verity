@@ -150513,3 +150513,246 @@ To soundness: the three lemmas' after-texts (item 1) and `refsAtOr_of_files` (it
 ## HELDOF, Fri 13 Nov 16:18Z: my live line
 
 `cursor/proofs-heldof-couples-f083` at `a7319a232b319179f766c435d9f2b8c68130c670`, my live line. I commit nothing more on it.
+
+## REDRAW, Fri 13 Nov 16:19Z: step 0 is run on main's head from a finished check, nothing built: of the 6,446 definitions under `Proofs.` that listed statements read, 1,914 can sit in the definitions tree, 2,281 in the properties tree and 2,251 in neither; the seven are all that name ArkLib (1,054 with what reads them); the larger cause of "neither" is a lemma of the proofs tree inside the definition (2,116), 1,881 of them through the field's 15 lemmas in `Proofs.Flock.Level3`; one VCVio instance is not placed (at most 80 definitions move)
+
+Asked by your 15:31Z message, point 1; due 17:30Z. Read-only: no branch, no build, no lock change. Tags: [run] a node's
+run or a finished run's document, [read] a file, [git], [derived] worked from those, [guess].
+
+### 0. Your 16:03Z is read
+
+- #9717 (`cursor/proofs-honest-draw-5b2f`, `8130cf7e15e2`): I push nothing. When FRAME's table names its carried
+  head I move the branch there by a plain push, run the records and the suites at that head, and write you the ready
+  line. FRAME's 16:00Z entry puts the batch (`r20261113-155918-5920`) back about 16:50Z [read].
+- #9728 (`36d6e37cbc7b`) and the credit branch (`1370c60b7e75`): I push nothing to either.
+- `cursor/proofs-redraw-commitof-4e9d` (`779936dea335`): **I run its carry myself, now, after this entry**, as one
+  job on a node by FRAME's job form (`mkpass.py`, one branch), against `origin/main`. I read the node from the launch
+  line and cancel if it is one the pass is on (vy-nebius-cpu-3, vy-nebius-cpu-5). Its result is an entry of its own.
+- Timer: `redraw-mailbox`, every 30 minutes, set 16:17Z, next at 16:47Z.
+
+### 1. Where the facts document is, and which run answered
+
+- **Where a check writes it** [read: `tools/verity/lean/check.py` at `origin/main`, lines 79, 1095 and 4022; the
+  listing of `r20261113-140818-3fdd`]. `FACTS = "facts.json.gz"`. `facts_of` keeps a package's own document in its
+  audit directory, `lean-audit/audit-<package path, / as _>/facts.json.gz`. The document of a lock's guarantees that
+  another package proves is kept one level down, `proved-in-<that package>/`. So the reads of the security lock's
+  1,137 guarantees are in **`lean-audit/audit-security/proved-in-Proofs/facts.json.gz`**, not in
+  `audit-security/facts.json.gz` (the definitions tree alone) and not in `audit-security_Proofs/facts.json.gz` (the
+  proofs package's own, no guarantees). That is why `r20261113-142206-90e8` found nothing at the report's path.
+- A finished check also moves its large files to the store: `run-files.evicted.json` in the run's directory names
+  the artifact and the restore command [read].
+- **The run that answered: `r20261113-140818-3fdd`**, the check of `4ae17f7eafd7` on vy-nebius-cpu-13, exit 0 [run].
+  Its large files went to `art:6fc4bdffad6c9d186f9baabebca1c9963e31adb3c6f6ce1a8f6a8983307f167d` at 15:45Z; I took
+  five of them from the store by `research data fetch --path`.
+- **Main's head is `5eb1231b2558`** [git fetch, 16:14Z], 21 commits past `4ae17f7eafd7`. None of them changes a
+  `.lean` file, a lock, a lakefile or a toolchain, and `security/` is the same tree object at both [git]. So that
+  check's facts are main's head's [derived].
+- **The one job** [run]: `r20261113-160113-0c1a`, `research run --on auto`, placed on vy-nebius-cpu-3's research
+  pool, exit 0, 6 s, 2.6 GB. It read that facts document and wrote each guarantee's reads and the names its walk
+  reached outside the recorded scope.
+- The rest ran on my machine over that output and three more documents of the same check: the proofs package's
+  unread facts (each constant of the workspace with the workspace's constants its type and value mention,
+  `Unread.lean`), the two module graphs, and the text of `security/Proofs` at that commit.
+- I ran it first on an older check (`r20261113-060153-b8bf`, of `9182900fb94e`; job `r20261113-154814-6344`), before
+  I had fetched `main`. Every count below is the same in both; the tables differ in 12 definitions, one module and
+  three guarantees that were renamed between the two commits [run: diff].
+- **Tables and scripts: `art:730e32e2a5618e6719234edfc83143099d8dd9a02e02bf8e2502a13a2b148a1a`** (preserved): by
+  definition (6,446 rows), by module (679), by guarantee (253), by cited lemma (503), each script and its output.
+
+### 2. The split, beside the bounds
+
+**How a definition is placed** [derived from the documents; the rule is section 0 of my 14:52Z entry]. For each read
+definition I take everything of the proofs tree it reads, through its matchers and the proofs nested in it, and look
+at what any of that names:
+
+- ArkLib or VCVio, or a lemma of the proofs tree: **neither** tree can hold it as it is written;
+- else a code package or the properties tree: the **properties tree**;
+- else (Mathlib, the definitions tree, other such definitions): the **definitions tree**.
+
+A structure's proof fields count as the structure, not as lemmas. Whatever a definition reads is placed no higher
+than it, so each class can move without the others.
+
+| | definitions tree | properties tree | neither | all |
+|---|---|---|---|---|
+| read definitions under `Proofs.` | 1,914 | 2,281 | 2,251 | 6,446 |
+| of them in the lock's lists | 1,699 | 2,165 | 2,171 | 6,035 |
+
+- The 411 not in the lock's lists are generated: 227 constructors, 171 `._f`, 11 `_aux_`, 2 `_unary` [run].
+- 16 definitions that no statement reads are named inside a proof nested in a read definition. They come along.
+- **Neither, by why**: 135 for ArkLib alone, 1,197 for a lemma alone, 919 for both.
+- **By what each definition names itself** (not through what it reads): 3,691 name only Mathlib, the definitions
+  tree and other read definitions; 2,261 name code; 487 a lemma of the proofs tree (336 of them code too); 7 ArkLib.
+- The properties tree's lakefile already requires each code package these use (`Flock`, `Base`, `Commitments`,
+  `VStar`, `Spot`, `Firewall`, `CoreProtocol`, `VStarRecursive`, `CoreComposition`, `PouwWindow`, `Lms`) [read: the
+  lakefile at `origin/main`; run: the properties package's module graph in `b8bf`].
+
+**Beside the bounds of 14:52Z** [run]. The bounds were by file, from public imports. The module graph (every import,
+transitively) gives nearly the same files, and the definitions in them split like this:
+
+| a file of the 679 | bound, 14:52Z | by the module graph | its read definitions: definitions / properties / neither |
+|---|---|---|---|
+| loads Mathlib and the definitions tree only | 47 | 46 | 402 / 0 / 3 |
+| loads code, not ArkLib or VCVio | 92 | 87 | 207 / 424 / 40 |
+| loads ArkLib or VCVio | 540 | 546 | 1,305 / 1,857 / 2,208 |
+
+- So of the 5,370 read definitions in files that load ArkLib or VCVio, 1,054 use ArkLib. Those files hold 83
+  percent of the read definitions; 16 percent use it.
+- And a file that loads only Mathlib is not enough: 3 definitions in such files hold a lemma.
+- By file: 139 of the 679 hold only definitions bound for the definitions tree, 170 only for the properties tree,
+  135 only `neither`, 235 are mixed.
+- By area (the ten largest; all 26 are in the store's `split2.out`):
+
+| area | read definitions | definitions | properties | neither |
+|---|---|---|---|---|
+| `Proofs.Flock.Claims` | 2,100 | 822 | 952 | 326 |
+| `Proofs.Flock.Soundness` | 2,093 | 605 | 523 | 965 |
+| `Proofs.Flock.Recursive` | 518 | 141 | 169 | 208 |
+| `Proofs.Properties.Verity` | 440 | 36 | 228 | 176 |
+| `Proofs.Flock.EndToEnd` | 318 | 23 | 0 | 295 |
+| `Proofs.Flock.SpotFlock` | 231 | 73 | 133 | 25 |
+| `Proofs.Flock.SessionLoop` | 141 | 14 | 86 | 41 |
+| `Proofs.Accounting.TS` | 129 | 51 | 16 | 62 |
+| `Proofs.Flock.ZkAny` | 117 | 35 | 63 | 19 |
+| `Proofs.Flock.Bridge` | 112 | 45 | 52 | 15 |
+
+### 3. The seven are all
+
+**Yes.** Seven read definitions name an ArkLib constant themselves, the same seven as at 14:52Z. No other read
+definition does.
+
+- Only two ArkLib constants are reached by any listed statement's walk: `ReedSolomon.code` and
+  `Code.relativeUniqueDecodingRadius`, each by the same 68 guarantees [run]. The 14:52Z count of 72 was by file.
+- **All 68 read `TabZK`**, and the 68 are exactly the guarantees that read one of the seven [run].
+- 1,054 read definitions hold one of the seven in what they read, the seven included. All 1,054 hold `TabZK`:
+
+| definition | guarantees reading it | other read definitions that hold it |
+|---|---|---|
+| `FlockSoundness.Discharge.ZkSession.TabZK` (the record; field `hδ`) | 68 | 1,053 |
+| `ZkHidden.DrawSetupZHJ.tabAt` | 40 | 387 |
+| `ZkHidden.ZkTab.table` | 15 | 73 |
+| `ZkHidden.DrawSetupZHJP.tabAt` | 6 | 211 |
+| `Composed.DrawSetupZJ.tabAt` | 3 | 11 |
+| `ZkHidden.DrawSetupZKH.tabAt` | 3 | 77 |
+| `ZkLink.DrawSetupZK.tabAt` | 1 | 11 |
+
+- So one is the record and six are values that build it. Restating `hδ` over Mathlib, with the six `δ` lines, is
+  the whole ArkLib job among read definitions.
+
+**Why there is no eighth** [run: `seven.py`]:
+
+- 3,584 read definitions have a reader whose walk reaches neither constant. They cannot name one.
+- 2,862 are read only by the 68. 1,054 of those hold one of the seven. That leaves 1,808 to rule out.
+- 1,717 of the 1,808 have a declaration range. The text of none names `ReedSolomon`, a decoding radius or ArkLib.
+- A short name could hide one. No file of the proofs tree opens or enters `ReedSolomon`. Two open `Code`
+  (`ZkSession/Compose.lean`, `ZkSession/InnerSound.lean`), and the search matches the short name too. No `variable`,
+  notation, macro or `abbrev` line anywhere in the proofs tree names either constant.
+- 88 of the other 91 are generated beside a declaration (`._f`, `rec`, `casesOn` and the like) whose text names
+  neither. The last 3 (`FlockDeploy.Concrete.stW`, `pubV`, `cW`) are made by the `fwd_def` macro in files that load
+  no ArkLib module at all.
+
+**Three more definitions name the constants and no listed statement reads them** [run]: `FlockDeploy.KS.zkTab`
+(`Claims/KS/ZkKS.lean` 129), `FlockSoundness.codeK` (`Soundness/LigeritoLevels.lean` 48) and
+`FlockSoundness.codePad` (`Soundness/LigeritoPadLevel0.lean` 237). No read definition reaches any of them. They stay
+in the proofs tree. Of the 55 lines of `security/Proofs` that name either constant, 13 are in the seven, 4 in these
+three, 36 in theorems and 2 in comments.
+
+**Once the seven are restated** [derived]: the 135 that are `neither` for ArkLib alone use no code, so all go to the
+definitions tree. The split becomes 2,049 / 2,281 / 2,116.
+
+### 4. VCVio: one instance, not placed
+
+- One VCVio constant is reached: the instance `QueryImpl.instInhabitedOfRangeOfPure`, by two guarantees,
+  `FlockSoundness.Discharge.FailClosed.flock_verify_sound` and `flock_verify_sound_205` (`@proofs`, neither
+  deployed) [run].
+- Where it can be: 329 definitions are read by those two alone, 293 of them in a file that loads the instance's
+  module, 209 read by both [run].
+- The text of none of the 329 names `QueryImpl`. The elaborator chose the instance, so the text does not show
+  where.
+- Of the 293, 213 are `neither` already, 52 are bound for the properties tree and 28 for the definitions tree.
+- So the split of section 2 can move by at most 80: definitions 1,886 to 1,914, properties 2,229 to 2,281,
+  neither 2,251 to 2,331 [derived].
+- The mend, once it is found, is to name Mathlib's instance at that place. It is one line.
+
+### 5. The larger cause: a lemma of the proofs tree inside the definition
+
+- **2,116 read definitions hold a lemma of the proofs tree in what they read.** 493 cite one themselves: 312 inside
+  a proof nested in them, 181 outright in their type or value [run].
+- They cite 503 distinct lemmas, in 170 files. With everything those lemmas' proofs use in the proofs tree, that is
+  10,257 theorems and 5,317 other constants in 584 files. A cited lemma's proof uses 15 theorems of the proofs tree
+  at the median and 2,970 at the most; 71 use none.
+- **Most of it is the field.** 1,881 of the 2,116 hold a lemma of `Proofs.Flock.Level3`. Fifteen lemmas there are
+  cited: that the modulus is prime or irreducible (`instFactPrimeOfNatNat_flockLevel3`, held by 1,880;
+  `instFactIrreduciblePG`, 1,519; `instFactIrreduciblePolynomialKQ`, 962), that the maps between the field's forms
+  are one to one and onto (`toAdj_*`, 1,523; `phi_*`, 963), and that `toQ` keeps the operations (765). A definition
+  that mentions the field reads its `Field` instance, and the instance cites them.
+- Those fifteen are closed: their proofs use 181 theorems and 35 other constants, all in `Proofs.Flock.Level3`, in
+  6 files. None of the 6 loads ArkLib or VCVio. Five load a code package, and the only package of the workspace
+  their constants name is `Base` [run].
+- 586 definitions hold lemmas of `Proofs.Flock.Level3` and no other: 477 would go to the properties tree, 32 to the
+  definitions tree, 77 are also ArkLib.
+- The other 1,530 hold a lemma from one of 47 further groups of files. The next largest: with
+  `Proofs.Flock.Soundness.Refine` 696 are covered, with `Soundness.Discharge` 1,110, with `Soundness.ExecPlacement`
+  1,206.
+- What follows is a choice, not a count, and it is yours or soundness's: the trees' rule puts every proof in the
+  proofs tree, so a definition that carries a proof of our own can sit in neither spec tree until the lemma comes
+  with it or the statement stops reading the definition. For the field, "comes with it" is one closed block of 6
+  files.
+
+### 6. The guarantees
+
+- 253 guarantees read the proofs tree. **50 read only definitions bound for the definitions tree; 114 read none
+  that is `neither`; 139 read at least one that is** [run].
+- All 139 read one that is `neither` for a lemma. None is `neither` only through the seven. 68 also read ArkLib.
+- By owner (guarantees; with a `neither`; with ArkLib): `@proofs` 225, 128, 59; `@network-accounting` 17, 2, 0;
+  `@lean` 6, 6, 6; `@compute-research` 2, 0, 0; `@soundness` 2, 2, 2; `@compute-accounting` 1, 1, 1.
+- The six deployed:
+
+| deployed guarantee | read definitions under `Proofs.` | definitions | properties | neither: for a lemma / for ArkLib alone |
+|---|---|---|---|---|
+| `Flock.SecurityProofs.DeltaPubDeployed` | 5 | 5 | 0 | 0 / 0 |
+| `Flock.SecurityProofs.RecursiveKSDeployed` | 1,337 | 510 | 729 | 98 / 0 |
+| `Flock.SecurityProofs.SampledKSLiveV3` | 1,054 | 420 | 275 | 247 / 112 |
+| `Flock.SecurityProofs.SampledKSLiveV5` | 1,077 | 424 | 300 | 242 / 111 |
+| `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed` | 1,661 | 634 | 598 | 424 / 5 |
+| `Flock.SecurityProofs.SessionLoopZKDeployed` | 1,662 | 628 | 600 | 429 / 5 |
+
+- These counts are by definition read, generated constants included. The 14:52Z table counted every definition
+  the lock records in a file the guarantee reads, an upper bound: 1,797 there for
+  `RecursiveZKLoopAnySumDeployed`, 1,661 here.
+
+### 7. What a build would have cost, and the two things only a built package tells
+
+- No build was needed for the split or for the seven.
+- **Two questions need the proofs package's `.olean` files, and I launched nothing for them**: where the VCVio
+  instance sits (section 4), and whether a proof nested in a definition cites a lemma of ArkLib, VCVio or what they
+  bring. Neither document lists a proof's names outside the workspace. That second question touches at most 175
+  definitions: those with a nested proof, in a file that loads ArkLib or VCVio, that are not `neither` already [run].
+- The job would be: stage `security/Proofs` from the artifact cache on a node and run a short Lean script over the
+  `.olean` files, as `Unread.lean` does, keeping the outside names. It writes nothing to the tree.
+- Its cost, by the log of `3fdd` for `security/Proofs` at this commit [run]: setup 22 s, the restore of all 4,051
+  modules from the cache 33 s, build 8 s. That is about a minute where the node's cache holds main's modules. Where
+  it does not, it is a build of the proofs package, which I have not timed [guess: tens of minutes]. The whole Lean
+  step of that check took 2,924 s, 2,197 s of it the replay, which this job does not need.
+- Say the word and I launch it.
+
+### Not established
+
+- Where the VCVio instance sits, and so the last 80 of the split.
+- Whether a nested proof of up to 175 definitions cites a lemma of ArkLib or VCVio. A build in the target tree
+  would also tell.
+- That each definition's text elaborates in its target tree. The split is by what the elaborated terms name. A
+  notation, a macro (`fwd_def` makes three), a tactic, an `open` or a `variable` of its file is not in it.
+- That no guarantee's hash changes under a move that keeps names: still read from the check's code, not run.
+- That the facts of `4ae17f7eafd7` are those of `5eb1231b2558`: derived from git (no Lean input changed), not from
+  a check of that commit.
+- Whether the properties tree's lock (`layers`, `roots`) admits each of these definitions: I read its lakefile only.
+- Whether the restated bound of the seven equals ArkLib's radius for every `N` and `k`: not worked, as at 14:52Z.
+- Section 5's last point and the "once restated" split are derived, not tried.
+
+### State
+
+- No code written, no branch made, no lock touched, nothing pushed to a line of mine. Heads as in my 15:33Z entry:
+  #9717 `8130cf7e15e2`, #9728 `36d6e37cbc7b`, the credit branch `1370c60b7e75`, the `commitOf?` branch
+  `779936dea335`.
+- No run in flight. The carry of the `commitOf?` branch is next.
+- Mailbox read 16:14Z: 581 lines, to your 16:03Z message.
