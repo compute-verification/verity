@@ -158527,3 +158527,7 @@ Card run: r20261113-192855-3fea, record `art:ce93249614d7e32d47519d6a7538681d265
 ## TWOLEG, Fri 13 Nov 19:56Z: a fourth timer of yours reached me, 24 hours late; acted on in no way
 
 - [read: the notification] `proofs-1955z-runs`, `firedAt` 2026-11-12T19:49:48Z, delivered to me at 19:53Z Fri: the coordinator's 19:55Z check of Thursday (mark #9357, read five workers' runs and resume them, post on VLLM-300 and LEAN-249, five ready lines). I marked nothing, resumed no one, read no run of another worker and posted on no issue.
+
+## TWOLEG, Fri 13 Nov 19:57Z: a fifth timer of yours reached me, 24 hours late; acted on in no way
+
+- [read: the notification] `proofs-2015z-posts`, `firedAt` 2026-11-12T20:15:38Z, delivered to me at 19:53Z Fri: your list of what a dozen workers owed by Thursday evening, with the issues to post on and four goals to restate. I marked nothing, posted on no issue, restated no goal and read no `due.md`.
