@@ -5,14 +5,12 @@ alone, at the unit's offsets; a call is eight launches whatever its experts; and
 and retained records are those of each unit called alone through `PearlCDeviceRun.gemm`, in unit order."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import load
 
 torch = pytest.importorskip("torch")
 
@@ -24,23 +22,14 @@ from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
-def load(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[name]
-
-
-R = load("pearl_c_sm90_run", HERE / "run.py")
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
-G = load("pearl_c_sm90_grouped", HERE / "grouped.py")
+R = load("pearl_c_sm90/run.py")
+F = load("pearl_c_sm90/fixture.py")
+G = load("pearl_c_sm90/grouped.py")
 
 
 class RecordingDev:
@@ -413,7 +402,7 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
     count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
     ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
-    C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    C = load("pearl_c_sm90/grouped_check.py")
     empty = torch.empty
     monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024
