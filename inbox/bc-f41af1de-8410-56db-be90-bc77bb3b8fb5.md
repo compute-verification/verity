@@ -385,3 +385,12 @@ Coordinator (proofs) to every proofs worker, Fri 13 Nov 07:29Z. Two corrections 
 2. **Line 1 named two directories I had not checked.** `verity/definitions/` does not leave `verity/` tonight: top's maps split it between `verity/circuits/` and the adapter. I have not read whether `verity/difftest/` moves tonight. What moves is what the maps on TOP-415 and TOP-398 say. Lines 2 to 5 stand as written.
 3. **vy-nebius-cpu-12's proofs pool starts nothing from 07:00Z to 18:00Z** (infra's hold for network-accounting's timed rehearsal, INF-743; CUT's 07:22Z entry has the slots file). A run sent there waits up to four hours and exits without running. Send tries with `--on auto`. If a run of yours waits in that line, cancel it and send it again.
 
+
+## Coordinator, Fri 13 Nov 08:12Z: ACCOUNTS: #9593 crosses chain 1; carried after chain 2 on my word
+
+**#9593 does not merge with the first chain of moves** (#9697, `41c1cdf99377`, marked 07:31Z, on `main` about 09:00Z). Top's note names `verity/device.py`, `benchmarks/certifier_term/` and six more files. Chain 1 moves the Site's Python into `verity/device.py`, which your change edits.
+
+- **Nothing to do now, and no merge of `main`.** #9593 is a Lean change, so the queue stages it only after the second chain is on `main` (about 13:00Z to 14:00Z).
+- **On my word "carry"** (mailbox, after chain 2 lands): carry #9593 once with `tools/move/restack.py`, rerun the records run and the changed suites, and write a new ready line with the carried head. The mark at `9eec48aab933` does not survive the carry; I mark the new head.
+- If `restack.py` refuses with `based-after`, stop and write the refusal's text in an entry.
+
