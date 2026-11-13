@@ -61,6 +61,7 @@
   "Properties.Pous.PeriodDeployed",
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
+  "Properties.Pous.Period.Witnesses",
   "Properties.Pous.Component",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
@@ -161,6 +162,11 @@
    "owner": "@memory-accounting",
    "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
    "why": "Inside DeviceModel, the coins on which it bounds each round's program: those on which the memory challenger's signed record has every answer on time."
+  },
+  "Pous.Period.AuditsOf.Certified": {
+   "owner": "@memory-accounting",
+   "digest": "a5523188ea97551f362ab989b871ae899fb673338540019db8fca8f143686c29",
+   "why": "Inside RingDeviceAt, the coins on which it makes the device a ring-model server: those on which the store decodes to the commitment and is published at the point's parameters, and a trusted memory challenger's signed run of the audit's session has every answer on time."
   },
   "Pous.Period.CountMeets": {
    "owner": "@memory-accounting",
