@@ -121825,3 +121825,95 @@ Heads, all pushed: records `b3d3c01f9983e49de9ab05dd1eea330473848e95`; rows `08a
 - That Friday-size files pass the wiring's clauses, or how long the guard takes on them (it has only ever read the toy's).
 - That the three new Lean files, the merged line or the mended guard compile.
 - Why the two `tools/research` tests fail: only that this branch changes nothing there.
+
+## SERVEDCARD, Fri 13 Nov 05:13Z: the overhead run, reduced: 34 block types timed on H200s, 96.71% of ranked proving time; 2 types (1.48%) refused; every card and lease free from 05:08:46Z
+
+What this run is. One full statement of each type, proved on one H200 (SM 90) of node A, at commit `0803d36697868861ec37c71fd656789911c719a4`, before #9375. Both of #9375's settings are absent at this commit and unset in each job, as `out/steps.txt` records. The values are drawn, not served: no serving engine ran.
+
+- [run] Each statement got one warm session and four timed ones. "seconds" is `prove_total_s`, the median of the four timed sessions. "util" is the card's mean utilization while the statement ran.
+- [run] Every timed statement's five sessions were all accepted. Its files (`pub.bin`, `stage.json`, `pin.txt`, sessions) are in its proving run's `out/kept`.
+- [run] The six runs, each `done` with rc 0:
+
+| batch | staging | proving | statements timed |
+|---|---|---|---|
+| 1 | `r20261113-035603-4c67` | `r20261113-035634-1c43` | 15 of 16 |
+| 2 | `r20261113-043814-3f1e` | `r20261113-043823-9759` | 4 of 4 |
+| 3 | `r20261113-044106-6a85` | `r20261113-044114-51aa` | 15 of 15 |
+
+| ranked type | statement | share % | n | k_log | seconds | accepted | util % | batch |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64}` | 3.97 | 256 | 27 | 0.708 | 5/5 | 9.2 | 1 |
+| 2 | `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64}` | 1.32 | 256 | 27 | 0.700 | 5/5 | 6.3 | 1 |
+| 3 | `MoeExpertFp8ReadGemm_v1{READ=H3072,K=6144,N=1,G=128,KB=128,SWAP=false}` | 26.06 | 1024 | 25 | 1.507 | 5/5 | 26.1 | 1 |
+| 4 | `BatchedGemm_v2{B=1,K=512,N=1}` | 10.77 | 8192 | 22 | 1.169 | 5/5 | 30.7 | 1 |
+| 5 | `MoeExpertFp8ReadGemmW_v1{READ=H4096,K=256,N=32,G=128,KB=128,SWAP=true}` | 10.6 | 1024 | 25 | 1.406 | 5/5 | 29.9 | 1 |
+| 6 | `ScaledMmFp8BlockSharedScale_v2{K=6144,N=4,G=128}` | 9.85 | 1024 | 25 | 1.197 | 5/5 | 36.7 | 1 |
+| 7 | `ScaledMmFp8BlockSharedScale_v2{K=2048,N=4,G=128}` | 9.5 | 2048 | 24 | 1.507 | 5/5 | 13.4 | 1 |
+| 8 | `CublasSplitKGemmF32Out_v2{K=6144,N=1,SPLIT_K=3}` | 5.52 | 1024 | 25 | 1.169 | 5/5 | 12.6 | 1 |
+| 9 | `LlBf16DotprodGemm_v2{N=1,K=6144,BS=128,VEC=8,FMA=1}` | 4.1 | 512 | 26 | 1.369 | 5/5 | 21.0 | 1 |
+| 10 | `CublasSplitKGemm_v2{K=6144,N=1,SPLIT_K=4}` | 2.64 | 1024 | 25 | 1.269 | 5/5 | 21.3 | 1 |
+| 11 | `Gemm_v3{K=6144,N=1}` | 1.7 | 1024 | 25 | 1.403 | 5/5 | 57.3 | 1 |
+| 12 | `BatchedGemm_v2{B=1,K=192,N=1}` | 1.67 | 16384 | 22 | 1.027 | 5/5 | 32.0 | 1 |
+| 13 | `EmbeddingRead_v1{V=256,H=4}` | 1.35 | 4096 | 23 | not measured tonight: refused, a templated statement | 0/0 | | 1 |
+| 14 | `AllReduceMultimem_v2{WORLD=8,SIZE=96,TREES=…}` | 1.2 | 8192 | 22 | 1.370 | 5/5 | 31.2 | 3 |
+| 15 | `SparseMlaCombine_v2{NSPLIT=5,DV=64}` | 0.75 | 4096 | 23 | 0.998 | 5/5 | 30.7 | 1 |
+| 16 | `ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}` | 0.68 | 8192 | 22 | 1.179 | 5/5 | 56.9 | 1 |
+| 17 | `EmbeddingShard_v2{VS=19360,H=1,START=0}` | 0.6 | 1024 | 25 | 1.150 | 5/5 | 56.5 | 1 |
+| 18 | `EmbeddingShard_v2{…,START=19360}` | 0.6 | 1024 | 25 | 0.966 | 5/5 | 25.3 | 3 |
+| 19 | `EmbeddingShard_v2{…,START=38720}` | 0.6 | 1024 | 25 | 1.212 | 5/5 | 24.0 | 3 |
+| 20 | `EmbeddingShard_v2{…,START=58080}` | 0.6 | 1024 | 25 | 1.031 | 5/5 | 34.8 | 3 |
+| 21 | `EmbeddingShard_v2{…,START=77440}` | 0.6 | 1024 | 25 | 0.964 | 5/5 | 23.5 | 3 |
+| 22 | `EmbeddingShard_v2{…,START=96800}` | 0.6 | 1024 | 25 | 0.978 | 5/5 | 41.8 | 3 |
+| 23 | `EmbeddingShard_v2{…,START=116160}` | 0.6 | 1024 | 25 | 1.028 | 5/5 | 9.8 | 3 |
+| 24 | `EmbeddingShard_v2{…,START=135520}` | 0.6 | 1024 | 25 | 1.142 | 5/5 | 37.0 | 3 |
+| 25 | `Fp8GroupQuantUe8m0_v2{K=6144,G=128}` | 0.51 | 1024 | 25 | 0.673 | 5/5 | 17.7 | 3 |
+| 26 | `AllReduceResidualMnnvl_v2{WORLD=8,N=96,SHOT=1}` | 0.2 | 8192 | 22 | 0.931 | 5/5 | 34.4 | 3 |
+| 27 | `ScaledMmFp8BlockSharedScale_v2{K=1536,N=8,G=128}` | 0.15 | 2048 | 24 | 1.141 | 5/5 | 30.1 | 3 |
+| 28 | `RmsNormMnnvl_v2{N=6144,SHOT=1,CLUSTER=8}` | 0.15 | 256 | 27 | 0.847 | 5/5 | 0.0 | 2 |
+| 29 | `RMSNormFusedCudaVector8_v2{N=6144}` | 0.14 | 256 | 27 | 0.723 | 5/5 | 15.3 | 3 |
+| 30 | `EmbeddingRead_v1{V=256,H=96}` | 0.13 | | | not measured tonight: not run, a templated statement as type 13 | | | |
+| 31 | `ResidualAdd_v2{N=384}` | 0.12 | 8192 | 22 | 1.287 | 5/5 | 31.7 | 3 |
+| 32 | `Fp8GroupQuantUe8m0_v2{K=2048,G=128}` | 0.09 | 2048 | 24 | 0.576 | 5/5 | 29.4 | 3 |
+| 33 | `DsaMqaLogits_v4{N=1,H=32,D=128}` | 0.06 | 4096 | 23 | 1.008 | 5/5 | 84.0 | 2 |
+| 34 | `MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8}` | 0.06 | 1024 | 25 | 0.937 | 5/5 | 21.4 | 3 |
+| 35 | `SparseMlaHeadEnd_v2{DV=512}` | 0.05 | 4096 | 23 | 1.252 | 5/5 | 73.1 | 2 |
+| 36 | `DsaRMSNorm_v2{N=2048}` | 0.05 | 1024 | 25 | 0.681 | 5/5 | 27.9 | 2 |
+
+Shares:
+- [derived] The 34 types timed hold 96.71% of ranked proving time. The shares are `types.tsv`'s, which are `bench-rows.tsv`'s, the ranked types' share of proving time.
+- [read] Not measured tonight:
+  - types 13 and 30, 1.48%: this commit's prove step refuses a templated statement ("pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)");
+  - ranked rows 37 to 40, 0.16%: `SparseMlaHeadBlock` with NVIS 60 to 63;
+  - "the other 152 types", 1.64%.
+
+  The last two are not in `overhead.units`.
+- [derived] The 44.2% from Thursday reconciles: it is ranked types 1, 2, 3, 5, 15, 13 and 30 (the "two scale reads" were the two `EmbeddingRead` types), 44.18% by `bench-rows.tsv`. Of them, tonight timed types 1, 2, 3, 5 and 15, 42.70%. Types 1 to 7, the first seven by rank, are 72.07%, all timed.
+- No figure for the whole is given: the run measures prover seconds per statement, not a whole-run overhead.
+
+Caveats:
+- [run] Within a statement the four timed sessions fall by a factor of 2 to 4 from first to last; for example, `EmbeddingShard` START=0 read 1.99, 1.46, 0.84 and 0.50 s. The median hides that trend, so one statement's four sessions are a small sample.
+- [run] A statement's wall time on its card, mostly loading the circuit, was 16 s to 296 s, against about 1 s of proving.
+- [run] `RmsNormMnnvl`'s utilization reads 0.0, which I haven't looked into.
+- [run] At 05:04:33Z `gpu-lease status` read card 7's lease "nr_throttled=7101 throttled_usec=1973744069": the job's cores were throttled while it held the card.
+- [derived] One statement per type at full: no quarter statements, so no fit in n.
+
+The cards [run]. Proving ended at 04:35:27Z, 05:06:14Z and 05:08:46Z, and each run's `out/cards-at-end.txt` read 0, 1 and 0 compute processes. The 1, at 05:06:14Z, was batch 3's prover on card 7, then still running. At 05:10:41Z `nvidia-smi` read 0 MiB on every card and `gpu-lease status` read all eight free. No process of ours is on node A. I look again at 05:57Z and post that confirmation by 06:00Z.
+
+The goal `proofs/spot-overhead-measured`, "Proof overhead measured per block type", is dated Fri 13 Nov 8:00 AM in the plan [read: `research goals show`]; your order says noon PST.
+- [derived] Met tonight: each ranked type's prover seconds on an H200, measured, for 34 types and 96.71% of ranked proving time.
+- [derived] Not met:
+  - the two `EmbeddingRead` types (1.48%), which need the prove step to pass a templated statement's rows: a change after this commit;
+  - served values, as all values are drawn;
+  - #9375's settings, as the commit is before it;
+  - a fit in n, as there are no quarter statements;
+  - the Lean leg on the kept sessions.
+
+The Lean leg [read: `lean-shard.sh`].
+- It is ready to start: the 34 statements' kept files are in the three proving runs' `out/kept` on node A (0.26, 0.06 and 0.24 GB, as `window.py` logged them) and in each run's custody upload.
+- It runs `lean-shard.sh` through `research run --on auto` on a CPU node, not on node A. Each statement is restaged from the tree and held to its kept `stage.json` and `pin.txt`, then its sessions are verified.
+- It waits on two things:
+  - who launches it: benchmarks, by the 18:30Z order;
+  - how it ships under TOP-412, which requires a pool run to ship from today's `main` with the kit as checksummed inputs, while `lean-shard.sh` restages from a clone of 0803d36697. The kit would carry 0803d36697's tree.
+- [guess] The rehearsal's Lean step accepted N=2 statements on 24 CPUs. Full statements at k_log 27 (three of them here) may need more memory than that.
+
+For the table: overhead run, reduced, done: 34 types timed on H200s at 0.58 to 1.51 s a full statement (median of four sessions, all accepted), 96.71% of ranked proving time; EmbeddingRead (1.48%) refused as templated; cards and leases free from 05:08:46Z; the Lean leg is ready on the kept sessions and waits on its launcher and on how it ships under TOP-412.
