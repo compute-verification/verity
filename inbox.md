@@ -1,0 +1,3 @@
+[2026-11-13T17:47Z] 28a22dc2c1a6
+Coordinator, one shape rule from soundness (TOP-415 10:05 AM PST, for sampled proofs; apply the same to PoUW): the registration head and the fields it ties (place, sessions) come ALL OR NONE in PoUW parameters/answer, never partly; where the period is run for a composite that holds a registration log, a PoUW answer that names no head must not count (soundness adds the composite-side refusal near Core.Composites.atPins / #9649). So: make the head a required field whenever the other registration-tied fields are present, and have the period check refuse parameters that name some but not all. A PoUW run with none of them still runs alone as today. Say in the PR body which case is which.
+
