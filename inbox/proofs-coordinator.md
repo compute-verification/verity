@@ -122874,3 +122874,76 @@ Your 05:39Z: read. #9441 is marked at `51a2e803cb83`; I push nothing to its bran
 Only waiting now [run, fetched at 05:38Z]: records `r20261113-053035-5934` (vy-nebius-cpu-5), expected end about 06:30Z [guess]; suites `r20261113-053207-fc76` (vy-nebius-cpu-1), expected end about 07:00Z [guess]. I hold ONE one-off timer, `members-oneparse-runs`, due about 06:35Z, to read the records, apply the STOP RULE, commit any regenerated lock and, once the suites pass, open the one-parse pull request unmarked. If you resume me sooner, I drop it first.
 
 Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4f595b14`; `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27` (marked, untouched). Unpushed: nothing. Notes synced: the 05:40Z checkpoint with its "On resume" list.
+
+## TWOLEG, Fri 05:42Z: the compiled check refused the honest play at parsing ("params: partition is null: the sessions are verified against the verifier's own partition object"); the fix is on the branch and the play reruns in `r20261113-053625-2556`; `InputMap.lean` compiles
+
+No Lean-slot wait over 10 minutes. The pen: the machine was replaced again before 05:33Z; this loop took `~/wt/.pen` at 05:33Z and recreated both worktrees. Nothing pushed was lost.
+
+**STOP RULE.** Not reached. The fix below is in the driver's case assembler (`benchmarks/`). It changes nothing the verifier accepts.
+
+**Did the compiled check accept the play? No.** [run] `r20261113-052244-1ad4`, at `dd230ef7e2`, an interior of one member, printed word for word:
+```
+second rc=0
+INTERIOR [{"base": 0, "key": "TokenSelect_v4{V=128}", "n": 8}]
+FORM_ON rc=1 {"commitment":null,"profile":null,"protocol":"verity/sampled-proofs/two-stage/v1/switch-on","public":null,"reason":"params: partition is null: the sessions are verified against the verifier's own partition object","verdict":"reject"}
+FORM_OFF rc=1 {"commitment":null,"profile":null,"protocol":"verity/sampled-proofs/two-stage/v1","public":null,"reason":"params: partition is null: the sessions are verified against the verifier's own partition object","verdict":"reject"}
+```
+So the play reached the form this time: the case was written (`$OUT/form`, five blobs), and both binaries were built and ran. The form refused while parsing its parameters, before any step.
+- Cause [read]: `SampledTwo.paramsOfJson` hands the interior's parameters to `OneStageZk.membersParamsOfJson`, which refuses a null `partition` (`Spot/OneStageZk.lean` 255–256). The run of record's interior parameters name `partition: null`. The per-member case (`audit/case-v2-members.json`) names the partition object.
+- [derived, from the run's files] That object is the canonical one for the interior. Its `format` is `verity/partition/v1`. Its `program` is the SHA-512 of the interior's canonical program less `annotations`. Its `query` equals the interior's query. The same object is the `want` the members' `push` holds each session's program digest to (`Spot/OneStageZk.lean` 589).
+- Fix, `b53983fdab` (not run): `sampled_two_case.assemble` puts the members' partition object into the interior's parameters. It raises `ValueError` where the run names a different partition.
+- [run] The play reruns at `b53983fdab` in `r20261113-053625-2556` (vy-nebius-cpu-14, launched 05:36Z). The last play took about 9 minutes, so I expect it to end about 05:46Z.
+
+**Your 05:12Z message never reached me.** It came neither by the hook nor in my mailbox file. I learned from RUNCOINS's mailbox that it asked me for `inputOf`'s map, and I wrote that.
+
+**`inputOf`'s map compiles.** [run] `r20261113-052901-254b`, at `faf4b73bd7`, `InputMap.lean`:
+```
+'VStar.Recursive.SampledTwo.inputOf_first' depends on axioms: [propext, Classical.choice, Quot.sound]
+'VStar.Recursive.SampledTwo.inputOf_interior' depends on axioms: [propext, Classical.choice, Quot.sound]
+'VStar.Recursive.SampledTwo.secondLawOf_ok' depends on axioms: [propext, Classical.choice, Quot.sound]
+'VStar.Recursive.SampledTwo.accepted_law_run' depends on axioms: [propext, Classical.choice, Quot.sound]
+lean-try: security/Proofs/Properties/Verity/SampledTwo/InputMap.lean: lean exit 0 in 422 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/InputMap.lean: axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+```
+- [read] `accepted_law_run` says: where `checkBlobsAtWith form p c ξ e bs` accepts, the run of record `run` of the input `i` accepted, and the interior `i.interior = some it` has source `ξ₂` and no closure. `i.rule = .twoStage grain replay k`, `Select.replayCells it.replay it.params.verifier.query = .ok ns`, `Select.templateIds it.params.verifier.query = .ok ids` and `k.over ids ns = .ok ks`. The last step's law is `Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks`.
+- Those are exactly the run's own fields that RUNCOINS's `AcceptedTwo i it run` and `firstSample` read. The join is not written: it needs RUNCOINS's tip merged into mine, and `jeq … = true` turned into `getD run "symbol" = .str "accept"`. Until the join compiles, I still call it "the bound under the law `secondLawOf` computes".
+- Your 05:29Z item 2: my `run_draw` (in `FirstSample.lean`) and RUNCOINS's `firstSample` both say an accepted run's `draw` is its first stage's `Select.select` output. Keep RUNCOINS's, which compiled. `run_draw` goes when `FirstSample.lean` is restated over `firstSample` at the join. `InputMap`'s lemmas are not in RUNCOINS's file; they are the other half.
+
+**The lock's roots: done.** `356c08be0a` appends 14 names at the end of `roots` in `security/Proofs/lean-audit.json`, one a line: every file under `SampledTwo/` at my head (`Leg`, `Projection`, `Claim`, `Reading`, `Refused`, `Steps`, `DevAgrees`, `SecondRead`, `ClaimInner`, `Ordered`, `Deployed`, `Shown`, `FirstSample`, `InputMap`). Nothing else in the lock changed: a script held every other key equal and the first 178 roots unchanged.
+
+**The one question: JSON compared with `==` on the form's accepted path.** [read] I traced it with a script over the call graph, then checked each link below by reading.
+- In the form's own file (`VStarRecursive/SampledTwo.lean`): none. It compares strings, naturals, `Option String` window roots (lines 351, 382, 387–389), `Option (Array String)` keys (152) and `ByteArray`s (339). It reads JSON only with `jeq` (198) and `matches`.
+- On its accepted path, outside the challenger's reader: `Spot/OneStageZk.lean` 589, in `push`: `(programSha.map Json.str) != some want`. This is `Option Json`'s `!=`, which reads `BEq Json`. Every accepted member session reaches it: `membersRun` → `stepMember` → `StepAt.step` → `step` → `push`. **It is not in REDRAW's list.**
+- In the challenger's reader, sites on the path that ARE in REDRAW's list: `ChallengerSession` 248, 256, 270, 682, 813, 817, 855, 871, 888; `ChallengerRecord` 103; `ChallengerCoins` 57. They are reached three ways:
+  - by `inputAt` → `OneStage.coinsOf` → `drawCoins`, which calls `challengerStream` and `trustedSessionOf`, and by `OneStageZk.coinsOf` → `trustedTreesOf`;
+  - on two windows, by `interiorUnshown` → `trustedSessionOf`;
+  - on two windows, by `stagesOrdered` → `checked` and `ledgerEntry?`.
+- Sites on the path that are **NOT in REDRAW's list**, all in `Spot/ChallengerSession.lean`:
+  - 420, `isOutcome` (`getD w "root" == Json.null`), and 435, `isBodyOf` (`getD b "record_leaf" == Json.null`). Both are reached through `ledgerEntry?`, which the form calls itself at `SampledTwo.lean` 389.
+  - 518, `isReserve` (`getD b "expires_utc" == Json.str x`), and in `verifyLedger`: 610 (`field? rb "for" == some (Json.str w)`), 644 (`cap != Json.null`, `circuit != Json.null`), 657, 661 and 662 (`… == Json.bool …`). These are reached through `checked`.
+  - 739, `auditedOpen` (`p.cap == Json.null`, `p.circuit == Json.null`), reached through `pinnedSession` → `auditedOpen`.
+- Not on the path: `ChallengerSession` 778 (`ledgerHead`, which only `Pieces.headPiece` calls); `Spot/Stream.lean` 106 and 413 (`Spot.Run.run` never calls `Stream`); `ChallengerInnerTrees` 94 (only the recursive form's `innerCoinsHeld` reaches it); `VStarRecursive/Protocol.lean` 563 (`verdicts`, which the two-stage form doesn't call).
+- My branch has no uncommitted edits, and my own commits touch none of `ChallengerSession`, `ChallengerRecord` or `ChallengerCoins`. Those three files at my head are identical to #9555's head (`38b7c6df38`).
+
+**A second template that the second stage derives wires from** (your 05:29Z item 1). [derived, by reading only; not established]
+- `two_stage_small.layout` builds one `boundary_rows.Layout`, whose `check` is the one template `TokenSelect_v4{V}`. The proof blocks of a layout that is not inline are that template's instances, so every member is one template's.
+- A second template takes a second class: a second `Layout` with its own check template and its own capture, served in the same window. The interior's `Q_template_instances` then lists two templates, and `two_stage.py` draws one member for each (line 540).
+- `--inline` is not the way: its templates are the check's body, from which the second stage derives no wires (`second-wires`). I have not read whether `two_stage.py second` takes two classes' replay blocks in one window.
+
+**Your 05:37Z message** (the coin-tree line refused on two windows, its lemma and negative case; `RecordsRead`'s two-line change). Taken, in that order, after the play at my present head is accepted. Nothing is started.
+
+**NEEDS.** Nothing.
+
+**Runs.**
+- [run] `r20261113-052244-1ad4`: the play, refused (above).
+- [run] `r20261113-052901-254b`: `InputMap`, rc 0.
+- [run] `r20261113-053625-2556`: the play at `b53983fdab`, running.
+- [run] `r20261113-052211-9393`: tries of `FirstSample`, `SecondRead`, `Ordered` and `Shown` at `dd230ef7e2`. It is on Lean slot build/1 since 05:38Z, after waiting for slots since 05:22Z.
+- [run] `r20261113-044424-14a0`: J5's remaining tries, still running.
+
+**To post.** Nothing.
+
+**Not established.**
+- Whether the play accepts with the partition fix; other parse or step refusals may follow it.
+- Whether `FirstSample.lean`, `SecondRead.lean`, `Ordered.lean` and `Shown.lean` compile (`9393`). STAGECOINS gets a title when they do.
+- The join of `accepted_law_run` with `firstSample`.
