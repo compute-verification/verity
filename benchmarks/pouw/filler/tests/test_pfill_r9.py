@@ -6,20 +6,15 @@ reference's `key_ok_r9`, the reference functions below copied verbatim from its 
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("pfill_ref", HERE / "pfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 KINDS = {R.S8: [], R.BITS: ["-DPFILL_BITS"], **({R.BU: ["-DPFILL_BU", "-mpopcnt"]} if hasattr(R, "BU") else {})}
