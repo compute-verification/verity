@@ -1,0 +1,65 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "b3902993caeaef278eb966882ae5c50056d89032",
+ "top": "920585e4671bb581147f33747d7c26c854a8f2b0",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..920585e4671b",
+   "commit": "920585e4671bb581147f33747d7c26c854a8f2b0",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "passed",
+   "why": "ruff finds nothing new in the 1 Python file(s) it changes; no direct environment read is new in the 1 Python file(s) it changes; no silent except handler is new in the 1 Python file(s) it changes; no lane-text site is new in the 13 file(s) it changes; no retired-term site is new in the 13 file(s) it changes",
+   "before": null,
+   "after": null,
+   "touched": [],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [
+    "verity/commitments/windows/interface.py"
+   ],
+   "counted": {
+    "repo_env_reads": [
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_silent_excepts": [
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_lane_text": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+     "verity/commitments/windows/interface.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}
