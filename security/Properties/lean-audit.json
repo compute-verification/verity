@@ -204,7 +204,7 @@
   },
   "Accounting.Assumptions.CircuitCarriers": {
    "owner": "@compute-accounting",
-   "digest": "be29d1c5e01223840401d0246dccf22593f62c50643c17c6db968e95929878f4",
+   "digest": "99f59232cf288d13cb7c5f394e99aa3978d8c3bc7d7c2f67e22acc18cc608b56",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -298,6 +298,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Accounting.Compose.ExecutionPhasePlay.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Accounting.Compose.PrefixOf": {
    "owner": "@compute-accounting",
    "digest": "20e76f89ae9e8add775b41b613a433d90b79f449fac25534292108cb5c52f9d2",
@@ -313,12 +319,6 @@
   "Accounting.Compose.SplitRate": {
    "owner": "@compute-accounting",
    "digest": "c7eabc0812b80f74f761f6534791a40f16695287d8988db89e05f45ffa638500",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Compose.ExecutionPhasePlay.EveryWindow": {
-   "owner": "@compute-accounting",
-   "digest": "7d600f1e5a7ff58f2d475d03f2f65967e958879802e62845a5d88720f13eb6e3",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -342,19 +342,19 @@
   },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
-   "digest": "d820cafc5d4165af391a7743baf57ace1483e8fb6bcf5d4edcdf410f81995c7f",
+   "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Draw.Assumptions.Live": {
    "owner": "@memory-accounting",
-   "digest": "677da50ad8a37dfb2a8ddae68f40a988a04851ee512ed7cc90c093ebda638d44",
+   "digest": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Draw.Assumptions.Refused": {
    "owner": "@memory-accounting",
-   "digest": "d53991ea58541e48a5642dd78b13ea996a5a5ff66f59d7755fb05eefe35e2fd2",
+   "digest": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -396,7 +396,7 @@
   },
   "Accounting.Requirement.Placement.Deadlines": {
    "owner": "@compute-accounting",
-   "digest": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e",
+   "digest": "ad9d24118ce106e6d2cbe144fb0a4f4ced756ae6b004396587332dd31423e97e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -786,7 +786,7 @@
   },
   "Properties.Pouw.PeriodJ10R.SharedNoiseLucks": {
    "owner": "@compute-accounting",
-   "digest": "74a01360a1920935c289005bfc3de8ebdb5066b785d1af549f86696fcbce86b4",
+   "digest": "14ef6309565f3275c47add450c6520e44234393bacae9aee31fc38b58a0ff04c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1430,8 +1430,8 @@
    "unfolded_hash": "7ff67e61406ade02debf8ba99511046c3c5a32eaef1000efa42ef7d069959e71"
   },
   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
-   "type_hash": "8e473fef8f065ddce579a5caca0e4e7ce35b129bbd576c43ef682e628f4a1de3",
-   "unfolded_hash": "07df4ce3f7a1882e144c870291188c430eb296540f401e0e3b268f62362f2e7e"
+   "type_hash": "9152e842487b7fc7d74554af82e9266510a2ec46be1c971d8dd5a0646d3db35c",
+   "unfolded_hash": "a9b91d25dbcdf96c818ffb95f0d02fc6106ca7eb8e2074aa16ba2db4af51efb1"
   },
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
    "type_hash": "606a2e4fac1660a70473857cbb34860a5460f7308c5769766de8a0e7c386fd9e",
@@ -1846,35 +1846,35 @@
   },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "type_hash": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
-   "unfolded_hash": "f2a2d59c47ae6b30d9ce654e3fca4275848e1a2b3b4801207001fba3cbfc61bb"
+   "unfolded_hash": "39a23fa931b5c3e78dfdadf7b74785a1157c344952da28280e97964c264db695"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "type_hash": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
-   "unfolded_hash": "76b96914fbf16f80e950d631e14ca1abb2be6fe02b5a3f46ac650ff14adf3e9c"
+   "unfolded_hash": "acc6f6c33c03428b58f45882de11ab4fef1ad919c9ad7686e308c88e0b69cc9f"
   },
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
    "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
-   "unfolded_hash": "f154d9a153e9865113a1b61f4cde883c035eecdc3898769fc63fe67465396ad0"
+   "unfolded_hash": "cf5e1d63b2919fc94bc34991742e6eae92f0649f3520f06a6b23111bd6802461"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
-   "unfolded_hash": "75269984977afbe853ee0b5411d4da9ca8dcf9bc9f88991fc6c18bb98c869235"
+   "unfolded_hash": "3511249b51ae59cdf897c3a83941517b2b83ee9daa87d4e99bd06c2a9b051a1b"
   },
   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
    "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "0149e59541e3107c420e07c885f12954a1aa1928494593cc4a48f996a2e8aa2d"
+   "unfolded_hash": "5f6fd3e74c37f03410e9c8394c8b8a128a7dca9fd7aef373d53a77f69d444c2b"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
-   "unfolded_hash": "2118b9197d0031c1a65d0a0ae13b9686c080195af61c6041991ab8326258ef98"
+   "unfolded_hash": "036e47d466acf667d051f27cffce65216434be0f7beb9b4794137d204482880b"
   },
   "Properties.Pouw.Served.SecurityProofs.servedWork": {
    "type_hash": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
-   "unfolded_hash": "963b38f75e98b8f12f845d471b0d6dfd0c50db6e8825ba6c4864395056f0f4c1"
+   "unfolded_hash": "6b688bdcfaff3bb7919cf493e56ae8f000a98ae254805aa775177a8e3cd66571"
   },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
-   "unfolded_hash": "1f97b8dd8fafd799eebd7137e25be690dfd907a3f55f7a4ff9c47f96d910d8c9"
+   "unfolded_hash": "a61f902aed0d3d371e4bab75c2332a65fdeb63a55b163475eac08f70831f2192"
   },
   "Properties.Pouw.Strata.strataTile": {
    "type_hash": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
@@ -1958,7 +1958,7 @@
   },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
-   "unfolded_hash": "5d6522c2fa1998026a7581dd1f988c22e3d47501d065bdb2a2a7dff2c3aa27b3"
+   "unfolded_hash": "9762a44cb58c6f1e9ae64739d962b25ad9b113c8c68d5da7e77c94585ccda73b"
   },
   "Properties.RemoteAudit.Line.lineChecked": {
    "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
@@ -1988,17 +1988,17 @@
    "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
    "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
   },
+  "Properties.RemoteAudit.Shared.runSamplesRecords": {
+   "type_hash": "9ac30e6a1815103d2475b9e3ed839cd4b5807fd2e7b344722104d415a24f0c43",
+   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
+  },
   "Properties.RemoteAudit.Shared.sampleIsSubset": {
    "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
    "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
   },
-  "Properties.RemoteAudit.Shared.runSamplesRecords": {
-   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
-   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
-  },
   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
    "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "8bf5782c45cb0917d1e3b220c1cf0d29026e3df71ead0ddb7a642a889c526488"
+   "unfolded_hash": "130b62b9ff377c7d29e5c5f798b34de7cbb618fc758228069136a0c771011bb4"
   },
   "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
    "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
@@ -2041,8 +2041,8 @@
    "unfolded_hash": "fcc46a8922f820346a7a7e3b842192ea15a3733ce591e666c28ca4217fe7f01e"
   },
   "Properties.RemoteAudit.lineCoversRun": {
-   "type_hash": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d",
-   "unfolded_hash": "086268618029cf73c75280dbbc176aee9b96ec0ea83b8b60ad423850bd43f8df"
+   "type_hash": "398abc60fc69b8f52338b2555c9e191a9830560d21200fa0ede3b1ad5989b46c",
+   "unfolded_hash": "de37be219487e9eb7e509117c66801fb2cc0ae4ee63f5cbce854e4b5dd725c1d"
   },
   "Properties.RemoteAudit.liveIsRun": {
    "type_hash": "f590e7328b4bf6c7dbfb8362da3e8a235c1e21eed5f61a86e741e80cdda95ec5",
@@ -2073,8 +2073,8 @@
    "unfolded_hash": "82b544743500e6e9b6cf6be9247270fc558bc7a6d55928dc5d9ab85973746385"
   },
   "Properties.RemoteAudit.pooledCoversRun": {
-   "type_hash": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b",
-   "unfolded_hash": "de78e51fc8a3c6e19dac2023ba8d86bc132b8182a74b71a2c4c91994aac204cf"
+   "type_hash": "000aab473ee9e88b263e212cd76589097841f57e8e2b3bd06fb6dac398afc1eb",
+   "unfolded_hash": "e0585302c222e8363b954d08df5ddf15e7208fbd427c2b0bfb874770d0c4f865"
   },
   "Properties.RemoteAudit.receiptsBelowLimit": {
    "type_hash": "80b7bc07dd0a13d6afe9f84c7dbeddf1510a7f018442f3fc995a863b3c69d1d1",
@@ -2692,11 +2692,11 @@
    "type_hash": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f",
    "unfolded_hash": "7ff67e61406ade02debf8ba99511046c3c5a32eaef1000efa42ef7d069959e71"
   },
-  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": {
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "owner": "@lean",
    "signature": [
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod :",
-    "  Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod :",
+    "  Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod"
    ],
    "assumptions": [],
    "premises": {
@@ -2709,9 +2709,9 @@
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
      "Accounting.Assumptions.WordCostsMacs",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.RegisteredBeforeDraw",
      "Properties.Pouw.Period.SaltIsLiveCoin",
      "Properties.Pouw.Period.SampleIsCoin",
@@ -2720,8 +2720,8 @@
     ],
     "reads": []
    },
-   "type_hash": "8e473fef8f065ddce579a5caca0e4e7ce35b129bbd576c43ef682e628f4a1de3",
-   "unfolded_hash": "07df4ce3f7a1882e144c870291188c430eb296540f401e0e3b268f62362f2e7e"
+   "type_hash": "9152e842487b7fc7d74554af82e9266510a2ec46be1c971d8dd5a0646d3db35c",
+   "unfolded_hash": "a9b91d25dbcdf96c818ffb95f0d02fc6106ca7eb8e2074aa16ba2db4af51efb1"
   },
   "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
    "owner": "@memory-accounting",
@@ -7443,10 +7443,10 @@
      "Accounting.Assumptions.TS.OperandHMu",
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
      "Accounting.Compose.SplitRate",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.RegisteredBeforeDraw",
      "Properties.Pouw.Period.SampleIsCoin",
      "Properties.Pouw.Period.ServiceSound"
@@ -7454,7 +7454,7 @@
     "reads": []
    },
    "type_hash": "9760d3f0de8b2e011d055cb27ac03744c5ba66617c21c1e80df0b8673106c567",
-   "unfolded_hash": "f2a2d59c47ae6b30d9ce654e3fca4275848e1a2b3b4801207001fba3cbfc61bb"
+   "unfolded_hash": "39a23fa931b5c3e78dfdadf7b74785a1157c344952da28280e97964c264db695"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "owner": "@compute-accounting",
@@ -7468,10 +7468,10 @@
      "Accounting.Assumptions.TS.OperandHMu",
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
      "Accounting.Compose.SplitRate",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.RegisteredBeforeDraw",
      "Properties.Pouw.Period.SampleIsCoin",
      "Properties.Pouw.Period.ServiceSound"
@@ -7479,7 +7479,7 @@
     "reads": []
    },
    "type_hash": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
-   "unfolded_hash": "76b96914fbf16f80e950d631e14ca1abb2be6fe02b5a3f46ac650ff14adf3e9c"
+   "unfolded_hash": "acc6f6c33c03428b58f45882de11ab4fef1ad919c9ad7686e308c88e0b69cc9f"
   },
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -7495,9 +7495,9 @@
      "Accounting.Assumptions.TS.OperandHMu",
      "Accounting.Assumptions.TS.ReceiptLuckAt",
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.RegisteredBeforeDraw",
      "Properties.Pouw.Period.SaltIsLiveCoin",
      "Properties.Pouw.Period.SampleIsCoin",
@@ -7507,7 +7507,7 @@
     "reads": []
    },
    "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
-   "unfolded_hash": "f154d9a153e9865113a1b61f4cde883c035eecdc3898769fc63fe67465396ad0"
+   "unfolded_hash": "cf5e1d63b2919fc94bc34991742e6eae92f0649f3520f06a6b23111bd6802461"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -7521,9 +7521,9 @@
     "domain": [],
     "open": [
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.SaltIsLiveCoin",
      "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw",
      "Properties.Pouw.PeriodJ10R.SharedNoiseLucks",
@@ -7537,7 +7537,7 @@
     ]
    },
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
-   "unfolded_hash": "75269984977afbe853ee0b5411d4da9ca8dcf9bc9f88991fc6c18bb98c869235"
+   "unfolded_hash": "3511249b51ae59cdf897c3a83941517b2b83ee9daa87d4e99bd06c2a9b051a1b"
   },
   "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
    "owner": "@compute-research",
@@ -7551,9 +7551,9 @@
     "domain": [],
     "open": [
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.SaltIsLiveCoin",
      "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw",
      "Properties.Pouw.PeriodJ10R.SharedNoiseLucks",
@@ -7567,7 +7567,7 @@
     ]
    },
    "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "0149e59541e3107c420e07c885f12954a1aa1928494593cc4a48f996a2e8aa2d"
+   "unfolded_hash": "5f6fd3e74c37f03410e9c8394c8b8a128a7dca9fd7aef373d53a77f69d444c2b"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "owner": "@compute-research",
@@ -7578,9 +7578,9 @@
     "domain": [],
     "open": [
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Pouw.Assumptions.SAKServed",
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
@@ -7603,7 +7603,7 @@
     ]
    },
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
-   "unfolded_hash": "2118b9197d0031c1a65d0a0ae13b9686c080195af61c6041991ab8326258ef98"
+   "unfolded_hash": "036e47d466acf667d051f27cffce65216434be0f7beb9b4794137d204482880b"
   },
   "Properties.Pouw.Served.SecurityProofs.servedWork": {
    "owner": "@compute-research",
@@ -7614,9 +7614,9 @@
     "domain": [],
     "open": [
      "Accounting.Assumptions.TS.UnitFixed",
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Pouw.Assumptions.SAKServed",
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
@@ -7636,7 +7636,7 @@
     ]
    },
    "type_hash": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
-   "unfolded_hash": "963b38f75e98b8f12f845d471b0d6dfd0c50db6e8825ba6c4864395056f0f4c1"
+   "unfolded_hash": "6b688bdcfaff3bb7919cf493e56ae8f000a98ae254805aa775177a8e3cd66571"
   },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "owner": "@compute-research",
@@ -7646,9 +7646,9 @@
     "assumptions": [],
     "domain": [],
     "open": [
+     "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
      "Accounting.Compose.PrefixOf",
      "Accounting.Compose.Scope",
-     "Accounting.Compose.WindowPlay.EveryWindow",
      "Properties.Pouw.Period.SaltIsLiveCoin",
      "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw",
      "Properties.Pouw.PeriodJ10R.SharedNoiseLucks",
@@ -7662,7 +7662,7 @@
     ]
    },
    "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
-   "unfolded_hash": "1f97b8dd8fafd799eebd7137e25be690dfd907a3f55f7a4ff9c47f96d910d8c9"
+   "unfolded_hash": "a61f902aed0d3d371e4bab75c2332a65fdeb63a55b163475eac08f70831f2192"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -8009,7 +8009,7 @@
     ]
    },
    "type_hash": "e824841bab9a5e2fabbd9e4bf6fd13362a8d2c96b6dc3100f09cee5da41e417d",
-   "unfolded_hash": "1871ba9848ff5cae772c627b9d3d5550364c9422dca39faae76161205bc03fcd"
+   "unfolded_hash": "2dbb7142099feb78c5c6c492eb7f8f254ae1005ff1c6f973161977245819a4b2"
   },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "owner": "@soundness",
@@ -8107,7 +8107,7 @@
     "reads": []
    },
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
-   "unfolded_hash": "5d6522c2fa1998026a7581dd1f988c22e3d47501d065bdb2a2a7dff2c3aa27b3"
+   "unfolded_hash": "9762a44cb58c6f1e9ae64739d962b25ad9b113c8c68d5da7e77c94585ccda73b"
   },
   "Properties.RemoteAudit.Line.lineChecked": {
    "owner": "@memory-accounting",
@@ -8208,6 +8208,19 @@
    "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
    "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
   },
+  "Properties.RemoteAudit.Shared.runSamplesRecords": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.runSamplesRecords : Properties.RemoteAudit.Shared.RunSamplesRecords"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9ac30e6a1815103d2475b9e3ed839cd4b5807fd2e7b344722104d415a24f0c43",
+   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
+  },
   "Properties.RemoteAudit.Shared.sampleIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Shared.sampleIsSubset : Properties.RemoteAudit.Shared.SampleIsSubset"],
@@ -8220,21 +8233,6 @@
    },
    "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
    "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
-  },
-  "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.sessionSamplesRecords : Properties.RemoteAudit.Shared.SessionSamplesRecords"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
-   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
   },
   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
    "owner": "@memory-accounting",
@@ -8259,7 +8257,7 @@
     "reads": []
    },
    "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "8bf5782c45cb0917d1e3b220c1cf0d29026e3df71ead0ddb7a642a889c526488"
+   "unfolded_hash": "130b62b9ff377c7d29e5c5f798b34de7cbb618fc758228069136a0c771011bb4"
   },
   "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
    "owner": "@memory-accounting",
@@ -8481,7 +8479,7 @@
      "Accounting.Remote.Held.Assumptions.SketchBoundAt"
     ]
    },
-   "type_hash": "19b62bc3d1ba04c73504d6a1c914bb8a0130ee946c842e0d1ee7cfaf8fc6f690"
+   "type_hash": "5ba97d061f66301256bbcec900e3f12accb6a7f00167ce4f8bfe85e2a7cd2df3"
   },
   "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial": {
    "owner": "@memory-accounting",
@@ -8769,9 +8767,9 @@
    "type_hash": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7",
    "unfolded_hash": "fcc46a8922f820346a7a7e3b842192ea15a3733ce591e666c28ca4217fe7f01e"
   },
-  "Properties.RemoteAudit.lineCoversSession": {
+  "Properties.RemoteAudit.lineCoversRun": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.lineCoversSession : Properties.RemoteAudit.LineCoversSession"],
+   "signature": ["Properties.RemoteAudit.lineCoversRun : Properties.RemoteAudit.LineCoversRun"],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -8779,8 +8777,8 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d",
-   "unfolded_hash": "086268618029cf73c75280dbbc176aee9b96ec0ea83b8b60ad423850bd43f8df"
+   "type_hash": "398abc60fc69b8f52338b2555c9e191a9830560d21200fa0ede3b1ad5989b46c",
+   "unfolded_hash": "de37be219487e9eb7e509117c66801fb2cc0ae4ee63f5cbce854e4b5dd725c1d"
   },
   "Properties.RemoteAudit.liveIsRun": {
    "owner": "@memory-accounting",
@@ -8990,9 +8988,9 @@
    "type_hash": "4e42619c9a38980ce0cbfba9b6dcfeef984a6c3755f7e7dac1e64a52a7536e03",
    "unfolded_hash": "82b544743500e6e9b6cf6be9247270fc558bc7a6d55928dc5d9ab85973746385"
   },
-  "Properties.RemoteAudit.pooledCoversSession": {
+  "Properties.RemoteAudit.pooledCoversRun": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.pooledCoversSession : Properties.RemoteAudit.PooledCoversSession"],
+   "signature": ["Properties.RemoteAudit.pooledCoversRun : Properties.RemoteAudit.PooledCoversRun"],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -9000,8 +8998,8 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b",
-   "unfolded_hash": "de78e51fc8a3c6e19dac2023ba8d86bc132b8182a74b71a2c4c91994aac204cf"
+   "type_hash": "000aab473ee9e88b263e212cd76589097841f57e8e2b3bd06fb6dac398afc1eb",
+   "unfolded_hash": "e0585302c222e8363b954d08df5ddf15e7208fbd427c2b0bfb874770d0c4f865"
   },
   "Properties.RemoteAudit.receiptsBelowLimit": {
    "owner": "@memory-accounting",
@@ -15054,11 +15052,11 @@
    }
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
-   "digest": "1e59e34c53e4e192915fdfe8547600135d3cfd63abccbcd6d084688041109b61",
+   "digest": "0402471c4773cb115ed779b0cc9ea12753ea69e5fdfe0145f5f13410f12c73c1",
    "definitions": {
-    "Accounting.Remote.Draw.Assumptions.Counted": "d820cafc5d4165af391a7743baf57ace1483e8fb6bcf5d4edcdf410f81995c7f",
-    "Accounting.Remote.Draw.Assumptions.Live": "677da50ad8a37dfb2a8ddae68f40a988a04851ee512ed7cc90c093ebda638d44",
-    "Accounting.Remote.Draw.Assumptions.Refused": "d53991ea58541e48a5642dd78b13ea996a5a5ff66f59d7755fb05eefe35e2fd2"
+    "Accounting.Remote.Draw.Assumptions.Counted": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
+    "Accounting.Remote.Draw.Assumptions.Live": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
+    "Accounting.Remote.Draw.Assumptions.Refused": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d"
    }
   },
   "Definitions.Accounting.Assumptions.RemoteHeld": {
@@ -15084,9 +15082,9 @@
    }
   },
   "Definitions.Accounting.Assumptions.Stacking": {
-   "digest": "fe6f285c0616785c4d4e78f98e18817432f380d62dcfcb00ba3566f8ee4b44c7",
+   "digest": "7ca9cf40b573c0ed2539443841c61596498817734f127b03ec9a8417a2184751",
    "definitions": {
-    "Accounting.Assumptions.CircuitCarriers": "be29d1c5e01223840401d0246dccf22593f62c50643c17c6db968e95929878f4",
+    "Accounting.Assumptions.CircuitCarriers": "99f59232cf288d13cb7c5f394e99aa3978d8c3bc7d7c2f67e22acc18cc608b56",
     "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    }
@@ -15101,7 +15099,7 @@
    }
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "2d1c99b6a3643f6595a133157b2338ed52861118602b8ffbc5b0f5aedba541b2",
+   "digest": "cb6f59cb74f474ccd98b5d6b76ede9f559132c7a378bc3c20c4a3e511cc18e32",
    "definitions": {
     "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
@@ -15134,9 +15132,9 @@
     "Accounting.RateSketch.appendedTiles": "0a8916fd0aca2e07686594f4045c3e40ebc81acabb478e6090cd091a3aa08dc5",
     "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
     "Accounting.RateSketch.steeredStore": "33418186501154eb79c4c6e8ad5b0ea0ad8ce94ed0aed87b7e953fc7601250d7",
-    "Accounting.Requirement.Placement.Deadlines": "813c1a3277f83608aa52114b44ce69ceac8fa573e3030f6e39517e028e5bd96e",
+    "Accounting.Requirement.Placement.Deadlines": "ad9d24118ce106e6d2cbe144fb0a4f4ced756ae6b004396587332dd31423e97e",
+    "Accounting.Requirement.Placement.executionPhaseTicks": "3a3c6b2725e859415d126a09b4dd1b38447e81693be39ab1b2401ad2d5042874",
     "Accounting.Requirement.Placement.passTicks": "a275bc4a10df11ff2f39fee90206b4cae844c4682ce801e5c6848bbb3da1894f",
-    "Accounting.Requirement.Placement.windowTicks": "a5b0e5331b3ae497865352a31ee721b81ee277abe005b65cc76556cf1cd26ad1",
     "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
     "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
    }
@@ -15239,10 +15237,21 @@
    }
   },
   "Definitions.Accounting.ComposeMonitoringPeriod": {
-   "digest": "96a01a4dc903782b6a599908a03b3458e1a0a5b1b09d102b359861a7a4a03dde",
+   "digest": "0be746cb7c3b547ddd6d984a15e180522de82fcda4ab98ce52c0a1551f244888",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
-    "Accounting.Compose.Declared.periodLayer": "ff094bebdaabd9d5e9ace2e0905ab4511361cbe214bfb93f1942b462d69dcf37",
+    "Accounting.Compose.Declared.monitoringPeriodLayer": "9f5b3efa6406c5cc12a5a61da7f5ed66b017f23304064839fe4600690f1dd7b2",
+    "Accounting.Compose.ExecutionPhasePlay": "c83044b357b1b0a407778073e32f98b6da8f1c20a30d38dbd3cd55e5f19fa2ea",
+    "Accounting.Compose.ExecutionPhasePlay.EveryWindow": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
+    "Accounting.Compose.ExecutionPhasePlay.below": "12df5c5599f57b661e2e73941b584812c2ecbc0c79c62f0e62df2cdc630a22bc",
+    "Accounting.Compose.ExecutionPhasePlay.brecOn": "279e764e031ad78abda7ef38724a7626b4d58c954b278e0640c294a2070e9671",
+    "Accounting.Compose.ExecutionPhasePlay.brecOn.go": "be6420fe4ba2e2369228ec269f65a3705e84ad9369bef547f58771ab5cd4cf9c",
+    "Accounting.Compose.ExecutionPhasePlay.casesOn": "7a3fe9b4b3abb5a9bbaa2ff43e49ccb832f832f5a0298b3ae72d3ec848772eda",
+    "Accounting.Compose.ExecutionPhasePlay.done": "590f71e089f2e1726cbac8894f86ab22b3d2831988ba9e77c89020da03009439",
+    "Accounting.Compose.ExecutionPhasePlay.liveAt": "3765a0301b32ac162961680d59ab170989a88e25c4d964ed64cf0a6aecafe17f",
+    "Accounting.Compose.ExecutionPhasePlay.rec": "39bbc2d8ab93ff4463e68fe58e8b57a4de9b621316dbde8e2484aefaaa3d7aa8",
+    "Accounting.Compose.ExecutionPhasePlay.window": "d961dd403af25e1a004c473ecf576e727dab9ab430e4785d969c66672f97ea2f",
+    "Accounting.Compose.ExecutionPhasePlay.windowAt": "89b8c2f5b7daaa57018ec5014e689e8eea94b8ad076bfe110c8d55d8bcf4ceaa",
     "Accounting.Compose.LiveWorkAt": "203edab3102362aec64440656abdcf8f3054d98a5a0d76734148dd122bdbe273",
     "Accounting.Compose.Outcomes": "a9f20d105e98575e23a6a23788f4a1a7c4d66d94cd1d0766ab4512b476b639bf",
     "Accounting.Compose.Outcomes.Credited": "438ee294cf5c6d99ec32c025241859d478b400ccb0740c4cdab2692dc9318051",
@@ -15254,24 +15263,13 @@
     "Accounting.Compose.PeriodRun": "cbfd28bc15b0c23cb462d1fe83c1978363fd39492e8c43a60f154effd6e4ae18",
     "Accounting.Compose.PrefixOf": "20e76f89ae9e8add775b41b613a433d90b79f449fac25534292108cb5c52f9d2",
     "Accounting.Compose.RoundGame.acceptsUpTo": "ad15995c52279ad19b55491447103c2df23d742e551ed9427c0eeaf15b65338d",
-    "Accounting.Compose.WindowPlay": "abbf6d86f51a72b82e21a67102782a1523ba6a906e592615cf03f7846894a525",
-    "Accounting.Compose.WindowPlay.EveryWindow": "7d600f1e5a7ff58f2d475d03f2f65967e958879802e62845a5d88720f13eb6e3",
-    "Accounting.Compose.WindowPlay.below": "019ca0227d52e3c7f354e5c160a3b416faf36260ab9b34b066a879107e8e5cf8",
-    "Accounting.Compose.WindowPlay.brecOn": "6ec83024bf017ed233aa043c01fd8d6afddec085f6792591d37e11257df8ccf7",
-    "Accounting.Compose.WindowPlay.brecOn.go": "d2c4bdbe13601b8cad341406a76e2c33a58131dd72b8e13422873265e6f2aa61",
-    "Accounting.Compose.WindowPlay.casesOn": "13ca444a78925e3993ba11189f6073b2a5f1f62fb74f6489d81ad614e6e091c5",
-    "Accounting.Compose.WindowPlay.done": "486618ac95373dd92546e07b238cc362b8567d07d5e17c290cdb5ac9b0e7ac3c",
-    "Accounting.Compose.WindowPlay.liveAt": "50d535530ba7ba3b924c45ab00c4f8747c8b43f18f541c411b640c7047a9a2d8",
-    "Accounting.Compose.WindowPlay.rec": "2b88578a46c99df649024dbe30257bda0d92a481ebb5fbec931779029d3ab83d",
-    "Accounting.Compose.WindowPlay.window": "d64cfa739e924c1366c2f7a4187695beec4b80e133ff0f83b4ee1780a0143d38",
-    "Accounting.Compose.WindowPlay.windowAt": "4694c15355f70cc454b7f6218eb88c0e7b971237794f8e7be5ea3e9cc48d0544",
     "Accounting.Compose.consGame": "787ca656bf11d227172039f03bc111809deaf9200c3869cc8d7569b20bdd440b",
     "Accounting.Compose.creditPrefix": "0cf51a60ce843ddf1b28ec3ba0a5e1f1bfd1823877dbcf833f6074f4830be3e5",
     "Accounting.Compose.epsPrefix": "326c39d4dd24cd93e1a7fa6d13d8784177b0a069dd48c7baa6a9ec56c68a5c62",
     "Accounting.Compose.liveCone": "fc1a07b9904b18a8d083652f260526228ad818a5cc1a1e314d3e7be4a07d7daf",
     "Accounting.Compose.liveWords": "0a60576d88cab5b6bc1024f19524c7b48d52b16e2c43faf43a10af4bb7379bdf",
-    "Accounting.Compose.periodGame": "d7785632d2bd96aab4ad655fd9a4bfe35ef856fcfd66b308b52cb986994a4def",
-    "Accounting.Compose.periodMode": "f2a39135d388ff641734b2e8460acc941e987bb58eb8246777f536ab7e235d5e",
+    "Accounting.Compose.monitoringPeriodGame": "ce67d9fd60e6fd015e0fc38215f4d07548f44ae0196972a7c1f652e9902e9a2f",
+    "Accounting.Compose.monitoringPeriodMode": "03845c5720544222c183dd84603208f03ee50de32d66cb925a7aee061bf9039a",
     "Accounting.Compose.rOfPrefix": "1166975ed785ba47325b1d4600a1cc953f9dcbbd8d561d612307cf64bb1afb83"
    }
   },
@@ -15632,12 +15630,12 @@
    }
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
-   "digest": "f69deb61da947cbe896f4c24722efa0002f0d068116cf0417199a04dc2d894c8",
+   "digest": "724650c29da0cc7d74c5686b931546582a183873b6ae81049ceb6bd487f8b90d",
    "definitions": {
     "Accounting.RateSketch.Data.ofParts": "6aab1729f3b0e6ee2a3175149b34c875242f4fdb696a50801c03b1cc8b167ce2",
-    "Accounting.RateSketch.SketchDeployedSession": "a840924e954cd6cfc03b388148c9df8f4384e2814b1ef1e93f1f46bdd0eb53e5",
-    "Accounting.RateSketch.SketchDeployedSession.win": "42ced0cac300e6968aa81375ebf78f5e1b400b8f51d80d9d3b8775309e0de629",
-    "Accounting.RateSketch.SketchDeployedSession.window": "50e54c2c9e6cc7a8c40bb09890403aaac639b933d2273660bef56068924b8bac",
+    "Accounting.RateSketch.SketchDeployedRun": "9934a127812af1b0a22e7fd5c7d1f4c520929e9b0201a4d59823ad56857ba9b5",
+    "Accounting.RateSketch.SketchDeployedRun.win": "70c8aa94c2e58d7a69fa5cacc4a13ccf0853fc164a9cd3975dee57f53a37f702",
+    "Accounting.RateSketch.SketchDeployedRun.window": "55e375b0dddc370d284f9934e825486298a20e71dea6d5d5351556c47cf20b36",
     "Accounting.RateSketch.SketchDeployedWindow": "4c6c1a6462b2f8ab95c02f58893070e0f7163cbf956c3f9fc84019d51b34cb0b",
     "Accounting.RateSketch.SketchDeployedWindow.dev": "8db66a39493ea3797daec4d26ba6e36c9484594fa7c326a4c8072c207ea96535",
     "Accounting.RateSketch.SketchDeployedWindow.device": "d018fc0b915935f46706d5e223c6779d0b8a14abed9f67b60b6ee681aa6fd5fc",
@@ -15647,9 +15645,9 @@
     "Accounting.RateSketch.SketchPassCoins": "371f4c1a0f16b2cbde2f4f192f39143871a4c1b09b6109ac354d76767e989702",
     "Accounting.RateSketch.SketchStore": "00773f858bbb7e05a6df4502dcf5b3ea2b7a613a465ce8947835a2bc95879959",
     "Accounting.RateSketch.SketchStream": "29266ed00efc5422dcdbe1740e6ce8bf08ddc1709078474088ff212adf03a4ab",
-    "Accounting.RateSketch.SketchSummarySession": "33a8f4a669f8005d7daebb73994e3298112be3d40c4752ab544e8f043452aa1b",
-    "Accounting.RateSketch.SketchSummarySession.session": "164adab63c15013427f713198fdd8864781753bc703577a574526d5c32507fec",
-    "Accounting.RateSketch.SketchSummarySession.win": "5963628a8e4cce68a298d71dc8ba6b1384b95dddac92e141fb979c95a32f8ba8",
+    "Accounting.RateSketch.SketchSummaryRun": "9920e8f032c82e1dbe3df783a4256eefd850159e9e0c06c5e53f61a6a5047d9f",
+    "Accounting.RateSketch.SketchSummaryRun.session": "e6d268234a633b92dfcb9bb90ac312216f25c93a7492a8053c9adf94a791d88b",
+    "Accounting.RateSketch.SketchSummaryRun.win": "cddc8a874304e4f95ff2b43c54403dd72db120c01c4687057791c32ab14864a7",
     "Accounting.RateSketch.SketchWindowCoins": "d46e219fc4d46dc4953b7f2258d5239e8ff7ff2c147a5201dec86209f9d74a11",
     "Accounting.RateSketch.gammaSketch": "e1b396c8315bcc6c1414c55fc8688b2fb9dfe9aef33f2e78fa3e94ab9607f0f5",
     "Accounting.RateSketch.instFintypeSketchPassCoins": "8d2911ee429f2d713860656051d012aa2ba52702c03f9e2d722112da5b191221",
@@ -15657,37 +15655,37 @@
    }
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "cd03dd65a81077a691d9e9f557c0e5799db662b4b58441104b15d5e632c492e9",
+   "digest": "daf32ef59b378150cbc3a074bdfaaaaa504abceb0d8d3b62a5ae35861eabd9fe",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
-    "Accounting.Remote.Draw.Committed": "8d5a27ed5020df51f364fe17853a01de1eeabd27b7f472291f38a9ea31848b9f",
-    "Accounting.Remote.Draw.Committed.hide": "39820921bfd5da58c6825f3b7f2768060a4715fb12886a060ebfed737b6a813c",
+    "Accounting.Remote.Draw.Committed": "10f9c89bccaea4ae435ed6a80dd375b86a9a9536f9394561b23fe4320db4cde9",
+    "Accounting.Remote.Draw.Committed.hide": "842e5ba915411c8d4d6d2b346b49c666cc7624f082d5b5e04dc6fc4aabf3396d",
     "Accounting.Remote.Draw.Committed.junk": "c71c8a95a334089ed6f87c9c3b3ad81ab4c41ce7c2308cab57cf705076a1391d",
-    "Accounting.Remote.Draw.Committed.play": "fc3c2b39e559c421d9e498718c83f68a71e89aaea72528aa1885eec3e7e14467",
-    "Accounting.Remote.Draw.Committed.view": "ef821b4c4ca72a36487ad098844c31f66680c424d505fe7038f718a2e940bd25",
+    "Accounting.Remote.Draw.Committed.play": "3adb7a360912a404984a66e69bbbb5180d53bff534c57d0c402e0fe6da624fc5",
+    "Accounting.Remote.Draw.Committed.view": "a430f397bd26ad24167c8e41351f6b1b9991e434739b6ae6340757a412d7c9b2",
     "Accounting.Remote.Draw.DrawCoins": "b6583366ba2d2e6689b91601af1db693ca50619eb89988eb26a42b73ac5b4c98",
     "Accounting.Remote.Draw.Receipts": "ce6e4c2e3f4f4ea89fcd62061255530c3412c5525ed3f1ce831e528dec8967d8",
-    "Accounting.Remote.Draw.Receipts.Moved": "9954968df2b6fac49bf5ea57a3133b30974eb8b2636fa02d07759a886f75b9e1",
-    "Accounting.Remote.Draw.Receipts.Shows": "008ccf5b38ff55cd73a659795a402c9c1895a5ef66edca77d469e83ff03c1321",
-    "Accounting.Remote.Draw.Receipts.binding": "d9b136b3828340944b73946c568525ed1789feac08904481194f5293b724efb8",
+    "Accounting.Remote.Draw.Receipts.Moved": "bd2276854e7ce692ab1a8bdaea39434e941f9fdca3cf050b0bf95ba9e828f09b",
+    "Accounting.Remote.Draw.Receipts.Shows": "11357e6dc2a3f1e50f6ce36625d27347222dd79ae8d9f136f29271a970473127",
+    "Accounting.Remote.Draw.Receipts.binding": "022d46213067db3e2581f0da0c85cd8c08f44849f04e3669ffd54a133f01aa0e",
     "Accounting.Remote.Draw.Receipts.hash": "10ed88ea7cdad972db352f16811db8954115b33ee69103ab412d437c9c6a2c0e",
-    "Accounting.Remote.Draw.Receipts.held": "fa79a849b759deca6cd7b19c1bc45451195175da01216d846906610845474afc",
+    "Accounting.Remote.Draw.Receipts.held": "1e9680d7df5b7d962476e1f9651a238a2f6814839d42078443d5d624bc677be3",
     "Accounting.Remote.Draw.Receipts.opened": "211121bc348717e335ae04b48dd926b81de96fb9c8372a9648d285859f3764c1",
     "Accounting.Remote.Draw.Receipts.rank": "5ae86ae2dd4eb61b619a38d0d8f5544ae76c9b4214105baf7d21869490330bd1",
     "Accounting.Remote.Draw.Receipts.root": "9e73ebcf4f1dbdea1501d917283e6b6faeb590b573498fdb1f7b12d23c81db00",
     "Accounting.Remote.Draw.Receipts.verifier": "5082628e5b4e9c2cba371683561f315de02da8647a30a4ec1b73edd174fb1a80",
-    "Accounting.Remote.Draw.Session": "e8656180e0049d267e94c77655b1b16f2539777441d63328a96fd5a4e10bfd0d",
-    "Accounting.Remote.Draw.Session.bound": "6f9296010e373666d84c7b7458bfa01bbdb031d140887577858f00ff0e2fcc00",
-    "Accounting.Remote.Draw.Session.correct": "bd3e90c291c744c2c714f6db4e7b1b3e77faa1ca5e06b624aa819a218e398ab2",
-    "Accounting.Remote.Draw.Session.distinguisher": "a7d5960ddff032357bca143aec3f3e36ce980000b0293df8f53c015ba2e04a4b",
-    "Accounting.Remote.Draw.Session.good": "bbec865ecac8bcb42fca408e7202f51356a39ab405a141f2afe58530dd1271b0",
-    "Accounting.Remote.Draw.Session.incorrect": "6db363e0c6b291a2437a4a244dea2608d7a22d4ccbca1c3467e5fc85bef7c57c",
-    "Accounting.Remote.Draw.Session.lands": "3d6800c04c84e726a6664df89f5abc07a1ad37b081a426bcac30ad35e3cde40e",
-    "Accounting.Remote.Draw.Session.opened": "976a1c9e289005247c199b0b66f96a40d796c1b073abcb052e8909210dda5bc6",
-    "Accounting.Remote.Draw.Session.pooled": "ff7717b6100438b9af74ae5b8c8b0b309c5981a1ed56c6860327365ef4a7676b",
-    "Accounting.Remote.Draw.Session.potential": "5f0fc1c488c5728863c0cddad7c40862f69f69abb0e744de4c86c9a484c601c3",
-    "Accounting.Remote.Draw.Session.samples": "3a758aab0574cdb38b10b8917297de7948a1a46b279550fe9307343abb9c1d21",
-    "Accounting.Remote.Draw.Session.size": "eb2c793ba96148aa163711e2c4a99f30d3213e74694fe86b30a7247a0cf8a712",
+    "Accounting.Remote.Draw.Run": "8c9a1d882254023547ee2e2fc997b9e74253a0bb7ba490c9442181f53520c600",
+    "Accounting.Remote.Draw.Run.bound": "19f4f4bd9e1d70788fda832f1748ac459cc28ebf701e805e47474b71b2240fd8",
+    "Accounting.Remote.Draw.Run.correct": "82e84e8d0ae26274530823fd2e9dce4530e5376d8b79f1c888c4ca0c9ab44ef5",
+    "Accounting.Remote.Draw.Run.distinguisher": "9c93d496a71d5cac12c962e669ae9c1f6b5184dea866ea7661aed1f3a01dcd74",
+    "Accounting.Remote.Draw.Run.good": "acda2cb8e5a2ba6c735a656830a7850eebf7ccca40600ac972d7121438ef3ba8",
+    "Accounting.Remote.Draw.Run.incorrect": "2e198b05c5facf4aa2bddf34d215f7e224847603809e1f5d1f211cd67c10d1b0",
+    "Accounting.Remote.Draw.Run.lands": "9f25fe758accba548339c3c9ecd23f9c7a18154ba15d4ff899a4184ccfe57d1d",
+    "Accounting.Remote.Draw.Run.opened": "c63ea1e4f282c7c113bc094559bf7caa5748adc09048f4731477c168642df0f6",
+    "Accounting.Remote.Draw.Run.pooled": "3bbedd6fe54c10219b3d8051186136ec636d6bf7953e8d84221de3e98692a875",
+    "Accounting.Remote.Draw.Run.potential": "06ee7a0b3e241eff386f964773be39d3fbfb649aa4254da2b53dd13cb10b7870",
+    "Accounting.Remote.Draw.Run.samples": "a221b61803d90be02eb8cce81709a75453baf2b688f81157571ef2ff3927b035",
+    "Accounting.Remote.Draw.Run.size": "d28408b4549e9330736c82f4fb3ed30710614c7e90c762968a2b21e142b7450c",
     "Accounting.Remote.Draw.accepted": "b0a92a5e05c26a8037ed70a16b94ff1287fdac2e513330dbe5679c1d499b94c6",
     "Accounting.Remote.Draw.arrange": "37920cbd071e929ccbbdeb23969e55343410ffb0a8eb027f49736e34a57ddc07",
     "Accounting.Remote.Draw.below": "01e6a2f311d6d4edc13e8be18327a1c65667b3ce06fcbcd401e05b5c973a969e",
@@ -23549,17 +23547,17 @@
     "Properties.Accounting.JointBridge.WorkOfCreditedWords": "1ac492ee74b4207481893b48f5ce7fd3f30337ee7e15d0a3ac9f583b75c76456"
    }
   },
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "17cfffc2415bf04819091405ecc1f109b0e19d75a64844fd3146918363a07be3",
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
+   "digest": "d64f52d420ba6ddf7ef73b5e3b5cc7c813dc3a13a4b2c72e39b1a5d1a9f1728d",
    "definitions": {
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "7c58cc81b691e9ec820fb94f4210285efb1c39550afbd56296b5477c8580c762",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "27266fc99be26d34e557e1bba2eb785400300802cc58926601d3ac82aec47cab"
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": "6172bdba59bf27689fef68743dc6f62a5d8f58324957dd1ff5ffdcddd5cc15bd",
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt": "1416c2942b25ee937314d840495b8abd5feacecb33922258a361e1874cf69c26"
    }
   },
   "Properties.Accounting.RegisteredCircuit": {
-   "digest": "32be3ea2323e53369460d3c328d08349717304e4e8b69e9abe023b4427b43d57",
+   "digest": "b38de3ca310683e71a2a895436c6ee97613c9ff869e3dc5a9f4be536b82b7599",
    "definitions": {
-    "Properties.RegisteredCircuit.ScheduledRequirement": "65bf0b24087424177fc15c0b71a2f0225160754b2f0cd31d2dfa17a34d6f203b"
+    "Properties.RegisteredCircuit.ScheduledRequirement": "f16cb30c3670a9580f9cd1abdba52f2eb9340152c0283b28a3d421d44f2996d1"
    }
   },
   "Properties.Accounting.Remote": {
@@ -23598,17 +23596,17 @@
    }
   },
   "Properties.Accounting.Remote.Line": {
-   "digest": "44fc8e045265af932816f8e25f300b0e1a5973dde8d4b045c9faa517b611efde",
+   "digest": "cbdc1b0fdac99a6a8850e031e94e299b5acea913464266e5d71f100c2a6c265c",
    "definitions": {
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "5d944429842d4eb4a6277de9f35923d442420b7dbedb344dac35d5b69d1318b5",
+    "Properties.RemoteAudit.Line.LineHeld": "eada5fa890adecca484dad6f2e4c4b5cfa1d034dd79fe89ca26c98742dcd450d",
     "Properties.RemoteAudit.Line.LineRegistered": "0a19ed5ecb3e46cc1cdec14b2943b045ca768feddbd06f60a7b96dc1543f79fc",
     "Properties.RemoteAudit.Line.ReadAt": "9ad2263ec6d5c6edf5c7763d2e1edbf447c3bc031bd241664f91b764b490bc61",
     "Properties.RemoteAudit.Line.StretchBound": "d546939080750b200ac67137b44c05e6fa6354ef969c019a493eb9f301ae42a5"
    }
   },
   "Properties.Accounting.Remote.Line.Record": {
-   "digest": "baf0d256dd8b87366ea40abf7883764dea19a0464cbf77dcf5caa117e8c2e939",
+   "digest": "4a79e96d003fcc36c9cc1ba8a2159cbf32e34ee4e71ad51537bee52c2c5187f9",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "42711f27299bb2712c065ce499996be68bd26c2633bfabda7bdab0a113062b7d",
     "Properties.RemoteAudit.Line.Node.blockBytes": "01096187cab77105f77d1a06703965cd55de643c51b4e42a5d232ab07571c01e",
@@ -23646,7 +23644,7 @@
     "Properties.RemoteAudit.Line.receiptMax": "1507ed9d46115e7a1dd249ed140bb32f7f1e8eac179bbbaf164ffbd9b2076b03",
     "Properties.RemoteAudit.Line.recordCommitted": "9e2c2ddc410ce061360d11b16bce69aafbac62b33a7deb437fe735c0ae947dcf",
     "Properties.RemoteAudit.Line.recordPace": "1316e56cadcaa8849c67b093609407a0feaf4bc4a574736c2a27d058028c4cf4",
-    "Properties.RemoteAudit.Line.recordSample": "5eeab044c58defbae7107ab29ccea7bfc4cdf970bfb74d9fe59e5ec6e62b7b24",
+    "Properties.RemoteAudit.Line.recordSample": "532a4396ed137fa98a253640228c7234ad91b4aa9d6ee17a700efb223b4da383",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
     "Properties.RemoteAudit.Line.spanStop": "08dfa9d81578347c8ff30e3a1b7ca3c1e38c13f6b39385197a7fa52b0e208a9b",
@@ -23684,11 +23682,11 @@
    }
   },
   "Properties.Accounting.Remote.Pooled": {
-   "digest": "acb3ea92b81937035e222250ae91af3bc0daec7cdc26409603b1f69af284d4ae",
+   "digest": "a3994f7e69b03d423fcc159d7ea80b5e2f4f3e41090557c5f22694593443aac4",
    "definitions": {
-    "Properties.RemoteAudit.LineCoversSession": "c41c1e66f974f81f166fc9d66f5a3ceb7fe7385747f6642749e15d2de70a237a",
+    "Properties.RemoteAudit.LineCoversRun": "3ddf70dec63f92cabcb65ddf7b7d24b75eb182c31f51ed322c19a52238f164f5",
     "Properties.RemoteAudit.PooledCovers": "6d7aedb23609c51c95611f267552e64a66656e486d7a59ed68e2fcb418758b59",
-    "Properties.RemoteAudit.PooledCoversSession": "b5de307ec5e92a5039caed5bf2ed36ea3a8c001ccb1ea640beafa1aff0dd8b07"
+    "Properties.RemoteAudit.PooledCoversRun": "7efac083a61e41d68793f3057b02bb4904f2f2d2f692de3f5dcbf9908345a414"
    }
   },
   "Properties.Accounting.Remote.Schedule": {
@@ -23707,14 +23705,14 @@
    }
   },
   "Properties.Accounting.Remote.Shared": {
-   "digest": "c23d0f88cd9a539d8b8282ea1b5e4411115c254197cfe4e9d46e045ebbb147e8",
+   "digest": "ed7772f7bb3fca3be6cf3bea0d0f401b91e8591cdd30415d91499e448009ddaa",
    "definitions": {
     "Properties.RemoteAudit.Shared.AcceptSamplesOpenable": "79c27cf28d687b63cf283211b916b6639e13ef3636868781afa9875c65c4cadc",
     "Properties.RemoteAudit.Shared.AcceptedSamplesOpenable": "a26dae74d7a2c738b8e47108a4a5d15e6a622437ce4b65f8858171752cc94637",
     "Properties.RemoteAudit.Shared.OpeningsUnreadUntilSampled": "1ba56564c7b8df61860b4017469075555e847ea2f548c02d671095af30137a61",
     "Properties.RemoteAudit.Shared.RecordKeptAfterSample": "6e1ecf974f998a754e56e1a5bd56d0414da6cc1a703215fe17bacf7aa479d895",
+    "Properties.RemoteAudit.Shared.RunSamplesRecords": "b299cdf14cc7263316659c5ff768a40dd1c6d7b230fb339b65c30b9e6127c9c3",
     "Properties.RemoteAudit.Shared.SampleIsSubset": "439d1cd43bbe317f6e1ebb67c7aff758075451513aae0f4bbc622610c73c4551",
-    "Properties.RemoteAudit.Shared.SessionSamplesRecords": "ed6a0e97538dc1993593d80cdd3fc1193e64371aad0680b1145766714989fa27",
     "Properties.RemoteAudit.Shared.lengthsOf": "a513bbe2b2c975d42200c7ed0592c3dd5fd34e9625589017b44b456d9e1c5752",
     "Properties.RemoteAudit.Shared.passCount": "31cc2541472556de7eea915e3142f8c57ba7655e16d37005585ac0a761dc342a",
     "Properties.RemoteAudit.Shared.passesBefore": "cd9697ad26ab90b29c1b7e05a4035686e33897780d15ecea28e6ccaa8c6f5e69",
@@ -23726,12 +23724,12 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "baefef31499c9baa404495b95880ef9bfe9df09e940942bd1b09b05f181b524a",
+   "digest": "c0c190d8c2cd0cac68514fad9d93235f51e0a53faf56c77334d6d16fb2f706ea",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "59354073f7e7b662a1701a83fbf84fbd39579e4cf0883216533374cf173659b9",
-    "Properties.RemoteAudit.Subprotocol.LineHeldBy": "7937a4a637647400d1cd889e9c69f65d7362f56c0893981bae517be5b231d46b",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "0e5cac81a4641e22e67664d4c831c8123cfdcade763cf44deab1b5cfa0767573",
+    "Properties.RemoteAudit.Subprotocol.LineHeldBy": "4f4117c4d5da44abee2d5ff68c56edc9f54b731808c5122db0d175ddd298702d",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
@@ -23747,10 +23745,10 @@
    }
   },
   "Properties.Accounting.Remote.SubprotocolDeployed": {
-   "digest": "dd518d2b0def9f4973adade1e12eee95e77a3bfc7e79f82956e6905fbc5677f3",
+   "digest": "e2d24c641091494a19ef428f792ab94af43b169e7b3a71d838d7ea19df32bfdf",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "39766f97e5ab8136f3e347101806cd299e484f3a2fe3f3c7f0e6b67a0fc5f3db",
-    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "6eb5a768792e17e57446394e98723dde8eb0c6d9c055ee6127a2565f8d9e3aaf",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "5567f7d2c5135b60d9a5b9fbe6b1c7d90413934780d65b22f17f61058adfec43",
     "Properties.RemoteAudit.Subprotocol.PublishedEps": "602e59d6e1ee0893199459628a76fef1d944b48391c6e5b6e196c7f977b68c0e"
    }
   },
@@ -25120,31 +25118,31 @@
    }
   },
   "Properties.Pouw.Period": {
-   "digest": "27de2732fbcd17e9b447a15632cec8d4d9530619a6b24eef7e0d1f1c4bf0a0c8",
+   "digest": "8b6521c8b294f4812421afe361434b604685ea0d9ac0f91f22dce31304d6eaa7",
    "definitions": {
     "Properties.Pouw.Period.Accepts": "c21427a1473ddc7fe78691ec89d29af259b32f87247df72976875fd535bb0394",
-    "Properties.Pouw.Period.CheckedCreditPeriod": "99717f69a0bdbaf887aa2f1e7030b6db373eb5f6a8f82652b46431375342eaf2",
-    "Properties.Pouw.Period.CheckedWorkPeriod": "060e4a25cfcd476b1dfc64823f3c48cfa0d62b2fbc8ef22479a1a49d42a727f9",
+    "Properties.Pouw.Period.CheckedCreditPeriod": "cddea15e23bb083e3a9885c2d638304c2fcc60bed185e59b03ab3b3a052c5a40",
+    "Properties.Pouw.Period.CheckedWorkPeriod": "d171d2957fac2b442507e376f3b56e67802ea1087d49db83ba8b784b9d5a1cf5",
     "Properties.Pouw.Period.Executions": "15befbb75f8a848e7bdd870c214c9c261aed7019550491190b6601e9c6dfb512",
     "Properties.Pouw.Period.Executions.AcceptedUpTo": "f201892cf63bd6edd6b3a6ebb0157140e3f3284a1568f108064fb4e6ca4c3a73",
     "Properties.Pouw.Period.Executions.ev": "7259707cb574416b1b8036c193cf257261e99a165b6cb1023421e46ba449d0be",
     "Properties.Pouw.Period.Executions.prefixLen": "9a66ae5af1bf5a8e63f575a786aa87cd272fa5d2cafd5e1da475d9445a523d75",
     "Properties.Pouw.Period.Executions.reg": "b67880277ebe105650716b07e21c3987d5c39092926148af2173aa47ca1e3bba",
-    "Properties.Pouw.Period.H1CheckedCreditPeriod": "972fc2cecbfbd3af3333ca8a3c96d84a227c7fda502a85b956bf4e22dc893b44",
+    "Properties.Pouw.Period.H1CheckedCreditPeriod": "bfab1d2bed82bcbddc70cb67ff937f4fc8a66c88e4d3354e676b7a048fba5b79",
     "Properties.Pouw.Period.RegisteredBeforeDraw": "d190084769ac0a2117e06d92d8f5c0da14134e26a158904e27266b557c89c20f",
     "Properties.Pouw.Period.SaltIsLiveCoin": "62bf1dbd153325c70fa3981569702dee28e3d52af7dd5a58c64d6dd060a87331",
     "Properties.Pouw.Period.SampleIsCoin": "bc966fcdb3f6f1e6db43a4a6188cc8ffa596c76ea084f6e793d77468ba46ada5",
     "Properties.Pouw.Period.ServiceSound": "6abffbd796bf0fa56d131433a69dcfc0f8c7bc5d4d710313849e835b90e26e92",
     "Properties.Pouw.Period.StagedPins": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1",
-    "Properties.Pouw.Period.checkedLayer": "5ae2188ebd838e6bfe0e6b159ff9aad86de645758cb443fd057f99ddde180132",
-    "Properties.Pouw.Period.checkedLive": "5f67cde4acdf782ea2eb675e68ebf71eff5374401bfc9595df00950db9e32d87",
+    "Properties.Pouw.Period.checkedLayer": "40f7e0e7a188c5fb05ea4e06eac31fc6e74e027607dbdd1b05f68db0f845238f",
+    "Properties.Pouw.Period.checkedLive": "be956a4d42f16e3c705356685a359cbdab8492795290adcf68aeb30b63c0cd68",
     "Properties.Pouw.Period.checkedRun": "57131614fd6f2d8e6a41d5941212acb0814fd1acc2156c718e8c5c26b0307b25",
     "Properties.Pouw.Period.flatAtCoin": "44ecaec7da386c059a1ce1ae9a33c9369b1ef1598e9eda30ac09727d89a8ca34",
     "Properties.Pouw.Period.stagedAt": "f23f95cf2dabffd3e340832985219360b36cda377fab4717e1363cbaf5cafda1"
    }
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "9e6293f04121274c51dc44e0a868bf71ab2f726182344bba240616206c8c7d46",
+   "digest": "ed0e8e103288e2716a9482e3b5960e72a0d0a17fb166a9b8341e813f5a13c58c",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -25162,7 +25160,7 @@
     "Properties.Pouw.PeriodJ10R.CreditWindows.ev": "5d97042b68f974c30d422a9c9381fce0dc6940b93e0da820f0b8dbeb38d493ed",
     "Properties.Pouw.PeriodJ10R.CreditWindows.prefixLen": "4271c5dd8cadacd18d3d09ac070cc01966c0fb95324f94e8862a9156fc2c4227",
     "Properties.Pouw.PeriodJ10R.CreditWindows.reg": "7924972f2ce6b21894946c383e0035414427b32fa79656a93138cbd6938b99bc",
-    "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod": "2577f54139ca2ee6e53e107bca1c6a2abc7ef994cdff5f7721b27a0571b3a183",
+    "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod": "89fc0a99962b5283d0f0b3383082a26c44cf38d5aa5c30ddb165ebe87261709a",
     "Properties.Pouw.PeriodJ10R.Noise": "9db7acd4bb3369d4c5346106776c1cf40c73ec30f58a551c192a90d33f1f07b7",
     "Properties.Pouw.PeriodJ10R.Place": "2e99d079adf78d0472e2b6fc484d29de695cbdec842c260865508bf580be9e1a",
     "Properties.Pouw.PeriodJ10R.Place.I": "54159bcffe13a9bfd954e981582354ed0d77a6652efea6afe6abc836dd1f1564",
@@ -25190,12 +25188,12 @@
     "Properties.Pouw.PeriodJ10R.PreDraw.served": "fcad7cc776f89b4387de67d5b518e347b68fec5076cf0ae699aa2751385d6d6a",
     "Properties.Pouw.PeriodJ10R.PreDraw.window": "e3514ce2f5c0c0f58b9ddbb4e7542017b939a8b5977a471d00bff2c394b9a18e",
     "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw": "23a8f8237659d197b7e3f6e1d8705e75f826487400abb3a198dace96f5d237db",
-    "Properties.Pouw.PeriodJ10R.SharedNoiseLucks": "74a01360a1920935c289005bfc3de8ebdb5066b785d1af549f86696fcbce86b4",
+    "Properties.Pouw.PeriodJ10R.SharedNoiseLucks": "14ef6309565f3275c47add450c6520e44234393bacae9aee31fc38b58a0ff04c",
     "Properties.Pouw.PeriodJ10R.TileSampleIsCoin": "6d1e72e12ddb1c1f38b4b41d3fe145057d984f8b49a18f7d62c8b999ec576f87",
     "Properties.Pouw.PeriodJ10R.TileServiceSound": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572",
     "Properties.Pouw.PeriodJ10R.WindowAccepts": "b0c80e06df4a2e8ed2c865c01574e0fd2a2ac0cbae60384335b76db1522a8cea",
     "Properties.Pouw.PeriodJ10R.creditDrawn": "d602a92a26854ee5a5b86e4d4f16297f046246126d68cda8672534a7c3a953bf",
-    "Properties.Pouw.PeriodJ10R.creditLive": "63dd34f3c96ff119f29c6d3d019252ed5ad63cd7a1736697836a1ebc253a33a1",
+    "Properties.Pouw.PeriodJ10R.creditLive": "e6e350fa44e20565bfa549b03c6073118a5136c08e228d991a6d6e7daa783554",
     "Properties.Pouw.PeriodJ10R.j10rAtCoin": "8cbeaff53c36a00aa4aff053fae03c6879f0476bdad6282b241d7e8b2149f31d",
     "Properties.Pouw.PeriodJ10R.j10rRate": "e18ddd97bda70a47cda1f7d3ac08a356437b0491b7b558e51a0291dbc2f29b35",
     "Properties.Pouw.PeriodJ10R.pinnedAt": "d8ed54eebcde3c86dfc4c51d9e472e31aa7d021bee817bb996da873b20cf94bc",
@@ -25204,15 +25202,15 @@
     "Properties.Pouw.PeriodJ10R.tileAt": "552661b9a3c21b462288ac7742eba5430bc9bc7ba692d61ab3517f94c39fa5d0",
     "Properties.Pouw.PeriodJ10R.tileCount": "294cbe291655d25c16ca6b696758908921beda6dfe08299ee58d4b1c93638257",
     "Properties.Pouw.PeriodJ10R.tileDraw": "c07e6b3d8516ad948a68197ec9a518ac3c0361df1012d19028bb749f93e31485",
-    "Properties.Pouw.PeriodJ10R.tileLayer": "c94b84c275d06e6cf4a8ee02b2f6e1af3f231b4074de7dc1ee9313792f7a9968",
+    "Properties.Pouw.PeriodJ10R.tileLayer": "2d4c7fb3bf94734d4d3c41ad264be453b66e80a1dffa344ac79928d16127bb0e",
     "Properties.Pouw.PeriodJ10R.tileRun": "8b15a5f30246bc08252ac542e8110745b2f6929b3ad731b107c6e265a109d98f"
    }
   },
   "Properties.Pouw.PeriodJ10RStrata": {
-   "digest": "c29f60f4004b1d0c70216a8882c5501bde5ce7b058893e8d6ad0934d46d3f010",
+   "digest": "380ca37970cef16e14c13fab2a585a70d443b6aca444942e1c54f45670f8dc0b",
    "definitions": {
     "Properties.Pouw.PeriodJ10RStrata.BlockDraw": "8c51d87a44f26cbacd92f87b041c9f78598f3db7ddd2a2faba318647f99e076c",
-    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "3c34a8c7735f15c6e12b1c44f421568370932f336c2c86b613f7d89bf7639364",
+    "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "3272efc800c8bd0ec49f925f88c4b48a3ae5f38f5697ccb706d3f0f594f03aef",
     "Properties.Pouw.PeriodJ10RStrata.Rest": "8a7ce9ec6b58e64025d0e07db7d22b6838a29c7f5500f05be754aefa00e8d31a",
     "Properties.Pouw.PeriodJ10RStrata.StrataCoin": "3b72d8959db0aa1c61278a35b72916d9816258e5e421d654717d40ba985d6b37",
     "Properties.Pouw.PeriodJ10RStrata.StrataSampleIsCoin": "6db67837187e2ecbf7e05c9a0719aff41704ed8cc81e3dc374b720a8d4c07247",
@@ -25225,26 +25223,26 @@
     "Properties.Pouw.PeriodJ10RStrata.relAt": "175453463eda382310efd4972422fa26dfc98094697ae4c6868f723c773475d2",
     "Properties.Pouw.PeriodJ10RStrata.rightAt": "7998f40eaf2fe1b25eda4eace37ea67692654090865471ab3b4c2cf50f845af5",
     "Properties.Pouw.PeriodJ10RStrata.runAt": "ba2c8b169a756bd49693d87e4b73c43e13948ecd2ea88313c0aa8f5c7bf0d2c5",
-    "Properties.Pouw.PeriodJ10RStrata.stratumLive": "122a58bbea7915b3ab244ddab200d75fa8526751cd1582e46247342014fc5772"
+    "Properties.Pouw.PeriodJ10RStrata.stratumLive": "25629451c198f3aaabae3bf2d80058c28d7c4e892fb33a3b13e842ac3393f6db"
    }
   },
   "Properties.Pouw.ServedFreed": {
-   "digest": "273164da406014938119a400d273f1d08d09c387f1db822a6aeff779f471c7f3",
+   "digest": "bd48545a387ca4849fb5a1b9e697eef81cf23f8f65ad615ca56378bdbdab014b",
    "definitions": {
     "Properties.Pouw.Served.CertifiedExchange": "a6929f13489cdf297588075b1af62348834de2858da838b461415ef613750244",
     "Properties.Pouw.Served.OutsourceWithinEgressServed": "19cd4ab81fedf945c477eb836d3259d50e6e9b9dba5d85a0bae33cc138a0561f",
-    "Properties.Pouw.Served.ServedFreed": "6a60dc41ef8a60e47fb81bd4f3125d0ea0654f238c378ea87a3687811eb0e01f"
+    "Properties.Pouw.Served.ServedFreed": "2484c3fa84d1266c3d78237915a51100c4c350a035b85596a0ce3368e06d14c8"
    }
   },
   "Properties.Pouw.ServedValues": {
-   "digest": "5336e0bb7bf98eaaee4dd9b4d080eb163e1c0456795bcdd38cf9a08534b84f3f",
+   "digest": "45a54d9d2ce4e67f4b52a4cd066abdee81d260004e444f07c59308ea3aa55f5f",
    "definitions": {
     "Properties.Pouw.ServedValues.BlockMap": "bc62c1278c493d91a709e67f64a74f32d9c8977b25cadc6cbdaeafadf8d7045b",
     "Properties.Pouw.ServedValues.BlockMap.gates": "f16109f5542ed907db77fbdb501363b78016f50681e59856d18fdfcf0e3f64d3",
     "Properties.Pouw.ServedValues.BlockMap.size": "b2bfad42cef1eade64a9bcf15ff6c72cd5006df6e751a1f181fb441800ac59ea",
-    "Properties.Pouw.ServedValues.RightValues": "4833d71a6691539e325e607053b712920d667b03cd5f89d8a73c9a2c9e30cd2e",
+    "Properties.Pouw.ServedValues.RightValues": "df34ea9274925988edbd9cbd3decd64aa9172bb0d58ca3ad37840dc1d5dc8adf",
     "Properties.Pouw.ServedValues.creditFloor": "ffff1c82d19708c5b5c820a9c621aa7b693faf1f75717b7a5661d0b447ca13ee",
-    "Properties.Pouw.ServedValues.creditedSize": "f6c3c9cf84f62308104b3a91dba729431d7c6a5c6238caaae97a6d901b12512c",
+    "Properties.Pouw.ServedValues.creditedSize": "4be80056b7b97d6b1d81a84ebf1a8760c5cb132506ed4ee439917ab05744aa16",
     "Properties.Pouw.ServedValues.epsSkip": "bfef0dcd964fcd5edd0ff33051be4991d36e6c45f1e9d6fcc8cdf7152eb72e5b",
     "Properties.Pouw.ServedValues.liveSize": "b09df032b09da04f61f9709655600aeb2b8921fd5dc19b8a3740635bebd87a3e",
     "Properties.Pouw.ServedValues.rightSize": "9744e65973999cbc519074fc29f2ef40f158ddeabdacbd2272f21b209a04bfb9",
@@ -25252,11 +25250,11 @@
    }
   },
   "Properties.Pouw.ServedWork": {
-   "digest": "673827be041e6fa2e07627279973b79854bd03d206d6940facd5ed5f1b70fd36",
+   "digest": "90a8f50fd9d45edd67998e0e08acdd3701a232afe97de28cb76c0fc7491574f7",
    "definitions": {
     "Properties.Pouw.Served.FixedAreRight": "9be619b683c72f950f517a112a029aa40bbf146b2b3c751dc6122dcc6d01d74f",
     "Properties.Pouw.Served.FixedBeforeSalt": "cbe84fdbd51a7a9a6aa58fa57c4ccf1dad0c50b4906eea8f5fdae2fffea79153",
-    "Properties.Pouw.Served.ServedWork": "887c9f3b767e10f4dad4b53fd7cc9cda2d35c1e063e90e43ff716726b88e00f1",
+    "Properties.Pouw.Served.ServedWork": "b4133a72c0c7b7e6309243389f61f166ca5c5da2851243a35ea923a8a7869484",
     "Properties.Pouw.Served.saltCoin": "f95cf7355cafb204149cfc4579725f0b76d837194ab042ba8ec7f80e9a304a97"
    }
   },
