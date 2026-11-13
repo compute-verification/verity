@@ -40,10 +40,11 @@ signed over its life, at most `Q` (`Deployment.signedBy_le`).
   coins at the positions of the family's coins whose root is the bytes after. Each has a position its layout places as
   that coin (`position_place`), where the run holds the play's coin, `COIN_BYTES` bytes of it (`coinAt`,
   `printLog_fresh`), so the run released of each family after each root the play's coins (`Lines.Holds`).
-* **What the device signs** (`Deployment`, `Deployment.signer`, `Deployment.signedBy_le`): a deployment is the
-  auditor's pinned challenger (`pin`, `sessions`) with its key's earlier runs and ledger lines (`earlier`). It fixes the
-  run's setup from what the play fixed, under the pinned key and at the parameters' layout, with the auditor's ledger
-  lines the device signs before any coin and at the close, one per sequence number (`Numbered`). Its ledger opens a
+* **What the device signs** (`Challenger`, `Deployment`, `Deployment.signer`, `Deployment.signedBy_le`): a deployment
+  is the auditor's challenger (`Challenger`: its pin, its key's earlier runs and ledger lines `earlier`) with the
+  sessions the auditor designated for it (`sessions`). It fixes the run's setup from what the play fixed, under the
+  pinned key and at the parameters' layout, with the auditor's ledger lines the device signs before any coin and at the
+  close, which the device numbers one per sequence number (`Challenger.numbered`, `Numbered`). Its ledger opens a
   designated session only for the play's run, and its earlier runs opened none (`opens_run`, `earlier_closed`,
   `fresh_id`), so a replayed run never reads as the play's. Its signer signs before any coin the messages of the lines
   the request fixes, and at the close the run's record and close and the messages of the lines at the close, each what
@@ -1079,23 +1080,22 @@ theorem printedRun_length (s : RunSetup) (log : List Release) : (printedRun s lo
 def Numbered (lines : List Json) : Prop :=
   (lines.filterMap fun l => (ledgerEntry? l).map (·.seq)).Nodup
 
-/-- **A deployment of the device**: the auditor's pinned challenger (`pin`), the sessions the auditor designated for
-it (`sessions`) and its key's earlier runs and ledger lines (`earlier`), and at each of the parameters `θ`, from what a
-play fixed: the prover's request `a`, the device's log, the bytes `b` the prover's close left to the device and its
-sample `ρ` at the close. `run` is the run's setup but for its key, its layout and its ledger lines, which `setupAt`
-sets: its session's id and host, its coins and salts by position where the play released none, how it ended and each
-line's time. `opens` are the auditor's ledger lines it signs before any coin, which the request fixes (the ledger's
-reserve and open, and the period's open), and `closes` the ones it signs at the close (the ledger's end and the
-period's close), at most `ledgerLines θ` of them in a play (`ledger_le`). `draws` are the bits it samples at the close,
-and `sign θ i m` its signature on `m` as its `i`-th in the play.
+/-- **The challenger, the auditor's device**: its pin (`pin`), its key's earlier runs and ledger lines (`earlier`),
+and at each of the parameters `θ`, from what a play fixed: the prover's request `a`, the device's log, the bytes `b`
+the prover's close left to the device and its sample `ρ` at the close. `run` is the run's setup but for its key, its
+layout and its ledger lines, which `Deployment.setupAt` sets: its session's id and host, its coins and salts by
+position where the play released none, how it ended and each line's time. `opens` are the auditor's ledger lines it
+signs before any coin, which the request fixes (the ledger's reserve and open, and the period's open), and `closes` the
+ones it signs at the close (the ledger's end and the period's close), at most `ledgerLines θ` of them in a play
+(`ledger_le`). `draws` are the bits it samples at the close, and `sign θ i m` its signature on `m` as its `i`-th in the
+play.
 
-The key's ledger holds one line per sequence number (`numbered`). Its ledger opens a designated session withheld only
-for the play's run (`opens_run`); its earlier lines open none (`earlier_closed`), and no earlier run has the play's
-session's id (`fresh_id`): a designated session is the auditor's, run once, so a run the prover replays from earlier
-is never the one v2 reads. -/
-structure Deployment where
+**The device numbers its ledger** (`numbered`): its key's ledger, over the key's whole life, holds one line per
+sequence number. It is a fact of the device's own ledger code, which writes each line's `seq` as the count of the
+lines before it; that code is the auditor host's challenger service, in Python, so the fact is this field of the
+device until the ledger's writer is in Lean and proves it. -/
+structure Challenger where
   pin : AuditorPin
-  sessions : List Hash.Msg
   earlier : History := ⟨fun _ => [], fun _ => []⟩
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup
   opens : ByteArray → ByteArray → List Json
@@ -1105,6 +1105,13 @@ structure Deployment where
   draws : ByteArray → ℕ
   sign : ByteArray → ℕ → Hash.Msg → Hash.Msg
   numbered : ∀ θ a log b ρ, Numbered (earlier.ledger ⟨pin.key.toArray⟩ ++ opens θ a ++ closes θ a log b ρ)
+
+/-- **A deployment of the device**: the challenger (`Challenger`) and the sessions the auditor designated for it
+(`sessions`). The key's ledger opens a designated session withheld only for the play's run (`opens_run`); its earlier
+lines open none (`earlier_closed`), and no earlier run has the play's session's id (`fresh_id`): a designated session
+is the auditor's, run once, so a run the prover replays from earlier is never the one v2 reads. -/
+structure Deployment extends Challenger where
+  sessions : List Hash.Msg
   earlier_closed : ∀ pk w id, w.toUTF8.data.toList ∈ sessions → ¬ OpensOn earlier pk w id
   opens_run : ∀ θ a log b ρ w id, w.toUTF8.data.toList ∈ sessions →
     OpensOn ⟨fun _ => [], fun _ => opens θ a ++ closes θ a log b ρ⟩ ⟨pin.key.toArray⟩ w id →
