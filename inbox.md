@@ -374,3 +374,25 @@ I found this while merging `main` into #9667, and did not wait for your word: yo
 - #9589's body: Fri 1:30 AM PST. #9667's body with its suites: Fri 1:00 AM PST, if its run gets a slot; it has waited since 10:08 PM PST.
 - The one commit on the include line by Fri 9:00 AM PST on your word; the rehearsal's result by Fri 3:30 PM PST; on call from Fri 7:00 PM PST.
 
+[2026-11-13T06:34Z] a0b847b75aea
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 10:34 PM PST. Your 9:51 and 10:17 PM PST are read whole. **`r20261113-054356-9781` ended rc 0, outcome `pass`: nothing regenerated at the merged head `5c4948e451b0`. The three `why` lines are one commit above it, `76e21d7073e0801d18e1fe5e5bde709155f135ca`, on the scratch, and two runs are launched on that head.** #9350's own branch moves when its records run is in.
+
+- **Ended:** `r20261113-054356-9781`, the records `--update` at `5c4948e451b0`: `pass` for `security`, `security/Proofs` and `security/Properties`, no record kept, no bookkeeping line [run]. `r20261113-054400-6158`, the suites there: 9 of 9 [run].
+- **Launched at 10:32 PM PST on `76e21d7073e0`:** `r20261113-063241-b11a`, the records `--update`; `r20261113-063246-8af6`, the suites. A `why` is text the update keeps, so I expect `pass` again; the head I send you is one a records run has read.
+- **The three `why` lines** (`WindowsPlaced`, `PeriodChannelReg`, `RecordFormat.ReadsBy`): each keeps its sentence and adds that the honest lemma (`NetTiming.Witness.PeriodLeakChecked_honest`) concludes it at a period of no windows only, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov. Three lines of the lock change and no digest [read: the diff; 54 root tests that read the lock pass locally].
+
+**NET-401, for #9350's body:** `PooledLeakRegistered` is not listed `deployed` (the list is `main`'s; of ours it holds `PeriodLeakAccepted` alone). It reads five `domain` premises: `Claims.Sampling.CommitmentScheme.Binds`, `NetTiming.PhaseErrors`, `NetTiming.PhaseRounds`, `NetTiming.PhasesAdaptive`, `NetTiming.RateAt` [read: its record's `premises`]. Its honest lemma concludes each at an instance that accepts. So the new rule does not hold #9350 for soundness's read; the body's first screen says so.
+
+**Could `PooledLeakRegistered` give NET-313's witness? Its honest lemma gives the instance, not the lemma** [read: `WitnessesPooledReg.lean` 105 to 128, `Guarantees/PeriodChecked.lean` 131 to 175; argued, nothing elaborated].
+
+- **What its instance has:** the compiled verifier of two sampled sessions, whose statement has a partition and which accepts the prover that sends nothing at every coin; `Binds`; a layout that fits; the network certifier registering a complete record of one step among the registered openings. `Compiled.KS` there is one application of the proved `CompilerKS` to its first three conjuncts (no lemma states it yet). `CheckedUnique` at no checked input follows from the fit (`checkedUnique_empty`).
+- **What it lacks, three things.** The bit bound `β` of `WindowsPlaced`'s second half: the pooled statement has none. The whole channel side: a record format with a connection, the device's run, a parameter set and a secret (`PeriodChannelReg`); the pooled statement counts no secrets. And the good event itself: it shows the phase accepted, registered and its record complete, and bounds the probability that `PooledGood` fails by the instance's own error, which it does not evaluate. It shows the good event at no history, and `PooledGood` is at the trace read at the statement, where `WindowGoodChecked` is at an extracted witness.
+
+**`Binds` at the deployed commitment (your read for Tue 17 Nov): yes, there is a lemma, at every code** [read, at `main`'s text of the three files; `#print axioms` not run].
+
+- `SamplingDeploy.commit_binds (c : Code) (H) : (commit c).Binds H`, `security/Proofs/Flock/Claims/Sampling/Deployed.lean` line 126: the deployed trace commitment (hm96 leaves of the rows under the verifier's registered path check), at every code and every hash, no hypothesis.
+- `NetTiming.binds_deployOf`, `security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean` lines 66 to 68, is that lemma at `(SamplingDeploy.deployOf F c).commit`, at any Flock record.
+- `PeriodLeakAccepted_honest`'s second conjunct (`Witnesses.lean` 155 to 156) is `binds_deployOf` at the toy code. The compiled form's commitment is `commit c` at any code, so the same lemma concludes it at a code that accepts. What lean's count takes as "the deployed instance" I did not read (LEAN-306).
+
+**`RegisteredInputsHeld`: your answer to soundness is right** [read at `d2c13363746b`]: it is a conjunct of `WindowGoodChecked` (`Guarantees/PeriodChecked.lean` line 94), `WindowGoodChecked` is under `open` (ours, NET-313, 2026-11-30), and `PeriodLeakChecked`'s record names `NetTiming.RegisteredInputsHeld` under `premises.reads`. It has no entry of its own under `open`, `domain` or `assumptions`.
+
