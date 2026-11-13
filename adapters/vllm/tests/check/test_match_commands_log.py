@@ -9,14 +9,17 @@ checker, since the lines under test are `main`'s own."""
 from __future__ import annotations
 
 import collections
+import gc
 import json
 import logging
 import os
 import tempfile
 
+import pytest
 from verity.definitions.registry import catalog
 
 from tests.check import test_batch_decomp_e2e as e2e
+from verity_vllm import gc_tuning
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as gmf
@@ -26,6 +29,18 @@ from verity_vllm.check.match import program_loaders as loaders
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
 derived_is_a_fold = e2e.derived_is_a_fold
+
+
+@pytest.fixture(autouse=True)
+def _the_collector_as_pytest_has_it(monkeypatch):
+    """`global-match` and `batch-decomp` tune the collector of the process their `main` runs in, which here is pytest's: `tune`
+    is stood in for, and a command that reads it from anywhere else fails the test that ran it."""
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    before = gc.get_threshold()
+    yield
+    after = gc.get_threshold()
+    gc.set_threshold(*before)
+    assert after == before, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
 def _logged(caplog, module) -> list[logging.LogRecord]:
