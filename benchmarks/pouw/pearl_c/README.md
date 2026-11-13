@@ -6,7 +6,7 @@ include, and what lets their tests run on a CPU: host builds of that hashing and
 | File | What it is |
 | --- | --- |
 | `sha512.cuh` | Pearl-C's names for the GPU's one SHA-512 (`verity/circuits/kernels/sha512.cuh`): the round constants, one compression and the byte-order helpers |
-| `hash_h3.cuh` | hashing format -h3, SHA-512 throughout: the labels, A's row digests, the tile leaves and the commitment trees, as `verity.protocols.pouw.prover.schemes.pearl_c` defines them |
+| `hash_h3.cuh` | hashing format -h3, SHA-512 throughout: the labels, A's row digests, the tile leaves and the commitment trees, as `verity.protocols.accounting.pouw.prover.schemes.pearl_c` defines them |
 | `hash_host.cpp` | `hash_h3.cuh` and `../pearl_c_sm120/hash_fast.cuh` built for the host: a grid's blocks run in order, a block's threads in order or under one barrier |
 | `simt_twin.py` | a host build of the same kernels that runs a block's CUDA threads thread for thread under one barrier (`build()`), for byte tests without a GPU |
 | `host_threads.h` | a CUDA block's threads as contexts on one host thread, for `simt_twin.py` and `../pearl_c_sm120/hash_decode_host.cpp` |
