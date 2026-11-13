@@ -443,3 +443,31 @@ resume. **Kernels' bytes are owed 35 minutes after the head.** Your dry run of
   something), so `build-reads.txt` matters as before: I compare it by git myself.
 The served Definitions' map is out of chain 2; the kept and merge maps ride, and lake if
 it certifies. The Pearl-C directories do not move (my section above).
+
+## Fri 13 Nov 09:20Z: GO NOW, a first pass of `moved-head.sh` on top's trial tree, which has the group map in it. Return as soon as the cubin's sha256 and the tests are in
+
+top (TOP-398, 09:19Z): chain 2's head is now expected 11:15Z to 11:45Z (the stager
+rehearses its whole stack first), and **our bytes are owed 35 minutes after that head**.
+Your job has never run on a tree with the group map in it. So we rehearse too, twice:
+
+1. **Now: `origin/cursor/top-moves-chain2-trial-f2f4` at
+   `dd0c5b48fe5ee7c47c6e80bb3306e074c88726fc`** (fetched by me: on chain 1's head; ten maps,
+   the group map last; `verity/protocols/{accounting,proofs,policy,compose,interface}`;
+   our kernel directories still in `benchmarks/pouw/`, with `hash_h3.cuh:18` including
+   `verity/circuits/kernels/row_commit.cuh` and `hm96_rows.cu:17` including
+   `verity/protocols/proofs/flock/prover/cuda/sha512.cuh`). top: PoUW's two rows are not
+   in it, the served Definitions' map did run there (it is out of the real chain), the
+   difftest map did not. **It answers one question: does the job run with the group map
+   in, and does the H200 kernel build to `5a6d7461f5f0…` there.**
+2. **At about 10:15Z: the stager's rehearsal tree** (the real step list on the paused
+   `main` `53bb345aa7e9`, with PoUW's two rows; without lean's stages). I resume you with
+   it when top posts it.
+3. **11:15Z to 11:45Z: the real head.** The gate. The cubin's sha256 first, at once.
+
+**Do now, on 1:** `moved-head.sh` as you wrote it, on a CPU node with the toolkit, from a
+pushed ref (the branch above is on origin). In order: the cubin's sha256 (write it to your
+note and sync at once), `fixture.py`'s check by the whole `build.sh`, the other four
+binaries, `build-reads.txt`, `run.py`'s and `fixture.py`'s sha256 and `source_digest`
+beside `main`'s, `verity.__file__` and the adapter's printed, the tests. **Say every fault
+of the job itself that the new layout shows, and mend the job for the next pass.** Commit
+and push the job's changes. Return as soon as it is done; I expect about half an hour.
