@@ -332,7 +332,8 @@
   "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
   "Proofs.Properties.Verity.SampledTwo.SessionAsk",
-  "Proofs.Properties.Verity.SampledTwo.LastSlot"
+  "Proofs.Properties.Verity.SampledTwo.LastSlot",
+  "Proofs.Properties.Verity.SampledTwo.SessionReplay"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
