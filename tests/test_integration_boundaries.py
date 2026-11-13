@@ -78,7 +78,7 @@ KNOWN = {
     # Listed ahead of the served circuits' move into the vLLM adapter, which makes each of these an integration's import;
     # each group says whose it is to remove.  circuits': the proof-block cut is handed the catalog, and core's tests take
     # what they check from `verity`.
-    ("verity/definitions/call_scope.py", "verity.definitions.registry.catalog"),
+    ("verity/circuits/call_scope.py", "verity.definitions.registry.catalog"),
     ("verity/circuits/tests/test_codec.py", "verity.definitions.registry.io_shell"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.dsa_topk_mask"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.prims"),
