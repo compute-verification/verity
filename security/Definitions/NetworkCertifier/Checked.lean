@@ -58,7 +58,7 @@ property `valid` of the whole run, not of the inputs alone.
   relation it is used with accepts at. `traceRun` is the trace's run, the incorrect proof blocks' committed gates held
   at the trace's values (`heldAdv`), which `RLeakChecked` accepts at. A check that holds on one run need not hold on
   another: the two differ wherever they hold a committed gate at different values.
-* `PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes` and `PeriodLeaksChecked`: a monitoring period's inputs, as
+* `MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes` and `MonitoringPeriodLeaksChecked`: a monitoring period's inputs, as
   `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
 -/
 
@@ -161,7 +161,7 @@ def PooledGoodChecked {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L 
 /-- **The covert sender's channel over a monitoring period**: the schedules in `Ss` give connection `c` at most `cap c`
 cells and the record format holds each (`RecordFormat.fits`); each secret `z ∈ Zs` runs on schedules in `Ss` and is
 decoded from the cells the client receives (`cells`). -/
-def PeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Conn Cell Ob) (cap : Conn → ℕ)
+def MonitoringPeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Conn Cell Ob) (cap : Conn → ℕ)
     (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn)
     (srvOf : Z → (Fin m → Ω) → Srv) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
     (cells : CertifierSchedule Conn × Srv → Conn → List (ℕ × CellView Cell)) : Prop :=
@@ -170,21 +170,21 @@ def PeriodChannel {m : ℕ} {Ω Conn Cell Srv Ob Z : Type} (f : RecordFormat Con
 
 /-- **Each window reads only the earlier windows' coins**: window `i`'s acceptance event `acc z i ω` and incorrect set
 `W z ω i` are one at any two histories that agree before `i`, and the set is among the window's `n i` proof blocks. -/
-def PeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+def MonitoringPeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) : Prop :=
   (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → acc z i ω = acc z i ω') ∧
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i) ∧ ∀ z ω i, W z ω i ⊆ Finset.range (n i)
 
 /-- **The conditional escape**: given the earlier windows' coins, window `i`'s audit accepts with probability at most
 `(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. -/
-def PeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+def MonitoringPeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (q : ℝ) (e : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
 
 /-- **The leak relation with a valid run at each window's own incorrect set**: window `i`'s audit accepts while its
 observations `obs z ω i` are not accepted with a valid run at `W z ω i` (`LeakAtChecked`) with probability at most
 `e' i`. -/
-def PeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
+def MonitoringPeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
