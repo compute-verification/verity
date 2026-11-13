@@ -5,6 +5,7 @@ and every time is given."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -22,12 +23,13 @@ FLAG = {"off": "false", "shadow": '"shadow"', "on": "true"}
 NO_DELEGATION = (f"its token is {READER!r}'s, which doesn't hold review-36 in main's registry, and it carries no delegation")
 
 
-def _main(env: Env, mode: str, registry: str = json.dumps(REGISTRY)) -> str:
+def _main(env: Env, mode: str, registry: str = json.dumps(REGISTRY), flags: str | None = None) -> str:
     """`main` moved to a commit whose drive.toml sets `signed_verdicts` to ``mode`` with the low-risk lane off, so every PR
-    needs a land verdict, and whose registry is ``registry``; its check listed with no task.  The origin's store gets its
-    remote, which `StoreLabels` and a signer's read of its delegation pull from."""
+    needs a land verdict, or is ``flags``, and whose registry is ``registry``; its check listed with no task.  The origin's
+    store gets its remote, which `StoreLabels` and a signer's read of its delegation pull from."""
     env.o.with_store_remote()
-    main = env.o.change({DRIVE_FLAGS: f"signed_verdicts = {FLAG[mode]}\nlowrisk_lane = false\n", str(Q.REGISTRY): registry})
+    flags = f"signed_verdicts = {FLAG[mode]}\nlowrisk_lane = false\n" if flags is None else flags
+    main = env.o.change({DRIVE_FLAGS: flags, str(Q.REGISTRY): registry})
     _git(env.o.origin, "update-ref", "refs/heads/main", main)
     env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
     return main
@@ -92,6 +94,29 @@ def test_in_shadow_an_unsigned_mark_and_verdict_are_each_logged_and_a_registered
     store.add_label(lab.target, vocab.LABEL_AUTH, labelauth.Signer(store, _mint(OTHER)).sign(lab), "review-36", ts=lab.ts)
     (again,) = _unauthenticated(loop.tick())
     assert again[:5] == (1, [one], vocab.REVIEWED, "review-36", "2026-11-02T02:59:00Z") and "which doesn't hold review-36" in again[5]
+
+
+@pytest.mark.parametrize("lane", ["low-risk", "verdict"])
+def test_under_this_trees_drive_toml_an_unsigned_mark_and_verdict_count_as_written_and_none_is_judged(env, monkeypatch, lane):
+    """The drive.toml this tree ships (`signed_verdicts = false`), with labels written with no token, as every mark and
+    verdict before signing was: a low-risk PR is built on its mark alone, and with the low-risk lane off a PR is built on its
+    mark and a reader's verdict; no label is judged (the issuer's keys are never fetched) and none is logged."""
+    shipped = (Path(__file__).resolve().parents[3] / DRIVE_FLAGS).read_text()
+    off = shipped.replace("\nlowrisk_lane = true\n", "\nlowrisk_lane = false\n")
+    assert Q.DriveFlags.parse(shipped, DRIVE_FLAGS).signed_verdicts == "off" and not Q.DriveFlags.parse(off, DRIVE_FLAGS).lowrisk_lane
+    _main(env, "off", flags=shipped if lane == "low-risk" else off)
+    head = env.put(1, {"a.txt": "1\n"})
+    env.o.store.add_label(label_target(1, head), vocab.READY, True, "lane-1", ts=TS)
+    if lane == "verdict":
+        env.o.store.add_label(label_target(1, head), vocab.REVIEWED, "land", "review-36", ts=TS)
+
+    def never(cache, log=print):
+        raise AssertionError("the issuer's keys are fetched with `signed_verdicts = false`")
+
+    loop = _loop(env, monkeypatch, keys=never)
+    recs = loop.tick()
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]] and _unauthenticated(recs) == []
+    assert loop.world.labels.verify is None and loop.world.left.get(1) is None
 
 
 @pytest.mark.parametrize("broken", ["keys", "registry"])
