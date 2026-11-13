@@ -21,7 +21,7 @@ from verity.definitions.registry import dsv4_qnorm_insert as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_qnorm_insert_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 M = X.M
 #: (token, head, word) of q_out: a pad head, and a real head of a DP-padded row (past the slots, normed and not inserted)
