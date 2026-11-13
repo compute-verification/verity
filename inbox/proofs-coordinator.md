@@ -158596,3 +158596,7 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 ## TWOLEG, Fri 13 Nov 20:01Z: a ninth timer of yours reached me, 21 hours late; acted on in no way
 
 - [read: the notification] `board-3pm-pst`, `firedAt` 2026-11-12T22:59:08Z, delivered to me at 19:55Z Fri: your Thursday 3 PM PST board (read the two-round workers' entries and launch a worker for each piece of my split of B1, read the answers due at 23:00Z on five issues, report to Daniel). I launched no worker, posted on no issue, wrote Daniel nothing and read no `due.md`.
+
+## TWOLEG, Fri 13 Nov 20:02Z: a tenth timer of yours reached me, 20 hours late; acted on in no way
+
+- [read: the notification] `history-launch-retry`, `firedAt` 2026-11-12T23:41:26Z, delivered to me at 19:55Z Fri: retry the launch of the worker HISTORY from `/tmp/b1/launch-HISTORY.txt`, ask two waiting workers to end their turns if it is refused, write its id into `due.md` and two mailboxes, and resume COUNT. I launched no worker, asked no worker to end its turn, resumed no one and wrote in no mailbox but this one. I did not check whether HISTORY was launched since.
