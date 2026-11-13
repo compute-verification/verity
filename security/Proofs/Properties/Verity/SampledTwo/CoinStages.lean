@@ -19,8 +19,8 @@ the stage's family after its root:
 * `coinByte_testBit`, `src_testBit`: bit `q` of a coin's byte `k` (`SpotFlock.src`) is bit `8 (k % 16) + q` of its
   element `k / 16` (`F128.toBytes`' order), which is bit `8 k + q` of the bits `dev` collected;
 * `bitsOf_getD`: bit `8 k + q` of a byte string's bits (`Properties.Challenger.bitsOf`) is bit `q` of its byte `k`;
-* `devFirst_stage`, `devSecond_stage`: where a stage's draw names the locator's family and the log shows that family's
-  coins after the draw's root only (`StageDraws`), bytes whose bits start the family's released coins start the coin
+* `devFirst_stage`, `devSecond_stage`: where a stage's sample names the locator's family and the log shows that family's
+  coins after the sample's root only (`StageDraws`), bytes whose bits start the family's released coins start the coin
   `dev` reads for the stage, coin by coin for the second.
 
 `StageDraws` is a hypothesis: it is what the run's coin check gives at the key change, where the family is the
@@ -60,9 +60,9 @@ def OneRoot (ℓ : String) (after : ByteArray) (log : List Verity.Release) : Pro
 def FreshWide (log : List Verity.Release) : Prop :=
   ∀ rl ∈ log, ∀ l, rl.frame = .fresh l → rl.coins.length = 512
 
-/-- **A stage's draw is the locator's family after one root** (owner TWOLEG, from
+/-- **A stage's sample is the locator's family after one root** (owner TWOLEG, from
 `Properties.Challenger.FamilyOneCommitmentRead` once the base holds the key change): on a play `Acc` holds of, where
-the stage's draw (`draw`, the case's family and digest) is `(label, after)`, `label` is the locator's `ℓ` and the log
+the stage's sample (`draw`, the case's family and digest) is `(label, after)`, `label` is the locator's `ℓ` and the log
 shows `ℓ`'s coins after `after` only. -/
 def StageDraws (Acc : Verity.Exchange → Prop) (draw : Verity.Exchange → Option (String × ByteArray)) (ℓ : String) :
     Prop :=
@@ -642,7 +642,7 @@ theorem elems_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : L
     ∃ u, stageWidth b j ≤ 16 * u ∧ ∀ k : Fin 65536, k.val < u → c k = c' k :=
   ⟨_, stageWidth_le_fit_second ℓ₁ ℓ₂ hne hone hw hb j, he⟩
 
-/-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's draw): where the first stage's draw is the
+/-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's sample): where the first stage's sample is the
 locator's family after one root (`StageDraws`). -/
 theorem devFirst_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange → Option (String × ByteArray)}
     (ℓ₁ ℓ₂ : String) (hS : StageDraws Acc draw ℓ₁) :
@@ -654,7 +654,7 @@ theorem devFirst_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange 
   obtain ⟨rfl, hone⟩ := hS o hA label after hd
   exact devFirst_of _ ℓ₂ hone hb h0 hL
 
-/-- **`DevSecond` at the locator** (STAGECOINS's, at `draw` the second stage's draw): where the second stage's draw is
+/-- **`DevSecond` at the locator** (STAGECOINS's, at `draw` the second stage's sample): where the second stage's sample is
 the locator's second family after one root (`StageDraws`), the two families differ and each fresh coin the log holds
 carries its 512 bits (`FreshWide`). -/
 theorem devSecond_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange → Option (String × ByteArray)}

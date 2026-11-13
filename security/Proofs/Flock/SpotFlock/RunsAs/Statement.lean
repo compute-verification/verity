@@ -57,7 +57,7 @@ structure AcceptedTwo (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) :
 /-! ## The held copies the run reads -/
 
 /-- **The held copies agree with what the run reads**: the registration the first stage samples is the one `Run.run`
-passes `Select.select` (the verifier's copies with the law and work table it expanded, the resolved rule, the closure
+passes `Select.select` (the verifier's copies with the sampling design and work table it expanded, the resolved rule, the closure
 map); the second stage's cells and counts are those `Run.run` computes; the design's links, wires and rows are the
 ones round 2 derives from the replay block's Definition; the templates' parts, at the replay sample the first stage
 selects on the run's bytes, are those the second stage's check reads; the reference

@@ -3,25 +3,25 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMapLaw
 
 /-!
-# The two-stage leg's coin map: its law with the agreement in the event (`coinMapHolds`)
+# The two-stage leg's coin map: its sampling design with the agreement in the event (`coinMapHolds`)
 
 `CoinMapHolds` (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is `CoinMapLaw` at the coin map's frame, with the
 agreement `ElemAgrees` inside the event and `hide = gapOf`. It is proved as `lawAt` is, along `relK` one coin node at a
 time, now counting the mapped play only where every release after the releases before agrees with the run's coins.
 
-* **The law with an agreement** (`LawA`, `law_idA`, `law_optA`, `law_iteA`, `law_keepA`, `law_setA`, `law_writeA`):
+* **The sampling design with an agreement** (`LawA`, `law_idA`, `law_optA`, `law_iteA`, `law_keepA`, `law_setA`, `law_writeA`):
   `LawHolds` counting the mapped play only where an agreement holds. Below a coin node the agreement is the subtree's
   own; a kept node or a node written with an independent value gives the node's agreement wherever the subtree's holds,
   and a node written through `W` gives it wherever the written value is good, at the chance it is not.
 * **A release agrees** (`RelGood`, `LogGood`, `AgFrom`): where the locator puts a release and its elements fit, it
   carries the round's coin's next elements; `AgFrom` holds of an output whose log's releases after `pre` all do.
   `LogGood` after `pre` reads the run's coins only where the releases after `pre` read (`logGood_congr`).
-* **Along the releases** (`law_placeKA`): the law with `AgFrom` holds along `relK` at `gapK`. A fresh coin's release
+* **Along the releases** (`law_placeKA`): the sampling design with `AgFrom` holds along `relK` at `gapK`. A fresh coin's release
   is the run's elements; an opening's is wherever its class at the run's elements is not empty, which `gapRound`'s
   middle term prices.
 * **To `ElemAgrees`** (`devBits_getD`, `elemAgrees_of_logGood`): where every release of a log agrees, the bits `devBits`
   collects for a round are the run's coin's, so `dev`'s elements are the run's below what the releases carry.
-* **The law** (`law_placeA`, `coinMapHolds`).
+* **The sampling design** (`law_placeA`, `coinMapHolds`).
 -/
 
 @[expose] public section
@@ -60,14 +60,14 @@ theorem playReaches_tapeOut : ∀ (g : Game β) (s : Strategy g) (t : Tape g s),
     let t' : C × ((c : C) → Tape (k c) (s c)) := t
     ⟨t'.1, playReaches_tapeOut (k t'.1) (s t'.1) (t'.2 t'.1)⟩
 
-/-! ## The law with an agreement -/
+/-! ## The sampling design with an agreement -/
 
 section Node
 
 variable {R : Type} [Fintype R] [Nonempty R]
 
 open Classical in
-/-- **The law with the agreement `Ag`**: as `LawHolds`, the mapped play counted only where `Ag` holds of the coins and
+/-- **The sampling design with the agreement `Ag`**: as `LawHolds`, the mapped play counted only where `Ag` holds of the coins and
 its output. -/
 def LawA (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (Ag : R → β → Prop) (G : ℝ≥0∞) : Prop :=
   ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
@@ -328,7 +328,7 @@ theorem agFrom_cons {lg : β → List Verity.Release} {r : Fin K → FlockDeploy
   rw [e₁, e₂]
   exact Iff.rfl
 
-/-! ## The law with the agreement along the releases -/
+/-! ## The sampling design with the agreement along the releases -/
 
 /-- The continuation `f` after the releases `pre` ends in outputs whose log is `pre` and the releases after. -/
 def Records (lg : β → List Verity.Release) (f : List Verity.Release → Game β) (pre : List Verity.Release) : Prop :=
@@ -347,7 +347,7 @@ theorem Records.out {lg : β → List Verity.Release} {f : List Verity.Release �
   obtain ⟨log, s', h'⟩ := Verity.Sampled.playReaches_relK k fs ts _ s (playReaches_tapeOut _ s τ)
   exact ⟨log, h _ s' _ h'⟩
 
-/-- The law with `AgFrom` along `relK k`, at every layout, trees, releases before and continuation that records them. -/
+/-- The sampling design with `AgFrom` along `relK k`, at every layout, trees, releases before and continuation that records them. -/
 def RecLawA {β : Type} (lg : β → List Verity.Release) {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k)
     (gr : GapRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β),
@@ -464,7 +464,7 @@ theorem law_openA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → F
   refine law_optA _ _ (fun s => law_leafA L hf s) (fun p s₄ => ?_) _ s₃
   exact law_roundA L hlaw hrc fs ts pre f hf i sn n b T p s₄
 
-/-- **The law with the agreement along the releases**: at every layout, trees, releases before and continuation that
+/-- **The sampling design with the agreement along the releases**: at every layout, trees, releases before and continuation that
 records them, the coin map `placeK` is uniform up to `gapK`, counted where the releases after `pre` agree. -/
 theorem law_placeKA {β : Type} (lg : β → List Verity.Release) : ∀ (k : ℕ) (fs : List (String × ℕ))
     (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β), Records lg f pre →
@@ -567,7 +567,7 @@ theorem elemAgrees_of_logGood {A : Live₂} {x : Msg} (reads : ℕ → Prop) {o 
       omega
     rw [e₁, e₂, dif_pos hj']
 
-/-! ## The law -/
+/-! ## The sampling design -/
 
 /-- **The coin map is uniform up to the hiding term, counted where the releases agree**, at the period's game. -/
 theorem law_placeA (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)

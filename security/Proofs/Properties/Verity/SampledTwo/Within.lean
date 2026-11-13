@@ -9,7 +9,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 # A stage's sample reads no byte past its source
 
 `readsWithin`: `ReadsWithin` (`OfRun.lean`) at every held copy whose first-stage registration has no closure map. A
-draw takes its bytes in order (`Draw.take`), which throws where the source runs out, so a draw that ends at position
+sample takes its bytes in order (`Draw.take`), which throws where the source runs out, so a sample that ends at position
 `R` ends within the source: `drawUnits_within`, and through the stages' samples, `select_within` (with no closure map)
 and `selectSecond_within`. The walk is `RunsAs.Released`'s, step for step, with "the position stays within the source"
 in place of "the same on any source with the same prefix".
@@ -119,7 +119,7 @@ theorem drawWith_within {ξ : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p : �
     exact bind_within h (fun r hr => stratifiedWith_within hp hr)
       (fun r _ hs hk => by exact pure_within hk hs)
 
-/-- **A draw reads no byte past its source**: the units a law draws from `ξ`, having read `r.2` bytes, read them within
+/-- **A sample reads no byte past its source**: the units a sampling design samples from `ξ`, having read `r.2` bytes, read them within
 `ξ`. -/
 theorem drawUnits_within {ξ : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Spot.Draw.drawUnits law n ξ = .ok r) : r.2 ≤ ξ.size := by

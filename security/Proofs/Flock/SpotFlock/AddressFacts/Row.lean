@@ -15,7 +15,7 @@ file states that round 2's checks put it there; at a proof-block partition side 
 registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is the one stated.
 
 * **The instance** (`InstanceFact`). A template's session statement lists every slot of its part as its population, in
-  order (`second-population`, `SecondStage.populationOk`), and its sample is the second draw's slots in the part
+  order (`second-population`, `SecondStage.populationOk`), and its sample is the second sample's slots in the part
   (`second-sample`, `SecondStage.ownDraw`). Flock sets the session up at the sample (`HmRow.drawn`), so instance `n` is
   the sample's `n`-th unit and is labelled with the population's label there, slot `lo + unitOf draw n` (`drawSlot`,
   `LabelledAt`). With no proof block always checked (`Held.noAlways`), a checked unit's instance (`rankAt`) is then
@@ -29,7 +29,7 @@ registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is
 * **The header's position is the read's** (`PositionFact`): at any slot map that labels the session's instances
   (`LabelledAt σ`), the position the header gives instance `n`'s row is the registered read's at label `σ n`
   (`rows_open`). The slot map is a parameter: `drawSlot` at a staging of every slot of the part, another at a staging
-  of the drawn slots alone. `ParsedFact`: the registered read Flock parses reads at a label what round 2's entry for its
+  of the sampled slots alone. `ParsedFact`: the registered read Flock parses reads at a label what round 2's entry for its
   name reads there.
 * **The slot's leaf** (`rowShape`, `LeafFact`): the slot's position, stride and units, fixed before the run from the
   auditor's copies (the unit's template, replay block and place in its cell, and the design's links, wires and rows)
