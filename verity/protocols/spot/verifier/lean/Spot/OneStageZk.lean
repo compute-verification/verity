@@ -70,8 +70,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
   a member the sample missed has no statement: a statement of a member the sample holds no unit of refuses
-  (`sampledHeld`, at the evidence's `proved_units`), so the statements are exactly the members the sample holds, one
-  session each (`membersRun_sampled`). Each session's coins are one tree's, as the one statement's are, and its tree's
+  (`sampledHeld`, at the evidence's `proved_units`), so every statement is of a member the sample holds, one session
+  each (`membersRun_sampled`). Each session's coins are one tree's, as the one statement's are, and its tree's
   last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
   the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
@@ -1295,8 +1295,9 @@ theorem sampledHeld_ok {held : Array Member} {want : Array Nat} (h : sampledHeld
     | false => exact absurd (by simp [hd]) hn
 
 /-- **Every statement of the per-member form's run is of a member the sample holds**: where `runMembers` returns a
-run, the statements' members in order (`membersHeld`) each have a unit among the evidence's `want`. With the proved
-units held to `want` (`runMembers_proved`), the statements are the members the sample holds, each once. -/
+run, the statements' members in order (`membersHeld`) each have a unit among the evidence's `want`. Where every
+session accepted, the proved units are `want` (`runMembers_proved`), so the statements are then the members the
+sample holds, each once. -/
 theorem runMembers_sampled {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array Nat}
     {bs : Core.Blobs} {r : Run} (h : runMembers slice ms sts want bs = .ok r) :
     ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.sampled want = true := by
