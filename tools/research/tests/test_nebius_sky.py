@@ -1471,8 +1471,8 @@ def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and
     assert r.returncode == 0 and f"vy-launcher-copies-gc: research from {w['v1']}\n" in r.stderr, r.stderr
     ran = json.loads(w["out"].read_text())                # written where the key file's variable says: the pass exported it
     assert (ran["from"], ran["pythonpath"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]))
-    assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--jobs-dir", str(named),
-                           "--apply"]
+    assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--max-paths", "100",
+                           "--jobs-dir", str(named), "--apply"]
     w["out"].unlink()
 
     def refused(why: str, **extra) -> None:

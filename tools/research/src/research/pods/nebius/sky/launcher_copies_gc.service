@@ -1,14 +1,16 @@
 # /etc/systemd/system/vy-launcher-copies-gc.service on vy-nebius-cpu-7 (`research deploy` installs it): the retention collector
 # over root's runs root there, where the checker, which launches runs on the other nodes all day, keeps its copy of each one
-# (`research retention gc --launcher-copies`, retention.py). A copy goes 48 hours after its last write, and only once the remote
-# says that its run is over and holds its run record with the copy's files; the pass is forced, since the rule is an age and
-# not the disk's fullness, and takes at most 200 copies. vy-retention-gc never reaches that directory: it runs as research, which
-# can't read root's, holds no store key to ask the remote with, and gives a launcher's copy no record. So this unit is root's and
-# reads the store key the checker runs with (VY_LAUNCHER_STORE_ENV, an env file whose variables it exports and never prints).
-# The checker says which runs it still needs in VY_LAUNCHER_NAMED/runs, the ids its unsettled tasks name, written again every
-# few seconds; a copy that file names stays (gc's --jobs-dir). A pass refuses, deleting nothing, when that file is missing or was
-# written over 15 minutes ago (a checker that is down, or one that doesn't write it), when the key can't be read, and without
-# main's copy of `research` (VY_RESEARCH_TOOL, as vy-retention-gc). A remote that can't be asked fails the pass (exit 1).
+# (`research retention gc --launcher-copies`, retention.py). A copy goes 48 hours after its last write, and only once the
+# remote says that its run is over and holds its run record with the copy's files; the pass is forced, since the rule is an age
+# and not the disk's fullness, and takes at most 100 copies, each of which it asks the remote about blob by blob, so that it
+# ends well inside its hour. vy-retention-gc never reaches that directory: it runs as research, which can't read root's, holds
+# no store key to ask the remote with, and gives a launcher's copy no record. So this unit is root's and reads the store key
+# the checker runs with (VY_LAUNCHER_STORE_ENV, an env file whose variables it exports and never prints). The checker says
+# which runs it still needs in VY_LAUNCHER_NAMED/runs, the ids that tasks blocked in its unfinished checks name, written again
+# every minute; a copy that file names stays (gc's --jobs-dir). A pass refuses, deleting nothing, when that file is missing or
+# was written over 15 minutes ago (a checker that is down, or one that doesn't write it), when the key can't be read, and
+# without main's copy of `research` (VY_RESEARCH_TOOL, as vy-retention-gc). A remote that can't be asked fails the pass (exit
+# 1).
 [Unit]
 Description=retention gc of the checker's copies of its runs, 48 h after their last write and once the store holds them
 
@@ -20,4 +22,4 @@ Environment=VY_RESEARCH_TOOL=/usr/local/lib/vy-monitoring/clean-up
 Environment=VY_LAUNCHER_RUNS=/workspace/research/root-runs
 Environment=VY_LAUNCHER_NAMED=/root/executor/named-runs
 Environment=VY_LAUNCHER_STORE_ENV=/root/.config/verity/r2.env
-ExecStart=/bin/sh -c 'T=$(readlink -e -- "$VY_RESEARCH_TOOL" 2> /dev/null); if [ -z "$T" ] || [ ! -d "$T/research" ]; then echo "vy-launcher-copies-gc: no research package at VY_RESEARCH_TOOL ($VY_RESEARCH_TOOL), where research deploy install places the copy of main; nothing was deleted" >&2; exit 1; fi; if [ -z "$(find "$VY_LAUNCHER_NAMED/runs" -maxdepth 0 -type f -mmin -15 2> /dev/null)" ]; then echo "vy-launcher-copies-gc: $VY_LAUNCHER_NAMED/runs, where the checker lists the runs its unsettled tasks name, is missing or was written over 15 min ago, so a copy somebody still needs can not be told from one nobody does; nothing was deleted" >&2; exit 1; fi; if [ ! -r "$VY_LAUNCHER_STORE_ENV" ]; then echo "vy-launcher-copies-gc: no store key at VY_LAUNCHER_STORE_ENV ($VY_LAUNCHER_STORE_ENV), so the remote can not be asked whether a run is over and stored; nothing was deleted" >&2; exit 1; fi; echo "vy-launcher-copies-gc: research from $T" >&2; set -a; . "$VY_LAUNCHER_STORE_ENV"; set +a; cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --root "$VY_LAUNCHER_RUNS" --launcher-copies --force --low-pct 0 --jobs-dir "$VY_LAUNCHER_NAMED" --apply'
+ExecStart=/bin/sh -c 'T=$(readlink -e -- "$VY_RESEARCH_TOOL" 2> /dev/null); if [ -z "$T" ] || [ ! -d "$T/research" ]; then echo "vy-launcher-copies-gc: no research package at VY_RESEARCH_TOOL ($VY_RESEARCH_TOOL), where research deploy install places the copy of main; nothing was deleted" >&2; exit 1; fi; if [ -z "$(find "$VY_LAUNCHER_NAMED/runs" -maxdepth 0 -type f -mmin -15 2> /dev/null)" ]; then echo "vy-launcher-copies-gc: $VY_LAUNCHER_NAMED/runs, where the checker lists the runs its unfinished checks still name, is missing or was written over 15 min ago, so a copy somebody still needs can not be told from one nobody does; nothing was deleted" >&2; exit 1; fi; if [ ! -r "$VY_LAUNCHER_STORE_ENV" ]; then echo "vy-launcher-copies-gc: no store key at VY_LAUNCHER_STORE_ENV ($VY_LAUNCHER_STORE_ENV), so the remote can not be asked whether a run is over and stored; nothing was deleted" >&2; exit 1; fi; echo "vy-launcher-copies-gc: research from $T" >&2; set -a; . "$VY_LAUNCHER_STORE_ENV"; set +a; cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --root "$VY_LAUNCHER_RUNS" --launcher-copies --force --low-pct 0 --max-paths 100 --jobs-dir "$VY_LAUNCHER_NAMED" --apply'
