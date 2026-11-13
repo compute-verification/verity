@@ -199,4 +199,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.RefsOfSent", "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed", "Proofs.Properties.Verity.SampledTwo.SessionPrefix",
   "Proofs.Properties.Verity.SampledTwo.SessionExtra", "Proofs.Properties.Verity.SampledTwo.SessionRecordRounds",
-  "Proofs.Properties.Verity.SampledTwo.SessionAsk", "Proofs.Properties.Verity.SampledTwo.LastSlot"]
+  "Proofs.Properties.Verity.SampledTwo.SessionAsk", "Proofs.Properties.Verity.SampledTwo.LastSlot",
+  "Proofs.Properties.Verity.SampledTwo.SessionReplay", "Proofs.Properties.Verity.SampledTwo.RoundPrefix",
+  "Proofs.Properties.Verity.SampledTwo.MessagesOpen"]
