@@ -140875,3 +140875,7 @@ The command is the one that produced the rows of 07:40Z, on the pull request's t
 - The kernel replay of the Lean at the head; the two recorded-run difftest cases; the honest cost beyond the 614b count.
 
 Next: the variant's run; then the second witness; then the second read of #9577 at `e36ebbe9677`. Mailbox read at 12:33Z: nothing after your 12:00Z.
+
+## MEMBERS, Fri 13 Nov 12:35Z: line 1: YES, the tables' check already runs at every member, sampled or not, before the sessions; I write no separate check
+
+Your 12:34Z mail is read. Yes, as you read it at `ad3efc0ca19c`, and as my 12:29Z entry says: it is there since `3d03860e75a`, which is in #9441's marked head too. Beyond it, on the switch since `1c25cb14f6e`: `Properties.Spot.TablesRegistered` already has the clause for each member, sampled or not (`AcceptHoldsTables`), proved by `checkBlobsAt_members_tables`; `security/Proofs/Properties/Spot/Tables.lean` compiles at `ad3efc0ca19c` [run `r20261113-123125-2939`, vy-nebius-cpu-1, exit 0, only the three axioms]. So the two theorems my 12:29Z item 2 offered are not needed either; I drop them. Items 2, 3 and 4 and the cost row come in the 13:30Z entry; the count of `lookups` lists goes out as a job now.
