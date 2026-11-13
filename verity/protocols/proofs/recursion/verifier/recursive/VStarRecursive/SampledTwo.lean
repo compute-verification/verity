@@ -296,7 +296,7 @@ def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray
 
 /-- **On two windows, the first session releases none of the second stage's coins** (check, 4): where the interior
 registration's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
-boundary's window, `Challenger.trustedSessionOf`) shows no coin of the second stage's family released after the
+boundary's window, `Challenger.trustedChallengePhaseOf`) shows no coin of the second stage's family released after the
 interior registration's digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second
 session's alone. Where a piece is missing or unreadable the run has already refused, and this adds nothing. -/
 def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
@@ -305,7 +305,7 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
     if some w == p.interior.verifier.windowRoot then .ok () else do
       let after ← Registration.digest e.record
       let k ← Challenger.ChallengerKey.ofJson (getD e.coins "key")
-      let (_, roots) ← Challenger.trustedSessionOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
+      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
         (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
