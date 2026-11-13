@@ -2,9 +2,13 @@
 weights and KV registration from a runner, the scheduler's appends, FIFO reuse of freed pages, and a step's pass."""
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
+import sys
 from collections import deque
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -16,13 +20,16 @@ else:
 from verity.protocols.poub.verifier import audit, codec, memory_map
 from verity.protocols.poub.verifier import receipts as rb
 
+from verity_vllm.engine import hooks
 from verity_vllm.protocols.remote_bandwidth.binder import (
     KERNEL_BLOCK_SIZES,
+    RUNNERS,
     Binder,
     Every,
     Inbox,
     PagedBacking,
     TorchBacking,
+    model_weights,
     page_layout,
     storage_bytes,
 )
@@ -167,6 +174,99 @@ def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_res
     st = b.stats()
     assert st["bytes_by_kind"].get("weights", 0) == registered and st["bytes_by_kind"]["kv"] == 3 * 2 * PAGES * 2048
     assert st["unregistered_bytes"] == 2 * 32 * 4 + 64 * 32 * 4 - registered
+
+
+def test_the_models_weights_are_each_storage_once_with_no_empty_one_read_through_what_wraps_the_model():
+    """`model_weights`: a parameter over a storage already listed (a tied weight held as a second parameter) and one
+    of no elements are left out, and a model without ``named_parameters`` is read through its ``runnable``, however
+    many times it is wrapped."""
+    model = torch.nn.Sequential(torch.nn.Linear(4, 2, bias=False), torch.nn.Linear(4, 2, bias=False))
+    model[1].weight = torch.nn.Parameter(model[0].weight.data)
+    model.register_parameter("none", torch.nn.Parameter(torch.zeros(0)))
+    assert [name for name, _ in model.named_parameters()] == ["none", "0.weight", "1.weight"]
+    for held in (model, SimpleNamespace(runnable=model), SimpleNamespace(runnable=SimpleNamespace(runnable=model))):
+        (w,) = model_weights(SimpleNamespace(model=held))
+        assert (w.name, w.source, w.encode, w.receipt) == ("0.weight", "param:0.weight", False, None)
+        assert w.tensor.data_ptr() == model[0].weight.data_ptr() and w.tensor.shape == (2, 4)
+
+
+def test_a_weights_bytes_past_its_last_whole_block_are_counted_unregistered():
+    """`Binder.on_load`: a weight of 8 blocks and 128 bytes registers the 8 blocks, and the 128 bytes are counted
+    under the weight's name with ``[tail]``."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.model = torch.nn.Sequential(torch.nn.Linear(65, 32, bias=False))
+    b.on_load(r)
+    st = b.stats()
+    assert b.unregistered == {"0.weight[tail]": 128} and st["bytes_by_kind"] == {"weights": 8 * 1024}
+    assert (st["unregistered"], st["unregistered_bytes"]) == (1, 128)
+
+
+@pytest.mark.parametrize("named", [{}, {"kv_caches": None}, {"kv_caches": []}])
+def test_a_runner_that_bound_no_kv_caches_is_refused(named):
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    del r.kv_caches
+    vars(r).update(named)
+    with pytest.raises(RuntimeError, match="^the model runner bound no KV caches$"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"] and b.slots == 0
+
+
+def test_kv_layers_of_different_page_shapes_are_refused():
+    """A layer whose slot holds twice the bytes of the others': the pool has one page layout."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.kv_caches[2] = torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)
+    with pytest.raises(NotImplementedError, match="^KV layers of different page shapes$"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"] and b.slots == 0
+
+
+def two_layers(shift: int):
+    """A runner of two layers in one storage, each (pages, 2, slots, heads, dim) and contiguous, the second ``shift``
+    elements after the first."""
+    n = PAGES * 2 * SLOTS * HEADS * DIM
+    whole = torch.zeros(2 * n, dtype=torch.bfloat16)
+    r = runner()
+    r.kv_caches = [whole[at:at + n].view(PAGES, 2, SLOTS, HEADS, DIM) for at in (0, shift)]
+    return r
+
+
+@pytest.mark.parametrize("shift", [0, 32, 1024])
+def test_kv_layers_whose_pages_overlap_in_one_storage_are_refused(shift):
+    """The second layer over the first's pages, 64 bytes into them, or one plane on: a plane of one starts inside a
+    plane of the other.  With the second right after the first, the two register."""
+    b = Binder(NodeMemory(), block_bytes=1024)
+    with pytest.raises(ValueError, match="^two KV layers' pages overlap in one storage$"):
+        b.on_kv(two_layers(shift), SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"] and b.slots == 0
+    b.on_kv(two_layers(PAGES * 2 * SLOTS * HEADS * DIM), SimpleNamespace(num_blocks=PAGES))
+    assert b.stats()["bytes_by_kind"] == {"kv": 2 * 2 * PAGES * 2048} and b.unregistered == {} and b.slots == SLOTS
+
+
+def test_a_kv_storages_bytes_that_no_layers_page_holds_are_counted_unregistered():
+    """Two of the three layers of one storage bound: the third's bytes are in the storage and in no page."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner(shared=True)
+    del r.kv_caches[1]
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.unregistered == {"kv[unpaged]": 2 * PAGES * 2048}
+    assert b.stats()["bytes_by_kind"] == {"kv": 2 * 2 * PAGES * 2048}
+
+
+def test_a_filler_of_less_than_one_block_is_refused():
+    b = Binder(NodeMemory(), block_bytes=1024)
+    with pytest.raises(ValueError, match="^filler of 1023 bytes holds no 1024-byte block$"):
+        b.register_filler(1023, "cpu")
+    assert b.filler is None and b.stats()["bytes_by_kind"] == {}
+    b.register_filler(1024, "cpu")
+    assert b.stats()["bytes_by_kind"] == {"filler": 1024}
+
+
+def test_a_fixed_schedule_takes_windows_of_one_pass_and_refuses_none():
+    """`Every`: with one pass a window, each call is a window's first, the call after the last window's is the close,
+    and the calls after that have no message."""
+    with pytest.raises(ValueError, match="^a window is at least one pass$"):
+        Every(0, lambda t: bytes(32))
+    every = Every(1, lambda t: bytes([t]) * 32, windows=2)
+    assert [every() for _ in range(5)] == [[bytes(32)], [b"\x01" * 32], [None], [], []]
 
 
 def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_reaches_a_kv_page():
@@ -364,3 +464,221 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     o = s.open([(1, 1)], window=0)[0]
     assert verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, tiles.output(pc.seed, 1))
     assert not verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, bytes(64))
+
+
+def module(monkeypatch, name: str, package: bool = False, **names: Any) -> Any:
+    """A stand-in module in ``sys.modules`` for the test, with a spec as an imported one has."""
+    m = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(name, None, is_package=package))
+    vars(m).update(names)
+    monkeypatch.setitem(sys.modules, name, m)
+    return m
+
+
+def vllm_standin(monkeypatch, said: list, runners: Sequence[str] = RUNNERS) -> SimpleNamespace:
+    """vLLM's modules the binder patches, as stand-ins: the packages over them, a ``GPUModelRunner`` in each of
+    ``runners`` (a `RUNNERS` module left out is None in ``sys.modules``: one that cannot be imported, for which
+    `importlib.util.find_spec` answers None), ``BlockPool`` and ``Scheduler``.  Each method tells ``said`` its name,
+    its object and what it was handed, and returns a value of its own."""
+
+    def runner_class() -> type:
+        class GPUModelRunner:
+            def load_model(self, *a: Any, **kw: Any) -> str:
+                said.append(("load_model", self, a, kw))
+                return "loaded"
+
+            def initialize_kv_cache(self, kv_cache_config: Any, *a: Any, **kw: Any) -> str:
+                said.append(("initialize_kv_cache", self, kv_cache_config, a, kw))
+                return "bound"
+
+        return GPUModelRunner
+
+    class BlockPool:
+        def get_new_blocks(self, n: int) -> list[Block]:
+            said.append(("get_new_blocks", self, n))
+            return [Block(i) for i in range(1, n + 1)]
+
+        def free_blocks(self, ordered: Any) -> None:
+            said.append(("free_blocks", self, ordered))
+
+        def touch(self, blocks: Any) -> str:
+            said.append(("touch", self, blocks))
+            return "touched"
+
+    class Scheduler:
+        def schedule(self, *a: Any, **kw: Any) -> str:
+            said.append(("schedule", self, a, kw))
+            return "scheduled"
+
+        def update_from_output(self, so: Any, out: Any) -> str:
+            said.append(("update_from_output", self, so, out))
+            return "updated"
+
+    for name in ("vllm", "vllm.v1", "vllm.v1.worker", "vllm.v1.worker.gpu", "vllm.v1.core", "vllm.v1.core.sched"):
+        module(monkeypatch, name, package=True)
+    classes = []
+    for name in RUNNERS:
+        if name in runners:
+            classes.append(module(monkeypatch, name, GPUModelRunner=runner_class()).GPUModelRunner)
+        else:
+            monkeypatch.setitem(sys.modules, name, None)
+    module(monkeypatch, "vllm.v1.core.block_pool", BlockPool=BlockPool)
+    module(monkeypatch, "vllm.v1.core.sched.scheduler", Scheduler=Scheduler)
+    return SimpleNamespace(runners=classes, BlockPool=BlockPool, Scheduler=Scheduler)
+
+
+def wrapped(v: SimpleNamespace) -> list[tuple[type, str]]:
+    """The methods `Binder.install` wraps, in its order."""
+    return [*((cls, name) for cls in v.runners for name in ("load_model", "initialize_kv_cache")),
+            (v.BlockPool, "get_new_blocks"), (v.BlockPool, "free_blocks"), (v.BlockPool, "touch"),
+            (v.Scheduler, "schedule"), (v.Scheduler, "update_from_output")]
+
+
+class ToldMemory(NodeMemory):
+    """A store that only tells ``said`` the pages it is asked to allocate."""
+
+    def __init__(self, said: list) -> None:
+        super().__init__()
+        self.said = said
+
+    def kv_alloc(self, pages: Sequence[int]) -> None:
+        self.said.append(("kv_alloc", pages))
+
+
+class Told(Binder):
+    """A `Binder` whose own work at each hook is only told to ``said``, so a test reads what a wrapper calls, with
+    what, and on which side of vLLM's own method."""
+
+    def __init__(self, said: list, **kw: Any) -> None:
+        super().__init__(ToldMemory(said), **kw)
+        self.said = said
+
+    def on_load(self, runner: Any) -> None:
+        self.said.append(("on_load", runner))
+
+    def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
+        self.said.append(("on_kv", runner, kv_cache_config))
+
+    def on_free(self, pool: Any, blocks: Sequence[Any]) -> None:
+        self.said.append(("on_free", pool, blocks))
+
+    def on_schedule(self, sched: Any, so: Any) -> None:
+        self.said.append(("on_schedule", sched, so))
+
+    def end(self) -> None:
+        self.said.append(("end",))
+
+
+@pytest.fixture
+def installed(monkeypatch):
+    """``(v, b, said)``: the stand-in vLLM, a `Told` binder installed on it and what both tell; uninstalled after."""
+    said: list = []
+    v = vllm_standin(monkeypatch, said)
+    b = Told(said).install()
+    try:
+        yield v, b, said
+    finally:
+        b.uninstall()
+
+
+def test_install_wraps_both_runners_the_pool_and_the_scheduler_under_its_tag_and_uninstall_puts_them_back(monkeypatch):
+    said: list = []
+    v = vllm_standin(monkeypatch, said)
+    own = {at: vars(at[0])[at[1]] for at in wrapped(v)}
+    assert len(own) == 9
+    b = Told(said)
+    b.uninstall()
+    assert b.hooks is None and all(vars(cls)[name] is f for (cls, name), f in own.items())
+    try:
+        assert b.install() is b and b.hooks is not None and b.hooks.tag == "verity-store"
+        assert [(e.owner, e.name) for e in b.hooks.entries] == wrapped(v)
+        assert all(e.tag == "verity-store" and e in hooks.live("verity-store") for e in b.hooks.entries)
+        assert all(vars(cls)[name] is not f for (cls, name), f in own.items())
+    finally:
+        b.uninstall()
+    assert b.hooks.entries == () and all(vars(cls)[name] is f for (cls, name), f in own.items())
+    b.uninstall()
+    mine = hooks.Hooks(tag="mine")
+    try:
+        assert Told(said).install(mine).hooks is mine
+        assert [(e.owner, e.name, e.tag) for e in mine.entries] == [(*at, "mine") for at in wrapped(v)]
+    finally:
+        mine.uninstall()
+    assert all(vars(cls)[name] is f for (cls, name), f in own.items()) and said == []
+
+
+@pytest.mark.parametrize("has", RUNNERS)
+def test_install_leaves_alone_a_runner_module_vllm_does_not_have(monkeypatch, has):
+    said: list = []
+    v = vllm_standin(monkeypatch, said, runners=[has])
+    assert len(v.runners) == 1
+    b = Told(said).install()
+    try:
+        assert [(e.owner, e.name) for e in b.hooks.entries] == wrapped(v) and len(b.hooks.entries) == 7
+        r = v.runners[0]()
+        assert r.load_model() == "loaded" and said == [("load_model", r, (), {}), ("on_load", r)]
+    finally:
+        b.uninstall()
+
+
+def test_a_runners_hooks_run_after_vllms_own_and_a_profiling_kv_cache_is_not_registered(installed):
+    """`GPUModelRunner.load_model` and `initialize_kv_cache` of both runners: vLLM's own runs first with what it was
+    handed and its value is returned; then the weights, or the KV pool unless the call is a profiling one, by keyword or
+    by position."""
+    v, _, said = installed
+    for cls in v.runners:
+        r = cls()
+        assert r.load_model(1, x=2) == "loaded"
+        assert said == [("load_model", r, (1,), {"x": 2}), ("on_load", r)]
+        for a, kw, registers in [((), {}, True), ((False,), {}, True), ((), {"is_profiling": False}, True),
+                                 ((True,), {}, False), ((), {"is_profiling": True}, False)]:
+            said.clear()
+            assert r.initialize_kv_cache("config", *a, **kw) == "bound"
+            assert said == [("initialize_kv_cache", r, "config", a, kw)] + [("on_kv", r, "config")] * registers
+        said.clear()
+
+
+def test_the_pools_hooks_allocate_and_free_after_vllms_own_and_refuse_a_freed_pages_return(installed):
+    """`BlockPool.get_new_blocks`: the pages vLLM handed out are allocated in the store, and returned.
+    `free_blocks`: vLLM's own gets every block of what it was handed, an iterator too, and then the binder the same
+    blocks.  `touch`: a page with no reference that is not the null page is refused before vLLM's own runs (a prefix
+    cache hit would bring it back with its KV); the null page and a referenced one pass."""
+    v, _, said = installed
+    pool = v.BlockPool()
+    blocks = pool.get_new_blocks(2)
+    assert [x.block_id for x in blocks] == [1, 2]
+    assert said == [("get_new_blocks", pool, 2), ("kv_alloc", [1, 2])]
+    said.clear()
+    freed = [Block(3), Block(4)]
+    assert pool.free_blocks(iter(freed)) is None
+    assert said == [("free_blocks", pool, freed), ("on_free", pool, freed)] and said[0][2] is said[1][2]
+    said.clear()
+    held, null, free = Block(5), Block(0), Block(6)
+    held.ref_cnt = 1
+    assert pool.touch([held, null]) == "touched" and said == [("touch", pool, [held, null])]
+    said.clear()
+    with pytest.raises(NotImplementedError, match="^the store's binder runs without prefix caching$"):
+        pool.touch([held, free])
+    assert said == []
+
+
+def test_with_kv_off_the_pools_hook_allocates_no_page_in_the_store(monkeypatch):
+    said: list = []
+    v = vllm_standin(monkeypatch, said)
+    b = Told(said, kv=False).install()
+    try:
+        pool = v.BlockPool()
+        assert [x.block_id for x in pool.get_new_blocks(3)] == [1, 2, 3] and said == [("get_new_blocks", pool, 3)]
+    finally:
+        b.uninstall()
+
+
+def test_the_schedulers_hooks_open_the_step_after_schedule_and_end_it_before_update_from_output(installed):
+    """`Scheduler.schedule`: vLLM's own runs first, and the binder is handed the scheduler and what it returned, which
+    is returned.  `update_from_output`: the binder ends the step first, then vLLM's own runs and its value is returned."""
+    v, _, said = installed
+    sched = v.Scheduler()
+    assert sched.schedule(1, x=2) == "scheduled"
+    assert said == [("schedule", sched, (1,), {"x": 2}), ("on_schedule", sched, "scheduled")]
+    said.clear()
+    assert sched.update_from_output("so", "out") == "updated"
+    assert said == [("end",), ("update_from_output", sched, "so", "out")]
