@@ -9,7 +9,7 @@ The sampled audit's completeness (`CompleteSampled`, `Definitions.Pouw.PearlC.Co
 passing the rules as a hypothesis (`Workload.FixedOK`), and needs two facts about the honest prover's sampled tile: its
 words are the reference's, and its replayed debit is within the cap. The first is
 proved (`HonestWords`: every reference value is an FP32 word's). The second depends on the activations and the noise,
-and nothing proves it; `HonestTileCapRate` assumes it at the rate a measurement gives.
+and nothing proves it; `HonestTileInertBoundRate` assumes it at the rate a measurement gives.
 
 It is **empirical**, not a hardness assumption: `ε` is an upper confidence limit on a measured rate of honest tiles that
 fail the per-tile cap. It is a parameter, so the theorem that reads it (`completeSampledDevRev1K`) holds unchanged
@@ -45,8 +45,8 @@ whatever the table's number. How the rate is measured and cited:
   step, not a confidence statement. A population can meet it and say nothing: on activations whose every row fails Π's
   rules (all NaN, say) no row is credited, every tile's debit and cap are both 0, and the completeness that follows is
   of an audit that credits nothing.
-- **The counted event** is `pearlCTilesDevRev1K`'s `capOK`, through the Python check that the L5 test ties to it.
-- **The measurement** is `benchmarks/pouw/pearl_c_vllm/served_debit.py --per-input` (at `f96f5b780`; the fresh trials
+- **The counted event** is `pearlCTilesDevRev1K`'s `inertBoundOK`, through the Python check that the L5 test ties to it.
+- **The measurement** is `benchmarks/pouw/pearl_c_vllm/served_inert_work.py --per-input` (at `f96f5b780`; the fresh trials
   are its `--fresh-draws N --fresh-source HEX`). Its `inputs.json`
   holds each input's failures, `W`, `w_max` and upper limit, and their maximum `cited_upper`; `ε` is `cited_upper`
   rounded up (Llama-3.1-8B and Qwen3-8B, `art:<pending: FP8 served table>`).
@@ -66,7 +66,7 @@ variable {Q R S : Type}
 rate of honest tiles that fail the check, not a hardness assumption). For every in-domain workload `U` whose weights
 pass the rules, every activation input `act` in the population `Served`, and every ticket count `w` proportional to the
 tiles' `W_ref`: over the oracle, the salt and one work-weighted sample, the probability that the sampled tile is of a unit
-of the layout and its replayed debit on the honest activations exceeds the cap (`TR.capOK` fails) is at most `ε`.
+of the layout and its replayed debit on the honest activations exceeds the cap (`TR.inertBoundOK` fails) is at most `ε`.
 
 The bound is per input, an input being one `(U, act)`: one linear's GEMM in one pass. `ε` is the cited maximum over the
 `m` measured inputs of each input's upper confidence limit at `δ = 0.05/m` (95% simultaneous), rounded up: at no failure
@@ -75,17 +75,17 @@ in a census of the input's tiles, `ln(20m)·w_max/W`; at no failure in `n` work-
 tile's noise is the oracle at points of its own). `Served` carries the meaning: every member of it is assumed within
 `ε`, not only the measured ones (a further empirical step, not a confidence statement), with activations fixed
 independently of the oracle and the salt. It is the population the measured requests were sampled from (their prompt
-source and how it was sampled) on the model's pinned weights. The counted event is `pearlCTilesDevRev1K`'s `capOK`,
-through the Python check that the L5 test ties to it. The measurement is `served_debit.py --per-input`
+source and how it was sampled) on the model's pinned weights. The counted event is `pearlCTilesDevRev1K`'s `inertBoundOK`,
+through the Python check that the L5 test ties to it. The measurement is `served_inert_work.py --per-input`
 (`inputs.json`'s `cited_upper`), `art:<pending: FP8 served table>`; the module docstring gives the bounds for an input
 with failures and for fresh trials. -/
-def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
+def HonestTileInertBoundRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes, Served U act →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
       pr (fun x : (Q → R) × S × Ticket w (TR.tiling U.layout).NT =>
           (TR.tiling U.layout).unit x.2.2.1 < U.layout.N ∧
-            ¬ TR.capOK x.1 x.2.1 U x.2.2.1 (act ((TR.tiling U.layout).unit x.2.2.1)))
+            ¬ TR.inertBoundOK x.1 x.2.1 U x.2.2.1 (act ((TR.tiling U.layout).unit x.2.2.1)))
         ≤ ε
 
 end Pouw.PearlC.Assumptions

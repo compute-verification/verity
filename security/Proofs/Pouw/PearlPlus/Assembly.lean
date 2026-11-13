@@ -93,7 +93,7 @@ def TilePassGivesTheWords : Prop :=
         (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨
-      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
+      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overInertBound why) →
       TileWordsGood (protocolH3 saltOf rootOf ρ) (tilesH3 saltOf rootOf ρ) U H s g c ∨
         ∃ x ∈ leafHashed p tid o, ∃ y ∈ commitHashed p tid c, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
@@ -104,8 +104,8 @@ namespace Pouw.PearlPlus.Assembly
 open PouwCheck.PearlPlus
 
 /-- A tile that passes or is only over its inert-work bound is `TileAcceptMeans`' outcome at some bound. -/
-theorem passOrOver_bound {t : TileOutcome} (h : t = .pass ∨ ∃ why, t = .overCap why) :
-    ∃ bound : Option String, t = match bound with | none => .pass | some why => .overCap why := by
+theorem passOrOver_bound {t : TileOutcome} (h : t = .pass ∨ ∃ why, t = .overInertBound why) :
+    ∃ bound : Option String, t = match bound with | none => .pass | some why => .overInertBound why := by
   rcases h with h | ⟨why, h⟩
   exacts [⟨none, h⟩, ⟨some why, h⟩]
 
@@ -195,7 +195,7 @@ theorem domain_k {s : PouwCheck.PearlPlus.Scheme} {u : PouwCheck.PearlPlus.Matmu
 a unit outside it (`domainReason`) before it reads an opening. -/
 theorem tile_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening}
     (ht : p.tile? tid = some (pos, rows, cols))
-    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overCap why) :
+    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overInertBound why) :
     p.scheme.domainReason p.records[pos]!.matmul = none := by
   cases hd : p.scheme.domainReason p.records[pos]!.matmul with
   | none => rfl
@@ -210,7 +210,7 @@ theorem tile_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : 
 (`128 ∣ k`). -/
 theorem record_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening}
     (ht : p.tile? tid = some (pos, rows, cols))
-    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overCap why) :
+    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overInertBound why) :
     p.records[pos]!.matmul.k ≤ 2 ^ 16 ∧ p.records[pos]!.matmul.k % 128 = 0 :=
   domain_k (tile_domain ht hc)
 

@@ -20,7 +20,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DeviceChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 public import Definitions.Pouw.PearlC.DevicePrices
-public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainInertBound
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
@@ -29,8 +29,8 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
-The gap at the RTX PRO 6000's v1 record under rev1 at the cap 1/1,000 (`Pouw.PearlC.pearlCGapSm120v1LoopCast8p72Rev1Cap1000_8192`
-in `Pouw.SecurityProofs.PearlC.DeviceCapRev1Gap`), its binders written as a `∀`. `Pouw.CostModel` and `Pouw.GGap` are
+The gap at the RTX PRO 6000's v1 record under rev1 at the cap 1/1,000 (`Pouw.PearlC.pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_8192`
+in `Pouw.SecurityProofs.PearlC.DeviceInertBoundRev1Gap`), its binders written as a `∀`. `Pouw.CostModel` and `Pouw.GGap` are
 the game's, so Pearl-C's are named in full.
 
 **At W1.** A guarantee that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
@@ -51,7 +51,7 @@ open Pouw.PearlC Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1648180439/446072750000` (0.36949%). -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -104,7 +104,7 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1058166877/294158650000` (0.35973%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh16384)
@@ -139,7 +139,7 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1058166877/294158650000` (0.35973%). -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -153,7 +153,7 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1648180439/446072750000` (0.36949%). -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -258,7 +258,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 8.72:
 `g = 5273/1466810` (0.35949%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120) sh16384)
@@ -271,7 +271,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72:
 `g = 205211/55610750` (0.36901%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120) sh8192)
@@ -365,7 +365,7 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, 16384³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1058166877/294158650000` (0.35973%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_16384OfInertShare400 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 400)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh16384)
@@ -378,7 +378,7 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, 8192³**, FP32 at 8.376, the honest cast at 8.72:
 `g = 1648180439/446072750000` (0.36949%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_8192OfInertShare400 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 400)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
@@ -434,7 +434,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000 at 16384³**: `g = 2950127/829250000`. -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((2950127 / 829250000 : ℚ) : ℝ) δPearlC
@@ -445,7 +445,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000 at 8192³**: `g = 216793/59950000`. -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC
@@ -456,7 +456,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 16: `g = 1917551/420050000` (0.45651%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast16Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast16InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (16 - 8))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((1917551 / 420050000 : ℚ) : ℝ) δPearlC
@@ -467,7 +467,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 1553551/419686000` (0.37017%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast8p72Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast8p72InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((1553551 / 419686000 : ℚ) : ℝ) δPearlC
@@ -479,7 +479,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.00, the honest cast at 8.72: `g = 3548551/419686000`
 (0.84553%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast8p72ChainOnlyCap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2Cast8p72ChainOnlyInertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainOnlyW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120) sem (1 / 1000) (218/25 - 8))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((3548551 / 419686000 : ℚ) : ℝ) δPearlC
@@ -490,9 +490,9 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the chain cap 1/1,000 at 16384³**, per unit: `g = 367519/103656250`. -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainCapW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
-    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2ChainInertShare1000_16384 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainInertBoundW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
+    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((367519 / 103656250 : ℚ) : ℝ) δPearlC
 
 end Pouw.PearlC
@@ -501,9 +501,9 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the chain cap 1/1,000 at 8192³**, per unit: `g = 26921/7493750`. -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainCapW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
-    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2ChainInertShare1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainInertBoundW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
+    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((26921 / 7493750 : ℚ) : ℝ) δPearlC
 
 end Pouw.PearlC
@@ -512,7 +512,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 16: `g = 639967/140017450` (0.45706%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast16Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast16InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v2 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (16 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((639967 / 140017450 : ℚ) : ℝ) δPearlC
@@ -523,9 +523,9 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). `pearlCGapSm120v2LoopCap1000_8192` bounds
+A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). `pearlCGapSm120v2LoopInertShare1000_8192` bounds
 it from above (`qa` rounded up to 2). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v2 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((1519901 / 419652350 : ℚ) : ℝ) δPearlC
@@ -536,7 +536,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 1555901/419688350` (0.37073%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v2 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((1555901 / 419688350 : ℚ) : ℝ) δPearlC
@@ -548,7 +548,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, chain-only, 8192³**, FP32 at 8.376, the honest cast at 8.72: `g = 3550901/419688350`
 (0.84608%). -/
-def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72ChainOnlyCap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72ChainOnlyInertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevChainOnlyW1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v2 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (218/25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120Loop) sh8192) ((3550901 / 419688350 : ℚ) : ℝ) δPearlC
@@ -570,7 +570,7 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's prices: `g = 216793/59950000`. -/
-def _root_.Pouw.Guarantees.PearlC.GapUOnlyUnpromotedCap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapUOnlyUnpromotedInertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120) (hTT : TTOutPearlCDevUOnlyW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt d sem (1 / 1000)),
     GGapU (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevRev1 d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((216793 / 59950000 : ℚ) : ℝ)
     δPearlC
@@ -581,7 +581,7 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v2 at the cap 1/1,000, 8192³**, at a record with no promotion and sm_120's prices: `g = 216793/59950000`. -/
-def _root_.Pouw.Guarantees.PearlC.GapUnpromotedCap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.GapUnpromotedInertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt d sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDev d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC
 
@@ -592,9 +592,9 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v2 at the chain cap 1/1,000, 8192³**, per unit, at a record with no promotion and sm_120's prices:
 `g = 26921/7493750`. -/
-def _root_.Pouw.Guarantees.PearlC.GapUnpromotedChainCap1000_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120) (hTT : TTOutPearlCDevChainCapW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt d sem (1 / 1000)),
-    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainCap d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((26921 / 7493750 : ℚ) : ℝ)
+def _root_.Pouw.Guarantees.PearlC.GapUnpromotedChainInertShare1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120) (hTT : TTOutPearlCDevChainInertBoundW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt d sem (1 / 1000)),
+    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainInertBound d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((26921 / 7493750 : ℚ) : ℝ)
     δPearlC
 
 end Pouw.PearlC
@@ -626,7 +626,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 8.72:
 `g = 5273/1466810` (0.35949%). -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
     (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -640,7 +640,7 @@ open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72:
 `g = 205211/55610750` (0.36901%). -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
     (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -728,7 +728,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000 per audit tile at 16384³**: `g = 2950127/829250000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v2InertShare1000_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCTilesDev (devSm120v2 Prices.sm120) sem (1 / 1000))
@@ -740,7 +740,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000 per audit tile at 8192³**: `g = 216793/59950000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192 : Prop :=
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v2InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
     GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCTilesDev (devSm120v2 Prices.sm120) sem (1 / 1000))
@@ -752,10 +752,10 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the chain cap 1/1,000 per audit tile at 16384³**: `g = 2950127/829250000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevChainCapW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
-    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
-    (pearlCTilesDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainInertShare1000_16384 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevChainInertBoundW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
+    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
+    (pearlCTilesDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((2950127 / 829250000 : ℚ) : ℝ) δPearlC
 
 end Pouw.PearlC
@@ -764,10 +764,10 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the chain cap 1/1,000 per audit tile at 8192³**: `g = 216793/59950000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevChainCapW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
-    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
-    (pearlCTilesDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+def _root_.Pouw.Guarantees.PearlC.SampledSm120v2ChainInertShare1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCDevChainInertBoundW1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v2 Prices.sm120) sem (1 / 1000)),
+    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
+    (pearlCTilesDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
     (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC
 
 end Pouw.PearlC
@@ -783,7 +783,7 @@ per linear and on the served layout, whose g is the max of the four. -/
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8.376, the honest
 cast at 8.72: `g = 851373343/226641700000` (0.37565%). -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_n6144k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -793,7 +793,7 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8.376, the honest
 cast at 8.72: `g = 295006781/75957050000` (0.38839%). -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_n4096k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -803,7 +803,7 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8.376, the
 honest cast at 8.72: `g = 1863165467/524322650000` (0.35535%). -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_n28672k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -813,7 +813,7 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8.376, the honest
 cast at 8.72: `g = 3045273083/782596025000` (0.38912%). -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_n4096k14336 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -824,7 +824,7 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
 /-- **v1 under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in one layout,
 FP32 at 8.376, the honest cast at 8.72: `g = 3045273083/782596025000` (0.38912%), the down projection's, the max of the
 four. -/
-def GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -834,7 +834,7 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at
 8.376, the honest cast at 8.72: `g = 851373343/226641700000` (0.37565%). -/
-def SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
+def SampledSm120v1LoopCast8p72Rev1InertShare1000_n6144k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -845,7 +845,7 @@ def SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8.376,
 the honest cast at 8.72: `g = 295006781/75957050000` (0.38839%). -/
-def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
+def SampledSm120v1LoopCast8p72Rev1InertShare1000_n4096k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -856,7 +856,7 @@ def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at
 8.376, the honest cast at 8.72: `g = 1863165467/524322650000` (0.35535%). -/
-def SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
+def SampledSm120v1LoopCast8p72Rev1InertShare1000_n28672k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -867,7 +867,7 @@ def SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at
 8.376, the honest cast at 8.72: `g = 3045273083/782596025000` (0.38912%). -/
-def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
+def SampledSm120v1LoopCast8p72Rev1InertShare1000_n4096k14336 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -879,7 +879,7 @@ def SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 : Prop :=
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in
 one layout, FP32 at 8.376, the honest cast at 8.72: `g = 3045273083/782596025000` (0.38912%), the down projection's, the
 max of the four. -/
-def SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b : Prop :=
+def SampledSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -895,7 +895,7 @@ twin the ledger reads beside the in-loop one. Each is below the in-loop g at the
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8, the honest cast at 8.72:
 `g = 508661/135634400` (0.37502%). -/
-def GapSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
+def GapSm120v1Cast8p72Rev1InertShare1000_n6144k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -905,7 +905,7 @@ def GapSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8, the honest cast at 8.72:
 `g = 1359/350750` (0.38746%). -/
-def GapSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
+def GapSm120v1Cast8p72Rev1InertShare1000_n4096k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -915,7 +915,7 @@ def GapSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8, the honest cast at 8.72:
 `g = 928813/261481000` (0.35521%). -/
-def GapSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
+def GapSm120v1Cast8p72Rev1InertShare1000_n28672k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -925,7 +925,7 @@ def GapSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8, the honest cast at 8.72:
 `g = 106307/27386000` (0.38818%). -/
-def GapSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
+def GapSm120v1Cast8p72Rev1InertShare1000_n4096k14336 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -935,7 +935,7 @@ def GapSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
 
 /-- **v1 under rev1 at the cap 1/1,000, Llama-3.1-8B's served layout, its four linears at any `m` in one layout**, FP32 at 8, the honest cast at 8.72:
 `g = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
-def GapSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
+def GapSm120v1Cast8p72Rev1InertShare1000_llama31_8b : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -945,7 +945,7 @@ def GapSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's qkv)**, FP32 at 8, the honest cast at 8.72:
 `g = 508661/135634400` (0.37502%). -/
-def SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
+def SampledSm120v1Cast8p72Rev1InertShare1000_n6144k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -956,7 +956,7 @@ def SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's o)**, FP32 at 8, the honest cast at 8.72:
 `g = 1359/350750` (0.38746%). -/
-def SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
+def SampledSm120v1Cast8p72Rev1InertShare1000_n4096k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -967,7 +967,7 @@ def SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8, the honest cast at 8.72:
 `g = 928813/261481000` (0.35521%). -/
-def SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
+def SampledSm120v1Cast8p72Rev1InertShare1000_n28672k4096 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -978,7 +978,7 @@ def SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8, the honest cast at 8.72:
 `g = 106307/27386000` (0.38818%). -/
-def SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
+def SampledSm120v1Cast8p72Rev1InertShare1000_n4096k14336 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →
@@ -989,7 +989,7 @@ def SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336 : Prop :=
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, Llama-3.1-8B's served layout, its four linears at any `m` in one layout**, FP32 at 8, the honest cast at 8.72:
 `g = 106307/27386000` (0.38818%), the down projection's, the max of the four. -/
-def SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
+def SampledSm120v1Cast8p72Rev1InertShare1000_llama31_8b : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S),
     TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt (devSm120v1 Prices.sm120) sem (1 / 1000) →

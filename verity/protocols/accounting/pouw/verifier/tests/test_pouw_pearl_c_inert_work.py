@@ -1,4 +1,4 @@
-"""Pearl-C's debit replay (`pearl_c_debit`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
+"""Pearl-C's debit replay (`pearl_c_inert_work`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
 checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from verity.circuits.silicon.models import HOPPER_E4M3_K32
 from verity.protocols.accounting.pouw.prover.circuit import words as W
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 VECTORS = Path(__file__).parent / "vectors"
@@ -85,7 +85,7 @@ def spiked_rows(k: int, count: int, seed: int, spike: float | None) -> list[byte
 
 
 @pytest.mark.parametrize("spike", [300.0, None])
-def test_aligned_spike_tile_is_over_the_cap(spike):
+def test_aligned_spike_tile_is_over_the_inert_bound(spike):
     """The negative control: the R = 300 aligned-spike tile, formed by the scheme's own `encode`, passes the domain and has
     74.6% of its atom-words flagged, about 15x the cap; without spikes the debit is far below it."""
     k, t = 4096, 4
@@ -94,11 +94,11 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     ops = s.encode(ctx, s.noise(ctx), spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike),
                    Tile(tuple(range(t)), tuple(range(t))))
     assert s.admissible(ctx, ops)
-    atoms, zeros, elements = D.tile_debit(ops.a.codes, ops.b.codes, formed(ops))
-    assert (atoms, zeros) == D.chain_debit(ops.a.codes, ops.b.codes)
+    atoms, zeros, elements = D.tile_inert_work(ops.a.codes, ops.b.codes, formed(ops))
+    assert (atoms, zeros) == D.chain_inert_work(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes) and zeros == 0
     assert elements == elements_by_definition(ops)
-    debit = D.debit_units(atoms, elements, zeros=zeros)
+    debit = D.inert_work_units(atoms, elements, zeros=zeros)
     cap = s.cap * s.credit_of(Shape(t, k, t))
     if spike:
         assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
@@ -111,7 +111,7 @@ def formed(ops) -> list[tuple[int, list[int], int]]:
 
 
 def elements_by_definition(ops) -> int:
-    """`tileDebitDev`'s elems over the whole tile, element by element: salt-dead (the circuit's `PouwHopperE4m3SaltDead` on
+    """`tileInertWorkDev`'s elems over the whole tile, element by element: salt-dead (the circuit's `PouwHopperE4m3SaltDead` on
     f32(α·x) and c_β), or its atom block flagged by every word of its row."""
     flags = [[D.word_flags(a, b) for b in ops.b.codes] for a in ops.a.codes]
     return sum(1 for i, (alpha, x, beta) in enumerate(formed(ops)) for l, w in enumerate(x)
@@ -131,8 +131,8 @@ def test_salt_dead_is_the_circuits_bit():
     assert not dead[0] and dead[6] and 50 < sum(dead) < 450
 
 
-def test_forming_elements_count_every_flagged_block_and_the_salt_dead():
-    """`forming_elements`: a block every word of its row flags counts whole, one some word leaves unflagged counts its
+def test_inert_elements_count_every_flagged_block_and_the_salt_dead():
+    """`inert_elements`: a block every word of its row flags counts whole, one some word leaves unflagged counts its
     salt-dead elements alone, and a row whose blocks are all flagged never reads its salt-dead elements."""
     t, f = [True] * 4, [False] * 4
     read = []
@@ -141,7 +141,7 @@ def test_forming_elements_count_every_flagged_block_and_the_salt_dead():
         read.append(i)
         return [l % 3 == 0 for l in range(128)]
     flags = [[t, t], [[True, False, True, False], [True, True, False, False]], [f, t]]
-    assert D.forming_elements(flags, dead) == 128 + (32 + 32) + 43
+    assert D.inert_elements(flags, dead) == 128 + (32 + 32) + 43
     assert read == [1, 2]
 
 
@@ -153,17 +153,17 @@ def zero_promos(a: list[int], b: list[int]) -> int:
 
 
 def test_later_zero_promotions_are_the_prefix_chains_at_zero():
-    """A word's later +0 promotions (`word_debit`) are its prefix chains that replay to ±0: none on P1's vectors at
+    """A word's later +0 promotions (`word_inert_work`) are its prefix chains that replay to ±0: none on P1's vectors at
     k = 512, every one on a zero word, and the one after a group that cancels the group before it."""
     words = [(a, b) for _, k, a, b, _ in vectors() if k == 512][:40]
-    assert all(D.word_debit(a, b)[1] == zero_promos(a, b) == 0 for a, b in words)
+    assert all(D.word_inert_work(a, b)[1] == zero_promos(a, b) == 0 for a, b in words)
     rng, k = random.Random("pearl-c-rev1/zeros"), 512
     a = [rng.randrange(0x7F) | rng.choice((0, 0x80)) for _ in range(k)]
     half = [rng.randrange(0x7F) | rng.choice((0, 0x80)) for _ in range(128)]
     tail = [rng.randrange(0x7F) | rng.choice((0, 0x80)) for _ in range(256)]
     b = half + [c ^ 0x80 for c in half] + tail
     a = a[:128] * 2 + a[256:]
-    assert D.word_debit(a, b) == (D.word_flags(a, b), zero_promos(a, b)) and zero_promos(a, b) == 1
-    assert D.word_debit([0] * k, [0] * k)[1] == zero_promos([0] * k, [0] * k) == k // (32 * D.G) - 1
-    assert D.chain_debit([a, [0] * k], [b]) == (sum(D.word_flags(a, b)) + sum(D.word_flags([0] * k, b)),
+    assert D.word_inert_work(a, b) == (D.word_flags(a, b), zero_promos(a, b)) and zero_promos(a, b) == 1
+    assert D.word_inert_work([0] * k, [0] * k)[1] == zero_promos([0] * k, [0] * k) == k // (32 * D.G) - 1
+    assert D.chain_inert_work([a, [0] * k], [b]) == (sum(D.word_flags(a, b)) + sum(D.word_flags([0] * k, b)),
                                                1 + zero_promos([0] * k, b))

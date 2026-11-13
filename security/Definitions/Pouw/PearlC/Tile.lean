@@ -72,7 +72,7 @@ structure TileRules (Q R S : Type) where
   tiling : Layout → Tiling
   rowOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
-  capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
+  inertBoundOK : (Q → R) → S → Workload → ℕ → Codes → Prop
   Wref : Layout → ℕ → ℝ
   Wcred : Layout → ℕ → Codes → ℝ
 
@@ -83,7 +83,7 @@ its unit's weight) passes the rules, and each ticket and useful word of its cred
 pass the rules) has the reference FP32 value. Excluded rows are bound but uncredited, so their words don't enter the gap. -/
 def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
     Prop :=
-  TR.capOK H s U g c.act ∧
+  TR.inertBoundOK H s U g c.act ∧
     (∀ j ∈ (TR.tiling U.layout).cols g,
       P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g))
         (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j) ∧
@@ -139,9 +139,9 @@ def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 open Classical in
 /-- The tiles of the units `τ` commits whose inert work (the replayed debit) exceeds its bound: the tolerant audit
 accepts a sampled one and credits it nothing. -/
-noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def overInertBoundTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
-    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
+    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.inertBoundOK H s U g c.act
 
 /-- **The gap property under the tolerant sampled audit.** Write `S` for the credit (the claimed work, the credited
 rows' `W_ref`; a number, where the type `S` is the salt's), `T` for the budget, `g` for the gap (the statement's `γ`),
@@ -159,9 +159,9 @@ def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
               blankTiles TR U (A.transcript U x.1 x.2.1))
-            (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+            (overInertBoundTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
-            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+            u (drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
         ≤ δ + η q U.layout.N
 
 /-! ## Pearl-C's tiles -/
@@ -178,7 +178,7 @@ def tileShare (sh : Shape) (rows cols : Finset ℕ) : ℚ := (rows.card * cols.c
 
 open Classical in
 /-- **A tile's replayed debit** in H100 units, on the unit's noisy codes and flags (`unitChain`, `Skip.unitFlags`):
-- **the chain:** `debitOf` of the tile's flagged atom-words, its words' share of the unit's `atoms` (additive over words,
+- **the chain:** `inertWorkOf` of the tile's flagged atom-words, its words' share of the unit's `atoms` (additive over words,
   and each word's flags read only its two rows);
 - **the forming, P3's per-tile rule** ("The per-tile cap"): each A′ element of
   the tile's rows that is salt-dead, or that no word of the tile needs (every word `(i, j)` with `j` in the tile's
@@ -186,7 +186,7 @@ open Classical in
   element's forming that the tile's credit carries. Needed is judged on the tile's own words, which over-debits against
   the unit and is sound; the shares over a row band's tiles sum to 1, so an element no word of the unit needs is debited
   once in all, and the tiles' forming debits add up to at least the unit's. -/
-noncomputable def PearlCSem.tileDebit (sem : PearlCSem Q R S) (c : Costs) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+noncomputable def PearlCSem.tileInertWork (sem : PearlCSem Q R S) (c : Costs) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
@@ -196,12 +196,12 @@ noncomputable def PearlCSem.tileDebit (sem : PearlCSem Q R S) (c : Costs) (H : Q
     ((range (sh.k / 32)).filter fun t => fl e.1 e.2 t = true).card
   let elems := ((univ : Finset (Fin sh.m × Fin sh.k)).filter fun e => (e.1 : ℕ) ∈ rows ∧
     (SaltDead.saltDead sem.alpha sem.beta sh.k (X e.1) e.2 ∨ ∀ j : Fin sh.n, (j : ℕ) ∈ cols → fl e.1 j ((e.2 : ℕ) / 32) = true)).card
-  debitOf Params.pi c ⟨atoms, 0⟩ + (c.fs : ℚ) * (cols.card / sh.n) * elems
+  inertWorkOf Params.pi c ⟨atoms, 0⟩ + (c.fs : ℚ) * (cols.card / sh.n) * elems
 
 /-- **Pearl-C's tiles** on the audit's `64 × 64` grid, at costs `c` and cap `ρ`:
 - `rowOK`: `PearlCSem.RowOK`, Π's rules on one activation row;
 - `credit`: `(1 − ρ)·creditOf` times the credited rows' share, fixed;
-- `capOK`: the replayed debit on the credited rows (`tileDebit`) is at most `ρ·creditOf` times their share;
+- `inertBoundOK`: the replayed debit on the credited rows (`tileInertWork`) is at most `ρ·creditOf` times their share;
 - `Wref`: `wrefOf` times the tile's share, as `verity.protocols.accounting.work.pouw.audit`'s `tickets` weigh a tile once its `wref` is `wrefOf`;
 - `Wcred`: `wrefOf` times the credited rows' share. -/
 noncomputable def pearlCTiles (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : TileRules Q R S where
@@ -211,10 +211,10 @@ noncomputable def pearlCTiles (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : T
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
     (((1 - ρ) * creditOf Params.pi c sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ)
-  capOK := fun H s U g act =>
+  inertBoundOK := fun H s U g act =>
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
-    sem.tileDebit c H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
+    sem.tileInertWork c H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
       ρ * creditOf Params.pi c sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g)
   Wref := fun L g =>
     let tl := auditTiling 64 64 L

@@ -22,7 +22,7 @@ from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 
@@ -559,9 +559,9 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
     for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
         assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
         assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
-    assert D.debit_units(1, 0, s, zeros=0) == 34 and D.debit_units(0, 1, s, zeros=0) == 40
-    assert D.debit_units(1, 1, zeros=0) == 40 + 64 and D.debit_units(0, 0, s, zeros=1) == 8
-    assert D.debit_units(0, 0, zeros=1) == 32
+    assert D.inert_work_units(1, 0, s, zeros=0) == 34 and D.inert_work_units(0, 1, s, zeros=0) == 40
+    assert D.inert_work_units(1, 1, zeros=0) == 40 + 64 and D.inert_work_units(0, 0, s, zeros=1) == 8
+    assert D.inert_work_units(0, 0, zeros=1) == 32
     with pytest.raises(ValueError):
         C.PearlC(forming="v0", prices=s, hashing="h0")
 

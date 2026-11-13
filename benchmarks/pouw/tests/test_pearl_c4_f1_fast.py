@@ -55,9 +55,9 @@ def test_fast_path_keeps_r1_and_the_tile_on_r1s_tile():
     k = ctx.matmul.shape.k
     fast = F.PearlC4("nvfp4", f1=Q.row_units, hashing="h0")
     rec = W.UnitRecord(ctx.matmul, 4, k)
-    assert [fast.row_over_debit(rec, ops, "A", p) for p in range(4)] == [s.row_over_debit(rec, ops, "A", p) for p in range(4)]
-    assert not any(fast.row_over_debit(rec, ops, "B", p) for p in range(4))
+    assert [fast.row_over_inert_work(rec, ops, "A", p) for p in range(4)] == [s.row_over_inert_work(rec, ops, "A", p) for p in range(4)]
+    assert not any(fast.row_over_inert_work(rec, ops, "B", p) for p in range(4))
     assert CW.check_opened(fast, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
-    d_fast = fast.tile_cap(rec, ops, range(4), range(4))[0]
-    d_rule = s.tile_cap(rec, ops, range(4), range(4))[0]
+    d_fast = fast.tile_inert_bound(rec, ops, range(4), range(4))[0]
+    d_rule = s.tile_inert_bound(rec, ops, range(4), range(4))[0]
     assert abs(d_fast - d_rule) <= Fraction(1, 10 ** 9) * max(1, d_rule)

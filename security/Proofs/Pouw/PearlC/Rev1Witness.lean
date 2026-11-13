@@ -111,11 +111,11 @@ theorem wide_unitFlags (H : Unit → Unit) (s : Unit) (i : Fin (wideWorkload.lay
   exact witness_flags t ht
 
 open Classical in
-theorem wide_debit_zero (H : Unit → Unit) (s : Unit) :
-    (witnessSem.unitDebit H s wideWorkload 0 (witnessAct 0)).atoms = 0 ∧
-      (witnessSem.unitDebit H s wideWorkload 0 (witnessAct 0)).elems = 0 := by
+theorem wide_inert_work_zero (H : Unit → Unit) (s : Unit) :
+    (witnessSem.unitInertWork H s wideWorkload 0 (witnessAct 0)).atoms = 0 ∧
+      (witnessSem.unitInertWork H s wideWorkload 0 (witnessAct 0)).elems = 0 := by
   constructor
-  · unfold PearlCSem.unitDebit
+  · unfold PearlCSem.unitInertWork
     dsimp only
     apply sum_eq_zero
     intro i _
@@ -126,7 +126,7 @@ theorem wide_debit_zero (H : Unit → Unit) (s : Unit) :
     have ht' : t < 4 := by simpa [wideWorkload] using mem_range.mp ht
     rw [wide_unitFlags H s i j t ht']
     simp
-  · unfold PearlCSem.unitDebit
+  · unfold PearlCSem.unitInertWork
     dsimp only
     rw [card_eq_zero, filter_eq_empty_iff]
     intro e _
@@ -142,9 +142,9 @@ theorem wide_debit_zero (H : Unit → Unit) (s : Unit) :
 
 open Classical in
 /-- The wide workload's first tile (row 0, columns `[0, 64)`) has zero debit. -/
-theorem wide_tileDebit_zero (H : Unit → Unit) (s : Unit) :
-    witnessSem.tileDebit Costs.adopted H s wideWorkload 0 (Ico 0 1) (Ico 0 64) (witnessAct 0) = 0 := by
-  unfold PearlCSem.tileDebit
+theorem wide_tileInertWork_zero (H : Unit → Unit) (s : Unit) :
+    witnessSem.tileInertWork Costs.adopted H s wideWorkload 0 (Ico 0 1) (Ico 0 64) (witnessAct 0) = 0 := by
+  unfold PearlCSem.tileInertWork
   dsimp only
   have ha : ∑ e ∈ (univ : Finset (Fin (wideWorkload.layout.shape 0).m × Fin (wideWorkload.layout.shape 0).n)).filter
       (fun e => (e.1 : ℕ) ∈ Ico 0 1 ∧ (e.2 : ℕ) ∈ Ico 0 64),
@@ -176,7 +176,7 @@ theorem wide_tileDebit_zero (H : Unit → Unit) (s : Unit) :
     rw [wide_unitFlags H s e.1 _ _ hl] at h0
     exact Bool.false_ne_true h0
   rw [ha, he]
-  simp [debitOf]
+  simp [inertWorkOf]
 
 theorem wide_passRows :
     witnessSem.passRows (wideWorkload.layout.shape 0) (witnessAct 0) (Ico 0 1) = Ico 0 1 := by
@@ -208,18 +208,18 @@ theorem ttOutPearlCH100Rev1Witness :
       TTOutPearlCH100Rev1 (witnessCM (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
       wideWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
       wideWorkload.FixedOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
-      (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
+      (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).inertBoundOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
       0 < ∑ u ∈ range wideWorkload.layout.N,
         (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () wideWorkload u (witnessAct u) := by
   set P := pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)
-  have hzero0 : debitDev devH100 (witnessSem.unitDebitDev devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0)) = 0 := by
-    rw [unitDebitDev_h100, debitDev_h100]
-    obtain ⟨ha, he⟩ := wide_debit_zero (fun _ => ()) ()
-    unfold debitOf
+  have hzero0 : inertWorkDev devH100 (witnessSem.unitInertWorkDev devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0)) = 0 := by
+    rw [unitInertWorkDev_h100, inertWorkDev_h100]
+    obtain ⟨ha, he⟩ := wide_inert_work_zero (fun _ => ()) ()
+    unfold inertWorkOf
     rw [ha, he]
     simp
-  have hzero : witnessSem.unitDebitRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) = 0 := by
-    unfold PearlCSem.unitDebitRev1
+  have hzero : witnessSem.unitInertWorkRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) = 0 := by
+    unfold PearlCSem.unitInertWorkRev1
     rw [hzero0]
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
@@ -230,9 +230,9 @@ theorem ttOutPearlCH100Rev1Witness :
     apply sum_le_sum
     intro u _
     show max (((creditDevRev1 devH100 (U.layout.shape u) -
-        witnessSem.unitDebitRev1 devH100 H s U u (act u) : ℚ) : ℝ)) 0 ≤
+        witnessSem.unitInertWorkRev1 devH100 H s U u (act u) : ℚ) : ℝ)) 0 ≤
       (wrefDevRev1 devH100 (U.layout.shape u) : ℝ)
-    have h0 := unitDebitRev1_nonneg witnessSem devH100 (by norm_num [devH100, Prices.h100]) H s U u (act u)
+    have h0 := unitInertWorkRev1_nonneg witnessSem devH100 (by norm_num [devH100, Prices.h100]) H s U u (act u)
     have h1 := creditDevRev1_le_wref_h100 (U.layout.shape u)
     have h2 := creditDevRev1_h100_nonneg (U.layout.shape u)
     apply max_le
@@ -256,14 +256,14 @@ theorem ttOutPearlCH100Rev1Witness :
       linarith
   · exact wide_inDomain P
   · exact wide_weightsOK
-  · show witnessSem.unitDebitRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) ≤
+  · show witnessSem.unitInertWorkRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) ≤
       1 / 400 * creditDevRev1 devH100 (wideWorkload.layout.shape 0)
     rw [hzero]
     have := creditDevRev1_h100_nonneg (wideWorkload.layout.shape 0)
     positivity
   · rw [show range wideWorkload.layout.N = range 1 from rfl, sum_range_one]
     show (0 : ℝ) < ((creditDevRev1 devH100 (wideWorkload.layout.shape 0) -
-      witnessSem.unitDebitRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) : ℚ) : ℝ)
+      witnessSem.unitInertWorkRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) : ℚ) : ℝ)
     rw [hzero, creditDevRev1_h100]
     norm_num [creditOfRev1, firstAddOf, creditOf, Params.pi, Costs.adopted, wideWorkload]
 
@@ -276,7 +276,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
         (pearlCTilesDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
     wideWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
     wideWorkload.FixedOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
-    (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
+    (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).inertBoundOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
     0 < ∑ g ∈ range ((pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).tiling wideWorkload.layout).NT,
       (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () wideWorkload g (witnessAct 0) := by
   set P := pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)
@@ -339,7 +339,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
       linarith
   · exact wide_inDomain P
   · exact wide_weightsOK
-  · show witnessSem.tileDebitRev1 devH100 (fun _ => ()) () wideWorkload ((TR.tiling wideWorkload.layout).unit 0)
+  · show witnessSem.tileInertWorkRev1 devH100 (fun _ => ()) () wideWorkload ((TR.tiling wideWorkload.layout).unit 0)
         (witnessSem.passRows (wideWorkload.layout.shape ((TR.tiling wideWorkload.layout).unit 0)) (witnessAct 0)
           ((TR.tiling wideWorkload.layout).rows 0)) ((TR.tiling wideWorkload.layout).cols 0) (witnessAct 0) ≤
       1 / 400 * creditDevRev1 devH100 (wideWorkload.layout.shape ((TR.tiling wideWorkload.layout).unit 0)) *
@@ -347,8 +347,8 @@ theorem ttOutTilePearlCH100Rev1Witness :
           (witnessSem.passRows (wideWorkload.layout.shape ((TR.tiling wideWorkload.layout).unit 0)) (witnessAct 0)
             ((TR.tiling wideWorkload.layout).rows 0)) ((TR.tiling wideWorkload.layout).cols 0)
     rw [hu, hr, hc, wide_passRows]
-    unfold PearlCSem.tileDebitRev1
-    rw [tileDebitDev_h100, wide_tileDebit_zero]
+    unfold PearlCSem.tileInertWorkRev1
+    rw [tileInertWorkDev_h100, wide_tileInertWork_zero]
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
     have h2 := creditDevRev1_h100_nonneg (wideWorkload.layout.shape 0)

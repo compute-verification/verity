@@ -18,8 +18,8 @@ public import PouwCommit.Rows
    all `hm96-sha512` trees (`PouwCommit.Rows`);
 3. the tile's words from the opened values (`Words.encode`, `Words.checked`; a non-finite value is `inadmissible inputs`),
    and their leaf is the opened leaf (`checked values`);
-4. the tile rule by the record: its rows (`Rule.rowsFailure`), then the inert-work bound (`Rule.capCheck`), a tile over
-   which is `overCap` once every later check passes;
+4. the tile rule by the record: its rows (`Rule.rowsFailure`), then the inert-work bound (`Rule.inertBoundCheck`), a tile over
+   which is `overInertBound` once every later check passes;
 5. on a call that commits y, the prover's files open the tile's real rows of it (`the prover's files don't open its y`),
    they open against the call's y root at their positions (`y opening`), each holds a word for every column of the tile
    (`the opened row holds N words`: the opening binds a row's value, of any length) and each word is the unscale of the
@@ -72,11 +72,11 @@ def words32 (b : ByteArray) : Array Nat :=
   (Array.range (b.size / 4)).map fun i =>
     b[4 * i]!.toNat ||| (b[4 * i + 1]!.toNat <<< 8) ||| (b[4 * i + 2]!.toNat <<< 16) ||| (b[4 * i + 3]!.toNat <<< 24)
 
-/-- A tile's verdict: it passes, it is over its inert-work bound (`Rule.capCheck`'s reason) with every other check passed,
+/-- A tile's verdict: it passes, it is over its inert-work bound (`Rule.inertBoundCheck`'s reason) with every other check passed,
 or it fails. The run's `over_cap` rule decides an over-bound tile: credited nothing, or the run rejected. -/
 inductive TileOutcome where
   | pass
-  | overCap (why : String)
+  | overInertBound (why : String)
   | fail (why : String)
   deriving BEq, Repr, Inhabited
 
@@ -102,9 +102,9 @@ def checkTile (p : Pass) (wn : Except String FixedNoise) (tid : Nat) (o : TileOp
   let .ok (ops, ch) := work | return .fail "inadmissible inputs"
   if leaf ch != openedValue o.leaf.value then return .fail "checked values"
   if let some why := Rule.rowsFailure r rows cols ops then return .fail why
-  let done : TileOutcome ← match Rule.capCheck p.scheme r rows cols ops with
+  let done : TileOutcome ← match Rule.inertBoundCheck p.scheme r rows cols ops with
     | .ok none => pure .pass
-    | .ok (some why) => pure (.overCap why)
+    | .ok (some why) => pure (.overInertBound why)
     | .error why => return .fail why
   let some yRoot := p.yRoots[pos]! | return done
   let ys ← match o.y with

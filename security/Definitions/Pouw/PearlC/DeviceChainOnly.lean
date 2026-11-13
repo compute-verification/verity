@@ -30,7 +30,7 @@ noncomputable def pearlCProtocolDevKChainOnly (d : PearlCDevice) (sem : PearlCSe
     Protocol Q R S :=
   { pearlCProtocolDevK d sem ρ c with
     credit := fun H s U u act =>
-      ((creditDevChainOnly d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ) }
+      ((creditDevChainOnly d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u act) : ℚ) : ℝ) }
 
 /-- `pearlCTilesDevK` with the chain-only fixed credit `(creditDevChainOnly − ρ·creditDev)` times the credited rows'
 share. -/
@@ -47,7 +47,7 @@ noncomputable def pearlCProtocolDevRev1KChainOnly (d : PearlCDevice) (sem : Pear
     Protocol Q R S :=
   { pearlCProtocolDevRev1K d sem ρ c with
     credit := fun H s U u act =>
-      ((creditDevRev1ChainOnly d (U.layout.shape u) - sem.unitDebitRev1 d H s U u act : ℚ) : ℝ) }
+      ((creditDevRev1ChainOnly d (U.layout.shape u) - sem.unitInertWorkRev1 d H s U u act : ℚ) : ℝ) }
 
 /-- `pearlCTilesDevRev1K` with the chain-only fixed credit `(creditDevRev1ChainOnly − ρ·creditDevRev1)` times the
 credited rows' share. -/

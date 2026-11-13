@@ -320,9 +320,9 @@ def side_tile(k: int, tile: tuple[int, int] = (1, 1), dev: str = "sm120") -> Spe
 
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and
 #: its advice: parameters the prover supplies that no unit computes and nothing binds (the certificates of the
-#: inert-work bound's word, `cap.ADVICE`), which Flock proves as private inputs.  An advice port is in the unit's io and
+#: inert-work bound's word, `inert_bound.ADVICE`), which Flock proves as private inputs.  An advice port is in the unit's io and
 #: in no read set: in no committed row (so in no link either) and in no public input region, which
-#: `leaves.statement_rows` enforces.  Under the inert-work bound the ports are `cap.PORTS` (``Shape.ports``).
+#: `leaves.statement_rows` enforces.  Under the inert-work bound the ports are `inert_bound.PORTS` (``Shape.ports``).
 PORTS = {
     "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
               "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}, "advice": ()},
@@ -401,13 +401,13 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
 class _Ports(pc4.RowK):
-    """`Shape.ports`: `cap.PORTS` on a shape with the inert-work bound, else `pc4.RowK`'s (today's, or with ``row_k``
+    """`Shape.ports`: `inert_bound.PORTS` on a shape with the inert-work bound, else `pc4.RowK`'s (today's, or with ``row_k``
     the cut's)."""
 
     def __get__(self, shape, cls=None) -> dict:
         if shape is not None and shape.cap:
-            from . import cap
-            return cap.PORTS
+            from . import inert_bound
+            return inert_bound.PORTS
         return super().__get__(shape, cls)
 
 
@@ -415,7 +415,7 @@ class _Ports(pc4.RowK):
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
     ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile inert-work bound, cut into word,
-    tile and tally units (`cap`), and ``row_rho`` its per-row inert-work bound at ρr = 1/row_rho (`cap.row_rho`, the -h3
+    tile and tally units (`cap`), and ``row_rho`` its per-row inert-work bound at ρr = 1/row_rho (`inert_bound.row_rho`, the -h3
     tile rule's; None, the tile's inert-work bound alone); ``row_k``, each row unit cut into k / row_k segments (`rowk`;
     None, today's Programs). `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
@@ -451,8 +451,8 @@ class Shape:
         if self.cap:
             if self.m % tm:
                 raise DomainError(f"Pearl-C's cap takes whole tiles only, {tm} | m: {self}")
-            from . import cap
-            cap.check_shape(self)
+            from . import inert_bound
+            inert_bound.check_shape(self)
         if self.row_k is not None:
             if self.m % tm:
                 raise DomainError(f"Pearl-C's row cut takes whole tiles only, {tm} | m: {self}")
@@ -584,8 +584,8 @@ def weight(shape: Shape) -> SpecializedDefinition:
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
     if shape.cap:
-        from . import cap
-        return cap.call(shape)
+        from . import inert_bound
+        return inert_bound.call(shape)
     if shape.row_k is not None:
         from . import rowk
         return rowk.root8(shape, "call")
@@ -596,8 +596,8 @@ def call(shape: Shape) -> SpecializedDefinition:
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
     if shape.cap:
-        from . import cap
-        return cap.check(shape)
+        from . import inert_bound
+        return inert_bound.check(shape)
     if shape.row_k is not None:
         from . import rowk
         return rowk.root8(shape, "check")
@@ -613,8 +613,8 @@ _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "t
 
 
 def _role_of() -> dict[int, str]:
-    from . import cap, rowk
-    return _ROLE_OF | cap.ROLE_OF | rowk.ROLE_OF
+    from . import inert_bound, rowk
+    return _ROLE_OF | inert_bound.ROLE_OF | rowk.ROLE_OF
 
 
 def tile_templates(shape: Shape) -> list[SpecializedDefinition]:
@@ -623,16 +623,16 @@ def tile_templates(shape: Shape) -> list[SpecializedDefinition]:
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`, under the inert-work bound `cap.ROLES`, or with
+    """`Q_template_instances` over the side's unit templates (`ROLES`, under the inert-work bound `inert_bound.ROLES`, or with
     ``row_k`` `rowk.ROLES`), in the order its root body first uses them: a short last tile row's template after the
     whole tiles'."""
     if shape.row_k is not None:
         from . import rowk
         return PO.template_instances_query(rowk.unit_templates8(shape, side))
     if shape.cap:
-        from . import cap
-        tp = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n, row_rho=shape.row_rho)
-        return PO.template_instances_query([tp[r] for r in cap.ROLES[side]])
+        from . import inert_bound
+        tp = inert_bound.unit_templates(shape.k, shape.dev, shape.tile, shape.n, row_rho=shape.row_rho)
+        return PO.template_instances_query([tp[r] for r in inert_bound.ROLES[side]])
     tp = templates(shape.k, shape.tile, shape.dev, shape.hidden, "h0")
     return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])
 

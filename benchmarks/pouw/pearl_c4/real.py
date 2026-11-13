@@ -8,7 +8,7 @@ the scheme (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) judges a
   non-finite word (D-SB rejects the transcript);
 * the split unit's screened blocks (`dead_blocks`, 9.5ρ), and the rows D-SS's retired one-in-64 limit would have rejected;
 * on --tiles 64 x 64 grid tiles of the split unit, sampled by a seeded RNG: the verifier's forming with D-SB
-  (`PearlC4._side`) and the replayed inert work of the tile's credited words against its bound (`tile_cap`), item by item.
+  (`PearlC4._side`) and the replayed inert work of the tile's credited words against its bound (`tile_inert_bound`), item by item.
 
 Shortcuts: the split is a stand-in, not a pinned rule (the ⌊k/100⌋ channels with the largest max|x| over the captured rows
 leave the unit, ties to the lower channel; the kept ones are zero-padded to a multiple of 128); the noise is keyed by
@@ -199,8 +199,8 @@ def tile(job: Job, name: str, t: int) -> dict:
     got |= {"credited": [len(cred_a), len(cred_b)], "rejected": ""}
     if not (cred_a and cred_b):
         return got
-    inert, bound = s.tile_cap(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b), cred_a, cred_b)
-    return got | {"debit": s.last_debit.to_json(), "cap": str(bound), "ratio": float(inert / bound)}
+    inert, bound = s.tile_inert_bound(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b), cred_a, cred_b)
+    return got | {"debit": s.last_inert_work.to_json(), "cap": str(bound), "ratio": float(inert / bound)}
 
 
 def run(task: tuple) -> tuple[tuple, dict]:

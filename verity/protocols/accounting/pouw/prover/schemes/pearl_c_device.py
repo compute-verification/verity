@@ -6,17 +6,17 @@ the peel accumulates into C̃'s word.  Beside them the record holds the promotio
 promoted by one FP32 nearest-even add), the W1 prices (`Prices`) that `wref`, `credit_of`, `job_cost` and the count of
 inert work read, the domain's k bound, and the inert-work bound ρ (`cap`: a tile whose inert work passes ρ times its
 credited cells' credit is rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl_c`,
-`pearl_c_debit`, `pearl_c_u` and the work sampling design (`clear_work`) read the record; nothing else in them names
+`pearl_c_inert_work`, `pearl_c_u` and the work sampling design (`clear_work`) read the record; nothing else in them names
 hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
   the H100's W1 prices (Lean `Prices.h100`), k <= 2^16 (the pure-chain freezing bound), k = 256 under forming v1 and -h3 beside Pearl-C's
-  k >= 1,024 (`census_ks`, where a row's inert-work bound is 4ρ: `pearl_c.CENSUS_ROW_CAP`) and ρ = 1/400 (TT_OUT(1/400)).
+  k >= 1,024 (`census_ks`, where a row's inert-work bound is 4ρ: `pearl_c.CENSUS_ROW_INERT_SHARE_MULTIPLE`) and ρ = 1/400 (TT_OUT(1/400)).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
   `SM120_PRICES` (`Prices.sm120`); the other fields are stand-ins (`standins` names each):
   `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4 and k bound.  Its inert-work bound is ρ = 1/1,000 (Lean
-  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192` and its twins).  G, the prices, the k
+  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_8192` and its twins).  G, the prices, the k
   bound and the inert-work bound are statement parameters: they change with the Lean statements, not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme

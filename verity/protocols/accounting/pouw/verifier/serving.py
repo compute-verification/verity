@@ -39,13 +39,13 @@ class HashFormat:
     name: str
     tree_hash: str
     seed_a: str
-    row_cap: bool = False
+    row_inert_bound: bool = False
     row_digest: str | None = None
 
 
 HASH_FORMATS: dict[str, HashFormat] = {
     "h0": HashFormat("h0", "sha256", "unit-root"),
-    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest=domains.SHA512_ROW_SEG_DIGEST),
+    "h3": HashFormat("h3", "hm96-sha512", "row", row_inert_bound=True, row_digest=domains.SHA512_ROW_SEG_DIGEST),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``

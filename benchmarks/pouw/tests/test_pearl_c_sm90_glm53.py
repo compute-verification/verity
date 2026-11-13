@@ -701,7 +701,7 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     assert not res["ok"]
 
 
-def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured(retained, tmp_path):
+def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured(retained, tmp_path):
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""

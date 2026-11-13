@@ -175,9 +175,9 @@ theorem gapSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
     (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1) (hΩ : 0 < Ω)
     (hW0 : ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ dc : Decl, 0 ≤ Wd U.layout g dc)
     (hc0 : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
-      TR.capOK H s U g act → 0 ≤ TR.credit H s U g act)
+      TR.inertBoundOK H s U g act → 0 ≤ TR.credit H s U g act)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ (act : Codes)
-      (dc : Decl), TR.capOK H s U g act → dc.kept ≤ (U.layout.shape ((TR.tiling U.layout).unit g)).k →
+      (dc : Decl), TR.inertBoundOK H s U g act → dc.kept ≤ (U.layout.shape ((TR.tiling U.layout).unit g)).k →
       (∀ i ∈ (TR.tiling U.layout).rows g, i ∈ dc.rows →
         TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) act i) →
       (Wd U.layout g dc : ℝ) ≤ Ω * TR.credit H s U g act)
@@ -198,9 +198,9 @@ theorem gapSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
     obtain ⟨⟨hgr, c, hc, hgc⟩, hdc⟩ := hg
     exact ⟨c, hc, hgc, mem_range.mp hgr, hdc⟩
   refine sampledOfGoodDrawTol TR Wd U τ (dec x.1 x.2) (goodDeclTiles P TR U x.1 x.2 τ (dec x.1 x.2))
-    (overCapTiles TR U x.1 x.2 τ) (fun g => TR.credit x.1 x.2 U g (actOf τ ((TR.tiling U.layout).unit g))) γ₀ Ω T hγ₀
+    (overInertBoundTiles TR U x.1 x.2 τ) (fun g => TR.credit x.1 x.2 U g (actOf τ ((TR.tiling U.layout).unit g))) γ₀ Ω T hγ₀
     hΩ ((goodDeclTiles_subset P TR U x.1 x.2 τ _).trans (goodTiles_subset P TR U x.1 x.2 τ))
-    ((overCapTiles_disjoint P TR U x.1 x.2 τ).mono_left
+    ((overInertBoundTiles_disjoint P TR U x.1 x.2 τ).mono_left
       (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 τ _) (Subset.refl _)))
     ?_ ?_ t u δ hu ?_
   · intro g hg
@@ -249,9 +249,9 @@ theorem gapSampledDraw_of_threshold {Q R S : Type} [Fintype Q] [DecidableEq Q] [
   classical
   refine le_trans (Claims.Ex_mono fun x => pr_mono fun c hc => ?_) (h U hU T hT q hq A hA dec t εs hεs)
   obtain ⟨hacc, hTlt⟩ := hc
-  have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
+  have hdisj := (overInertBoundTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
     (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2)) (Subset.refl _))
-  have h0 : drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 := by
+  have h0 : drawsIn (overInertBoundTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 := by
     unfold drawsIn
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
     exact fun i _ ho => Finset.disjoint_left.mp hdisj (hacc i) ho

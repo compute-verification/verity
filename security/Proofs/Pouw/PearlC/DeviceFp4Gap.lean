@@ -27,7 +27,7 @@ import Mathlib.Tactic.Positivity.Finset
   corner, rectangular shapes, shapes between and past the table's points (`cL_corner`, `cL_rectangular`, `cL_between`,
   `cL_beyond`), and the table's shape and fall in each dimension (`cLTable_dims`, `cLTable_falls`).
 * **Neither the base-split fix nor its restage moves g.** F1′, F2 and R1 are debit terms
-  (`Fp4Sem.tileDebit`), and the g statements hold at any debit within the cap. They take TT_OUT on the domain
+  (`Fp4Sem.tileInertWork`), and the g statements hold at any debit within the cap. They take TT_OUT on the domain
   `pearlCDomainFp4`, now bounded to the grant's shapes, and read only its one-shape clause, so the instances are
   unchanged.
 -/
@@ -53,16 +53,16 @@ theorem pearlCGapFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     GGap CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) → ∀ (H : Q → R) (s' : S),
       ∀ u < U.layout.N, ∀ act : Codes, (pearlCProtocolFp4 d sem ρ).actOK (U.layout.shape u) act →
-        (pearlCProtocolFp4 d sem ρ).capOK H s' U u act →
+        (pearlCProtocolFp4 d sem ρ).inertBoundOK H s' U u act →
           (pearlCProtocolFp4 d sem ρ).Wref U.layout u ≤ (ω : ℝ) * (pearlCProtocolFp4 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : sem.unitDebit d H s' U u act ≤ ρ * creditFp4 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWork d H s' U u act ≤ ρ * creditFp4 d (U.layout.shape u) := hcap
     show (wrefFp4 d (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditFp4 d (U.layout.shape u) - sem.unitInertWork d H s' U u act : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditFp4 d s) ≤ ω * (creditFp4 d s - sem.unitDebit d H s' U u act) :=
+    have : ω * ((1 - ρ) * creditFp4 d s) ≤ ω * (creditFp4 d s - sem.unitInertWork d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (1 / 400) (ω : ℝ) δPearlC
@@ -79,7 +79,7 @@ theorem pearlCSampledFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
     (hTT : TTOutTileFp4 CM d sem ρ) :
     GGapSampled CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4At sem s) (γ : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) → ∀ (H : Q → R) (s' : S),
-      ∀ g < ((pearlCTilesFp4 d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesFp4 d sem ρ).capOK H s' U g act →
+      ∀ g < ((pearlCTilesFp4 d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesFp4 d sem ρ).inertBoundOK H s' U g act →
         (pearlCTilesFp4 d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesFp4 d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg

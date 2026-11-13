@@ -99,8 +99,8 @@ def GGapSampledDrawTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM :
             (TR.tiling U.layout).NT =>
           AuditAcceptsTol (goodDeclTiles P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.transcript U x.1 x.2))
-            (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c ∧
-          T < (1 - γ) * (1 - u (drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c)) *
+            (overInertBoundTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c ∧
+          T < (1 - γ) * (1 - u (drawsIn (overInertBoundTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c)) *
             claimedDraw TR Wd U (A.transcript U x.1 x.2) (dec x.1 x.2)))
         ≤ δ + η q U.layout.N
 
@@ -133,8 +133,8 @@ def GGapSampledDrawTolThreshold [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
             (TR.tiling U.layout).NT =>
           AuditAcceptsTol (goodDeclTiles P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.transcript U x.1 x.2))
-            (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c ∧
-          T < (1 - γ) * (1 - (if drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 then εs else 1)) *
+            (overInertBoundTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c ∧
+          T < (1 - γ) * (1 - (if drawsIn (overInertBoundTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 then εs else 1)) *
             claimedDraw TR Wd U (A.transcript U x.1 x.2) (dec x.1 x.2)))
         ≤ (1 - εs) ^ t + η q U.layout.N
 

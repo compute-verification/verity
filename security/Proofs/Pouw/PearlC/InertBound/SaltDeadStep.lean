@@ -33,7 +33,7 @@ The pieces of the salt-dead two-ends lemma (`Cap/SaltDead.lean`) that do not men
 
 @[expose] public section
 
-namespace Pouw.PearlC.Cap
+namespace Pouw.PearlC.InertBound
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC
 
@@ -590,4 +590,4 @@ theorem e4m3Word_signs (y : ℚ) : ∃ K : ℕ, K ≤ 126 ∧
     rw [h2]
     split_ifs at this ⊢ <;> simpa using this
 
-end Pouw.PearlC.Cap
+end Pouw.PearlC.InertBound

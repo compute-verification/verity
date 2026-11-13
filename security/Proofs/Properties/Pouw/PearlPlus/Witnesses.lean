@@ -30,7 +30,7 @@ three different SHA-512 digests, neither open one value nor collide (`openingBin
 the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
 the mask's tables are too large for it to build.
 
-`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans`,
+`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheInertBound`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans`,
 `TileAcceptMeans` and `WorkIsTheCredit` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest`
 ones are at one honest pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan`
 samples its one tile, and `check` accepts its run at no samples, since a sampled tile of the deployed scheme is replayed on the
@@ -349,7 +349,7 @@ theorem refusedBeforeTheCoin_honest : plan emptyRun = .error emptyRefusal := rfl
 /-- A verdict that accepts every run (`acceptAllCheck`) answers the run `plan` refuses with an acceptance, not the refusal. -/
 theorem refusedBeforeTheCoin_nontrivial :
     ¬ (acceptAllCheck emptyRun noOpening =
-      { accept := false, reason := some emptyRefusal.reason, refused := emptyRefusal.refused, overCap := emptyRun.overCap,
+      { accept := false, reason := some emptyRefusal.reason, refused := emptyRefusal.refused, overInertBound := emptyRun.overInertBound,
         tie := emptyRefusal.tie }) := by
   intro h
   cases h
@@ -461,7 +461,7 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
   intro pl h
   cases h
 
-/-! ## A tile: `TileAcceptMeans` and `TileKeepsTheCap` -/
+/-! ## A tile: `TileAcceptMeans` and `TileKeepsTheInertBound` -/
 
 namespace Witness
 
@@ -488,9 +488,9 @@ theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {t
     (hch : Words.checked ops = .ok ch)
     (hleaf : (Words.leaf ch != openedValue o.leaf.value) = false)
     (hrows : Rule.rowsFailure p.records[pos]! rows cols ops = none)
-    (hcap : Rule.capCheck p.scheme p.records[pos]! rows cols ops = .ok bound)
+    (hcap : Rule.inertBoundCheck p.scheme p.records[pos]! rows cols ops = .ok bound)
     (hy : p.yRoots[pos]! = none) :
-    checkTile p wn tid o = (match bound with | none => .pass | some why => .overCap why) := by
+    checkTile p wn tid o = (match bound with | none => .pass | some why => .overInertBound why) := by
   subst hwn
   cases bound <;>
   simp only [checkTile, ht, hd, hc, ha, hb, hl, bind, Except.bind, he, hch, pure, Except.pure, hleaf, hrows, hcap, hy,
@@ -765,7 +765,7 @@ theorem test_domain : testPass.scheme.domainReason testPass.records[0]!.matmul =
 
 theorem test_rows : Rule.rowsFailure testPass.records[0]! [0] [0] testOps = none := by decide +kernel
 
-theorem test_cap : Rule.capCheck testPass.scheme testPass.records[0]! [0] [0] testOps = .ok none := by
+theorem test_inert_bound : Rule.inertBoundCheck testPass.scheme testPass.records[0]! [0] [0] testOps = .ok none := by
   apply eq_ok_of_toOption
   decide +kernel
 
@@ -782,7 +782,7 @@ check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed
 Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
 theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = .pass :=
   checkTile_eq_outcome (bound := none) test_tile test_domain test_covers test_opensA test_opensB test_opensLeaf rfl
-    test_encode test_checked test_leaf test_rows test_cap test_y
+    test_encode test_checked test_leaf test_rows test_inert_bound test_y
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
@@ -793,16 +793,16 @@ theorem tileAcceptMeans_nontrivial :
 /-- The rule passes the tile of one 1 × 128 × 1 call whose two rows are credited: both rows keep the per-row rules, each
 of the word's four atoms changes its total, so none is flagged, and no element of the A row is salt-dead (`capSide`), so
 none is a forming element and the replayed inert work is 0. -/
-theorem tileKeepsTheCap_honest :
-    Rule.checkOpened capScheme capRecord [0] [0] capOps = none ∧ (capRecord.credited [0] [0]).1 ≠ [] ∧
-      (capRecord.credited [0] [0]).2 ≠ [] := by
+theorem tileKeepsTheInertBound_honest :
+    Rule.checkOpened capScheme inertBoundRecord [0] [0] inertBoundOps = none ∧ (inertBoundRecord.credited [0] [0]).1 ≠ [] ∧
+      (inertBoundRecord.credited [0] [0]).2 ≠ [] := by
   refine ⟨by decide +kernel, by decide, by decide⟩
 
-/-- A rule that accepts every tile passes the tile of `capRecord` whose word has 32 codes, less than one promotion group,
+/-- A rule that accepts every tile passes the tile of `inertBoundRecord` whose word has 32 codes, less than one promotion group,
 on which the inert-work replay refuses, so neither its words' flags nor its forming elements are replayed for its
 credited cell. -/
-theorem tileKeepsTheCap_nontrivial :
-    ¬ TileKeepsTheCap.match_1 (motive := fun _ => Prop) (capRecord.credited [0] [0]) fun cr cc =>
+theorem tileKeepsTheInertBound_nontrivial :
+    ¬ TileKeepsTheInertBound.match_1 (motive := fun _ => Prop) (inertBoundRecord.credited [0] [0]) fun cr cc =>
       cr ≠ [] → cc ≠ [] →
       ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
         cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) =
@@ -810,13 +810,13 @@ theorem tileKeepsTheCap_nontrivial :
         (cr.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
           Rule.rowElements shortOps.a.alpha[[0].idxOf iw.1]! shortOps.a.beta[[0].idxOf iw.1]!
             shortOps.a.x[[0].idxOf iw.1]! (iw.2.map Prod.fst)) = .ok elems ∧
-        let credit := creditOf 1 capRecord.kKept capRecord.matmul.n
-        let rowDebit := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
-          Rule.debitUnits capRecord.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+        let credit := creditOf 1 inertBoundRecord.kKept inertBoundRecord.matmul.n
+        let rowInertWork := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
+          Rule.inertWorkUnits inertBoundRecord.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
             (we.1.foldl (fun t w => t + w.2) 0) we.2
-        rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
-        ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
-          Rule.CAP_NUM * credit * cc.length * (if capScheme.censusKs.contains capRecord.matmul.k then 4 else 1) := by
+        rowInertWork.foldl (· + ·) 0 * Rule.INERT_BOUND_DEN ≤ Rule.INERT_BOUND_NUM * credit * cr.length * cc.length ∧
+        ∀ d ∈ rowInertWork, d * Rule.INERT_BOUND_DEN ≤
+          Rule.INERT_BOUND_NUM * credit * cc.length * (if capScheme.censusKs.contains inertBoundRecord.matmul.k then 4 else 1) := by
   intro h
   obtain ⟨words, _, hw, -⟩ := h (by decide) (by decide)
   have refused : ∀ e : Except String (List (List (Array Bool × Nat))), e = .ok words → e.toOption = none → False := by
@@ -824,9 +824,9 @@ theorem tileKeepsTheCap_nontrivial :
     cases h
   exact refused _ hw (by decide +kernel)
 
--- The statement above is `TileKeepsTheCap`'s conclusion at `shortOps`'s tile as written: the kernel checks it here.
-example (h : TileKeepsTheCap) (hc : Rule.checkOpened capScheme capRecord [0] [0] shortOps = none) : False :=
-  tileKeepsTheCap_nontrivial (h capScheme capRecord [0] [0] shortOps hc)
+-- The statement above is `TileKeepsTheInertBound`'s conclusion at `shortOps`'s tile as written: the kernel checks it here.
+example (h : TileKeepsTheInertBound) (hc : Rule.checkOpened capScheme inertBoundRecord [0] [0] shortOps = none) : False :=
+  tileKeepsTheInertBound_nontrivial (h capScheme inertBoundRecord [0] [0] shortOps hc)
 
 
 /-! ## A sampled tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance

@@ -107,11 +107,11 @@ def PearlCSampledByDeadline : Prop :=
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 8192³**: `PearlCSampledByDeadline` at
-`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192`'s record, FP32 at 8.376 and the honest cast at 8.72, at
+`pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_8192`'s record, FP32 at 8.376 and the honest cast at 8.72, at
 `g = 1648180439/446072750000` (0.36949%), at W1: the cost model is `W1.w1Priced dv salt`, with `dv` the record's W1
 setting `W1Device.sm120Loop sha fetch`. Its hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 and the honest
 clock at that cost model; `sha`, `fetch`, `salt` and `sem` are parameters. -/
-def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
+def PearlCSm120Rev1InertShare1000ByDeadline_8192 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlC.PearlCSem Q R S),
     let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
@@ -134,9 +134,9 @@ def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 16384³**: `PearlCSampledByDeadline` at
-`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384`'s record, at `g = 1058166877/294158650000` (0.35973%), with the
-hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
+`pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_16384`'s record, at `g = 1058166877/294158650000` (0.35973%), with the
+hypotheses of `PearlCSm120Rev1InertShare1000ByDeadline_8192`. -/
+def PearlCSm120Rev1InertShare1000ByDeadline_16384 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlC.PearlCSem Q R S),
     let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
@@ -159,9 +159,9 @@ def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Qwen3-8B's served layout**:
-`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b`'s record, at
-`g = 74663501/19190030000` (0.38907%), with the hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
+`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_qwen3_8b`'s record, at
+`g = 74663501/19190030000` (0.38907%), with the hypotheses of `PearlCSm120Rev1InertShare1000ByDeadline_8192`. -/
+def PearlCSm120Rev1InertShare1000ByDeadline_qwen3_8b : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlC.PearlCSem Q R S),
     let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
@@ -184,9 +184,9 @@ def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Llama-3.1-8B's served layout**:
-`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b`'s record, at
-`g = 3045273083/782596025000` (0.38912%), with the hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
+`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b`'s record, at
+`g = 3045273083/782596025000` (0.38912%), with the hypotheses of `PearlCSm120Rev1InertShare1000ByDeadline_8192`. -/
+def PearlCSm120Rev1InertShare1000ByDeadline_llama31_8b : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlC.PearlCSem Q R S),
     let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop

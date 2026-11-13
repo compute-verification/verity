@@ -16,7 +16,7 @@ import pytest
 import epoch_coins as E
 
 import pearl_c_vectors as CV
-from test_pouw_pearl_c_debit import spiked_rows
+from test_pouw_pearl_c_inert_work import spiked_rows
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape, Tile
 from verity.protocols.accounting.pouw.prover.schemes import get
@@ -151,7 +151,7 @@ def formed(k: int) -> tuple[int, list[int], int]:
     return 0x3F800000, [0] * k, 0x3F800000
 
 
-def test_tile_cap_is_the_cells_share_of_the_units_credit():
+def test_tile_inert_bound_is_the_cells_share_of_the_units_credit():
     """The per-tile statement's cap (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
     |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile caps sum to
     ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile.  At sm_120's prices the cap
@@ -163,7 +163,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
+            _, cap = CW.tile_inert_bound(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
@@ -173,7 +173,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 16)
-    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 16
+    assert CW.tile_inert_bound(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 16
 
 
 def test_records_bind_every_field_and_the_splits():
@@ -332,7 +332,7 @@ def test_r1_is_a_no_op_on_pearl_c():
     Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring
     with the transcript gives the same records as without."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
-    assert not hasattr(S, "row_over_debit") and not hasattr(S, "r1_rows")
+    assert not hasattr(S, "row_over_inert_work") and not hasattr(S, "r1_rows")
     plain = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     assert CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, transcript=tr) == plain
     u = epoch.workload.matmuls[0]
@@ -343,17 +343,17 @@ def test_r1_is_a_no_op_on_pearl_c():
 
 
 def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
-    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
-    `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
+    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_inert_work`) is its own: Pearl-C (FP8) brings no
+    `tile_inert_bound`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
     from verity.protocols.accounting.pouw.prover.schemes import pearl_c4
 
     def unreachable(*args, **kwargs):
         raise AssertionError("Pearl-C reached Pearl-C4's debit")
 
-    monkeypatch.setattr(pearl_c4, "tile_debit", unreachable)
+    monkeypatch.setattr(pearl_c4, "tile_inert_work", unreachable)
     monkeypatch.setattr(pearl_c4, "salt_dead", unreachable)
     epoch, prover, tr, rows_a, rows_b = lifecycle()
-    assert not hasattr(S, "tile_cap")
+    assert not hasattr(S, "tile_inert_bound")
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     assert CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
@@ -419,7 +419,7 @@ def test_split_check_gates_an_honest_split():
     assert out.audit.accepted and seen == [(9, split[9])]
 
 
-def test_aligned_spike_unit_is_rejected_by_the_cap():
+def test_aligned_spike_unit_is_rejected_by_the_inert_bound():
     """F1's negative control through the audit: every row passes the domain, and the sampled tile's replayed debit (74%+
     of its atom-words) exceeds ρ·creditOf; the same unit without spikes is accepted."""
     k, t = 1024, 4
@@ -439,7 +439,7 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
             assert "exceeds the cap" in out.audit.verdicts[0].reason
 
 
-def test_h3_caps_each_credited_row_as_well_as_the_tile():
+def test_h3_bounds_each_credited_row_as_well_as_the_tile():
     """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
     72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the
     tile's (at 300 its forming elements alone put the tile over).
@@ -447,7 +447,7 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     that row takes its band of 64 rows, here the whole tile, so the audit then accepts with no credit."""
     k, m, n = 1024, 32, 4
     h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
-    assert CW.row_cap(h3) and not CW.row_cap(h0) and not CW.row_cap(S)
+    assert CW.row_inert_bound(h3) and not CW.row_inert_bound(h0) and not CW.row_inert_bound(S)
     rows_a = spiked_rows(k, 1, 100, 72.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
@@ -461,8 +461,8 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
     for s in (h3, h0):
         ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
-        debit, cap = CW._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
-        row = CW._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
+        debit, cap = CW._inert_work_and_bound(s, records[0], tile, ops, list(range(m)), list(range(n)))
+        row = CW._inert_work_and_bound(s, records[0], tile, ops, [0], list(range(n)))
         assert debit < cap * 3 / 4 and row[0] > 10 * row[1] and row[1] == cap / m
     assert CW.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
     out = CW.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
@@ -491,18 +491,18 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
             scheme.encode(ctx, scheme.noise(ctx), rows_a, rows_b, tile))
 
 
-def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
+def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
     """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
-    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
+    cells' credit (`pearlCTilesDevRev1RowInertBoundAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
     accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
     under 4ρ that put the tile over ρ are refused by the tile cap."""
     m = 16
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
-    assert h3.census_ks == (256,) and h3.row_cap_at(256) == 4 * h3.cap == Fraction(1, 100)
-    assert CW.row_cap(h3) and CW.row_cap_multiple(h3, 256) == 4
+    assert h3.census_ks == (256,) and h3.row_inert_share_at(256) == 4 * h3.cap == Fraction(1, 100)
+    assert CW.row_inert_bound(h3) and CW.row_inert_share_multiple(h3, 256) == 4
     rec, tile, a, b, ops = _census_tile(h3, [50.0] + [None] * (m - 1), 256)
-    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
-    row = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    debit, cap = CW._inert_work_and_bound(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    row = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert debit < cap / 2 and row[1] < row[0] < 4 * row[1]
     assert CW.check_opened(h3, rec, tile, a, b, ops) is None
     rec, tile, a, b, ops = _census_tile(h3, [85.0] + [None] * (m - 1), 256)
@@ -510,24 +510,24 @@ def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
     assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
     spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]
     rec, tile, a, b, ops = _census_tile(h3, spikes, 256)
-    rows = [CW._debit_cap(h3, rec, tile, ops, [i], [0, 1, 2, 3]) for i in range(m)]
-    debit, cap = CW._debit_cap(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
+    rows = [CW._inert_work_and_bound(h3, rec, tile, ops, [i], [0, 1, 2, 3]) for i in range(m)]
+    debit, cap = CW._inert_work_and_bound(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
     assert all(d <= 4 * c for d, c in rows) and debit > 2 * cap
     assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
 
 
-def test_census_row_cap_leaves_k_from_k_min_unchanged():
+def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
     """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
     without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
     shape, under 4ρ, passes."""
     m = 16
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
     for k in (1024, 2048, 8192, 1 << 16):
-        assert h3.row_cap_at(k) == h3.cap and CW.row_cap_multiple(h3, k) == 1
+        assert h3.row_inert_share_at(k) == h3.cap and CW.row_inert_share_multiple(h3, k) == 1
     for s in (S, C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), get("pearl-c-sm120-v1-h3")):
-        assert s.census_ks == () and all(CW.row_cap_multiple(s, k) == 1 for k in (128, 256, 1024))
+        assert s.census_ks == () and all(CW.row_inert_share_multiple(s, k) == 1 for k in (128, 256, 1024))
     rec, tile, a, b, ops = _census_tile(h3, [30.0] + [None] * (m - 1), 1024)
-    d, c = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
+    d, c = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert c < d < 4 * c
     assert CW.check_opened(h3, rec, tile, a, b, ops) == (
         f"A row 0's replayed debit {float(d):.0f} exceeds its cap {float(c):.0f} (the row cap: ρ·its credited cells' "

@@ -3,11 +3,11 @@ module
 public import Definitions.Pouw.Guarantees.Deadline
 public import Proofs.Pouw.Game
 public import Proofs.Pouw.Break
-public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.DeviceInertBoundRev1Gap
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.TTOutW1
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+import Proofs.Pouw.PearlC.DeviceInertBoundRev1Gap
 import Proofs.Pouw.Prob
 
 /-!
@@ -96,26 +96,26 @@ theorem PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline := by
   rw [(hA' x.1 x.2.1).1 htr]
   exact ⟨hacc, hlt⟩
 
-theorem PearlCSm120Rev1Cap1000ByDeadline_8192 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192 :=
+theorem PearlCSm120Rev1InertShare1000ByDeadline_8192 : Pouw.Guarantees.PearlCSm120Rev1InertShare1000ByDeadline_8192 :=
   fun Q R S _ _ _ _ sha fetch salt sem hTT =>
     PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
-      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_8192 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
 
-theorem PearlCSm120Rev1Cap1000ByDeadline_16384 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384 :=
+theorem PearlCSm120Rev1InertShare1000ByDeadline_16384 : Pouw.Guarantees.PearlCSm120Rev1InertShare1000ByDeadline_16384 :=
   fun Q R S _ _ _ _ sha fetch salt sem hTT =>
     PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
-      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_16384 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
 
-theorem PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b :=
+theorem PearlCSm120Rev1InertShare1000ByDeadline_qwen3_8b : Pouw.Guarantees.PearlCSm120Rev1InertShare1000ByDeadline_qwen3_8b :=
   fun Q R S _ _ _ _ sha fetch salt sem hTT =>
     PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
-      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b _ sem
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_qwen3_8b _ sem
         (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
 
-theorem PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b :=
+theorem PearlCSm120Rev1InertShare1000ByDeadline_llama31_8b : Pouw.Guarantees.PearlCSm120Rev1InertShare1000ByDeadline_llama31_8b :=
   fun Q R S _ _ _ _ sha fetch salt sem hTT =>
     PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
-      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b _ sem
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b _ sem
         (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
 
 end Pouw.SecurityProofs

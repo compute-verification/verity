@@ -104,7 +104,7 @@ blocks (a multiple of 64 words), the v2 rows Flock's widened scope takes; pc8-ca
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.
 
-Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the inert-work bound's `cap.PORTS`, `rowk.PORTS4` and
+Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the inert-work bound's `inert_bound.PORTS`, `rowk.PORTS4` and
 `rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit execution phase's tile (`pc8.Pc8TileSide`), which reads
 fp8-pi rows: its execution phase's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock
 rows from these: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and
@@ -395,7 +395,7 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
     then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,
     which META names when an output row is a row-seg row or a run of several (else every output row is one port's).  The
-    output rows' ports, then the public outputs (``unit["public"]``, `cap.PORTS`: the tally's verdict, which the verifier
+    output rows' ports, then the public outputs (``unit["public"]``, `inert_bound.PORTS`: the tally's verdict, which the verifier
     reads), are the unit's outputs, once each and in order, so no row here holds a public output.  An advice port
     (``unit["advice"]``, `pc8.PORTS`) is a parameter in no row and no public input region (else ValueError), so no row here
     holds a bit of it."""
