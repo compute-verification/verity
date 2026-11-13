@@ -30,8 +30,8 @@ from __future__ import annotations
 import numpy as np
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BF16, BIT, F32, I32, SelectF32
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BF16, BIT, F32, I32, SelectF32
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
 from verity.definitions.registry.topp_keep_builder import (INF, NEG_INF, ONE_F, Engine, Vec, bfly, cat, pad, put, reduce, scan,

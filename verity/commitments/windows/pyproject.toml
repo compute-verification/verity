@@ -6,7 +6,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_interface.py"]
-inputs = ["verity", "verity/circuits", "verity/commitments", "verity/definitions/kernels"]
+inputs = ["verity", "verity/circuits", "verity/commitments", "verity/circuits/kernels"]
 # not `parallel`: the suite takes about as long as its one slow test, so in one process it runs beside the parallel suites,
 # which run one after another, and xdist would shorten nothing
 
@@ -15,4 +15,4 @@ inputs = ["verity", "verity/circuits", "verity/commitments", "verity/definitions
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_blocks.py", "tests/test_interface.py"]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]
