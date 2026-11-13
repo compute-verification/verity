@@ -7,13 +7,13 @@ public import Proofs.Properties.Verity.SampledTwo.WiredScope
 
 `couplesAt_wired`: an instance of `CouplesAt` at a commitment and strategy, at the statement `JoinsAt` fixes (`stmtX`)
 and at the audit statement, partition and design the session's verifier reads of it. Its `scope` is a lemma of
-`JoinsAt` (`scope_wired`), and `parse`, `partition` and `two` are what the verifier computes (`WiredParse.lean`), under
+`JoinsAt` and `TwoHolds` (`scope_wired`), and `parse`, `partition` and `two` are what the verifier computes (`WiredParse.lean`), under
 two premises stated once:
 
 * `RecordWf c`: the record the commitment carries is a well-formed tree, which the proved verifier's reader reads back
   from the bytes `Flock.canon` prints of it (`decode_of_stmtOf`);
-* `SpotFlock.RunsAs.Round2.TwoHolds A.h`: the held copies' design evaluates, a lemma wherever a play is accepted under
-  `HeldOfAt` (`twoHolds_of_formAccepts`).
+* `SpotFlock.RunsAs.Round2.TwoHolds A.h`: the held copies' design evaluates, a lemma wherever a play whose blobs don't
+  collide with the registered files is accepted (`twoHolds_of_formAccepts` at `heldOfAt_goodCase`).
 
 `units` is the premise `UnitsWired`: at the audit statement, partition and design the verifier reads, the vocabulary's
 units are the replay blocks under `readX`. `joins`, `extract`, `caps`, `opens`, `collisionResistant` and `delta` are
@@ -21,7 +21,7 @@ taken as they are; `caps`, like `units`, at what the verifier reads.
 
 ## What this does not show
 
-`RecordWf`, `TwoHolds` where no play is accepted, and `UnitsWired`: each is a hypothesis. `JoinsAt` at a commitment
+`RecordWf`, `TwoHolds` where no play with no such collision is accepted, and `UnitsWired`: each is a hypothesis. `JoinsAt` at a commitment
 whose bytes don't decode (`stmtOf c = none`), where its `stmtX` fails, so the instance is at the commitments that
 decode.
 -/
@@ -81,7 +81,7 @@ theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A 
   obtain ⟨dd, hdd⟩ := two_wired hT s
   exact ⟨s, Pt, dd,
     { joins := hJ
-      scope := scope_wired hJ
+      scope := scope_wired hJ hT
       extract := hX
       parse := hs
       partition := hPt
