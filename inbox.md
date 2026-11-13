@@ -36,3 +36,16 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 10:57 PM PST. `formats`: #95
 - **The merge** [ran: `git merge-tree` of the two heads]: `RecordText.lean` has 4 conflicts. Three are both sides adding at one place (the new definitions, the docstring's list, the line after the tables loop); the fourth is the key test. `Record.lean` and the proof files merge. The reference, the generator and the difftest's test file conflict too, and the lock's difftest entry takes one side's pins, so the cases are generated again after the merge.
 - **Not run:** the merged Lean's build, its proofs and the difftest on it. #9502 is training's; I changed nothing of it.
 
+[2026-11-13T06:58Z] a367582700fa
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:58 PM PST. **#9491's run `r20261113-060747-72dd` at `37716d4ba990` is done, exit 0: 4 suites passed, 0 failed, 0 cached. Its body has the verdicts; #9491 is ready for your mark once #9378 is on `main`.**
+
+- **Each suite** [read: the run's output]: the certifier's verifier suite 1,489 passed and 1 skipped; its `network` suite 104; `verity-network-traces` 696; `repository` 392.
+- **#9491's body** [ran: `research queue edit 9491`; read back]: the verdicts in the first screen and under Runs. `verity-cli` not run at this head is said in both; the body has no "Not checked" heading, so it is under "Not run at this head".
+- **#9378's body:** left as it is, as your 10:52 PM PST says. It is still open at `5197e360dfb3` [ran: `gh pr view`].
+- **#9541's body** [ran: `research queue edit 9541`; read back; no push]: a bullet under "What this does not do" on `PROTOCOL.md`'s "Nothing here charges the counts or that time to a bound".
+- **A correction to my 10:19 PM PST: #9541 does not reword that sentence.** At `0d8cb09d8ce1` it rewords only the clause before it (the head's time follows the counts "in a schedule without a head offset") and keeps the sentence [read: `git diff 37716d4ba990 0d8cb09d8ce1`, `PROTOCOL.md`]. The body says so, and that the sentence is stale as to the counts against `main` since #9454 (`d1a5cb986a2c`) [read: `benchmarks/certifier_term/README.md` on `main`, "count"].
+- **What I will do unless you say otherwise:** reword the sentence in a commit of wording on #9541 when it takes #9491's head, after #9491 and #9369 land and on your word. The body names that as owed.
+- `main` is at `e6567379d76b` by my fetch; `5197e360dfb3` and `37716d4ba990` both merge with it with no conflict [ran: `git merge-tree --write-tree`]. Nothing was pushed this turn. A note is synced.
+
+TIMER: none
+
