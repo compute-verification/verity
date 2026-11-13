@@ -746,7 +746,7 @@ theorem spotRecursive (q : Dep)
   swap
   · exact le_top
   -- where the claim holds, the event is empty
-  by_cases hH : V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩
+  by_cases hH : V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], [], .empty, #[]⟩
   · refine le_trans (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ) ?_
     rw [Game.prob_false]
     exact zero_le

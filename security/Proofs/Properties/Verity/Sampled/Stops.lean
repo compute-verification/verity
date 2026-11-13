@@ -410,9 +410,10 @@ section StopsAt
 variable {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 
 /-- **Where a position's walk stops, at a log and the close after it**: as `StopOf` says, from some log `pre`, at
-releases continuing to the close under the signer `sg` after the request `rq` and `pre` and them. -/
+releases continuing to the close under the signer `sg` and the further parties `Ds` after the request `rq` and `pre` and
+them. -/
 def StopsAt (P : Fin R → List Release → Frame → Prop) (rv : Fin R → Exchange → Option Claims.Msg) (sg : Signer)
-    (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) (q : Pos g σ Claims.Msg (Fin R)) : Prop :=
+    (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) (q : Pos g σ Claims.Msg (Fin R)) : Prop :=
   ∃ (pre : List Release) (f : List Release → Game Exchange) (a : Fin R → Prop),
     (∀ log, f log = finish sg Ds θ F c rq (pre ++ log)) ∧ StopOf P rv pre f a q
 

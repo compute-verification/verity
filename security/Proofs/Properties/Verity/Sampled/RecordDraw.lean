@@ -266,7 +266,7 @@ theorem reaches_finish {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Arr
 theorem exists_reaches_finish (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
     (L : List Release) : ∃ o, (∃ s, PlayReaches (finish D Ds θ F c a L) s o) ∧ o.log = L :=
   ⟨⟨θ, F, c, a, L, .empty, List.ofFn fun _ => false, D.signatures a (spotLog Ds L) .empty (List.ofFn fun _ => false),
-      Ds.map (fun P => P.signatures a (P.logOf L) .empty []), .empty, #[]⟩,
+      Ds.map (fun P : Signer => P.signatures a (P.logOf L) ByteArray.empty []), .empty, #[]⟩,
     ⟨⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩, fun _ => false, rfl⟩, rfl⟩
 
 /-- **A node whose outputs' logs are `pre`, the release `r`, then any**, one of them `pre` and `r` alone. -/
@@ -403,7 +403,7 @@ def WalkFill (k : ℕ) : Prop :=
         (Pos.walk g' s' Ks (fill (freshSel (finish D Ds θ F c a) label after) g' s' Ks m κ z) back).s' o →
         ∃ log', o.log = pre ++ L ++ log' ∧ StopTail log'
 
-variable {D θ F c a label after rd}
+variable {D Ds θ F c a label after rd}
 
 theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
     (hf : ∀ log, f log = finish D Ds θ F c a (pre ++ log)) {g'' : Game Exchange} (hn : g'' = f [])
@@ -670,7 +670,8 @@ theorem walkFill_req {g : Game Exchange} {σ : Strategy g} {label : String} {aft
       (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D Ds θ F c a) []).cut := fun j => eq_of_heq (hK j)
   have hH : ∀ j, (Ks j).isHere = false := fun j => by rw [hK' j]; rfl
   rw [walk_send_of hH, fill_send_of _ hH]
-  obtain ⟨L, hA, hO⟩ := walkFill (g := g) (σ := σ) (D := D) (θ := θ) (F := F) (c := c) (a := s'.1) (label := label)
+  obtain ⟨L, hA, hO⟩ := walkFill (g := g) (σ := σ) (D := D) (Ds := Ds) (θ := θ) (F := F) (c := c) (a := s'.1)
+    (label := label)
     (after := after) hrd K fs [] [] (finish D Ds θ F c s'.1) (fun _ => rfl) _ rfl s'.2
     (fun j => (Ks j).atSend s'.1) (fun j => .inr (by rw [hK' j]; rfl)) m κ z back
   exact ⟨L, hA, fun o ho => by
