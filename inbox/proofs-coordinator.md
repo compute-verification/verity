@@ -146247,3 +146247,150 @@ Under them, one lemma says what the reader returns: `paramsParsed_reads (h : par
 - `ScopeTable.lean`: not touched by me since `b49c6e4061`.
 
 **Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `e0eb889df17a` (new, off the join at `4e986e339ad2`; `df746bc8b5c` is `ParamsWf.lean`, `9053c218bbac` adds `PortsOfParams.lean`, `e0eb889df17a` is the mend, all "not compiled"); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
+
+## REDRAW, Fri 13 Nov 14:36Z: network's question (NET-403): yes, the auditor's device reserves a session while its lane has no period open, and both readers accept that ledger with the session in no period; PoUW credits nothing on it, the readers of challenges read no period; a bare refusal at the device breaks three honest flows, one of them made that way by rule (Pearl-C's draw); refuse at the device, not in the reader, and only together with those flows
+
+Asked by the coordinator's message of 14:25Z (by the hook), ahead of the Y2 sizing. Read on `origin/main`
+`053b8e50fe8a` [run: `git fetch`, 14:17Z]. Nothing run but searches and `research msg owners`. No file changed.
+
+### 1. Is it so: yes [read]
+
+The device's writer, `verity/composite/device/live_challenger/auditor.py`:
+
+- `gate_reserve` (1165 to 1186) and the signer `reserve` (2042 to 2059) refuse a reserve for three reasons only: the
+  session is in the ledger already (2049), the pins (2051), and `cap_refusal` (1171, 2053).
+- `cap_refusal` (1131 to 1137) looks only at a period of the lane that is open, and at its cap. With no period open
+  it returns None. Nothing asks that a period be open.
+- The gate's answer then says `"period": None` (1183 to 1186, `held and held[0]`).
+- `open_refusal` (1140 to 1162) refuses an open only when the period holding the session has closed (1154). A
+  session that no period holds is opened.
+- `periods_of` (774 to 790): a reserve joins a period only if its lane has one open at that entry. A period opened
+  later does not take it, since a window is counted at its reserve.
+- `reserve`'s docstring says "From this entry on the window is one of that period's" (2043 to 2044). That holds only
+  when a period is open.
+
+The reference reader, `verity/protocols/spot/device/challenger.py`, `_verify` (which `verify_ledger` and
+`verify_periods` both return from):
+
+- `join` (1329 to 1335) returns None when the lane has no period open, and refuses nothing.
+- A reserve is then recorded with `"period": None` (1368).
+- An open checks its period only when there is one (1394).
+- So `verify_periods` (1296 to 1307) lists the session in no period's `windows`, and no close lists it. Its docstring
+  states the rule from the period's side ("its windows are exactly the reserves … between its period-open and its
+  period-close") and says nothing of a reserve outside every period.
+- `audited_session` gives it `period`, `cap` and `circuit` None ("all None when no period holds it", 1600 to 1615).
+
+The Lean reader, `verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean`, accepts the same ledger:
+
+- `join` (502 to 509): `| return (periods, none)` when the lane has no open period (504).
+- `verifyLedger` records the reserve with `period := none` (590 to 592), and checks an open's period only under
+  `if let some name := r.period` (614 to 616).
+- `auditedOpen` (718 to 745) looks the session up with `periods.find? (·.windows.contains s)`. It throws only when a
+  period holds the session and commits no cap or circuit. Otherwise it returns `period := none`, `cap` and `circuit`
+  null.
+
+Who then refuses such a session, and who does not [read]:
+
+- **PoUW refuses it for credit**, in three places:
+  - `circuitReason none` inside `creditedSession` (ChallengerSession.lean 822 to 828, 910 to 915; Python
+    `circuit_reason`, `challenger.py` 1752 to 1760: "holds the window's session in no period, so it counts toward
+    none"), which the period's credit calls for each window and for its draw session
+    (`verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean` 2255 and 2258);
+  - `periodWeights` (`Credit.lean` 1754 to 1761);
+  - `period` (`Credit.lean` 2092 to 2128), which takes exactly the sessions the period's close lists.
+- **The readers of challenges read no period at all.** `trustedSessionOf` is `pinnedSession` then `sessionNamed`
+  (ChallengerSession.lean 897 to 908). Its callers are the one-stage audit's `drawCoins` (`ChallengerDraw.lean` 38),
+  `challengerStream` (`ChallengerCoins.lean` 120), `trustedTreesOf` (`ChallengerTrees.lean` 279),
+  `RecordAcross.lean` 106, and PoUW's salt and pass readers (`PouwCheck/Rounds.lean` 70, `Pass.lean` 297). So a
+  one-stage audit whose session is in no period passes as it does inside one.
+
+### 2. What refusing it at the device would change
+
+**The refusal itself is small** [derived]: one clause in `reserve`'s `body_of` (auditor.py 2048 to 2054) and the
+same in `gate_reserve` (1171), about 6 lines, in a file the registry gives to `@proofs` [run]. While only the writer
+refuses, no reader changes, no Lean changes and no lock record moves.
+
+**The reader should not refuse it** [derived]:
+
+- A ledger is checked from entry 0 (`_verify`'s loop, 1337). A reader that refused a reserve outside a period would
+  refuse, whole, every ledger that already holds one. The gate's own first test writes one at `seq` 0
+  (`live_challenger/tests/test_auditor.py` 81 to 83 expects `"period": None`).
+- It would change `Spot.Challenger.join`, which both locks record as read. Its module `Spot.ChallengerSession` has
+  59 listed readers in the properties lock (30 `@soundness`, 17 `@compute-accounting`, 4 `@proofs`, 4
+  `@compute-research`, 1 `@lean`; two deployed: `Verity.remote_soundness_of_subprotocols` and
+  `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`) and 4 in the security lock [run: the readers in
+  the report of `r20261113-112700-682b`, a build of my credit branch whose read groups are main's].
+
+**Does a listed statement read it** [read]: none says anything of a session in no period. Under `security/` the one
+lemma about `join` is `join_spec` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean` 117 to 118), which says
+only that it returns or throws. The statements over the reader (`Properties.Challenger`, `Properties.Pouw.LiveSalt`)
+name no period of a session.
+
+**Honest flows that reserve with no period open today** [read]:
+
+| Flow | Where | Lines | Owner | Why outside a period |
+|---|---|---|---|---|
+| Pearl-C's draw session | `benchmarks/pouw/pearl_c_vllm/bench_arm.py` `LiveDraw` 125 to 175; the rule `after_close`, `adapters/vllm/verity_vllm/protocols/pouw/h1/window.py` 140 to 150; its readers `benchmarks/one_stage/served_verdicts.py` 929 to 947, 1040 to 1057, 1656 to 1660 and `pearl_c_vllm/verify_run.py` 62 to 67, 88 to 92 | about 110 | `@compute-accounting`, `@vllm`, `@proofs` | By rule. The draw is "the lane's first reserve after that period closed", refused while the lane has a period open, "so it joins none". The coin record writes `period (null)`. |
+| H1 served with no period open (a run that credits nothing) | `adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py` 117 to 134 | about 20 | `@vllm` | The next window is reserved ahead only "while that reserve joined no period". |
+| The one-stage audit's own sessions | `benchmarks/one_stage/a5_coins.py` `Local.open` 595 to 612 (the local challenger, which runs the gate's code) and `GateClient` 664 to 676; `adapters/vllm/verity_vllm/pipeline/commit_coins.py` 114 to 119 | about 40 | `@proofs`, `@vllm` | Neither file names a period. The session is in one only if the lane happens to have one open. |
+| The device's tests | `verity/composite/device/live_challenger/tests/test_auditor.py` (461 lines, 17 lines that reserve, no period-open), `test_auditor_days.py` (356 lines, 12 that reserve, none), parts of `test_auditor_rt4.py` and `test_serve.py` | two files whole | `@proofs` | They reserve on an empty ledger. |
+| Other suites' ledgers | `verity/protocols/tests/tests/test_record.py` 28 to 29 (a reserve, then the period-open). Two tests state today's rule and stay: `verity/protocols/spot/verifier/tests/test_remote.py` 1681 to 1707 and the Lean difftest's case "the window in no period" (`spot/verifier/lean/tests/test_challenger_difftest.py` 1603) | a few each | `@proofs` | They test the reader, which would not change. |
+
+**A first session of a lane needs none of it** [read]: a lane's own gate key opens its period (auditor.py 95 to 97),
+so a lane can open a period before its first reserve.
+
+**One rule stands in the way of putting those sessions inside a period** [read]:
+
+- PoUW's `period` takes exactly the close's sessions, "each window's, then its sample's", and refuses a close with
+  any other (`Credit.lean` 2089 to 2128). Pearl-C's period credit does the same: "a complete salt-only session no
+  presented pass names … refuses the period" (`verity/protocols/pouw/verifier/credit.py` 2990 to 2994).
+- A lane has one period open at a time (`_verify` 1418).
+- So today a session of any other protocol, reserved while the lane's PoUW period is open, costs that period its
+  credit. That is why Pearl-C's draw waits for the close.
+- With a refusing device, each such session needs one of two things. Either a period of its own before or after (a
+  signed open with a cap and a circuit, and a close). Or PoUW's match skips the sessions that are not PoUW's, which
+  it can tell only by the reserve's signed `scheme` and `families`; that is B's ground.
+
+### 3. Recommendation [guess, mine]
+
+The device should refuse a reserve while its lane has no period open, in the writer only and never in the reader, and
+in one change with Pearl-C's draw moved inside its period (as H1's draw already is) and a period for the one-stage
+audit's sessions; until that lands, network's rule that an opened session in no period costs every period is the
+right one, because honest sessions are in no period today.
+
+### For point 4's sixth statement (the 14:28Z message): where the open keeps `pinned` [read, main `053b8e50fe8a`]
+
+- The device writes `pinned` (40 hex digits) in three bodies: the reserve's (auditor.py 2057), the open's, with the
+  seal `pins: {lines, sha512}` beside it (2077 to 2078), and the period-open's (2137).
+- The reader takes the open's. `auditedOpen` sets `pinned := strOf (getD o.body "pinned")`, `o` being the window's
+  open entry (ChallengerSession.lean 742). `pinnedSession` checks
+  `firstParentReason a.session (strOf (getD opened "pinned")) main` on that same body (897 to 901). The entry's form
+  asks `isDigest (getD b "pinned") 40` (428, 533).
+- So the statement's pin is the field `pinned` of the body of the ledger's one open on the window's root. The sketch's
+  guess was right as to the place. These line numbers are main's; I read them again on #9728's carried head before
+  the statement is written.
+
+### Not established
+
+- Whether any ledger of record on an auditor's device holds a reserve outside a period. I read code and tests, and
+  no ledger.
+- In which order a served remote run reserves the Commit's session and opens the lane's period, so whether that
+  session is in a period in a served run (`serve_h1.py` and the run recorder were not read).
+- Whether PoUB's and PoUS's sessions reserve outside a period.
+  `verity/protocols/poub/verifier/session/challengers.py` 198 to 202 holds the reserve's period to the audit's own
+  `self.period`, which may be None; its callers were not read.
+- The line counts in the table are of the passages I read, not of a diff.
+- The readers' counts are by module, from a build of my credit branch, not of main's tip.
+- Of NET-403 I read the comments of 14:07Z and 14:24Z only.
+
+### State
+
+- The Y2 sizing stopped at 14:26Z for this read; its numbers so far are in the note (synced 14:26Z). It goes on now,
+  due 17:00Z.
+- Heads unchanged [run: `git ls-remote`, 14:34Z]: #9717 `8130cf7e15e2`, #9728 `36d6e37cbc7b`, the credit branch
+  `1370c60b7e75`, the `commitOf?` branch `779936dea335`. Nothing unpushed; no code written.
+- No run in flight. `r20261113-142206-90e8` (vy-nebius-2, pool `proofs`, 8 GB asked, started at once, a read of the
+  facts document the earlier records run left) ended exit 3: the document was not at the path the report names.
+  `r20261113-142140-a923` was refused at once (that machine takes a run only through a pool).
+- Pen: `~/wt/.pen`, owner line of 14:13Z. Mailbox read 14:17Z, 532 lines, nothing new there; the 14:25Z and 14:28Z
+  messages came by the hook.
