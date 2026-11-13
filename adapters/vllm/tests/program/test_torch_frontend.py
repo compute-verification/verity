@@ -9,10 +9,17 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.circuits import Program, bind, encode_program, program_digest, query  # noqa: E402
-from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
-from verity_vllm.program.frontend import examples as ex  # noqa: E402
 
-from tests.program.test_running_example import Add16, Id16, Inference, Mul16, Relu16, make_program  # noqa: E402
+from tests.program.test_running_example import Add16, Id16, Mul16, Relu16, make_program  # noqa: E402
+from verity_vllm.program.frontend import (  # noqa: E402
+    Arr,
+    FrontendError,
+    batch,
+    export,
+    function,
+    ops,
+)
+from verity_vllm.program.frontend import examples as ex  # noqa: E402
 
 V16 = ex.Value(16)  # module level: string annotations are evaluated in the function's globals
 
