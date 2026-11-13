@@ -36,7 +36,8 @@ reference statements:
   parameters' bytes has;
 * `RefsAt C xs₀`: at every accepted play, the blobs the parameters' digests name give the reference statements `xs₀`.
   A reference statement is its member's circuit file and public file, each the blob under a digest the parameters
-  name, and the pinned lookup tables the blobs hold, each under a digest the verifier pins;
+  name, and the pinned lookup tables the blobs hold, each under a digest the verifier pins (`RefsOfSent` reads each
+  against its digest);
 * `CopyOf A P j u`: `A.h` is the copy `heldOf` builds from the parameters `P`, the boundary record `j` and `u`, at
   every input and interior that carry them in the seven fields `heldOf` reads, which are the ones an accepted play's
   input has (`fields_of_accept`). One such input and interior building `A.h` give it (`copyOf_of_one`, in
@@ -44,7 +45,9 @@ reference statements:
 
 ## What this does not show
 
-* `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsAt` is no check's verdict.
+* `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsOfSent` gives `RefsAt` at the
+  reference statements of one accepted play, or two of the blobs sent differ under one SHA-512, where every accepted
+  play passed the tables' check at one registration; the form's check runs it only at a member a statement names.
 * That the form's check calls `descOk`: it does not.
 -/
 

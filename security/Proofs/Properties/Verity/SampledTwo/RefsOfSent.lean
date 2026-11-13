@@ -20,25 +20,31 @@ its digest, with a collision as the second way out: two of the blobs sent differ
 
 * **The files** are pinned: two plays' blobs give one file under one digest, or collide (`get_same`).
 * **Each table's bytes** are pinned: where two plays' blobs both hold a pinned table, its two files are one or collide.
-* **Which pinned tables the blobs hold** is pinned by no digest. Under one list of table names on both plays' blobs
-  the tables are the same or collide (`tables_same`), and so are the reference statements (`refStmts_same`). So
-  `RefsAt` holds at the reference statements of any one accepted play, or two blobs sent collide, on a case map whose
-  accepted plays all hold the tables of one list of names (`TablesAt`): `refsAt_of_tables`, and `heldOfAt_or_collide`
-  for the held copies at the cases at one statement.
+* **Which pinned tables the blobs hold** is pinned by no digest of its own. Under one list of table names on both
+  plays' blobs the tables are the same or collide (`tables_same`), and so are the reference statements
+  (`refStmts_same`). The names are pinned where both plays' blobs passed the tables' check at one registration
+  (`Spot.OneStageZk.tablesHeld`: the registration's circuit file, under its digest, looks up exactly the pinned tables
+  the blobs hold): `names_same`.
+
+So `RefsAt` holds at the reference statements of any one accepted play, or two of the blobs sent collide, on a case
+map whose accepted plays all passed the tables' check at one registration (`TablesHeldAt`): `refsAt_of_held`, and
+`heldOfAt_or_collide` for the held copies at the cases at one statement.
 
 ## What the form checks of the tables
 
-The form checks the names of the tables the blobs hold against a circuit file's lookups only in a member's statement
-(`Spot.OneStageZk.tablesHeld`, the first step of `statementOf`), and reads a member's statement only where one of the
-evidence's statements names the member (`runMembers`). `accepted_tables` is that check at an accepted play: each
-member a statement names has its circuit file on the blobs, and the file looks up exactly the tables the blobs hold
-(`Properties.Spot.HoldsRegisteredTables`).
+The form runs the tables' check only in a member's statement (the first step of `statementOf`), and reads a member's
+statement only where one of the evidence's statements names the member (`runMembers`). `accepted_tables` is that
+check at an accepted play: each member a statement names has its circuit file on the blobs, and the file looks up
+exactly the tables the blobs hold (`Properties.Spot.HoldsRegisteredTables`). So `TablesHeldAt C q` holds where every
+accepted play names the registration `q` in a statement (`NamesAt`, `tablesHeldAt_of_names`).
 
 ## What this does not show
 
-* `TablesAt` at any case map. An accepted play whose evidence names no statement runs `tablesHeld` at no member, and
-  two accepted plays that name different members are held to two circuit files' lookups. The reference statement of
-  every template reads the tables the blobs hold, whether or not a statement names its member.
+* `NamesAt` or `TablesHeldAt` at any case map. An accepted play whose evidence names no statement runs the tables'
+  check at no member, and two accepted plays that name different members are held to two circuit files' lookups. The
+  reference statement of every template reads the tables the blobs hold, whether or not a statement names its member.
+  So the read no digest pins is which of the verifier's pinned tables a play's blobs hold, at a play that names no
+  statement of a registration every other accepted play names.
 * That an accepted play names a statement, or that two members' circuit files look up the same tables.
 -/
 
@@ -323,20 +329,57 @@ theorem accepted_tables {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar
 
 /-! ## `RefsAt`, or a collision -/
 
-/-- **Every accepted play's blobs hold the pinned tables named `L`.** -/
-def TablesAt (C : CaseOf) (L : List String) : Prop :=
-  ∀ o k, FormAccepts C o → C o = some k → (_root_.Spot.OneStageZk.tablesOf k.blobs).map (·.1) = L
+/-- **Every accepted play's blobs passed the tables' check at the registration `q`** (`tablesHeld`, as
+`Properties.Spot.HoldsRegisteredTables` reads it): `q`'s circuit file is on the blobs and looks up exactly the pinned
+tables the blobs hold. -/
+def TablesHeldAt (C : CaseOf) (q : _root_.Spot.OneStageZk.Own) : Prop :=
+  ∀ o k, FormAccepts C o → C o = some k → Properties.Spot.HoldsRegisteredTables q k.blobs
+
+/-- **Every accepted play names the registration `q` in a statement**: one of its evidence's statements is held to a
+member whose registration is `q`. -/
+def NamesAt (C : CaseOf) (q : _root_.Spot.OneStageZk.Own) : Prop :=
+  ∀ o k p c e held, FormAccepts C o → C o = some k → Decoded k p c e →
+    _root_.Spot.OneStageZk.membersHeld p.members e.statements = .ok held →
+    ∃ z ∈ (e.statements.zip held).toList, z.2.own = q
+
+/-- **The form's check gives `TablesHeldAt` at a registration every accepted play names in a statement**
+(`accepted_tables`). -/
+theorem tablesHeldAt_of_names {C : CaseOf} {q : _root_.Spot.OneStageZk.Own} (hN : NamesAt C q) :
+    TablesHeldAt C q := by
+  intro o k hA hk
+  have hA' := hA
+  obtain ⟨k', hk', p, c, e, pub, prof, hdec, -⟩ := hA'
+  have hkk : k' = k := Option.some.inj (hk'.symm.trans hk)
+  subst hkk
+  obtain ⟨held, hheld, ht⟩ := accepted_tables hA hk hdec
+  obtain ⟨z, hz, hzq⟩ := hN o _ p c e held hA hk hdec hheld
+  rw [← hzq]
+  exact ht z hz
+
+/-- **Two plays' blobs that passed the tables' check at one registration hold the pinned tables of one list of names,
+or collide**: the circuit file under the registration's digest is one file, or two blobs collide. -/
+theorem names_same {q : _root_.Spot.OneStageZk.Own} {F F' : Array ByteArray}
+    (h : Properties.Spot.HoldsRegisteredTables q (_root_.Core.Blobs.ofArray F))
+    (h' : Properties.Spot.HoldsRegisteredTables q (_root_.Core.Blobs.ofArray F')) :
+    (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)).map (·.1) =
+      (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F')).map (·.1) ∨ BlobsCollide F F' := by
+  obtain ⟨cB, hc, hl⟩ := h
+  obtain ⟨cB', hc', hl'⟩ := h'
+  rcases get_same hc hc' with e | hcol
+  · rw [e] at hl
+    exact .inl (Except.ok.inj (hl.symm.trans hl'))
+  · exact .inr hcol
 
 theorem caseIsSent_at {C : CaseOf} (x : Claims.Msg) (h : CaseIsSent C) : CaseIsSent (atStmt C x) :=
   fun o k p c e hk hdec => h o k p c e (atStmt_some hk).1 hdec
 
 /-- **The reference statements of one accepted play are every accepted play's, or two of the blobs sent differ under
 one SHA-512**, on a case map whose cases are the ones sent (`CaseIsSent`), whose accepted plays decode one parameters
-(`DecodesAt`) and hold the pinned tables of one list of names (`TablesAt`). -/
-theorem refsAt_of_tables {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {L : List String}
+(`DecodesAt`) and passed the tables' check at one registration (`TablesHeldAt`). -/
+theorem refsAt_of_held {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {q : _root_.Spot.OneStageZk.Own}
     {o₀ : Verity.Exchange} {k₀ : Case} {c₀ : _root_.Spot.OneStage.Commitment}
     {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
-    (hS : CaseIsSent C) (hP : DecodesAt C P) (hT : TablesAt C L)
+    (hS : CaseIsSent C) (hP : DecodesAt C P) (hT : TablesHeldAt C q)
     (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
     (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C := by
   by_cases hcol : SentCollides C
@@ -346,23 +389,22 @@ theorem refsAt_of_tables {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {L
   subst hpP
   have hb := (hS o k _ c e hk hdec).2
   have hb₀ := (hS o₀ k₀ _ c₀ e₀ hk₀ hd₀).2
-  have hn : (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)).map (·.1) =
-      (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o₀.sent.blobs)).map (·.1) := by
-    rw [← hb, ← hb₀]
-    exact (hT o k hA hk).trans (hT o₀ k₀ hA₀ hk₀).symm
-  rw [hb] at hx
-  rw [hb₀] at hx₀
-  exact (refStmts_same hx hx₀ hn).resolve_right fun hc => hcol ⟨o, o₀, hA, hA₀, hc⟩
+  have hh := hT o k hA hk
+  have hh₀ := hT o₀ k₀ hA₀ hk₀
+  rw [hb] at hx hh
+  rw [hb₀] at hx₀ hh₀
+  have hne : ¬ BlobsCollide o.sent.blobs o₀.sent.blobs := fun hc => hcol ⟨o, o₀, hA, hA₀, hc⟩
+  exact (refStmts_same hx hx₀ ((names_same hh hh₀).resolve_right hne)).resolve_right hne
 
 /-- **The held copies at the cases at one statement, or two of the blobs sent differ under one SHA-512**:
-`heldOfAt_at` with `RefsAt` from `refsAt_of_tables`, at the reference statements `xs₀` of one accepted play. -/
+`heldOfAt_at` with `RefsAt` from `refsAt_of_held`, at the reference statements `xs₀` of one accepted play. -/
 theorem heldOfAt_or_collide {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
-    {j : Lean.Json} {L : List String} {o₀ : Verity.Exchange} {k₀ : Case} {c₀ : _root_.Spot.OneStage.Commitment}
-    {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg} (u₀ : Unread)
-    (hS : CaseIsSent C) (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
-    (hT : TablesAt (atStmt C x) L) (hA₀ : FormAccepts (atStmt C x) o₀) (hk₀ : atStmt C x o₀ = some k₀)
+    {j : Lean.Json} {q : _root_.Spot.OneStageZk.Own} {o₀ : Verity.Exchange} {k₀ : Case}
+    {c₀ : _root_.Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
+    (u₀ : Unread) (hS : CaseIsSent C) (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
+    (hT : TablesHeldAt (atStmt C x) q) (hA₀ : FormAccepts (atStmt C x) o₀) (hk₀ : atStmt C x o₀ = some k₀)
     (hd₀ : Decoded k₀ P c₀ e₀) (hx₀ : refStmtsOf P k₀.blobs = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
     (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x) :=
-  (refsAt_of_tables (caseIsSent_at x hS) hP hT hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA
+  (refsAt_of_held (caseIsSent_at x hS) hP hT hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA
 
 end Verity.SampledTwo
