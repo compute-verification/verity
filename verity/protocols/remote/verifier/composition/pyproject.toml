@@ -57,4 +57,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verit
           "verity/configuration/deploy", "verity/configuration/wire",
           "verity/circuits", "verity/commitments", "verity/configuration/__init__.py", "verity/hardware/__init__.py",
           "verity/definitions", "verity/protocols/proofs/flock/agreement", "verity/protocols/proofs/flock/pod", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/tool.py",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]

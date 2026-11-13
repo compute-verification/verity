@@ -35,4 +35,4 @@ inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/
           "verity/protocols/proofs/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs",
           "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins",
           "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links", "verity/protocols/proofs/flock/prover/tests/fixtures/zk-sessions",
-          "verity/protocols/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py"]

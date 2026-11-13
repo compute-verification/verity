@@ -24,4 +24,4 @@ untraced = [
 # protocol interface.
 inputs = ["verity/protocols/proofs/flock/verifier", "verity/protocols/interface",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/__init__.py", "verity/protocols/__init__.py"]
+          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py"]
