@@ -157850,3 +157850,153 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `59e90438b7e4a020466ea4ac8036ad2daf135f4b` (pull request #9776). Runs out: `r20261113-175338-b748` (records, cpu-6, ends by 19:58:49Z), `r20261113-180009-568e` (suites, cpu-2, ends by 20:02Z).
+
+## ADDRROW2, Fri 13 Nov 19:31Z: the 25 finders one by one: at 21 a search of the runs' own finite lists finds the witness; three do not and I name them (`leafFinder`, `clashPickCL`, `clashPickHL`); `clashPickHLO` is deleted; and four more finders hold a chooser of `plurSZ`'s kind
+
+**In plain words.** Your 19:06Z and 19:22Z mails are read whole [run: mailbox read at 19:31Z]. You asked for the names
+of the finders whose witness is not a position of the runs as soon as I know them. I read the event of each of the
+25 finders (no proofs, nothing compiled). At 21 of them every witness is an index into a list the run itself holds,
+or a member of a finite type of positions, so a search replaces `h.choose`. Three are different, each in its own way,
+and they are below by name. I also found something you did not ask for: the chooser the other worker is sizing
+(`plurSZ`) has four siblings at finders outside `ZkLink/StrictZ.lean`, one of them read by two listed statements.
+
+Paths are under `security/Proofs/Flock/` at `origin/main` `fa3e619ee146`; the files are the pin's [run: `git diff`].
+"Listed" counts are the readers among the listed guarantees, from the pin's facts [run].
+
+### A. The three that are not positions of the runs (for PRF-490, by name)
+
+1. **`leafFinder`** (`Recursive/LeafFinder.lean:64`; listed readers: 0). Its event `LeafColl` (`:52`) is
+   `∃ j, ∃ R' : Reg', ∃ path p, isRead p ∧ (openings R' path p).Conflict`. The session `j : Fin S` and the read
+   `p : lay.Pos` are finite. **The registration `R' : Reg'` and the paths `path : lay.Pos → ByteArray` are not
+   positions of anything**: the event says some registration and some paths exist under which the read's two
+   openings conflict. No search finds them. Where the event is proved (`leaf_of_accepts`,
+   `C3/RegLevels/TopTie.lean:167`) they are the session outcome's own registration `o.1` and the public file
+   header's paths (`regPathsHJ … o.2.2`), and the audit's outcome does hold each session's outcome
+   (`VRec`, `Recursive/Flock.lean:544`) [read]. So the mend is to state `LeafColl` at those two, read from the
+   outcome. That changes the event's text. `LeafColl` is read by no listed guarantee [run], but it stands in the
+   premise `VBridgeCOff` of theorems in `Recursive/{RegExtract, ValueBridge, AuditC3}.lean`. I make no edit to it
+   before your word.
+2. **`clashPickCL`** (`Recursive/Compile.lean:89`; listed readers: 2, `Flock.SecurityProofs.PublicAudit` and
+   `Flock.SecurityProofs.RecursiveRanRegisteredExec`, neither deployed). Its event is
+   `∃ o o', outCL … t = some o ∧ outCL … t' = some o' ∧ ClashCL … o o'`. The witnesses `o`, `o'` are the two
+   outcomes, and they are whatever `outCL` returns, so the picker needs no `choose` for them. **But `outCL` (`:81`)
+   is itself `if h : ∃ out, PlaysT … out then some h.choose else none`**: the outcome the transcript's steps play
+   the table to, taken by choice. The outcome is unique (`PlaysT.det`, `Recursive/ForkRuns.lean:41`), so the choice
+   picks the only one. It is there because a step is taken "only when its type is the node's"
+   (`Soundness/Refine/LiveSim.lean:42`), and equality of two types is not decidable, so no function plays a
+   transcript [derived]. Inside `ClashCL` every witness is a position, as in rows 6 to 8 of the table. So the picker's
+   `choose` goes; `outCL`'s stays unless soundness rules on it. A second `outCL`
+   (`Soundness/Discharge/Exec/FlockLinkL.lean`) is read by the two `flock_verify_sound` statements; I did not read
+   it.
+3. **`clashPickHL`** (`Recursive/HoloExec.lean:364`; listed readers: 0). The same with `outHL` (`:355`).
+
+`clashPickHLO` (`C3/Fork/Sound.lean:67`) is deleted by your ruling, so 24 finders remain.
+
+### B. The other 21, one row each [read]
+
+"Finite type" means the search is over `Finset.univ.toList` (soundness's ruling B). "Own list" means a list the
+run's outcome holds.
+
+| # | finder (line) | picker | listed | the event's witnesses | searched over |
+|---|---|---|---|---|---|
+| 1 | `advRSFinderZ` (`Soundness/Discharge/ZkLink/StrictZ.lean:50`) | `conflictPick` | 48 | `p : Fin (2 ^ (lvOf T.sch ℓ).logLen)` | finite type |
+| 2 | `advPadsSFinderZ` (`:59`) | `conflictPick` | 48 | `p : Fin T.N` | finite type |
+| 3 | `advTauSFinderZ` (`:68`) | `conflictPick` | 48 | `p : Unit` | one position |
+| 4 | `adv₀SFinderZ` (`:77`) | `conflictPick` | 48 | `p : Fin (2 ^ (lvOf T.sch 0).logLen)` | finite type |
+| 5 | `selfSFinderZ` (`:84`) | `onePick` | 48 | `SelfClashZ` (`ZkLink/BadZ.lean:348`): two members of the run's level-0 openings; or a rep `r < 2`, a level `ℓ` with a recorded cap, and two members of that slot's openings; or `r < 2`, `jj, jj' < T.q`, `p : Fin T.N` and **`root : D`** | own lists and bounded indices. `root` is not searched: an opening verifies against `fun _ => root` only if `root` is what its walk reaches, so it is computed from the opening at `jj` |
+| 6 | `adv₀FinderL` (`Soundness/Discharge/Exec/StrictCRL.lean:41`) | `conflictPick` | 0 | `p : Fin (2 ^ (lvOf sch 0).logLen)` | finite type |
+| 7 | `advRFinderL` (`:49`) | `conflictPick` | 0 | `p : Fin (2 ^ (lvOf sch ℓ).logLen)` | finite type |
+| 8 | `selfFinderL` (`:60`) | `onePick` | 0 | `SelfClashL` (`Exec/CompiledL.lean:218`): as row 5's first two cases; the cap is `caps[ℓ - 1]?` | own lists |
+| 9 | `advRSFinderL` (`:143`) | `conflictPick` | 2 | as row 7 | finite type |
+| 10 | `adv₀SFinderL` (`:156`) | `conflictPick` | 2 | as row 6 | finite type |
+| 11 | `selfSFinderL` (`:164`) | `onePick` | 2 | as row 8 | own lists |
+| 12 | `TreeRewind.finder` (`Soundness/StrictCR.lean:230`) | `conflictPick` | 0 | `p : tr.P`, a field with `Fintype` | finite type |
+| 13 | `adv₀Finder` (`:274`) | `conflictPick` | 0 | `p : Fin (2 ^ (lvOf sch 0).logLen)` | finite type |
+| 14 | `advRFinder` (`:282`) | `conflictPick` | 0 | `p : Fin (2 ^ (lvOf sch ℓ).logLen)` | finite type |
+| 15 | `selfFinder` (`:293`) | `onePick` | 0 | `SelfClash` (`Soundness/CompiledSound.lean:164`): as row 8 | own lists |
+| 16 | `advRSFinder` (`:376`) | `conflictPick` | 0 | as row 14 | finite type |
+| 17 | `adv₀SFinder` (`:389`) | `conflictPick` | 0 | as row 13 | finite type |
+| 18 | `selfSFinder` (`:397`) | `onePick` | 0 | as row 15 | own lists |
+| 19 | `regFinder` (`Recursive/Registrants.lean:105`) | `onePick` | 3 | `RegColl` (`:93`): sessions `j, j' : Fin S` and reads `p, p' : lay.Pos` (a `Fintype`, `Soundness/Binding/Layout.lean:73`); the pair is already written out (`TwoOpenings.pair` or `hm96Pair`) | finite types |
+| 20 | `saltFinder` (`Recursive/SaltFinder.lean:115`) | `onePick` | 0 | `SaltColl` (`:98`): `j : Fin S`, `p : lay.Pos`; the pair is `hm96Pair` | finite types |
+| 21 | `topFinder` (`Recursive/TopFinder.lean:239`) | `onePick` | 0 | `TopColl` (`:199`): `cs`, `s`, `bcs` | nothing is searched: each is the value of a function of the history (`innerCommitsAt`, `stream?`, `tops[0]?`). The program and the entry of the pair's domain are values too (`RecVStar.registration`, `HoloExec.lean:173`) |
+
+In every row the test at each candidate ("this opening verifies", "these two rows differ") is decided
+classically, as `firstL` does, which soundness admitted. Two things in the table are not positions and are not
+chosen either, so I name them rather than judge them: row 5's `root` (computed from an opening) and row 21's values
+(computed from the history).
+
+### C. Four more finders hold a chooser of `plurSZ`'s kind [read; run for the readers]
+
+`plurSZ` is `Classical.choose (Rewinding.exists_pluralityE …)`, the plurality table handed to `forkFinder`. The
+same definition, at another opening function, is at four finders that are not in `ZkLink/StrictZ.lean`:
+
+| chooser | finder | listed |
+|---|---|---|
+| `plurSL` (`Soundness/Discharge/Exec/SessionSoundL.lean:192`) | `advRSFinderL` (row 9) | 2: `FlockSoundness.Discharge.FailClosed.flock_verify_sound`, `…flock_verify_sound_205` |
+| `plurCL` (`Soundness/Discharge/Exec/CompiledL.lean:427`) | `advRFinderL` (row 7) | 0 |
+| `plurS` (`Soundness/Session.lean:215`) | `advRSFinder` (row 16) | 0 |
+| `plurC` (`Soundness/CompiledSound.lean:368`) | `advRFinder` (row 14) | 0 |
+
+If the other worker's lemma (the fork's value does not depend on the chooser) is stated for `forkFinder` at any
+chooser, it covers all five. I leave rows 1 to 3 for last, as you ordered, and I ask whether rows 7, 9, 14 and 16
+wait with them.
+
+### D. The picker's shape with the search [derived; not compiled]
+
+```lean
+open Classical in
+noncomputable def pickOf {W : Type} (ws : List W) (p : W → Prop) (pr : W → List UInt8 × List UInt8) : Pair :=
+  (ws.find? fun w => decide (p w)).map pr
+```
+`conflictPick op pr b b'` is `pickOf Finset.univ.toList (ConflictAt op (b, b')) (pr (b, b'))`, for a finite `P`,
+which every lemma of place 2 already assumes (`Rewinding.conflict` is over a `Fintype P`). A self-clash finder
+passes the list of the run's own pairs of openings. `collOf_isColl` becomes: a member of `ws` passes `p`, and `pr`
+is a collision at every member that passes, so the output is a collision. The four lemmas keep their bounds. The
+trial's place 2 used `h.choose`, so it does not show this; I compile this shape next, at places 2, 3 and 5, before
+any file of the real tree is edited, and say in the next entry whether it went.
+
+### E. Your condition on `I.session` [read]
+
+`session : ByteArray → Option Live` is a field of `structure Instance`
+(`Proofs/Properties/Verity/Sampled/Instance.lean:163-173`, the last field), beside `base` and `deployment`: "the
+session the deployment runs at each parameters". It is the instance's own data, and nothing defines it by choice.
+The honest instance gives it as `fun _ => none`. I say so in the sampled pull request's body.
+
+### F. Pull request 1
+
+Not open yet: the records run (`r20261113-185209-f829`) is building and the changed suites
+(`r20261113-185337-0238`) are running, both at `071cba3fba4b`; four of the six suites have passed. I open it against
+PRF-490 when both are back and send the line.
+
+### What moves Monday
+
+Not known yet. What I know: the search is one definition and the four lemmas for 21 finders; `leafFinder` needs an
+event's text to change; `clashPickCL` and `clashPickHL` need a word on `outCL`; rows 1 to 3 wait for the chooser.
+I give the count of finders done and the day in the entry after the search picker compiles.
+
+### Not established
+
+- Nothing here is compiled. The search picker's shape is derived.
+- I read events and definitions, no proofs. That each event's proof can be turned into "a member of the list
+  passes" is derived for rows 1 to 18 from the shape of `ClashL` and `ConflictAt`, and not checked for rows 19 to 21.
+- `Exec.outCL` (`Exec/FlockLinkL.lean`) and how the two `flock_verify_sound` statements read it.
+- Whether `LeafColl` restated at the outcome's registration and paths keeps the proofs of the theorems that take
+  `VBridgeCOff` at it.
+
+### Pushed
+
+- This entry. No branch moved since my 19:02Z entry.
+
+### Runs
+
+- `r20261113-185209-f829` running: the records run of pull request 1 at `071cba3fba4b`.
+- `r20261113-185337-0238` running: the changed suites of pull request 1 at `071cba3fba4b`.
+
+### To post
+
+- On PRF-490, the names: `leafFinder` (its event quantifies over a registration and paths; the mend changes the
+  event's text); `clashPickCL` and `clashPickHL` (their outcomes come from `outCL` and `outHL`, each the unique
+  played outcome taken by `choose`, since no function plays a transcript whose steps carry their types).
+- On PRF-490, for the other worker: `plurSL`, `plurCL`, `plurS` and `plurC` are `plurSZ`'s definition at four more
+  finders; `plurSL` is read by the two `flock_verify_sound` statements.
