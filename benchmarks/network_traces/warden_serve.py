@@ -62,6 +62,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--top-p P] [--ids [--users NAME] [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
         [--egress id|bytes] [--max-tokens-cap N]
+    python warden_serve.py session (--upstream HOST:PORT | --fake) --listen HOST:PORT --windows N --out DIR
+        [--height 10] [--start-in 5] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes] [--max-tokens-cap N]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
@@ -106,6 +108,28 @@ prover starts on the weights its sink wrote, and runs `serve --load-heads`: the 
 the run's session before its first window (`sign_load`), so one LMS key and one session carry the load and the windows,
 and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
 session (`check_load`) at the relay's roots.
+
+**A session** (`session`, the gate's `relay-session`): the relay kept up for clients that are not its own. It is
+`rehearse` without its traffic and its client, and runs through the same code: a key in a scratch directory, `serve`
+as a process at `--listen` (the gate's: a port of the loopback its ssh forwards the peer's client port to) for exactly
+`--windows` link-windows, then `check`. It makes no request, so it asks the endpoint nothing before a client does, and
+writes no `traffic.json`, `client.log` or `client.json`.
+- *Where a client connects, and what tells it the relay is ready.* `serve` writes `deployment.json` once it listens:
+  the listener, the schedule, the session, the key, the run id, `windows` and `origin_unix`, bucket 0's start,
+  `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
+  peer's client port, which the gate's `status` names with the deployment) and speaks cells (`warden.cells`,
+  `warden.Shim`). One that connects before the origin waits in the queue.
+- *The end.* The relay ticks windows · T buckets from the origin and stops; nothing ends it earlier. A connection
+  still open then is cut (`warden.Warden.run`): one in the queue gets no cell and is in no record; one admitted at
+  bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit
+  takes; one cut from s + D on, with no `END` or `FAIL`, is refused by the audit in the link-window of its admission
+  (`warden.audit`). A connection admitted by bucket windows · T − `WardenParams.span` − 1 ends inside the run.
+- *What the check holds.* With no `client.json`, `check` holds what it holds of the records alone: every
+  link-window's certificates and registrations and the audit. That each cell reached its client in its bucket, and
+  that a client's bytes are the records', is the client's to check, from its own log against the run: the summary's
+  `requests`, `ended` and `cells_in_their_bucket` count no connection.
+- *What it establishes.* The records cover the connections that crossed the relay. A server reached by another
+  route is in none of them ("What it can't enforce here").
 
 **The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O[,ROWS] ...]`,
 the schedule's lengths rows and its content rows' classes (`P,O,ROWS` under `--lengths 1`, `P,O` under `--lengths 2`,

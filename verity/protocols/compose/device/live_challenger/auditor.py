@@ -245,6 +245,58 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
+- **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
+  the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
+  The gate sends no request and runs no client: the clients are the served run's, on the peer, and a connection's
+  path is client ──cells──▶ the peer's 127.0.0.1:CLIENT_PORT ──tunnel──▶ the relay (here) ──tunnel──▶ the peer's
+  127.0.0.1:PORT. What follows is the contract a runner of another lane reads.
+  - *The verb.* `relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS]
+    [--scan-class CLASS] [--watermark] [--height H]`. `--peer`, `--port`, `--minutes`, `--bucket-ms`, `--scan-class`,
+    `--watermark` and `--height` are a scan rehearsal's, read and bounded by the same code (`parse_warden`). It takes
+    none of a rehearsal's traffic (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, `--temperature`,
+    `--top-p`). The schedule is always the scan's, at the request's tick and class (`scan_schedule`), in the id egress
+    form: the one the certifier's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
+    `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in link-windows, 1 to
+    the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
+  - *Start.* The gate refuses the request while a rehearsal or another session runs, a key whose height can't sign
+    the session's link-windows (`warden_height`: `--height`, the deployed key's by default) and `--minutes` under
+    `session_minutes` (the link-windows' span, the key's generation and the check). It writes `request.json` (the
+    request, `client_port` and `windows` in it) and starts the rehearsal's unit; the reply, at once, is the request
+    with `run` and `unit`.
+  - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
+    `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
+    relay's listener, a free port of the loopback here (`forward_argv`). It then runs
+    `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` link-windows, and
+    the check.
+  - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
+    relay's cells both ways (`verity.protocols.accounting.certifier.verifier.warden`: `cells` sending, `Shim`
+    reading) at the schedule the deployment names. The port answers only while the unit's ssh is up: a connection
+    refused there is the forward down, and the run's `tunnel.log` says why.
+  - *Ready.* `status RUN` carries `relay`: null until the relay listens, then `{"client": "127.0.0.1:CLIENT_PORT",
+    "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
+    `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
+    connection made before it waits in the relay's queue, which holds the schedule's `queue` and refuses the next.
+  - *End.* The relay stops when its `--windows` link-windows have run, windows · T · τ after the origin. The runner
+    then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries `end`
+    and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its first
+    link-window, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a failed
+    run, as a rehearsal's.
+  - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
+    and schedule and each link-window's certificates and registrations, and in `end.json` the check's verdict and
+    counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
+    cells' salts, the relay's log and the check. The gate holds no traffic and no client's log, so the check
+    (`warden_serve.py check`) reads the records, their certificates, the registrations and the audit, and nothing of
+    what a client received: the end's `requests`, `ended` and `cells_in_their_bucket` count none. A client holds its
+    own log to the run's `fetch`.
+  - *A connection open at the session's end is cut.* One still in the queue is closed with no cell and is in no
+    record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
+    been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
+    s + D, with no `END` or `FAIL`, makes the check refuse the link-window of its admission, so the run isn't
+    accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`WardenParams.span`:
+    D + ⌊(egress cells − 1) / r⌋ buckets).
+  - *What it establishes.* The session's records cover the connections that crossed the relay, each cell in its
+    bucket. That nothing else reaches the endpoint is not the relay's to say: it is the placement's, and the
+    developer's forward's.
 - **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
   rehearsals): the demo's weights, plain INT8 as interface 1 generates them from its public seed, sit on this
   host's store disk (`/var/lib/vy-challenger/store`, `Host.store`, its own mount, `auditor`'s) and are relayed to the
