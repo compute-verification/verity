@@ -33,8 +33,8 @@ heredoc fed to a shell, `find -exec`, `su -c`, `flock`, `script -c` and `paralle
 the block rule leaves tmux alone.
 
 Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a `preToolUse` event's for the Shell tool
-(`tool_input.command`), and prints its verdict as JSON on stdout; each event's key names go to $AGENT_GUARD_EVENT_LOG
-(`settings.record_event`).
+(`tool_input.command`), and prints its verdict as JSON on stdout; each event's key names, and of its values the model it
+names and its turn's id, go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
 
 A secret file is refused the same way: a command that writes what it reads to its output (READERS: `cat`, `head`, `tail`,
 `sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, `zcat` and its kin, and a `grep`/`rg` that prints lines, one

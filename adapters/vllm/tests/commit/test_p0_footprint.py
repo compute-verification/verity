@@ -179,7 +179,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
         _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established: sampled replay None -- not run")
         assert v["commit_pass"] is True or _c2_only, f"{name}: exit {p.returncode}: {v.get('first_fail_reason') or v.get('commit_fail_reason')}"
         assert p.returncode == 0 or (p.returncode == 3 and _c2_only), f"{name}: exit {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
-        rows = [json.loads(l) for l in (tmp_path / name / "runs.jsonl").read_text().splitlines()]
+        rows = [json.loads(line) for line in (tmp_path / name / "runs.jsonl").read_text().splitlines()]
         rr = {r["commit"]["run_root"] for r in rows if r["arm"] != "control"}
         assert len(rr) == 1
         roots.append(rr.pop())

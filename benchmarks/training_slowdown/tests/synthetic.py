@@ -172,8 +172,9 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
-    the job's trace is taken from (its config, route, model and optimizers)."""
+    attention kernel torch picks (a fused one, a job's on a GPU) or under the math kernel (a job's on a CPU,
+    `run.cpu_attention`): the counter's record, and what the job's trace is taken from (its config, route, model
+    and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
