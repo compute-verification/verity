@@ -59,7 +59,7 @@ results.
 
 `benchmarks/harness/verity_bench` (the distribution `verity-bench`) is the shared harness. It measures what an arm, a
 protocol option or an experimental install, adds to served inference against stock vLLM, through the vLLM
-integration's public interfaces. A spec in `benchmarks/specs/` names a preset, its arms and its sweep, and expands to
+integration's public interfaces. A spec in `benchmarks/harness/specs/` names a preset, its arms and its sweep, and expands to
 points, each with an identity. `verity-bench run SPEC` records one run per point without a passing run, `check` passes
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
