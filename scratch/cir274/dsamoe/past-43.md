@@ -110,4 +110,80 @@ by the build [ran, `r20261113-055329-012c`]: `Unexpressible: AllGather_v1{WORLD=
 whole), so no existing template can be the copy. The other ways are a new Definition or the two-digit `Piece`, neither of
 them ours alone.
 
-ITEM2
+## 2. The two families that grow
+
+### BatchedGemm: a prefill step that mixes split and unsplit chains
+
+**The cause** [read, then ran].
+- Which chains split is FA3's choice for the whole launch, which `launch_num_splits` (`sparse_mla_split.py:248`) states:
+  - each token t has nblk_t = ⌈T_t / 64⌉ key blocks;
+  - bps = ⌈1.1 · Σ nblk / 132⌉ (the census's 132 SMs);
+  - token t splits in ⌈nblk_t / bps⌉, capped.
+- In a prefill step of one request, tokens with T ≤ 64 never split, and longer ones split while bps is small. So a step is
+  **mixed**, some chains split and some not, at 65-92 ids and 129-144 ids, and at no other length up to 4,096 [ran,
+  `p3_splits.py`, `r20261113-055538-ef0a`].
+- An unsplit chain's head output is one 512-word `HeadEnd` row; a split one's is 8 rows of 64 words (its combines).
+  BatchedGemm{K=512} reads head b's 512 words whole, so the frame's `_whole` (`node_window.py:466-479`) finds no one step and
+  gathers a member at a time: `AllGather_v1{WORLD=1,N=512}` for the unsplit members, `AllGather_v1{WORLD=8,N=64}` for the
+  split ones.
+- `batched_gemm`'s units are `a + (b·N + n)·M + t` (`node_window_sparse.py:72-89`): one (b, n) run of members crosses both
+  templates. `_lead` (`node_window.py:600`) fails over the whole grid, so the feed is one a unit before `coalesce` and two a
+  (b, n) run after.
+
+**The count** [ran at 4 and 8 layers; formula inferred from them]. With B·N = 2,048 (8 heads by 256 columns), L layers and
+the prompt's LP tokens:
+- x wires = 1 a step, merged across layers, when the step is unmixed;
+- when mixed, 2 · B · N = 4,096 a layer;
+- before `coalesce`, B · N · LP = 2,048 · LP a layer.
+
+| ids, 2 outputs | mixed | x wires, 4 layers | x wires, 8 layers | wires before `coalesce`, all families, 4 layers |
+|---|---|---|---|---|
+| 43 | no | 1 | 1 | 19,158 |
+| 64 | no | 1 | | 22,050 |
+| 65 | yes, 1 token splits | 16,384 | | 556,990 |
+| 86 | yes, 22 tokens split | 16,384 | 32,768 | 737,762 |
+| 127 | no | 1 | 1 | 31,378 |
+| 128 | no | 1 | | 31,630 |
+| 129 | yes, 1 token splits | 16,384 | | 1,092,930 |
+| 150 | no | 1 | 1 | 35,418 |
+| 200, 256 | no | 1 | | 44,318, 55,398 |
+
+The x wires are BatchedGemm{K=512}'s in the prefill step. Runs: `r20261113-053624-689e` (4 layers),
+`r20261113-055752-193f` (8 layers). That is why the counts aren't monotone in length: 65, 86 and 129 are mixed, and 127,
+128 and 150 aren't. SWEEP_BG
+
+**At 78 layers, mixed** [computed]: 78 × 4,096 = 319,488 x wires, about 61 MB of description at the 192 B a wire these cost
+at 4 layers (10,237,720 − 7,094,916 B over 16,376 wires at 86 ids). Before `coalesce` it is 2,048 × 86 × 78 = 13.7 million
+wire records at 86 ids. Unmixed lengths stay at 1 a step.
+
+**A form ours alone** (`node_window_sparse.py` `batched_gemm`, about 15 lines) [ran, as the scratch prototype
+`p3_bgform.py`, monkeypatched]:
+- keep the current form wherever `_lead` holds over the whole (B, N, M) grid, so every unmixed window keeps its digest;
+- otherwise put the units member-slowest, `a + t·B·N + b·N + n`;
+- feed x one run of like members at a time, over (members, B, N). In each template the per-member gathers sit at
+  `base + b·M_run + t`, so one feed holds per run;
+- read w at (M, B, N) with steps (0, N·K, K);
+- output `Piece(0, B·N, Row(t, a, "o0", 1), 1, B·N)`.
+
+Measured (patched clone, 4 layers, 2 outputs unless noted, both structure checks passing, `r20261113-060202-5a6b`):
+
+| ids | x wires, before → after | wires | before `coalesce` | bytes |
+|---|---|---|---|---|
+| 43 | 4 → 4 | 13,238, digest unchanged | 19,158 | 4,417,654 |
+| 86 | 16,387 → 11 | 36,100 → 19,724 | 737,762 → 33,258 | 10,237,720 → 7,094,916 |
+| 129 | 16,387 → 11 | 31,862 → 15,486 | 1,092,930 → 36,170 | 8,962,271 → 5,813,361 |
+| 126, 3 outputs | 4 → 4 | 21,431, digest unchanged | | |
+
+BGFORM_MORE
+
+What it changes:
+- the description, at mixed lengths only;
+- a test of a mixed (B, N, M) grid in `test_node_window_sparse.py`; `test_batched_gemm_slices` stays, since the
+  unmixed form is unchanged;
+- two unit orders in one lowering, where today there is one [inferred].
+
+The alternative is a frame change: `_whole` gathering the mixed members by one step per template. That is REQBLOCK's file.
+
+### SparseMlaSplit
+
+SMS_SECTION
