@@ -773,7 +773,7 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
   · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
           pr_mono fun _ hz => hr hz.1
       _ ≤ _ := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow
@@ -914,8 +914,8 @@ theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     exact ht
   have hcard : ∀ ω w, (Gs w ω).card = (cor o (e.symm ω) w).card := fun ω w => Finset.card_map _
   refine (pr_mono fun ω hω => ?_).trans ((pr_or_le _ _).trans (add_le_add
-    ((Rate.Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
-    ((Rate.Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
+    ((Rate.Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
   · obtain ⟨hall, hK | ⟨w, hw⟩⟩ := hω
     · refine Or.inl ⟨fun w t => hmem ω w t (hall w t), ?_⟩
       show ∑ i, d * (Gs i ω).card ≤ d * K
