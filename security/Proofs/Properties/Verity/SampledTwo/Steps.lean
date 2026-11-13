@@ -13,7 +13,9 @@ accepts at the switch `form` (`accepted_steps`):
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
-  run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`);
+  run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`), and on two windows the
+  first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
+  `interiorUnshown_roots`);
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -82,7 +84,8 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
-      sourceRead ξ run = .ok () ∧ Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
+      sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
+      Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
       OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out } = .accept pub prof := by
   unfold checkBlobsAtWith at h
   cases hp : prepare form p c ξ e bs with
@@ -103,9 +106,12 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
         cases hs : sourceRead ξ run' with
         | error _ => simp [hi, hr, hs, bind, Except.bind] at hp
         | ok u =>
-          simp only [hi, hr, hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
-          obtain ⟨rfl, rfl⟩ := hp
-          exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hj, htwo⟩
+          cases hu : interiorUnshown p e with
+          | error _ => simp [hi, hr, hs, hu, bind, Except.bind] at hp
+          | ok u' =>
+            simp only [hi, hr, hs, hu, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
+            obtain ⟨rfl, rfl⟩ := hp
+            exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
 
 /-- **The evidence's first-stage bytes are no more than the run read**, where the run reports what it read and
 `sourceRead` passed. -/
@@ -116,5 +122,28 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
   split at h
   · cases h
   · omega
+
+/-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
+check's `interiorUnshown` passed, the boundary's window is `w` and not the interior's, the second stage's family is
+`label`, the interior registration's digest is `after` and the first session `e.coins` names on `w` has the roots
+`roots`, those roots show no coin of `label` released after `after`. -/
+theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p e = .ok ()) {w label : String}
+    {after : ByteArray} {k : Spot.Challenger.ChallengerKey} {c : Spot.Challenger.LiveCommitment}
+    {roots : Spot.Challenger.Roots} (hw : p.boundary.verifier.windowRoot = some w)
+    (hne : some w ≠ p.interior.verifier.windowRoot)
+    (hl : Spot.getD (Spot.getD e.interior.base.coins "segment") "label" = .str label)
+    (ha : Spot.Registration.digest e.record = .ok after)
+    (hk : Spot.Challenger.ChallengerKey.ofJson (Spot.getD e.coins "key") = .ok k)
+    (ht : Spot.Challenger.trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
+      (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
+    interiorShown roots label after = false := by
+  have hb : (some w == p.interior.verifier.windowRoot) = false := by simpa using hne
+  unfold interiorUnshown at h
+  rw [hw, hl] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, hk, ht, bind, Except.bind] at h
+  cases hc : interiorShown roots label after
+  · rfl
+  · rw [hc] at h
+    simp at h
 
 end VStar.Recursive.SampledTwo
