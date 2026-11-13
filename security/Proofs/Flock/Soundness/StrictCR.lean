@@ -15,10 +15,12 @@ finders that the compiled theorem, the knowledge term and `δ_tree` count, and r
 * A finder (`Finder`) is a game played by a fixed strategy that outputs two byte strings or nothing. `Finder.CR H F q` is
   `SHA512CRStrict` for `F` at the budget `q`, and bounds `F`'s success by `q²/2^513` (`Finder.CR.le`).
 * The rewinding finders run the prover to a commitment and continue it twice: `twoRuns` after a cap every run sends
-  first, `forkFinder` at a rep's cap along the run (the fork `Lock.forkE` measures). They output the two openings that
-  conflict. The self-clash finder runs the prover once (`oneRun`). Merkle binding makes every pair they count a collision
-  (`op₀_conflict_collision`, `opR_conflict_collision`, `SelfClash.collision`), so each term is at most its finder's
-  success.
+  first, `forkFinder` at a rep's cap along the run (the fork `Lock.forkE` measures). They output the pair of the two
+  openings at the first position where the two continuations conflict (`conflictPick`). The self-clash finder runs the
+  prover once (`oneRun`) and outputs the pair of the first two of the run's own openings that clash (`onePick`). What a
+  finder outputs is a search of lists its runs hold (`collOf`): no witness is chosen. Merkle binding makes every pair
+  they output a collision (`op₀_conflict_collision`, `opR_conflict_collision`, `selfCands_spec`), so each term is at
+  most its finder's success.
 * So the compiled theorem (`table_sound_compiled_strict`), a table's knowledge bound in a session
   (`ksBoundAccB_le_strict`), the knowledge term (`ksAvgBE_le_strict`) and the rewinding bound at a registered root
   (`tree_le_strict`; `TreeRewind.le` for an event a rewinding covers, which is how `δ_tree` enters the end-to-end
@@ -49,32 +51,58 @@ variable {D : Type} (H : List UInt8 → D)
 def IsColl (o : Pair) : Prop := ∃ x y, o = some (x, y) ∧ x ≠ y ∧ H x = H y
 
 open Classical in
-/-- A collision of `H` when `p` holds (`h` gives one), nothing otherwise. -/
-noncomputable def collOf (p : Prop) (h : p → Merkle.Collision H) : Pair :=
-  if hp : p then some ((h hp).choose, (h hp).choose_spec.choose) else none
+/-- **The pair `pr` gives at the first member of `ws` that passes the test `p`**, and nothing when none does. A
+finder's output is this search of a list its runs hold. The test is decided classically; no witness is chosen. -/
+noncomputable def collOf {W : Type} (ws : List W) (p : W → Prop) (pr : W → List UInt8 × List UInt8) : Pair :=
+  (ws.find? fun w => decide (p w)).map pr
 
-theorem collOf_isColl {p : Prop} (h : p → Merkle.Collision H) (hp : p) : IsColl H (collOf H p h) := by
+open Classical in
+/-- The search finds a collision when a member of the list passes the test, and the pair is a collision at every
+member that passes. -/
+theorem collOf_isColl {W : Type} {ws : List W} {p : W → Prop} {pr : W → List UInt8 × List UInt8}
+    (hpr : ∀ w ∈ ws, p w → Hash.Collision H (pr w).1 (pr w).2) (h : ∃ w ∈ ws, p w) : IsColl H (collOf ws p pr) := by
+  obtain ⟨w, hw, hp⟩ := h
+  have hs : (ws.find? fun w => decide (p w)).isSome := List.find?_isSome.2 ⟨w, hw, decide_eq_true hp⟩
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 hs
+  have h1 := List.find?_some hv
+  have hv' : p v := of_decide_eq_true h1
+  refine ⟨(pr v).1, (pr v).2, ?_, hpr v (List.mem_of_find?_eq_some hv) hv'⟩
   unfold collOf
-  rw [dite_eq_left hp]
-  exact ⟨_, _, rfl, (h hp).choose_spec.choose_spec⟩
+  rw [hv]
+  rfl
 
-/-- An event of a run, as a finder's output: a collision whenever the event holds. -/
-noncomputable def onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle.Collision H) (a : α) : Pair :=
-  collOf H (q a) (hq a)
-
-theorem ind_le_onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle.Collision H) (a : α) :
-    ind q a ≤ ind (IsColl H) (onePick H q hq a) := by
+theorem ind_le_isColl {α : Type} (q : α → Prop) (pick : α → Pair) (h : ∀ a, q a → IsColl H (pick a)) (a : α) :
+    ind q a ≤ ind (IsColl H) (pick a) := by
   unfold ind
-  by_cases h : q a
-  · have hc : IsColl H (onePick H q hq a) := collOf_isColl H (hq a) h
-    rw [ite_eq_left h, ite_eq_left hc]
-  · rw [ite_eq_right h]
+  by_cases hq : q a
+  · have hc : IsColl H (pick a) := h a hq
+    rw [ite_eq_left hq, ite_eq_left hc]
+  · rw [ite_eq_right hq]
     split_ifs <;> norm_num
 
-/-- Two runs' conflict at some position, as a finder's output. -/
-noncomputable def conflictPick {α P V : Type} (op : α → P → Option V)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) (b b' : α) : Pair :=
-  onePick H (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (fun x h => h.elim (hcol x)) (b, b')
+/-- **An event of a run, as a finder's output.** `cs a` is the run's candidates: each is a test and the two byte
+strings to output when it passes. The output is the pair of the first candidate whose test passes. -/
+noncomputable def onePick {α : Type} (cs : α → List (Prop × (List UInt8 × List UInt8))) (a : α) : Pair :=
+  collOf (cs a) (fun c => c.1) fun c => c.2
+
+theorem ind_le_onePick {α : Type} (q : α → Prop) (cs : α → List (Prop × (List UInt8 × List UInt8)))
+    (hq : ∀ a, q a → ∃ c ∈ cs a, c.1) (hcs : ∀ a, ∀ c ∈ cs a, c.1 → Hash.Collision H c.2.1 c.2.2) (a : α) :
+    ind q a ≤ ind (IsColl H) (onePick cs a) :=
+  ind_le_isColl H q (onePick cs) (fun a h => collOf_isColl H (hcs a) (hq a h)) a
+
+/-- **Two runs' conflict at some position, as a finder's output**: the pair `pr` gives at the first position where
+the two runs conflict. -/
+noncomputable def conflictPick {α P V : Type} [Fintype P] (op : α → P → Option V)
+    (pr : α × α → P → List UInt8 × List UInt8) (b b' : α) : Pair :=
+  collOf (Finset.univ : Finset P).toList (Rewinding.ConflictAt op (b, b')) (pr (b, b'))
+
+theorem ind_le_conflictPick {α P V : Type} [Fintype P] (op : α → P → Option V)
+    (pr : α × α → P → List UInt8 × List UInt8)
+    (hpr : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pr x p).1 (pr x p).2) (b b' : α) :
+    ind (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (b, b') ≤ ind (IsColl H) (conflictPick op pr b b') :=
+  ind_le_isColl H (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (fun x : α × α => conflictPick op pr x.1 x.2)
+    (fun x h => collOf_isColl H (fun p _ hp => hpr x p hp)
+      (h.elim fun p hp => ⟨p, Finset.mem_toList.2 (Finset.mem_univ p), hp⟩)) (b, b')
 
 /-- **A collision finder**: a game played by a fixed strategy, with what it found as its output. -/
 structure Finder (γ : Type) : Type 1 where
@@ -122,19 +150,19 @@ theorem twoRuns_ev {β γ : Type} (f : γ → ℝ) (g : Game β) (s : Strategy g
   exact congrArg (fun F => expect F g s) (funext fun b => expect_map f (pick b) g s)
 
 theorem expect_one_le {α : Type} (g : Game α) (s : Strategy g) (q : α → Prop)
-    (hq : ∀ a, q a → Merkle.Collision H) :
-    expect (ind q) g s ≤ (oneRun g s (onePick H q hq)).ev (ind (IsColl H)) := by
+    (cs : α → List (Prop × (List UInt8 × List UInt8))) (hq : ∀ a, q a → ∃ c ∈ cs a, c.1)
+    (hcs : ∀ a, ∀ c ∈ cs a, c.1 → Hash.Collision H c.2.1 c.2.2) :
+    expect (ind q) g s ≤ (oneRun g s (onePick cs)).ev (ind (IsColl H)) := by
   rw [oneRun_ev]
-  exact expect_mono (ind_le_onePick H q hq) g s
+  exact expect_mono (ind_le_onePick H q cs hq hcs) g s
 
-theorem expect₂_conflict_le {α P V : Type} (g : Game α) (s : Strategy g) (op : α → P → Option V)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) :
+theorem expect₂_conflict_le {α P V : Type} [Fintype P] (g : Game α) (s : Strategy g) (op : α → P → Option V)
+    (pr : α × α → P → List UInt8 × List UInt8)
+    (hpr : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pr x p).1 (pr x p).2) :
     expect₂ (fun b b' => ind (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (b, b')) g s ≤
-      (twoRuns g s (conflictPick H op hcol)).ev (ind (IsColl H)) := by
+      (twoRuns g s (conflictPick op pr)).ev (ind (IsColl H)) := by
   rw [twoRuns_ev]
-  exact expect_mono (fun b => expect_mono (fun b' =>
-    ind_le_onePick H (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (fun x h => h.elim (hcol x))
-      (b, b')) _ _) _ _
+  exact expect_mono (fun b => expect_mono (fun b' => ind_le_conflictPick H op pr hpr b b') _ _) _ _
 
 section Fork
 
@@ -172,37 +200,39 @@ theorem forkE_le_ev (plur : Lock.Chooser T Dc β) (slot : ℕ) {Φ : Dc → β �
         exact expect_mono (fun b => expect_mono (hΦ σ'.1 b) _ _) _ _
       · exact forkE_le_ev plur slot hΦ hdflt _ σ'.2
 
-theorem forkE_conflict_le {P V : Type} (plur : Lock.Chooser T Dc β) (slot : ℕ) (op : Dc → β → P → Option V)
-    (hcol : ∀ d x p, Rewinding.ConflictAt (op d) x p → Merkle.Collision H) {i : I} {g : Game α} {g' : Game β}
-    (L : Lock T Dc get R i g g') (σ' : Strategy g') :
+theorem forkE_conflict_le {P V : Type} [Fintype P] (plur : Lock.Chooser T Dc β) (slot : ℕ)
+    (op : Dc → β → P → Option V) (pr : Dc → β × β → P → List UInt8 × List UInt8)
+    (hpr : ∀ d x p, Rewinding.ConflictAt (op d) x p → Hash.Collision H (pr d x p).1 (pr d x p).2)
+    {i : I} {g : Game α} {g' : Game β} (L : Lock T Dc get R i g g') (σ' : Strategy g') :
     Lock.forkE plur slot (fun d b b' => ind (fun x : β × β => ∃ p, Rewinding.ConflictAt (op d) x p) (b, b')) L σ' ≤
-      (forkFinder plur slot (fun d => conflictPick H (op d) (hcol d)) none L σ').ev (ind (IsColl H)) :=
-  forkE_le_ev plur slot (fun d b b' => ind_le_onePick H (fun x : β × β => ∃ p, Rewinding.ConflictAt (op d) x p)
-    (fun x h => h.elim (hcol d x)) (b, b')) (ind_nonneg _ _) L σ'
+      (forkFinder plur slot (fun d => conflictPick (op d) (pr d)) none L σ').ev (ind (IsColl H)) :=
+  forkE_le_ev plur slot (fun d b b' => ind_le_conflictPick H (op d) (pr d) (hpr d) b b') (ind_nonneg _ _) L σ'
 
 end Fork
 
 open Classical in
 /-- **`δ_tree`'s rewinding bound under `SHA512CRStrict`.** Runs of `g` against `s` open positions `P` of a registered
 root to values (`op`), and `vstar` is the plurality of those openings (`Rewinding.IsPluralityE`), the leaves the bound
-reads the root as. If each run opens at most `Q` positions and two runs' conflicting openings are a collision (`hcol`,
-Merkle binding), then the probability that a run opens a position off `vstar` is at most `√(N·Q·q²/2^513)`, for `q` the
-budget of the finder that runs the prover twice after the registration (`DESIGN.md` §1: `δ_tree ≤ √(N_s·Q_s·Adv)`). -/
+reads the root as. If each run opens at most `Q` positions and the pair `pr` of two runs' conflicting openings is a
+collision (`hpr`, Merkle binding), then the probability that a run opens a position off `vstar` is at most
+`√(N·Q·q²/2^513)`, for `q` the budget of the finder that runs the prover twice after the registration and outputs
+`pr` at the first position where the two runs conflict (`DESIGN.md` §1: `δ_tree ≤ √(N_s·Q_s·Adv)`). -/
 theorem tree_le_strict {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (op : α → P → Option V)
     (g : Game α) (s : Strategy g) (vstar : P → V) (hv : Rewinding.IsPluralityE op g s vstar) (Q : ℕ)
     (hQ : ∀ a, (Finset.univ.filter fun p => (op a p).isSome).card ≤ Q)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) {q : ℝ}
-    (hCR : (twoRuns g s (conflictPick H op hcol)).CR H q) :
+    (pr : α × α → P → List UInt8 × List UInt8)
+    (hpr : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pr x p).1 (pr x p).2) {q : ℝ}
+    (hCR : (twoRuns g s (conflictPick op pr)).CR H q) :
     expect (ind fun a => ∃ p, Rewinding.Off op vstar a p) g s ≤
       Real.sqrt (Fintype.card P * Q * (q ^ 2 / 2 ^ (513 : ℝ))) :=
   (Rewinding.expect_bad_le op g s vstar hv Q hQ).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-    ((expect₂_conflict_le H g s op hcol).trans hCR.le) (by positivity)))
+    ((expect₂_conflict_le H g s op pr hpr).trans hCR.le) (by positivity)))
 
 /-- **A rewinding at registered roots that covers an event** `bad` of the game `G` played by `S`. Runs of `g` against
 `s` (the prover after its registration, with the unit sample in place of the proof coins) open positions `P` of the roots
-to values (`op`), at most `Q` per run (`opens`), and `vstar` is the plurality of the openings (`plur`). Two runs'
-conflicting openings are a collision of `H` (`binds`, Merkle binding), and `bad` is no likelier than a run opening a
-position off `vstar` (`covers`). -/
+to values (`op`), at most `Q` per run (`opens`), and `vstar` is the plurality of the openings (`plur`). `pair` gives,
+for two runs and a position, two byte strings, which are a collision of `H` when the two runs' openings there conflict
+(`binds`, Merkle binding), and `bad` is no likelier than a run opening a position off `vstar` (`covers`). -/
 structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Prop) : Type 1 where
   α : Type
   P : Type
@@ -217,7 +247,8 @@ structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Pr
   plur : Rewinding.IsPluralityE op g s vstar
   Q : ℕ
   opens : ∀ a, (Finset.univ.filter fun p => (op a p).isSome).card ≤ Q
-  binds : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H
+  pair : α × α → P → List UInt8 × List UInt8
+  binds : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pair x p).1 (pair x p).2
   covers : prob bad G S ≤ ENNReal.ofReal (expect (ind fun a => ∃ p, Rewinding.Off op vstar a p) g s)
 
 namespace TreeRewind
@@ -226,9 +257,10 @@ attribute [local instance] fintypeP fintypeV decEqV
 
 variable {H} {β : Type} {G : Game β} {S : Strategy G} {bad : β → Prop}
 
-/-- The finder `δ_tree` counts: two runs after the registration, and a position they open to different values. -/
+/-- The finder `δ_tree` counts: two runs after the registration, and the pair at the first position they open to
+different values. -/
 noncomputable def finder (tr : TreeRewind H G S bad) : Finder Pair :=
-  twoRuns tr.g tr.s (conflictPick H tr.op tr.binds)
+  twoRuns tr.g tr.s (conflictPick tr.op tr.pair)
 
 /-- **`δ_tree` at the budget `q`**: `√(N·Q·q²/2^513)`, for `N` the positions and `Q` the openings per run. -/
 noncomputable def bound (tr : TreeRewind H G S bad) (q : ℝ) : ℝ :=
@@ -238,7 +270,7 @@ noncomputable def bound (tr : TreeRewind H G S bad) (q : ℝ) : ℝ :=
 covered event has probability at most `bound q` (`tree_le_strict`). -/
 theorem le (tr : TreeRewind H G S bad) {q : ℝ} (h : tr.finder.CR H q) : prob bad G S ≤ ENNReal.ofReal (tr.bound q) :=
   tr.covers.trans (ENNReal.ofReal_le_ofReal
-    (tree_le_strict H tr.op tr.g tr.s tr.vstar tr.plur tr.Q tr.opens tr.binds h))
+    (tree_le_strict H tr.op tr.g tr.s tr.vstar tr.plur tr.Q tr.opens tr.pair tr.binds h))
 
 /-- **A rewinding with no positions** covers an event that never happens. The skeleton's `hExec` (every executable
 accept is the model's) gives one for `execAccept ∧ o.1 = false`, at `δ_tree = 0` (`ofNever_bound`). -/
@@ -253,6 +285,7 @@ def ofNever (h : ∀ b, ¬ bad b) : TreeRewind H G S bad where
   plur e := e.elim
   Q := 0
   opens _ := by simp
+  pair _ e := e.elim
   binds _ e := e.elim
   covers := (prob_mono (p := bad) (q := fun _ => False) h G S).trans (by rw [prob_false]; exact zero_le)
 
@@ -269,31 +302,32 @@ section Compiled
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
-/-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and a level-0 position they open to different
-rows. -/
+/-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and the pair of their openings at the first
+level-0 position they open to different rows. -/
 noncomputable def adv₀Finder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) :
     Finder Pair :=
-  twoRuns (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2
-    (conflictPick H (op₀ H E sch σ.1) fun _ _ h => op₀_conflict_collision h)
+  twoRuns (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2 (conflictPick (op₀ H E sch σ.1) (op₀Pair H E sch σ.1))
 
-/-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and a level-`ℓ` position
-they open to different rows. -/
+/-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and the pair of their
+openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRFinder [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : Finder Pair :=
   forkFinder (plurC H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
-    (fun d => conflictPick H (opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d) fun _ _ h => opR_conflict_collision h)
+    (fun d => conflictPick (opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d)
+      (opRPair H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d))
     none
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
-/-- **The self-clash finder**: one run, and a position it opens two ways. -/
+/-- **The self-clash finder**: one run, and the pair of the first two of its openings that open a position two
+ways (`selfCands`). -/
 noncomputable def selfFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) :
     Finder Pair :=
-  oneRun (tableC A H E S sch hm ptLocal mPts) σ (onePick H (SelfClash H E sch) fun _ h => h.collision)
+  oneRun (tableC A H E S sch hm ptLocal mPts) σ (onePick (selfCands H E sch))
 
 /-- **`SHA512CRStrict` for the compiled theorem's finders**: the rewinding finders at budget `qF`, the self-clash finder at
 budget `qS`. -/
@@ -311,7 +345,7 @@ theorem adv₀_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts))
     {q : ℝ} (h : (adv₀Finder A H E S sch hm ptLocal mPts σ).CR H q) :
     adv₀ A H E S sch hm ptLocal mPts σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (expect₂_conflict_le H (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2 (op₀ H E sch σ.1)
+  (expect₂_conflict_le H (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2 (op₀ H E sch σ.1) (op₀Pair H E sch σ.1)
     fun _ _ h => op₀_conflict_collision h).trans h.le
 
 theorem advR_le_strict [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
@@ -321,7 +355,8 @@ theorem advR_le_strict [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E :
     (h : (advRFinder A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ).CR H q) :
     advR A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le H (plurC H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
-    (opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ) (fun _ _ _ h => opR_conflict_collision h)
+    (opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ) (opRPair H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ)
+    (fun _ _ _ h => opR_conflict_collision h)
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2).trans h.le
 
@@ -330,7 +365,8 @@ theorem self_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts))
     {q : ℝ} (h : (selfFinder A H E S sch hm ptLocal mPts σ).CR H q) :
     expect (ind (SelfClash H E sch)) (tableC A H E S sch hm ptLocal mPts) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (expect_one_le H _ σ (SelfClash H E sch) fun _ h => h.collision).trans h.le
+  (expect_one_le H _ σ (SelfClash H E sch) (selfCands H E sch) (fun _ h => h.cand)
+    fun _ _ hc h => selfCands_spec hc h).trans h.le
 
 /-- **The compiled theorem under `SHA512CRStrict`** (`table_sound_compiled` at its finders). If the rewinding finders
 each satisfy `SHA512CRStrict` at budget `qF` and the self-clash finder at `qS`, a compiled run accepts while the table
@@ -372,34 +408,35 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   [Inhabited D] {mPts : ℕ}
 
 /-- **`Adv_{r,ℓ}`'s finder in a session**: along the session, at the table's rep `r`'s level-`ℓ` cap, two continuations,
-and a level-`ℓ` position they open to different rows. -/
+and the pair of their openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRSFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) (cap₀ : Cap D) (r ℓ : ℕ)
     (σ : Strategy (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
     Finder Pair :=
   forkFinder (plurS H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length) (slotOf r ℓ)
-    (fun d => conflictPick H
+    (fun d => conflictPick
       (fun outs : List (OutC F D) => opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD pre.length dfltOut))
-      fun x _ h => opR_conflict_collision (x := (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut)) h)
+      fun x p => opRPair H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d
+        (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
     none (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ
 
-/-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and a level-0 position of the table they open to different
-rows. -/
+/-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and the pair of their openings at the first level-0
+position of the table they open to different rows. -/
 noncomputable def adv₀SFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D)))
     (cap₀ : Cap D) (σ : Strategy (sessAfter A H E S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   twoRuns (sessAfter A H E S sch hm ptLocal mPts pre post cap₀) σ
-    (conflictPick H (fun outs : List (OutC F D) => op₀ H E sch cap₀ (outs.getD pre.length dfltOut))
-      fun x _ h => op₀_conflict_collision (x := (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut)) h)
+    (conflictPick (fun outs : List (OutC F D) => op₀ H E sch cap₀ (outs.getD pre.length dfltOut))
+      fun x p => op₀Pair H E sch cap₀ (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
 
-/-- **The self-clash finder in a session**: one run after `Commit`, and a position of the table it opens two ways. -/
+/-- **The self-clash finder in a session**: one run after `Commit`, and the pair of the first two of the table's
+openings that open a position two ways. -/
 noncomputable def selfSFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D)))
     (cap₀ : Cap D) (σ : Strategy (sessAfter A H E S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   oneRun (sessAfter A H E S sch hm ptLocal mPts pre post cap₀) σ
-    (onePick H (fun outs : List (OutC F D) => SelfClash H E sch (outs.getD pre.length dfltOut))
-      fun _ h => h.collision)
+    (onePick fun outs : List (OutC F D) => selfCands H E sch (outs.getD pre.length dfltOut))
 
 /-- **`SHA512CRStrict` for a table's finders in a session**: the rewinding finders at budget `qF`, the self-clash finder
 at budget `qS`. -/
@@ -421,6 +458,8 @@ theorem advRS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
     advRS A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post cap₀ r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le H (plurS H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length) (slotOf r ℓ)
     (fun d (outs : List (OutC F D)) => opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD pre.length dfltOut))
+    (fun d x p => opRPair H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d
+      (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
     (fun _ x _ h => opR_conflict_collision (x := (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut)) h)
     (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ).trans h.le
 
@@ -432,6 +471,7 @@ theorem adv₀S_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     adv₀S A H E S sch hm ptLocal mPts pre post cap₀ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect₂_conflict_le H (sessAfter A H E S sch hm ptLocal mPts pre post cap₀) σ
     (fun outs : List (OutC F D) => op₀ H E sch cap₀ (outs.getD pre.length dfltOut))
+    (fun x p => op₀Pair H E sch cap₀ (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
     fun x _ h => op₀_conflict_collision (x := (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut)) h).trans
     h.le
 
@@ -443,7 +483,8 @@ theorem selfS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
     expect (ind fun outs : List (OutC F D) => SelfClash H E sch (outs.getD pre.length dfltOut))
       (sessAfter A H E S sch hm ptLocal mPts pre post cap₀) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect_one_le H _ σ (fun outs : List (OutC F D) => SelfClash H E sch (outs.getD pre.length dfltOut))
-    fun _ h => h.collision).trans h.le
+    (fun outs : List (OutC F D) => selfCands H E sch (outs.getD pre.length dfltOut)) (fun _ h => h.cand)
+    fun _ _ hc h => selfCands_spec hc h).trans h.le
 
 /-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
