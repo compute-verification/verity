@@ -12,14 +12,16 @@ from collections import Counter
 
 import numpy as np
 import pytest
-
-from tests.program import sampled_accept_vectors as SV
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
-from verity.definitions.registry import sampled_accept as A, sampling as SA, spec
+from verity.definitions.registry import sampled_accept as A
+from verity.definitions.registry import sampling as SA
+from verity.definitions.registry import spec
 from verity.definitions.registry.sampling_rows import gumbel_select_row
+
+from tests.program import sampled_accept_vectors as SV
 
 F = np.float32
 M32 = 0xFFFFFFFF
