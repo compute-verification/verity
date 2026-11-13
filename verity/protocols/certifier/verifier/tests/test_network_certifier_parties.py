@@ -1,9 +1,12 @@
 """The network certifier's manifest (`parties`): its three parties and two channels as its docstring states them, the
-workers and the verifier as sampled proofs declares them, a placement that holds the certifier to the auditor's machine
+workers and the verifier as SPOT declares them, a placement that holds the certifier to the auditor's machine
 and takes one a link, and a committed output value's two parts as the two messages: the witness to the workers alone,
-the record to the verifier alone, each refused by name past its schema."""
+the record to the verifier alone, each refused by name past its schema; and its id and its check are the Lean's."""
 
 from __future__ import annotations
+
+import re
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +31,7 @@ LINKS = (("gate", "node"), ("gate", "auditor"), ("auditor", "node"))
 SITE = site_of([{"name": n, "owner": o, "provides": p} for n, (o, p) in MACHINES.items()],
                [{"ends": [a, b], "latency_ms": 1} for a, b in LINKS])
 PLACED = {NC.NETWORK_CERTIFIER: "gate", NC.WORKERS: "node", NC.VERIFIER: "auditor"}
+LEAN = Path(__file__).resolve().parents[1] / "lean"
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +40,7 @@ def out(tmp_path_factory) -> tuple[O.CertifiedOut, O.PublicKey]:
     return O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=WINDOW, link=LINK), s.public_key()
 
 
-def test_the_manifest_states_the_certifier_and_sampled_proofs_two() -> None:
+def test_the_manifest_states_the_certifier_and_spots_two() -> None:
     m = NC.MANIFEST
     assert (m.protocol, m.version) == (domains.CERTIFIER_PROTOCOL, 1) and m.protocol == SP.IDS["certifier"]
     assert [r.name for r in m.parties] == ["network-certifier", "workers", "verifier"]
@@ -109,3 +113,13 @@ def test_the_bounds_are_the_frames_and_the_deployed_signatures() -> None:
     frame = wire.HEADER.unpack(b"\xff" * wire.HEADER.size)[1]
     assert NC.MAX_OPENING % O.SALT_BYTES == 0 and NC.MAX_OPENING <= frame < NC.MAX_OPENING + O.SALT_BYTES
     assert wire.MAX_HEAD < 2 * lms.DEPLOYED.signature_bytes() < NC.MAX_RECORD
+
+
+def test_its_id_and_its_check_are_the_leans() -> None:
+    exe, command, argument = NC.MANIFEST.params.split()
+    assert (command, argument) == ("check", "PARAMS")
+    lake = (LEAN / "lakefile.toml").read_text(encoding="utf-8")
+    root = re.search(rf'^name = "{re.escape(exe)}"\nroot = "([\w.]+)Main"$', lake, re.MULTILINE)
+    assert root, f"{exe} is no executable of {LEAN.name}/lakefile.toml"
+    text = (LEAN / (root[1].replace(".", "/") + ".lean")).read_text(encoding="utf-8")
+    assert f'def protocolId : String := "{NC.ID}"' in text
