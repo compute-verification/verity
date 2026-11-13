@@ -789,6 +789,25 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
 
 
+@pytest.mark.parametrize("runner, wrote, error", [
+    ("import sys\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("import sys\nprint('half a document')\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("print('{}')\n", "{}", KeyError),
+    ("print('null')\n", "null", TypeError)])
+def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_names_what_it_wrote(linted, monkeypatch, runner,
+                                                                                                  wrote, error):
+    """The runner's process printing no JSON, or JSON that isn't its document, is the gate unable to judge: a `GitError`
+    naming both ends of the change and the end of what the process wrote (its stderr first), with the reading's own error
+    behind it, and never a verdict."""
+    top = linted.commit("a helper", {"adapters/vllm/tests/lint/_helper.py": "X = 1\n"})
+    base = linted.git("rev-parse", "main")
+    monkeypatch.setattr(G, "RUNNER", runner)
+    with pytest.raises(G.GitError) as e:
+        G.gate("main", "pr")
+    assert str(e.value) == f"the base's lints at {base[:12]} didn't run on {top[:12]}: {wrote}"
+    assert isinstance(e.value.__cause__ or e.value.__context__, error)
+
+
 REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
 RUFF_LINT = "adapters/vllm/tests/lint/test_ruff.py"
 RUFF_JSON = "adapters/vllm/tests/lint/allowlists/ruff.json"

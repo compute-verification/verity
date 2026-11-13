@@ -208,3 +208,19 @@ def test_the_interface_imports_neither_vllm_nor_torch():
     mods = {a.name for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Import) for a in n.names}
     mods |= {n.module for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.ImportFrom) and n.module}
     assert not {m for m in mods if m.split(".")[0] in ("vllm", "torch", "triton", "numpy")}
+
+
+def test_an_arm_set_past_activate_is_answered_as_an_activated_one():
+    """`Stack.active` set without `activate`: a spec the stack refuses is still `Refused`, the class a caller catches, on
+    a stack with no executor too, and a forward outside a pass names the stack's own executor, or the arm's where the
+    stack has none."""
+    stack = Stack(SITES)
+    stack.active = PEARLC
+    with pytest.raises(Refused, match="schedule 'deferred': vLLM own apply runs serial"), stack.pass_(PassSpec(schedule="deferred")):
+        pass
+    with pytest.raises(RuntimeError, match="^pouw:pearl-c-sm120-v1-h3 is active outside a pass"):
+        stack.apply(SITES[0], Layer(), "x", None, original)
+    stack = Stack(SITES, Executor(name="pouw:other"))
+    stack.active = PEARLC
+    with pytest.raises(RuntimeError, match="^pouw:other is active outside a pass"):
+        stack.apply(SITES[0], Layer(), "x", None, original)
