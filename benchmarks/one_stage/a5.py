@@ -1681,11 +1681,11 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both; with ``relay`` (`window_trees`),
     every verifier on the window's challenger session through it, one session at a time. Where the audit's sessions are
     behind the ZK server so is its prover: one `prove --zk --stream` process on the CPU that starts a Lean session loop
-    for each session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the
-    process's environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None
-    where a session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of
-    its own (`a0.session`), which takes its tree through ``relay`` too. Neither a session behind the ZK server nor a
-    process pair takes a card (`devices_refusal`)."""
+    for each session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as
+    the process's environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on
+    it. None where a session is one it doesn't prove (plain, or members that don't agree): each session is then a
+    process pair of its own (`a0.session`), which takes its tree through ``relay`` too. Neither a session behind the ZK
+    server nor a process pair takes a card (`devices_refusal`)."""
     if why := devices_refusal(a):
         raise ValueError(why)
     if plain(a):
