@@ -1006,6 +1006,8 @@ class _Entry:
     copies: tuple[Any, ...] = ()
     seed_salt: str | None = None
     history: Mapping[str, Any] | None = None
+    #: the declared day `register` handed R1-R8 and the run: `{"day", "declarations", "head"}`, or empty
+    declared: Mapping[str, Any] = field(default_factory=dict)
     read: bytes | None = None
     #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
     family: str | None = None
@@ -1904,7 +1906,8 @@ class Stream:
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
-                 history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
+                 history: Mapping[str, Any] | None = None,
+                 declared: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1913,7 +1916,10 @@ class Stream:
         the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them). Then the receipt. Under
+        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them, and `declared`,
+        the window's day, the registration log's declarations and the head of the prefix they were filled from,
+        `{"day", "declarations", "head"}` as `registration.check` takes them, which the run of record reads too).
+        Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1961,7 +1967,7 @@ class Stream:
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
-                            history=history)
+                            history=history, **(declared or {}))
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1992,7 +1998,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt, history))
+                                     window_root, held, outputs), seed_salt, history, dict(declared or {})))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2455,7 +2461,8 @@ class Stream:
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
-                      history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main)
+                      history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main,
+                      **e.declared)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2528,7 +2535,7 @@ class Stream:
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
                       tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
-                      main=self.main,
+                      main=self.main, **e.declared,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
