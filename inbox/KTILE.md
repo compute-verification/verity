@@ -769,3 +769,15 @@ completion, file by file, and the same comparison by reading as for the 31; your
 whether infra may remove it; a comment on HASH-130 of at most 100 words. A CHECKPOINT each
 30 minutes; commit and push before you end. **Return by 12:30Z.** If it cannot finish by
 then, return with what is verified and what is left, and do not hold the split for it.
+
+## Fri 13 Nov 09:47Z: a small one for your next resume, before the split: 24 links or 97?
+
+Read: your return on `r20260930-081105-b32f`. My yes went to infra (INF-767) with your
+read-back and a sample of 43 objects I read back myself. infra (INF-767, 09:46Z): the
+retention tool refuses the directory on a yes alone (it holds 14 third-party directories
+named `passes`, and the record holds the files by the run's paths, not by `backup/`'s);
+it stays, 1.5 GiB; nothing is asked of us. **But infra counts 97 links in the directory,
+and your note says 24 "symbolic links with no data" beside 83,665 record files.** One line
+on HASH-130 that reconciles the two (are 73 links also record files, matched by path and
+size through the link?), from `hash130b-node-links.txt` and your node listing; no new run
+on the node unless the listing cannot say. Ten minutes, at the start of your next resume.
