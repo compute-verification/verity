@@ -36644,9 +36644,9 @@
    }
   },
   "Definitions.Core.Registration": {
-   "digest": "b0ba120c18763fc74de85eb62197630fb8dd1046be743640232eaf98d3620236",
+   "digest": "4aa097fae86b246ea9e3c9ed58b685e4ee57017b76f9add6e99e14d6e27bde3c",
    "definitions": {
-    "Verity.Registration.View": "526299db2a7fa7c4719db784e97d443cb719028d0f7d68e9c5d820ea92478ec9",
+    "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
     "Verity.Registration.View.Devices": "57ae39208ba1d0ff9a716eb4daaa087e659e08bf3ad0e6f76c7c55c7463d1f08",
     "Verity.Registration.View.Holds": "a08ae8d982afa757ae415002b9bfcecbffcb413ec9d1fc04fffc1dcafd6342ba",
     "Verity.Registration.View.Once": "f53e892033655f1db2f53283c8a8dd8bbe6a87775e47a1ba38b6aa25b30038f9",
@@ -36654,7 +36654,8 @@
     "Verity.Registration.View.declarations": "9b5b1996f3d5309e8d7a73417741591bd7c0dfc599c98dd2c380e9b8596b988b",
     "Verity.Registration.View.site": "daca8b37b3b956728e71ee33d63fea90a1f73f3ab459e31cc14cfa6785d1de27",
     "Verity.Registration.View.theta": "ab0b2f0a94dfccc500c42a6f0215b8e07e2497d64073135e33c865799050056b",
-    "Verity.Registration.view": "98225078dd64822792f9757809fedfbec15193552d956969a6697925140f4a50"
+    "Verity.Registration.heads": "dd0d7f40d5c07b916fd8fb2ce1af04a6aa443db81e6bbdad016d3668a76ecd9b",
+    "Verity.Registration.view": "b29115a930d7a483e82179d15a25787c55467af20450dc05378947ee040c0916"
    }
   },
   "Definitions.Core.Requirement": {

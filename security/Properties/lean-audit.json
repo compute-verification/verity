@@ -14801,7 +14801,7 @@
    }
   },
   "CoreProtocol.Registration": {
-   "digest": "223f00908686db2cb332787bce2bb0ab115dab24832fd27984817a3501693ccb",
+   "digest": "6a386918ba819777b3854cda6236be106c2fc1a96bef6fa13b4ff341d5dbef2b",
    "definitions": {
     "Core.Registration.Builder": "b438270d457108e29d32015e3bb5798840d881bc6c092de17bc8d0beee87eae3",
     "Core.Registration.Builder.advice": "f74254652f83808930212e175d2a7a99b956ab3f2ac512f52cf841bdc8a17126",
@@ -14836,15 +14836,16 @@
     "Core.Registration.Refusal.duplicateDeclaration": "9d3868e404bab83defecd1a8e072be2f461734d095863c792c140443834944c7",
     "Core.Registration.Refusal.duplicateInformation": "ab7cd34be5df8153f12bf449cab92490a6e74c5b6a65f35eb8d2e2c50bd94579",
     "Core.Registration.Refusal.site": "200982366ff3974f6f0bcea5135f5079d1e14662477b6a0515680a83447d0efd",
-    "Core.Registration.State": "2d8fd8d50754babf0e75819e218ba41dd38b380ace69899f0420deb60cb06d8a",
-    "Core.Registration.State.add": "495a148bafdb55978b16ad7418f7fe1d701226f5ee53f1145d071874be41d2e6",
+    "Core.Registration.State": "e2067446865cbec355667fa0b8e5f2dd895e3fcaafe84fd55e9726e34aea07ef",
+    "Core.Registration.State.add": "9f5db618813979bd7f8efd96c88b3f555a87a8c9c5729cd94984c12d90a60c2b",
     "Core.Registration.State.declared": "4237e221bd744c464f2dd7ccce717565ef4fc73b429104461324c83edb425a1c",
-    "Core.Registration.State.empty": "941b8fa4297561804ef6ed92bcbb3ed1aa9af44f5d87f837a114bd0b5649031a",
+    "Core.Registration.State.empty": "1d43a1ac9d74cdb311d0324e07769f9237f1271e3b0259c91bef861825778072",
     "Core.Registration.State.entries": "8f3f58ca5418a1748784388fdd6722448ba0fcc2c9ae71d75b016dd9314db228",
     "Core.Registration.State.head": "5db646aaec271ddc9ad9cf609645507037fc43cae112e9d34954d519008cd39c",
+    "Core.Registration.State.heads": "52b17b67fc50a9e9df56cf0f7acce5ed8e479b61c44455257317c4e12de32eec",
     "Core.Registration.State.items": "9a7d1542b4787cc8627284715a098bbd9a5e3fd5efd3548c6bbb360b9c9c54ca",
     "Core.Registration.State.site": "770283e16cccef23aca8c788800cf04e4b92080ec0de4f8b0748ef984d2c1754",
-    "Core.Registration.State.view": "ca18a5c08b4c88a7e138e6f68fa9552decda6e6360df8e30a8bc300660e3f289",
+    "Core.Registration.State.view": "3313691fe09e0afe51a363ca7c9de48b2fa24e9bc7cf1813036fef22a88b0898",
     "Core.Registration.Theta": "c549edfc5e7d8aa77f303420eb748e9b55ed8c7586067e587d96f7252dd712c5",
     "Core.Registration.Theta.checkpoint": "2baec0ea8820874a92007737f21bf77f027ced4e3fc611947ea587be96250f93",
     "Core.Registration.Theta.domain": "9380954b49b72aa7d6706d095c8ce2f6aeacba041066227f032f647f67cd3db5",
@@ -14853,10 +14854,11 @@
     "Core.Registration.Theta.value": "43a246bc870be1e768e0e0b31b7a6b80057ecfab72db57a8beee7595a43f77cc",
     "Core.Registration.Theta.wordBits": "7bb2480febdc2eb7979b141922feef388fd25479b8110b81f17aae5b4ac4d1a9",
     "Core.Registration.Theta.words": "c995fb3267d51ee25c2116f63d6f6126d78c56d771a532763d342d9d540af166",
-    "Core.Registration.View": "9b5c1e85ee07ed5b420e55913da6f165af287b56545f304453dcded8726aab8e",
+    "Core.Registration.View": "54869034135242630261149b6d318f18d0132f89c04c8cf90c0acd33c8deb68c",
     "Core.Registration.View.builder": "4ef352721bd0f7987e2f3f5aef307ef0cacb3d72151f77c1844982f1edeba66d",
     "Core.Registration.View.declarations": "44c20303020713aff409323584a430f30ab692a9c32c2b691db753fb893cd9cb",
     "Core.Registration.View.head": "aa33e30e252adbe7b94995382ff6567ede6dd600fb9b022ddb925381f4feb1f9",
+    "Core.Registration.View.heads": "2ac4b67c0b99631b810776b6e0ae7f8d582b27413e155480d679736a625bfc9c",
     "Core.Registration.View.site": "83b5bb629d6cfe862feab1a3c74bfe2bb7728cfaa64427fcecd7e414a8801f9f",
     "Core.Registration.View.theta": "a2fe63c155e18065eeb2a992abbd8deaf22aa7e9919f6e9517a24a4cd3d96d18",
     "Core.Registration.check": "639410d1c1d65e3103503e0e8101e07e79fdfedaa96af64ae51f02f6e006ee1c",
@@ -16508,10 +16510,11 @@
    }
   },
   "Definitions.Core.Registration": {
-   "digest": "a1d2541aef12d31c6ee5c8c67573a80c1579bd96d69c4b43eff7f3e5f2401046",
+   "digest": "cf08402eeaa931c0c76e47014c8f010bc528aef18e7da910346ff9ecc5d910ca",
    "definitions": {
-    "Verity.Registration.View": "526299db2a7fa7c4719db784e97d443cb719028d0f7d68e9c5d820ea92478ec9",
-    "Verity.Registration.view": "98225078dd64822792f9757809fedfbec15193552d956969a6697925140f4a50"
+    "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
+    "Verity.Registration.heads": "dd0d7f40d5c07b916fd8fb2ce1af04a6aa443db81e6bbdad016d3668a76ecd9b",
+    "Verity.Registration.view": "b29115a930d7a483e82179d15a25787c55467af20450dc05378947ee040c0916"
    }
   },
   "Definitions.Core.Requirement": {
@@ -24075,7 +24078,7 @@
    }
   },
   "Properties.Core.Registration": {
-   "digest": "d7712fc14cc8bd4e8a7cb33bfb77ece14ab65693031b4245882fbb24cb194bcf",
+   "digest": "6b65486d19de74835419a11b7a7e2ebb3340024aec89df060fdf20aff01487df",
    "definitions": {
     "Properties.Registration.Checks": "d409f431c404d27fe64f64c550b6819e9f6899e30c5eb613b83c6815532df2dc",
     "Properties.Registration.acceptAllCheck": "a2f4345e91bea4a179f38c3417f4f64d5c0d36141bcedfb2ac02cda92d7dca66",
@@ -24093,7 +24096,7 @@
     "Properties.Registration.noGatesBuilder": "fa1a418732b9138958713ac6c1e0b81d5da100cf9d4d854ace5c194e572e17fb",
     "Properties.Registration.theta": "21ef79b6987dece483dbc69e8c36e2a2cf882cb47fb9688f9c3618ffee4e040c",
     "Properties.Registration.twiceLog": "2bf45855134ae8819e6919ef2a4917c5e51e59fc17376d71347c02e138a28758",
-    "Properties.Registration.view": "6c1a1a2f2440636aea6e6ae5f5fc6f66b6997bbfded07608c99bb3918f169716"
+    "Properties.Registration.view": "ce3f648332cbd147a3d4ae96d0767e453449ae2200b90fe044b566761738cf60"
    }
   },
   "Properties.Core.Site": {
