@@ -233,13 +233,13 @@ def main() -> int:
         if checks.mutations:
             checks.mutation("the chain group without its N_p generators", off, f"{len(off)} mismatches")
 
-        # (7) a join cut at a structured Φ^R settles with more probe states and a higher cap
+        # (7) a join cut at a structured Φ^R settles with more probe states and a higher limit on its candidates
         cut = [(77, 219, 0, 0, 0, 0), (409, 681, 1023, 1023, 1023, 1023)]
         before, _ = root_kernels(exe, n, r1, r2, 6, cut)
         after, _ = root_kernels(exe, n, r1, r2, 6, cut, ("-p", "6", "-c", "28"))
         checks.check("n10, two structured words at scaled-KJ pairs that the filtered sweep cut: cut with 3 probes and "
-                     "cap 2^16", all(before[j][-1] == 1 for j in cut), str([before[j] for j in cut]))
-        checks.check("the same with 6 probes and cap 2^28: uncut, and K_R = K_1 = P/X/N for R = 1..6",
+                     "a limit of 2^16 candidates", all(before[j][-1] == 1 for j in cut), str([before[j] for j in cut]))
+        checks.check("the same with 6 probes and a limit of 2^28 candidates: uncut, and K_R = K_1 = P/X/N for R = 1..6",
                      all(good(after[j], 6) and after[j][0] == 16 for j in cut), str([after[j] for j in cut]))
     return checks.finish()
 

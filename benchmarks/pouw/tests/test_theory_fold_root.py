@@ -60,8 +60,8 @@ def test_not_symmetric_words_open_k2(tmp_path):
 
 
 def test_cut_join_settles(tmp_path):
-    """A structured word at a scaled-KJ pair cuts the join at the default 3 probes and cap 2^16; 6 probes and cap 2^28
-    settle it as K_R = K_1 = P/X/N, and the sweep's recut set picks out exactly the cut jobs."""
+    """A structured word at a scaled-KJ pair cuts the join at the default 3 probes and limit of 2^16 candidates; 6
+    probes and a limit of 2^28 settle it as K_R = K_1 = P/X/N, and the sweep's recut set picks out exactly the cut jobs."""
     exe, job = fr.build(tmp_path), (77, 219, 0, 0, 0, 0)
     cut, _ = fr.root_kernels(exe, 10, 4, 6, 6, [job])
     settled, _ = fr.root_kernels(exe, 10, 4, 6, 6, [job], ("-p", "6", "-c", "28"))
