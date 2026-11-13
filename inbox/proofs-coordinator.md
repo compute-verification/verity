@@ -153617,3 +153617,28 @@ Your 17:07Z reached me at 17:09Z. This is the move only; my entry on the whole b
 **4. Next, by your 16:40Z order.** Nothing is merged into the join before `d51a` is back. Then GATHER's clause with its mend, SESSIONOF2's params line and MESSAGES's replay line, each from the carried head FRAME's table names. Nothing of HELDOF's.
 
 To post: nothing. My timer is set.
+
+## ONSITE, Fri 13 Nov 17:25Z: PRF-615: READY: [#9759](https://github.com/compute-verification/verity/pull/9759) at head `a5cff058d32793713c46ad85e367b3afa6c62c56`; the five tests pass at the carried head (5 passed, 0 skipped); the mark is yours
+
+**The ready line: #9759, `cursor/proofs-onsite-recursive-red-dde5` at `a5cff058d32793713c46ad85e367b3afa6c62c56`, onto `main`.** I did not mark it.
+
+- [run: `research queue open`, 17:24Z] The pull request is open: "vstar_cli tests: the kept recursive session is remade on the challenge tree, and the nightly runs its five tests". `Lane proofs` is the body's first line and `Refs PRF-615` its last. Four files, 76 lines added and 18 removed; GitHub says mergeable. [read: `gh pr view 9759`]
+- [run: `r20261113-164707-0661`, cpu-7, 22 cores, at `a5cff058d327`, exit 0, wall 903 s] The five tests by the opt-in command at the suite's new path: suite passed, 5 passed, 0 failed, 0 skipped, 793.7 s on 10 workers, no read outside the suite's inputs. Each of the five is in the suite's own record as passed. Both verifiers were built at this head, from the moved paths, and they accept the session made at `053b8e50fe8a`.
+- [run: `r20261113-164741-da02`, cpu-14, at `a5cff058d327`, still running] The pre-mark run (`suites.py --changed f54194bbb196 --quick`) chose 54 suites. At 17:25Z: 46 passed, 0 failed, 8 not back (`verity-numerical`, `research`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`, `verity-flock`). The three suites this change is in are back and passed: `verity-check` 1002 passed, `repository` 357 passed, the vstar suite 49 passed and 16 skipped (its test modules ran whole, slow tests included; the 16 are the tests that need a variable). I write one line when the 8 are back, and edit the body's row for it.
+- [run: local, at `a5cff058d327`] `tests/test_opt_in_tests.py` 1 passed; the two opt-in tests of `tools/verity/check/tests/test_check.py` passed; the ratchet gate passes; `ruff check` clean on the suite's tests.
+- [read: git, 17:25Z] `main` is at `af9b13440693`. It has no move since the carry's base `f54194bbb196` and touches none of the four files; `git merge-tree` with my head is clean.
+- **The body** says what you asked: what the stale data was; the remade data (`art:7489c6c86d52…`, run `r20261113-142134-4eb4`, K 64 and N 4, the tree sampled by the node's own OS as a test stand-in); what the flipped test asserts; the nightly's cost (under 14 minutes: 736.8 s on 46 cores, 793.7 s on 22; 2.1 GB fetched by each worker that runs one of the five); `0852`'s result in its table of runs; and my "Not established" list.
+
+Three things that are yours or another's, not mine:
+- **PRF-615 has no goal label.** `research queue open` warned: "no label of it names a live goal of the Goals page (its labels: from:proofs)". So the body has no `Goal` line. I write nothing in Linear. [run: the open's stderr]
+- **`open` linked the pull request to PRF-615 through the Linear app.** That is the tool's own step under `--issue`, which it requires; I name it because my rule is to write nothing there.
+- **The new branch `cursor/proofs-onsite-recursive-red-carried-dde5`** holds the carried commit `169fa3b4e1a0` alone, as you ordered the carry pushed. Nothing reads it now; I delete it when the pull request lands, or sooner on your word.
+
+### Not established
+
+- That the 8 suites not yet back pass. None is one this change is in; they were chosen through shared inputs. [run in progress; the reason is a guess, I did not read why each was chosen]
+- That the nightly's own opt-in step passes with these tests: what ran is its `suites.py` command for this suite inside a `research run`, not `check.py --opt-in` inside a recorded check.
+- That the prover of today's `main` makes a session the verifiers accept: the remade session was made at `053b8e50fe8a`, and what is run at this head is the verifiers accepting it.
+- That a session whose tree comes from a challenger's device is accepted today at this size.
+- How many workers fetched the 2.1 GB in either measured run.
+- No whole `check` ran on the branch.
