@@ -4,7 +4,7 @@ no such form is refused."""
 from __future__ import annotations
 
 import pytest
-from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity.circuits.types import Array, RecordType, Tuple, Type, Value
 
 import verity_vllm.pipeline.registration_log as RL
 
@@ -27,8 +27,10 @@ def test_a_mixed_type_lowers_field_by_field_and_a_mixed_array_repeats_its_elemen
 def test_a_type_with_no_leaf_lowers_to_no_node_and_a_mixed_type_of_no_known_form_is_refused():
     assert RL.lower(Tuple()) == [] and RL.lower(Array(0, PAIR)) == []
 
-    class Odd:
-        leaves = 2
+    class Odd(Type):
+        @property
+        def leaves(self) -> int:
+            return 2
 
         def width_set(self) -> frozenset:
             return frozenset({8, 16})
@@ -36,4 +38,4 @@ def test_a_type_with_no_leaf_lowers_to_no_node_and_a_mixed_type_of_no_known_form
         def __repr__(self) -> str:
             return "Odd"
     with pytest.raises(ValueError, match="^a parameter of type Odd lowers to no input nodes$"):
-        RL.lower(Odd())  # type: ignore[arg-type]
+        RL.lower(Odd())
