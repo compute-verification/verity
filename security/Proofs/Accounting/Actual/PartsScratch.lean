@@ -27,7 +27,13 @@ definitions each needs that the tree does not hold. No body is `sorry`.
   `Site.auditorsOf`, `Site.uncovered`, `Site.uncertified_registered_eq`, `Site.leak_le_sum_K_auditors`,
   `Site.leak_le_sum_K_sinks_registered`.
 * The runs: `onsite_node0_covered` (the example site), `oneNode_charged` and `twoNodes_charged` (two hosts with a
-  link between them, under one site and under two).
+  link between them, under one site and under two), `hosts_sink_runs`, `sites_linkKinds`.
+* (2) as filed: the sink form with the sealing concluded from the registration. In the model, `sealed_of_ends`,
+  `releaseTerm`, `leak_le_sum_K_release` (a release place is a trusted unit; its whole cost is one summand) and
+  `leak_le_sum_K_release_none`. At a node, `Site.LinkKinds`, `Site.Within`, `Site.host_of_challenger`,
+  `Site.challengers_sealed`, `Site.uncovered_sealed`, `Site.leak_le_sum_K_sealed_registered`, and with a shared
+  challenger as a trusted unit `Site.sealedOf`, `Site.sharedOf`, `Site.leak_le_sum_K_filed`. From a valid log,
+  `Registration.Valid.linkKinds` and `Registration.Valid.ends_places`.
 * The Site as the hardware model's links: `Site.linkEnds`, `Site.linkβ` over ids; `Site.Place`, `Site.place`,
   `Site.placeEnds`, `Site.loc` over the finite type of places, which `B4` needs.
 * (1) `Site.egress_le_registered`, with `Site.egressLimit_eq` (the limit as the sum over the registered links with
@@ -447,6 +453,31 @@ theorem not_sealed_of_link [DecidableEq L] (ends : E → L × L) (β : E → ℕ
   rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from h] at hle
   omega
 
+/-- **Sinks whose links all end inside are sealed**: where every link with an end among the sinks has its other end
+among the sinks, the certifiers or the location `X`, the sinks are sealed. The sealing is then a conclusion from the
+links' ends, and no premise. -/
+theorem sealed_of_ends [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X sink : Finset L)
+    (h : ∀ e, ((ends e).1 ∈ sink → (ends e).2 ∈ sink ∪ (cert ∪ X)) ∧
+      ((ends e).2 ∈ sink → (ends e).1 ∈ sink ∪ (cert ∪ X))) :
+    Sealed ends β cert X sink := by
+  classical
+  unfold Sealed Covered uncertifiedCapacity
+  refine Finset.sum_eq_zero fun e he => ?_
+  exfalso
+  simp only [boundary, mem_filter, mem_univ, true_and] at he
+  obtain ⟨hx, h1, h2⟩ := he
+  have ha := (h e).1
+  have hb := (h e).2
+  by_cases s1 : (ends e).1 ∈ sink <;> by_cases s2 : (ends e).2 ∈ sink <;> simp_all
+
+/-- **The release term**: what the release places `rel` add to the exponent of (2), each its count `c y` over the
+window and one jitter share. It is `0` when there is no release place. -/
+def releaseTerm (rel : Finset L) (c : L → ℕ) (jitter buckets : ℕ) : ℕ :=
+  (∑ y ∈ rel, c y) + jitter * buckets * rel.card
+
+theorem releaseTerm_empty (c : L → ℕ) (jitter buckets : ℕ) : releaseTerm (∅ : Finset L) c jitter buckets = 0 := by
+  simp [releaseTerm]
+
 end Covering
 
 /-- **(2), the covered form, (a): a memory challenger that covers a link is one of the covering set.** With the
@@ -511,6 +542,69 @@ theorem leak_le_sum_K_sealed {L E Ω : Type*} [LinearOrder L] [Fintype L] [Finty
         uncertifiedCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
   have h := leak_le_sum_K_sinks S ℓ ends β link 𝒱 cert X sink spec record bucket jitter a b K hcs hdl hT hXs hsec hK
   rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from hseal, Nat.add_zero] at h
+  exact h
+
+/-- **(2), the sink form with release places.** The certifiers `cert`, the release places `rel` (apart from the
+certifiers), the location `X` and the sealed sinks `sink`. A release place is a trusted unit whose record over the
+window takes at most `2 ^ c y` values: it is where a device that is otherwise a sink lets something leave the
+location. With `B4`'s premises at `cert ∪ rel` and the location `X ∪ sink`: what the outside of `X`, the sinks, the
+certifiers and the release places does during `[a, b)` takes at most
+`2 ^ (∑ K over cert + jitter · buckets · #cert + β° (b − a) + releaseTerm)` values, `β°` the capacity of the links
+across `X`'s boundary with no certifier, release place or sink at an end.
+
+The release places' whole cost is the last summand (`releaseTerm`): with no release place it is `0` and this is
+`leak_le_sum_K_sealed` (`leak_le_sum_K_release_none`). It is `B4` as it stands, at `cert ∪ rel`. -/
+theorem leak_le_sum_K_release {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+    (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert rel X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ)
+    (jitter a b : ℕ) (K c : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
+    (hd : Disjoint cert rel) (hT : TrustedUnits S 𝒱 (cert ∪ rel) spec record bucket jitter)
+    (hXs : Disjoint X sink) (hsec : Secrets S (cert ∪ rel) (X ∪ sink) a)
+    (hseal : Sealed ends β (cert ∪ rel) X sink) (hK : RecordsWithin S cert record a b K)
+    (hc : RecordsWithin S rel record a b c) :
+    (Set.range fun r => (S r).acts (X ∪ sink ∪ (cert ∪ rel))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
+        uncertifiedCapacity ends β (cert ∪ rel ∪ sink) X * (b - a) +
+        releaseTerm rel c jitter ((Finset.Ico a b).image bucket).card) : ℕ) : ℕ∞) := by
+  have hK' : RecordsWithin S (cert ∪ rel) record a b (fun y => if y ∈ cert then K y else c y) := by
+    intro y hy
+    by_cases hyc : y ∈ cert
+    · have h1 := hK y hyc
+      simp only [hyc, if_true]
+      exact h1
+    · have h1 := hc y ((Finset.mem_union.1 hy).resolve_left hyc)
+      simp only [hyc, if_false]
+      exact h1
+  have hs : ∑ y ∈ cert ∪ rel, (if y ∈ cert then K y else c y) = (∑ y ∈ cert, K y) + ∑ y ∈ rel, c y := by
+    have h1 : ∑ y ∈ cert, (if y ∈ cert then K y else c y) = ∑ y ∈ cert, K y :=
+      Finset.sum_congr rfl fun y hy => if_pos hy
+    have h2 : ∑ y ∈ rel, (if y ∈ cert then K y else c y) = ∑ y ∈ rel, c y :=
+      Finset.sum_congr rfl fun y hy => if_neg (Finset.disjoint_right.1 hd hy)
+    rw [Finset.sum_union hd, h1, h2]
+  refine (leak_le_sum_K_sealed S ℓ ends β link 𝒱 (cert ∪ rel) X sink spec record bucket jitter a b
+    (fun y => if y ∈ cert then K y else c y) hcs hdl hT hXs hsec hseal hK').trans ?_
+  refine Nat.mono_cast (Nat.pow_le_pow_right Nat.two_pos (le_of_eq ?_))
+  rw [hs, Finset.card_union_eq_card_add_card.2 hd, Nat.mul_add]
+  unfold releaseTerm
+  omega
+
+/-- **With no release place the release term drops**, and the statement is `leak_le_sum_K_sealed`'s with nothing else
+restated. -/
+theorem leak_le_sum_K_release_none {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+    (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
+    (K c : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
+    (hT : TrustedUnits S 𝒱 cert spec record bucket jitter) (hXs : Disjoint X sink)
+    (hsec : Secrets S cert (X ∪ sink) a) (hseal : Sealed ends β cert X sink)
+    (hK : RecordsWithin S cert record a b K) :
+    (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
+        uncertifiedCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
+  have h := leak_le_sum_K_release S ℓ ends β link 𝒱 cert ∅ X sink spec record bucket jitter a b K c hcs hdl
+    (Finset.disjoint_empty_right cert) (by rw [Finset.union_empty]; exact hT) hXs
+    (by rw [Finset.union_empty]; exact hsec) (by rw [Finset.union_empty]; exact hseal) hK
+    (fun y hy => absurd hy (by simp))
+  rw [releaseTerm_empty, Nat.add_zero, Finset.union_empty] at h
   exact h
 
 end Accounting
@@ -648,7 +742,225 @@ theorem leak_le_sum_K_sinks_registered {Ω : Type*} (pinned : Finset String) (i 
   exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
     (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) spec record bucket jitter a b K hcs hdl hT hsec hK
 
+/-- **Every registered link joins kinds a link may join**: what the entry check `kind` (`Entry.Kinds`) asks of each
+new link, at the whole Site. A valid log's Site has it (`Registration.Valid.linkKinds`). -/
+def LinkKinds : Prop := ∀ k ∈ S.links, ∃ p ∈ Kind.links, S.Joins k p.1 p.2
+
+instance instDecidableLinkKinds : Decidable S.LinkKinds := by unfold LinkKinds; infer_instance
+
+/-- **`y` is linked only into node `i`**: every registered link with an end at `y` has its other end at or under
+`i`. -/
+def Within (i y : String) : Prop :=
+  ∀ k ∈ S.links, (k.ends.1 = y → k.ends.2 ∈ S.under i) ∧ (k.ends.2 = y → k.ends.1 ∈ S.under i)
+
+/-- **A memory challenger's links end at hosts**: at a Site whose links join kinds a link may join, the other end of
+a link with a memory challenger at one end is a host. -/
+theorem host_of_challenger (hk : S.LinkKinds) {k : Link} (hmem : k ∈ S.links) :
+    (S.kind? k.ends.1 = some .challenger → S.kind? k.ends.2 = some .host) ∧
+      (S.kind? k.ends.2 = some .challenger → S.kind? k.ends.1 = some .host) := by
+  obtain ⟨p, hp, hj⟩ := hk k hmem
+  have hp' : p = (Kind.host, Kind.host) ∨ p = (Kind.host, Kind.outside) ∨ p = (Kind.certifier, Kind.host) ∨
+      p = (Kind.certifier, Kind.outside) ∨ p = (Kind.challenger, Kind.host) := by
+    simpa [Kind.links] using hp
+  simp only [Joins, Prod.mk.injEq] at hj
+  constructor
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
+
+/-- **The memory challengers linked only into a node are sealed by the registration**: at a Site whose links join
+kinds a link may join, every link with an end at a memory challenger of `sink`, each linked only into node `i`, has
+its other end at one of `i`'s prover places: a host at or under `i`. Nothing is assumed of the links but the entry
+check. -/
+theorem challengers_sealed (hk : S.LinkKinds) (i : String) (sink : Finset String)
+    (hs : ∀ y ∈ sink, S.kind? y = some .challenger ∧ S.Within i y) :
+    ∀ k ∈ S.links, (k.ends.1 ∈ sink → k.ends.2 ∈ S.proverUnder i) ∧
+      (k.ends.2 ∈ sink → k.ends.1 ∈ S.proverUnder i) := by
+  classical
+  intro k hmem
+  have hh := S.host_of_challenger hk hmem
+  constructor
+  · intro h1
+    obtain ⟨hc, hw⟩ := hs _ h1
+    have hhost := hh.1 hc
+    unfold proverUnder
+    refine Finset.mem_filter.2 ⟨(hw k hmem).1 rfl, ?_⟩
+    intro k' hk'
+    rw [hhost, Option.mem_def, Option.some.injEq] at hk'
+    subst hk'
+    rfl
+  · intro h2
+    obtain ⟨hc, hw⟩ := hs _ h2
+    have hhost := hh.2 hc
+    unfold proverUnder
+    refine Finset.mem_filter.2 ⟨(hw k hmem).2 rfl, ?_⟩
+    intro k' hk'
+    rw [hhost, Option.mem_def, Option.some.injEq] at hk'
+    subst hk'
+    rfl
+
+/-- **Sealed sinks add nothing to the uncovered links**: where every registered link with an end at a place of
+`sink` has its other end in `X`, the uncovered links of the location `X ∪ sink` are those of `X` with the sinks
+covering beside `cert`: no link of a sink is among them. -/
+theorem uncovered_sealed (cert X sink : Finset String)
+    (h : ∀ k ∈ S.links, (k.ends.1 ∈ sink → k.ends.2 ∈ X) ∧ (k.ends.2 ∈ sink → k.ends.1 ∈ X)) :
+    S.uncovered cert (X ∪ sink) = S.uncovered (cert ∪ sink) X := by
+  unfold uncovered crossing
+  rw [List.filter_filter, List.filter_filter]
+  refine List.filter_congr fun k hk => ?_
+  have h1 := (h k hk).1
+  have h2 := (h k hk).2
+  by_cases a1 : k.ends.1 ∈ X <;> by_cases a2 : k.ends.2 ∈ X <;> by_cases b1 : k.ends.1 ∈ sink <;>
+    by_cases b2 : k.ends.2 ∈ sink <;> by_cases c1 : k.ends.1 ∈ cert <;> by_cases c2 : k.ends.2 ∈ cert <;>
+    simp_all
+
+/-- **(2), the sink form at a node, with the sealing concluded from the registration.** At a Site whose links join
+kinds a link may join and end at registered places (a valid log's Site: `Registration.Valid.linkKinds`,
+`Registration.Valid.ends_places`), for a node `i` whose pinned memory challengers are each linked only into `i`
+(`Within`): with `B4`'s premises at `i`'s certifiers and at the location of `i`'s prover places and those challengers,
+what the outside does during `[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · #cert + β° (b − a))` values, `β°`
+the sum of `β` over the registered links with exactly one end among `i`'s prover places and no auditor's device at
+either end. No challenger adds a term, and no premise says the challengers are sealed. -/
+theorem leak_le_sum_K_sealed_registered {Ω : Type*} (pinned : Finset String) (i : String)
+    (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
+    (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
+    (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
+    (hkinds : S.LinkKinds) (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
+    (hin : ∀ y ∈ S.challengersOf pinned i, S.Within i y)
+    (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i))
+      (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i)) record a b K) :
+    (Set.range fun r =>
+        (R r).acts (S.loc (S.proverUnder i ∪ S.challengersOf pinned i) ∪ S.loc (S.certifiersOf i))ᶜ
+          (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i)).card +
+        ((S.uncovered (S.auditorsOf pinned i) (S.proverUnder i)).map (·.β)).sum * (b - a)) : ℕ) : ℕ∞) := by
+  have h := S.leak_le_sum_K_sinks_registered pinned i R ℓ link 𝒱 spec record bucket jitter a b K hcs hdl hT hsec hK
+  rw [S.uncertified_registered_eq _ _ hends,
+    S.uncovered_sealed (S.certifiersOf i) (S.proverUnder i) (S.challengersOf pinned i)
+      (S.challengers_sealed hkinds i (S.challengersOf pinned i)
+        fun y hy => ⟨(S.mem_challengersOf hy).1, hin y hy⟩)] at h
+  exact h
+
+open Classical in
+/-- **The sealed challengers of node `i`**: the memory challengers that cover it and are linked only into it. -/
+noncomputable def sealedOf (pinned : Finset String) (i : String) : Finset String :=
+  (S.challengersOf pinned i).filter fun y => S.Within i y
+
+open Classical in
+/-- **The shared challengers of node `i`**: the memory challengers that cover it and have a link that ends outside
+it. On `main`'s Site that is a challenger linked to a host of another node. -/
+noncomputable def sharedOf (pinned : Finset String) (i : String) : Finset String :=
+  (S.challengersOf pinned i).filter fun y => ¬ S.Within i y
+
+theorem mem_sealedOf {pinned : Finset String} {i y : String} (h : y ∈ S.sealedOf pinned i) :
+    S.kind? y = some .challenger ∧ S.Within i y := by
+  classical
+  unfold sealedOf at h
+  exact ⟨(S.mem_challengersOf (Finset.mem_filter.1 h).1).1, (Finset.mem_filter.1 h).2⟩
+
+/-- **(2) at a node, as filed: the sealed challengers are sinks, and a shared challenger is a trusted unit.** At a
+Site whose links join kinds a link may join and end at registered places, for node `i`: the location is `i`'s prover
+places with its sealed challengers (`sealedOf`), and the trusted units are its certifiers with its shared challengers
+(`sharedOf`). With `B4`'s premises there, what the outside does during `[a, b)` takes at most
+`2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the count over the certifiers and the shared
+challengers, `β°` the sum of `β` over the registered links with exactly one end among `i`'s prover places and no
+certifier or challenger of `i` at either end.
+
+A sealed challenger adds nothing, and that it is sealed is no premise. A shared challenger adds its `K`, its record's
+count over the window, and one jitter share; with no shared challenger this is `leak_le_sum_K_sealed_registered`. -/
+theorem leak_le_sum_K_filed {Ω : Type*} (pinned : Finset String) (i : String)
+    (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
+    (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
+    (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
+    (hkinds : S.LinkKinds) (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
+    (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i))
+      (S.loc (S.proverUnder i ∪ S.sealedOf pinned i)) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) record a b K) :
+    (Set.range fun r =>
+        (R r).acts (S.loc (S.proverUnder i ∪ S.sealedOf pinned i) ∪
+          S.loc (S.certifiersOf i ∪ S.sharedOf pinned i))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i ∪ S.sharedOf pinned i), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)).card +
+        ((S.uncovered (S.certifiersOf i ∪ S.sharedOf pinned i ∪ S.sealedOf pinned i) (S.proverUnder i)).map
+          (·.β)).sum * (b - a)) : ℕ) : ℕ∞) := by
+  have h := Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱
+    (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) (S.loc (S.proverUnder i ∪ S.sealedOf pinned i)) spec record
+    bucket jitter a b K hcs hdl hT hsec hK
+  rw [S.uncertified_registered_eq _ _ hends,
+    S.uncovered_sealed (S.certifiersOf i ∪ S.sharedOf pinned i) (S.proverUnder i) (S.sealedOf pinned i)
+      (S.challengers_sealed hkinds i (S.sealedOf pinned i) fun y hy => S.mem_sealedOf hy)] at h
+  exact h
+
 end Verity.Site
+
+namespace Verity.Registration
+
+variable {D : Digests} {A : Auditor} {c : Composite}
+
+/-- **A valid log's links join kinds a link may join**: the entry check `kind` holds each new link to it at the Site
+as the entry extends it, and a later entry changes no registered id's kind. -/
+theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).LinkKinds := by
+  induction l using List.reverseRecOn with
+  | nil =>
+    intro k hk
+    simp at hk
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · obtain ⟨p, hp, hj⟩ := ih hl k hk
+      refine ⟨p, hp, ?_⟩
+      simp only [Site.Joins, Prod.mk.injEq] at hj ⊢
+      rcases hj with ⟨h1, h2⟩ | ⟨h1, h2⟩
+      · exact Or.inl ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+      · exact Or.inr ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+    · exact (he.2.2.1.2.1 k hk).2.1
+
+/-- **A valid log's links end at places of its Site**: the entry check `unknownRef` holds each new link's ends to
+registered ids, and a registered id stays registered. -/
+theorem Valid.ends_places {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, k.ends.1 ∈ (Site.ofLog l).places ∧ k.ends.2 ∈ (Site.ofLog l).places := by
+  have hk : ∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Known k.ends.1 ∧ (Site.ofLog l).Known k.ends.2 := by
+    induction l using List.reverseRecOn with
+    | nil =>
+      intro k hk
+      simp at hk
+    | append_singleton l e ih =>
+      obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+      cases e with
+      | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+      | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+      | site _ s => ?_
+      have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+      rw [Site.ofLog_concat, Entry.added]
+      intro k hk
+      rcases List.mem_append.mp hk with hk | hk
+      · exact ⟨Site.known_of_prefix hpre (ih hl k hk).1, Site.known_of_prefix hpre (ih hl k hk).2⟩
+      · exact he.2.1.2 k hk
+  have hp : ∀ j, (Site.ofLog l).Known j → j ∈ (Site.ofLog l).places := by
+    intro j hj
+    unfold Site.places
+    rcases hj with hj | hj
+    · rw [hj]
+      exact Finset.mem_insert_self _ _
+    · exact Finset.mem_insert_of_mem (List.mem_toFinset.2 hj)
+  intro k hmem
+  exact ⟨hp _ (hk k hmem).1, hp _ (hk k hmem).2⟩
+
+end Verity.Registration
 
 namespace Verity.Registration.Example
 
@@ -776,6 +1088,22 @@ theorem oneNode_capacity :
       k.ends.1 ∈ (Site.ofLog [oneNode]).places ∧ k.ends.2 ∈ (Site.ofLog [oneNode]).places := by
     decide +kernel
   rw [Site.uncertified_registered_eq (Site.ofLog [oneNode]) _ _ hends]
+  decide +kernel
+
+/-- The three sites' links join kinds a link may join, as the entry check `kind` holds a valid log's to. -/
+theorem sites_linkKinds :
+    (Site.ofLog [onsite]).LinkKinds ∧ (Site.ofLog [oneNode]).LinkKinds ∧ (Site.ofLog [twoNodes]).LinkKinds := by
+  decide +kernel
+
+/-- **The challenger as a sink, at a site.** With both hosts under `site0`, the challenger linked to both is linked
+only into `site0`, and with it among the sinks no registered link is charged there. With the hosts under two sites,
+the challenger's link to the other site's host ends outside `site0`: as a sink it is charged at that link's
+capacity, beside the hosts' own link. -/
+theorem hosts_sink_runs :
+    ((Site.ofLog [oneNode]).uncovered {"cert0"} (proverPlaces (Site.ofLog [oneNode]) "site0" ∪ {"chal0"})).map
+        (fun k => (k.id, k.β)) = [] ∧
+      ((Site.ofLog [twoNodes]).uncovered {"cert0"} (proverPlaces (Site.ofLog [twoNodes]) "site0" ∪ {"chal0"})).map
+        (fun k => (k.id, k.β)) = [("chal0-link1", 100000), ("n01", 7)] := by
   decide +kernel
 
 end Verity.Registration.Example
