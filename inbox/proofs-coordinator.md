@@ -135991,3 +135991,41 @@ Mailbox read through 10:39Z. Pushed: `cursor/proofs-members-switch-34fd` at `bac
 - [run `r20261113-101413-a81e`, vy-nebius-cpu-1, at `c79c5f79f37`] the suites (SPOT's verifier and its Lean tests, the remote composition, `benchmarks/one_stage`, the root suite): running since 10:14Z. It holds the test that asks the compiled check to accept a window of two members on real files.
 
 **I need from you:** the ruling in item 3 (is the rest of item 2 owed before the switch is marked, or after it and before S9); nothing else.
+
+## [2026-11-13T10:45Z] ACCEPTS: `firstK_of_formAccepts` COMPILES at head `f3462236a6` on `cursor/proofs-accepts-7d08` (`r20261113-103826-a3a7`: "lean exit 0 in 321 s", 23 theorems, probe clean); ASSEMBLY: take it and drop `firstSized` (call below); the demo's θ meets PartsSizedAt: YES by its builder's text (read, not run); `linkRuns`' rows count = `replayCells`' `n_t`: NOT READABLE to a yes (two computations, no lemma)
+
+**In plain words.** The first premise of row 10 is now a theorem: at every accepted play, the held first stage samples a fixed number `K` of replay blocks. The demo builds its interior program the way the second premise needs: templates in the check's order, one after another, `K · n_t` slots each. Whether the replay block's rows count each template's units the same way the cells do is two separate computations in the verifier, and I could not settle it by reading.
+
+**1. `firstK_of_formAccepts`** [run: `r20261113-103826-a3a7` at `f3462236a6`, vy-nebius-cpu-3, rc 0: "lean-try: …AcceptsTop.lean: lean exit 0 in 321 s"; "axiom probe: none of its 23 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.AcceptsTop declares a name it does"; no warning on the file's lines].
+- `firstK_of_formAccepts (hof : HeldOfAt A C) (hA : FormAccepts C o) (hi : inputOn C o = some i) (hit : i.interior = some it) : ∃ K, SpotFlock.firstK A.h.reg.first = some K`.
+- How: the run's rule is the parameters' (`inputOf_first`). The parser reads it with `Select.Rule.ofJson`, which returns a two-stage rule only with a rate law (`ofJson_replay`, `paramsOfJson_ruleOf`, `rule_of_formAccepts`). `heldOf`'s first stage holds `Select.resolve`'s rule, which `textOver` makes `subset:K` at `1 ≤ K ≤ n` (`textOver_rate`). An accepted play has no closure map (`closure_of_formAccepts`), and `parseDesign_count` and `flockLaw_subset_text` read `subset:K` as `.subset K`.
+- `firstSized` is `∃ K, …` with no play in it, which no lemma of the accept can give where no play is accepted. So I added the call that drops it: `partsHeldAt_of_accepts (hof : HeldOfAt A C) (hs : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K) : PartsHeldAt A C`. ASSEMBLY: delete `firstSized`, and lines 384–385 become `exact partsHeldAt_of_accepts h.heldOfAt h.partsSizedAt` (your `partsSizedAt` field is already in the `∀ K` form it takes).
+- New: `ofJson_replay`, `paramsOfJson_ruleOf`, `textOver_rate`, `subset_text`, `rule_of_formAccepts`, `firstK_of_formAccepts`, `partsHeldAt_of_accepts`. No existing statement changed. `AcceptsTop` now also imports `Sampled.Record.Reg` and `SampledTwo.InputMap`, both modules that already build. No new module, so no root. It is two commits (`587cd9f4fc`, whose try failed on two lines, then `f3462236a6`); I did not squash, since that would need a force push.
+- [run: `git merge-tree --write-tree` of `f3462236a6` into the join's `4a4d22b644`, rc 0, no conflict; only `AcceptsTop.lean` differs.]
+
+**3a. Does the demo's θ meet `PartsSizedAt`? Yes, by the text** [read; nothing run].
+- `two_stage.py` `design` (join, line 573): `members = tuple(IR.member(P.template_id(t)) for t in layout.templates)` and `cells = S.replay_cells(Program(layout.replay), P.template_instances_query(layout.templates))`, the stream's cells, one per template in the check's order. Line 562: the interior window is `IR.interior_window(self.members, self.cells, boundary, sample, …)`.
+- `adapters/vllm/verity_vllm/pipeline/interior_rows.py` `interior_window` (line 371): "template-major: template t's Q·n_t units from off_t = Q·Σ_{t'<t} n_t'"; `q = len(sample)`, `sizes = [q * n for n in cells]`, `offs` their running sums; program and query from `CS.population_program([(fn, n) for m, n in zip(ms, sizes)])`.
+- `verity/commitments/windows/population.py` → `verity/circuits/population.py` `mixed_population_program`: "one batch per member `(template, n)`, in order". So each template is one range `[Q·Σ_{s<t} n_s, Q·Σ_{s≤t} n_s)`, in the check's order.
+- With `Q = len(sample)`, the replay sample's size, which is `K` at an accepted play (`select_subset_size`), this is `SecondStage.parts K strata = some (partsAt h K)` [derived], if two things hold that I did not check: each stratum's name in `Partition.strata` is the template id the params' `proofs` name (`P.template_id(t)` on both sides, by the text), and `Partition.strata` makes one range a batch.
+- So no STOP RULE: the demo's instance meets the premise as far as its builder's text says. Not run: no demo θ was evaluated.
+
+**3b. Is `linkRuns`' row count `replayCells`' `n_t` for a linked template? Not readable to a yes** [read: `SecondStage.lean` `callersOf`, `linkRuns`, `gather`, `fits`; `Select.lean` `replayCells`; `Partition.lean` `evaluate`].
+- `linkRuns` counts `callersOf`'s `units`: the sum of `x.members` over the replay Definition's body nodes that call the template, and only where every call of the template in the program is one of that body's (`all == here`); `gather` asks each linked port's runs to hold exactly those units (`fits`).
+- `replayCells` counts `Partition.evaluate` of the replay program under the template query, which is `Flock.TemplateQuery.evaluate` on the descriptor, summed by template.
+- [guess] They count the same nodes when the replay program's root is the replay Definition and the template query's instances are its body's call and batch nodes, as the demo's are. No lemma says so, and I did not read `TemplateQuery.evaluate`. Task 2's refusal would make this moot for `PartsSizedAt`, since it compares the parts with `replayCells` directly.
+
+**STOP RULE.** Nothing. No existing statement, lock entry or verifier line changed. 3a is a yes.
+
+**NEEDS.**
+- ASSEMBLY: merge `f3462236a6` and drop `firstSized` as above.
+- Coordinator: nothing. Task 2 (the refusal draft) is next, on a new branch, by 12:30Z.
+
+**Not established.**
+- That the demo's θ meets `PartsSizedAt` when evaluated: read from three files, not run. Also unchecked: stratum names against the params' template names, and one range per batch in `Partition.strata`.
+- 3b, as above.
+- That the join compiles with `f3462236a6`: the try ran on my tree.
+
+**Runs.** `r20261113-102817-3950` at `587cd9f4fc`, rc 1 (`inputOf_first` not imported; `Reg.program` not unfolded). `r20261113-103826-a3a7` at `f3462236a6`, rc 0. Nothing out.
+
+**Machine** [run]: the VM rebooted again before 10:21Z. I took the pen again (10:21:13Z) and rebuilt both worktrees from the pushed branches; nothing was lost. No `main` merged.
