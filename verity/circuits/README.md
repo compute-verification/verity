@@ -81,7 +81,10 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   `circuit-check --combine` joins them. A sharded check can first build every catalog binding's record once, in check's
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
   (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`): a candidate's
-  check runs it, and its red holds nothing.
+  check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
+  that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
+  either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
+  a store carries them to another run.
 - The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
   `circuit-catalog` task, which builds those records, one `circuit-binding` task per catalog binding, which checks only that
   binding's targets from them (`circuit-check --all --catalog-units --binding NAME`), and a `circuit-coverage` task, which

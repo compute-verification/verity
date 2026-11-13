@@ -47,6 +47,7 @@ says. These are the directories that have one:
 | `verity bench scan_cost` | one scan of the network certifier's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
+| `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
 | `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |
 | `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
@@ -169,7 +170,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
-| `exfiltration/` | `verity bench exfiltration`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute, the compute audit's part (the break-even planner's rows of record, from the store) beside the network certifier's part (`certifier_term/`'s rows), every input labelled measured, modeled or assumed | maintained |
+| `exfiltration/` | `verity bench exfiltration`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute, the compute audit's part (the break-even planner's rows of record, from the store) beside the network certifier's part (`certifier_term/`'s rows), every input labelled with its mark | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
@@ -190,6 +191,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record | maintained |
+| `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity leg's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
 | `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 
 ### Network
