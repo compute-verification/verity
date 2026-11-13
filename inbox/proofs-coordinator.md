@@ -144931,3 +144931,139 @@ Item 4 of your 13:29Z message. By reading and one small run, `r20261113-134855-d
 1. Yes or no: the strata kept once a program (item 4), now or after the carry.
 2. Whether (a) should run, and with it whether I write the members' parameters as a job script or FIRSTACCEPT's driver does.
 3. Nothing is asked of vllm by me. What a second audit would ask of it is in item 0; that ruling is yours.
+
+## TWOLEG — 14:08Z Fri 13 Nov — the 14:15Z line: `Spot.Place` and the refusals are written and their tree builds (`3fde4636a9b`, `9f6e` rc 0, no axiom probe yet); both kept honest plays name `draw/0`, so the form at this head refuses them by `FIRST_FAMILY` until the driver reserves by place
+
+Branch `cursor/proofs-twoleg-family-ad71`, off the join's tip `4e986e339ad`, head `709510899c5`, pushed. No lock, no
+listed statement and no other owner's file is touched.
+
+**The definition** (`verity/protocols/spot/verifier/lean/Spot/Place.lean`, new, imports `Spot.Json` alone):
+
+~~~lean
+def SIZES : Nat := 2 ^ 32
+def FAMILY : String := "draw"
+
+def size? (w : Json) (k : String) : Option Nat :=
+  match nat? (getD w k) with
+  | some n => if n < SIZES then some n else none
+  | none => none
+
+def stopped (w : Json) : Bool :=
+  match getD w "stopped" with
+  | .bool b => b
+  | _ => false
+
+def blocks (w : Json) : Bool := jsonStrIs (getD w "population") "stop"
+
+def place (w : Json) : Option Nat :=
+  match size? w "prompt", size? w "outputs" with
+  | some prompt, some outputs =>
+    if blocks w && !stopped w then none
+    else some (((prompt * SIZES + outputs) * 2 + (stopped w).toNat) * 2 + (blocks w).toNat)
+  | _, _ => none
+
+def family (w : Json) : Option String := (place w).map fun n => s!"{FAMILY}/{n}"
+
+def run (w : Json) : Option String :=
+  match getD w "run" with
+  | .str r => some r
+  | _ => none
+~~~
+
+**The refusal lines** (`VStarRecursive/SampledTwo.lean`, `inputAt` step 4, lines 403 and 404, straight after the
+boundary record `j₁` is held to the commitment's digest):
+
+~~~lean
+  firstRootIs p.boundary.verifier.windowRoot j₁
+  firstFamilyIs (p.boundary.challenger.map (·.2)) j₁
+~~~
+
+~~~lean
+def firstRootIs (root : Option String) (j : Json) : V Unit :=
+  match Place.run (getD j "window") with
+  | some run => if root = some run then .ok () else .error FIRST_ROOT
+  | none => .error FIRST_ROOT
+
+def firstFamilyIs (family : Option String) (j : Json) : V Unit :=
+  match Place.family (getD j "window") with
+  | some f => if family = some f then .ok () else .error FIRST_FAMILY
+  | none => .error FIRST_PLACE
+~~~
+
+There are three words, not two. A record whose window names no place (a size of 2^32 or more, a size that is no
+natural number, or a stop population of a class that is no stop class) is refused by `FIRST_PLACE`, the word of its
+own STOPDRIVER asked for. Parameters that name no root, or a record that names no run, are `FIRST_ROOT`. Parameters
+that name no family, or another, are `FIRST_FAMILY`.
+
+**Where the two take their family today** (order 2; lines at this head, the same as the join's tip). Both take a
+string their caller writes, and neither reads the record's window:
+
+| Reader | Where the family enters | Where it is used |
+|---|---|---|
+| The stream's two-stage run | `Spot/Pieces.lean:746–751`: the `run` piece's `family` and `interior.family` | `Spot/Run.lean:130` (`Input.family`) and `:98` (`Interior.family`); `Run.run` gives it to `coinsCode` (`:207`) at `:326`, the interior's at `:261` |
+| The stop audit | `Spot/Pieces.lean:643–650`: the `across` piece's `family` | `Spot/RecordAcross.lean:200` (`Across.family`); `acrossFound` gives it to `orderReason` (`:125`) at `:238` |
+| The stop audit's Python | `benchmarks/one_stage/stop_audit.py:290` and `:333`: `s.get("family")`, from the stop sample's file | |
+
+To use the one function, `Run.run` would hold `i.family` to `Place.family` of `i.record`'s window and `acrossFound`
+would hold `i.family` to `Place.family` of `i.later`'s window. `Spot.Run` is read by `security/Properties`' lock, so
+that change moves a record; `Spot.RecordAcross` is read by no lock. I changed neither.
+
+**The honest plays.** Read from the kept cases' files, not yet run on the compiled form:
+
+- `e089`'s and `9a9e`'s `out/form`: the record's `window.run` equals `params.boundary.window_root`, so `FIRST_ROOT`
+  passes.
+- Their window has prompt 4, outputs 4, no `stopped` and no `population`, so its family is `draw/68719476752`. Their
+  parameters name `draw/0`. **The form at this head refuses both by `FIRST_FAMILY`**, and accepts no play I hold. It
+  accepts one only from a driver that reserves the first stage's family by place (STOPDRIVER's `ca224910c2f`), which I
+  have not run.
+
+**The difftest's size.** Lean: `Spot.Place.piece` (8 lines) and one entry in `Spot/DifftestMain.lean`. Python:
+`verity/protocols/spot/verifier/lean/tests/test_place_difftest.py`, 160 lines, its reference copied from STOPDRIVER's
+`place` and `family_of` (a verifier's test imports no `benchmarks/` code). Its rows:
+
+- 12 accepted, with STOPDRIVER's three labels word for word: `draw/68719476752`, `draw/68719476754` (`stopped` true),
+  `draw/68719476755` (`stopped` true and `population` `stop`).
+- 11 refused, the two refusals among them: a size of 2^32, and `population` `stop` without `stopped` true.
+- One test that 48 windows have 48 places, and one generated run of 1,500 windows.
+
+The 24 tests that need no Lean printed 24 passes on this VM. The Lean side has not run.
+
+**What is compiled and what is not.**
+
+- `3fde4636a9b` (`Spot.Place`, the refusals, the mended proofs): `r20261113-134539-9f6e`, rc 0. It built 39 files in
+  three packages, `Steps.lean`, `AcceptsOfSteps.lean` and every file on the join that imports them among them
+  (`security/Proofs`: `Build completed successfully (12089 jobs)`). The `#guard`s of the three labels and each refusal
+  word pass in it. It is a build: no axiom probe.
+- `709510899c5` (adds the piece and the difftest): not compiled.
+- The baseline at the join's tip, `r20261113-134607-21b9`: rc 0.
+
+**Proved at `3fde4636a9b`** (compiled, axioms not yet probed), in `Steps.lean`: `inputAt_first` (a check that passes
+has the parameters' boundary window root and family equal to the record's run and family), `accepted_first` and
+`accepted_first_same` (two accepted checks of one boundary record read the same root and family). `inputAt_ok`,
+`inputAt_interior` and `inputAt_of_steps` are mended over the two new lines; `inputAt_of_steps` gains the two
+hypotheses.
+
+**Runs out**, all at `709510899c5`:
+
+| Run | What | Machine |
+|---|---|---|
+| `r20261113-140125-471b` | `verity lean try` of `Steps.lean`, for its axiom probe | cpu-1 |
+| `r20261113-140242-4e70` | `verity lean try` of `AcceptsOfSteps.lean` | cpu-1 |
+| `r20261113-140327-9fd1` | the suite's `test_place_difftest.py` on the Lean | cpu-1 |
+| `r20261113-140620-f748` | the compiled form on `e089`'s kept play as kept, with the label set to the window's family, and with the window root altered | cpu-11 |
+
+A first try of the difftest, `r20261113-135827-75c1`, failed on my job script (no environment for `pytest`), not on
+the test.
+
+### Not established
+
+- That any new theorem uses only the three standard axioms: the two tries print that.
+- That the form's executable builds at this head and refuses as its `#guard`s say on a real play: `f748`.
+- That the Lean and the Python agree on any window: `9fd1`.
+- That the form at this head accepts an honest play: it accepts none of the kept ones, by design until the driver
+  changes.
+- That `place` is one-to-one, as a Lean theorem. It is held by `#guard`s and by the Python test of 48 windows only.
+- Anything about the second stage's session: its root and its family (`draw/0`) are held to nothing by this change.
+
+One slip of mine: a local `pytest` of the new test started `lake build` on this VM for about three minutes before my
+timeout cut it. I removed the half-built `.lake` trees; nothing was kept from it.
