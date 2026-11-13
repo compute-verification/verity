@@ -158,7 +158,8 @@ def test_the_routes_process_gets_no_name_of_the_stores_key_and_finds_its_directo
     route = json.loads(said.read_text())
     names, kept = set(route["names"]), {"RESEARCH_RUN_DIR", "NOT_AWS_", "PATH", "PYTHONPATH"}
     assert not [n for n in names if n.startswith("AWS_")] and "RESEARCH_STORE_CONFIG" not in names
-    assert {n for n in os.environ if n not in dummy} | kept <= names
+    inherited = {n for n in os.environ if n not in dummy}
+    assert inherited | kept <= names
     entry, command = route["argv"][:route["argv"].index("--")], route["argv"][route["argv"].index("--") + 1:]
     assert entry[:2] == ["-m", "training_slowdown.sandbox"] and entry[-2:] == ["--hide", str(staged)]
     assert command[:3] == [str(standin), "-m", "training_slowdown.run"]
