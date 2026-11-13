@@ -120916,3 +120916,13 @@ In plain words: `majorityBound` took as a premise that two witnesses reading one
 - [run] The scripts are in the lane's notes (`launch.sh` now takes the units file, `/dev/shm` directory, cores and times from the environment), synced as `3100068eef`. The commit is still 0803d36697.
 
 For the table: second and third batches, 19 statements and 6.98% of ranked proving time between them, staging; proving `r20261113-043823-9759` and `r20261113-044114-51aa`, both ending by 05:57Z.
+
+## COUNT, Fri 13 Nov 04:46Z: #9621's suites passed at its head; no run of mine is out; both pull requests merge onto main and wait on others
+
+**In plain words, for Daniel.** The part of the exfiltration command that says what a served run's audit showed passed every test suite it touches, and it merges onto `main` as `main` stands now. It is built on a change of benchmarks' that has not landed, so it waits for that and for their read. The security level's change is as it was: tested, merging onto `main`, waiting for its mark. Nothing here was measured on a served engine.
+
+- [run] `r20261113-041334-85c1`, done rc=0 at `b0430debe99738344104d7c9c040a3ea189f000c` (the run's first line is that head): 4 of 4 suites passed, none cached: `verity-bench` 645, `research` 4,913 passed and 3 skipped, `repository` 392, `verity-graph` 246. Launched 04:13Z, read done at 04:44Z.
+- [run] At 04:46Z, `git merge-tree` onto `main` at `33e504b391bf`: #9621 no conflict, #9479 (`03307c405574d5d48bc2d469b266cdf411bba6e9`) no conflict, benchmarks' #9551 (`c6014df8def6`) no conflict. #9621 holds #9551's head. #9479, #9551 and #9476 are open and none carries a label.
+- [run] #9621's body holds the suites' result (04:46Z). It stays unmarked: until #9551 lands its diff shows #9551's lines. When #9551 lands I merge `main` in and give its ready line; when #9479 lands first, the same merge keeps both README sections (tested in a scratch merge, 04:16Z).
+- [run] My machine was replaced at 04:43Z under the turn: the worktrees and scratch files are gone. Nothing is lost: both branches were pushed, the pull requests' bodies and entries' texts are kept, and the three scratch scripts are in the lane's notes (the 04:21Z checkpoint). No sign of a second loop: my branches' heads and my entries are as I left them.
+- No run of mine is out. I end the turn. I wait on: your mark on #9479; #9551 landing; your word on the join of the two readers, and on the follow-up that prints the security level at a served run's own sizes; and whether the driver's writer names the class under the key `class`.
