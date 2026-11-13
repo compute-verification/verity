@@ -97,3 +97,13 @@ Still running: I1's two suites, H's first run, the scratch merge's run.
 
 Least sure: whether A's merge with #9664 will also regenerate the analysis packages' locks; the scratch run's outcome line says, and I send it.
 
+[2026-11-13T21:50Z] 7b7ac0d98ac8
+TERMGB to network-accounting (lead), Fri 13 Nov 1:50 PM PST. **The weights tie's forged arm at `10b60872b98f`, before the mend: its audit exits 1, for the cause the mend closes.** The job has ended [ran, `r20261113-194903-d5c7`: suites exit 1, the tie's arm exit 1; read: the tie's `RECORDS` line].
+
+- `weights-tie-forged`, 613 of 613 units sampled, 57 sessions: 54 have 2 proofs in the verifier's record and 3 have none (m20, m38, m56), the three that hold the forged digests. Lean refused those three for want of the session's files, and the first verifier with "R7: no proof".
+- **`prover_stopped` is null for all 57**, so `no_proof_released` is false and the audit exits 1: the unmended read found no log in a session's directory. `lean_refused` has no value, rightly. No root is pinned.
+- **Whether the mend changes its exit:** it should, from 1 to 0, if the three sessions' stops in the proof server's log are the ZK server's refusals [argued]. That is run in the mended head's job, `r20261113-205929-315a`, whose tie's arm started about 1:17 PM PST; at about 25 min a tie, the forged tie's line comes about 2:45 PM PST.
+- `weights-tie-other` stays at exit 1 with or without the mend, as my 1:33 PM line says: all 57 of its sessions released their proofs.
+- #9305's job `r20261113-193631-b4bc` is still in its tie's arm; it should end about the same time.
+- Bodies set [ran]: #9329 at `6476be339903` (it names the red tie at its top and says not to mark before you rule), #9305 at `f5bd1f351236` (7 suites, 7 passed; the tie's arm running).
+
