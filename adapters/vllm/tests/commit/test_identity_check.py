@@ -1,6 +1,7 @@
 """The identity check's cases beside `test_x03_identities`'s: an expected manifest under external acquisition, MoE tensors no
 source declares, and the staging rule the check hands the per-layer rule: the committer's explicit one, an FA3 source's, a
-native FA2 source's, and the default where no source stages hidden rows.  Offline (no CUDA)."""
+native FA2 source's, and the default where no source stages hidden rows; and the check's two name rules as the hazard decision
+reads them.  Offline (no CUDA)."""
 from __future__ import annotations
 
 from typing import Any
@@ -15,6 +16,7 @@ from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
     NativeHostCommitter,
     TensorMeta,
+    hazard_of_record,
 )
 
 NH, KVH, D = 8, 4, 256
@@ -236,3 +238,15 @@ def test_a_committer_with_no_hidden_source_names_the_default_rule_and_runs_none(
     assert got["ok"] is True, got["violations"]
     assert (got["fa2_rule"]["steps"], got["fa2_rule"]["policy"]) == ({}, {"backend": "fa2", "compact": True})
     assert got["manifest"]["fa2_hidden_per_layer"] == 0
+
+
+# --- the check's two name rules, as the hazard decision reads them --------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["model.layers.0.mlp/part_rank0", "model.layers.3.mlp.experts/shard_rank12",
+                                  "model.layers.0.self_attn.o_proj/all_reduce", "model.layers.0.mlp/x_q", "model.layers.0.mlp/x_s"])
+def test_a_collective_s_partial_and_a_call_dependent_value_are_snapshot_at_the_hook(name: str) -> None:
+    """The names the identity check counts as a rank's partials (`TP_PARTIAL_RE`) and as call-dependent (`CALL_DEPENDENT_RE`) are
+    snapshot at the hook, with no leaf in the caller's table; a name that only ends or begins like one is not."""
+    assert hazard_of_record(name, frozenset()) is True
+    assert hazard_of_record(name + "_more", frozenset()) is False
+    assert hazard_of_record(name.replace("/", "/the_"), frozenset()) is False
