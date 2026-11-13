@@ -88,7 +88,9 @@ Until a served audit has sampled a stop block the server chooses that count, whi
 * **The stop class's verdicts** move that mark, and only that one. A record named in the store (`VERDICTS`), its runs
   each holding verdicts' records in `VERDICTS_FILE`, one a line in the shape `VERDICT_FIELDS` (a record lacking a
   field is refused by its name), gives the four verdicts a stop class needs (`PIECES`) and the negative controls
-  (`CONTROLS`). Where every piece is accepted and complete and every control refused by the verifier that accepted
+  (`CONTROLS`). Where every piece is accepted and complete on one class (its honest verdicts each name it,
+  `CLASS_FIELDS`, with their verifier's check that their stream's registration names its boundary, and agree on its
+  registration, serve, class and rate, the row's `RATE`) and every control refused by the verifier that accepted
   its piece (`stop_class`), the output count's 0 is marked `RUN_NOT_PROVED`, printed "run (Python verifier, not
   proved)" with each verdict's run and verifier and counted apart from `measured`; it is `measured` only where every
   piece's record names the Lean guarantee that proves its verifier (`proved_by`). Otherwise the print names what is
@@ -227,6 +229,19 @@ VERDICT_READS = ("accept", "not complete", "refuse", "withheld")
 #: one does) and `open` (while `proved_by` is null, what stands between the verdict and proved, stated in words)
 VERDICT_FIELDS = ("piece", "control", "run", "verifier", "verdict", "proved_by", "open")
 VERIFIER_FIELDS = ("module", "commit")
+#: what an honest verdict's record names of the class it is on: `registration`, the class's boundary record's digest;
+#: `stream_registration`, its own stream's registration's digest; `stream_names_boundary`, the verifier's recorded
+#: check that that registration names the boundary; `serve`, the served run's store id; `class`, ``w<window>/p<P>-o<O>``
+#: (``-nostop`` for a class with no stop block); and `rate`, ``NUM/DEN`` in lowest terms, from the registration record.
+#: A record lacking one keeps the class short of complete and is named; a control's are not read, since a control
+#: changes a committed value and so its registration
+CLASS_FIELDS = ("registration", "stream_registration", "stream_names_boundary", "serve", "class", "rate")
+#: what the four pieces' honest verdicts agree on for their class to be complete
+AGREED = ("registration", "serve", "class", "rate")
+CLASS_NAME = re.compile(r"^w[0-9]+/p[0-9]+-o[0-9]+(-nostop)?$")
+RATE_TEXT = re.compile(r"^([1-9][0-9]*)/([1-9][0-9]*)$")
+#: the rate the row assumes: every stop and tie block proved
+RATE = "1/1"
 #: an issue's id, which the print never carries: `open` states what is open, and the issue is on the board (SHA-512
 #: is a hash's name, not an issue)
 ISSUE_ID = re.compile(r"\b(?!SHA-)[A-Z]+-[0-9]+\b")
@@ -597,7 +612,22 @@ def verdict(x: Any, where: str) -> dict:
         if not ok:
             raise ValueError(f"{where} holds {', '.join(f'`{k}` {x[k]!r}' for k in VERDICT_FIELDS if k != 'verifier')}: "
                              f"{why}")
-    return {k: x[k] for k in VERDICT_FIELDS} | {"verifier": {k: v[k] for k in VERIFIER_FIELDS}}
+    out = {k: x[k] for k in VERDICT_FIELDS} | {"verifier": {k: v[k] for k in VERIFIER_FIELDS}}
+    if x["control"] is not None:
+        return out
+    rate = RATE_TEXT.match(x["rate"]) if isinstance(x.get("rate"), str) else None
+    for k, ok, why in (("registration", text, "the digest of the class's boundary record"),
+                       ("stream_registration", text, "the digest of its own stream's registration"),
+                       ("stream_names_boundary", lambda k: isinstance(x[k], bool),
+                        "true or false, the verifier's recorded check that its stream's registration names the boundary"),
+                       ("serve", text, "the store id of the served run the class came from"),
+                       ("class", lambda k: isinstance(x[k], str) and bool(CLASS_NAME.match(x[k])),
+                        "`w<window>/p<P>-o<O>`, with `-nostop` for a class with no stop block"),
+                       ("rate", lambda k: rate is not None and math.gcd(int(rate[1]), int(rate[2])) == 1,
+                        "`NUM/DEN` in lowest terms, the rate the registration record states")):
+        if k in x and not ok(k):
+            raise ValueError(f"{where} holds `{k}` {x[k]!r}: `{k}` is {why}")
+    return out | {k: x[k] for k in CLASS_FIELDS if k in x}
 
 
 def _what(v: Mapping) -> str:
@@ -657,10 +687,18 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
     response's output count at 0 on a run (`complete`): each of `PIECES` accepted and complete on its honest run, and
     each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted; a `withheld`
     verdict is neither, so it keeps the class short of complete and names what it was withheld for, and a control on a
-    withheld piece refused by that piece's verifier counts as refused. Where it is,
-    `mark` is what the output count's 0 is marked: `measured` only where every piece's record names the Lean guarantee
-    that proves its verifier (`proved_by`), else `RUN_NOT_PROVED`. Where it is not, `lacks` names what is missing, the
-    mark is None and the output count keeps its own. `said` is what the print says of the class."""
+    withheld piece refused by that piece's verifier counts as refused.
+
+    The four honest verdicts are of one class only where each names it (`CLASS_FIELDS`) with its verifier's recorded
+    check that its stream's registration names the class's boundary true (`stream_names_boundary`, which this never
+    recomputes), they agree on `AGREED`, and their rate is the row's, `RATE`; otherwise `lacks` names the verdict that
+    lacks a field or records a failed check, or the field the verdicts disagree on with each value's pieces. A control
+    is held to its piece and its verifier (module and commit) alone, never to the class.
+
+    Where it is complete, `class` is what the verdicts agree on and `mark` is what the output count's 0 is marked:
+    `measured` only where every piece's record names the Lean guarantee that proves its verifier (`proved_by`), else
+    `RUN_NOT_PROVED`. Where it is not, `lacks` names what is missing, `class` and the mark are None and the output count
+    keeps its own. `said` is what the print says of the class."""
 
     honest = {v["piece"]: v for v in verdicts if v["control"] is None}
     lacks = []
@@ -669,6 +707,24 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
             lacks.append(f"no verdict on {what}")
         elif (v := honest[piece])["verdict"] != "accept":
             lacks.append(f"{what} {_read(v)}")
+    named = [(PIECES[piece], honest[piece]) for piece in PIECES if piece in honest]
+    for what, v in named:
+        if lack := [f"`{k}`" for k in CLASS_FIELDS if k not in v]:
+            lacks.append(f"{what}'s verdict on {v['run']} lacks {', '.join(lack)}")
+        elif v["stream_names_boundary"] is not True:
+            lacks.append(f"{what}'s verdict on {v['run']} records that its stream's registration, "
+                         f"`{v['stream_registration']}`, doesn't name the class's boundary (`stream_names_boundary` false)")
+    for k in AGREED:
+        held: dict[str, list[str]] = {}
+        for what, v in named:
+            if k in v:
+                held.setdefault(v[k], []).append(what)
+        if len(held) > 1:
+            lacks.append(f"the honest verdicts disagree on `{k}`: "
+                         + _listed([f"`{x}` ({_listed(pieces)})" for x, pieces in held.items()]))
+        elif k == "rate" and held and (rate := next(iter(held))) != RATE:
+            lacks.append(f"the honest verdicts are at rate {rate}, and the row assumes {RATE}: every stop and tie block "
+                         "proved")
     for control, what in CONTROLS.items():
         tried = [v for v in verdicts if v["control"] == control]
         if not tried:
@@ -681,16 +737,18 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
                   or accepted["verifier"] != v["verifier"]):
                 lacks.append(f"the control with {what} is refused on {v['run']} by {_by(v)}, not by a verifier that "
                              f"accepted the honest run's verdict on {PIECES[v['piece']]}")
-    out = {"record": VERDICTS, "runs": list(runs), "complete": not lacks, "mark": None, "lacks": lacks,
+    out = {"record": VERDICTS, "runs": list(runs), "complete": not lacks, "mark": None, "class": None, "lacks": lacks,
            "verdicts": list(verdicts)}
     if lacks:
         return out | {"said": "not complete: " + "; ".join(lacks)}
+    one = {k: honest["stop_record"][k] for k in AGREED}
+    on = f"complete on class `{one['class']}` of serve {one['serve']} at rate {one['rate']}"
     unproved = [piece for piece in PIECES if honest[piece]["proved_by"] is None]
     if not unproved:
-        return out | {"mark": "measured", "said": "complete (measured: proved by "
+        return out | {"mark": "measured", "class": one, "said": f"{on} (measured: proved by "
                       + _listed([f"`{g}`" for g in dict.fromkeys(honest[p]["proved_by"] for p in PIECES)]) + ")"}
-    return out | {"mark": RUN_NOT_PROVED,
-                  "said": f"complete (run, not proved: {_listed(list(dict.fromkeys(honest[p]['open'] for p in unproved)))}"
+    return out | {"mark": RUN_NOT_PROVED, "class": one,
+                  "said": f"{on} (run, not proved: {_listed(list(dict.fromkeys(honest[p]['open'] for p in unproved)))}"
                           f"; Python verifier for {_listed([PIECES[p] for p in unproved])})"}
 
 
@@ -904,7 +962,8 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     if stop and stop["complete"]:
         out.append(one(net, "output_count", 0, "bit/request", stop["mark"],
                        f"taken at 0 in the sums under {_names(count['at_zero_in'])}: the stop class's verdicts of record, "
-                       f"`{VERDICTS}` ({', '.join(stop['runs'])}), are {stop['said']}: "
+                       f"`{VERDICTS}` ({', '.join(stop['runs'])}), are {stop['said']}, its boundary's registration "
+                       f"`{stop['class']['registration']}`: "
                        + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
                                    + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved: {v['open']}")
                                    for v in stop["verdicts"])

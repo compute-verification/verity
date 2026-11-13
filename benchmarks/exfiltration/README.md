@@ -91,11 +91,30 @@ field's name:
   stated in words (`the two-round form's soundness is not proved`). A record whose `open` names an issue's id is
   refused: the print carries no issue id, and the issue goes on the board.
 
-The class is complete when every piece's honest run is `accept`, and a changed id and a changed `max_tokens` are each
-refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Then the
+An honest verdict (`control` null) also names the class it is on, in six top-level fields (`CLASS_FIELDS`). One it
+lacks keeps the class short of complete and is named; one that holds what it can't is refused by its name:
+
+- `registration`: the digest of the class's boundary record, the same on all four.
+- `stream_registration`: the digest of the verdict's own stream's registration.
+- `stream_names_boundary`: true or false, the verifier's recorded check that that registration names the boundary.
+  The command reads it and never recomputes it.
+- `serve`: the store id of the served run the class came from.
+- `class`: `w<window>/p<P>-o<O>`, with `-nostop` for a class with no stop block.
+- `rate`: `NUM/DEN` in lowest terms, from the registration record; every stop and tie block proved is `1/1`.
+
+A control's are not read: a control changes a committed value, so its registration differs. It is held to its piece
+and its verifier (module and commit) alone.
+
+The class is complete when every piece's honest run is `accept`, the four name one class (each with its
+`stream_names_boundary` true, all four agreeing on `registration`, `serve`, `class` and `rate`) at the rate the row
+assumes, `1/1`, and a changed id and a changed `max_tokens` are each
+refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Where they
+don't name one class the print says which verdict lacks a field or records a failed check, or which field the four
+disagree on with each value's pieces, and claims nothing. Where the class is complete the
 output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN; Python verifier
-for PIECES)`, OPEN being each unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
+verifier and counted apart from measured, its source naming the boundary's registration, and the class prints as
+`complete on class C of serve S at rate 1/1 (run, not proved: OPEN; Python verifier for PIECES)`, OPEN being each
+unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
 from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
 count's line names what is missing; a `withheld` piece or control prints as `withheld: OPEN`, and a withheld control
 is not refused. A control on a withheld piece refused by that piece's verifier (the same module and commit) counts as
