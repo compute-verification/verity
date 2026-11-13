@@ -268,12 +268,13 @@ def main() -> int:
     ck.check("the credited floor program ♭ is the honest fold's (the baseline binds DS_issue alone), so the bound moves "
              "only through the cheater", s100.baseline.pi == {"DS_issue": 1.0}, s100.baseline.pi)
     count_only = replace(s100, design=replace(s100.design, fold={"FFMA": s100.design.fold_cost()})).cheat(Q)
-    cap = 1 - count_only.T / T_base
+    ceiling = 1 - count_only.T / T_base
     _, s_ri, c_ri, _ = cert[("sm100", "DC-100-ri")]
-    ck.check("the cap: with the fold priced at its instruction count alone (any pipe; DS-100's FFMA is issue only), the "
-             "cheater is at its issue floor, the most any pipe move can reach, over every key model's re-solve",
-             count_only.binding == ("DS_issue",) and all(m < cap for _, m, _, _ in rows.values()),
-             f"ε_machine {cap:.4%}, headline {rest + cap:.3%}; the measured reading's ε_machine "
+    ck.check("the ceiling: with the fold priced at its instruction count alone (any pipe; DS-100's FFMA is issue "
+             "only), the cheater is at its issue floor, the most any pipe move can reach, over every key model's "
+             "re-solve",
+             count_only.binding == ("DS_issue",) and all(m < ceiling for _, m, _, _ in rows.values()),
+             f"ε_machine {ceiling:.4%}, headline {rest + ceiling:.3%}; the measured reading's ε_machine "
              f"{1 - c_ri.T / s_ri.baseline.T:.4%}")
     ck.check("the B200 measured reading (DC-100-ri, π* issue) is unchanged: every IMAD-pipe round has more instructions",
              c_ri.pi == {"issue": 1.0} and kmin > 2)
@@ -282,7 +283,8 @@ def main() -> int:
     print(f"  design: ε_machine {e0.machine_eps:.4%}, headline {e0.core():.3%}")
     for n, line in lines.items():
         print(f"  {n}: {line}")
-    print(f"  cap, the fold at its instruction count on any pipe: ε_machine {cap:.4%}, headline {rest + cap:.3%}")
+    print(f"  ceiling, the fold at its instruction count on any pipe: ε_machine {ceiling:.4%}, "
+          f"headline {rest + ceiling:.3%}")
 
     if ck.mutations:
         p = keyed_program(0x0F0F0F0F, 5, 7)
