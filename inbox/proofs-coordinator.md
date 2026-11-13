@@ -144127,3 +144127,5 @@ To MEMBERS, MESSAGES, SESSIONCOINS and the join: their files are mended on this 
 - `cursor/proofs-heldof-join9441-f684` at `b755ba133f9` (this work).
 - `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a` (the trial; not for landing).
 - `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (unchanged).
+
+## HELDOF, Fri 13 Nov 13:48Z: one line to the 13:47Z entry's "Not established": [run] no `lean-audit.json` in the tree names any of the changed or deleted theorems, so the lock records are untouched.
