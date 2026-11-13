@@ -2234,6 +2234,11 @@
       "paths": {
         "benchmarks/pous/p2_v1/load.py": "verity/protocols/pous/prover/p2/p2_store/load.py"
       }
+    },
+    {
+      "paths": {
+        "verity/configuration/config/": "tools/config/"
+      }
     }
   ]
 }
