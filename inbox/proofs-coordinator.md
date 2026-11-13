@@ -157193,3 +157193,91 @@ Read at `main` `3f4af5f89966`. This answers your 19:06Z item 3 (which case it is
 - V5 has no `v`. Its knowledge finders' budgets are the free binders `(qF qS : ℝ)` (`V5/Statement.lean:358`), and `t'` (`:354`) charges only the link finders. For V5 the same condition reads `2t′ + 2·hOpenMax ≤ qF` and `t′ + hSelfMax ≤ qS`. That still needs a statement change, to tie `qF` and `qS` to `t′`.
 
 **Not established.** The counts assume each hm96 leaf and each node is one SHA-512 call (the `H : List UInt8 → D` model), whatever the message length. I haven't proved in Lean that `N ≤ 8192` holds at every statement `planZHJ` admits; the table rests on Part B's reading, `len + 192 ≤ 1024`. Whether `decide` reduces `capDepth`, which calls `Nat.log`, a well-founded definition, in the kernel is not known; I will try it on a node next and report it in the next entry.
+
+
+## SESSIONCOINS, Fri 13 Nov 19:15Z: the cost point, rest: the third way needs a text change too, so (i); the binders; (i) stated; the kernel try launched
+
+Read at `main` `3f4af5f89966`. This follows my 19:11Z entry (the numbers) and covers your 19:03Z items 4, 1 and 3, in your 19:06Z order.
+
+### Item 4: the third way. Today's definitions don't allow the lemma, and no change of definitions alone would
+
+**First, `v` is tied to nothing, so no definition can prove `hOpen ≤ v`.** [read, derived] In V3, `v` is a binder whose only hypothesis is `0 ≤ v` (`ScopeGate.lean:139`). In V5 there is no `v` at all, and `qF` and `qS` are free (`V5/Statement.lean:358`). A lemma `hOpen ≤ v` would have to hold at `v = 0`, but every opening costs at least 3 calls (its hm96 leaf). Charging the openings to `t′` instead, "inside the two runs", hits the same wall: `t′` is free too (`ScopeGate.lean:136`, `V5/Statement.lean:354`), and the runs are charged that constant, not a count. So whatever the cost model, `v` or `t′` must be constrained by the statement. That is a text change.
+
+**Second, the session game counts no SHA-512 call.** [read]
+- `Finder.CR` charges the constant `fun _ => q` (`StrictCR.lean:97`).
+- `outZC` (`ZkLink/Compiled.lean:255–257`) decides acceptance, `OpensOKZ` included, as a Prop. The game leaves (`Game`) carry no cost.
+- The one count of the verifier's calls in the tree is the executable's `Zk.shaCalls` (`verity/protocols/proofs/flock/verifier/Flock/With/Log.lean:132`, with `verifyLogged_size`). Only the Claims side reads it (`Claims/Deploy.lean`, `nOf`); V3's and V5's game don't.
+
+**Third, three forks compare openings the verifier may never have hashed.** [read] Even with a per-run count of the verifier's calls, the lemma would fail on three of the five forks, because their event doesn't require acceptance:
+- **Forks on accepted runs only:**
+  - `advRSZ` reads `opRAccZ` (`AccZ.lean:40–43`: `AccUpTo n outs`, else `none`).
+  - `advTauSZ` reads `opTauZ` (`BadZ.lean:300`: `out.accepted = true`).
+  - There, acceptance includes "every row path verifies" (`outZC`'s docstring, `Compiled.lean:255–256`), so the compared openings are ones the verifier checked.
+- **Forks on any run:** `advPadsSZ` (`opPadsAtZ`, `SessionZ.lean:160–164`), `adv₀SZ` (`op₀Z`, `:174–179`) and the self-clash finder (`SelfClashZ`, `BadZ.lean:348`). On a rejecting run, the executable stops at its first failed check, so the compared openings can lie past it.
+
+**What the third way would need.** All three of these:
+1. A per-run cost on `OutZC`: either the executable's `Zk.shaCalls` on the run's proof bytes, through `opnZ` (`VerdictStatements.lean:104`), or a model count of the openings `outZC` checks.
+2. Acceptance in the three forks' events, or a cost that charges their openings anyway.
+3. A hypothesis that `v` bounds that cost.
+
+Item 3 is way (i) again, so the third way doesn't avoid the ask. It does say where (i)'s count comes from. [derived]
+
+### Item 1: the binders, word for word [read]
+
+**V3** (`Bridge/ScopeGate.lean`):
+- `t′`, line 136, with no comment: `(t' : ℝ) (_ht' : 0 ≤ t')`.
+- `v`, lines 138–139: `-- one opening's verification, in SHA-512 evaluations` / `(v : ℝ) (_hv : 0 ≤ v)`.
+- The docstring: "Its finders' charges are V2's: `2(t' + v)` and `t' + v` for the knowledge finders and `t' + v` per run for the link finders."
+- The premise's comment (`:166–169`): "cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the prover and two verifications for a rewinding finder, one of each for the self-clash finder". It applies to `TableCRZAt … (2 * (t' + v)) (t' + v)`, and the link premise is at `(t' + v)`.
+
+**V5** (`Bridge/V5/Statement.lean`, the statement at `:324`):
+- `t′`, line 354: `(t' : ℝ) (_ht' : 0 ≤ t')`.
+- `qF qS`, line 358: `(qF qS : ℝ)`, with no comment and no hypothesis.
+- There is no `v`. The premises are `TableCRZ … qF qS` and `LinkCRZC … M t'`.
+- The docstring (`:317`): "The link finders are charged `t'` per run (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`."
+- So in V5, `t′` alone already plays V3's `t′ + v`, and the knowledge finders' budgets are unconstrained.
+
+**The lock and `ASSUMPTIONS.md`:**
+- The lock's `meaning` is a list of 136 module names (`Definitions.Core`, …, `Proofs.Flock.Bridge`), with no text per guarantee. V3's and V5's records list only premises and hashes. So no lock entry says what `v` counts; the meaning is the docstrings above. [read]
+- `security/Proofs/Flock/Soundness/ASSUMPTIONS.md:64–72` says: "for `t′` the prover's in one session run and `v` one opening's verification", with `qF ≥ 2t′ + 2v` ("two runs after a cap, and the two conflicting openings verified") and `qS ≥ t′ + v` ("one run, one further verification").
+- `:243` lists these as "conditions Lean doesn't check". [read]
+- So V3's text and the ledger read `v` as one opening's check, and V5's docstring reads it as the verifier's share of one run. These are two readings. The second covers the first, and (i) below is stated so it covers both.
+
+### Item 3: way (i), stated
+
+**In Lean**, as a `domain` hypothesis of V3 beside `_hv`, over the tables `TabZK` the plan holds:
+
+```lean
+/-- SHA-512 calls to check every opening one session run makes at table `T`: both reps' row openings at every level and
+their pads openings, each an hm96 leaf (three calls) and its path, and `τ`'s leaf. -/
+def runOpenCalls (T : TabZK F mPts) : ℕ :=
+  2 * ((T.sch.levels.map fun l => l.queries * (3 + pathLen l)).sum + T.q * (3 + Nat.log 2 T.N) + 3)
+
+    (v : ℝ) (_hv : 0 ≤ v) (_hvOpen : ∀ S R, ∀ T ∈ planZHJ (Reg := Reg) dj y₀ S R, (runOpenCalls T : ℝ) ≤ v)
+```
+
+- **For V5**, the same hypothesis needs a `v` binder added, with the knowledge finders' budgets tied to it. Either `qF qS` are replaced by `2 * (t' + v)` and `t' + v`, as in V3, or V5 takes `2 * (t' + v) ≤ qF` and `t' + v ≤ qS`. The first is the smaller text; the second keeps V5's figures' binders. [derived]
+- **In one sentence:** `v` is at least the number of SHA-512 calls it takes to check every opening that one session run makes at any table of the plan.
+- **Why "every opening" and not "the compared opening".** It covers both readings of `v` in item 1. It bounds the rewinding finders' `hOpen` (at most one level's openings) and the self-clash finder's `hSelf` (one run's openings) by one number. At the deployed plans it is at most 23,830, against figures stated for every `v ≤ 2^80` (my 19:11Z). A tighter form, `max over tables and levels of (3 + pathLen)` (at most 19), charges only the compared openings, if the cost charges nothing for finding them. [derived]
+
+**Who proves it, and how** [derived, with one guess]:
+- It is a fact about parameters. `runOpenCalls T` reads only `T.sch`, `T.q` and `T.N`.
+- At the deployed plans these are `Zk.schedule m` for `m ∈ 25..35`: `DrawSetupZJ`'s `hz : Zk.schedule x.st.m = .ok (sch, tPad)` (`Composed/DefsJ.lean:80–94`), `q = Zk.Q = 168`, and `N = nextPow2(len + 192)·8` (`Zk.lean:24–27, 261`).
+- So the deployed instance is one lemma by cases on `m`, each case closed in the kernel, plus two facts the table construction would have to supply: `T.q = 168`, and `T.N ≤ 8192`.
+- [guess] I haven't found those two facts as lemmas. `ZkTabLay` (`VerdictStatements.lean:113`) ties the pads' positions to the executable, not `N` or `q`. If they are missing, they are the honest witness's real work. They are equations about the setup, not hashing.
+- The guarantees' own proofs don't change: they take the hypothesis, and only the deployed instance discharges it.
+
+**Whether `decide` or `rfl` settles it.** I stated the arithmetic core today and launched it.
+- **The run:** `r20261113-191149-e50b` on vy-nebius-cpu-2, pool research, from the scratch branch `cursor/sessioncoins-alignedx-try`, commit `538f19e06cc4` (`security/Proofs/Flock/Soundness/OpenCostTry.lean`; no pull request).
+- **What it states, each as `decide`, `decide +kernel` and `rfl`:**
+  - `Nat.log 2 4096 = 12 ∧ Nat.log 2 8192 = 13`;
+  - `∀ m < 36, ∀ logN < 14, 25 ≤ m → hOpenMax m logN ≤ 19`;
+  - `… → hSelfScan m logN ≤ 23830`.
+  - These run over `fast100` with level 0's `q₀`, via `Schedule.withQueries₀`.
+- **The doubt it settles:** `capDepth` calls `Nat.log`, which may be a well-founded definition that the elaborator's `decide` won't unfold. If so, `decide +kernel` or `rfl` is the form to use.
+- **Timing:** it waits in the node's check line behind the AlignedX try, `r20261113-184926-3df8`, which still has 6 checks ahead of it. I'll give one line on each, with times, when they end.
+
+### Not established
+- Whether `decide`, `decide +kernel` or `rfl` closes the deployed bound, and how long it takes: the run above.
+- That `T.q = 168` and `T.N ≤ 8192` are lemmas for every table `planZHJ` admits.
+- That the executable verifier's `Zk.shaCalls` on an accepted run counts at least `runOpenCalls`. It would, if it checks every path separately; I haven't read whether frame-v3's multi-openings share nodes, which would make it count fewer.
