@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.spot.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
-from verity.protocols.spot.optimize import CostModel, Objective, frontier
+from verity.protocols.spot.prover.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
+from verity.protocols.spot.prover.optimize import CostModel, Objective, frontier
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
