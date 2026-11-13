@@ -35,7 +35,7 @@ namespace Properties.Spot.Period
 open Lean (Json)
 open Std.Do
 open _root_.Spot _root_.Spot.Challenger _root_.Spot.Period
-open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple throw_spec ok_spec checked_ok verifyLedger_inv)
+open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple throw_spec ok_spec checked_ok verifyLedger_inv getD_root)
 open Properties.Challenger.Session (none_of_forall)
 open FlockSoundness.Discharge.Exec (array_mapM_ok_getElem)
 
@@ -780,7 +780,8 @@ theorem acceptMeans : AcceptMeans := by
     rw [h1]
     exact h3
 
-/-- **Each committed root is audited once** (`Properties.Spot.Period.CommittedOnce`). -/
+/-- **Each root committed on a session with the sample's family is one published window, with one audit entry**
+(`Properties.Spot.Period.CommittedOnce`). -/
 theorem committedOnce : CommittedOnce := by
   intro inner p c e bs pub prof h
   obtain ⟨-, -, -, r, ws, hr, hw, hmap, hoth, -, -, records, -, haud⟩ := acceptMeans inner p c e bs pub prof h
@@ -792,7 +793,7 @@ theorem committedOnce : CommittedOnce := by
     rw [← hmap, Array.size_map]
   have hget : ∀ j (hj : j < pub.windows.size) (hj' : j < ws.windows.size),
       pub.windows[j].window = ws.windows[j] := fun j hj hj' => getElem_of_map_eq hmap j hj hj'
-  refine ⟨wins, periods, hck, hreach, fun x hx hC hS => ?_, fun x hx hC hS => ?_, fun w hw => ?_⟩
+  refine ⟨(wins, periods), hck, hreach, fun x hx hC hS => ?_, fun x hx hC hS => ?_, fun w hw => ?_⟩
   · obtain ⟨w, hwm, hwr, hws⟩ := (hcom x hx hC).1 hS
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hwm
     have hi' : i < pub.windows.size := by rw [hsz]; exact hi
@@ -811,5 +812,111 @@ theorem committedOnce : CommittedOnce := by
     have hj' : j < ws.windows.size := by rw [← hsz]; exact hj
     obtain ⟨x, hx, hC, hS, hxr, hxs, -⟩ := hwins ws.windows[j] (Array.getElem_mem hj')
     exact ⟨x, hx, hC, hS, by rw [hget j hj hj']; exact hxr, by rw [hget j hj hj']; exact hxs⟩
+
+/-- **With no other session published, every root the lane committed is audited**
+(`Properties.Spot.Period.EveryRootAudited`). -/
+theorem everyRootAudited : EveryRootAudited := by
+  intro inner p c e bs pub prof h hnone
+  obtain ⟨-, -, -, r, ws, hr, -, -, -, -, -, records, hrec, haud⟩ := acceptMeans inner p c e bs pub prof h
+  obtain ⟨hck, -⟩ := read_ok hr
+  obtain ⟨wp, hck', hreach, hsam, hoth, -⟩ := committedOnce inner p c e bs pub prof h
+  have hwp : wp = (r.wins, r.periods) := Except.ok.inj (hck'.symm.trans hck)
+  rw [hwp] at hsam hoth
+  refine ⟨r, hr, hck, hreach, records, hrec, fun x hx hC => ?_⟩
+  by_cases hS : Sampled p.ledger x
+  · obtain ⟨i, hi, hroot, hses, -, huniq⟩ := hsam x hx hC hS
+    obtain ⟨we, a, record, hwe, ha, hrc, hA⟩ := haud i hi
+    exact ⟨i, hi, hroot, hses, huniq, we, a, record, hwe, ha, hrc, hA⟩
+  · obtain ⟨s, hs, -⟩ := hoth x hx hC hS
+    rw [hnone] at hs
+    simp at hs
+
+/-! ## The decoder -/
+
+theorem keyOf_spec (j : Json) :
+    ⦃⌜True⌝⦄ ChallengerKey.ofJson j ⦃⇓? k => ⌜ChallengerKey.ofJson j = .ok k⌝⦄ := ok_spec _
+
+/-- `Params.of` reads the ledger's key from the key's JSON. -/
+theorem paramsOf_key {key label lane start stop : Json} {q : Params}
+    (h : Params.of key label lane start stop = .ok q) : ChallengerKey.ofJson key = .ok q.key := by
+  refine of_triple (Q := fun q => ChallengerKey.ofJson key = .ok q.key) ?_ h
+  clear h
+  mvcgen [Params.of, -Spec.throw_Except, throw_spec, keyOf_spec]
+
+theorem paramsOf_spec (key label lane start stop : Json) :
+    ⦃⌜True⌝⦄ Params.of key label lane start stop
+      ⦃⇓? q => ⌜Params.of key label lane start stop = .ok q⌝⦄ := ok_spec _
+
+theorem mapError_spec {ε ε' α : Type} (x : Except ε α) (f : ε → ε') :
+    ⦃⌜True⌝⦄ x.mapError f ⦃⇓? _ => ⌜True⌝⦄ := by
+  cases x <;> exact fun _ => True.intro
+
+/-- An `audit` that names none of the keys a window sets or leaves unset. -/
+theorem none_of_keys {audit : Json}
+    (h : ((WINDOW_KEYS ++ UNDERIVED_KEYS).all fun k => (field? audit k).isNone) = true) :
+    field? audit "challenger" = none ∧ field? audit "window_root" = none ∧
+      field? audit "seed_salt" = none ∧ field? audit "day" = none ∧ field? audit "declarations" = none := by
+  have hk : ∀ k ∈ WINDOW_KEYS ++ UNDERIVED_KEYS, field? audit k = none := fun k hk =>
+    Option.isNone_iff_eq_none.1 (Array.all_eq_true'.1 h k hk)
+  exact ⟨hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]), hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]),
+    hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]), hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]),
+    hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS])⟩
+
+/-- **What the decoder gives the check** (`Properties.Spot.Period.DecodedMeans`). -/
+theorem decodedMeans : DecodedMeans := by
+  intro j p h
+  refine of_triple (Q := fun p => ChallengerKey.ofJson p.keyJ = .ok p.ledger.key ∧
+      field? p.audit "challenger" = none ∧ field? p.audit "window_root" = none ∧
+      field? p.audit "seed_salt" = none ∧ field? p.audit "day" = none ∧
+      field? p.audit "declarations" = none) ?_ h
+  clear h
+  mvcgen [AuditParams.of, -Spec.throw_Except, throw_spec, paramsOf_spec, mapError_spec]
+  all_goals exact ⟨paramsOf_key (by assumption), none_of_keys (Bool.and_eq_true_iff.1 (by assumption)).2⟩
+
+/-! ## The session audited at a window -/
+
+section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
+open private strOf from Spot.ChallengerSession
+
+-- `mvcgen` splits `auditedIn` into one goal per check it makes of the window and its `end`
+set_option maxHeartbeats 4000000 in
+/-- `auditedIn` reads the session of the first of the ledger's windows whose root is the one the caller names. -/
+theorem auditedIn_ok {wins : Array Win} {periods : Array MonitoringPeriod} {window : Json} {a : Audited × Json}
+    (h : auditedIn wins periods window = .ok a) :
+    ∃ win, wins.find? (fun w => w.root == strOf (getD window "root")) = some win ∧
+      a.1.session = win.opened.session := by
+  refine of_triple (Q := fun a => ∃ win,
+      wins.find? (fun w => w.root == strOf (getD window "root")) = some win ∧
+      a.1.session = win.opened.session) ?_ h
+  clear h
+  mvcgen [auditedIn, -Spec.throw_Except, throw_spec]
+  all_goals exact ⟨_, by assumption, rfl⟩
+
+/-- `auditedIn` on a root reads the session of one of the ledger's windows on that root. -/
+theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {root : String} {a : Audited × Json}
+    (h : auditedIn wins periods (Json.mkObj [("root", Json.str root)]) = .ok a) :
+    ∃ win ∈ wins, win.root = root ∧ a.1.session = win.opened.session := by
+  obtain ⟨win, hfind, hses⟩ := auditedIn_ok h
+  rw [getD_root] at hfind
+  exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 (Array.find?_some hfind), hses⟩
+
+end
+
+/-- **The session audited at a window is the window's** (`Properties.Spot.Period.AuditedSession`). -/
+theorem auditedSession : AuditedSession := by
+  intro p ledger r ws w au opened hr hw hmem ha
+  have hwo : windowsOf p ledger = .ok ws := by
+    unfold windowsOf
+    exact bind_ok.2 ⟨r, hr, hw⟩
+  obtain ⟨r', stop, sampled, hr', -, hR⟩ := returned_of hwo
+  have hrr : r' = r := Except.ok.inj (hr'.symm.trans hr)
+  rw [hrr] at hR
+  obtain ⟨win, hwin, hroot, hses⟩ := auditedIn_root ha
+  obtain ⟨x, hx, -, hxr, hxs, -, -⟩ := hR.win_of_session (hR.mem_sampled.1 hs).1
+  have hxw : win = x := wins_inj hR.dist hwin hx (Or.inl (hroot.trans (hwr.trans hxr.symm)))
+  exact hses.trans ((congrArg (fun y : Win => y.opened.session) hxw).trans (hxs.trans hws.symm))
 
 end Properties.Spot.Period
