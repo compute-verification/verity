@@ -77,7 +77,7 @@ def _boundary_window() -> CS.Binding:
 
 
 def _first(members):
-    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage drawn (spans 0 and 2)."""
+    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
     names = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(members, CELLS, "00", [0], WIRES))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}

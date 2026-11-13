@@ -43,7 +43,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Slots.select`);
 * `pop_order`: the run's `population-order` check as it runs (`Slots.popOk`, from the ranges: `Slots.popOkRanges`) and
   as `popOk` states it, off the layout's population;
-* `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
+* `fits`: what of v2's inputs and of a session's sample a session's statement would hold at a given number of bytes or
   more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
@@ -781,7 +781,7 @@ def run (j : Json) : V Json := do
 the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
 second stage's units (`drawn`), the design's links (`replayLinks`') and wires (`replayWires`'), each null for none, the
 rows their units read (`replayRows`'), null for none, the names of what the replay block returns (`returns`,
-`replayReturns`'), null for none, the verdicts, whose verifiers of record report the sessions'
+`replayReturns`'), null for none, the verdicts, whose verifiers report the sessions'
 reads (`Record.sessionRegistered`) and name the header, registered reads and sample each checked
 (`SecondStage.verifiedOf`), the reference header of each template's statement (`refs`, `{template: header}`, null for
 none) and the registered reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no
@@ -914,9 +914,9 @@ def secondSchedule (j : Json) : V Json := do
   return Json.mkObj [("failure", (Schedule.failure rec_).elim Json.null Json.str), ("at", .arr (bs.map atJson))]
 
 /-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
-of v2's inputs (`OneStageZk.fitsWhy`) and of a session's draw (`OneStageZk.drawFitsWhy`) a session's statement would hold
+of v2's inputs (`OneStageZk.fitsWhy`) and of a session's sample (`OneStageZk.drawFitsWhy`) a session's statement would hold
 at `limit` bytes or more, each null for nothing. The files are hex, the tables `[name, hex]` pairs, the program hex or
-null, and the partition object, the registered reads and the draw null for none. -/
+null, and the partition object, the registered reads and the sample null for none. -/
 def fits (j : Json) : V Json := do
   let some limit := nat? (getD j "limit") | throw "limit is not a natural number"
   let circuit ← Flock.unhex (← Flock.J.str j "circuit" "the lengths")
