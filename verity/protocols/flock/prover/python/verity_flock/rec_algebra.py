@@ -6,7 +6,7 @@ public statement, except two products of messages (zerocheck's ``v_A · v_B``, l
 
     residual = Σ_k coef_k · w_k  +  const  +  Σ (message · message)
 
-and V* computes it with one GF(2^128) product per term (`verity.definitions.ops.boolean.gf2k.GfResiduals`), the coefficients and constants
+and V* computes it with one GF(2^128) product per term (`verity.circuits.ops.boolean.gf2k.GfResiduals`), the coefficients and constants
 being verifier rows. `run` is the inner verifier's algebra written once over values: on ints it is the reference (`residuals`);
 on symbolic messages (`Lin`) it yields the coefficients, from which `structure` reads the circuit and `verifier_rows` its
 coefficient inputs. Merkle openings, caps and the transcript's framing are rec-v0's.
@@ -47,8 +47,8 @@ import struct
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
-from verity.definitions.ops.boolean import gf2k as G
-from verity.definitions.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
+from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
 
 __all__ = ["ACC_NAMES", "Claim", "CoinSource", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fast100_wide", "fold_points", "GfPorts",
            "free_names", "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",

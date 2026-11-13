@@ -1,4 +1,4 @@
-"""`Q_word_v1{X,W,R=no-recompute}` (`verity.definitions.word`): every computation gate certified by exactly one unit, cross-unit reads
+"""`Q_word_v1{X,W,R=no-recompute}` (`verity.circuits.word`): every computation gate certified by exactly one unit, cross-unit reads
 only through committed values (`verity.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
 the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
@@ -28,8 +28,8 @@ from verity.circuits.program import Program
 from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions import word as W
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits import word as W
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import fp8_moe_experts as XM
 from verity.definitions.registry import moe
 from verity.definitions.registry import sampling as SM
@@ -445,7 +445,7 @@ def test_the_graph_holds_a_few_bytes_per_operand_read():
 #: forking happens in a fresh interpreter: a pytest-xdist worker has threads, and a fork beside them may deadlock
 PREFETCH_PROBE = """
 import json, multiprocessing
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity_vllm.query.program_view import spec_base, spec_statics
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}",
          "NoSuch_v1{N=1}"]
@@ -470,7 +470,7 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
 #: the probe's specs prefetched under a budget no cut fits, each cut counted in its worker while it runs, then without one
 PREFETCH_BUDGET_PROBE = """
 import json, multiprocessing
-from verity.definitions import word as W
+from verity.circuits import word as W
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
 live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
 cut = W._rule_of_pending
