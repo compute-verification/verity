@@ -31,7 +31,8 @@ one gate: `Spot.Bits.off` past its last gate, `Spot.Bits.consts`, and `Spot.Bits
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. Its `twoFilesOk` is `filesFitOk` (the layout fits the
 members' files) and every clause of `wiring`, each under its name (`wiringClauses`); `unnamed` and `unread` list each
-template's name with a row `sourceRowsNamed` or `writtenRowsRead` refuses. Each member's circuit is read once
+template's name with a row `sourceRowsNamed` or `writtenRowsRead` refuses, and `unmoved` each with a wired row at
+which some unit has no gate to go to, which `wiresMoveRows` decides, and why. Each member's circuit is read once
 (`readAll`), and the clauses are evaluated at that array (`wiringClausesAt`, the model's by `wiringClausesAt_eq`). The
 model's statement parsers recurse deeper than a default stack holds: give the interpreter a large `--tstack`.
 
@@ -97,22 +98,21 @@ theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.C
   unfold stmtOk runOkAt parse
   cases decode x <;> cases stmtsOf m₂ <;> simp [regOk, readsOk_eq, Bool.and_assoc]
 
-/-- **The registered wiring's clauses that read the registration's description alone**, each under its name: every
-member's circuit is in the scope Flock's hidden-output proof covers (`membersScoped`), and of `wiringOk`: each name is
-one template's, each
-wire's writer's part is before its reader's, every row a template's units read source bits at is a port a link or a
-wire names, each wire's reader port is like its writer's output port, no wire names a row a template's units write
-that no link names and some wire reads it, each reference read at a port no link or wire names reads a port of the
-interior registration, the interior registration registers no value, each member's circuit names its ports once, and
-every returned output bit of its unit sits on a computed row.
-Not the one clause that passes over every source bit of the members' programs (`wiresMove`). -/
+/-- **The registered wiring's clauses**, each under its name: every member's circuit is in the scope Flock's
+hidden-output proof covers (`membersScoped`), and every clause of `wiringOk`, in its order: each name is one
+template's, each wire's writer's part is before its reader's, every row a template's units read source bits at is a
+port a link or a wire names, every wired source bit has a gate to go to (decided once per template, `wiresMoveRows`),
+each wire's reader port is like its writer's output port, no wire names a row a template's units write that no link
+names and some wire reads it, each reference read at a port no link or wire names reads a port of the interior
+registration, the interior registration registers no value, each member's circuit names its ports once, and every
+returned output bit of its unit sits on a computed row. Each reads the registration's description alone. -/
 def wiringClauses : List (String × (Held → Bool)) :=
   [("membersScoped", membersScoped), ("namesOnce", namesOnce), ("writersFirst", writersFirst),
-    ("sourceRowsNamed", sourceRowsNamed), ("wiresAlike", wiresAlike), ("writtenRowsUnwired", writtenRowsUnwired),
-    ("writtenRowsRead", writtenRowsRead), ("refReadsOwn", refReadsOwn),
+    ("sourceRowsNamed", sourceRowsNamed), ("wiresMoveRows", wiresMoveRows), ("wiresAlike", wiresAlike),
+    ("writtenRowsUnwired", writtenRowsUnwired), ("writtenRowsRead", writtenRowsRead), ("refReadsOwn", refReadsOwn),
     ("interiorValuesEmpty", fun h => h.interiorNames.values.isEmpty), ("portsOnce", portsOnce), ("outsOk", outsOk)]
 
-/-- **The registered wiring passes the clauses that read the description alone** (`wiringClauses`, every one). -/
+/-- **The registered wiring passes its clauses** (`wiringClauses`, every one): `membersScoped` and `wiringOk`. -/
 def wiringSizedOk (h : Held) : Bool := wiringClauses.all fun kv => kv.2 h
 
 /-- **`two`'s conjuncts that fit the layout to the members' files**, at the members `ms` (`h.ms`): the replay layout
@@ -124,9 +124,8 @@ def filesFitOk (h : Held) (ms : Spot.Bits.Members) : Bool :=
   | _, _ => false
 
 /-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the layout fits them (`filesFitOk`),
-and the registered wiring passes the clauses that read the description alone (`wiringSizedOk`). Not `scopeOk`, whose
-program is the members' circuits unrolled (`bitsProgs`), and not the wiring's clause over every source bit
-(`wiresMove`). -/
+and the registered wiring passes its clauses (`wiringSizedOk`). Not `scopeOk`, whose program is the members' circuits
+unrolled (`bitsProgs`). -/
 def twoFilesOk (h : Held) (ms : Spot.Bits.Members) : Bool := filesFitOk h ms && wiringSizedOk h
 
 /-! ## The wiring's clauses at the members' circuits, each read once
@@ -181,6 +180,30 @@ def wireAlikeAt (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) (w : Spo
         _root_.Flock.PortRoots.schemaOf (c tw) (portNamedAt c tw w.wport)
   | none => true
 
+/-- `wireGoes` at a count. -/
+def wireGoesAt (h : Held) (n t : ℕ) (row : String) (w : Spot.SecondStage.Wire) : Bool :=
+  match heldRows h (h.names.getD t "") row, heldWriterAt h n w.writer with
+  | some r, some tw => cellGoes h t tw w r
+  | _, _ => false
+
+/-- `rowGoes` at a count. -/
+def rowGoesAt (h : Held) (n t : ℕ) (row : String) : Bool :=
+  match heldLink h (h.names.getD t "") row, heldWire h (h.names.getD t "") row with
+  | none, some w => wireGoesAt h n t row w
+  | _, _ => true
+
+/-- `wireBit` at a count and circuits. -/
+def wireBitAt (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) (w : Spot.SecondStage.Wire) (bit : ℕ) : Bool :=
+  match heldWriterAt h n w.writer with
+  | some tw => outBit (c tw) w.wport bit
+  | none => false
+
+/-- `bitGoes` at a count and circuits. -/
+def bitGoesAt (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) (t : ℕ) (row : String) (bit : ℕ) : Bool :=
+  match heldLink h (h.names.getD t "") row, heldWire h (h.names.getD t "") row with
+  | none, some w => wireBitAt h n c w bit
+  | _, _ => true
+
 /-- **`wiringClauses`, each at a count `n` and circuits `c`**, in their order. -/
 def wiringClausesAt : List (String × (Held → ℕ → (ℕ → _root_.Flock.Circuit) → Bool)) :=
   [("membersScoped", fun _ n c => (List.range n).all fun t => _root_.Flock.ProvedScope.scopeOkH (c t)),
@@ -191,6 +214,10 @@ def wiringClausesAt : List (String × (Held → ℕ → (ℕ → _root_.Flock.Ci
       (List.range n).all fun t =>
         (sourceRows (c t)).all fun row =>
           (heldLink h (h.names.getD t "") row).isSome || (heldWire h (h.names.getD t "") row).isSome),
+    ("wiresMoveRows", fun h n c =>
+      (List.range n).all fun t =>
+        ((sourceRows (c t)).all fun row => rowGoesAt h n t row) &&
+          (sourceCells (c t)).all fun rb => bitGoesAt h n c t rb.1 rb.2),
     ("wiresAlike", fun h n c =>
       (h.wires.getD #[]).all fun w =>
         (List.range n).all fun t => !(w.template == h.names.getD t "") || wireAlikeAt h n c w t),
@@ -241,13 +268,13 @@ def rowsAt (h : Held) (c : _root_.Flock.Circuit) (t : ℕ) : Rows :=
     unread := written.filter fun row =>
       !((heldLink h name row).isSome || (h.wires.getD #[]).any fun w => w.writer == name && w.wport == row) }
 
-/-! ## Every wired source bit has a gate to go to, asked once per template
+/-! ## Why a wired source bit has no gate to go to
 
-`wiresMove` passes over every source bit of the members' programs, so this never evaluates it. Below, the same is
-asked once per template, of the rows one unit reads source bits at and of how many bits of each it reads
-(`unmovedAt`): every unit of the template has a writer's unit to read each wired row at, and that unit writes every
-bit read. It is said beside the model's clauses and is not one of them: `twoFilesOk` does not read it, and no theorem
-here ties it to `wiresMove`. -/
+The model's clause is `wiresMoveRows`, one of `wiringClauses`: every unit of a template has a writer's unit to read
+each wired row at, and that unit writes every bit read. Below, the same is asked of the rows one unit reads source
+bits at and of how many bits of each it reads, and each row at which it fails is listed with why (`unmovedAt`). The
+list is said beside the model's clause: `twoFilesOk` reads the clause and not the list, and no theorem here ties the
+two. -/
 
 /-- **How many bits of each row one unit of circuit `c` reads**: for each row an input column's source is a message
 bit of (`Bits.srcKey`, `Bits.srcPos`), one more than the last bit of it any column reads. -/
@@ -452,9 +479,9 @@ def members (ms : Spot.Bits.Members) : IO (List Json) :=
 then each template's `templateOk`: `filesFitOk`), each clause of the wiring under its name (`wiringClausesAt`, the
 model's by `wiringClausesAt_eq`) and each template's rows (`rowsAt`). Its result's fields: `twoFilesOk` with its time,
 `filesFitOk`, the clauses (`wiring`), and each template's name with a row no link or wire names (`unnamed`) and with
-a written row no link names and no wire reads (`unread`). Beside them, not read by `twoFilesOk`: whether every wired
-source bit has a gate to go to, asked once per template (`wiresMoveRows`), and each template's name with a wired row
-at which some unit has none and why (`unmoved`, `unmovedAt`). -/
+a written row no link names and no wire reads (`unread`). Beside them, not read by `twoFilesOk`: each template's
+name with a wired row at which some unit has no gate to go to and why (`unmoved`, `unmovedAt`), which the wiring's
+clause `wiresMoveRows` decides. -/
 def filesResult (h : Held) (c : ℕ → _root_.Flock.Circuit) (ms : Spot.Bits.Members) :
     IO (Bool × List (String × Json)) := do
   let mut total := 0
@@ -489,7 +516,6 @@ def filesResult (h : Held) (c : ℕ → _root_.Flock.Circuit) (ms : Spot.Bits.Me
   return (files, [("twoFilesOk", Lean.toJson files), ("twoFilesOk_ms", Lean.toJson total),
     ("filesFitOk", Lean.toJson fit), ("wiring", Json.mkObj (wiring.map fun kv => (kv.1, Lean.toJson kv.2))),
     ("unnamed", pairs (·.unnamed)), ("unread", pairs (·.unread)),
-    ("wiresMoveRows", Lean.toJson unmoved.isEmpty),
     ("unmoved", Json.arr (unmoved.map fun e => Json.arr #[Json.str e.1, Json.str e.2.1, Json.str e.2.2]).toArray)])
 
 /-- Each conjunct of `runOkAt` on its own, in their order. -/
@@ -575,8 +601,8 @@ def main (args : List String) : IO UInt32 := do
   if mode == "files" then
     let (files, fields) ← filesResult h c ms
     let res := Json.mkObj ([("held", Lean.toJson true),
-      ("not_evaluated", Lean.toJson "the run; partition's membersPart and two's scopeOk, over bitsProgs; wiresMove, \
-        over every source bit")] ++ fields)
+      ("not_evaluated", Lean.toJson "the run; partition's membersPart and two's scopeOk, over bitsProgs")] ++
+      fields)
     IO.println s!"GUARD-RESULT {res.compress}"
     return if files then 0 else 1
   let sizes ← members ms
@@ -593,8 +619,7 @@ def main (args : List String) : IO UInt32 := do
   let (files, fields) ← filesResult h c ms
   let res := Json.mkObj ([("held", Lean.toJson true), ("runOk", Lean.toJson run), ("runOk_ms", Lean.toJson runMs),
     ("recordsOk", Lean.toJson records), ("runOk_at_own_names", rest), ("members", Json.arr sizes.toArray),
-    ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs; wiresMove, over every \
-      source bit")] ++ fields)
+    ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs")] ++ fields)
   IO.println s!"GUARD-RESULT {res.compress}"
   return if run && files then 0 else 1
 
