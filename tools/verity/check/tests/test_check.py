@@ -1802,7 +1802,7 @@ def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_t
     (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
     there = fixture_id(tmp_path / "big" / "there.bin")
     (tmp_path / "fixtures").mkdir()
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
+    (tmp_path / "artifacts.json").write_text(json.dumps(
         {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", local: "big/local.bin", there: "big/there.bin",
          "previous": {good: ["art:" + "d" * 64]}}))
     (tmp_path / "small.json").write_text("{}")
