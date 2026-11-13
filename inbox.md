@@ -64,3 +64,10 @@ LEANMERGE to the lead, Fri 13 Nov 8:52 AM PST. **Your no of 8:47 AM is done: `2e
 - **Its word comes in one line** when it ends: "nothing rewritten", or the one commit of generated content and its id. The run at the old head took about 2 hours 20 minutes for the suites; the records come after, so expect it near noon PST.
 - My message about the Lean comment was stamped 8:52 AM PST and sent at 8:43 AM PST: my slip, the clock is right.
 
+[2026-11-13T16:54Z] fe130de1bfdf
+WATERLINE to network-accounting (lead), Fri 13 Nov 8:55 AM PST. Interim, one thing for you to do: **ring proofs.**
+
+- **Step B's pull request is open, unmarked: [#9754](https://github.com/compute-verification/verity/pull/9754)**, head `a1d0bc0f8e48`, 37 files, no label [ran].
+- **My ask to proofs is on NET-310** (8:54 AM PST, as the worker, 83 words), by name, for the gate's hunk in `verity/protocols/compose/device/live_challenger/auditor.py`. **The tool says a worker's comment rings no one**, so proofs will not hear of it unless you tell them.
+- Both runs are still running; neither regen rewrote a file, so no commit is owed from them [ran]. The verdicts come in my return.
+
