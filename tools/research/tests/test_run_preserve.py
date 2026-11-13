@@ -276,7 +276,8 @@ def test_the_runner_hands_its_child_the_custody_dirs_path_and_no_key(run):
     assert sorted(kw) == ["env", "stderr", "stdin", "stdout"] and kw["stdin"] == subprocess.DEVNULL and kw["stdout"] == kw["stderr"]
     key = _key(run.cdir, run.vault)
     assert not [k for k in kw["env"] if k in CU.KEY_ENV] and not [n for n in key if n in json.dumps([argv, kw["env"]])]
-    assert not [k for k in os.environ if k in CU.KEY_ENV], "the key was in the child's environment for the put alone"
+    left = [k for k in os.environ if k in CU.KEY_ENV]
+    assert not left, "the key was in the child's environment for the put alone"
     assert stat.S_IMODE((run.cdir / RP.LOG).stat().st_mode) == 0o600 and '"verdict": "PRESERVED"' in (run.cdir / RP.LOG).read_text()
     assert stat.S_IMODE((run.cdir / RP.STORE).stat().st_mode) == 0o700
     assert _holding(run.d, key) == [] and _holding(store_root(), key) == []
@@ -338,7 +339,8 @@ def test_a_path_that_is_not_a_small_regular_file_of_out_is_refused_with_what_to_
     assert (rc, out, err) == (1, "", [f"REFUSED: {answer['reason']}"]) and answer["verdict"] == "REFUSED"
     assert says.format(out=run.out, d=run.d, cdir=run.cdir, tmp=run.tmp_path) in answer["reason"]
     assert not run.vault.exists(), "nothing was put"
-    assert not [k for k in os.environ if k in CU.KEY_ENV]
+    left = [k for k in os.environ if k in CU.KEY_ENV]
+    assert not left
 
 
 def test_a_file_of_exactly_the_most_bytes_is_preserved_and_one_that_grows_past_them_is_not(run, tmp_path):
