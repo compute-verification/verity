@@ -4107,8 +4107,9 @@ ROOT = Path(__file__).resolve().parents[3]
 #: inputs with that commit's own code (`lean_keys`)
 KEY_FILES = ("tools/verity/lean/lean_changed.py", "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py",
              "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "tools/verity/lean/siblings.py",
-             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
-             "tools/verity/check/slot.py", "tools/verity/check/lean_slot.py", "tools/verity/graph/verity_graph/contract.py")
+             "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/lean/reserve.py",
+             "tools/verity/lean/reserve.json", "tools/verity/check/common.py", "tools/verity/check/slot.py",
+             "tools/verity/check/lean_slot.py", "tools/verity/graph/verity_graph/contract.py")
 #: two Lake packages, `pkg` requiring `lib` by path, each with its toolchain
 LAKE = {"pkg/lakefile.toml": 'name = "pkg"\n', "pkg/lean-toolchain": "v1\n",
         "pkg/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": "../lib", "name": "lib"}]}),
@@ -4237,7 +4238,7 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     """A records run that failed a package still writes a record, which reads as a pass, and vouches for nothing.  Only a
     result's `passes`, the Lean inputs key of each package it passed, vouches: with no run the warning names the command to
     start; with a failing one, that run too."""
-    from research.queue import RECORDS_COMMAND, RECORDS_MEM_GB, StoreLabels
+    from research.queue import RECORDS_COMMAND, StoreLabels
 
     world.with_store_remote()
     _keyed(world, {LOCK: _lock()})
@@ -4247,15 +4248,18 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     err = capsys.readouterr().err
     assert f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of pkg against `main`" in err
     assert f"the store holds no pass of it on {h[:12]}'s Lean inputs" in err
-    assert f"start `{RECORDS_COMMAND.format(pkg='pkg', gb=RECORDS_MEM_GB)}`" in err
-    assert f"--mem-gb 93, as {h[:12]} has no `tools/verity/lean/lean_changed.py --ask`" in world.logs[-1]
-    assert ("research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone --declared-output "
+    asked = re.fullmatch(rf"research queue: records run at {h[:12]}: --mem-gb ([1-9][0-9]*), its own "
+                         r"`tools/verity/lean/lean_changed\.py --ask`'s", world.logs[-1])
+    assert asked, f"the head's own `--ask`, which runs from the key code alone, gives the ask: {world.logs[-1]}"
+    gb = int(asked[1])
+    assert f"start `{RECORDS_COMMAND.format(pkg='pkg', gb=gb)}`" in err
+    assert (f"research run --on auto --mem-gb {gb} --max-min 120 --project verity --source . --cwd clone --declared-output "
             "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records pkg --update") in err
     failed = _published(world, h, passed=False)
     assert _mark(world, 1, h) == 1
     err = capsys.readouterr().err
     assert f"records run {failed} of {h[:12]} failed pkg (`research status {failed}`" in err
-    assert RECORDS_COMMAND.format(pkg="pkg", gb=RECORDS_MEM_GB) in err
+    assert RECORDS_COMMAND.format(pkg="pkg", gb=gb) in err
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
 
     key = _key(world.dev, h)
