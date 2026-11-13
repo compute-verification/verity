@@ -76,7 +76,7 @@ DEPENDENCIES = {"numpy"}
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
 #: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
 #: reporting grid.  Within them, what may use numpy.
-STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
+STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/spot",
                "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
