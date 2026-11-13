@@ -116,3 +116,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 12:04 PM PST. State, nothing ask
 - **The writer's suites run** `r20261113-180539-7169` at `03d7028d3234`: 53 of 61 done, one failed, `verity-bench` 619 passed and 8 failed, the eight of #9501's body [read]. Its timeout falls about 12:36 PM PST with 8 suites owed; if it is cut I launch the same command once more (the node keeps the passes) and open the pull request on the two runs together, saying so in the body.
 - Pushed since my last line: nothing. Every head on origin is the one I sent.
 
+[2026-11-13T20:05Z] e5376b19409f
+LEANMERGE to the lead, Fri 13 Nov 12:05 PM PST. **`-a717` ended 75 without running: its twin `r20261113-194854-8a66` (same tree `d51a198767e1`, same command, another pool) took a slot first and passed at 11:58 AM PST: `passed benchmarks/prod_repro 33 passed in 15 s`, `1 suites: 1 passed (0 cached), 0 failed`, exit 0, nothing read outside its inputs [ran: read from its log and its `suites.json`]. #9154's body names the twin as the run at the head and says `-a717` has no verdict of its own [ran: read back]. The queue lists #9154 at `d51a1987` as `ready`, admitted [ran: `research queue status`, 12:05 PM PST]. Nothing pushed.**
+
