@@ -1724,10 +1724,10 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_ela
 
     building, held = LC.build, []
 
-    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None):
+    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         """Lake's rebuild of the modules a refusal names, which writes their builds; `held` gets which of FILE, `Proofs.Y`
         and `Proofs.Z` had a trace when it began, then whether `Proofs.Y` and `Proofs.Z` had hash files."""
-        got = building(pkg, t, lake, targets, sandbox, cmd, echo)
+        got = building(pkg, t, lake, targets, sandbox, cmd, echo, at=at)
         if not cmd and targets and not targets[0].endswith(":deps"):
             held[:] = [p.exists() for p in (x, y, z)] + [any(y.parent.glob(f"{n}.*.hash")) for n in ("Y", "Z")]
         for target in [] if cmd else targets or []:
@@ -1803,9 +1803,9 @@ def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_bu
 
     building = LC.build
 
-    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None):
+    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         """Lake's rebuild of the modules a refusal names writes their builds."""
-        got = building(pkg, t, lake, targets, sandbox, cmd, echo)
+        got = building(pkg, t, lake, targets, sandbox, cmd, echo, at=at)
         for target in [] if cmd else [t for t in targets or [] if not t.endswith(":deps")]:
             module(proofs / LC.SIBLINGS.LIB, target[1:].replace(".", "/"), trace=of(sec / f"{target[1:].replace('.', '/')}.lean"))
         return got
