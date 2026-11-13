@@ -56,7 +56,7 @@ source = "the node's own report on a VM of this kind (art:b77a7a7a93b1): eth0, a
 # The storage path: the node's way out that is no interface. Every disk of the node is the provider's network disk,
 # so what is written to one has left the server past every interface of the VM's, where no network certifier can
 # split it. It is stated once, naming the disk leaves that ride it, and it states no rate: its rate is the one that
-# bounds the node's disks together, the host card's disk.read_max, which nodes.leaves gives and nodes.ways_out
+# bounds the node's disks together, the host card's disk.read_max, which the Site's leaves gives and its ways_out
 # reads. A server whose drives are all its own has no such table.
 [storage]
 leaves = ["vda", "vdb", "vdc"]
