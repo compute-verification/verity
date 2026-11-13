@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import run as RUN
 import settings as RS
-from verity.settings import direct_uses
+from verity_config.verity_settings import direct_uses
 
 HERE = Path(__file__).resolve().parents[1]
 #: The files of this member that still use the environment directly, and how often.  It only shrinks.

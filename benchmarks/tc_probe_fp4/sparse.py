@@ -45,7 +45,7 @@ import numpy as np
 import probe as P
 
 # isort: split
-# verity_config is importable once probe has put verity/configuration/config on sys.path
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED
 
 from verity.definitions.silicon import models as M

@@ -23,7 +23,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 if [ "$REL" = bf16-ampere ] && [ -z "${SET:-}" ] && [ -z "${K:-}" ]; then
   # the A100 row's frozen bench-instances/v1 set: rebuilt here from the committed seeds, refused unless every array matches the
   # committed manifest's sha256, then linked into the source tree (as pod_bootstrap.sh BENCH_INSTANCES=1 does)
-  BI=$W/bench-instances/v1; FZ=$REPO/fixtures/bench-instances/v1
+  BI=$W/bench-instances/v1; FZ=$REPO/benchmarks/numerical/bench-instances/v1
   [ -f $BI/vu-k1536.x.u16 ] || python3 -m verity_numerical.bench.instances build --out $BI --seeds $FZ/seeds --procs $TH 2>&1 | tail -3
   python3 - $BI $FZ <<'PYEOF' | tee $O/bench-instances.txt || exit 4
 import json, sys

@@ -1161,7 +1161,7 @@ day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, whi
   # declaration the serve's declaration.json names by digest, of day DAY, so V3c's audit runs R2 against the day the serve declared
   local got
   got=$("$TREE/.venv/bin/python" -c 'import json, sys
-from verity.hardware import site as S
+from verity import device as S
 from verity.hardware import registration as G
 decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
 composite, log = G.log_of(json.load(open(sys.argv[2])))

@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy import config as K
-from verity.configuration.deploy.manifest import Channel
-from verity.configuration.wire import Refused
+from verity import config as K
+from verity.protocol import Channel
+from verity.channel import Refused
 from verity.protocols.certifier.verifier import parties as NC
 from verity.protocols.inference_only.verifier import parties as IO
 from verity_cli import run as R
