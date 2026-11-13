@@ -513,7 +513,7 @@ def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     for argv in (workload, wrapped):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
         assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
 
 
 def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
