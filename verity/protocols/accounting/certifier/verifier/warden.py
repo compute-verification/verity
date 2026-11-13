@@ -28,7 +28,8 @@ can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes
 `ingress_scan.Class`), so the network certifier certifies no record of a window in which it refused a connection:
 `withhold` gets that window's three records in place of `publish`, and the period check refuses an execution phase
 missing any record's certificate. Under the lengths rows' form 2 the queue's head is admitted only at a bucket from
-which it ends inside the run ("The lengths rows").
+which it ends inside the run, and an arrival past the last such bucket is turned away, which is no refusal ("The
+lengths rows").
 
 **The schedule.** Connection q, admitted at bucket s on the network certifier's own schedule, carries r = `slots` cells
 a bucket each way from s on:
@@ -110,9 +111,21 @@ call without releases, on which the network certifier signs that the execution p
   records, so the run's last close ends two;
 - admits a connection only at a bucket s with s + `span` inside the run, so that every release of the run's last
   execution phase has ended by its close: that execution phase admits in its first T − `span` buckets and no later.
-  A connection that arrives after them waits in the queue and is cut at the run's end, as one still queued then
-  always is. The queue's bound holds as it does (Admission): a load that keeps arriving through those last `span`
-  buckets fills the queue, its next connection is refused, and the last execution phase's records are withheld;
+  A connection still queued after them waits and is cut at the run's end with no cell, as one still queued then
+  always is;
+- turns away an arrival it handles once its ticks have reached the first bucket that admits nothing. The arrival
+  takes no ordinal, is never queued and is no refusal, so no record is withheld for it; `turned_away` counts it. It
+  gets one `REFUSED` cell on ordinal 0, the same bytes at every turn-away, and its stream's end with it. They leave
+  with the next tick's bucket as that bucket's cells do, never at the arrival: written on the loop by that tick, or
+  with `paced` handed to the pacer as a part of that bucket for the arrival's socket, the link's last, which ends
+  the stream. The cell is in no record. The link stays open after: what the client still sends is read and dropped,
+  none of it reaching a server and at most a byte past the cells a request may hold (`ingress_cells`), and the
+  link is closed at the client's end of stream, or at the run's end. A link closed with its client's bytes unread,
+  as a request it never read is, is reset, and a reset client may lose the cell. Which arrivals are turned away is
+  a function of the tick count at each one's arrival, the run's length and the schedule: nothing the queue or the
+  lanes hold, and so nothing a server does, moves it. An arrival after the run's last tick has no tick left and is
+  closed with no cell. Before those buckets a full queue refuses as it does (Admission), and that execution phase's
+  records are withheld;
 - ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
 **The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
@@ -132,6 +145,25 @@ it, or to where that hand would have been for a release it never hands (the leng
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
 schedule without content rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands
 what it did.
+
+**The head's tick** (`WardenParams.head_offset` and `WardenParams.head_wait`, none by default, set together and only
+in a schedule with lengths rows). Whoever takes an execution phase's hand lays its tables, commits them and signs
+their head off the tick, in a time that follows the execution phase's releases. Without the two fields that head
+is published when that work ends, and its time is held to no tick. With them the head is handed back to the network
+certifier (`Warden.head_back`), and a tick of the schedule publishes it (`leave`); nothing off the tick does:
+- execution phase w's head is due at tick `WardenParams.head_tick` = c + `head_offset`, c the last bucket of the
+  window whose close hands it: window w + 1's, and the run's last window's for the run's last execution phase. The
+  network certifier counts the offset in its own buckets and has no other clock;
+- a head back before its tick waits for it, and leaves at that tick and never sooner;
+- a head not back at its tick leaves at the first tick it is back by, at most W = `head_wait` ticks after the due
+  one. At W = 0 a head that is late is no head;
+- a head not back by tick c + `head_offset` + W is never published: the execution phase has no head, and `leave`
+  is told so at that tick;
+- the run ticks `head_offset` + W buckets past its last window while a head may still leave. Those ticks carry no
+  cell.
+What a hand ends in under form 2 where it has no releases, the word that no head comes, is held to its tick the same
+way. The network certifier says nothing of what a late head or a missing one is charged: that is its reader's. Both
+fields enter the parameters' digest, and a schedule without them keeps the one it had.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
@@ -181,7 +213,9 @@ connection is the server's to refuse.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
-So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The
+So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it, but
+for the one cell that is on no connection, a refusal's or a turn-away's `REFUSED`: a refusal's window has no
+certificate, and a turn-away's is one constant in the bucket its arrival sets. The
 third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed (with lengths rows, none
@@ -229,6 +263,9 @@ EGRESS_FORMS = ("id", "bytes")
 READ_BYTES = 1 << 16
 #: the most a client connection may hold unwritten before the network certifier stops writing to it
 WRITE_BACKLOG = 1 << 22
+#: the pacer's key of a run's n-th turned-away arrival, from 1, is `AWAY_KEYS` − n: its keys are u32, and a
+#: connection's is its ordinal, which counts up from 1
+AWAY_KEYS = 1 << 32
 
 
 @dataclass(frozen=True)
@@ -251,6 +288,8 @@ class WardenParams:
     lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1 or 2, or none
     content: tuple[tuple[int, ...], ...] | None = None  # the content rows' classes (`content_rows.classes`), or none
     request_words: bool | None = None  # the request words (the module docstring's "The content rows"): True, or none
+    head_offset: int | None = None  # the buckets from a hand's close to its head's tick ("The head's tick"), or none
+    head_wait: int | None = None  # W: the most ticks a head not back at its tick may leave after it, or none
 
 
     def __post_init__(self) -> None:
@@ -299,6 +338,24 @@ class WardenParams:
                                  "content its classes, each (P, O), and max_tokens_cap set)")
         if self.content is not None:
             object.__setattr__(self, "content", _content_rows().classes(self))
+        offset, wait = self.head_offset, self.head_wait
+        if wait is not None and offset is None:
+            raise ValueError(f"head_wait ({wait!r}) is set and head_offset is not: the ticks a head may wait are "
+                             f"counted from the tick it is due at, so a schedule that sets head_wait sets "
+                             f"head_offset")
+        if offset is not None:
+            if wait is None:
+                raise ValueError(f"head_offset ({offset!r}) is set and head_wait is not: a head not back at its "
+                                 f"tick leaves within head_wait ticks of it or never, and head_wait has no "
+                                 f"default (0: a late head is no head)")
+            if type(offset) is not int or not 1 <= offset < 1 << 32:
+                raise ValueError(f"head_offset is a positive u32, the buckets from a hand's close to its head's "
+                                 f"tick, or unset, not {offset!r}")
+            if type(wait) is not int or not 0 <= wait < 1 << 32:
+                raise ValueError(f"head_wait is a u32, the most ticks a late head may wait, or unset, not {wait!r}")
+            if self.lengths is None:
+                raise ValueError("a head is the lengths rows' tables', so a schedule with head_offset has lengths "
+                                 "rows (lengths is 1 or 2)")
 
     def _stride_that_fits(self, most: int) -> str:
         """What a schedule whose slot stride releases more than `most` requests changes: its longest stride that
@@ -341,6 +398,18 @@ class WardenParams:
         load can reach."""
         return self.lanes * -(-(self.window + self.ingress_buckets - 1) // (self.delay + 1))
 
+    def head_tick(self, w: int, windows: int) -> int:
+        """The tick execution phase w's head is due at in a run of `windows` execution phases (the module
+        docstring's "The head's tick"): `head_offset` buckets after the last bucket of the window whose close hands
+        it, window w + 1's or, for the run's last execution phase, its own. ValueError for a schedule without a
+        head offset, or an execution phase outside the run."""
+        if self.head_offset is None:
+            raise ValueError("the schedule has no head offset (WardenParams.head_offset): its heads are held to "
+                             "no tick")
+        if type(w) is not int or type(windows) is not int or not 0 <= w < windows:
+            raise ValueError(f"execution phase {w!r} is not one of a run of {windows!r}")
+        return min(w + 2, windows) * self.window - 1 + self.head_offset
+
     @property
     def span(self) -> int:
         """The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
@@ -376,15 +445,16 @@ class WardenParams:
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
         cap nor its reason in what it hashes, one without lengths rows not their form, one without content rows not
-        their classes and one without request words not that it has none, so its digest is the one it had before
-        any of them was a parameter."""
+        their classes, one without request words not that it has none and one whose heads are held to no tick
+        neither `head_offset` nor `head_wait`, so its digest is the one it had before any of them was a
+        parameter."""
         values = {k: v for k, v in asdict(self).items() if k not in OPTIONAL_FIELDS or v is not None}
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
                                                                             "reasons": list(self.reasons)}))
 
 
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
-OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words")
+OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words", "head_offset", "head_wait")
 #: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
 #: one that isn't is ended without releases
 LENGTHS_FORMS = (1, 2)
@@ -579,7 +649,9 @@ class Warden:
       default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
       connection was refused (`refused_windows`; by default kept in `withheld`): nothing of that window is to be
       certified; `log` has one entry a connection once it ends, `refused` the ordinal-less refusals' count,
-      `lateness` each tick's in seconds;
+      `turned_away` that of the arrivals form 2 turned away in the run's last buckets, which are no refusals,
+      `turned_away_reset` that of the links among them their clients reset after the cell, `lateness` each tick's in
+      seconds;
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
@@ -590,6 +662,11 @@ class Warden:
       strides)` receives each window's releases by slot stride, a window later (by default they are kept in
       `lengths`); under form 2 it is called once for every execution phase of the run, in their order, the last one
       at the run's last close, with `strides` None for an execution phase that is not handed;
+    - in a schedule with a head offset (`WardenParams.head_offset`; the module docstring's "The head's tick"),
+      `head_back(window, head)` takes what an execution phase's hand ended in, from whoever took the hand, and
+      `leave(window, tick, head)` receives it at the tick it leaves at, or None in its place at the last tick it
+      could have left at (by default they are kept in `left`); `heads` has each execution phase's tick, None where
+      its head never left;
     - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
@@ -609,7 +686,8 @@ class Warden:
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
-                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
+                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None,
+                 leave: Callable[[int, int, Any], None] | None = None) -> None:
         if paced is None and clock is time.monotonic:
             raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
@@ -646,6 +724,11 @@ class Warden:
         # `lengths` as it is called: under form 2 also with no strides, for a window that is not handed
         self.hand_lengths: Callable[[int, tuple[tuple[Released, ...], ...] | None], None] = (
             lengths or (lambda window, strides: self.lengths.append((window, strides))))
+        self.left: list[tuple[int, int, Any]] = []
+        self.leave = leave or (lambda window, tick, head: self.left.append((window, tick, head)))
+        self.heads: list[tuple[int, int | None]] = []  # each execution phase's tick, None: its head never left
+        self._due: dict[int, int] = {}  # the tick each execution phase's head is due at, until it leaves or can't
+        self._back: dict[int, Any] = {}  # the heads handed back that wait for their tick
         self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
         self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
         self._ended = 0  # under form 2, the windows whose lengths rows are ended: 0 … _ended − 1
@@ -656,6 +739,13 @@ class Warden:
         self.ordinals = 0
         self.refused = 0
         self.refused_windows: set[int] = set()
+        self.turned_away = 0
+        self.turned_away_reset = 0
+        self._away = cell(REFUSED, 0, b"", params.cell_bytes)  # every turn-away's cell, made once
+        #: the arrivals turned away since the last tick: each one's count, its reader and its writer
+        self._turned: list[tuple[int, asyncio.StreamReader, Any]] = []
+        self._leaving: dict[Any, asyncio.Task] = {}  # a turned-away link from its cell's tick until it is closed
+        self._over = False  # the run has ended: no tick is left
         self.log: list[dict] = []
         self.lateness: list[float] = []
         self.ticks = 0
@@ -670,6 +760,16 @@ class Warden:
         return math.ceil((self.clock() - self.origin) * 1000 / self.params.bucket_ms)
 
     async def handle(self, reader: asyncio.StreamReader, writer: Any) -> None:
+        if self.params.closes and self.ticks >= self._admits:
+            # turned away (the module docstring's "The lengths rows"): by the tick count and the schedule alone,
+            # read before the queue; its cell is the next tick's to release
+            self.turned_away += 1
+            if self._over:
+                writer.close()
+            else:
+                self._turned.append((self.turned_away, reader, writer))
+            self._changed.set()
+            return
         if len(self.queue) >= self.params.queue:
             self.refused += 1
             self.refused_windows.add(self.ticks // self.params.window)
@@ -710,9 +810,17 @@ class Warden:
                 await self._pacer.close()
                 await reports
         finally:
+            self._over = True
             for connection in [*self.active, *self.queue]:
                 self._end(connection, cut=True)
             self.active, self.queue = [], deque()
+            for _, _, writer in self._turned:
+                writer.close()
+            self._turned.clear()
+            for writer, leaving in self._leaving.items():
+                leaving.cancel()
+                writer.close()
+            self._leaving.clear()
             if opening is not None:
                 opening.cancel()
                 self._end_watermark()
@@ -725,9 +833,72 @@ class Warden:
                 for w in range(self._ended, self.windows):
                     self._end_lengths(w, False)
             self._changed.set()
+        if self.params.head_offset is not None:
+            await self._head_ticks()
+
+    async def _head_ticks(self) -> None:
+        """The ticks past the run's last window at which a head may still leave (the module docstring's "The head's
+        tick"): `head_offset` + `head_wait` of them, while one is due. They carry no cell."""
+        first, tau = self.windows * self.params.window, self.params.bucket_ms / 1000
+        for t in range(first, first + self.params.head_offset + self.params.head_wait):
+            if not self._due:
+                return
+            deadline = self.origin + t * tau
+            await self.sleep(deadline - self.clock())
+            self.lateness.append(self.clock() - deadline)
+            self._leave(t)
+            self.ticks += 1
+            self._changed.set()
+
+    def head_back(self, window: int, head: Any) -> bool:
+        """What execution phase `window`'s hand ended in (its signed head, or the word that it has none), handed
+        back by whoever took the hand: it waits for its tick (the module docstring's "The head's tick"). False for
+        one whose last tick has passed, which is dropped: that execution phase has no head. ValueError for a
+        schedule without a head offset, an execution phase that wasn't handed, or one handed back twice."""
+        if self.params.head_offset is None:
+            raise ValueError("the schedule has no head offset (WardenParams.head_offset): no tick publishes a head")
+        if head is None:
+            raise ValueError(f"execution phase {window}'s head is handed back, not None")
+        settled = dict(self.heads)
+        if window in self._back or settled.get(window) is not None:
+            raise ValueError(f"execution phase {window}'s head was handed back before")
+        if window in settled:
+            return False
+        if window not in self._due:
+            raise ValueError(f"execution phase {window} was not handed, so no head of it is due")
+        self._back[window] = head
+        self._changed.set()
+        return True
+
+    @property
+    def awaited(self) -> list[int]:
+        """The execution phases whose head is due and not handed back."""
+        return sorted(w for w in self._due if w not in self._back)
+
+    def _leave(self, t: int) -> None:
+        """Tick t's heads (the module docstring's "The head's tick"): each one due by t and back leaves, to `leave`,
+        if t is at most `head_wait` ticks past its due tick; one not back by then never leaves, and `leave` is told
+        so with None."""
+        for w in sorted(self._due):
+            last = self._due[w] + self.params.head_wait
+            if t < self._due[w] or (t < last and w not in self._back):
+                continue
+            head = self._back.pop(w, None) if t <= last else None
+            self._back.pop(w, None)
+            del self._due[w]
+            self.heads.append((w, None if head is None else t))
+            self.leave(w, t, head)
+
+    def _hand(self, w: int, strides: tuple[tuple[Released, ...], ...] | None) -> None:
+        """Window w's hand to `hand_lengths`; in a schedule with a head offset its head is due from here on."""
+        if self.params.head_offset is not None:
+            self._due[w] = self.params.head_tick(w, self.windows)
+        self.hand_lengths(w, strides)
 
     def _tick(self, t: int) -> None:
         T = self.params.window
+        if self._due:
+            self._leave(t)
         if t % T == 0 and t // T - 1 in self._held:
             self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
         if t % T == 0 and self.params.lengths is not None:
@@ -754,6 +925,18 @@ class Warden:
                 self._write(c, b"".join(out))
             else:
                 parts.append((c.ordinal, b"".join(out), c.ended is not None))
+        for n, reader, writer in self._turned:
+            if writer.is_closing():
+                continue
+            if self._pacer is None:
+                writer.write(self._away)
+                if writer.can_write_eof():
+                    writer.write_eof()
+            else:
+                self._pacer.add(AWAY_KEYS - n, writer.get_extra_info("socket").fileno())
+                parts.append((AWAY_KEYS - n, self._away, True))
+            self._leaving[writer] = asyncio.create_task(self._read_to_end(reader, writer))
+        self._turned.clear()
         if parts:
             self._pacer.hand(t, self.origin + t * self.params.bucket_ms / 1000 + self.paced, parts)
             self._unreleased[t // T] += 1
@@ -776,6 +959,28 @@ class Warden:
             self._held[w] = (out, records)
             if not self._unreleased[w]:
                 self._emit(w)
+
+    async def _read_to_end(self, reader: asyncio.StreamReader, writer: Any) -> None:
+        """A turned-away link from the tick that releases its cell and its stream's end: what its client still sends is
+        read and dropped, to the client's end of stream, and the link is closed then. A link closed with its client's
+        bytes unread is reset, and a reset client may lose the cell it has not read. A link its client resets first
+        is closed as well, and `turned_away_reset` counts it. At most a byte past the cells a request may hold
+        (`ingress_cells`) is read: a link that sends more is read no further, as an admitted connection's ingress
+        past its bound is not, and is closed at the run's end."""
+        left = self.params.ingress_cells * self.params.cell_bytes
+        try:
+            while left >= 0:
+                data = await reader.read(min(READ_BYTES, left + 1))
+                if not data:
+                    break
+                left -= len(data)
+        except OSError:
+            self.turned_away_reset += 1
+        if left < 0:
+            return
+        writer.close()
+        self._leaving.pop(writer, None)
+        self._changed.set()
 
     def _emit(self, w: int, reason: Reason | None = None) -> None:
         """Window w's held records, each with `reason` as its status unless it has one: a window records its first
@@ -817,13 +1022,13 @@ class Warden:
         if strides is None or not handed:
             if self.params.closes:
                 self._ended = w + 1
-                self.hand_lengths(w, None)
+                self._hand(w, None)
             return
         if any(c.ended is None or c.failed in CLIENT_REASONS for stride in strides for c in stride):
             raise RuntimeError(f"window {w} released a request whose connection is live, or failed as its client's, "
                                f"when its lengths rows are handed")
         self._ended = w + 1
-        self.hand_lengths(w, tuple(tuple(
+        self._hand(w, tuple(tuple(
             Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None, c.request,
                      bytes(c.ids)) for c in stride) for stride in strides))
 
