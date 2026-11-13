@@ -615,12 +615,14 @@ private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Str
 
 /-- **The wipe's compiled check accepts every signed session `WipeChecked` describes** (the honest lemma of
 `WipeAccepts`, with `wipeAccepts_meets` its instance), on the period's server and session, publishing `certify` of the
-commitment's parameters and the evidence's egress, unless that egress is outside 0 to `EGRESS_MAX_UNITS`, which the
-check refuses: `WipeAccepts`' hypothesis holds where its conclusion does and the egress is in that range. -/
+commitment's parameters at `EGRESS_MAX_UNITS`, which certifies nothing, and profiling them with the evidence's egress,
+unless that egress is outside 0 to `EGRESS_MAX_UNITS`, which the check refuses: `WipeAccepts`' hypothesis holds where
+its conclusion does and the egress is in that range. -/
 theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
     (s : StreamedWipe.Signed), c.server = p.server → c.session = p.session → e.signed = some s →
       WipeChecked SCHEMES p.trusted.toList s c →
-      WipeProtocol.protocol.check p c e = .accept (WipeProtocol.certify c.params e.egress) (c.params, e.egress) ∨
+      WipeProtocol.protocol.check p c e =
+          .accept (WipeProtocol.certify c.params StreamedWipe.EGRESS_MAX_UNITS) (c.params, e.egress) ∨
         e.egress < 0 ∨ StreamedWipe.EGRESS_MAX_UNITS < e.egress := by
   intro p c e s hsv hss hse ⟨hk, hcm, hcov, hend, hsize, hb⟩
   by_cases he : e.egress < 0 ∨ StreamedWipe.EGRESS_MAX_UNITS < e.egress
@@ -646,7 +648,7 @@ the check accept. -/
 theorem wipeAccepts_complete_nontrivial :
     ¬ (WipeProtocol.protocol.check ⟨.empty, .empty, #[]⟩ (default : StreamedWipe.Commitment)
           (⟨some default, some 0⟩ : WipeProtocol.Evidence) =
-        .accept (WipeProtocol.certify (default : StreamedWipe.Commitment).params 0)
+        .accept (WipeProtocol.certify (default : StreamedWipe.Commitment).params StreamedWipe.EGRESS_MAX_UNITS)
           ((default : StreamedWipe.Commitment).params, 0) ∨
       WipeProtocol.Evidence.egress ⟨some default, some 0⟩ < 0 ∨
       StreamedWipe.EGRESS_MAX_UNITS < WipeProtocol.Evidence.egress ⟨some default, some 0⟩) := by
@@ -710,7 +712,8 @@ private theorem honest_accepted {pk sig : ByteArray}
     (hw : WipeChecked SCHEMES [pk] (honestSession pk sig) honestCommitment) :
     WipeProtocol.protocol.check ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
         ⟨some (honestSession pk sig), some 0⟩ =
-      .accept (WipeProtocol.certify honestCommitment.params 0) (honestCommitment.params, 0) := by
+      .accept (WipeProtocol.certify honestCommitment.params StreamedWipe.EGRESS_MAX_UNITS)
+        (honestCommitment.params, 0) := by
   rcases wipeAccepts_complete ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
       ⟨some (honestSession pk sig), some 0⟩ (honestSession pk sig) rfl rfl rfl hw with h | h | h
   · exact h

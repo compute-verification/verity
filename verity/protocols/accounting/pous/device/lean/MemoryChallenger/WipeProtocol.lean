@@ -29,8 +29,13 @@ The streamed-label wipe's verdict (`StreamedWipe.verdict`, the wipe judge of rec
 * the check: a commitment of another server or session rejects; an egress outside 0 to `EGRESS_MAX_UNITS` rejects;
   an unsigned session is undecided; else `verdict`, whose reasons, joined by `"; "`, are a rejection's.
 
-On acceptance it publishes the foreign content an accepted wipe may leave and the error that holds at,
-`{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits", "r"}` (`certify`): `memory_bits` is `M`, every
+On acceptance it publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the
+evidence names. No network certifier signs that count, so until the check that composes the wipe with the network
+certifier holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as
+a gap (`writerGap`).
+
+`certify` is what that check is to publish: the foreign content an accepted wipe may leave and the error that holds at,
+`{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits", "r"}`: `memory_bits` is `M`, every
 declared tier in bits, the fill's `n · 512` and `R` past it (`outsideBits`, memory the fill doesn't reach); `k` is the
 session's timed reads, which the memory challenger chose and its commitment names; `r = ratio k`, the largest `r` with
 `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`1 ≤ k ≤ MAX_READS`, an egress count that isn't saturated)
@@ -178,17 +183,28 @@ def certify (p : StreamedWipe.Params) (egressMib : Int) : Public :=
     ⟨true, egressMib, EPS, foreignBits p r + egressMib.toNat * UNIT_BITS, p.k, m, r⟩
   else ⟨false, egressMib, ⟨0, 1⟩, m, p.k, m, r⟩
 
+/-- What an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`, which certifies nothing, whatever count the
+evidence names, since no network certifier signs that count. -/
+def uncounted (p : StreamedWipe.Params) : Public := certify p StreamedWipe.EGRESS_MAX_UNITS
+
+/-- The evidence's count, when it names one `gaps` doesn't: the evidence writer's, which no network certifier signs. -/
+def writerGap (egressMib : Int) : List String :=
+  if egressMib < 0 || egressMib ≥ StreamedWipe.EGRESS_MAX_UNITS then []
+  else [s!"the egress count is {egressMib} MiB, the evidence writer's, which no network certifier signed: no wipe " ++
+    "is certified on it until the check that composes the wipe with the network certifier"]
+
 def Public.toJson (p : Public) : Json :=
   Json.mkObj [("certified", .bool p.certified), ("egress_mib", Lean.toJson p.egressMib), ("eps", .str p.eps.toString),
     ("foreign_bits", natJ p.foreignBits), ("k", natJ p.k), ("memory_bits", natJ p.memoryBits), ("r", natJ p.r)]
 
-/-- The profile: the wipe the session ran, the bound and every gap. -/
+/-- The profile: the wipe the session ran, the bound and every gap, the evidence's count among them. -/
 def profileJson (x : StreamedWipe.Params × Int) : Json :=
   let (p, e) := x
   Json.mkObj [("batch", natJ p.batch),
     ("certificate", Json.mkObj [("eps", .str EPS.toString), ("max_reads", natJ MAX_READS),
       ("outside_bits", natJ (outsideBits p)), ("r", natJ (ratioOf p)), ("reads", natJ p.k)]),
-    ("experimental", .str EXPERIMENTAL), ("gaps", .arr ((gaps p e).map Json.str).toArray), ("k", natJ p.k),
+    ("experimental", .str EXPERIMENTAL), ("gaps", .arr ((gaps p e ++ writerGap e).map Json.str).toArray),
+    ("k", natJ p.k),
     ("labels", natJ p.labels), ("limit_ns", natJ p.limitNs),
     ("tiers", .arr (p.tiers.map fun (t, b) => .arr #[.str t, natJ b]))]
 
@@ -202,7 +218,7 @@ def check (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) (e : Ev
   | none => .undecided "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
   | some s =>
     let v := StreamedWipe.verdict schemes p.trusted.toList s c
-    if v.accepted then .accept (certify c.params e.egress) (c.params, e.egress)
+    if v.accepted then .accept (uncounted c.params) (c.params, e.egress)
     else .reject ("; ".intercalate v.reasons.toList)
 
 def mkProtocol (id : String) (schemes : Schemes) : Core.Protocol where
@@ -245,6 +261,12 @@ private def h200 : StreamedWipe.Params := ⟨2365587456, 2906, 1, 1000, #[("gpu-
   [s!"k = {MAX_READS + 1}: the certificate is computed for at most {MAX_READS} reads"]
 #guard (certify { segment with k := MAX_READS + 1 } 0).foreignBits == 2 ^ 28
 #guard (Evidence.egress ⟨none, none⟩, Evidence.egress ⟨none, some 3⟩) == (StreamedWipe.EGRESS_MAX_UNITS, 3)
+#guard ((uncounted segment).certified, (uncounted segment).egressMib, (uncounted segment).foreignBits,
+  (uncounted segment).eps.toString) == (false, StreamedWipe.EGRESS_MAX_UNITS, memoryBits segment, "0")
+#guard (uncounted h200).certified == false
+#guard writerGap 0 == ["the egress count is 0 MiB, the evidence writer's, which no network certifier signed: no wipe " ++
+  "is certified on it until the check that composes the wipe with the network certifier"]
+#guard (writerGap StreamedWipe.EGRESS_MAX_UNITS, writerGap (-1)) == ([], [])
 
 /-- A commitment of no timed reads. -/
 private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { segment with k := 0 }⟩

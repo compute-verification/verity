@@ -34,7 +34,7 @@ import Proofs.Pous.Prob
   (`exactly_decodes`), which returns only parameters `Params.check` passes (`commitment_ofJson_check`), and those have
   `1 ≤ batch ≤ k` (`params_check_k`), so at least one read.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
-  commitment's parameters, and a certified one has `k ≤ MAX_READS`, `memory_bits` the declared tiers' bits,
+  commitment's parameters (at `EGRESS_MAX_UNITS`, `uncounted`, so not certified), and a certified `certify` has `k ≤ MAX_READS`, `memory_bits` the declared tiers' bits,
   `eps = 1/2^128` and `foreign_bits = foreignBits p (ratio k) + egress_mib · 2^23`. From 1 to `MAX_READS` reads and no
   egress, `certify` certifies (`certify_zero`).
 * **The honest and nontrivial lemmas** (`wipeSurvivorBoundHonest`, `wipeSurvivorBoundNontrivial`): the honest strategy
@@ -314,7 +314,7 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
       · dsimp only at h
         split at h
         · injection h with h1
-          exact ⟨_, h1⟩
+          exact ⟨StreamedWipe.EGRESS_MAX_UNITS, h1⟩
         · cases h
 
 /-- What `exactly` accepts is what its decoder decoded. -/

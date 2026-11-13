@@ -16,8 +16,11 @@ on the commitment and the evidence: the signed session and one egress count besi
 * else `streamed_wipe.verdict`, whose reasons, joined by `"; "`, are a rejection's: a late or wrong read, an untrusted
   key, a bad signature, an uncovered batch size.
 
-What an accepted wipe certifies is `certify`'s: `{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits",
-"r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
+An accepted wipe publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the evidence
+names. No network certifier signs that count, so until the check that composes the wipe with the network certifier
+holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as a gap
+(`writer_gap`). `certify` is what that check is to publish: `{"certified", "egress_mib", "eps", "foreign_bits", "k",
+"memory_bits", "r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
 `k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
 largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k` from 1 to `MAX_READS`, an egress count
 that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold
@@ -36,8 +39,8 @@ process whose key and session log are beside the periods). The verifier trusts o
 SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
-count (unless `wipe.egress_bits` names one) and an accepted leg's bound is vacuous: its verdict is real and its
-quantity isn't. The leg's record says `trusted-host` holds only for a session signed under the challenger host's key
+count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`uncounted`): its verdict
+is real and its quantity isn't. The leg's record says `trusted-host` holds only for a session signed under the challenger host's key
 that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
@@ -161,12 +164,29 @@ def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
             "foreign_bits": foreign_bits(p, r) + egress_mib * sw.EGRESS_UNIT_BITS, "k": p.k, "memory_bits": m, "r": r}
 
 
+def uncounted(p: sw.WipeParams) -> dict[str, Any]:
+    """`MemoryChallenger.WipeProtocol.uncounted`, what an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`,
+    which certifies nothing, whatever count the evidence names, since no network certifier signs that count."""
+    return certify(p, sw.EGRESS_MAX_UNITS)
+
+
+def writer_gap(egress_mib: int) -> list[str]:
+    """`MemoryChallenger.WipeProtocol.writerGap`: the evidence's count, when it names one `gaps` doesn't: the evidence
+    writer's, which no network certifier signs."""
+    if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
+        return []
+    return [f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe "
+            "is certified on it until the check that composes the wipe with the network certifier"]
+
+
 def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
-    """`MemoryChallenger.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap."""
+    """`MemoryChallenger.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap, the evidence's
+    count among them."""
     return {"batch": p.batch,
             "certificate": {"eps": str(EPS), "max_reads": MAX_READS, "outside_bits": p.outside_bits, "r": ratio_of(p),
                             "reads": p.k},
-            "experimental": EXPERIMENTAL, "gaps": gaps(p, egress_mib), "k": p.k, "labels": p.labels,
+            "experimental": EXPERIMENTAL, "gaps": gaps(p, egress_mib) + writer_gap(egress_mib), "k": p.k,
+            "labels": p.labels,
             "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers]}
 
 
@@ -191,7 +211,7 @@ def outcome(server: bytes, session: bytes, trusted: Collection[bytes], commitmen
     v = sw.verdict(signed, commitment, trusted=set(trusted), schemes=schemes)
     if not v.accepted:
         return ("reject", "; ".join(v.reasons))
-    return ("accept", certify(commitment.params, egress), profile(commitment.params, egress))
+    return ("accept", uncounted(commitment.params), profile(commitment.params, egress))
 
 
 def digest(commitment: sw.WipeCommitment) -> bytes:
@@ -547,7 +567,8 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
     check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
-    signed under the challenger host's pinned key (`wipe_party.holds`), an uncounted egress (`EGRESS_MAX_UNITS`), each
+    signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
+    any other count is the evidence writer's, which no network certifier signed, and certifies no wipe), each
     undeclared tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
     the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
     certifier counts."""
@@ -555,6 +576,9 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
                    "is vacuous")
+    elif egress_mib is not None:
+        out.append(f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the "
+                   "check certifies no wipe on it until the check that composes the wipe with the network certifier")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
     out += [f"tier {s['tier']}: the memory {s['device']}'s driver reserves is undeclared: the tier is CUDA's total "
@@ -704,7 +728,7 @@ __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT
            "foreign_labels", "gaps", "keeping", "leg",
            "main", "memory_bits",
            "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
-           "timing", "uncertified", "undeclared"]
+           "timing", "uncertified", "uncounted", "undeclared", "writer_gap"]
 
 if __name__ == "__main__":
     sys.exit(main())

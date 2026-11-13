@@ -3,8 +3,9 @@
 size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON edit or params of another server or
 session, each with a sampled egress in its evidence (`wipe_cases.EGRESS`: none, in range, or outside it); and
 `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
-segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill,
-one whose evidence gives no egress (accepted, not certified) and one whose egress is out of range (rejected), a
+segment at `k = 2152` (`r = 24`) and one at `k = 5231` (`r = 59`) with memory past the fill, one whose evidence gives an
+egress of 0 MiB, each accepted and not certified, its count named as the evidence writer's, one whose evidence gives no
+egress (accepted, not certified) and one whose egress is out of range (rejected), a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
 verdict it is aimed at; and a commitment of no reads, refused by both as they decode it."""
 
@@ -108,19 +109,22 @@ def test_the_named_wipes(deployed_server):
         if m not in ("params", "commitment", "evidence"):
             assert seen[m]["reason"] == C.answer(c)["reason"], (m, seen[m])
     m = 1 << 28
-    for name, k, r, threshold, memory in [("segment", 2152, 24, 11_709_069, m),
-                                          ("reads", 5231, 59, 5_074_062 + (8 << 20), m + (8 << 20))]:
+    for name, k, r, memory in [("segment", 2152, 24, m), ("reads", 5231, 59, m + (8 << 20))]:
         p = seen[name]["public"]
-        assert (p["certified"], p["k"], p["r"], p["memory_bits"], p["eps"]) == (True, k, r, memory, f"1/{2 ** 128}"), p
-        assert p["foreign_bits"] == threshold + p["egress_mib"] * sw.EGRESS_UNIT_BITS, p
-        assert seen[name]["profile"]["gaps"] == [] and seen[name]["profile"]["certificate"]["reads"] == k
-    small = seen["honest"]["public"]
-    assert small["certified"] and small["k"] == WP.READS and 1 <= small["egress_mib"] <= 4
-    assert small["foreign_bits"] - small["egress_mib"] * sw.EGRESS_UNIT_BITS < small["memory_bits"]
-    for name in ("honest", "segment", "reads", "uncounted"):
+        assert p == {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": memory, "k": k,
+                     "memory_bits": memory, "r": r}, p
+        assert seen[name]["profile"]["certificate"]["reads"] == k and seen[name]["profile"]["certificate"]["r"] == r
+    assert seen["honest"]["public"]["k"] == WP.READS
+    for name in ("honest", "segment", "reads", "zero-egress"):
         evidence = json.loads(bytes.fromhex(C.build(name)["evidence"]))
         assert sorted(evidence) == ["egress_mib", "signed"] and "egress_bits" not in evidence["signed"], name
-        assert seen[name]["public"]["egress_mib"] == WP.egress_of(evidence["egress_mib"]), name
+        params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
+        assert seen[name]["public"] == WP.uncounted(params), name
+        assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
+            f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
+            "signed: no wipe is certified on it until the check that composes the wipe with the network certifier"], name
+    assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
+    assert not seen["zero-egress"]["public"]["certified"]
     none = seen["uncounted"]
     assert json.loads(bytes.fromhex(C.build("uncounted")["evidence"]))["egress_mib"] is None
     assert none["public"] == WP.certify(WC.commitment_of(json.loads(bytes.fromhex(C.build("uncounted")["commitment"]))).params,

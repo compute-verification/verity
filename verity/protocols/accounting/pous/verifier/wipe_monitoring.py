@@ -2,7 +2,9 @@
 from one accepted wipe's answer as `wipe_period.certify` publishes it: at most `foreign_bits` of the declared tiers'
 `memory_bits` hold anything but the fill, except with `eps` plus the wipe's labels' and coins' PRF advantage (SHA-512
 as PRF: not priced, not assumed). `eps` is 2^-128 when the bound covers the session; when it doesn't, `foreign_bits` is
-`memory_bits` and `eps` 0, the vacuous statement.
+`memory_bits` and `eps` 0, the vacuous statement. `verity/wipe/v0` publishes the vacuous statement for every wipe it
+accepts (`wipe_period.uncounted`), since no network certifier signs its evidence's egress count, so a run's own answer
+pools nothing until the check that composes the wipe with the network certifier publishes `certify` at a count.
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one

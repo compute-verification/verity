@@ -2,8 +2,9 @@
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
 meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
-egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the
-periods are the reporting grid's `PERIODS`."""
+egress record is refused, a covered one over the session's own real-time window too; a run's own answer stays vacuous
+at the count its evidence gives, which no network certifier signs, so the pooled tables are of an answer certified by
+hand (`counted`); a rejected wipe pools nothing; the periods are the reporting grid's `PERIODS`."""
 
 from __future__ import annotations
 
@@ -38,8 +39,15 @@ def _answer(egress_mib: int | None) -> dict:
 
 
 @pytest.fixture(scope="module")
-def counted():
+def written():
     return _answer(2)
+
+
+@pytest.fixture(scope="module")
+def counted(written):
+    """`written` as the check that composes the wipe with the network certifier is to publish it at a certifier's
+    count of 2 MiB: `certify` at that count, set by hand, since `verity/wipe/v0` certifies no wipe."""
+    return written | {"public": W.certify(HBM, 2), "profile": written["profile"] | {"gaps": []}}
 
 
 @pytest.fixture(scope="module")
@@ -172,6 +180,14 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
     for accepted in (uncounted, counted):
         with pytest.raises(ValueError, match="nothing signed says the record covers this wipe's session"):
             WM.table(accepted, 1, egress=RECORD)
+
+
+def test_the_evidence_writers_count_stays_vacuous(written):
+    """A run's own answer at the 2 MiB its evidence gives is `uncounted`: it pools nothing, and says why."""
+    assert written["public"] == W.uncounted(HBM)
+    r = WM.table(written, 1)
+    assert r["periods"] is None and "the egress count is 2 MiB, the evidence writer's" in r["why"]
+    assert r["each"]["eps"] == "0" and "eps_plus" not in r["each"]
 
 
 def test_a_record_over_the_sessions_own_real_time_window_is_refused_too(uncounted):
