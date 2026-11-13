@@ -8,6 +8,9 @@ import json
 import os
 from pathlib import Path
 
+#: what `pearlc_census.py`, `pearlc_k256_gate.py`, three scripts of `pearl_c_vllm/` and the tests read
+__all__ = ["write"]
+
 
 def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tuple[str, float, str]]) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")

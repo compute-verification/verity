@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
-spec = importlib.util.spec_from_file_location("pouw_pearlc_census", Path(__file__).parents[1] / "pearlc_census.py")
-C = importlib.util.module_from_spec(spec)
-sys.modules["pouw_pearlc_census"] = C
-spec.loader.exec_module(C)
+import pearlc_census as C
 
 
 def test_chained_atom_matches_verity():

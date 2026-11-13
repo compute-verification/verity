@@ -1,15 +1,16 @@
 {
+ "format": 1,
  "roots": ["NciCheck"],
  "exempt": {
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.RecordDifftestMain": "the record check's difftest, under `runs`: compiled evaluation of NciCheck.RecordDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck",
   "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
+  "NciCheck.RecordDifftestMain": "the record check's difftest, under `runs`: compiled evaluation of NciCheck.RecordDifftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.BaselineDifftestMain": {
@@ -73,15 +74,6 @@
    },
    "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },
-  "NciCheck.RecordDifftestMain": {
-   "why": "670 execution phases' circuit records with their Programs, registration logs in R6's chain, pins and the count's limits: 600 random (one to four templates, their units laid out by inference entries with the slot digit anywhere among the digits, wires that keep to the reader's slot, cross slots or do either unit by unit, each from an output of the row's bits whose leaves' width divides the reader's or into a closed row, some templates passing a parameter's one-bit leaves on (itself, through a call, a callee inside a callee, a batch member or a scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), registered reads, a table with its table reads and opening, ingress, the first record registering some of the parameters under the root the run commits or another, and pins of most templates' Definitions), two in five broken, the 61 ways in turn, each refused at one stage; and 70 shaped ones, the first 26 in the shape of a served class, at two slots and three positions and at four slots and 35: the weights registered at the start of the deployment, none registered, none committed, another root, the opening's root read dropped, the opening's reader another Definition whose verdict is a constant 1, one wire from the next slot, the order given beside the record, and the run's record first in the log; then a pinned reader's layout at two slots and three positions: the key left unwired, the key then listed among the opening's ports (refused reader-roles), another row named the key, the root read in the domain id's row, the domain id in the root's, the two swapped, an opened row left out, the opened rows in another order and another output named the verdict (each refused reader-roles), a pinned reader whose key is its second row and one of one output (each refused reader-layout), and the key among the ports and the two readers under no pin (taken, their openings fresh); then a wire's leaves: the served shape's token a word into a key of 32 one-bit leaves that only gates of its reader read, a closed row, and 32 one-bit leaves into a key of one word (each taken), a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit leaf from another slot, the bits passed on by the template itself, by one of no gate, through a call, through a callee inside a callee, through a batch member and through a scan, one of them alone through a scan's carry, the other fifteen alone as a scan's outputs, all to an output no wire reads, and the bits handed to a callee that returns none of them (each refused leaf-widths), the same template with its output gates of its own over those bits (taken, its row closed), an output whose leaves have two widths, into a 32-bit leaf (refused leaf-widths) and into a closed row (taken), an output of 8 bits, which lacks bits of the 16-bit row it fills, into one leaf and into a closed row (each refused leaf-widths), and an output of 31 bits, two words, into a row of two words (refused leaf-widths) and wired into a row of one (refused wires); then the served shape's root handing a unit a row that is not input gates of its own: one input run handed to two rows, a row every unit shares, and a row of computed gates (each refused own-rows); then a text the form reads nothing of: the served shape's record as one that lists its members, which states no wires (refused wires), and the text of no wire and nothing else, which names no Program (refused templates); then a row declared twice: the served shape's record with one declaration more into a row it already declares, a case each pair of a wire, a registered read, a table read, an opening's port and ingress that the shape has a row for, fourteen in all (two wires into one row refused wires, every other pair refused inputs); then a template with an output that has no bit, one that returns no field and one with a field of no bit beside a field of 16, each refused templates; then a template keyed as an input id, bound per run and bound at registration, a composite whose gates are computed: the record of that one template, and the served shape's record with a unit of it more at the Program's root that the record does not list, each refused templates. On each, NciCheck.Record.checkDetail gives what scripts/nci_record_reference.py's check_detail computes row by row of every unit (the summary's counts, the verdict and the failure, or the first refusal's code, with its message where it has one), NciCheck.Record.check its check and no other field, NciCheck.Record.kinds its kinds of some rows, NciCheck.Record.exported its exported of the same rows (each one's unit's slot and why the row is θ), NciCheck.RecordCount.checkDetail its count, and the templates NciCheck.Record.front reads have its closed rows; and SPOT's reader reads, from the instance Python builds from its own layout of each template, the wiring it reads from the form's, which refuses the wires exactly where SPOT does",
-   "args": ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", "670"],
-   "data": {
-    "record_difftest/cases.jsonl": "88419aeb0a3fdf3f066704d60102a9c4dc0e8b9cd9ea6886f4957b11760c32ce",
-    "record_difftest/python.jsonl": "2dcfa57862810d0d8fcdafe05a923a4d9f4d6c1ba5c241301ea09e3f4b71c31b"
-   },
-   "generate": ["python3", "scripts/record_difftest_vectors.py", "{repo}", "--out", "{out}"]
-  },
   "NciCheck.DifftestMain": {
    "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and three pinned ones (θ with an input bound per run, refused theta-not-registered, θ the registered input, accepted, and a declaration with a Const8 gate, which reads nothing, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4338"],
@@ -90,6 +82,15 @@
     "difftest/python.jsonl": "6c1afeabbc17328b5f64fde48e518c18742a70ef295216ff00c181751a464e8b"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.RecordDifftestMain": {
+   "why": "670 execution phases' circuit records with their Programs, registration logs in R6's chain, pins and the count's limits: 600 random (one to four templates, their units laid out by inference entries with the slot digit anywhere among the digits, wires that keep to the reader's slot, cross slots or do either unit by unit, each from an output of the row's bits whose leaves' width divides the reader's or into a closed row, some templates passing a parameter's one-bit leaves on (itself, through a call, a callee inside a callee, a batch member or a scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), registered reads, a table with its table reads and opening, ingress, the first record registering some of the parameters under the root the run commits or another, and pins of most templates' Definitions), two in five broken, the 61 ways in turn, each refused at one stage; and 70 shaped ones, the first 26 in the shape of a served class, at two slots and three positions and at four slots and 35: the weights registered at the start of the deployment, none registered, none committed, another root, the opening's root read dropped, the opening's reader another Definition whose verdict is a constant 1, one wire from the next slot, the order given beside the record, and the run's record first in the log; then a pinned reader's layout at two slots and three positions: the key left unwired, the key then listed among the opening's ports (refused reader-roles), another row named the key, the root read in the domain id's row, the domain id in the root's, the two swapped, an opened row left out, the opened rows in another order and another output named the verdict (each refused reader-roles), a pinned reader whose key is its second row and one of one output (each refused reader-layout), and the key among the ports and the two readers under no pin (taken, their openings fresh); then a wire's leaves: the served shape's token a word into a key of 32 one-bit leaves that only gates of its reader read, a closed row, and 32 one-bit leaves into a key of one word (each taken), a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit leaf from another slot, the bits passed on by the template itself, by one of no gate, through a call, through a callee inside a callee, through a batch member and through a scan, one of them alone through a scan's carry, the other fifteen alone as a scan's outputs, all to an output no wire reads, and the bits handed to a callee that returns none of them (each refused leaf-widths), the same template with its output gates of its own over those bits (taken, its row closed), an output whose leaves have two widths, into a 32-bit leaf (refused leaf-widths) and into a closed row (taken), an output of 8 bits, which lacks bits of the 16-bit row it fills, into one leaf and into a closed row (each refused leaf-widths), and an output of 31 bits, two words, into a row of two words (refused leaf-widths) and wired into a row of one (refused wires); then the served shape's root handing a unit a row that is not input gates of its own: one input run handed to two rows, a row every unit shares, and a row of computed gates (each refused own-rows); then a text the form reads nothing of: the served shape's record as one that lists its members, which states no wires (refused wires), and the text of no wire and nothing else, which names no Program (refused templates); then a row declared twice: the served shape's record with one declaration more into a row it already declares, a case each pair of a wire, a registered read, a table read, an opening's port and ingress that the shape has a row for, fourteen in all (two wires into one row refused wires, every other pair refused inputs); then a template with an output that has no bit, one that returns no field and one with a field of no bit beside a field of 16, each refused templates; then a template keyed as an input id, bound per run and bound at registration, a composite whose gates are computed: the record of that one template, and the served shape's record with a unit of it more at the Program's root that the record does not list, each refused templates. On each, NciCheck.Record.checkDetail gives what scripts/nci_record_reference.py's check_detail computes row by row of every unit (the summary's counts, the verdict and the failure, or the first refusal's code, with its message where it has one), NciCheck.Record.check its check and no other field, NciCheck.Record.kinds its kinds of some rows, NciCheck.Record.exported its exported of the same rows (each one's unit's slot and why the row is θ), NciCheck.RecordCount.checkDetail its count, and the templates NciCheck.Record.front reads have its closed rows; and SPOT's reader reads, from the instance Python builds from its own layout of each template, the wiring it reads from the form's, which refuses the wires exactly where SPOT does",
+   "args": ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", "670"],
+   "data": {
+    "record_difftest/cases.jsonl": "88419aeb0a3fdf3f066704d60102a9c4dc0e8b9cd9ea6886f4957b11760c32ce",
+    "record_difftest/python.jsonl": "2dcfa57862810d0d8fcdafe05a923a4d9f4d6c1ba5c241301ea09e3f4b71c31b"
+   },
+   "generate": ["python3", "scripts/record_difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
@@ -108,10 +109,20 @@
    "except": [],
    "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
   },
+  "NciCheck.Protocol": {
+   "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
+   "except": [],
+   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+  },
   "NciCheck.Count": {
    "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+  },
+  "NciCheck.DefinitionDigest": {
+   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
+   "except": [],
+   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   },
   "NciCheck.RecordText": {
    "imports": ["Flock.Sigma", "Flock.TemplateQuery", "Spot.Wires"],
@@ -133,16 +144,6 @@
    "imports": ["NciCheck.Record", "NciCheck.Count"],
    "except": [],
    "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
-  },
-  "NciCheck.Protocol": {
-   "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
-   "except": [],
-   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
-  },
-  "NciCheck.DefinitionDigest": {
-   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
-   "except": [],
-   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

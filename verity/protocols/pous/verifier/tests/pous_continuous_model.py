@@ -131,9 +131,9 @@ def cont_verdict(D: int, Q: int, Q_late: int, f: Callable, p: Ret | Round, c: by
     a = run(f, p)[0]
     if a is None:
         return REJECT
-    if Q_late < work(f, p):
+    if work(f, p) > Q_late:
         return REJECT
-    if D < depth(f, p) or Q < work(f, p):
+    if depth(f, p) > D or work(f, p) > Q:
         return LATE
     return HIT if a == c else WRONG
 

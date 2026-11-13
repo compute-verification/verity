@@ -46,6 +46,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from arm import GateResult, OperandSet, Shape, Work
 
+__all__ = ["PearlPlus", "epsilon"]
+
 HERE = Path(__file__).resolve().parent
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"

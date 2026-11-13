@@ -1,0 +1,48 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama32-1b-1gpu-pouw-protocol-served-h200"
+# `llama31-8b-1gpu-pouw-protocol-served-b32` for the demo's Llama 3.2 1B on one H200 (sm_90a): the PoUW option's Pearl-C
+# arm on pearl_c_sm90's kernels under `pearl-c-h100-v1-h3` (the setup exports PEARLC_KERNEL and PEARLC_CUBIN) against
+# stock FP8, eager and compiled. served_passes.py serves its Pearl-C arm with every pass retained (`served_pearlplus.sh`,
+# served_verdicts.sh's POUW=pearlplus).
+arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]
+sweep = "b32"
+reps = 6
+eager = true
+setup = "benchmarks/harness/setup/pearl_c_sm90.sh"
+
+[arm_settings."pouw:pearl-c-h100-v1-h3"]
+precision = "bfloat16"
+control = "none"
+
+[arm_settings."pouw:pearl-c-h100-v1-h3".protocols_config.pouw]
+device = "cuda"
+kernel = "$PEARLC_KERNEL"
+cubin = "$PEARLC_CUBIN"
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama32-1b-1gpu-pouw-protocol-served-h200"
+model = "unsloth/Llama-3.2-1B"
+revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
+case = "LLAMA32_1B"
+precision = "fp8"
+gpu_id = "h200"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 8192
+max_num_seqs = 128
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

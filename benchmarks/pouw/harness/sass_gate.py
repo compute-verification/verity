@@ -83,6 +83,7 @@ import copy
 import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -93,6 +94,17 @@ import tempfile
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+
+#: what `bench.py`, `ieee_pin.py`, the gates and build checks that load this file (`gpu_kit/`'s, `pearl_c_sm90/`'s,
+#: `pearl_c_sm120/`'s, `benchmarks/torch_gpu/`'s, `adapters/vllm/tests/engine/int8_attention_sass.py`) and the tests read
+__all__ = [
+    "DIV", "EM_CUDA", "EXCEPTABLE", "EXIT_FAIL", "FATBIN_COMPRESSED", "FATBIN_MAGIC", "FATBIN_ZSTD", "Function", "Insn",
+    "MAX_INFLATED", "MAX_LISTED", "MMA", "PAGE", "PINS", "PINS_VERSION", "POSIX_SEM", "SHT_NOTE", "SassChecker",
+    "SassGateFailed", "VERSION", "ZSTD_MAGIC", "cubin_verdict", "declared", "device_code", "find_tools", "flagged",
+    "has_device_code", "judge", "load_pins", "mapped", "mma_gate", "opcode", "parse_nvdisasm", "pin_record",
+    "ptxas_report", "read_mapped", "regions", "sass_functions", "scan", "signature_id", "tool_notes", "toolkit_of",
+    "update_pins", "why_failed", "write_verdict",
+]
 
 VERSION = "sass-gate/v4"
 EXIT_FAIL = 7
@@ -804,11 +816,22 @@ def match_fast(fn: Function, c: int, kind: str, bodies: frozenset[str]) -> Match
     return _escape(fn, m) or m
 
 
-def _f32(text: str) -> int | None:
-    try:
-        return struct.unpack("<I", struct.pack("<f", float(text)))[0]
-    except (ValueError, OverflowError):
+#: every spelling `float` reads, digit separators and surrounding space aside (no disassembler prints those). Wider than
+#: `_FLOAT`, the numerators a pinned sequence takes: ``+INF`` is an immediate too
+_SPELLS_FLOAT = re.compile(r"[+-]?(?:(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?|inf(?:inity)?|nan)", re.IGNORECASE)
+#: the least magnitude that rounds past each format's largest finite value, which `struct` refuses to pack
+_PAST = {"f": float.fromhex("0x1.ffffffp+127"), "e": 65520.0}
+
+
+def _float_bits(text: str, fmt: str) -> int | None:
+    """The bits of the FP32 (``f``) or FP16 (``e``) immediate `text` spells; None when it spells no float (a register, a
+    NaN the disassembler names ``QNAN``) or a finite one past the format's range."""
+    if not _SPELLS_FLOAT.fullmatch(text):
         return None
+    x = float(text)
+    if math.isfinite(x) and abs(x) >= _PAST[fmt]:
+        return None
+    return int.from_bytes(struct.pack("<" + fmt, x), "little")
 
 
 def _immediate(ins: Insn) -> int | None:
@@ -819,11 +842,8 @@ def _immediate(ins: Insn) -> int | None:
             return 0
         return int(a[-1], 0) & 0xFFFFFFFF if re.fullmatch(r"-?(0x[0-9a-f]+|\d+)", a[-1]) else None
     if o in ("HFMA2", "HFMA2.MMA") and len(a) == 5 and a[1:3] == ["-RZ", "RZ"]:
-        try:
-            hi, lo = (struct.unpack("<H", struct.pack("<e", float(x)))[0] for x in a[3:])
-        except (ValueError, OverflowError):
-            return None
-        return hi << 16 | lo
+        hi, lo = (_float_bits(x, "e") for x in a[3:])
+        return None if hi is None or lo is None else hi << 16 | lo
     return None
 
 
@@ -985,7 +1005,7 @@ def _div_call(fn: Function, k0: int, bodies: frozenset[str]) -> tuple | str:
     qa = next(t for t, p in pats.items() if _defines(p) == "q")
     if re.fullmatch(r"U?R\d+", env["a"]):
         a = value(fn, qa, env["a"])
-    elif (bits := _f32(env["a"])) is not None:
+    elif (bits := _float_bits(env["a"], "f")) is not None:
         a = ("imm", bits)
     else:
         return f"the numerator {env['a']} isn't an FP32 immediate"
@@ -1601,14 +1621,15 @@ def read_mapped(start: int, n: int) -> bytes:
 
 
 def posix_semaphore(path: str) -> str | None:
-    """Why a deleted /dev/shm/sem.* mapping is a semaphore, not device code; None when it may be device code."""
+    """Why a deleted /dev/shm/sem.* mapping is a semaphore, not device code; None when it may be device code. A mapping
+    of one page whose bytes can't be read fails the gate, by the error."""
     rs = regions(path)
     if not rs or any(e - s > PAGE for s, e in rs):
         return None
     try:
         data = [read_mapped(s, e - s) for s, e in rs]
-    except OSError:
-        return None
+    except OSError as ex:
+        raise SassGateFailed(f"{path} is mapped but deleted, and the gate can't read its page ({ex})") from ex
     if any(d[:4] == b"\x7fELF" or struct.pack("<I", FATBIN_MAGIC) in d for d in data):
         return None
     return "a POSIX semaphore (one page, no ELF or fatbin), not a library"
@@ -1742,9 +1763,8 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
 
 
 # ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
-# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/, torch_gpu's s8_linear/ and attn_bf16/) states the
-# kernels it wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
-# torch_gpu's units/ reads the build through `ptxas_report` and `sass_functions`.
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and torch_gpu's s8_linear/) states the kernels it
+# wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: a ptxas line that refuses the build: a warning, an error or a serialized wgmma (C751x)

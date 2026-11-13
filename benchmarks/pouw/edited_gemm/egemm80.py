@@ -105,7 +105,7 @@ def gate(sass_path: Path, build_log: Path) -> dict:
         body = mainloop(ins, mma)
         c = Counter(op for _, op, _ in body)
 
-        def fam(p: str) -> int:
+        def fam(p: str, c: Counter = c) -> int:
             return sum(v for k, v in c.items() if k.startswith(p))
 
         words = 4 * n_com

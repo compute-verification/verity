@@ -1,4 +1,4 @@
-"""Run the WP2 reference checker over ``bench-instances/v1``: every positive must be accepted with the recorded word
+"""Run the reference checker over ``bench-instances/v1``: every positive must be accepted with the recorded word
 (and, for ``vu-k1536``, reproduce every recorded intermediate accumulator), every ``wrong`` negative must be rejected
 with its claimed word and accepted with the correct one, every ``reject`` negative must be rejected whatever is claimed.
 
@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
@@ -86,24 +87,29 @@ def _neg(i: int) -> dict[str, Any]:
     assert isinstance(t, I.VuTier)
     x, w, claimed = t.instance(i)
     row = dict(zip(t.columns, t.index[i]))
+    correct = int(row["correct_y"]) if row["verdict"] == "wrong" else None
+
+    def verdict(why: str | None = None) -> dict[str, Any]:
+        return {"id": i, "ok": why is None, "mistake": row["mistake"], **({} if why is None else {"why": why})}
+
     try:
         h = gen_vu(REAL, x, w)
-    except Reject:
-        h = None  # out of the domain at hint generation: rejected
+    except Reject:  # out of the domain at hint generation: no word is accepted, the correct one neither
+        return verdict(None if correct is None else f"correct {correct:#06x} not accepted")
     except Exception as e:  # noqa: BLE001 -- a crash is a finding, not a rejection
-        return {"id": i, "ok": False, "mistake": row["mistake"], "why": f"hint generation crashed: {type(e).__name__}: {e}"}
-    accepted_claimed = h is not None and accepts_vu(REAL, x, w, claimed, h)
-    if accepted_claimed:
-        return {"id": i, "ok": False, "mistake": row["mistake"], "why": f"claimed {claimed:#06x} accepted"}
-    if row["verdict"] == "wrong" and (h is None or not accepts_vu(REAL, x, w, int(row["correct_y"]), h)):
-        return {"id": i, "ok": False, "mistake": row["mistake"], "why": f"correct {int(row['correct_y']):#06x} not accepted"}
-    return {"id": i, "ok": True, "mistake": row["mistake"]}
+        return verdict(f"hint generation crashed: {type(e).__name__}: {e}")
+    if accepts_vu(REAL, x, w, claimed, h):
+        return verdict(f"claimed {claimed:#06x} accepted")
+    if correct is not None and not accepts_vu(REAL, x, w, correct, h):
+        return verdict(f"correct {correct:#06x} not accepted")
+    return verdict()
 
 
 _WORKER = {"vu-k1536": _vu, "tu-k16": _tu, "vu-k1536-neg": _neg}
 
 
-def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int = 1, log=print) -> dict[str, Any]:
+def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int = 1,
+               log: Callable[[str], None] = print) -> dict[str, Any]:
     tier = I.load(tier_name, root)
     n = tier.n if limit is None else min(limit, tier.n)
     fn = _WORKER[tier_name]
@@ -128,7 +134,7 @@ def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int 
     return rep
 
 
-def sweep(root: Path, tiers: list[str], limit: int | None, procs: int, log=print) -> dict[str, Any]:
+def sweep(root: Path, tiers: list[str], limit: int | None, procs: int, log: Callable[[str], None] = print) -> dict[str, Any]:
     doc = {"schema": "checker-sweep/v1", "dataset": I.DATASET,
            "manifest_sha256": hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest(), "params": "REAL",
            "tiers": [sweep_tier(t, root, limit, procs, log) for t in tiers]}

@@ -40,13 +40,18 @@ import hashlib
 import json
 import re
 import secrets
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.commitments import domains
+from verity.commitments.randomness import Key, derive
 
-from verity.protocols.pouw.verifier.protocol import DomainError
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, PoUWScheme
+
 from .ncp2 import Shape
+from .plan import DRAW_DOMAIN
 
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
@@ -98,11 +103,11 @@ class Anchors:
         """`NcpWeight`'s anchored inputs, by parameter."""
         return {"salt": self._salt_words(), "weight": _lane(self.weight), "colids": list(self.cols)}
 
-    def check_call(self, fn, args: Sequence[Sequence[int]]) -> None:
+    def check_call(self, fn: PrimitiveDefinition | SpecializedDefinition, args: Sequence[Sequence[int]]) -> None:
         """Refuse a call's flat input leaves whose anchored inputs are not these anchors."""
         _check(fn, args, self.call_inputs())
 
-    def check_weight(self, fn, args: Sequence[Sequence[int]]) -> None:
+    def check_weight(self, fn: PrimitiveDefinition | SpecializedDefinition, args: Sequence[Sequence[int]]) -> None:
         _check(fn, args, self.weight_inputs())
 
 
@@ -163,7 +168,7 @@ def region_bytes(words: Sequence[int]) -> bytes:
 PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 
 
-def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
+def public_ports(shape: Any, role: str) -> dict[str, dict[str, str]]:
     """``role``'s public input ports as Flock's circuit names them (``compose``'s ``public_inputs``, META's
     ``public_inputs``), in the unit's parameter order: each region's seed by the scheme's label for it (``shape.seeds``) and
     its derivation by its rule id (`Derivation.rule`)."""
@@ -195,7 +200,8 @@ class TileAnchors:
                 raise DomainError(f"the {name} ids are {count} distinct 32-bit global indices")
 
     @classmethod
-    def of(cls, scheme, ctx, shape, rows: Sequence[int] | None = None, cols: Sequence[int] | None = None) -> "TileAnchors":
+    def of(cls, scheme: PoUWScheme, ctx: Context, shape: Any, rows: Sequence[int] | None = None,
+           cols: Sequence[int] | None = None) -> TileAnchors:
         """The anchors of ``ctx``'s block under ``scheme`` (rows and columns 0.. by default)."""
         noise = scheme.noise(ctx)
         rows = tuple(range(shape.m)) if rows is None else tuple(rows)
@@ -212,11 +218,11 @@ class TileAnchors:
     def _ids(self, anchor: str) -> tuple[int, ...]:
         return {"ea": self.rows, "eb": self.cols}.get(anchor, ())
 
-    def inputs(self, fn) -> dict[str, list[int]]:
+    def inputs(self, fn: PrimitiveDefinition | SpecializedDefinition) -> dict[str, list[int]]:
         """``fn``'s anchored inputs, by parameter: those of `ANCHORED` it takes."""
         return {name: self._derive(name, self._ids(name)) for name, _t in fn.signature()[0] if name in ANCHORED}
 
-    def check_inputs(self, fn, args: Sequence[Sequence[int]]) -> None:
+    def check_inputs(self, fn: PrimitiveDefinition | SpecializedDefinition, args: Sequence[Sequence[int]]) -> None:
         """Refuse ``fn``'s flat input leaves whose anchored inputs are not the verifier's."""
         _check(fn, args, self.inputs(fn))
 
@@ -289,7 +295,7 @@ class TileAnchors:
             off -= p["words"]
 
 
-def _check(fn, args, want: dict[str, list[int]]) -> None:
+def _check(fn: PrimitiveDefinition | SpecializedDefinition, args: Sequence[Sequence[int]], want: dict[str, list[int]]) -> None:
     params, _ = fn.signature()
     names = [name for name, _t in params]
     if len(args) != len(names):
@@ -347,7 +353,7 @@ class Receipt:
                 raise DomainError(f"call index {anchors.call_index} is repeated in the receipt")
             seen.add(anchors.call_index)
 
-    def entry(self, anchors, shape=None) -> tuple[Any, Any, bytes] | None:
+    def entry(self, anchors: Anchors, shape: Shape | None = None) -> tuple[Any, Any, bytes] | None:
         """The receipt's entry for ``anchors``' call index, if it lists exactly these anchors (and ``shape``)."""
         for a, s, c in self.calls:
             if a.call_index == anchors.call_index:
@@ -385,7 +391,7 @@ class Ledger:
         for name, value in (("seen", set()), ("_receipt", None), ("_key", None), ("_source", None), ("_sent", False)):
             object.__setattr__(self, name, value)
 
-    def __setattr__(self, name, value) -> None:
+    def __setattr__(self, name: str, value: object) -> None:
         raise AttributeError(f"a Ledger's {name!r} is not set by callers: a window's ledger comes from Ledger.open")
 
     @property
@@ -393,18 +399,14 @@ class Ledger:
         return self._receipt
 
     @property
-    def key(self):
+    def key(self) -> Key | None:
         return self._key
 
     @classmethod
-    def open(cls, receipt: Receipt) -> "Ledger":
+    def open(cls, receipt: Receipt) -> Ledger:
         """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so an execution phase's secret is fresh and used once (C2)."""
-        from verity.commitments.randomness import derive
-
-        from .plan import DRAW_DOMAIN
-
         if not isinstance(receipt, Receipt):
             raise TypeError("a window's ledger opens from its complete Receipt")
         ledger, source = cls(), _fresh_source()
@@ -428,7 +430,7 @@ class Ledger:
         if self._sent:
             raise DomainError("the window's sample has been sent: it samples nothing more")
 
-    def commitment(self, anchors) -> bytes:
+    def commitment(self, anchors: Anchors) -> bytes:
         """The call's commitment as the execution phase's receipt lists it, by call index: the only commitment its openings are
         checked against (`Traced.check_openings`), never one supplied with them."""
         if self._receipt is None:
@@ -450,8 +452,6 @@ class Ledger:
         from the recorded source, not that the source was fresh: a verifier colluding with a prover could pick a source
         whose sample misses. That is the designated verifier's trust; a beacon or a commit-and-reveal would be needed for
         a third party to check it."""
-        from .plan import DRAW_DOMAIN
-
         if not self._sent:
             raise DomainError("a window's source is recorded only once its draw is sent")
         return {"domain": DRAW_DOMAIN, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
@@ -489,16 +489,13 @@ class SaltWindows:
         return ledger
 
 
-def replay_key(record: dict[str, str]):
+def replay_key(record: dict[str, str]) -> Key:
     """The execution phase's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
-    from verity.commitments.randomness import derive
-
-    from .plan import DRAW_DOMAIN
-
     if record.get("domain") != DRAW_DOMAIN:
         raise DomainError(f"the record's domain is not {DRAW_DOMAIN!r}")
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
-           "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]
+__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS",
+           "Receipt", "SOURCE_BYTES", "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes",
+           "region_words", "replay_key"]
