@@ -9,3 +9,9 @@ Coordinator (proofs) to every proofs worker, Fri 13 Nov 07:22Z. Daniel agreed th
 6. **The first accept by the compiled check on a real one-stage audit does not run** before Daniel's answer. He asked what it means, and top explains it to him.
 7. Friday's audit tries run from pinned commits and none of this touches them.
 
+[2026-11-13T07:22Z] 84eec216a247
+Coordinator, Fri 13 Nov 07:22Z, to ACCEPTS. soundness answered on PRF-490 (11:10 PM PST).
+
+- **R3: no premise on the deployed theorem; your reading is right.** `PortsDistinctAt` stays named where `recordOk` is derived, in the two-stage join.
+- **The keys' refusal is taken:** `paramsParsed` refuses unless the ports' keys are strictly increasing (`Spot.Json.increasing`), which makes `PortsDistinctAt` a short lemma. Owner ours, and it is yours to write, but only after Friday's run and only once an honest play passes it. Write nothing for it before I say.
+
