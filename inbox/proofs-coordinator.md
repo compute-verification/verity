@@ -150851,3 +150851,88 @@ proved by `cases propext e; rfl`). That is entry 1's third case, which you ruled
 **Runs.** None new. `r20261113-155322-edca` (the constant graph at the pin's own facts): done, rc 0.
 
 **To post.** Nothing.
+
+## MESSAGES, Fri 13 Nov 16:24Z: THE WORD ON THE WHOLE, ahead of Sat 02:00Z: `Dg`, `raw`, `ctx` at the form, round by round. Both of the join's fields from my piece that no check gives (`msgOpens`, `digestBefore`) can go. `digestBefore` becomes a theorem at every round. `msgOpens` becomes facts the form's own checks give: eleven, listed; five are proved on the join's text, six are read off the checks and not proved. I see no new named premise
+
+**0. The whole in five lines**
+
+- [read: `JoinsAt.lean` lines 248 to 262] The join takes `msgOpens` (the device recorded the SHA-512 of each message the check read) and `digestBefore` (that digest is fixed by the challenges shown before the round) as premises. Its own docstring says the first is not what the device signs.
+- [run: `adbc`, my live line] What replaces them compiles: at each round a play fixes a list of digests `Dg` and a context `ctx`; the strings the check read, `raw`, have those digests (`ShowsStrings`); the message is a function of the strings and the context (`Explains`); the digests and the context are the same on two accepted plays at challenges the history shows alike (`FixedBefore`). `messagesFixedStrings` gives `MessagesFixed` from these.
+- The bound keeps its form: the sum over the rounds of the square roots of a collision finder's success. The finder's pair is two strings under one digest, not two messages.
+- [derived] `FixedBefore` is a theorem at every round (point 2). `ShowsStrings` and `Explains` come down to the eleven facts of point 3.
+- Nothing here is in the join. I restate nothing of the join until you order it.
+
+**1. Round by round** (the run of record's rounds; `stage` the second stage's rounds)
+
+| round | message the check reads | `Dg`, and where the device's log holds it | `raw` | `ctx` |
+|---|---|---|---|---|
+| 0 | empty | none | none | none |
+| 1 | the interior record's canonical text | the interior registration's digest: the `answers` of the first release of the second stage's family | the tagged text, `format ‖ 0 ‖ text` | none |
+| 2 to `stage` | empty | none | none | none |
+| `stage + 1`, the statements | one statement a template: circuit, public file, tables, sample, registered reads | round 1's digest; the params' own SHA-512 of each template's circuit and public file; the verifier's fixed digests of the lookup tables | the tagged text; those files | the second stage's challenges: every release of that family after the interior's digest |
+| a session's first slot | tag 0, the table's `root_B`, no public words | the `answers` of the opening put on the slot | `root_F ‖ root_B` | as the statements' |
+| a session's middle slots | tag 0, the round's retained bytes | the `answers` of the opening put on the slot | the retained bytes | as the statements' |
+| a session's last slot | the statement, the record's text, the proof files | the `answers` of that session's closing opening | the session's evidence: the record and each proof file's name and bytes, length-framed | as the statements' |
+
+- From the first session slot on, `Dg` and `raw` also carry the statements' round's digests and strings, since each later message is read at its session's statement.
+- [read] The marks for the table: `Reading.lean` 130 to 156 and `SessionMsgs.lean` 84 to 123 (messages); `Spot/Registration.lean` 104 (the digest is SHA-512 of the tagged canonical text); `ChallengerTrees.lean` 177 (`linkAfter` is SHA-512 of `root_F` then each table's `root_B`) and 245 to 258 (the first opening is after `linkAfter`, each round's after the record's `msg_sha512`); `Flock/Record.lean` 172 (S12: the retained bytes have the recorded digest); `OneStageZk.lean` 1283 and 1308 (the evidence's bytes); `Flock/Verify.lean` 37 (S8: no public words).
+
+**2. `FixedBefore`: a theorem at every round**
+
+- [run: `adbc`] `CoinMap.before L i` is the play's log up to the first release the locator puts on a round at or past `i`, with that release's frame and `answers`. `before_shown`: it is the same on any play at challenges the history before round `i` shows. `fixedBefore_strings_before`: so `FixedBefore` holds wherever `Dg` is read off it. `before_session`: at a session's slot a release is put on, it ends at that release.
+- [derived] Every `Dg` and `ctx` of the table is read off it:
+  - round 1 and the statements': the interior's digest is the `answers` of the first release at or past round 1. The second stage's challenges are all before the first opening (`readLinkFirst`, proved, my `RoundsRise.lean`), so they are in the log before round `stage + 1`.
+  - a session's first and middle slots: the release it ends at (`before_session`).
+  - a session's last slot: no release is put on it (`locOf_ne_last`, point 2 of this morning), and the session's closing opening is before the next session's first opening, so it is in the log before the slot.
+- [read: `PrefixFixed.lean` 454 and 516] It rests on `ShowsPlaced` (each round a release is put on answers with its challenge), which `showsPlaced_form` already gives the join from `SessionMsgsAsk`.
+- Not written: the readings `g` of the log, one for each of the five rows that have a digest. Each is a definition and one use of the lemma.
+
+**3. `ShowsStrings` and `Explains`: eleven facts**
+
+Proved on the join's text [read, each at its file]:
+
+1. Every release of the second stage's family answers the interior's digest: `oneRoot_second` (`CutRoots.lean`; on two windows from the `otherRoots` field).
+2. No such release follows an opening: `readLinkFirst` (`RoundsRise.lean`).
+3. A file read under a digest has that SHA-512: `get_ofArray`, `get_same` (`RefsOfSent.lean`). This is the circuit, the public file and the tables.
+4. The evidence's bytes give back the record and each proof file: `evidenceBytes_inj` (`Sampled/MemberForm/Evidence.lean`).
+5. A session's closing opening answers the SHA-512 of its evidence, and the sessions' openings come in the sessions' order: `members_read` (`Sampled/MemberForm/Order.lean`), on the log the check read.
+
+Read off the checks, not proved [read: the check; derived: that it gives the fact]:
+
+6. Round 1: an accepted play has one release of the second stage's family (the second stage read a challenge), so with 1 and 2 the first release at or past round 1 answers the interior's digest. And the check holds the interior record as read back to that digest (`interiorDigestIs`).
+7. The statements' sample: `second-sample` (`Spot/SecondStage.lean` 1076) holds each statement's sample to the verifier's own of the second stage's challenges by JSON equality. Needed: that equality gives equal sample bytes, and the verifier's own sample is a function of the interior record, the params, the first stage's accepted sample and the second stage's challenges.
+8. The statements' other fields: every field but the sample, the registered reads and the public file is the held reference's. That is `pinHeldAt`, a field of the join today. The registered reads are the params'.
+9. A session's openings: the opening put on a slot answers `linkAfter` of the record's link (first slot) or the record's round's `msg_sha512` (middle slots). `sessionTreeReason` checks it; `SessionCoins.located_opened` states the opening's challenges and not its `answers`. It needs that clause.
+10. A session's record and the messages: the record's `root_B` and each round's retained bytes are the messages read (`FlockDeploy.custody`), and the retained bytes have the recorded digest (S12).
+11. The last slot on the device's log: `SessionCoins.MembersHeld` keeps `members_read`'s order and drops that the closing answers the evidence's SHA-512. It needs that clause back.
+
+- [derived] Where the restated `FixedBefore` earns its keep: in 7 the first stage's accepted sample is read off the bytes the check read of round 0's challenge. Two accepted plays at one round-0 challenge read the same bytes; a play that is not accepted says nothing of them. [guess: `sourceRead` gives it; not read]
+- Whose, as I read the files: 7 leans on `AddressFacts/RowDraw.lean` (`ownDraw_eq`) and `FirstSample.lean`, neither mine; 8 is a field today; 9 and 11 are a clause each in SESSIONCOINS's two files; 6 and 10 are mine to write.
+
+**4. What the join would change, when you order it**
+
+- Out: `msgOpens`, `digestBefore`. In, until each is proved: whichever of 6 to 11 is not yet a theorem, each a fact about one check and smaller than what it replaces.
+- `Dg` changes type (a list of digests a round), so `joinFrame` and `joinMiss` are restated at `frameBy` and `finderBy`. `callsLeBy` gives `CallsLe` at the new frame [run: `adbc`]. The coin map's law is taken at the frame's prover, so COINMAP's statement is read at the new prover; I have not read whether its proof cares which prover it is.
+- No listed guarantee and no named assumption changes that I can see. Two premise fields leave.
+
+**5. Order I would work in** (my own files, on `cursor/proofs-messages-word-745c`, cut from the live line)
+
+1. The five readings of the log and `FixedBefore` at the form's reading, whole.
+2. Round 1 whole (fact 6).
+3. A session's first and middle slots (facts 9 and 10), then its last (11, with 4 and 5).
+4. The statements' round (7 and 8) last: it leans most on other lines.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock.
+
+## NEEDS
+
+- Your word on whether 9 and 11 (a clause each in `located_opened` and `MembersHeld`) are SESSIONCOINS's to add or mine to prove beside its file.
+
+## Not established
+
+- Facts 6 to 11 as theorems. The five readings of the log.
+- That the coin map's law holds at the new frame's prover as it does at today's.
+- Whether the first stage's challenges are all in the log before the second stage's first on one window. The restated `FixedBefore` does not need it; a reading of the raw log would.
+- The tie's discharge and `sessionsRun`: not started, as ordered.
