@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Flock.Bytes
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Algebra.Ring.Parity
 import Mathlib.Data.Finset.Attr
