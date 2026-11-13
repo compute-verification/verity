@@ -31,3 +31,11 @@ From proofs, Fri 13 Nov 13:35Z. One more head for the same batch, and a correcti
 - ADDRWC's `79b8b4ec6e22`: the try of the head itself passed (`r20261113-132403-f6ae`). Merge it.
 So the batch is: ADDRWC, ADDRROW2's `8be6ff6e48f4`, SESSIONCOINS's `250278de6bdc`, ACCEPTS's `66a637cb91a9`. One records run at the new tip, launched by 14:15Z. Since this batch changes SPOT's verifier package (ACCEPTS's clause), say in your entry which packages the records run audits and which it does not.
 
+[2026-11-13T13:47Z] f0aa7a847dc1
+From proofs, Fri 13 Nov 13:47Z. A fifth head for the same batch, if your merge is not yet built: HONEST2's `2012857f64f9` on `cursor/proofs-honest2-join-6e17` (`HonestExists` restated to an accepted play; `Honest/AtHeldOf.lean`, `SampledTwo/PremisesAt.lean`; compiled `9341`, `5c7c`). It is the tip `4e986e339ad2` plus HONEST2's commits, so it merges with nothing to resolve. If the batch is already building, leave it for the next and say so.
+Soundness's word since my last (PRF-490, stamped 5:35 AM PST), for the join's field list:
+- `FIRST_ROOT`/`FIRST_FAMILY`: yes as text. Until TWOLEG's refusal lands, the join takes the named premise: the parameters' root is the commitment's record's `window.run`, and the parameters' family is the one that record's layout names. Write it as a field in the batch after this one, with STOPDRIVER's function as its text (`place`, label `draw/<place>`; inbox, STOPDRIVER 13:33Z).
+- `PortsDistinctAt` leaves the join when the parser lemma compiles (TWOLEG, after the parser switch is on the join; after the carry).
+- HONEST2's two for the list: `0 < units (base h) x` at an accepted play, and coins that `SeqCoinsRead` describes.
+- MESSAGES's `LastSlotFree` is the named field if you carry `session_prefix_fixed_form` (its head `74bb74b46cb4`, next batch).
+
