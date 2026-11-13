@@ -12,7 +12,7 @@ inputs are.  A v2 that changes the rule for EOS stops will pass this check and m
 """
 from __future__ import annotations
 
-import json
+from verity_vllm.commit.executed_prefix import executed_prefix_of_record
 
 from .. import resolver
 
@@ -43,10 +43,12 @@ def _order(fx: dict) -> dict[str, str]:
 
 
 def _facts(row: resolver.Row) -> tuple[dict, dict, dict, list, dict]:
-    fx = json.load(open(row.workload()))
+    fx = resolver.read_json(row.workload())
     order = _order(fx)
     caps = {order[str(r["request_id"])]: int(r["max_tokens"]) for r in fx["requests"]}
-    tok = row.json(_tokens_rel(row))
+    rel = _tokens_rel(row)
+    assert rel is not None, f"{row.key}: no tokens.json, so `applies` keeps this check off the row"
+    tok = row.json(rel)
     wp = row.json("build_workload/workload_program.json")
     stop = wp.get("stop_rule") or {}
     return fx, order, caps, tok["requests"], stop
@@ -76,7 +78,6 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_vllm.commit.executed_prefix import executed_prefix_of_record
     fx, order, caps, treqs, stop = _facts(row)
     served = {order[str(e["request_id"])]: [int(t) for t in (e.get("generated_token_ids") or [])] for e in treqs if str(e.get("request_id")) in order}
     epr = executed_prefix_of_record(sorted(caps, key=lambda r: int(r[1:])), served, caps=caps, eos_of_record=stop.get("eos_token_ids"), lag=stop.get("lag"))

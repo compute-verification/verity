@@ -19,15 +19,16 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   hands out no coin commitment root before the session's end, its hello answers the layout alone, each coin comes as its
   raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
   checks (`remote.RemoteChallenger.close`) and settles each sample's segment to (`ChallengerCoins.settle`), and which must
-  be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with one family
-  `FAMILY`, sized from the samples before anything opens (`families`): one coin, then each rank's `need`, at least
-  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the sample and planned it
+  be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with one family a
+  rank (`family`), since a family's coins follow one registration (`coins.FAMILY_ROOT`), each sized from its sample
+  before anything opens (`families`: the rank's `need`, at least `COINS_PER_RANK` coins), and a family of its own
+  (`WINDOW_FAMILY`) for the one coin after the window's root. The session opens once every rank has passed its checks before the sample and planned it
   (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's sample is
   refused, so a refusal before the sample never spends the root's one session.
 * **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
-  then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
-  commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
+  then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the
+  rank's family's coins commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
   Once every rank has sampled or won't (`skip`), the client closes the
   session. `Replay` reads an honest sample's bytes again, for the negatives' streams.
@@ -76,6 +77,8 @@ from verity.commitments.crypto import lms
 TREE = Path(__file__).resolve().parents[2]
 SCHEME = "verity/one-stage/a5-draw/v1"
 FAMILY = "draw"
+#: the family of the one coin after the window's root, which no sample reads
+WINDOW_FAMILY = "window"
 COINS_PER_RANK = 16
 LOCAL_PARAMS = (4, 5)
 LOCAL_HOST, LOCAL_PEER = "local-challenger", "local"
@@ -117,24 +120,30 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
     return -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
+def family(rank: int) -> str:
+    """Rank `rank`'s family of the session: its registration's alone, since a family's coins follow one registration
+    (`coins.FAMILY_ROOT`), and the one its verifier holds its sample's evidence to."""
+    return f"{FAMILY}/{rank}"
+
+
 def families(needs: Mapping[int, int]) -> list[list[Any]]:
-    """The session's layout for the samples `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
-    root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins."""
-    return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())]]
+    """The session's layout for the samples `needs` (rank -> `need`): `WINDOW_FAMILY` with the coin after the window's
+    root (`Draws.pre`), then each rank's family (`family`) with its need, at least `COINS_PER_RANK` coins."""
+    return [[WINDOW_FAMILY, 1], *([family(r), max(COINS_PER_RANK, n)] for r, n in sorted(needs.items()))]
 
 
 def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
     """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's sample (`needs`,
     rank -> `need`), naming the need and the reserve; None when it can."""
-    want = 1 + sum(needs.values())
+    want = {WINDOW_FAMILY: 1, **{family(r): n for r, n in sorted(needs.items())}}
     why = Ch.layout_problem(SCHEME, 0, tuple(tuple(f) for f in layout))
     if why is not None:
-        return f"the draws need {want} {FAMILY} coins, and the challenger can't reserve {layout}: {why}"
-    have = dict(tuple(f) for f in layout).get(FAMILY, 0)
-    if have < want:
-        per_rank = ", ".join(f"rank {r} {n}" for r, n in sorted(needs.items()))
-        return (f"the draws need {want} {FAMILY} coins (1 after the window's root, then {per_rank}), and the reserve "
-                f"{layout} holds {have}")
+        return f"the draws need {want} coins, and the challenger can't reserve {layout}: {why}"
+    have = dict(tuple(f) for f in layout)
+    short = {label: n for label, n in want.items() if have.get(label, 0) < n}
+    if short:
+        return (f"the draws need {want} coins (1 after the window's root, then each rank's in its own family), and the "
+                f"reserve {layout} holds fewer of {sorted(short)}")
     return None
 
 
@@ -159,8 +168,8 @@ TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listenin
 
 class Draws:
     """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its sample (`plan`).
-    Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
-    `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
+    Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, and a
+    `ChallengerCoins` over each rank's own family at its `commit`) or is refused (`refuse`). The session's evidence follows once published. A rank's
     sample holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
     and its reads.
 
@@ -174,7 +183,8 @@ class Draws:
         self._io, self._held = threading.Lock(), set()
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
         self._opened, self._refused = threading.Event(), None
-        self._client = self._coins = self._pre = None
+        self._client = self._window = self._pre = None
+        self._coins: dict[int, CC.ChallengerCoins] = {}
         self._turn, self._current, self._segment = threading.Lock(), None, None
         self._ended: str | None = None
         self._evidence: dict | None = None
@@ -218,9 +228,9 @@ class Draws:
             if commitment is not None and not client.withheld and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
-            coins = CC.ChallengerCoins(Ch.LiveRecord(client, FAMILY))
-            pre = coins.commit(bytes.fromhex(self._root))
-            coins(Ch.COIN_BYTES)
+            window = CC.ChallengerCoins(Ch.LiveRecord(client, WINDOW_FAMILY))
+            pre = window.commit(bytes.fromhex(self._root))
+            window(Ch.COIN_BYTES)
         except Exception as e:  # every waiting rank's plan must end, whatever failed
             if client is not None:
                 try:
@@ -229,7 +239,7 @@ class Draws:
                     pass
             self.refuse(f"the challenger's session opened, and its client failed: {e}")
             raise Ch.CoinError(str(e)) from e
-        self._client, self._coins, self._pre = client, coins, pre
+        self._client, self._window, self._pre = client, window, pre
         self._opened.set()
         with self._lock:
             if not self._left and self._current is None and not self._held:
@@ -242,11 +252,11 @@ class Draws:
         self._closed.set()
 
     def commit(self, rank: int, after: str) -> None:
-        """Rank `rank`'s turn, once: the coins after its registration's digest `after` (hex), which its reads take until
-        its `drawn`."""
+        """Rank `rank`'s turn, once: its own family's coins (`family`) after its registration's digest `after` (hex),
+        which its reads take until its `drawn`."""
         if self._refused is not None:
             raise Ch.CoinError(self._refused)
-        if self._coins is None:
+        if self._client is None:
             raise Ch.CoinError(f"rank {rank} commits before the session opened: a rank plans its draw first (Draws.plan)")
         self._turn.acquire()
         self._current, self._segment = rank, None
@@ -255,7 +265,8 @@ class Draws:
                 if rank not in self._left:
                     raise Ch.CoinError(f"rank {rank} has drawn, or won't: a rank's registration draws once")
                 self._left.discard(rank)
-            self._segment = self._coins.commit(bytes.fromhex(after))
+            self._coins[rank] = CC.ChallengerCoins(Ch.LiveRecord(self._client, family(rank)))
+            self._segment = self._coins[rank].commit(bytes.fromhex(after))
         except BaseException:
             self.drawn(rank)
             raise
@@ -264,7 +275,7 @@ class Draws:
         if self._current != rank or self._segment is None:
             raise Ch.CoinError(f"rank {rank} reads coins only in its turn, after its commitment")
         with self._io:
-            return self._coins(n)
+            return self._coins[rank](n)
 
     def drawn(self, rank: int) -> dict | None:
         """The end of rank `rank`'s turn: its segment (None when it committed none). No-op outside its turn."""
@@ -348,7 +359,8 @@ class Draws:
             if self._client is not None:
                 with self._io:
                     self._client.close()
-                self._coins.settle()
+                for coins in (self._window, *self._coins.values()):
+                    coins.settle()
         except Ch.CoinError as e:
             self._ended = str(e)
         self._closed.set()
@@ -362,8 +374,9 @@ class Draws:
         at its close; None when the close failed first) and every sample's segment, settled (`_close`), in order."""
         self._closed.wait()
         c = None if self._client is None else self._client.commitment
+        every = [] if self._window is None else [self._window, *(self._coins[r] for r in sorted(self._coins))]
         return {"commitment": None if c is None else c.root.hex(),
-                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments]}
+                "segments": [s.to_json() for coins in every for s in coins.segments]}
 
     def wait_closed(self) -> str | None:
         """Once the client has closed the session: None, or why its close failed."""
@@ -391,10 +404,15 @@ _Manager.register("Draws", Draws)
 class RankCoins(CC.ChallengerCoins):
     """Rank `rank`'s coins of the step's session (`draws`, the `Draws` proxy) as its `service.Stream` reads them: a
     `ChallengerCoins`, so the stream's coin source is the challenger, whose commitment and reads go to the one client in
-    `Draws`, in the rank's turn until `drawn`. `read` is every byte it read, `need` the coins it planned (`plan`)."""
+    `Draws`, in the rank's turn until `drawn`. `read` is every byte it read, `need` the coins it planned (`plan`), and
+    `label` the rank's family (`family`)."""
 
     def __init__(self, draws: Any, rank: int) -> None:
         self._draws, self._rank, self.read, self.need = draws, rank, bytearray(), None
+
+    @property
+    def label(self) -> str:
+        return family(self._rank)
 
     def plan(self, coins: int) -> None:
         """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
@@ -414,11 +432,16 @@ class RankCoins(CC.ChallengerCoins):
 
 
 class Replay(CC.ChallengerCoins):
-    """The bytes an honest sample read from the challenger, read again in order: a negative's `service.Stream` on them samples
-    the honest sample's units, so its outcome differs from the honest one in its coins' evidence alone."""
+    """The bytes an honest sample read from the challenger, read again in order, as coins of the honest sample's family
+    `label` (None: of no family): a negative's `service.Stream` on them samples the honest sample's units and names its
+    family, so its outcome differs from the honest one in its coins' evidence alone."""
 
-    def __init__(self, read: bytes) -> None:
-        self._read, self._at = bytes(read), 0
+    def __init__(self, read: bytes, label: str | None = None) -> None:
+        self._read, self._at, self._label = bytes(read), 0, label
+
+    @property
+    def label(self) -> str | None:
+        return self._label
 
     def __call__(self, n: int) -> bytes:
         if self._at + n > len(self._read):
@@ -503,7 +526,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         at = ((side or {}).get("step"), (side or {}).get("codes"))
         row = {"accepted": accepted, "lean": side, "source": s.coin_source}
         if isinstance(replay, Replay):
-            row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
+            row["python"] = CC.coins_reason(evidence, window, FAMILY, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
     neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn", lambda: len(coins.read))
     fresh = OwnReplay(read)
@@ -825,8 +848,9 @@ def evidence(published: dict, segment: dict) -> dict | None:
 
 
 def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
-    """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, its
-    `after` rewritten to the registration's) added in front, a segment that skips a coin released after the registration,
+    """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, the
+    window family's, its `after` rewritten to the registration's) added in front, a segment that skips a coin released
+    after the registration,
     the verifier's main without any commit the pins log pins (the session's pin off main's first-parent line), no pins log,
     no evidence at all."""
     s = ev["segment"]
@@ -835,8 +859,7 @@ def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
     return {
         "coins-tampered-opening": {**ev, "segment": {**s, "openings": [{**s["openings"][0], "coin": "00" * 64},
                                                                        *s["openings"][1:]]}},
-        "coins-opened-before-the-registration": {**ev, "segment": {**s, "openings": earlier + s["openings"],
-                                                                   "start": s["start"] - len(earlier)}},
+        "coins-opened-before-the-registration": {**ev, "segment": {**s, "openings": earlier + s["openings"]}},
         "coins-segment-skips-a-released-coin": {**ev, "segment": {**s, "openings": s["openings"][1:], "start": s["start"] + 1}},
         "coins-pin-off-main": {**ev, "main": [c for c in ev["main"] if c not in logged]},
         "coins-no-pins-log": {**ev, "pins": None},

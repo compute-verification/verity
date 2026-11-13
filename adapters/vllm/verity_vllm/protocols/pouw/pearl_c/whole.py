@@ -29,6 +29,8 @@ from typing import Any
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
+__all__ = ["WholeStep"]
+
 #: the key of vLLM's own graphs, captured at start
 VLLM = ("vllm",)
 
@@ -85,7 +87,7 @@ class WholeStep:
 
         def dispatch(*a: Any, **kw: Any) -> Any:
             key = self.key()
-            graphs = self.sets.get(key)
+            graphs = None if key is None else self.sets.get(key)
             if graphs:
                 mgr.graphs = graphs
                 desc = original(*a, **kw)

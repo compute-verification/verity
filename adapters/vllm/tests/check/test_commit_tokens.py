@@ -11,6 +11,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +20,13 @@ import pytest
 
 from tests.check.opened import commit_host_steps, meta, retained_block
 from tests.commit.test_binding_negatives import PD
-from verity_vllm.check import commit_tokens as CT, executed_prefix as EPL
+from verity_vllm.check import commit_tokens as CT
+from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import boundary_linkage, linkage_horizon
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import binding as B, executed_prefix as EP
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
@@ -83,7 +86,8 @@ def world(sampled: dict = SAMPLED, served: dict = SERVED, finish: dict = FINISH,
     steps, rows = {}, {}
     for e in range(max(len(v) for v in sampled.values())):
         live = [r for r in sorted(sampled) if e < len(sampled[r])]
-        ids, rr = [], []
+        ids: list[int] = []
+        rr: list[tuple[str, int, int]] = []
         for r in live:
             toks = PROMPTS[r] if e == 0 else [sampled[r][e - 1]]
             rr.append((r, len(ids), len(ids) + len(toks)))
@@ -160,20 +164,22 @@ def test_an_early_eos_is_accepted_on_the_token_record_bound_to_the_commitment(tm
     assert CT.account_link_error(match, link) is None
 
 
-def test_account_links_decides_a_config_run_on_the_token_record_and_never_falls_back(tmp_path, capsys):
+def test_account_links_decides_a_config_run_on_the_token_record_and_never_falls_back(tmp_path, capsys, caplog):
+    caplog.set_level(logging.INFO, logger="verity_vllm")
     w = world()
     kw = dict(out_dir=str(tmp_path), pair=0, order=ORDER, arrivals=ARRIVALS, match_dir=None, stop=STOP, served=SERVED, finish=FINISH,
               past=w.past, program_digest=PD)
     out = CT.account_links(w.com, w.run, w.bmap, w.epr, **kw)
     assert out["error"] is None and out["commit_account_link"]["ok"] and out["match_account_link"]["ok"] is False
-    assert "executed prefix <-> Commit's token record (pair 0): LINKED" in capsys.readouterr().out
+    assert "executed prefix <-> Commit's token record (pair 0): LINKED" in capsys.readouterr().out + caplog.text
     # a record that cannot be built is a refused commit link: never the Match link's verdict, never the committer's own count
     bad = CT.account_links(w.com, w.run, None, w.epr, **kw)
     assert bad["commit_account_link"]["problems"][0].startswith("token record not built") and bad["commit_account_link"]["required"]
     assert "not bound to the commitment by the Commit's token record: token record not built" in bad["error"]
 
 
-def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_alone(tmp_path, capsys):
+def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_alone(tmp_path, capsys, caplog):
+    caplog.set_level(logging.INFO, logger="verity_vllm")
     w = world()
     no_ids = dict(w.bmap, entries=[e for e in w.bmap["entries"] if (e["identity"]["op_path"], e["identity"]["output_member"]) != CT.FAMILY])
     assert CT.sampled_ids_committed(w.bmap) and not CT.sampled_ids_committed(no_ids) and no_ids["entries"]
@@ -192,7 +198,7 @@ def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_a
     assert alone["error"] is None and alone["match_account_link"]["ok"] and alone["match_account_link"]["required"]
     assert cl["required"] is False and cl["record"] is None and cl["problems"] == [] and not written.exists()
     assert cl["not_applied"] == "no committed runner.sampler/sampled_token_ids in the binding map: the Match link alone decides"
-    assert f"Commit's token record (pair 0): not applied ({cl['not_applied']})" in capsys.readouterr().out
+    assert f"Commit's token record (pair 0): not applied ({cl['not_applied']})" in capsys.readouterr().out + caplog.text
     # the facts of record rest on the Match link alone
     cov = COVERED | {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
     f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, {"result": True}, ARRIVALS, STOP)

@@ -98,10 +98,15 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
 
 class StageCoins(CC.ChallengerCoins):
     """Both stages' coins of the run's one challenger session (``draws``, `a5_coins.Draws`' proxy) as the stream reads
-    them: the first stage's rank 0's, the second's rank 1's, each committed to its registration's digest in turn."""
+    them: the first stage's rank 0's, the second's rank 1's, each its own family's, committed to its registration's
+    digest in turn."""
 
     def __init__(self, draws) -> None:
         self.stages, self.at = (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+
+    @property
+    def label(self) -> str:
+        return self.stages[max(self.at, 0)].label
 
     def commit(self, after: bytes) -> None:
         self.at += 1

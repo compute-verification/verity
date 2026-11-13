@@ -8,9 +8,11 @@ FAIL of any earlier rule is unchanged.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from verity_vllm.check.commit_pass import commit_verdict
 
-WP_OK = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
+WP_OK: dict[str, Any] = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
 VC_OK = {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}
 
 
@@ -42,7 +44,10 @@ def test_b8_without_form_b_passes_with_the_gap_named():
 
 
 def test_b2_with_complete_attribution_passes_clean_even_when_value_partial():
-    oc = _oc(True); oc["complete"] = False; oc["grade"] = "partial"; oc["steps_not_snapshotted"] = 32       # the snapshot-gap class
+    oc = _oc(True)
+    oc["complete"] = False
+    oc["grade"] = "partial"
+    oc["steps_not_snapshotted"] = 32       # the snapshot-gap class
     ok, reason = commit_verdict({**_base(2), "oracle_compare": oc}, True, min_openings=64)
     assert ok is True and "attribution" not in reason, reason
 

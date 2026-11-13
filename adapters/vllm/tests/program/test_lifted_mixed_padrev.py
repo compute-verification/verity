@@ -22,14 +22,14 @@ from verity.circuits import Program
 from verity.circuits.defs import composite
 from verity.circuits.layout import resolve
 from verity.circuits.refs import Coll, concat
-from verity.definitions.registry import lifted as L
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity.circuits.types import Array, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 
 I32 = Value(32)
-NEVER = 0x7FFFFFFF  # an EOS id no TINY event emits: the cap decides
 
 
 @composite("PadrevServe2", 1, ["C", "LP", "D_MAX", "EOS"],
@@ -63,7 +63,7 @@ def _single(eos, prompt=None):
 
 
 def _all_words(prog, t, calls):
-    words = []
+    words: list = []
     stack = list(calls)[::-1]
     while stack:
         c = stack.pop()
@@ -136,7 +136,7 @@ def test_a1_the_shared_weights_input_carries_no_bot_and_is_read_identically_by_b
     prompt, w = _inputs()
     lifted_w = L.lift_words(weights_type(TINY), list(w))
     lifted_w[0] = L.enc_bot(widths[0])
-    with pytest.raises(Exception):
+    with pytest.raises(L.BoundaryFailure, match="prescribed input must be Active"):
         for wd, x in zip(widths, lifted_w):
             L.check_boundary(wd, x, what="weights", prescribed=True)
     # both requests' weights reads are the SAME gates: one Input, two readers (no per-request copy of the weights)

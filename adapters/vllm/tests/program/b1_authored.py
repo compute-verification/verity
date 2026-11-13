@@ -18,13 +18,22 @@ leaf. Needs torch (the pod); `tests/program/test_b1_authored.py` skips without i
 """
 
 import torch
-
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.types import Array
+from verity.circuits.types import Tuple as TupleT
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16, F32, I32
-from verity.circuits.types import Array, Tuple as TupleT
+
 from verity_vllm.program.frontend.schemas import Arr, Dep, Tup
-from verity_vllm.program.frontend.torch_frontend import Bound, Prim, Registered, batch, bind, function, ops
+from verity_vllm.program.frontend.torch_frontend import (
+    Bound,
+    Prim,
+    Registered,
+    batch,
+    bind,
+    function,
+    ops,
+)
 
 BN = b1.BN  # kBlockN = 64
 

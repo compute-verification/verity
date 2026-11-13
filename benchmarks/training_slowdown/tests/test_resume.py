@@ -42,27 +42,6 @@ def scored(cp: dict) -> dict:
     return cp | {"bpb": near(cp["bpb"]), "score": cp["score"] and {k: near(v) for k, v in cp["score"].items()}}
 
 
-#: what to do where two jobs that state the same windows differ in their checkpoints' digests
-ON_A_NODE = ("the continued job's checkpoints differ from the unbroken job's in their digests, and the windows the two "
-             "jobs state don't. Either the job's kept state isn't the unbroken job's, or this CPU's fused bf16 "
-             "attention kernel doesn't repeat its own bits, and then one step run twice gives two gradients with "
-             "nothing wrong in the job. A node's CPU repeats them and its verdict is the test's: run the suite there "
-             '(`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-             'uv run tools/verity/check/suites.py benchmarks/training_slowdown"`) before changing the job')
-
-
-def differ(whole: dict, cut: dict) -> str:
-    """What `assert_continues` says where the two jobs' checkpoints differ: `ON_A_NODE` where their digests do and
-    the windows the two records state don't (a record of a job that asked for no fresh windows states none), since
-    there this machine can't tell a job that continued wrongly from a kernel that didn't repeat itself. The limit on
-    oneDNN (conftest) keeps a bf16 product the same every time and doesn't reach the fused attention kernel."""
-    def digests(rec):
-        return [{k: v for k, v in cp.items() if k.endswith("sha256")} for cp in rec["checkpoints"]]
-    if whole.get("windows") == cut.get("windows") and digests(whole) != digests(cut):
-        return ON_A_NODE
-    return "the continued job's checkpoints aren't the unbroken job's"
-
-
 def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> None:
     """`cut`, a job stopped and continued from step `at`, records what `whole`, the unbroken one, does: every step's
     count, every checkpoint's digests, its score to within `SCORE_REL` (`scored`), and everything else but its
@@ -86,7 +65,7 @@ def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> Non
         b["steps"][at] = short | {k: full[k] for k in (*counts, *by, "struct")}
     assert b["steps"] == a["steps"] and [s["step"] for s in b["steps"]] == list(range(len(b["steps"])))
     assert [cp | {"macs": cp["macs"] - build * (cp["step"] >= at)} for cp in b["checkpoints"]] == [
-        scored(cp) for cp in a["checkpoints"]], differ(whole, cut)
+        scored(cp) for cp in a["checkpoints"]], "the continued job's checkpoints aren't the unbroken job's"
     assert b["structures"].items() >= a["structures"].items()
 
     def rest(rec):
@@ -237,6 +216,25 @@ def test_a_job_of_a_route_with_an_output_keeps_the_model_it_trains_and_continues
     assert (whole["tail"]["macs"] > 0) == (route == "lora")
     other = segment(tiny, {"step": 2}, bare(kept))
     assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
+
+
+def test_a_stopped_job_whose_step_is_random_continues_to_the_unbroken_jobs_latents(tmp_path):
+    """`qat` under `low_state` takes its roundings' random values from torch's global generator at every step, which
+    the state a stopped job keeps holds (`run.generators`). The segment that continues from step 2 ends at the
+    unbroken job's latents bit for bit, and the two records joined are the unbroken job's (`assert_continues`); given
+    the generator as it stood when the job began, it ends at others. A job's trace (`traced.trace_step`) runs after
+    its last step, so none runs between two of its steps."""
+    reg = tiny_registry(tmp_path / "reg")
+    tiny = tmp_path, reg, write_config(tmp_path / "a.toml", route="qat", budget=BUDGET,
+                                       dials=OUTPUTS["qat"] | {"grad_code": "rtn4", "low_state": True})
+    whole = run.joined(None, segment(tiny))
+    cut = segment(tiny, stop_after=1)
+    rest = segment(tiny, {"step": 2}, cut["state"])
+    assert_continues(whole, run.joined(run.joined(None, cut["record"]), rest), at=2)
+    torch.manual_seed(0)
+    begun = run.plain(run.generators())
+    other = segment(tiny, {"step": 2}, cut["state"] | {"generators": begun})
+    assert all(a["trained_sha256"] != b["trained_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
 
 
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():

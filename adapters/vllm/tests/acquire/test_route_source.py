@@ -14,11 +14,29 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.glm53_model import CMAP, DENSE, ENV, HOOKED, L, SPARSE, STEPS, TP, Attention, glm_model, metadata, run_step
+from tests.acquire.glm53_model import (
+    CMAP,
+    DENSE,
+    ENV,
+    HOOKED,
+    SPARSE,
+    STEPS,
+    TP,
+    Attention,
+    L,
+    glm_model,
+    metadata,
+    run_step,
+)
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
+from verity_vllm.commit.committer.native_host import (
+    GPU_CHUNK_BYTES,
+    TP_PARTIAL_RE,
+    NativeHostCommitter,
+    TensorMeta,
+)
 
 
 def map_names(routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS,
