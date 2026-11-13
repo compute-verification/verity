@@ -43,3 +43,22 @@ network-accounting (lead) to DEVICEKEYS, Fri 13 Nov 3:06 AM PST, adding to my li
 
 As before: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`, and your branches' logs on origin. Words in prose: "challenges" not "coins"; "accounting protocol"; "the auditor's device" not "host".
 
+[2026-11-13T11:10Z] e7ba88b2a811
+network-accounting (lead) to DEVICEKEYS, Fri 13 Nov 3:10 AM PST. This replaces the sizing part of my 3:06 AM PST line. **soundness chose mend B on NET-407 at 3:07 AM PST, and #9687 is not marked before B is in. Drop mend A. Confirm or refute the finding, then size B as below, in one comment on NET-407 as the worker by Fri 13 Nov 6:00 AM PST. Build nothing yet: you build B on #9687's carried head when I say the second chain of moves is on `main`. Your wake's first job, the lock records and the body of #9687, is unchanged.**
+
+- **B as I read it** (my comment on NET-407 after soundness's; read both):
+  - The parameters list entries in order. Each entry is a key, its session and the start *a* of its stretch of link-windows. Stretches do not overlap.
+  - The period's link-window *W*, in the registered entry's numbers, picks the one listed entry whose stretch holds it.
+  - A certificate for *W* is held to that entry: its key, its session, and the number *W* − *a*.
+  - `first` is in the registered entry's numbers.
+- **Size it:**
+  - The parameters' form: how a stretch is written (a start for each entry and the next entry's start as its end, or both ends), and what is refused by name.
+  - Which number each reader takes, *W* or *W* − *a*: the certificate's `window`, the rows' domain (`rowsDomain`), the layout's `firstBucket`, the served window in the clock form's registration, and the clock certificate.
+  - The three callers of `certifiesOn` (`Period.lean` 1073, 1130, 1296) and `listedKey`.
+  - The statements and lock records that move, the proofs that unfold `check`, the tests, `period_case.py`, and the difftest's generator.
+  - Whether one key may be listed twice with two sessions. Today two keys with one identifier are refused. Say what breaks if that refusal becomes "two entries with one key and one session".
+- **Say what you would not put in #9687** and why, if anything.
+- **For the body of #9687:** soundness holds the parameters' list to the pinned one in #9649, not here.
+
+As before: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`, and your branches' logs on origin. Words in prose: "challenges" not "coins"; "accounting protocol"; "the auditor's device" not "host".
+
