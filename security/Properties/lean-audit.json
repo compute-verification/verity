@@ -62,6 +62,7 @@
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
+  "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -2208,8 +2209,23 @@
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.PeriodGame"],
+   "except": [
+    "Properties.Pous.Period",
+    "Properties.Pous.Wipe",
+    "Properties.Pous.PeriodGame",
+    "Properties.Pous.MemoryChallenger.Session"
+   ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "imports": [
+    "Mathlib",
+    "Properties.Pous.MemoryChallenger",
+    "MemoryChallenger",
+    "Definitions.Accounting.Assumptions.Parties"
+   ],
+   "except": [],
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   },
   "Properties.Pous.Period": {
    "imports": [
@@ -3128,6 +3144,51 @@
    },
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
+  },
+  "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests :",
+    "  MemoryChallenger.Session.Properties.AuditorSeesDigests"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Assumptions.Parties.Confined",
+     "Accounting.Assumptions.Parties.Faithful",
+     "Accounting.Assumptions.Parties.WitnessPathPrivate"
+    ],
+    "reads": [
+     "Accounting.Assumptions.Parties.Code",
+     "Accounting.Assumptions.Parties.Code.init",
+     "Accounting.Assumptions.Parties.Code.messages",
+     "Accounting.Assumptions.Parties.Code.mk",
+     "Accounting.Assumptions.Parties.Code.step",
+     "Accounting.Assumptions.Parties.Code.trace",
+     "Accounting.Assumptions.Parties.Code.trace._f",
+     "Accounting.Assumptions.Parties.Dest",
+     "Accounting.Assumptions.Parties.Dest.casesOn",
+     "Accounting.Assumptions.Parties.Dest.clear",
+     "Accounting.Assumptions.Parties.Dest.ctorIdx",
+     "Accounting.Assumptions.Parties.Dest.rec",
+     "Accounting.Assumptions.Parties.Dest.witness",
+     "Accounting.Assumptions.Parties.Run",
+     "Accounting.Assumptions.Parties.Run.coins",
+     "Accounting.Assumptions.Parties.Run.emitted",
+     "Accounting.Assumptions.Parties.Run.mk",
+     "Accounting.Assumptions.Parties.Run.overheard",
+     "Accounting.Assumptions.Parties.Run.sent",
+     "Accounting.Assumptions.Parties.Run.states",
+     "Accounting.Assumptions.Parties.Run.taken",
+     "Accounting.Assumptions.Parties.Run.truth",
+     "Accounting.Assumptions.Parties.auditorView",
+     "Accounting.Assumptions.Parties.instDecidableEqDest"
+    ]
+   },
+   "type_hash": "967034dac532b3c68f13d3fbe4c795315c6152d238cfb451ef4db5b3e953bbfa",
+   "unfolded_hash": "d5380f4bbc65593c052c9a2dff29b36c23950e3f776f8f04f79ac28f72193c46"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -12833,6 +12894,10 @@
     "function": "MemoryChallenger.Attest.Properties.code",
     "outcome": "none"
    },
+   "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+    "function": "MemoryChallenger.Session.Properties.code",
+    "outcome": "none"
+   },
    "Properties.NetworkPeriod.rowsProgWired": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
@@ -14468,7 +14533,7 @@
    }
   },
   "Commitments.FV3": {
-   "digest": "11b4707d2e489649023187f2d9968a77e274aafefdc256181a2dfb43a6b5f0bb",
+   "digest": "0250401b8dbaa73b7c0f534b51784108bd38fedede32231db6332ee68bce660f",
    "definitions": {
     "Flock.FV3.Domain": "36a9410f0bb424a2c38165b764ed69a1207ee86948fa393f705d1ddc0fbdd692",
     "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
@@ -14503,12 +14568,14 @@
     "Flock.FV3.Sha512.hash": "65eb0dc95ee344351cca2dd0437d7ff6313b9a242f42a499e16a680766319b0d",
     "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
     "Flock.FV3.Sha512.node": "2b5a1399f0c3465babd3baa43fcd702f9e6b625f22297197a46124a1881ec695",
+    "Flock.FV3.Sha512.path": "32f46488fed3dcce02ce5a8a9fa3a127b3fb83f0c355a2c2802868d49a9ebee6",
     "Flock.FV3.Sha512.scheme": "0a2e745f691ffb3b648a322d3e45fb092e0e8cb428f54f10f1cbe498f488dffc",
     "Flock.FV3.Sha512.sibs": "fdcede501b2029181c011c52e3a6349b6b6fab3870183b59194d76dc645fbc21",
     "Flock.FV3.Sha512.taggedSha512": "7ce543bed847ab1a41082253496f3001a227e9eb208cb74f462b08fcc3a80355",
     "Flock.FV3.hash": "cc9e4c8cff49884c029e2dcd72eacfcff412be1262f7605a1340423d22de694c",
     "Flock.FV3.input": "40f6284bef69a01c2183abb181d134f0933c86d920af89dbdd6287181a68493c",
     "Flock.FV3.leaf": "4b7af71c043502c3b39a0c104b4738a7d793224b9a774a8f16ab9bd06cab139f",
+    "Flock.FV3.path": "44efffc387746567108f8f00ded084ce41dbdc0bbe0439e15e702a5c84dfdc99",
     "Flock.FV3.root": "6a22de22bbca2178bc03fcea105a21368f1b0b34dd561c136c085d25319ad51f",
     "Flock.FV3.uint": "1ac23222e67f6d80d0114374a4088da24daf3d7b1315e5239d849bb2606fce47"
    }
@@ -20851,7 +20918,7 @@
    }
   },
   "MemoryChallenger.Records": {
-   "digest": "e9a94507b7261268b3bfda69986402a0c359d3f7e89e45b8d37192a108d3af6c",
+   "digest": "01ce8b79a23d15304fdc8f57e559676b25a69956de8a6c6d652261e6d1277802",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -20870,8 +20937,11 @@
     "MemoryChallenger.CoinTree.indices": "0e2a5a6b2f1d9384d8c065719db0a803e4ed76eda6d8c4007bee243d8838ec18",
     "MemoryChallenger.CoinTree.k": "0fe8aeeeb3186fb5063b393791f98f4236d413ca3dc958078ddf4a6e7e85e332",
     "MemoryChallenger.CoinTree.key": "e8816d917e1f7c0ccc43c08d439e4ad304c904862440adbfc63920be73f80a8d",
+    "MemoryChallenger.CoinTree.levels": "d8c5b8a4a23b24b3a0c941db0374b12a2dd982dfccb6cb9980e6617fbedf3352",
     "MemoryChallenger.CoinTree.make": "ecdcaed9b38f54aea78987c8574779aa108bb975e03a5bb48d289a05b9a242fa",
+    "MemoryChallenger.CoinTree.opening": "a9419c8c9dde0dcc9767ff959855b2fd22fad373d54c2c674bf9f414bc63a512",
     "MemoryChallenger.CoinTree.root": "6100657735795727f4f3c969337fe4da8714f3aecbc95171fdd107ee517664e2",
+    "MemoryChallenger.CoinTree.salts": "21721c80f3a11baa192bf2114e3d194b65f8f4f66aabf5ba98e0b005e8ab4d24",
     "MemoryChallenger.CoinTree.session": "c904b761372eb2eb6541aeaa462b3d624c67d24df9b4b358d0c7fc360701a82b",
     "MemoryChallenger.DRAW_BYTES": "68f85e41afb606989e1aaa0bbfe522d5c78ce32c0feecfbd531c263925303fe0",
     "MemoryChallenger.E": "a375a27998813b4bdcd78a978652f133230b90354170dd67d190c2b8b6d02730",
@@ -24714,6 +24784,51 @@
     "MemoryChallenger.Properties.sessionMessage": "5b6a2bc60aa00caaaa6084b68bb84cf6b1dc305635e267cdeff47e130f8b2e48",
     "MemoryChallenger.Properties.sessionStrings": "ae3237f1e28242ca20ff67c654527962565cfdcb5c7b5cdb6cd89deee7023e53",
     "MemoryChallenger.Properties.treeStrings": "3d99dea70208f39c41d1968350b39acae0c06cca6efe071224abeae848f97f27"
+   }
+  },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "digest": "2a9e89d6a3a39e1ae2d887d28a31050364bf299454e176a7902a6f03ec8087b3",
+   "definitions": {
+    "MemoryChallenger.Session.Properties.AuditorSeesDigests": "2cc9af34d7fd6af5c99eb80a9c776dd8b69b1923ee99db1c1f25b2032dde4992",
+    "MemoryChallenger.Session.Properties.AuditorSeesSkeletonAt": "286b03f5bdf675d4754b4128355099f00746816beaeed9a8eb911708b3145de4",
+    "MemoryChallenger.Session.Properties.Ch": "d1cc517fb053f1e0236e0b6b2760dfc968724b2e86a982e6a330eee142ef319e",
+    "MemoryChallenger.Session.Properties.Ch.casesOn": "a79fec91a297918526117d682125eed75d8135d49090bc65397ee3916a5e560d",
+    "MemoryChallenger.Session.Properties.Ch.challenge": "8b6c8d28260a317aeb094d66d0a4d0f88e347cda3e9875cd2541e94e5f798620",
+    "MemoryChallenger.Session.Properties.Ch.rec": "f8d30cb904ea28796aa60ca933e0aa492a975e19d98a1a1d109895d1a2e81077",
+    "MemoryChallenger.Session.Properties.Ch.report": "93a467ae715992c99e7cf7a041c7c7a3bb8782a72983680a6833d989717fe56c",
+    "MemoryChallenger.Session.Properties.Msg": "554422fc728dcdea36c00a207d01aaeb074518554c3134f66693874dfcc3b3c6",
+    "MemoryChallenger.Session.Properties.Msg.done": "bdbbdec64dadabcfd35b77dbf0127f95cc5a71a525b67d4bfc6f52a6eec9c9d1",
+    "MemoryChallenger.Session.Properties.Msg.index": "71c805c0fd13633a22595385e9cd40dfee8c1194b03eaae60317478b9d0927fd",
+    "MemoryChallenger.Session.Properties.Msg.report": "12316f6f3f3b98078180e200c5cddb670364a154443242e7602eb891025ad457",
+    "MemoryChallenger.Session.Properties.Msg.warmup": "730d7ecd51fae85c0d82831e6652aeb5379724f9bbe40190d5ed9c98dd303144",
+    "MemoryChallenger.Session.Properties.Params": "bc5d22732ef9f95a0e4de698d1684b39478e934db6a3398276b75e691eb412aa",
+    "MemoryChallenger.Session.Properties.Params.binding": "5cf041e82ec317e1df5fd82adb7f8b76c79c823554e0c5c42a71ae69fd607a4f",
+    "MemoryChallenger.Session.Properties.Params.blockBytes": "3f7aa4f9667ed1758fbc79abc2b254e6f4915187814be51fd1c0b285e5a4abe4",
+    "MemoryChallenger.Session.Properties.Params.closing": "189ae930fb22749991e54d0c7a651a29e42ea067764e09bd6bc46354a9078015",
+    "MemoryChallenger.Session.Properties.Params.coins": "0333f1083798d55d1389d99a3db8d2a18656abcc66ac89b40e277b972e90b263",
+    "MemoryChallenger.Session.Properties.Params.commitment": "07370ddfd24bb75a3c660abc92636e704268ea77bbdaa848c12abc712f55bb90",
+    "MemoryChallenger.Session.Properties.Params.limitNs": "0eec80b629998964d3b88a08ff3403a067ff3ab6e3558d2df87950c32358a1d5",
+    "MemoryChallenger.Session.Properties.Params.publicKey": "bff0bd162785473747ad53f80978af162e7d8dac2ae6e95f23ad60a7d361f995",
+    "MemoryChallenger.Session.Properties.Params.scheme": "a36f0b4b42d54b0b292399e7a5cbd0dacae3500ce88d279ecb4ce9e55fc76491",
+    "MemoryChallenger.Session.Properties.Params.sign": "09e1950c32c9aad0e95ef13dfa2f35a7b28092992ed6e8cd36016d76389d1e72",
+    "MemoryChallenger.Session.Properties.Seen": "8114f05e228a79695a15da6946e50610779b09d989ef2b9e4c0670db508dffad",
+    "MemoryChallenger.Session.Properties.Seen.digest": "8af5557521e565aa463dc71f6f41e847ad4a2f7d0a2c96a738b78ee347e9a9dd",
+    "MemoryChallenger.Session.Properties.Seen.receiptNs": "5d92d87f68c53ee9b0193fb8896bd920de5b07edccf97369a3bbc97a86ae49d6",
+    "MemoryChallenger.Session.Properties.Seen.sendNs": "f31adb1f953101c65234ff90be02834757faee21e8e548d317e80e71b179eff6",
+    "MemoryChallenger.Session.Properties.Seen.size": "5e0f67191ef846157da422444f1410e8d964110db1953b5c1d357637b25a9e7c",
+    "MemoryChallenger.Session.Properties.Step": "325076aa0c61199d0623921a2b49218997eb579da10198c088d3ccff0c75c34f",
+    "MemoryChallenger.Session.Properties.Step.casesOn": "deefe14649f52569c5f5d10d818d71e93f0d53864e9d3fd506f462683a8d058c",
+    "MemoryChallenger.Session.Properties.Step.rec": "2c1a8c689d4f0c8294ff14f4d4f06218d7467e747dc0381739c1b2a5b871915c",
+    "MemoryChallenger.Session.Properties.Step.round": "694244dd4567fb7a5ff07e5e5fe937e399f33435f8464c9b938a5cb651ae50fb",
+    "MemoryChallenger.Session.Properties.Step.skeleton": "63e4e8bf48550c252893e91f79b32624ebef115278f83253691287d0df316a23",
+    "MemoryChallenger.Session.Properties.Step.warmup": "d910e5e6c2351ce4990875b957390917cd58b8bceefc55cb4d5ef8491c4eef9c",
+    "MemoryChallenger.Session.Properties.code": "6039c6582f41e4e839661960eb43e0a31895a82db52586f5b9e2e6570b7b2214",
+    "MemoryChallenger.Session.Properties.codeOn": "7cf29e2aa0613093bb94b35c9d9657b32f3c74f2e3ef40f560ad045ffb64d960",
+    "MemoryChallenger.Session.Properties.inClear": "33a2dec2814689572842c7da42a2665611850a8167e72e0e24f3b04c43921872",
+    "MemoryChallenger.Session.Properties.reportPublic": "ca3c4f571227e3a7816c898a7564c0f0e1528e9a1b5b4552a295fc90591e01b5",
+    "MemoryChallenger.Session.Properties.roundSeen": "35679b2095b14e003e6bab18ba32543035ebc30723a85f80aaf3b814885b89ff",
+    "MemoryChallenger.Session.Properties.seen": "1a776558bddcb8f52ead6073db8a30b2e4600021b126fe1e5c3aa328de0da74b",
+    "MemoryChallenger.Session.Properties.seenCode": "db167dd3c3ba0212886fbe0ad6efe44f65538513d7f84bff75503a0116a3272b"
    }
   },
   "Properties.Pous.Obligation": {
