@@ -1536,7 +1536,7 @@ ORDER_TREE = {
     "verity/protocols/proofs/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
     "verity/protocols/proofs/spot/lean/Spot/X.lean": "",
     "verity/protocols/proofs/spot/by_path.py": ("import sys\nfrom pathlib import Path\n"
-                               "sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'demos' / 'e2e'))\nimport prof\n"),
+                               "sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'demos' / 'e2e'))\nimport prof\n"),
     "demos/e2e/prof.py": "",
     "tools/lazy.py": "def f():\n    from benchmarks.probe import run\n",
     "benchmarks/probe/run.py": "import tools.lazy\n",
@@ -1622,8 +1622,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/configuration/package_above.py:1: python package verity.protocols.proofs.flock.verifier.interface loads "
         "verity/protocols/proofs/flock/__init__.py"]
     found = _place_loads(loads, listing)
-    assert list(found) == ["verity/circuits", "verity/configuration", "verity/definitions", "verity/protocols/proofs/flock/verifier",
-                           device, prover, verifier, "verity/protocols/proofs/spot"], list(found)
+    assert list(found) == ["verity/circuits", "verity/configuration", "verity/definitions", device, prover, verifier,
+                           "verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"], list(found)
     assert [sorted(x) for x in found["verity/circuits"]] == [["verity/definitions"], [], []], found["verity/circuits"]
     assert [sorted(x) for x in found["verity/definitions"]] == [["verity/circuits"], [], []], found["verity/definitions"]
     assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["demos/e2e"], [], []], found["verity/protocols/proofs/spot"]
@@ -1632,7 +1632,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
     assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", "verity/definitions", prover], reach
     assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/ops.py"]
-    assert sorted(loaders) == ["verity/protocols/proofs/flock/prover/stage.py", f"{prover}/build.py"], loaders
+    assert sorted(loaders) == [f"{prover}/build.py", "verity/protocols/proofs/flock/prover/stage.py"], loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
     assert [sorted(x) for x in found["verity/protocols/proofs/flock/verifier"]] == [[], [], ["verity/configuration/package_above.py"]]
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/definitions"], "trusted": True}])))
@@ -1640,7 +1640,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
         "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/definitions"]
     parted = _place_loads(loads, listing._replace(places=split))
-    assert list(parted) == [*list(found)[:4], device, party, *list(found)[5:]], list(parted)
+    assert list(parted) == [*list(found)[:3], device, party, *list(found)[4:]], list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]
     assert [sorted(x) for x in parted[party]] == [[device], sorted([*reach, device, verifier]), []], parted[party]
     kept = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/circuits", party]}])))
