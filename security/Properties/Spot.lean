@@ -108,14 +108,19 @@ def RootIs (r want : Json) : Prop :=
 
 /-- One port of the verifier's layout that names the port it is wired to (`want`'s `"wired"`, a port whose rows are the
 leaves of that port's tree): the record has a root under its own name `p` and one under the port it names, each a
-string, and the two are one string. One tree is registered at both names. -/
+string, and the two are one string. One tree is registered at both names. It says nothing of a port whose entry names
+none: the clause is only as good as the layout's `wired` entries, and a layout that leaves `wired` out is not refused
+for it. It is a second check of what `SecondStage.readOk_wired` gives, which holds each session's read of a wired port
+to its writer's root; where the verifier's parameters come from is the composite's to hold, not R3's. -/
 def WiredIs (rec : Json) (p : String) (want : Json) : Prop :=
   ∀ q, getD want "wired" = .str q →
     ∃ r h s, rootFor rec p = some r ∧ rootFor rec q = some h ∧ getD r "root" = .str s ∧ getD h "root" = .str s
 
 /-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
 domain}`; no port twice, and exactly the verifier's ports; each of the verifier's ports has its root as derived; and
-each port the layout wires to another has that port's root (`WiredIs`). -/
+each port the layout wires to another has that port's root (`WiredIs`: a second check of what
+`SecondStage.readOk_wired` gives, over the `wired` entries the verifier's parameters bring, whose provenance is the
+composite's and not R3's). -/
 def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "scheme") (.str v.scheme) ∧
   rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧

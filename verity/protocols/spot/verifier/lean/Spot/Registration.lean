@@ -79,7 +79,9 @@ acceptance rests on that later check.
 A port whose rows are the leaves of another port's tree (a member's port wired to its writer's output, with no tree of
 its own) is named in the verifier's layout with the port it is wired to (`"wired"`), at that port's leaves and domain.
 The record names a root under both names, and R3 refuses one whose two roots differ or that lacks either (`R3-wired`,
-`wiredHeld`): one tree named at two ports is the wire itself, checked and not a name.
+`wiredHeld`): one tree named at two ports is the wire itself, checked and not a name. It is a second check of what the
+second stage holds each session's read of a wired port to (`SecondStage.readOk_wired`), and only as good as the
+layout's `wired` entries: where the parameters come from is the composite's to hold, not R3's.
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
@@ -561,7 +563,11 @@ def wiredOk (find : String → Option Json) (p : String) (want : Json) : Bool :=
   | _ => true
 
 /-- R3 of the wired ports: a port of the layout whose rows are the leaves of another port's tree names that port
-(`wired`), and the record registers one tree at both names (`wiredOk`, of every port). -/
+(`wired`), and the record registers one tree at both names (`wiredOk`, of every port). The clause is only as good as
+the layout's `wired` entries, which the verifier's parameters bring: a layout that leaves `wired` out of a port is not
+refused by R3 for it. So `R3-wired` is a second check of what `SecondStage.readOk_wired` gives, which holds each
+session's read of a wired port to its writer's root whatever the layout names; where the parameters come from is the
+composite's to hold, not R3's. -/
 def wiredHeld (find : String → Option Json) (ports : Array (String × Json)) : Bool :=
   ports.all fun pw => wiredOk find pw.1 pw.2
 

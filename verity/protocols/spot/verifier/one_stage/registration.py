@@ -386,7 +386,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
-        # one tree at two names: a port its layout wires to another's tree has that port's root
+        # one tree at two names: a port its layout wires to another's tree has that port's root. Only as good as the
+        # layout's `wired` entries: a second check of what the second stage holds each session's read of a wired port to
         for p, want in sorted(ports.items()):
             q = want.get("wired")
             if isinstance(q, str) and not (p in got and q in got and isinstance(got[p]["root"], str)
