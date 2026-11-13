@@ -1148,9 +1148,10 @@ class PearlC4:
                     "live-verifier"),
             hypotheses=(
                 ("TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
-                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                 "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
-                 "of the units whose replayed debit is under the cap for less than their credit less the debit"),
+                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the inert work's "
+                 "F1′ and F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and "
+                 "U words of the units whose replayed inert work is within the inert-work bound for less than their credit "
+                 "less the inert work"),
                 (f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
                  "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090"),
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
@@ -1158,8 +1159,8 @@ class PearlC4:
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
                 ("savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
-                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
-                 "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replay charges the rest as inert "
+                 "work (tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
                  "(B_OVF, credit_of)"),
                 "the unscale is glue outside the checked values",
             ),
