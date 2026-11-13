@@ -2,8 +2,8 @@
 
 A served model's proof blocks proved one type at a time, from synthetic values at the model's served statics, through the path the
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
-`serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/flock/prover`'s
-patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/flock/verifier`), handed
+`serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/proofs/flock/prover`'s
+patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/proofs/flock/verifier`), handed
 the statement's partition object and Program, which must accept the honest run and reject the selftest build's forgeries (a
 committed false output word, a false output claim, a flipped internal bit). The selftest build's honest record gets through
 every check and is refused last, for its statement version (`ProvedScope.servedForm`). `summarize.py` counts Lean's
@@ -91,6 +91,6 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
 - **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
-  `verity.commitments`, `verity.protocols.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

@@ -37,9 +37,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.certifier.verifier import active
-from verity.protocols.certifier.verifier.certificate import Issuer
-from verity.protocols.certifier.verifier.release import release_of
+from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.certificate import Issuer
+from verity.protocols.accounting.certifier.verifier.release import release_of
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -504,8 +504,8 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
     """`ServedProxy` hands its `publish` the sync its own shaper ran each egress window under, and none with an ingress
     record or past the shaper's syncs; `CertifyingPublisher` signs it salted beside the window's record (`clocks.jsonl`,
     with its opening), and the certifier's key opens exactly those syncs back (`certificate.SignedClocks`)."""
-    from verity.protocols.certifier.verifier.certificate import SignedClocks
-    from verity.protocols.certifier.verifier.grid import Certifier
+    from verity.protocols.accounting.certifier.verifier.certificate import SignedClocks
+    from verity.protocols.accounting.certifier.verifier.grid import Certifier
 
     probed = {"url": "stub", "body": cs.request_body("stub", TOKENS),
               "responses": [{"events": TOKENS, "first_s": 0.0, "last_s": 0.0}]}
@@ -561,7 +561,7 @@ def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
 
 
 def _out_shape(words: int, rows: int, program: str = "cd" * 64):
-    from verity.protocols.certifier.verifier import out_commit as OC
+    from verity.protocols.accounting.certifier.verifier import out_commit as OC
 
     return OC.OutShape(program, "out", words, rows)
 
@@ -573,7 +573,7 @@ def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_i
     and the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
     that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the execution phase under
     ``refused``, with no witness."""
-    from verity.protocols.certifier.verifier import out_commit as OC
+    from verity.protocols.accounting.certifier.verifier import out_commit as OC
 
     words = [0x0102, 0xfffe, 7, 0]
     text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
@@ -605,7 +605,7 @@ def test_the_out_value_is_committed_at_the_registered_width_in_the_records_order
     order, ``shape.words`` a row, so response j's step s is row ``j·S + s`` (`out_rows`); the record pins at that
     shape and is ``out-width`` at the per-coordinate one, and words that aren't whole rows of it, or more rows than
     it holds, are ``out-shape``, never padded."""
-    from verity.protocols.certifier.verifier import out_commit as OC
+    from verity.protocols.accounting.certifier.verifier import out_commit as OC
 
     words = list(range(1, 4 * 8 + 1))
     text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode()
