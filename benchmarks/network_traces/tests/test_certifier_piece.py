@@ -581,7 +581,7 @@ def _private_chain_out(out: Path) -> Path:
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
+                       "warden_check": {"accepted": True, "problems": 0, "requests": REQUESTS}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
@@ -624,7 +624,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
     assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
-        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS, OUTPUTS}
+        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)

@@ -371,7 +371,9 @@ members aren't scanned) is no find, nor is a piece those files hold, as they are
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
 and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
-repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
+repeats it. The guard reads pieces of 32 bytes and sees no shorter value of the witness, so what a step may write of
+the witness is held by name where it is written: of the network certifier's own check the certificates step writes
+the gate's list of published counts and no other key (`warden_chain.COUNTS`). The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.

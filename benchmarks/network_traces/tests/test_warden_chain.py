@@ -154,8 +154,35 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     path.unlink()
     for b in [WC.WS.ar.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
         WC.WS.ar.write_blobs(path, b)
-    got = WC.certificates(run)
-    assert got["verdict"] == "refused" and "responses window 0 isn't certified" in got["why"]
+    got, check = WC.certificates(run), WC.WS.check(run / "witness")
+    assert got["verdict"] == "refused" and got["rows"][0]["certified"] is False
+    assert any("responses window 0 isn't certified" in p for p in check["problems"])
+    assert got["warden_check"]["problems"] == len(check["problems"]) and f"{len(check['problems'])} problems" in got["why"]
+    assert not [p for p in check["problems"] if p in json.dumps(got)]
+
+
+def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
+    """Of the network certifier's own check, the certificates step writes the gate's end's verdict, key for key:
+    whether it accepted, how many problems, and the gate's own list of counts (`auditor.WARDEN_COUNTS`, its
+    `cell_rows` cut to `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not
+    written by the chain: the summary's other keys (a connection's bytes before padding, the requests' tokens, the
+    certifier's clocks) stay in the witness, and so does a key the summary gains later. The record's leak guard reads
+    pieces of 32 bytes and sees no shorter value, so this is held by name."""
+    assert (WC.COUNTS, WC.CELL_ROWS) == (G.WARDEN_COUNTS, G.CELL_ROWS), (
+        "warden_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
+        "first, then write it here")
+    run = gate_run(tmp_path)
+    check = WC.WS.check(run / "witness")
+    got = WC.certificates(run)["warden_check"]
+    assert set(got) <= {"accepted", "problems", *G.WARDEN_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
+    assert {"data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
+            "ticker_stalls", "withheld_windows"} <= set(check["summary"]) - set(got)
+    (run / "witness" / "check.json").write_text(json.dumps(check))
+    (tmp_path / "end").mkdir()
+    assert got == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
+    later = {"accepted": True, "problems": ["connection 3: its words"],
+             "summary": {"requests": 1, "a_later_key": 2, "cell_rows": {"registered": 1, "of": 2, "cost": {"ms": 3}}}}
+    assert WC.verdict(later) == {"accepted": True, "problems": 1, "requests": 1, "cell_rows": {"registered": 1, "of": 2}}
 
 
 @pytest.fixture(scope="module")
