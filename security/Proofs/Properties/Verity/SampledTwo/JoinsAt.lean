@@ -237,10 +237,15 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   sessionMatches : SessionMatches C
   /-- The interior's log, as the check read it, ends the play's. -/
   interiorLogged : SessionCoins.InteriorLogged C LogIsDevice
-  /-- The message the check reads at each round opens the digest the play records. -/
+  /-- The message the check reads at each round opens the digest the play records. Holds of a strategy whose message
+  at each round is fixed before the round's coin; no check gives it: at the digests the device signs (the link's
+  `after`, a rep round's SHA-512 of its retained bytes, the closing's SHA-512 of the session's evidence; the
+  statements' round has no release) the message read is not the string hashed. -/
   msgOpens : Messages.MsgOpens A x
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg
-  /-- Each round's digest is fixed by the coins the history before it shows. -/
+  /-- Each round's digest is fixed by the coins the history before it shows. Holds of a strategy whose message at
+  each round is fixed before the round's coin; no check gives it: at `Dg` the SHA-512 of the message read, it is that
+  fact taken as a premise. -/
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
