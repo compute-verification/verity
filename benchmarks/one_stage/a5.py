@@ -430,9 +430,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
     where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
     proof or an outcome the stream refuses or holds pending; the negatives; the coins' record). The coins' record says
-    whose coins `coins_reason` took (``verified``; None where it refused): the SHA-512 of the challenger key the evidence
-    verified under, and the id of the one session the auditor's ledger opens on the window's root under that key
-    (`challenger.pinned_session`, the read `coins_reason` makes)."""
+    whose coins `coins_reason` took (``verified``; None where it refused): the SHA-512 of the challenger key the stream
+    holds, which the evidence verified under, and the id of the one session the auditor's ledger opens on the window's
+    root under that key and the stream's copy of main's history (`challenger.pinned_session`, the read `coins_reason`
+    makes)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
@@ -484,8 +485,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     checks = (result or {}).get("checks") or {}
     verified = None
     if ev is not None and why is None:
-        key = AC.Ch.ChallengerKey.from_json(ev["key"])
-        held = AC.Ch.pinned_session(ev["ledger"], {"root": root}, key, ev["pins"], ev["main"], AC.lms_verify)
+        key = ours["key"]
+        held = AC.Ch.pinned_session(ev["ledger"], {"root": root}, key, ev["pins"], list(ours["main"]), AC.lms_verify)
         verified = {"key_sha512": hashlib.sha512(key.public).hexdigest(), "session": held.session}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "verified": verified,
