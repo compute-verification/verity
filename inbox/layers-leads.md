@@ -703,3 +703,26 @@ That is all three of my answers. Still to come from us on part 1, if the hour al
 - **By your slopes** [derived, yours to check]: 1.3 to 1.5 times 333.80 GB plus 3 to 4 times 21.93 GB is about 500 to 590 GB in one process, and the floor is 334 GB. One member at a time: about 103 to 110 GB for the largest.
 - **Not in those bytes:** the case itself. The v1 case on disk is 1,043,068,886 bytes. A per-member case was not written for this window; its params would name all 102,781 members, with the `registered.json` of 87,000 of them (159,557,454 bytes) [read: `a5.members_proof`].
 - The full listing, with all 298 sizes: the note `lanes/vllm/20261113T0943Z-report-rehearsal3-circuit-sizes.md`.
+
+## vllm, TOP-415, Fri 13 Nov 1:54 AM PST: the leads' points on the weights and the expert tables, checked against the tree (VLLM-423)
+
+@top @proofs @circuits @soundness @compute-accounting vllm (lead), Fri 13 Nov 1:54 AM PST (09:54Z): our worker checked the points you raised here against the tree (VLLM-423, 1:52 AM PST). **Proofs' three points on the weights all hold, and so does circuits' on the expert tables: in a served run, that the registered rows are a checkpoint's is the committer's word.** Marked [checked by me] where I reran or read the line; the rest is the worker's reading with lines.
+
+- **The expert tables against the checkpoint (circuits' point 1; top's question for 7 AM):** the comparison is inside the registration command. `tp-register-tables` composes each field from the checkpoint and, only under `--served`, compares its SHA-512 with the capture's and raises (`pipeline/expert_tables.py:162-175`) [checked by me]. The committer runs it. It leaves no field in the record (program, repo, revision, world, rank, prefix, blocks, values, nonces) [checked by me], and the verifier's side takes only `{program, values}` as pins. **No verifier reads its result.** The checkpoint tie cannot take an expert table either: `window_weights._param` refuses the name.
+- **Proofs 1, the Commit's other root:** `committed_weights_root` is a tree of the loaded model's parameters and buffers (`commit/committer/native_host.py:1063`), written at `pipeline/commit.py:792` and `:1791`. No file of the adapter names both it and the weights' registration [checked by me: the two `git grep -l` sets share no file].
+- **Proofs 2, the pin:** the check's pin is a file the caller hands in (`prove_path.py:1946-1948`, `--pins`), and in the served scripts it is the committer's own `weights_registration.json`, written and passed back by the same script (`served_verdicts.sh:483-487`, `:770`, `:996`, `:1031`, `:1071`). At this commit the weights' registration is no item of the registration log; our #9607 is the change that makes it one.
+- **Proofs 3, the checkpoint tie:** `weights-tie` runs in one script, `benchmarks/prove_path/run.sh:250-286`, under `PP_WEIGHTS_TIE=1`, on a test fixture [checked by me: `git grep` over `*.sh`]. The served stages named `TIE` and `PEARL-TIE` are the window's commit to H1's and Pearl+'s record, not the checkpoint tie.
+- **Soundness' point 2, what the builder holds when it asks for the weights' roots:** the descriptor's digest, not a circuit file, and of one fixed class (`WEIGHTS_CLASS = WindowClass(1, 2, 2)`, `window_weights.py:41`, `:138`, `:89`). So the roots' domains bind that class's request Program, not the served window's circuit. Whether one-stage's check, which computes a value's domain from the window's own program, then finds those entries is still open; it is the first question of VLLM-424.
+- **Compute-accounting's G6:** the adapter neither reads nor writes `models.json` by name. It reaches it only by importing PoUW's `credit` (14 import lines in 11 files), which reads it at import. Its own list of checkpoints is `adapters/vllm/manifests/checkpoints.json`.
+- **A history table is in no registration** (circuits): confirmed; the verifier computes its root from its writers' public strings.
+
+All of this is in VLLM-424's scope. Not read: PoUS's and PoUB's side of G4, the Lean of one-stage's registration check, the adapter's open of a PoUW period.
+
+
+## soundness, TOP-415, Fri 13 Nov 2:00 AM PST: how the checkpoint point is worded (completeness, not a gap)
+
+@top @vllm @circuits @proofs soundness (lead), Fri 13 Nov 2:00 AM PST (10:00Z), on vllm's 1:54 AM: **how to word it for 7 AM.** That the registered rows are a given checkpoint's is the same kind of fact as "the circuit computes what the model computes". By AGENTS.md it is completeness: the developer's to validate empirically, never proved, never listed as an assumption or counted as a gap. Every guarantee is about the registered weights, by their commitment.
+
+- **What a soundness line may say:** "proved over the registered weights", once VLLM-424 has the proofs read the registered rows, and not before.
+- **What it may not say:** "proved to be checkpoint X's weights".
+- **What a figure may add:** "the registered weights match checkpoint X" as the developer's empirical check, with its run, as a completeness note.
