@@ -538,7 +538,7 @@ window root are refused the same way, a reject failing `run`; a sample that read
 
 ### The window's seed salt
 
-At the window's open, before it serves, the stream draws its seed salt (`Stream.seed_salt`): the first coin of the
+At the window's open, before it serves, the stream samples its seed salt (`Stream.seed_salt`): the first coin of the
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
 Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
