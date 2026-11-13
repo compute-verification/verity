@@ -18,18 +18,18 @@ from verity_vllm.protocols.pouw import h1
 LIVE = "verity.protocols.pouw.prover.circuit.live"
 #: the modules whose import loads the live circuit: `live` builds a window's live tables with it, `served` imports `live`,
 #: and `kept` and `handoff` import `served`
-LOADERS = frozenset({"handoff", "kept", "live", "served"})
+LOADERS = frozenset({"verity_vllm.protocols.pouw.h1.handoff", "verity_vllm.protocols.pouw.h1.kept",
+                     "verity_vllm.protocols.pouw.h1.live", "verity_vllm.protocols.pouw.h1.served"})
 #: argv[1] is imported: whether the live circuit is loaded after it
 CHILD = f"import importlib, sys\nimportlib.import_module(sys.argv[1])\nprint({LIVE!r} in sys.modules)\n"
 
 
-@pytest.mark.parametrize("module", sorted(m.name for m in pkgutil.iter_modules(h1.__path__)))
+@pytest.mark.parametrize("module", sorted(f"{h1.__name__}.{m.name}" for m in pkgutil.iter_modules(h1.__path__)))
 def test_importing_a_module_of_h1_loads_the_live_circuit_only_from_a_loader(module: str) -> None:
     """With `served` or `live` imported at the head of a module outside `LOADERS`, the live circuit's Definitions are in
     the table from that module's import on, and `resolve` answers for their ids in a process that built no live table."""
-    child = subprocess.run([sys.executable, "-c", CHILD, f"{h1.__name__}.{module}"], capture_output=True, text=True,
-                           check=True)
+    child = subprocess.run([sys.executable, "-c", CHILD, module], capture_output=True, text=True, check=True)
     loads = child.stdout.strip() == "True"
     assert loads == (module in LOADERS), (
-        f"importing h1.{module} {'loads' if loads else 'does not load'} the live circuit: import `served` or `live` inside "
-        "the function that needs it, or name the module in LOADERS with its reason")
+        f"importing {module} {'loads' if loads else 'does not load'} the live circuit: import `served` or `live` inside the "
+        "function that needs it, or name the module in LOADERS with its reason")
