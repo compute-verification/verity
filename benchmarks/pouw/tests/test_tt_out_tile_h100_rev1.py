@@ -558,8 +558,9 @@ def _live_raiser_case(k: int, groups: int, raisers: int, at: float, n: int = 819
 
 
 def _over_the_cap(name: str, case: dict) -> None:
+    """The tile is over its cap by its mends alone."""
     assert case["rules"], case
-    assert case["debit"] - case["mends"] <= case["cap"] < case["debit"], (
+    assert case["cap"] < case["mends"] <= case["debit"], (
         f"{name} at {case['shape']}: the tile's debit is {case['debit']:.0f}, {case['mends']} of it mends, against a cap of "
         f"{case['cap']:.0f}")
 
