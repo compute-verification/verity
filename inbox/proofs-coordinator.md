@@ -131418,3 +131418,53 @@ Nothing.
 - That any suite beyond the five `7127` has printed passes with GATHER's second try on the join.
 - That a play with K above 1 units is accepted by the form's check: every play here is K = 1, an interior of one member.
 - That an evidence file reaches `RECORD_DIGEST` or `RECORD_READ` through the binary: `#guard`s only, as before.
+
+## SESSIONCOINS, Fri 13 Nov 08:55Z: ASSEMBLY: MERGE `1d1352eb2d` (`cursor/proofs-sessioncoins-e4a0`): it COMPILES over TWOLEG's `1e20910586` (`r20261113-081538-3606`, rc 0: all ten session files "lean exit 0", probes clean); the merge into the join's tip `ece55a0cca` has no conflict; `firstTreeless` then leaves `JoinsAt` by one import and one line, NOT compiled on the join
+
+**In plain words.** Every file of mine compiles on the form as TWOLEG named it, with the theorem that reads my premise `FirstTreeless` off the form's own refusal. Merging my head into the join adds that one file and its two root lines, and rewords two docstrings. After it the join no longer has to assume that the first session samples no challenge tree on two windows: it is a theorem of the accepted check. I have not compiled the one line that uses it on the join, since the join's tip is not mine to build.
+
+**1. The run** [run: `r20261113-081538-3606` on vy-nebius-cpu-8, `--on auto --mem-gb 24`, no `ulimit`, at `1d1352eb2dc92b26…`: "done rc=0 class=SUCCESS"]. Each file's two lines, word for word, the path shortened to the file's name:
+- `SessionTreeless.lean`: "lean exit 0 in 442 s"; "axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `SessionCut.lean`: "lean exit 0 in 342 s"; "none of its 7 theorems uses an axiom beyond …".
+- `SessionLogged.lean`: "lean exit 0 in 31 s"; "none of its 7 theorems …".
+- `SessionHeld.lean`: "lean exit 0 in 38 s"; "none of its 21 theorems …".
+- `SessionCoins.lean`: "lean exit 0 in 33 s"; "none of its 38 theorems …".
+- `SessionRecord.lean`: "lean exit 0 in 29 s"; "none of its 5 theorems …".
+- `SessionDev.lean`: "lean exit 0 in 86 s"; "none of its 22 theorems …".
+- `SessionOpened.lean`: "lean exit 0 in 29 s"; "none of its 6 theorems …".
+- `SessionAgrees.lean`: "lean exit 0 in 29 s"; "none of its 4 theorems …".
+- `SessionFits.lean`: "lean exit 0 in 31 s"; "none of its 5 theorems …".
+- Ten lines `TRY <file> exit 0`, then `ALL rc=0`. No line of the log holds "error". The log's only `sorry` warnings name ArkLib's files. No warning names `SessionTreeless.lean`.
+- Each file's siblings line: "no built module of its package that doesn't import … declares a name it does". On this machine that check read 1276 built modules and left about 2800 unchecked, "with no build of their source as it is". The wider read is `4bc5`'s at `7df5f9e029`: 4045 modules for `SessionTreeless` (38 unchecked), 3840 for `SessionCut` (242 unchecked). No name of either file changed since.
+- The four cut files my branch holds (CUT's `0dc5993463`) built under these tries over `1e20910586`; they have no probe line here and are not what the join holds.
+
+**2. The merge into the join** [run: `git merge-tree --write-tree origin/cursor/proofs-join-42b8 1d1352eb2d` at the join's `ece55a0cca`, fetched 08:54Z; on my VM, nothing committed or pushed]. No conflict. Against that tip it changes five files:
+- `SampledTwo/SessionTreeless.lean`, new, 82 lines.
+- `SampledTwo/SessionCut.lean` and `SampledTwo/SessionLogged.lean`: docstrings only (9 and 6 lines).
+- `security/Proofs/lakefile.toml`: one root added, `Proofs.Properties.Verity.SampledTwo.SessionTreeless`, after `SessionCut`; the lines after it rewrap, and no name goes.
+- `security/Proofs/lean-audit.json`: the same name added to `roots`, one line.
+- It brings no cut file, nothing of TWOLEG's the join does not hold, and no commit of `main`: my head's merge base with the join is `1e20910586`.
+
+**3. The edit in `JoinsAt.lean` after the merge** [read at `ece55a0cca`; not compiled]. Only that file reads the field (`git grep firstTreeless` on the join: lines 73, 252 and 369).
+- Add `public import Proofs.Properties.Verity.SampledTwo.SessionTreeless` (it imports `SessionCut`).
+- Line 369 becomes `SessionCoins.interiorLogged_read C h.caseIsSent (SessionCoins.firstTreeless_of_check C h.caseIsSent (fun _ _ _ _ _ _ _ _ => rfl)) o hA hg.1`.
+- The field at lines 251 to 252 goes, and the docstring's bullet at lines 73 to 75 says it is a theorem now. `JoinsAt` has one field fewer.
+- Why `rfl` [read]: the join's `Cut.lean:117` has `firstCoins e := e.coins` in an exposed section, and the premise `hS` asks `Spot.getD (firstCoins e) "session" = Spot.getD e.coins "session"`. If it does not close, `fun o ha p c e c₂ hc hi => (h.sessionMatches o ha p c e c₂ hc hi).2 "session" (by simp)` gives it from the field `sessionMatches`.
+- What the proof reads is the same on the join as on my branch [read: `git grep` of each statement on both]: `firstLines`, `boundaryOf`, `interiorOf`, `secondDraws`, `firstDraws_window`, `secondDraws_eq`, `source_window`, `mapM_str_inv`, `mapM_map_str`, `toOption_ok`, `obind_some`, `firstTreeless_of_plain`, and TWOLEG's `accepted_treeless` and `firstTreeless_lines`. The one difference under it is `firstCoins`, which the proof never unfolds: it goes through `hS`.
+
+**4. For your table of fields.** `FirstTreeless C` speaks of every play the form accepts at `C` whose two sessions are on two windows. After item 3 it is no field: it follows from `caseIsSent`, which the join has.
+
+### STOP RULE
+Kept. No statement changed since my 08:18Z entry, and nothing since then touches a listed guarantee, a named assumption, a form or the lock.
+
+### NEEDS
+1. ASSEMBLY: item 2 and item 3, when you take the head.
+2. Coordinator: MESSAGES's item 3.2 (the locator at a kept prefix), mine or MESSAGES's. Asked at 08:05Z; I have read no answer and write nothing for it until you say.
+
+### Not established
+- That item 3's line compiles on the join: the join's tip is not compiled yet, and I built nothing there.
+- That `hS` is `rfl` at the join's cut: read.
+- A records run at any head of mine. The join's is the first to read `SessionTreeless`'s root.
+- Anything about a run of the compiled check: the theorem is about the Lean function. TWOLEG's 08:12Z and 08:53Z entries report the play with a tree's line refused (`FORM_TREE rc=1`, `54e6` and `3f1b`) and an honest play on two windows accepted; I ran no play.
+
+Branch `cursor/proofs-sessioncoins-e4a0` at `1d1352eb2dc92b26d4b8f9891a1e739931428600`, pushed; nothing unpushed; no run out. Mailbox read at 08:49Z: nothing after your 07:29Z.
