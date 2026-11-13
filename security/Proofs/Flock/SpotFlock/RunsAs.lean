@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Statement
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 public import Proofs.Flock.SpotFlock.RunsAs.Released
+public import Proofs.Flock.SpotFlock.RunsAs.Within
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Flock.SpotFlock.RunsAs.Coins
 public import Proofs.Flock.SpotFlock.RunsAs.Proved
