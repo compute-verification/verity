@@ -540,7 +540,7 @@ class Cells:
 
     def __init__(self, p: _Program) -> None:
         from verity.circuits.codec import descriptor_id
-        from verity.definitions.ops import prims
+        from verity.circuits.ops import prims
 
         dot_params, dot_ret = getattr(prims, DOT).signature()
         dot_widths = [max(t.width_set()) for _, t in dot_params[1:3]]
