@@ -32,7 +32,7 @@ theorem acceptedTwo_of_check {form : Bool} {p : VStar.Recursive.SampledTwo.Param
     form = true ∧ ∃ c₂ ξ₂ r i it run, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧
       AcceptedTwo i it run ∧ VStar.Recursive.SampledTwo.sourceRead ξ run = .ok () := by
   obtain ⟨hf, c₂, ξ₂, r, i, run, hin, hrun, hsr, -, hj, -⟩ := VStar.Recursive.SampledTwo.accepted_steps h
-  obtain ⟨-, -, -, -, vs, received₂, -, rfl⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   exact ⟨hf, c₂, ξ₂, r, _, _, run, hin, ⟨hrun, str_of_jeq (jeq_symm hj), hp, rfl⟩, hsr⟩
 
 end SpotFlock.RunsAs

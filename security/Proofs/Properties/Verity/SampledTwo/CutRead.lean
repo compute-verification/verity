@@ -16,8 +16,8 @@ That an accepted play is one whose logs the cut reads does not follow from the f
   (`Spot.Run.coinsCode`) reads the first stage's coin evidence with `drawCoins` under the parameters' key, the boundary
   registration's window and family, after its digest, as the cut does (`keyOf`, `firstDraws`), and takes `null`
   evidence where the first stage read no byte. `CutFirst` derives `FirstReads` from the form's acceptance on every
-  play whose first stage's coin evidence is not `null` (`FirstShown`); of a two-stage audit whose first stage reads
-  no coin, the cut says nothing.
+  play whose first stage's coin evidence is not `null` (`FirstCoinsShown`); of a two-stage audit whose first stage
+  reads no coin, the cut says nothing.
 * **The first session's log read as coin trees.** The form reads the first session's log only through `drawCoins`,
   which reads no coin tree. The device's run prints its log as coin trees (`PrintsOn`), and the log `drawCoins` read
   is that run's or the record carries a break (`Drawn.drawn_log`); so the first read exists, or a break

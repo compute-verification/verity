@@ -22,15 +22,15 @@ on two, the first session's releases come before the interior's (`logsOf`).
 * `CutReads`: on a play the form accepts, the cut reads at least one log. Where it reads none, `LogIsDevice` holds of
   any log, and says nothing.
 * `FirstDrawn`: the bytes the first stage read start the coins `drawCoins` reads under the parameters' key, in the
-  family the evidence's segment names, from the first stage's coin evidence. The run's coin check reads the evidence's
-  key; that it reads the parameters' is the run's coins' piece (`CheckReadsDraw` at the parameters' key).
+  family of the boundary registration's challenger, from the first stage's coin evidence. The run's coin check reads
+  that key and that family (`inputOf`); that it reads them as `drawCoins` does is the run's coins' piece.
 * `SecondAlone`: on two windows, the first session's releases hold no coins of the interior's family after the
   interior's digest. An honest run releases none there; the form does not refuse such a log today. Where it does, the
   interior's coins would follow coins of their own family that the second stage never read, and `SecondShown` would
   fail on a log that is the device's.
 
-**Not established here.** The first stage's family is the one the evidence's segment names, not the parameters'; and
-the run's coin check passes a signature from an earlier monitoring period. Neither is worked around.
+**Not established here.** The run's coin check passes a signature from an earlier monitoring period. It is not worked
+around.
 -/
 
 @[expose] public section
@@ -55,7 +55,7 @@ def CutReads (C : CaseOf) : Prop :=
 
 /-- **The first stage read the draw the cut reads**: on a play the form accepts, the bits of the bytes the run's first
 stage read start those of the coins `drawCoins` reads under the parameters' key, on the boundary registration's
-window, in the family the evidence's segment names, after the boundary registration's digest. -/
+window, in the family of its challenger, after the boundary registration's digest. -/
 def FirstDrawn (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ i read, inputOn C o = some i → FirstRead i read →
     ∀ p c e key d ξ, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key → firstDraws key p c e = some d →
@@ -114,7 +114,7 @@ theorem firstLines_arr {e : VStar.Recursive.SampledTwo.Evidence} {l : List Strin
 theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d : Draws} (hd : Decoded k p c e)
     (h : firstDraws key p c e = some d) : firstDraw k = some (d.label, d.after) := by
-  obtain ⟨-, hc, he⟩ := hd
+  obtain ⟨hp, hc, -⟩ := hd
   unfold firstDraws at h
   cases hb : boundaryOf p with
   | error _ => simp [hb, Except.toOption] at h
@@ -122,7 +122,7 @@ theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spo
     cases hw : bp.verifier.windowRoot with
     | none => simp [hb, hw, Except.toOption] at h
     | some w =>
-      cases hl : firstLabel e with
+      cases hl : firstLabel p with
       | none => simp [hb, hw, hl, Except.toOption] at h
       | some lab =>
         have h' : some (⟨key, w, lab, c.digest⟩ : Draws) = some d := by
@@ -131,12 +131,10 @@ theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spo
         obtain rfl := Option.some.inj h'
         unfold firstLabel at hl
         unfold firstDraw
-        rw [hc, he]
-        split at hl
-        · rename_i l hj
-          cases hl
-          simp [hj, Except.toOption]
-        · cases hl
+        rw [hc, hp]
+        show (p.boundary.challenger.map (·.2)).map (fun l => (l, c.digest)) = some (lab, c.digest)
+        rw [hl]
+        rfl
 
 /-- **The interior's draw on the case is the cut's**: its family and digest are those of the cut's second draw. -/
 theorem secondDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}

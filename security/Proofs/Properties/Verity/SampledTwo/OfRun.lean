@@ -23,7 +23,8 @@ form's check accepts and over the reading's own fields:
 * `HeldAt`: the held copies agree with what the run reads (`RunsAs.HeldMatches`); `TwoHolds` and `NamesDistinct` at
   the held copies;
 * `RecordsAt`: the records name their registrations' names and the interior record registers no value;
-* `RecordsRead`: each record's canonical bytes read back, by the proved verifier's reader, as the record the run held;
+* `RecordsRead`: each record's canonical bytes read back, by the proved verifier's reader, as the record the run held
+  (proved in `AcceptsTop.lean`, `recordsRead`);
 * `RoundTwo`: the second stage's statement check, passing, gives the model's;
 * `StmtsRead`: the reading's session statements' message states the statements the run's second stage checked;
 * `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`: each session statement has its template's stage count, is in scope, and
@@ -66,9 +67,9 @@ def RecordsAt (A : Live₂) (C : CaseOf) : Prop :=
     recordMsg it.record = some m₁ → RecordsHeld A.h x m₁ ∧ RegistersNone it.record
 
 /-- **An accepted play's records read back**: the proved verifier's reader (`SpotFlock.jsonMsg`) reads the boundary
-record's canonical bytes as the record the run held, and the interior record's as the interior's. The form reads its
-records with a parser the kernel cannot unfold, so this is a premise until the form hands the run each record as the
-proved verifier's parser reads its canonical text. -/
+record's canonical bytes as the record the run held, and the interior record's as the interior's. The form hands the
+run each record as the proved verifier's parser reads its canonical text (`readBack`), so it holds at every case map
+(`AcceptsTop.recordsRead`). -/
 def RecordsRead (C : CaseOf) : Prop :=
   ∀ o i it x m₁, FormAccepts C o → inputOn C o = some i → i.interior = some it → recordMsg i.record = some x →
     recordMsg it.record = some m₁ → SpotFlock.jsonMsg x = some i.record ∧ SpotFlock.jsonMsg m₁ = some it.record
