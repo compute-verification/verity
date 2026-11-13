@@ -373,7 +373,10 @@ def _dec(field: str, value):
 
 
 def certificate_json(c: Certificate) -> dict:
-    return {f: _enc(getattr(c, f)) for f in Certificate.__slots__}
+    """A certificate's JSON, its keys in sorted order: the one order a certificate's keys are written in, the
+    published file's (the gate's ``out/certificates.jsonl``, written with its keys sorted), so a certificate's text
+    in a witness line (`certified_json`) is its text in the public one."""
+    return {f: _enc(getattr(c, f)) for f in sorted(Certificate.__slots__)}
 
 
 def certificate_from_json(doc: dict) -> Certificate:

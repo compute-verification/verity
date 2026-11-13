@@ -126,7 +126,7 @@ def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_h
     assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in kept)
     assert all(cs.certificate_from_json(d).verify(key, session) for d in kept)
     assert sorted(map(json.dumps, (d["certificate"] for d in certified))) == \
-        sorted(json.dumps({f: d[f] for f in Certificate.__slots__}) for d in kept)
+        sorted(json.dumps({f: d[f] for f in sorted(Certificate.__slots__)}) for d in kept)
     text = (tmp / "client" / "certificates.jsonl").read_text()
     assert not any(d["salt_c"] in text or d["head"]["root"] in text for d in certified)
     signed, clocks = cs.read_clocks(tmp / "run" / "clocks.jsonl"), _lines(tmp / "client" / "clocks.jsonl")

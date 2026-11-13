@@ -57,7 +57,8 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
     """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
     direction and window the registration names, and the line as `warden_serve.Publisher` writes it less the wiring
     and the cost: the witness's own bytes but for those two, the root and the domain among them, and no wiring. The
-    line whole is in ``witness/``, where the chain reads it. So the record's leak guard, which reads a job's files
+    line whole is in ``witness/``, where the chain reads it. A record's certificate is written in one key order, so
+    its text in the witness's line is its text in the public one. So the record's leak guard, which reads a job's files
     against the gate run's witness, holds nothing of a record whose files name a registration's public keys as a
     verifier's files do (the published line, the registration less its wiring indented, a port with its root and
     domain, the certificates). The control: the published line with the wiring written into it is held, and so are
@@ -83,6 +84,10 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
     assert b"commit_ms" not in out and b'"cost"' not in out
     assert all(r[k].encode() in out for r in regs for k in ("root", "domain"))
     assert WC.WS.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
+    certified = (run / "witness" / "certified.jsonl").read_text().splitlines()
+    certificates = (run / "out" / "certificates.jsonl").read_text().splitlines()
+    assert len(certified) == len(certificates) == 3 * sz.W63.windows
+    assert all(x.endswith(", " + c[1:]) for x, c in zip(certified, certificates))
 
     record = tmp_path / "record"
     shutil.copytree(run / "out", record / "gates" / "out")
@@ -92,7 +97,6 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
         "certificates.json": json.dumps({"rows": [x["certificate"] for x in public]}, indent=1, sort_keys=True),
         "published.jsonl": "".join(x + "\n" for x in published),
         "registration.json": json.dumps(less[0], indent=1, sort_keys=True),
-        "registrations.json": json.dumps(less),
         "registered.json": json.dumps({"ports": {f"o{i}": {k: r[k] for k in port} for i, r in enumerate(regs)}},
                                       sort_keys=True)}
     control = published[0].replace('"root": ', f'"wiring": "{regs[0]["wiring"]}", "root": ')
