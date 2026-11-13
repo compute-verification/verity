@@ -1,4 +1,4 @@
-"""answers: the verifier of record's answers (`proofs.verify`) on a window's statements, each run once and shared by
+"""answers: the verifier's answers (`proofs.verify`) on a window's statements, each run once and shared by
 every step that judges them.
 
 Credit's window check and the period's (`credit.window`, `credit.period_credit`, through `credit._verified` or
@@ -10,7 +10,7 @@ step still judges every answer itself, in its own order, and refuses where it re
 A run's key is the SHA-512 of all of its inputs (`key`): the verifier's executable, the circuit file, the public file,
 every file of each session directory (its name and SHA-512), the paths the verifier is handed, the committed circuit
 digest, the program's bytes, and the partition object and the ``--registered`` file as canonical JSON. Those are the
-statement's proof files and what credit builds from the window's entries, root, rounds, salt and draw, so a changed
+statement's proof files and what credit builds from the window's entries, root, rounds, salt and sample, so a changed
 input is another key. The memo is the verifier's own: in memory, or a directory in the verifier's scratch (0700, each
 answer a 0600 file), never the serve dir or anywhere the prover writes. ``--lean-answers DIR`` hands a memo directory
 to credit's window check (``pouw_h1_gpu --check-challenger``) and to the period's (``pouw_piece.py period``), so the
@@ -25,11 +25,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
-from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import canonical_json
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 __all__ = ["Answers", "key", "verdict"]
 
@@ -128,7 +129,8 @@ class Answers:
         self.verify = verify or (lambda proof, **kw: PF.verify(proof, **kw))
         self.exe = exe or (lambda: PF.executable())
         self.memo: dict[str, dict[str, Any]] = {}
-        self.ran, self.unkeyed, self.taken = 0, 0, {}
+        self.ran, self.unkeyed = 0, 0
+        self.taken: dict[str, int] = {}
         if directory is not None:
             old = os.umask(0o077)
             try:

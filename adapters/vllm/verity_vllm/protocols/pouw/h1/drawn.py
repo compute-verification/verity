@@ -269,7 +269,8 @@ def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
     over M slots (`Served.a_words`), at the first one's ``a`` nonce, bound to the window's root."""
     # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
     # loads, and a reader of the table by id (`windows.interface.resolve`) answers for them from then on.  So it is imported
-    # where a value is rebuilt, here and in `zy_value` and `b_value`: importing this module alone leaves the table as it was.
+    # where a value is rebuilt, here and in `zy_value`, `b_value` and `receipt_table`: importing this module alone leaves the
+    # table as it was.
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     lay, prefix = win["layout"], win["shape"]["prefix"]
@@ -432,8 +433,9 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt (`call_receipts` of the unit's A rows, B rows and record at the rows credit's file `reg` reads them, in
     `values`), at ``RECEIPT_NONCE`` + c under the prover's key `key`, bound to the window's root."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
+    # imported here for `a_value`'s reason: `served` loads the live circuit
     from verity_vllm.protocols.pouw.h1 import served as SV
+
     size = CR.call_work(win["layout"])[call][0]
     u0 = reg["ports"][CR.PUB_PORT][G.READS_FROM]
     units = list(range(u0, u0 + size))
@@ -682,7 +684,7 @@ def stage(a: Any) -> int:
             tabs = statement_tables(z, st.row_ports, out_ports)
             roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
             if a.recompose:
-                def lowered(_rows: dict, outs: dict, z: dict = z, roots: tuple = roots) -> None:
+                def lowered(_rows: dict, outs: dict, z: dict = z, roots: tuple = roots, k: int = k) -> None:
                     reference_check(z, outs, win, k, roots)
                     outputs_held(z, outs)
                 st.reference_check = lowered
