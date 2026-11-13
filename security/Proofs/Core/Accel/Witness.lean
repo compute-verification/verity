@@ -63,7 +63,7 @@ structure GemmFigures (c : Card) : Prop where
   /-- Device memory holds `A` and `B` and then `C` at `n = 2048`: `kernel_computes`, for `stores_exec`. -/
   dram : 2048 * 2048 / 2 + 2048 * 2048 ≤ c.size .dram
 
-instance (c : Card) : Decidable (GemmFigures c) :=
+instance instDecidableGemmFigures (c : Card) : Decidable (GemmFigures c) :=
   decidable_of_iff ((0 < c.ρ .tensor ∧ 0 < c.ρ .issue ∧ 0 < c.ρ .alu ∧ 0 < c.ρ .imad ∧ 0 < c.ρ .shfl ∧
       0 < c.ρ .f64 ∧ 0 < c.ρ .sfu ∧ 0 < c.ρ .smem ∧ 0 < c.ρ .l2 ∧ 0 < c.ρ .dram) ∧ c.weight .s8 = 1 ∧
       1069056 ≤ c.text ∧ 2048 * 2048 ≤ c.size .reg ∧ 2 * 2048 * 512 ≤ c.size .smem ∧
