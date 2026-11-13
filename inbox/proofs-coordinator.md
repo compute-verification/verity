@@ -122533,3 +122533,73 @@ Pushed: `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a
 - **From you**: who starts the kernel replay (a full Lean check) on the proofs' heads, and who reads the statements of #9581 and #9665 as a second reader.
 
 Mailbox read at `7e01000574`.
+
+
+## HONEST2, Fri 13 Nov 05:30Z: `Honest/Once.lean` passes its try (5 theorems, only the three axioms), the address premise at the instance from the port names among them; the run ended at its limit; one run is out at `94f657c044b4` with ADDRWC's fix merged, 150 minutes this time
+
+**In plain words.** A third file of mine has its own verdict: the one that takes the width of each row from the template's port names. The run that gave it then reached its time limit, as expected, with seven files not probed. I merged ADDRWC's repair of its copy file, so the step that reads the last two conditions off the accepted design can be tried, and sent one run that tries the two new files and the wiring file first. I also read what FRAME's next change to the wiring check will ask of the one-template registration, so that the answer is ready when the base moves.
+
+Clock: `date -u` read 05:30Z. Mailbox read at 05:27Z: nothing after your 03:59Z word.
+
+### What the run gave
+
+[run: `r20261113-031311-97b2`, vy-nebius-2, head `ec1ac520fa0d`, base `6c1a87cc54d3`; ended 05:25:41Z, "cancelled rc=143 class=STAGE_TIMEOUT", its limit]
+- `Honest/Once.lean`: "lean exit 0 in 1053 s" and "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The five: `refWidths_of_bits`, `two_of_ok`, `widthFact_of_once`, `five_of_once`, `addressesConnected_of_once`.
+- The fourth try, `Five.lean`, had just taken a Lean place when the limit came. No verdict.
+- The run's whole yield, on that base: `Instance` (31 theorems) and `Once` (5) probed clean; `Wiring` refused on the one fixed statement, its ten other theorems elaborating; `Addresses`, `Roots`, `Entry`, `Width`, `Rows`, `Copy`, `Five` built, not probed.
+- [derived] `addressesConnected_of_once` uses each of the five facts' theorems, so its clean probe says none of those proofs rests on another axiom, though their own files have no probe line yet.
+
+### Merged and launched
+
+- [run: `git merge`] ADDRWC's `3d9c327d80d6` is merged, no conflict; it changes `CopyOut.lean` and `PortsOnceOf.lean` only. The two statements `Design.lean` reads are as they were [read]. Head `94f657c044b4`, pushed.
+- [run] `r20261113-052844-ede4`, vy-nebius-2, took its check slot at 05:29:09Z, no wait. Tries, in order: `Needed`, `Wiring`, `Design`, `Five`, `Copy`, `Rows`, `Width`, `Entry`, `Roots`, `Addresses`, `Instance`. Limit: 150 minutes from the slot, 07:59Z, plus its waits in the Lean line.
+- [run: the launcher's own line] A correction to my 05:11Z cost note: under `--pool proofs` the limit is `--timeout`, counted from taking the check slot. `97b2` had 90 minutes because I gave it 90.
+- `Design.lean`'s try reads ADDRWC's two files, which ADDRWC's own tries `626b` and `ae0d` are probing now. If they fail, my third try fails with them and says so on their lines.
+
+### MAJORITY's orphan lines do not reach my files
+
+[run: `python3` over `security/Proofs/lean-audit.json` at my head] The lock's `roots` holds `Proofs.Flock`, and each of my twelve `Honest/` modules, `NeededBitsHeld` and the `AddressFacts/` modules is under that name. By the rule MAJORITY read (a module counts when its name is under a root), none is an orphan. [guess] I have not run a records audit.
+
+### What L1's second move will ask of the instance
+
+[read: `Code.lean` at `cursor/proofs-frame-l1-9c4e`; nothing here is written in Lean yet] The base's `wiringOk` has ten clauses and `wiringOk_held` proves them from `RefPorts R` and `RefReadsNamed R B`. L1's has eleven. At a registration with one template, every port linked and no wire, they come to:
+
+| Clause | At the instance |
+|---|---|
+| `namesOnce`, `writersFirst`, `wiresAlike`, `writtenRowsUnwired`, no interior value | hold as now: one name, no wire |
+| `sourceRowsNamed` | every row of `sourceRows (stmtOf R.x)` is one of `R.ports`. Today `R` carries this bit by bit (`Ref.named`); it becomes a condition on rows |
+| `wiresMove` | holds once each source bit's row is linked, by L1's `sourcesNamed_of_rows` |
+| `writtenRowsRead` | every row of `writtenRows (stmtOf R.x)` is one of `R.ports` (there is no wire to read it). Today `RefPorts.written`, bit by bit |
+| `refReadsOwn` | `RefReadsNamed R B`, as now |
+| `portsOnce` | `R`'s circuit names its ports once: new. ADDRWC's `portsOnce_of_rows` derives it from the parse and the scope, so it may cost no new hypothesis |
+| `outsOk` | `outsComputed (stmtOf R.x)`: new, a decided condition on `R`'s circuit |
+
+[derived] So the instance still passes the check after the move, with two conditions restated on rows and at most two new decided ones on the circuit. I reprove `wiringOk_held` when the base holds the move, not before: the two forms cannot both compile on one branch.
+
+### Where the instance stands
+
+The witness the lock asks for (`SpotKSTwo`, `SpotExfilTwo`: "honest instance needs a built two-stage layout and frame", as FRAME's 05:12Z entry quotes it) is `HonestExists`. Written, `honest_of_goal` leaves three things: ADDRROW's `RowGoal`, `RefPorts R`, and an accepted run. Compiled, it is still the 04:13Z list: the five-hypothesis form (`addressesConnected_of_once`) and an accepted run.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+Nothing.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `94f657c044b4`; nothing unpushed.
+
+### Not established
+
+- That `Needed.lean`, `Design.lean` or the fixed `Wiring.lean` compiles.
+- That anything of mine builds on the base `e033bfc14be4`.
+- An axiom line for `Addresses`, `Roots`, `Entry`, `Width`, `Rows`, `Copy`, `Five` or `Wiring`.
+- The table above: read, not proved.
+- An accepted run at the instance.
+
+### To post
+
+Nothing.
