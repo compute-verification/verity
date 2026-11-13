@@ -20,7 +20,8 @@ round by round:
   (`AnswersShown`), on messages and coins whose every earlier answer was a message (a run that got that far).
 
 `runShown_of` is `RunShown` from the two. The run's agreement round by round is `stepWith_agree_on`: two verifiers
-that answer alike on the messages one run of them actually sends give the same rounds.
+that answer alike on the messages one run of them actually sends give the same rounds. `runShown` holds at every
+`Live₂`, so `messagesFixed` is `Messages.messagesBound` without it.
 -/
 
 @[expose] public section
@@ -723,5 +724,19 @@ theorem runShown (A : Live₂) (x : Msg) : RunShown A x := by
   have hO : AnswersOwn A.L.V := by rw [L_V]; exact answersOwn A.h
   have hS : AnswersShown A.L.V := by rw [L_V]; exact answersShown A.h
   exact runShown_of hO hS
+
+/-- **`MessagesFixed` at the frame's prover**, at the sum over the rounds of the square roots of their finders'
+successes: where the message the check reads opens the digest the play records, each round's digest is fixed by the
+coins the history before it shows, and the run reaches every round. -/
+theorem messagesFixed {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (A : Live₂)
+    (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
+    (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ) (hO : MsgOpens A x Rd Acc Good Dg)
+    (hB : ∀ i < A.L.V.k x, DigestBefore (frame V A x θ F c σ place Rd Dg) Rd Acc Good Dg i)
+    (hT : RunsThrough (frame V A x θ F c σ place Rd Dg) Rd Acc Good) :
+    MessagesFixed V A x θ F c σ (frame V A x θ F c σ place Rd Dg) Rd Acc Good
+      (∑ i ∈ Finset.range (A.L.V.k x),
+        ENNReal.ofReal (Real.sqrt ((msgFinder V θ F c σ place Rd Dg i q).Pr Verity.sha512Msg))) :=
+  messagesBound V A x θ F c σ place Rd Acc Good Dg q hO hB (runShown A x) hT
 
 end Verity.SampledTwo.Messages
