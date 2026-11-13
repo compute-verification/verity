@@ -23,8 +23,8 @@ variable {ι α : Type} [Fintype α] {d : Accounting.Device ι}
 commit phase's check while one of its three claims fails with probability at most their errors summed, for a vocabulary
 whose sampled fields read the constructions `K` at the deployment's sessions `S`, wherever each session's coupling,
 PoUW's target and the inference-only policy's target hold. -/
-theorem remote_soundness_of_targets (V : Vocab d α) {T : Sampled.Pinned} {K : Sampled.Constructions V}
-    {S : ByteArray → Array ByteArray → Option Sampled.Live} (hD : Sampled.Deployed V T K S)
+theorem remote_soundness_of_targets (V : Vocab d α) {K : Sampled.Constructions V}
+    {S : ByteArray → Array ByteArray → Option Sampled.Live} (hD : Sampled.Deployed V K S)
     (hCov : Sampled.Covers V .remote S) (hC : ∀ θ F A, S θ F = some A → Sampled.CouplingTarget V .remote K A θ F)
     (hW : V.PouwSound .remote) (hI : V.InferenceOnlySound .remote) :
     V.SoundnessAt .remote :=

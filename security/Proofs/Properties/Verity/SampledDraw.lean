@@ -533,9 +533,8 @@ def DrawRead (k : Verity.Registration.Composite) (read : Verity.Sent → Option 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- At a deployment, the sampled check's read is v2's (`Deployed.coinsRead`), so it shows the sample where v2's does. -/
-theorem drawRead_deployed {V : Vocab d α} {T : Pinned} {K : Constructions V}
-    {S : ByteArray → Array ByteArray → Option Live} {k : Verity.Registration.Composite} (hD : Deployed V T K S)
-    (h : DrawRead k coinsRead) :
+theorem drawRead_deployed {V : Vocab d α} {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
+    {k : Verity.Registration.Composite} (hD : Deployed V K S) (h : DrawRead k coinsRead) :
     DrawRead k (V.coinsRead .sampled) := by
   rw [show V.coinsRead .sampled = coinsRead from funext hD.coinsRead]
   exact h

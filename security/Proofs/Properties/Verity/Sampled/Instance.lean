@@ -482,9 +482,8 @@ and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`):
 `error`'s condition at this strategy (`strictSpecs`, `premisesOf`, `fileSpecs`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.pinned I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) :
-    Deployed (I.vocab K) I.pinned (I.lift K) I.sessions where
+    Deployed (I.vocab K) (I.lift K) I.sessions where
   setsUp θ F A h := setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2
-  digests θ := digestsAt_of (I.vocab K) I.pinned I.programDigest I.publicDigest I.read θ
   coinsRead _ := rfl
   finder θ F c σ := (hKr θ F c σ).symm
   forger θ F c σ := (hKf θ F c σ).symm

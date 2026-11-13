@@ -72,8 +72,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
   the read shows no log; a record that doesn't parse reads as `null`, as `treesHeld` reads it, and v2 refuses its
   session.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
-  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables the circuit file
-  registers (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
+  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters.
+  Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
@@ -1061,19 +1061,17 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
-`S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
-name and the lookup tables the circuit file registers (`DigestsAt`); the device's log as the sampled check reads
-it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
-the extractor is the
+`S` holds is the one v2 sets up (`SetsUp`); the device's log as the sampled check reads it is v2's (`coinsRead`); the
+finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
 commitment opens (`Live.OpensUnder`), `error`'s condition holds SPOT's per-finder premises (`FinderCR`), the
 vocabulary's session premises (`Vocab.premises`) are exactly the session's at the projected strategy
 (`Live.FinderCR`), and `True` where `S` holds no session, and the published `δ` is at least the session's at the read
-finder's published bound (`Live.delta`). -/
-structure Deployed (V : Vocab d α) (T : Pinned) (K : Constructions V)
-    (S : ByteArray → Array ByteArray → Option Live) : Prop where
+finder's published bound (`Live.delta`). That the files the vocabulary reads are v2's (`DigestsAt`) is no field here:
+the lemmas that need it take it, and a deployment whose digests and reading are v2's gives it (`digestsAt_of`). -/
+structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
+    Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
-  digests : ∀ θ, DigestsAt V T θ
   coinsRead : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
