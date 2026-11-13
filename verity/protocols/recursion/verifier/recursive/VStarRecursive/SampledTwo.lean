@@ -58,7 +58,7 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      first stage's copy of the auditor's ledger is a prefix of the second stage's (`LEDGER_PREFIX`), and on the
      second's, read under the parameters' challenger key, the first stage's session's `end` line has a lower `seq`
      than the second stage's session's `reserve` line (`STAGES_ORDER`); and on two windows no line of the first
-     session's log is a coin tree's (`firstTreeless`, `FIRST_TREE`): the first stage's session only draws its
+     session's log is a coin tree's (`firstTreeless`, `FIRST_TREE`): the first stage's session only samples its
      sample, so every coin tree of the play is on the second stage's session, where the interior audit reads them
      in order from its log's first;
   5. the interior audit's verdict at its coins under the second stage's law (`secondCheck`), which gives the public
@@ -67,13 +67,13 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
 
 **The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
 registration is sampled under two laws: its record's, a subset of all its `m` proof blocks (`subsetLaw`), which R1
-holds it to as the run of record does, and the second stage's, which its sample is drawn under. It reads the draw the
+holds it to as the run of record does, and the second stage's, which its sample is sampled under. It reads the sample the
 coins `ξ₂` give under the second stage's law, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
-subset law, the evidence's draw held to the second stage's law (`Draw.checkDraw`), the record's checks over its proved
+subset sampling design, the evidence's sample held to the second stage's law (`Draw.checkDraw`), the record's checks over its proved
 units (`OneStage.recordChecks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's law.
 That law is computed, never read from the evidence (`secondLawOf`): `Select.secondLaw` of the first stage's sample (the
-proved units of the draw the run of record decided) over the replay block's cells under the interior's query
-(`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage draws by.
+proved units of the sample the run of record decided) over the replay block's cells under the interior's query
+(`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
 -/
 module
 
@@ -345,7 +345,7 @@ def STAGE_PAST (stage : String) : String :=
   s!"the {stage} stage's bytes run past one coin's {STAGE_BYTES} bytes: a stage's sample reads one coin's bytes"
 
 /-- **Neither stage's bytes run past one coin's** (check, 3): the first stage's bytes `ξ` and the second stage's `ξ₂`
-are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes draws fresh ones, and the coins'
+are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes samples fresh ones, and the coins'
 check takes a read over any number of whole coins, so nothing else bounds them. -/
 def stagesFit (ξ ξ₂ : ByteArray) : V Unit :=
   if STAGE_BYTES < ξ.size then .error (STAGE_PAST "first")
@@ -432,7 +432,7 @@ window is not the boundary registration's, no line of the first stage's session'
 coin tree's, one the challenger wrote when it sampled a tree or opened a round of one (`FIRST_TREE`). The interior
 audit reads its sessions' coin trees in order from its own session's log's first, and the first stage's coin check
 drops such lines unread (`Challenger.releasedRootsOf`), so nothing else refuses a first session that sampled one. A
-first stage only draws its sample, so no honest play has such a line. On one window both stages read one session,
+first stage only samples its sample, so no honest play has such a line. On one window both stages read one session,
 whose log holds the second stage's trees, and this adds nothing. -/
 def firstTreeless (p : Params) (e : Evidence) : V Unit :=
   match p.boundary.verifier.windowRoot with
@@ -443,7 +443,7 @@ def firstTreeless (p : Params) (e : Evidence) : V Unit :=
   | none => .ok ()
 
 /-- **The second stage's law** (check, 5), computed and never read: `Select.secondLaw` of the first stage's sample, the
-proved units of the draw the run of record `run` decided (its `draw`), over the cells the replay block's program has
+proved units of the sample the run of record `run` decided (its `draw`), over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
 second stage computes it. -/
 def secondLawOf (p : Params) (run : Json) : V Json := do
@@ -456,7 +456,7 @@ def secondLawOf (p : Params) (run : Json) : V Json := do
 /-- The interior registration's law as the run of record reads it: a subset of all its `m` proof blocks. -/
 def subsetLaw (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
 
-/-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the draw held to the second stage's law `law`, the
+/-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the sample held to the second stage's law `law`, the
 record's checks, the verdicts, and the bound under `law` at δ `delta`, as `OneStage.check` has them. -/
 def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (law : Json)
     (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
@@ -485,8 +485,8 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
   | none => .reject "the law the draw passed under has no profile"
 
 /-- **The interior audit's check at the second stage's law** (check, 5; module docstring, **the last step**): the
-interior registration's population `m`; the draw the coins `ξ₂` give under `law` (`OneStage.coinsReason` at the
-verifier whose law is `subsetLaw m`, so that the draw is `law`'s, `Draw.flockLaw`), every coin opened read; then
+interior registration's population `m`; the sample the coins `ξ₂` give under `law` (`OneStage.coinsReason` at the
+verifier whose sampling design is `subsetLaw m`, so that the sample is `law`'s, `Draw.flockLaw`), every coin opened read; then
 `secondChecked` at that verifier. -/
 def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (law : Json)
     (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=

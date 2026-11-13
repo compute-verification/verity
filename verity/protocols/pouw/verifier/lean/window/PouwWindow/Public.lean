@@ -4,7 +4,7 @@ module
 # What the execution phase makes public (`window.py`, "Public items")
 
 `PUBLIC`, the draft's list and the rows' fixed length, in the service's `Public` form, `REGISTERED`, the items
-an execution phase's window commitment record carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule
+an execution phase's execution phase commitment record carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule
 carries (`REGISTERED` without `length`), and `KINDS`, the kinds of an entry.
 -/
 
@@ -34,11 +34,11 @@ def publicItems : List PublicItem := [
   ⟨"drawn", "coins", "outcome", "the verifier's own draw, after the receipt"⟩,
   ⟨"root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"⟩]
 
-/-- `REGISTERED`: the items an execution phase's window commitment record carries; the verdict and the sample come after
+/-- `REGISTERED`: the items an execution phase's execution phase commitment record carries; the verdict and the sample come after
 it. -/
 def registered : List String := ["work", "check", "sampling", "length", "root_W"]
 
-/-- `LEGACY_REGISTERED`: what a window commitment record made before the fixed-length rule carries, `registered` without
+/-- `LEGACY_REGISTERED`: what an execution phase commitment record made before the fixed-length rule carries, `registered` without
 `length`, so not of record. -/
 def legacyRegistered : List String := registered.filter (· != "length")
 

@@ -87,7 +87,7 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
 
 
 def _rated(text: str, n: int = 6, table=None, **change) -> dict:
-    """A record of `n` proof blocks under the rate `text` as a stream registers it: its law and work table the ones the
+    """A record of `n` proof blocks under the rate `text` as a stream registers it: its sampling design and work table the ones the
     rate names over them (`selection_law`, `selection_table`), from the verifier's work `table`."""
     rule, program = S.Law(text), P.population_program(PAIR, n)
     return _record(n, law=S.selection_law(rule, n, D.strata_sizes(program, QUERY)),
@@ -665,8 +665,8 @@ def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
 
 
 def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration():
-    """The stream draws the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
-    the window's open root, logged on the challenger's clock, drawn once and before the window's first registration.
+    """The stream samples the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
+    the window's open root, logged on the challenger's clock, sampled once and before the window's first registration.
     Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
     one naming another or none is refused (`R6-seed-salt`); where the stream drew no salt, a window naming one (a salt
     the server chose) is refused by name. The Spec declares the salt public, of kind `coins`, or a seeded window is
