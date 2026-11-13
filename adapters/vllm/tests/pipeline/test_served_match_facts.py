@@ -352,3 +352,13 @@ def test_the_check_walks_the_committed_steps_in_order_each_with_its_values_words
     assert check.steps[0].values["h"].dtype == np.uint16 and check.steps[0].values["h"].tolist() == [[0x3F80, 0xC000, 0x3F00], [0x0000, 0x4040, 0x8000]]
     assert check.steps[2].values["h"].tolist() == [[0x4000, 0xC080, 0x3F80], [0x0000, 0x40C0, 0x8000]]
     assert check.steps[0].values["ids"].tolist() == [4, 9] and check.steps[2].values["ids"].tolist() == [5, 10]
+
+
+@pytest.mark.parametrize("rows", [{}, {0: None}, {0: []}, {0: ()}])
+def test_a_step_the_committer_recorded_no_row_order_for_is_checked_with_no_request_rows(monkeypatch, rows):
+    monkeypatch.setattr(_Check, "made", [])
+    monkeypatch.setattr(served_check, "ServedCheck", _Check)
+    com = _committer({0: {"ids": torch.tensor([4, 9], dtype=torch.int64)}}, rows)
+    sm.check_committed({"program_digest": "d"}, com, None, {}, {"req-a": "r0"}, seed=None)
+    check, = _Check.made
+    assert [st.rows for st in check.steps] == [[]] and type(check.steps[0].rows) is list
