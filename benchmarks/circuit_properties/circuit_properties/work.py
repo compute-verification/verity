@@ -88,11 +88,10 @@ gives a gathered value:
   values the Program doesn't state (a rope table, which may hold a 0).
 
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
-one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
-each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
-two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
-of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
-positions whose prefixes hold the same tokens in the same proportions. The updates': a weight is `θ`'s rows, which
+one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
+words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
+under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
 are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
