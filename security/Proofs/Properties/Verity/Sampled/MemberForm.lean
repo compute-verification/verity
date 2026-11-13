@@ -22,6 +22,8 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Registered
 public import Proofs.Properties.Verity.Sampled.MemberForm.Apart
 public import Proofs.Properties.Verity.Sampled.MemberForm.Laid
 public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
+public import Proofs.Properties.Verity.Sampled.MemberForm.Sent
+public import Proofs.Properties.Verity.Sampled.MemberForm.Reads
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -87,5 +89,13 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   counts sum to its units (`WindowOn.total`, from the files' units), and each member's units lie one after another
   from where the members before it end.
 * `MemberForm.WindowPasses`: at each play the form accepts, the window the verifier sets up is laid out and each
-  member's files pass (`windowPasses_members`), which is what a window's instance takes of the form's acceptance.
+  member's files pass (`windowPasses_members`), which is what a window's instance takes of the form's acceptance;
+  so the verifier sets the deployment's window up at every accepted play (`windowAt_form`).
+* `MemberForm.Sent`: each session of the form in what the prover sent: the evidence sent for the `u`-th session
+  (`sentEvidenceAt`), the `j`-th statement's one session as the evidence's `j`-th, named at place `j` (`named_at`),
+  its record and evidence among what was sent (`sentRecordAt_session`, `sentEvidenceAt_session`), its one table and
+  that table's coin tree (`rootBTables_one`, `Member.spec_coinTree`).
+* `MemberForm.Reads`: at each play the form accepts, every release of the sample's family precedes every opening
+  and the play has the sessions of the window's sample (`windowRead_members`, `windowReads_members`), which is the
+  read a window's instance takes of the form's acceptance.
 -/

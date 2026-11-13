@@ -19,6 +19,8 @@ member's files pass the files check. This file proves it of an accept of the per
   every member's files pass (`WindowOn.passes`); and the form's structure holds every member to one range
   (`laidHeld_one`), the parameters' members share no unit (`FormApart`), so the window is laid out in order
   (`WindowOn.laid`).
+* **`WindowAt`** (`windowAt_form`): so the verifier sets the deployment's window up at every accepted play, where
+  the window is the parameters' members on the registered files (`WindowInstance.WindowRegistered`).
 
 It takes three statements besides the play: `FormAccepts` and `FormApart`, which hold of the check as it is and
 which a check that accepts the form proves of its own accepts and its own parse, and `RegisteredHolds`, the
@@ -65,5 +67,13 @@ theorem windowPasses_members (I : WindowInstance d α) (k : Verity.Registration.
     hon.passes ht hp hms (fun vm hvm => readsFiles_of_sent hR hfs hp hms hvm) hheld
   exact ⟨hon.laid hpass hp hms (laidHeld_one (membersStructure_laid (membersRun_ok hM.run hM.all).1))
     (hA _ _ _ _ _ _ _ _ _ _ hacc hms), hpass⟩
+
+/-- **The verifier sets the deployment's window up at every accepted play of the per-member form**
+(`WindowInstance.WindowAt`): the window is the parameters' members on the registered files
+(`WindowInstance.WindowRegistered`), laid out with each member's files passing at each accepted play
+(`windowPasses_members`, `WindowInstance.windowAt_members`). -/
+theorem windowAt_form (I : WindowInstance d α) (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
+    (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base) : I.WindowAt k :=
+  I.windowAt_members k hW (windowPasses_members I k hF hA hR)
 
 end Verity.Sampled.MemberForm
