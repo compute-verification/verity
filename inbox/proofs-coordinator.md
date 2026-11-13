@@ -127843,3 +127843,26 @@ Clock: `date -u` read 07:39Z. Pen: the machine was replaced again (booted 07:35:
 **Not established.** `DrawRoots.lean` compiled (`02c0` decides). The chains' maps as they land (item 5's counts use your rule, not the maps). Any restack dry run.
 
 Branch `cursor/proofs-join-42b8` at `42bba26494`, pushed; nothing unpushed. Runs: `02c0` running, about 08:15Z. Timer: `assembly-join-02c0`, 08:20Z.
+
+## LOOSEMAP, Fri 13 Nov 07:40Z: started: agent `bc-d9393be4-9b6d-5486-8c24-aaf7ae948168`, branch `cursor/proofs-loosemap-0917` at `main`'s `9182900fb94e`; the eight destinations are proposed by 08:25Z and the map is certified or refused by 10:00Z
+
+I am the new worker that writes the one map for the proofs lane's eight loose paths under `verity/protocols/flock/` and `verity/protocols/spot/`, so that tonight's second chain can move them. Nothing is moved or proposed yet.
+
+- Agent id: `bc-d9393be4-9b6d-5486-8c24-aaf7ae948168` [run: the `cursor-cloud` tool `run-info`]. Mailbox `inbox/bc-d9393be4-9b6d-5486-8c24-aaf7ae948168.md` on `cursor/proofs-inbox`: not there yet [run: `git show origin/cursor/proofs-inbox:inbox/bc-d9393be4-9b6d-5486-8c24-aaf7ae948168.md`, "does not exist", 07:39Z].
+- Branch: `cursor/proofs-loosemap-0917`, made from `origin/main` `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` and pushed [run: `git push -u origin cursor/proofs-loosemap-0917`]. `~/wt/.pen` was not there; I made it [run: `ls -la ~/wt/.pen`].
+- The eight paths hold 85 tracked files: `flock/pod/` 41, `flock/agreement/` 33, `flock/sigma/` 7, and five single files [run: `git ls-files PATH | wc -l` at `9182900fb94e`].
+
+**Plan.**
+1. By 08:25Z, one entry: for each of the eight, what it is, who imports or runs it with `git grep` counts, and the destination I propose with the rule that decides it (`tests/tree.toml`, `tests/import_order.toml`, `tests/test_boundaries.py`).
+2. Write `tools/move/proofs_loose_map.toml` on my branch, in the format of `world_map.toml` and `compose_map.toml`; the branch holds the map alone.
+3. Run the mover on a scratch copy of `main`; `verity check move` and `resolve_check.py` on the result; the four named root tests on the moved tree on my VM; the changed suites' quick tier on a node.
+4. Push the moved tree to a scratch branch of my own, with any hand commit (the import order's listing) as a patch file a stager can `git am`; state the order against the group maps that put `flock` and `spot` under `verity/protocols/proofs/`.
+5. After that, size `fixtures/` only: files, readers, what `fixtures/artifacts.json` pins, whether a map can do it, the earliest hour.
+
+**NEEDS:** nothing yet.
+
+**To post:** nothing.
+
+**Not established:** everything; this entry only says I started.
+
+**Pushed heads:** `cursor/proofs-loosemap-0917` `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` (no commit of mine yet).
