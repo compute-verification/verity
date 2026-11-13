@@ -40,12 +40,12 @@ build() {  # DIR TARGET
   return $rc
 }
 build verity/protocols/compose/verifier/remote remote || exit 3
-build verity/protocols/onsite/verifier onsite || exit 3
+build verity/protocols/compose/verifier/onsite onsite || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-check || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-period || exit 3
 build verity/protocols/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
-REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/onsite/verifier/$B/onsite
+REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/compose/verifier/onsite/$B/onsite
 POUW=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-period
 V2=$TREE/verity/protocols/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
 P=$W/cases

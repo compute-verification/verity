@@ -2233,6 +2233,11 @@
       "paths": {
         "verity/protocols/remote/verifier/": "verity/protocols/compose/verifier/remote/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/onsite/verifier/": "verity/protocols/compose/verifier/onsite/"
+      }
     }
   ]
 }

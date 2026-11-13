@@ -741,7 +741,7 @@
       "linear": "PRF",
       "linear_label": "lane:soundness",
       "owns": [
-        "verity/protocols/onsite/verifier/",
+        "verity/protocols/compose/verifier/onsite/",
         "verity/protocols/compose/verifier/remote/"
       ],
       "branch_suffixes": [

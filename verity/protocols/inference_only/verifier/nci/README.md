@@ -6,7 +6,7 @@ The inference-only policy's check, in Lean only. This directory is `lean/` and t
 and no console script.
 
 - **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../../../certifier/verifier/lean`,
-  `verity/protocols/onsite/verifier`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
+  `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
