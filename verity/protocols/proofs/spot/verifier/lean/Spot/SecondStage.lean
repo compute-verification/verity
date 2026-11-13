@@ -2101,7 +2101,7 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
       have hso := anySampled_false hn hmem hs hf
       exact ⟨s, p, hs, hf, hd', hi', by simpa [hso] using hc'⟩
 
-/-- **Every port a header shares rows at is a read round 2 holds**, of a statement of either shape: `check_ok_refs` of
+/-- **Every port a header shares rows at is a read the second stage holds**, of a statement of either shape: `check_ok_refs` of
 a passing `checkAny`. -/
 theorem checkAny_ok_refs {allow : Bool} {own : Own} {ss : Array Json}
     (h : (checkAny allow own (some ss)).codes = #[]) :
@@ -2216,5 +2216,107 @@ theorem checkAny_ok_sampled {allow : Bool} {own : Own} {ss : Array Json}
   rw [if_pos hso] at hc
   obtain ⟨-, -, hhead, hpop, -, hdraw, -⟩ := sampledCodes_nil hc
   exact ⟨sampledOk_indices hpop, hdraw, sampledHeaderOk_ref hhead⟩
+
+/-- Two lists alike under two maps are alike place by place: where the second has `b` at place `i`, the first has an
+entry there that its map sends where the second's sends `b`. -/
+theorem map_eq_at {α β γ : Type} (f : α → γ) (g : β → γ) :
+    ∀ (l : List α) (m : List β), l.map f = m.map g → ∀ (i : Nat) (b : β), m[i]? = some b →
+      ∃ a, l[i]? = some a ∧ f a = g b
+  | [], [], _, _, _, hb => by simp at hb
+  | [], _ :: _, h, _, _, _ => by simp at h
+  | _ :: _, [], h, _, _, _ => by simp at h
+  | a :: l, _ :: m, h, i, b, hb => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    cases i with
+    | zero =>
+      simp only [List.getElem?_cons_zero, Option.some.injEq] at hb
+      rw [hb] at h
+      exact ⟨a, by simp, h.1⟩
+    | succ n =>
+      simp only [List.getElem?_cons_succ] at hb
+      obtain ⟨a', ha', hf⟩ := map_eq_at f g l m h.2 n b hb
+      exact ⟨a', by simpa using ha', hf⟩
+
+/-- An entry a list has at a place is one of the list's, and the place is below its length. -/
+theorem mem_of_at {α : Type} : ∀ (l : List α) (i : Nat) (a : α), l[i]? = some a → a ∈ l ∧ i < l.length
+  | [], _, _, h => by simp at h
+  | b :: l, 0, a, h => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    rw [h]
+    exact ⟨by simp, by simp⟩
+  | _ :: l, n + 1, a, h => by
+    simp only [List.getElem?_cons_succ] at h
+    obtain ⟨hm, hn⟩ := mem_of_at l n a h
+    refine ⟨List.mem_cons_of_mem _ hm, ?_⟩
+    simp only [List.length_cons]
+    omega
+
+/-- An entry of a list is at one of its places. -/
+theorem at_of_mem {α : Type} : ∀ (l : List α) (a : α), a ∈ l → ∃ i, l[i]? = some a
+  | [], _, h => by simp at h
+  | b :: l, a, h => by
+    rcases List.mem_cons.1 h with hab | h'
+    · exact ⟨0, by simp [hab]⟩
+    · obtain ⟨i, hi⟩ := at_of_mem l a h'
+      exact ⟨i + 1, by simpa using hi⟩
+
+/-- **Instance `j` of a statement of only its part's sampled proof blocks is the part's `j`-th sampled slot**: where
+the header's `units.indices` `is` are the part's sampled slots (`sampledOk_indices`), the slot `u` at place `j` of
+`sampledSlots` is a unit of the second draw and a slot of the part, and `is` has its number at place `j`. -/
+theorem sampled_at {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
+    (hl : is.toList.map nat? = (sampledSlots q p drawn).toList.map some) {j u : Nat}
+    (hj : (sampledSlots q p drawn).toList[j]? = some u) :
+    u ∈ drawn ∧ p.holds q u = true ∧ ∃ x, is.toList[j]? = some x ∧ nat? x = some u := by
+  obtain ⟨x, hx, hn⟩ := map_eq_at nat? some _ _ hl j u hj
+  have hm : u ∈ sampledSlots q p drawn := by
+    have hmem := (mem_of_at _ j u hj).1
+    first
+      | exact Array.mem_def.2 hmem
+      | simpa using hmem
+  obtain ⟨hd, hp⟩ := mem_sampledSlots hm
+  exact ⟨hd, hp, x, hx, hn⟩
+
+/-- **Every slot of the part the second draw samples is an instance of the statement**: where the header's
+`units.indices` `is` are the part's sampled slots, a unit `u` of the second draw that is a slot of part `p` has its
+number at a place `j` of `is`, below the count of the part's sampled slots, the statement's `instances`. -/
+theorem sampled_slot {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
+    (hl : is.toList.map nat? = (sampledSlots q p drawn).toList.map some) {u : Nat} (hu : u ∈ drawn)
+    (hp : p.holds q u = true) :
+    ∃ j x, j < (sampledSlots q p drawn).size ∧ is.toList[j]? = some x ∧ nat? x = some u := by
+  have hm : u ∈ sampledSlots q p drawn := by simpa [sampledSlots] using And.intro hu hp
+  have hmem : u ∈ (sampledSlots q p drawn).toList := by
+    first
+      | exact Array.mem_def.1 hm
+      | simpa using hm
+  obtain ⟨j, hj⟩ := at_of_mem _ u hmem
+  obtain ⟨-, -, x, hx, hn⟩ := sampled_at hl hj
+  have hlt := (mem_of_at _ j u hj).2
+  exact ⟨j, x, by simpa using hlt, hx, hn⟩
+
+/-- **The slots of a statement of only its part's sampled proof blocks, each way**: in a passing `checkAny`, where
+the `i`-th statement is one (`sampledOnly`), its `units.indices` hold at each place `j` the number of the `j`-th slot
+of its part that the second draw samples, a unit of the draw and a slot of the part (`sampled_at`); and every unit of
+the second draw that is a slot of its part has its number at a place below the statement's `instances`
+(`sampled_slot`). So the statement's instances and the part's sampled slots are one list, in the draw's order: the
+map from a sampled slot to its instance is its place among the part's sampled slots, where a statement of every slot
+of the part has `u - lo`. -/
+theorem checkAny_ok_slots {allow : Bool} {own : Own} {ss : Array Json}
+    (h : (checkAny allow own (some ss)).codes = #[]) :
+    ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
+      ps.find? (·.template == s.template) = some p ∧
+      (sampledOnly own.sample.size p own.drawn s.header = true →
+        ∃ is, getD (getD s.header "units") "indices" = .arr is ∧
+          nat? (getD s.header "instances") = some (sampledSlots own.sample.size p own.drawn).size ∧
+          (∀ j u, (sampledSlots own.sample.size p own.drawn).toList[j]? = some u →
+            u ∈ own.drawn ∧ p.holds own.sample.size u = true ∧ ∃ x, is.toList[j]? = some x ∧ nat? x = some u) ∧
+          (∀ u, u ∈ own.drawn → p.holds own.sample.size u = true →
+            ∃ j x, j < (sampledSlots own.sample.size p own.drawn).size ∧ is.toList[j]? = some x ∧
+              nat? x = some u)) := by
+  obtain ⟨ps, hp, hst⟩ := checkAny_ok_sampled h
+  refine ⟨ps, hp, fun i hi => ?_⟩
+  obtain ⟨s, p, hs, hf, hso⟩ := hst i hi
+  refine ⟨s, p, hs, hf, fun hso' => ?_⟩
+  obtain ⟨⟨is, hix, hm, -, hl⟩, -, -⟩ := hso hso'
+  exact ⟨is, hix, hm, fun _ _ hj => sampled_at hl hj, fun _ hu hpu => sampled_slot hl hu hpu⟩
 
 end Spot.SecondStage
