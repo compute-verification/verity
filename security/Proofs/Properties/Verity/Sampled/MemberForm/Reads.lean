@@ -92,7 +92,7 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
       rw [length_bitsOf, length_fillCoins]
       omega
   have hpr : drawnUnits ev.base.draw = ev.base.provedUnits :=
-    checkAt_proved hv1 (evidenceOf_closure hacc.2.2.1)
+    checkAt_proved (e := { ev.base with verdicts := r.out }) hv1 (evidenceOf_closure hacc.2.2.1)
   have hd := joint_draw_of_drew hdrew (W.joint 0) ω hL hnJ hpre
   have hS : ∀ v : Fin W.nJ, v ∈ W.L.draw ω ↔ v.val ∈ ev.base.provedUnits := fun v => by
     have hmem := Finset.ext_iff.1 hd v
