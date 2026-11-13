@@ -4,6 +4,7 @@ another range or a padded shard, and `attach` refuses a manifest without the fam
 from __future__ import annotations
 
 import types
+from typing import Any
 
 import pytest
 
@@ -17,9 +18,9 @@ from verity_vllm.acquire.sources import vocab_range_source as S  # noqa: E402
 
 class Recorder:
     def __init__(self) -> None:
-        self._cur = None
+        self._cur: types.SimpleNamespace | None = None
         self.errors: list[str] = []
-        self.acquired: list[tuple[str, object]] = []
+        self.acquired: list[tuple[str, Any]] = []
         self.sources: list = []
         self.name = "rec"
         self.model = None
@@ -48,7 +49,11 @@ def test_the_source_commits_only_inside_the_site_during_a_step():
     com = Recorder()
     src = S.VocabRangeSource(com, _model(), {"embed_tokens": {"start": VS, "shard_rows": VS}})
     launches = []
-    fn = src._wrap(lambda *a: launches.append(a) or None)
+
+    def launch(*a):
+        launches.append(a)
+
+    fn = src._wrap(launch)
     ids = torch.tensor([3, VS, 2 * VS - 1, 2 * VS], dtype=torch.int64)
     args = (None, ids, None, VS, 2 * VS, 0, 2 * VS, 2 * VS)
     fn(*args)                                                   # outside a step
