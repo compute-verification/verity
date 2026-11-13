@@ -134166,3 +134166,70 @@ Nothing.
 - An axiom probe of the Cut files on the join's tree: `8f29` built them as imports and probed only the four files it tried. My own tries probed all eight on my branch (`5897`, and `6730` for `CutRoots.lean`).
 
 Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). No run of mine is out.
+
+
+## RUNCOINS, Fri 13 Nov 10:00Z: both certifier imports cut at 66bbbd6266, compiled; at the join's tip merged with it the test still fails on one import, RowTable's, not mine; B's table: one edge gone, three by way 2, one by way 3
+
+**Compiled:** "research: r20261113-093537-53f6 observed 2026-11-13T09:58:11.938Z: done rc=0 class=SUCCESS", twelve tries, one file each, `--siblings` and the axiom probe, each ending "lean exit 0" and "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (the stub: "axiom probe: no theorems in it") [run].
+
+**In plain words.** Both of my imports that reached the network certifier are cut, with no statement, name or lock record changed. Proved read only two small sorting lemmas from Held; they now sit in Spot/Credited, which Proved already imports. Coins needs the challenger's own proofs, so I cut the challenger's chain where it entered the certifier's files: two imports now take the byte lemmas from Flock's own byte file, one byte lemma moved to a new Flock file, and the LMS proofs moved from the certifier's directory to the Hash area. The test passes at my head. At the join's tip with my head merged it still fails, now only on `AddressFacts/RowTable.lean`'s import, which ADDRROW2's `d2cae2a309` added. For B, the cut removes one edge (Proved to Held) and adds none: 4 edges remain, of which I would move three to the public side and make one (Coins) private.
+
+### A. The cut
+
+Head: `cursor/proofs-runcoins-2d88` at `66bbbd6266`, one commit on `6e1696929a`, pushed [run].
+- **Proved** [run]: `Verity.Sampled.ascending_lt` and `qsort_ascending` (17 lines, proofs verbatim, same namespace) moved from `Properties/Verity/Sampled/Held.lean` to the end of `Properties/Spot/Credited.lean`. Held imports Credited and keeps no copy. Proved drops its Held import.
+- **Coins** [run]: its own lemmas need `drawnByDevice` and `coinsReason_draw`, which need the challenger's Session, Window and Coins proofs. So the cut is at the three places that chain entered a certifier file:
+  - `Challenger/Commitment.lean` and `Pous/MemoryChallenger/Tree.lean` import `Proofs.Flock.Bytes` instead of `NetworkCertifier/Records/Bytes` and `Check/Bytes`. What they read (`hexOf_inj`, `bs`, `split_bytes`, `hash_size`, ...) was already declared there.
+  - `be64_size_inj`, with `be64_inj` and `byte_toNat`, moved verbatim from `NetworkCertifier/Check/Bytes.lean` to a new `security/Proofs/Flock/Be64.lean`. Check/Bytes, Session and Attest import it.
+  - The LMS proofs (`Properties.CertifierDevice.Proofs.Lms`: `key_spec`, `LmsCorrect`, `LmsSigns`, ...) moved verbatim from `NetworkCertifier/Device/Lms.lean` to a new `security/Proofs/Properties/Hash/Lms.lean`, without the unused import of the certifier's `Device` definitions. The old file now only imports the new one and `Properties.NetworkCertifier.Device`, so its nine certifier importers are unchanged. Attest imports the new file.
+  - Roots: `Proofs.Properties.Hash.Lms` added to `security/Proofs/lakefile.toml` and to `lean-audit.json`'s `roots`. Be64 is already under the `Proofs.Flock` root.
+- STOP RULE check: no guarantee, named assumption, lock record or verifier changes. No lock record names a moved declaration (grepped all three locks). The only lock change is the one `roots` line [run].
+- Local checks [run]: `tests/test_lean_packages.py` and `tests/test_boundaries.py`: 94 passed. `tests/test_lean_vocabulary.py`: 15 passed.
+
+### The test's line at both trees
+
+`uv run pytest tests/test_boundaries.py -k test_spot_never_imports_the_network_certifier_in_lean`, run alone:
+- **At my head `66bbbd6266`:** "1 passed, 58 deselected in 3.66s". Every import out of SPOT's set: "3300 files of SPOT; 0 certifier files reached; 0 imports out of SPOT that reach one" [run].
+- **At the join's tip `854e4f245e` (09:58Z) with `66bbbd6266` merged** (clean merge, uncommitted, scratch worktree): "1 failed, 58 deselected in 3.31s"; "3346 files of SPOT; 31 certifier files reached; 1 imports out of SPOT that reach one: security/Proofs/Flock/SpotFlock/AddressFacts/RowTable.lean -> security/Proofs/Properties/Verity/SampledTwo/OneTable.lean (31 certifier files)" [run].
+- **At the join's tip alone, for comparison:** 3 imports reach one: RowTable's (34 certifier files), my Coins (20) and my Proved (31) [run].
+
+ADDRROW2's `d2cae2a309` ("RowTable: one_table from SESSIONOF2's oneTable_of_sessionOk", merged into the join at `2fc4e01e46`) added RowTable's import of `SampledTwo.OneTable` [run: `git log -S`]. Its chain runs through `Verity/SampledCoins.lean -> NetworkCertifier/DeviceOutput/Frames.lean` and `Verity/Sampled/Device.lean -> NetworkCertifier/Check/LinkWindow.lean` [run]. Not mine, and I have not touched it.
+
+### B. The five public-boundary edges
+
+`tools/verity/check/public_boundary.py`, at `6e1696929a`: "5 edges, 5 new". At `66bbbd6266`: "4 edges, 4 new" [run].
+
+| Edge | What it reads | Lines read | Not public behind the target | Way |
+|---|---|---|---|---|
+| `Proved.lean:4 -> Verity/Sampled/Held.lean` | `qsort_ascending`, `ascending_lt` | 17 | 127 files, 40,587 lines | 1: gone with A's cut |
+| `Proved.lean:5 -> Spot/Credited.lean` | `filterMap_int_arr` with `filterMap_int`, `toList_of_mapM`; since A also `qsort_ascending`, `ascending_lt` | about 44 | 9 files, 3,963 lines | 2 |
+| `OfCheck.lean:5 -> Verity/SampledTwo/Steps.lean` | `inputAt_ok` (28 lines), `accepted_steps` (29), and the helpers above them (`finishWith_accept`, `readBack_ok`, `digestIs_ok`) | about 100 of the file's 282 | only Steps itself, 282 lines | 2 |
+| `Statement.lean:6 -> security/Properties/Challenger.lean` | definitions `Run`, `Run.released`, `History`, `OpensOn`, `Break` | about 30 of a 548-line definitions file | only the file itself, 548 lines | 2 |
+| `Coins.lean:4 -> Challenger/Drawn.lean` | `drawnByDevice` (2 lines), `coinsReason_draw` (8) | 10 | 20 files, 6,727 lines, among them 5 of PoUS's device Lean files and PoUS's Attest and Tree | 3 |
+
+All the counts above are [run], by `/tmp/privclosure.py`, which uses the test's own import graph and `public_boundary.py --public`.
+
+What I would do, and what each costs [derived]:
+- **Credited:** move the five lemmas (about 44 lines, proofs verbatim) to a public file beside FRAME's (b). Their statements read `Properties.Spot.Ascending` and `Spot.int?`. `int?` is public already; `Ascending` lives in `security/Properties/Spot.lean`, which is private but has nothing private behind it (454 lines). So it also costs either a one-line `needed` entry for that file from `flock`, or moving the one-line definition.
+- **Steps:** make `SampledTwo/Steps.lean` public whole (282 lines, nothing private behind it), by moving it or by a `needed` line. That is TWOLEG's area.
+- **Challenger.lean:** extend its existing `needed`-from-`spot` entry to `flock`. That is one line in `public_boundary.toml`, a boundary decision; the file has nothing private behind it.
+- **Coins:** way 3. `RunsAs/Coins.lean` (95 lines) proves a fact about the challenger's code: that `coinsCode`'s read is the device's draw (`coinsCode_read`, `fromDevice_of_code`, `runCoinsFromDevice`). Only the aggregator `RunsAs.lean` imports it. Moving it to the challenger's side (e.g. `Properties/Challenger/RunCoins.lean`) and out of the aggregator costs a file move and one `roots` line. Its cost to the claim: in the public tree, `RunCoinsFromDevice` would be a premise with no discharge there. No lock entry reads it today (grepped). Way 2 here would drag 6,727 lines, PoUS's device Lean among them, which the boundary keeps private.
+- Together: about 1,300 lines made public (three files, nothing behind them), one 44-line move, one 95-line file made private, and two or three boundary lines. The boundary lines are the coordinator's decision, or Daniel's.
+
+### STOP RULE
+None hit.
+
+### NEEDS
+- ADDRROW2 (or SESSIONOF2, whose `oneTable_of_sessionOk` it reads) to cut `AddressFacts/RowTable.lean -> SampledTwo/OneTable.lean`; the join stays red on A until then.
+- A decision on B's three boundary lines and on Coins going private.
+
+### To post
+Nothing.
+
+### Not established
+- The sibling check covered only the built modules: 167 to 183 per try, with about 3,800 "unchecked, with no build of their source as it is" [run]. A grep finds no second declaration of any moved name [run], but no whole-package build of `66bbbd6266`, and no build of the merged tree, has run.
+- No records run. That no lock record changes rests on grepping the locks for the moved names, not on `--update`.
+- That the merged tree compiles: the merge was clean, but not compiled.
+
+**Runs:** r20261113-093537-53f6 (12 tries, rc=0). r20261113-093027-daa4 failed in 1 s on `python: command not found`, my script's error; it was relaunched with `python3`.
+**Machine:** `--on auto` placed it on vy-nebius-cpu-1's research pool.
