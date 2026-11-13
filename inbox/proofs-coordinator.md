@@ -110461,3 +110461,26 @@ A Lean slot on vy-nebius-2 took 38 minutes for the undrawn refusal's try (in lin
 2. [derived, not compiled] `v5Files_of_checks` gives more than `distinct`: at a member whose files pass, `RootFixesDomainL` at the public file's leaf map, which is `Member.RootsFix` (`Sampled/Window.lean:179`) once the load's count is the member's, and `FilesPass.loads` has that. So under way (b), where the accept holds every member's files, sampled or not, `RootsFix` holds of every member of an accepted play with no collision term, and `Window.RootsCR` and the members' `rootsErr` terms would not be needed. I will prove `FilesPass.rootsFix` in my own file and drop the `hfix` hypothesis of my `FilesPass.checked`; whether the window's bound drops its roots terms is theirs.
 
 **Not established.** Nothing of (1) is compiled: it is a reading of the check and of soundness's two lemmas. The undrawn refusal's try has not reported. The bridge lemma is unwritten, and its `loads` step rests on my reading of `headerHeld` and `Member.slice`. D's place lemma has not compiled against the tree; D's sessions' file is unwritten. Finding L (link first) and Finding A (`WindowSessions.members`) stand without a ruling.
+
+## OWNREADS, Fri 13 Nov 00:26Z: the whole lemma is written and pushed, with no sorry, and its first try is queued on vy-nebius-cpu-12
+
+In plain words: the file that proves FRAME's decided check `refReadsOwn h` gives the run fact `OwnReads h` is written in full, with no `sorry` and no new axiom, and pushed. It has not compiled yet. Its first compile is waiting for a place on vy-nebius-cpu-12. The proof says this: in an accepted run, the second stage's `second-values` check holds each registered read of a checked inner block's session to its template's reference reads, field for field. The fields it blanks for the run are an entry's root, domain and leaves, and its rows. It never blanks `value`. So the read's value is the reference read's value at its port. `refReadsOwn` holds that value to the interior registration's ports, and the first stage's record names exactly those ports among its roots.
+
+- Branch `cursor/proofs-ownreads-9a1c`, pushed head `cdbce75c2f`. It adds `security/Proofs/Flock/SpotFlock/OwnReads.lean` (about 545 lines, 38 declarations) and one root line in `security/Proofs/lakefile.toml`. [run: git push]
+- This meets the 02:30Z item: the statement is in a try. The run is `r20261113-002429-f115` on vy-nebius-cpu-12, running `lean_changed.py --try security/Proofs/Flock/SpotFlock/OwnReads.lean --siblings`. At 00:25Z it was waiting for a slot. I first sent it to vy-nebius-2 as `r20261113-002256-3be1`. Following your 00:23Z machine split, I cancelled that run after it had waited one minute without starting, and resent it. [run]
+- The statements are unchanged from my 00:06Z entry: `RefReadsWf h`, `reads_ref_value`, and `ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h`. The general lemma, `reads_ref_value`, reads no link or wire. So it holds at an input port where an inner block reads a registered value, which keeps the later widening open. [read: my file]
+- The general JSON lemmas are in the namespace `SpotFlock.ReadsJson`, to keep them from clashing with other workers' names. There are three groups:
+  - well-formedness through `setKey` and `Json.mkObj`;
+  - what `blankReads` does to `ports`;
+  - `value_of_jeq`: two well-formed reads files that `jeq` holds alike once blanked have one `value` at each port, by `CanonLine.canon_inj` and `field?_equiv`. [read: my file]
+- Per your 00:16Z message, new docstrings say "first stage" and "second stage". [read]
+
+NEEDS: HELDOF (`bc-3ddfb587-549a-5964-9ddf-80547065f684`), whoever builds `heldOf`: `RefReadsWf (heldOf …)`, which says every template's reference reads are well-formed JSON (`Claims.Json.Wf`). If `heldOf` gets them from `Flock.JsonParse.parse`, `FlockComplete.JsonRT.parse_wf` gives it at once. [derived]
+
+Not established: nothing in the file has compiled. The tactic steps most likely to need repair are these:
+- the `show` through `setKey`;
+- `decide` or `simp` on the blanked-field lists;
+- the `simpa` steps in `refReads_of_values`;
+- the `Except.mapError` case in `wf_of_jsonOf`.
+
+My next entry, by 01:26Z, gives the run's verdict and the repairs.
