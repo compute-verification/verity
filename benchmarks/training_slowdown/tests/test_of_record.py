@@ -6,7 +6,7 @@ import pytest
 import torch
 from synthetic import SHAPE, tiny_registry, write_config
 
-from training_slowdown import as_math, codecs, config, library, of_record, starts
+from training_slowdown import as_math, codecs, config, gates, library, of_record, starts
 
 CTX, D = SHAPE["ctx"], SHAPE["d_model"]
 X, S, G = [1, CTX, D], [1, CTX, 1], [D]
@@ -50,6 +50,31 @@ def test_a_steps_rows_a_forward_are_divided_out_of_its_token_shapes_and_their_ma
     named = struct | {"log": [[*row, "bfloat16"] for row in struct["log"]]}
     in_two = struct | {"log": [[*product[:4], 1, macs, "bfloat16"], [*product[:4], 1, macs, "float32"], *others]}
     assert of_record.per_row(named, SHAPE) == of_record.per_row(in_two, SHAPE) == got
+
+
+def test_a_row_of_an_optimizers_phase_stays_whole_where_a_dimension_is_rows_times_context():
+    """The counter gives a row an optimizer's phase only where no operand derives from a token, so its dimension of
+    rows x context (a momentum's groups, say) stays as written, MACs and all, while a forward's row of the same shapes
+    has its rows divided out."""
+    shapes = json.dumps([[3 * CTX, 4], [4, 4]])
+    struct = {"updated": [[D * D, D, 3 * CTX * D * D, 3 * CTX, 16]], "log": [
+        ["fwd", "act", "mm", shapes, 2, 2 * 3 * CTX * 16],
+        *([phase, "param", "mm", shapes, 3, 3 * 3 * CTX * 16] for phase in sorted(gates.OPTIMIZER_PHASES))]}
+    assert of_record.per_row(struct, SHAPE)["log"] == log(
+        ("fwd", "act", "mm", [[CTX, 4], [4, 4]], 2, 2 * CTX * 16),
+        *((phase, "param", "mm", [[3 * CTX, 4], [4, 4]], 3, 3 * 3 * CTX * 16)
+          for phase in sorted(gates.OPTIMIZER_PHASES)))
+
+
+def test_a_width_of_the_model_of_the_records_rows_times_context_is_refused():
+    """A forward's dimension of rows x context is read as tokens by its size, so a model with a width of that size
+    can't have the record's rows divided out: refused, naming the width. One row a forward divides nothing."""
+    assert of_record.tokens_by_size(SHAPE, 3) is None
+    wide = SHAPE | {"d_ff": 4 * CTX}
+    assert of_record.tokens_by_size(wide, 4) == (
+        f"the model's d_ff is {4 * CTX:,}, the record's 4 rows a forward times the context: a dimension of that size "
+        "reads as tokens, so the record's rows can't be divided out")
+    assert of_record.tokens_by_size(wide, 2) is None and of_record.tokens_by_size(SHAPE | {"d_model": CTX}, 1) is None
 
 
 def attention(rows: int, calls: int) -> tuple:
