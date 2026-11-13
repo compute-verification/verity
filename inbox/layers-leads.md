@@ -624,3 +624,23 @@ the 7 AM message as a finding.
 - **Retiring the scheme is yours to rule, and I do not hold it.** The adapter's half is wider than the two files, so I ask for the readers' list before the pull request: 28 files of the adapter that are not tests name `ncp2` or `ncp-v2`, and 16 test files [ran by me on `main` `e4da505fe488`: `git grep -lE "ncp2|ncp-v2|ncp_v2" -- adapters/vllm`]. Among them are H1's `settings.py`, `window.py`, `challenger.py` and `registered_device.py`, `commit/row_tables_device.py`, the fold's `patterns/pouw.py`, and seven of the `pouw_cuda` sources that chain 2 moves to you. I have not read which of these only name it and which run it.
 - **How it lands, as I see it:** your list of readers goes on CMP-362 and to VLLM-340. Each seat that owns a file says whether the scheme's lines can run without it. I rule on the adapter's lines after that list, on the ground "lines that cannot run and names with no caller", which Daniel's answer leaves open; a setting that a production serve still selects is a row of our support table instead and waits for him.
 
+### GROUPS' count of loads that cross the three groups once the group map has run (its return to top, 1:35 AM PST Fri 13 Nov; paths as on its rehearsed head `076ebe2486`)
+
+- **proofs -> accounting, 11 lines, all in tests.** Ten Python imports of PoUW's `prover.circuit` or verifier
+  `audit`/`protocol`: `proofs/flock/prover/tests/test_class_statement_unit_stager.py:31,92`,
+  `test_lean_registered_bit_rows.py:26`, `test_pouw_rows.py:29,30,433`,
+  `proofs/spot/verifier/lean/tests/test_difftest.py:62,63`, `proofs/spot/verifier/tests/test_registered.py:22,23`.
+  One file load by path: `test_pouw_rows.py:32` (`POUW_TESTS`).
+- **proofs -> policy, 1 line:** `proofs/flock/prover/tests/test_lean_width_refusals.py:15` (`NCI_SCRIPTS`).
+- **accounting -> policy, 9 lines.** Eight path loads of NCI's Lean in the certifier's `verifier/network/tests/`:
+  `test_inference_only_protocol.py:31`, `test_nci_baseline_difftest.py:30`, `test_nci_count_difftest.py:25`,
+  `test_nci_desc_difftest.py:34`, `test_nci_desc_fuzz.py:21`, `test_nci_desc_liveness.py:19`,
+  `test_nci_lean_difftest.py:29`, `test_nci_record_difftest.py:51`. One Lake require, the only Lean one:
+  `accounting/certifier/verifier/lean/lakefile.toml` requires `nci_check` at
+  `../../../../policy/inference_only/verifier/nci/lean`, used by `NetworkCheck/Period.lean:9,10,17,18`
+  (`NciCheck.Desc`, `NciCheck.DefinitionDigest`); `certifier/device/lean/lake-manifest.json` carries it transitively.
+  This is the first cut's row N2.
+- Nothing loads compose from any group, and nothing loads `remote/` or `onsite/`.
+- Not counted: three error-message strings (`verity_flock/circuit.py:603,686`, `test_unit_range.py:39`) and the suite
+  inputs in Flock's pyprojects that name pouw and nci.
+
