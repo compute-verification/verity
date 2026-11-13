@@ -124832,3 +124832,42 @@ Replaced at 05:57Z; worktrees rebuilt from the pushed branches; nothing was lost
 ### What I wait on
 
 Your mark on #9621; #9640 on `main` (yours to tell benchmarks); your word naming #9501's head.
+
+## CUT, Fri 13 Nov 06:26Z: `CutAccept.lean` COMPILES at `8cf4d46672` (`51b2`: "lean exit 0 in 338 s", probe clean over 11 theorems); all seven files of the cut now compile; ASSEMBLY should merge `8cf4d46672`
+
+In plain words: the cut's last file compiles. The cut's bound now takes nothing about what an accepted play shows as a premise: that the first stage's coins are read under the parameters' key, and that an accepted play on two windows shows its two sessions in order, are theorems of the form's accept. What is left as a premise is the wiring, the device's printing in its ledger's order, and the device's signing.
+
+STOP RULE: none reached.
+
+**`r20261113-061742-51b2` (vy-nebius-cpu-12, at `8cf4d46672`), done, rc 0 [run]:**
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/CutAccept.lean: lean exit 0 in 338 s".
+- "axiom probe: none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  - The probe printed each one, among them `firstShown`, `firstReads`, `orderShown` and `cutBound_accept`, each "depends on axioms: [propext, Classical.choice, Quot.sound]".
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.CutAccept declares a name it does (3040 imported in 10 s, peak 5048 MB); 1029 unchecked, with no build of their source as it is or importing a module with none".
+- The log's two "declaration uses `sorry`" lines are ArkLib's (`Data/Fin/Basic.lean`, `Data/MvPolynomial/Interpolation.lean`), replayed from the cache; none is in a file of mine.
+- The linter warns of alternatives of a `first` that never run (17 lines in `CutAccept.lean`). I remove them in the next commit, which then needs its own try.
+
+**What compiled where [run].**
+- `Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutOrder`: `r20261113-043720-e0dc`, at `62f0284f05`. Unchanged since.
+- `CutFirst`: `r20261113-054257-8c4e`, at `3b2eaa5371`. Unchanged since.
+- `CutAccept`: `51b2`, at `8cf4d46672`.
+
+**ASSEMBLY.** Merge `8cf4d46672`. `Verity.SampledTwo.firstReads θ : FirstReads θ` and `Verity.SampledTwo.orderShown θ : OrderShown θ` take no hypothesis, so both fields leave `JoinsAt`. `CutAccept.lean` imports TWOLEG's `Steps.lean` and neither `Ordered.lean` nor `Shown.lean`. The lock's `roots` at my head hold `CutFirst` and `CutAccept` only; the other five are yours to add.
+
+The premises the cut names:
+- At `cutBound_accept` (compiled): `Wired`, `PrintsInOrder`, `SignsPlay`.
+- At `cutBound_order` (compiled): those three, with `FirstReads θ` and `OrderShown θ`.
+
+NEEDS: none.
+
+To post: nothing.
+
+Not established:
+- `cutBound_accept` is over the form's accept and is listed in no lock entry. It says nothing about a run.
+- No records run of `security/Proofs` has run at my head, so I give no ready line.
+- The base `cursor/proofs-two-round-base-84b5` is not merged into my branch. I merge it next (a merge, not a rebase) and recompile all seven files.
+- The one-root half of `draws₁`, `draws₂` is not started as Lean. I am reading it now; the next entry says what it needs.
+- `PrintsInOrder` is proved of no device.
+- The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
+
+Head: `8cf4d46672` (`cursor/proofs-cut-9323`), pushed; nothing unpushed. No run of mine is running.
