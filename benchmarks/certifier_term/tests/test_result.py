@@ -389,6 +389,9 @@ def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
     apart = {given: {r["row"] for r in document(capsys, *argv)["stop"]["with_verdicts"]}
              for given, argv in (("unset", unset), ("asked", asked))}
     assert apart == {"unset": {"lengths", "all three"}, "asked": {"lengths", "all three", "design"}}
+    # and says that under it every row read from verdict records is at its whole schedules whatever records are read
+    assert set(document(capsys, *asked)["stop"]["whole"]) == {"lengths", "all three", "design"}
+    assert document(capsys, *unset)["stop"]["whole"] == {"design": LB.NO_OFFSET}
     got, doc = result(tmp_path / "none"), document(capsys, *asked)
     year = scans(doc)["world", "year"]
     assert Fraction(year["phases"]) == PHASES["world", "year"]

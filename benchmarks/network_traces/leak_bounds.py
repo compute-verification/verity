@@ -115,6 +115,9 @@ run's files lowers no figure. With no answer passed it is `NO_RECORDS`, each con
 holds the answer and `main` has no option for it. The head's time is the monitoring period's schedule's, one a row:
 a row takes the answer only where its execution phases were held under the head's time its schedule sets (`takes`,
 `Stop.head`), so registrations held under another offset, another W or none hold no execution phase of any row.
+An answer that names no head's time, as `stop_verdicts` hands and as `NO_RECORDS` is, is taken only under a schedule
+that sets none: under one that sets an offset every row read from verdict records is at its whole schedules
+whatever records are read, and the lines say so (`UNTIMED`).
 The lines print how the rows are charged and why, and each verdict read under the mark `RUN_NOT_PROVED`. Where an
 execution phase of some row is charged its whole schedule, the document holds apart what each row would be with
 every one held under its schedule (its ``stop``'s ``with_verdicts``): figures no record read supports, which no row
@@ -645,6 +648,10 @@ HEAD_TICK = "the tick the head is accepted at is held by the schedule and charge
 #: schedule that sets no offset for the head
 NO_OFFSET = ("its schedule sets no offset for the head (--head-offset, --head-wait), so the head's time is held to "
              "no tick")
+#: why no row takes an answer that names no head's time under a schedule that sets one: what `stop_verdicts` hands,
+#: and `NO_RECORDS`
+UNTIMED = ("the verdict records' answer names no head's time, since their reader (`stop_verdicts`) holds its "
+           "registrations to no schedule's, so no record read holds an execution phase under a schedule that sets one")
 #: how the stop class is charged where no verdict record is read: its whole schedule
 NO_RECORDS = Stop(0, (f"no verdict record was read, so each connection is charged its whole schedule: the "
                       f"{', the '.join(VERDICTS)} are each missing",))
@@ -1172,13 +1179,11 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     most = math.ceil(max(r.phases for r in charged))
     every = stop.held >= most
     # the rows read from verdict records that are charged their whole schedules whatever those records say, and why:
-    # one that takes no answer under its schedule, where that is the schedule's doing or the records hold something
-    theirs = "no schedule's head's time" if stop.head is None else f"a head {stop.head.words}"
+    # each one that takes no answer under its schedule, whether the answer holds an execution phase or none
+    theirs = UNTIMED if stop.head is None else f"the verdict records were held to a head {stop.head.words}"
     its = "its schedule sets no offset for the head" if tick is None else f"its schedule's head is {tick.words}"
-    whole = {name: NO_OFFSET if kind.count and tick is None else
-             f"the verdict records were held to {theirs}, and {its}"
-             for name, kind in ROWS.items()
-             if kind.verdicts and not takes(kind, stop, tick) and (stop.held or kind.count and tick is None)}
+    whole = {name: NO_OFFSET if kind.count and tick is None else f"{theirs}, and {its}"
+             for name, kind in ROWS.items() if kind.verdicts and not takes(kind, stop, tick)}
     below = every and not whole
     # what the rows read from verdict records would be with every execution phase held under this schedule, where
     # they are charged more: no row whose check reads a head that its schedule holds to no tick
@@ -1273,8 +1278,8 @@ def render(doc: dict) -> str:
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
     card, ct, st, sc, hd = doc["with_set_time_card"], doc["count"], doc["stop"], doc["scan"], doc["head"]
     cost, rate = ct["cost_runner"], doc["failure_rate_at_target"]
-    # the rows read from verdict records that take them, and why the design's does not, where it does not
-    reading, unheld = [name for name in st["rows"] if name not in st["whole"]], st["whole"].get("design")
+    # the rows read from verdict records that take them, and whether the design's is one that does not
+    reading, unheld = [name for name in st["rows"] if name not in st["whole"]], "design" in st["whole"]
     # what the design is charged for each execution phase of a link whatever it serves: the count, and the head's
     # tick where its schedule sets one
     ticked = hd["offset"] is not None
@@ -1395,7 +1400,7 @@ def render(doc: dict) -> str:
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",
         ("With the lengths held by a stop block" if st["below"] else
-         f"With its stop class charged its whole schedule, since {unheld}," if unheld else
+         "With its stop class charged its whole schedule whatever the verdict records say," if unheld else
          "With its stop class charged its whole schedule"
          + (f" on all but {_n(st['held_phases'])} execution phase(s) of a link" if st["held_phases"] else "")
          + ", for want of the verdicts that hold the lengths by a stop block,")

@@ -88,6 +88,13 @@ verity bench certifier_term --response-ids 1024 --head-offset N --head-wait 0 --
 neither. They are there for what the command prints beside it, the design's two rows: with neither given, `design`
 is printed at its whole schedules (The terms, below).
 
+Under an offset every row read from verdict records, `lengths`, `all three` and `design`, is at its whole schedules
+whatever records are read. A row takes only records held under the head's time its schedule sets, and the reader of
+the records holds its registrations to no schedule's head's time, so no record it reads holds an execution phase
+under a schedule that sets one (The stop class's verdicts, below). The command's own lines say so above its tables,
+`The stop class of the rows ... is charged its whole schedule on every execution phase, whatever the verdict records
+say`, and hold apart what each row would be with every execution phase held.
+
 ### The scans' δ
 
 A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution phase bounds
@@ -192,9 +199,11 @@ a row, given to the command (`--head-offset`, `--head-wait`) and never read from
 row takes the answer only where its execution phases were held under the head's time its schedule sets
 (`leak_bounds.takes`, the answer's `head`): registrations held under another offset, another wait bound or none
 hold no execution phase of `lengths`, of `all three` or of `design`. The reader's answer names no head's time,
-since it holds its registrations to no schedule's. So it holds an execution phase only under a schedule that sets
-no offset, and there only of `lengths` and `all three`: `design` is then charged its whole schedules whatever the
-records say (The terms, below).
+since it holds its registrations to no schedule's, and neither does the answer of no record at all. So under a
+schedule that sets an offset, the command of record's among them, it holds no execution phase of any row: all three
+rows are at their whole schedules whatever records are read, and the document lists them with why (its `stop`'s
+`whole`). Under a schedule that sets no offset it holds an execution phase only of `lengths` and `all three`:
+`design` is then charged its whole schedules whatever the records say (The terms, below).
 
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the

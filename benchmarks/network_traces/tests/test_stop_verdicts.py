@@ -327,9 +327,11 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
     assert doc["stop"]["whole"] == {"design": LB.NO_OFFSET}
     assert {w["row"] for w in doc["stop"]["with_verdicts"]} == {"lengths", "all three"}
     timed = LB.document(LB.inputs(head_offset=1_280, head_wait=0), stop=answer, only=["node"], periods=["week"])
-    why = ("the verdict records were held to no schedule's head's time, and its schedule's head is due 1,280 "
-           "bucket(s) after the close that hands it, and accepted at that tick and no later")
+    why = (f"{LB.UNTIMED}, and its schedule's head is due 1,280 bucket(s) after the close that hands it, and "
+           "accepted at that tick and no later")
     assert timed["stop"]["whole"] == dict.fromkeys(doc["stop"]["rows"], why)
+    assert ("The stop class of the rows `lengths`, `all three`, `design` is charged its whole schedule on every "
+            f"execution phase, whatever the verdict records say: {why}.") in LB.render(timed).splitlines()
     at = {r["row"]: r for r in timed["rows"]}
     assert all(at[name]["schedules"] == at["scan"]["schedules"] for name in doc["stop"]["rows"])
     apart = {w["row"]: w for w in timed["stop"]["with_verdicts"]}
