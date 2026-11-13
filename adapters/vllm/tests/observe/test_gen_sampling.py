@@ -1,4 +1,4 @@
-"""The torch-free recomputation of the sampler's uniforms (`program.sampling_rng`) and the sampling workloads."""
+"""The torch-free recomputation of the sampler's uniforms (`tests.program.sampling_rng`) and the sampling workloads."""
 
 from __future__ import annotations
 
