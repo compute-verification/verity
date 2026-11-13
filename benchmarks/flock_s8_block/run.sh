@@ -28,7 +28,7 @@
 #      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N, and a plain one
 #      of a served statement its staged full sample, draw.json; unset, no sample)
 #      WINDOW=DIR (prove_path.py commit's window dir, the prover's files included) MEMBER=0  SUBCIRCUIT=ID  SERVE_RUN=DIR
-#      SERVE_WINDOW=0  CUDA_TK (default: verity/protocols/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
+#      SERVE_WINDOW=0  CUDA_TK (default: verity/protocols/flock/prover/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
 #      FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps; it holds the staged values)
 #      STEPS="build stage sanity gpu cpu" (lean: add it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -39,7 +39,7 @@ STATEMENTS=${STATEMENTS:-"4096:1 4096:8 14336:1"}; CPU_STATEMENTS=${CPU_STATEMEN
 PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEMENTS:-}; DRAW=${DRAW:-}
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
-. verity/protocols/flock/pod/cuda-13.3.sh
+. verity/protocols/flock/prover/pod/cuda-13.3.sh
 . verity/protocols/spot/verifier/one_stage/verifier_env.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
@@ -52,7 +52,7 @@ has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 if has build; then
   echo "== build $(date -u +%T)"
-  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/protocols/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/protocols/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $B | tee $O/binary.sha256
 fi
@@ -209,12 +209,12 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
+  LSHA=$(python3 verity/protocols/flock/prover/pod/lake_closure.py key verity/protocols/flock/verifier)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $FW/lean-src) \
+    rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/prover/pod/lake_closure.py copy verity/protocols/flock/verifier $FW/lean-src) \
       && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
       && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi
