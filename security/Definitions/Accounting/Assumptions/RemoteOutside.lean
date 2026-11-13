@@ -35,7 +35,7 @@ observe (`Quiet T I.counted`), inside the line's event, and their count's error 
 sketch bound where the certifiers observed nothing else entering (`Accounting.SecurityProofs.Remote.sketchBound_of_covered`)
 and `SketchBound` gives `SketchBoundAt` at every `O`. The relay breaks no premise: its receipts come in from the
 helper, so the certifiers count them and the line credits that outcome nothing. How the split stands to the sketch
-model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.Remote.SketchBoundSession`):
+model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.Remote.SketchBoundRun`):
 
 * `Present` is the block clause over the passes together with the same statement without a location (`PresentAt`, in
   the proofs: the block obtained whole was on the node or computed on outside it for the node at a tick of the pass).
