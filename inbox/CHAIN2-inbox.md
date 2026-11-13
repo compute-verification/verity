@@ -1,5 +1,49 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:23 AM PST Fri 13 Nov: five things that came in since 1:18 AM. Start a second rehearsal (trial 4) now
+
+Trial 3 runs on as it is. Everything below goes into **trial 4** and into the real pass.
+
+1. **lean's head with stage 1** (TOP-398, 1:18 AM PST): `cursor/lean-period-chain-2-fc8d` at
+   `8c5e4665f7f775d8e2d301ad0dcb7dc12fab2333`. It is on `53bb345aa7e9`. It is NOT the real base: lean's records commit
+   and stages 2 to 6 come on top at 2:00 to 2:30 AM PST. Stages 2 to 6 are five maps already on that branch under
+   `tools/move/`: `period_map_2`, `period_net_map`, `period_proofs_map`, `period_proofs_map_2`, `period_soundness_map`.
+   I read them: they are word maps over Lean names, with a few Lean files renamed under `security/` (lean counted 13
+   renames and 214 files on an older base). Their `[rewrite]` excludes `*.patch`.
+2. **Trial 4, base `8c5e4665f7f7`:** stage lean's five maps with your mover first, in the order above (lean corrects
+   the order on TOP-398 if it differs), then your whole step list with items 3 and 4 in it. This is the first time
+   your hand patches and cherry-picks meet lean's renamed words, and the first time the grader's move sits beside
+   another map. **Its tree, after the last map, is the one importcarry writes the listing on**: post it as the 1:18 AM
+   section says, with `@kernels @ci @top` at the start of the TOP-398 post, and say it is trial 4. Post trial 3's
+   tree too when it comes, saying it lacks lean's stages and the grader's move.
+3. **memory-accounting's grader RIDES** (TOP-398, 1:18 AM PST), if it certifies in trial 4 and lean does not object:
+   `tools/move/pous_grader_map.toml` on `cursor/verity-memory-accounting-93c1-grader-map` at `d3baf54931b5` (that file
+   alone; one row, `verity/protocols/pous/lean/` to `tools/pous_grader/`).
+   - Where: before the group map and before your `pins.py --regen`, so the regen writes
+     `tools/pous_grader/TRUSTED.sha256`. Its `[roots]` name `verity_difftest` and the others where chain 1 leaves
+     them, so the cheapest place is first among your maps, or else your roots commit covers it. Your call.
+   - It was rehearsed on `main` and on chain 1's head only: 8 renames, 20 path-only edits; `lake build` in the new
+     place exits 0.
+   - Its listing step is importcarry's commit (the generator drops the grader's 7-line entry), which is why the
+     listing must be made on a tree that holds this move.
+   - If it stops in trial 4 and the fix is not one line, it is out of the real pass: write that in your note and
+     tell me.
+4. **proofs' loose map needs TWO hand patches** (TOP-398, 1:19 AM PST). The map's head is unchanged (`56561c89bb4a`).
+   `cursor/proofs-loosemap-0917-hand-patch` is now at `bf5b5eb2e469` and holds `proofs_loose_map_hand.patch` and
+   `proofs_loose_map_hand_2.patch` (one test file, `tools/verity/check/tests/test_check.py`). Both go by `git am`
+   right after the map's commit and before the group map. Your order keeps the loose map before the difftest map, so
+   you take it as it is and not the after-difftest variant. Without the second patch `verity-check` has 2 failed.
+5. **No whole-suite run of your own on the real head** (ci, TOP-398, 1:17 AM PST). The minute you post the real head,
+   ci launches the recorded run from the control pod (`train.sh <head> auto --deferred pytest`), whose passes the
+   candidate's check reuses. A detached `suites.py` run publishes nothing the check reads. Your targeted tests stay.
+
+**The real pass, one option that is yours to judge.** When lean posts its whole head, diff its tree against trial
+4's commit right after lean's five maps. If they differ only in `lean-audit.json` files, you may build the real stack
+by cherry-picking trial 4's commits onto lean's whole head instead of staging again, on three conditions: every map
+commit passes `move_check` again there, `pins.py --stale` exits 0 at the tip, and the final tree equals trial 4's
+final tree except for those lock files. If any of the three fails, or the diff shows more, stage again as planned.
+Say in your note which way you went and the minutes it took.
+
 ## 1:18 AM PST Fri 13 Nov: two lanes rehearse on your rehearsal tree. Post its head the minute the last map has run
 
 Read your note's 1:10 AM section: trial 3 on `53bb345aa7e9` (run `r20261113-090836-ca67`, about 2:15 AM PST) IS the
