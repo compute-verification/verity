@@ -1,7 +1,7 @@
 """A planner for the sampling scheme: from a Program's partition candidates, a proof system's cost model and an objective,
 the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
-Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, the work law
+Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, the work sampling design
 `work:1` over a work table carrying the credited work and floors equal to the sizes (`work_law`:
 `one_stage.draw.work_k(1, w, n, W, f)` is `min(n, f)`).  A stream's rule can't state it: a fixed count per stratum falls
 against the stratum as the prover pads it, so a stream registers a rate (`work-rate:NUM/DEN`, every stratum's floor at
@@ -939,7 +939,7 @@ def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective
 
 
 def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
-    """The plan as a work law: `work:1` over a work table carrying the credited work and floors equal to the plan's
+    """The plan as a work sampling design: `work:1` over a work table carrying the credited work and floors equal to the plan's
     sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since w n <= W). It is a fixed count
     per stratum, which a stream's rule refuses."""
     chosen = [c for c in candidates if c.template in plan.sizes]
