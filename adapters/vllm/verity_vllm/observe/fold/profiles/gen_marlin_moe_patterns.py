@@ -81,7 +81,6 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
     WeightField,
     scratch_view,
-    whole_view,
 )
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
@@ -250,7 +249,7 @@ class MoEMarlinSharedExperts:
         """`_dsv4_topk_kernel[(M,)]` at its pins: its part and (scores, the bias's name, weights, ids)."""
         C = self.config
         E, TOPK, M = C["NUM_EXPERTS"], C["TOPK"], hidden.shape[0]
-        e = sc.router.triton
+        e: Any = sc.router.enter   # a TritonLaunch: `match` sends a scored layer here only when its router is one
         pinned: Any = DSV4_TOPK_PINS["constexprs"]
         got = {"kernel": e.fn, "src_sha256": e.src_sha, "constexprs": {k: e.constexprs.get(k) for k in pinned}, "num_warps": e.num_warps}
         if got != DSV4_TOPK_PINS:
@@ -314,12 +313,13 @@ class MoEMarlinSharedExperts:
                 if not isinstance(act, Compute) or act.rows != P or any(act.spec.bindings.get(k) != v for k, v in want.items()):
                     return unsupported(node, f"the routed {K_CLAMP} did not resolve as SiluMulClamp{want} on the pair rows", child_id=sc.rsilu.id,
                                        child_reason=getattr(act, "reason", None))
-                x = whole_view(act.operands[0])
+                clamp: Any = act   # SiluAndMulWithClamp's Compute: one PerRow in, one out
+                x = clamp.operands[0].view
                 if (x.alloc, x.offset) != (prev.alloc, prev.offset):
                     return unsupported(node, f"the routed {K_CLAMP} does not read the w13 output as [P, 2I]", input=repr(x), w13=repr(prev))
                 out.append((sc.rsilu.id, Compute(act.spec, P, act.operands, act.outputs, act.consumed, hint=f"{hint}/{K_CLAMP}",
                                                  kernels=act.kernels, pattern=self.name)))
-                prev = whole_view(act.outputs[0])
+                prev = clamp.outputs[0].view
             c = self._gemm(node, ctx, launch, prev, K, N, routed, bufs, BM, weights, P, tp)
             if isinstance(c, Unsupported):
                 return c
@@ -351,8 +351,8 @@ class MoEMarlinSharedExperts:
         """One `moe_wna16_marlin_gemm` launch over the align's schedule: its Definition, A, C [P, N] and the weight and scale fields."""
         C = self.config
         E, TOPK, M = C["NUM_EXPERTS"], C["TOPK"], P // C["TOPK"]
-        what = "w2" if routed else "w13"
-        a: Any = bound_args(launch)   # what the log recorded, each read checked below
+        a: Any   # what the log recorded, each read checked below
+        what, a = ("w2" if routed else "w13"), bound_args(launch)
         top_k = 1 if routed else TOPK
         flags = {k: a.get(k) for k in MARLIN_FLAGS} | {"top_k": a.get("top_k"), "mul_topk_weights": a.get("mul_topk_weights"),
                                                      "moe_block_size": a.get("moe_block_size"), "size_m": a.get("size_m"),
