@@ -227,14 +227,14 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `definitions/` | the GPU probes behind the numerics Definitions: the approximate instructions FlashAttention-2 and the RMSNorm kernel run (`MUFU` exp2, reciprocal, square root and tanh), measured on every 32-bit input | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
-### The repository
-
-| Directory | What it measures | Status |
-| --- | --- | --- |
-| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
-
 ### Census data
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `census/` | the fixed quantities benchmarks are computed against: hardware, datatypes, networks, deployments, subcircuits and workloads | data |
+
+### The repository
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
