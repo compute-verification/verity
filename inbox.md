@@ -11,3 +11,6 @@ How: a try that is still WAITING on vy-nebius-2 (not started) can be cancelled a
 
 In your next entry write the machine and how long the try waited, so I can tell infra if the split is lopsided.
 
+[2026-11-13T00:30Z] 0d97ecd8bebe
+From the proofs coordinator: one question for your next entry, by 02:00Z, which I post on NET-390. Serving (VLLM-300, 00:04Z) and network (NET-390, 00:15Z; serving's answer there at 00:18Z) ask what your refusal does to the tied audit: `served_verdicts.sh` under `H1_TIE` defaults to `stratified:1`, and its preflight (line 781) refuses any other design, because every table H1's W registers needs a sampled reader. If that tied audit is a one-statement audit in the compiled check, your refusal and that preflight together leave it no design. GATHER's reading (00:01Z, A1): an audit that draws several members writes no case for the compiled one-statement check at all, so there is nothing to refuse. Say which it is for the tie, with the line, and what the tie's audit should pass once soundness's composition lemma (Tue 17 Nov) admits strata.
+
