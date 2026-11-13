@@ -207,7 +207,7 @@ def _harness_args(d: Path) -> argparse.Namespace:
     return ap.parse_args(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify"])
 
 
-def test_the_harness_writes_the_mark_in_the_write_that_ends_the_run_however_it_ends(tmp_path):
+def test_the_harness_writes_the_mark_in_the_write_that_ends_the_run_however_it_ends(tmp_path, monkeypatch):
     """A reader that finds a run ended finds its mark: `research status` fetches an ended run's records once."""
     for name, cmd, rc in (("done", [PY, "-c", "pass"], 0), ("failed", [PY, "-c", "raise SystemExit(3)"], 3),
                           ("unspawned", [str(tmp_path / "no-such-program")], 127)):
@@ -225,6 +225,13 @@ def test_the_harness_writes_the_mark_in_the_write_that_ends_the_run_however_it_e
     assert status["state"] == "done" and "memory" not in status
     marks = [json.loads(ln) for ln in (d / "events.jsonl").read_text().splitlines()]
     assert [m["error"] for m in marks if m.get("name") == "ended_failed"] == ["ZeroDivisionError: division by zero"]
+    monkeypatch.setattr(trun, "session_cap", lambda: "900G")
+    monkeypatch.setattr(trun.Cgroup, "limits", lambda self: {"path": "/system.slice/ssh.service", "memory_max_kind": "finite"})
+    d = tmp_path / "refused"
+    assert trun.run(_harness_args(d), [PY, "-c", "pass"], None, lambda: memmark.of_run(d, {"mem_gb": 1}, {})) == trun.EX_NO_MEMORY_CAP
+    status = json.loads((d / "status.json").read_text())
+    assert status["state"] == "failed" and status["memory"] == status["transitions"][-1]["memory"]
+    assert (status["memory"]["ask_bytes"], status["memory"]["peak_held_bytes"]) == (GB, None) and status["memory"]["reason"]
 
 
 WRITES_SAMPLES = ("import json, os; f = open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'resources.jsonl'), 'w'); "
