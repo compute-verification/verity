@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -456,6 +457,53 @@ def test_an_opening_inside_a_subtree_is_refused_by_the_drivers_leaf_check():
                  {"leaf": Opening(1, rb.hidden(leaf, salt), path)}, {"leaf_receipts": o.leaf_receipts[:-1]}):
         bad = o.__class__(**{**o.__dict__, **edge})
         assert not verify_opening(s.region("w"), pc, plan, bad, RECEIPT, CODEC.decode, None)
+
+
+def test_the_reference_refuses_an_opening_that_is_not_the_plans_and_a_plan_that_is_not_the_passs():
+    """Position 19 again, block 19 of ``w``, before the reference reads a receipt. It is refused under another block's
+    index, named for ``w2``, which is not its segment's region, and checked against ``w2``'s blocks, which do not hold
+    block 19. So is a plan that reads a block twice, a plan with two other positions swapped, the pass's own plan once
+    the pass names the swapped plan's digest, and a pass whose segments do not add up to the plan's length."""
+    s, _ = _aligned_store()
+    (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
+    (o,), plan, w = s.open([(0, 19)]), s.plan(0), s.region("w")
+    assert (o.block, o.region) == (19, "w") and verify_opening(w, pc, plan, o, RECEIPT, CODEC.decode, None)
+    for edge in ({"block": 20}, {"region": "w2"}):
+        assert not verify_opening(w, pc, plan, replace(o, **edge), RECEIPT, CODEC.decode, None), edge
+    assert not verify_opening(s.region("w2"), pc, plan, o, RECEIPT, CODEC.decode, None)
+    twice, swapped = plan.copy(), plan.copy()
+    twice[40] = twice[41]
+    swapped[[40, 41]] = swapped[[41, 40]]
+    assert twice[19] == swapped[19] == 19 and sorted(swapped.tolist()) == sorted(plan.tolist())
+    assert not verify_opening(w, pc, twice, o, RECEIPT, CODEC.decode, None)
+    assert not verify_opening(w, pc, swapped, o, RECEIPT, CODEC.decode, None)
+    other = rb.Plan.of(swapped.tolist(), s.layout().blocks).digest
+    assert other != pc.plan_digest == rb.Plan.of(plan.tolist(), s.layout().blocks).digest
+    assert not verify_opening(w, replace(pc, plan_digest=other), plan, o, RECEIPT, CODEC.decode, None)
+    last = pc.segments[-1]
+    short = replace(pc, segments=(*pc.segments[:-1], replace(last, count=last.count - 1)))
+    assert not verify_opening(w, short, plan, o, RECEIPT, CODEC.decode, None)
+
+
+def test_the_reference_holds_an_opening_to_the_plans_block_under_a_receipt_of_the_bytes_alone():
+    """A receipt need not read a block's index (`Receipt.binds` names what it reads beside the block). Under one that
+    reads the bytes alone, an opening that names another block of its region carries the same receipt, leaf and path,
+    and the reference refuses it by the plan: the block at the position is not the one it names."""
+
+    class OfTheBytes(FakeReceipt):
+        name = "fake-sha512-bytes"
+
+        def keyed(self, seed: bytes):
+            return lambda j, block, z=None: hashlib.sha512(seed + block + (z or b"")).digest()
+
+    s, rec = NodeMemory(salt_key=bytes(32)), OfTheBytes()
+    b = ArrayBacking(np.random.default_rng(5).integers(0, 256, 3 * BLOCK, np.uint8))
+    s.register("w", "hbm", "weights", b, block_bytes=BLOCK, codec=CODEC, receipt=rec, source="rng")
+    (pc,), _ = _window(s, SIGMA, [((), None)])
+    (o,), plan, w = s.open([(0, 1)]), s.plan(0), s.region("w")
+    assert int(plan[1]) == o.block and verify_opening(w, pc, plan, o, rec, CODEC.decode, None)
+    for block in sorted({0, 1, 2} - {o.block}):
+        assert not verify_opening(w, pc, plan, replace(o, block=block), rec, CODEC.decode, None), block
 
 
 @pytest.mark.parametrize("kind", rb.KINDS)
