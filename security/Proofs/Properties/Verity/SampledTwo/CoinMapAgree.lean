@@ -39,14 +39,14 @@ theorem ind_mono {p q : Prop} [Decidable p] [Decidable q] (h : p → q) (x : ℝ
   by_cases hp : p
   · rw [if_pos hp, if_pos (h hp)]
   · rw [if_neg hp]
-    exact zero_le _
+    exact zero_le
 
 theorem ind_le_one {p : Prop} [Decidable p] {x : ℝ≥0∞} (hx : x ≤ 1) : (if p then x else 0) ≤ 1 := by
   by_cases hp : p
   · rw [if_pos hp]
     exact hx
   · rw [if_neg hp]
-    exact zero_le _
+    exact zero_le
 
 /-- **An output a play reaches**: the play's output at any tape. -/
 theorem playReaches_tapeOut : ∀ (g : Game β) (s : Strategy g) (t : Tape g s), PlayReaches g s (Tape.out g s t)
@@ -363,8 +363,8 @@ theorem law_freshA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
   rcases hs : slot L K pre (.fresh l) b 4 with _ | ⟨i, u⟩
   · refine law_keepA s' (Ag' := fun x r o => AgFrom L lg r (pre ++ [⟨.fresh l, b, List.ofFn x⟩]) o) ?_ fun x => ?_
     · intro x r τ hA
-      obtain ⟨log, hl⟩ := hf.out ⟨.fresh l, b, List.ofFn x⟩ k fs' ts _ τ
-      exact (agFrom_cons L hl).2 ⟨relGood_of_none L hs, hA⟩
+      exact (agFrom_cons L (hf.out ⟨.fresh l, b, List.ofFn x⟩ k fs' ts _ _).choose_spec).2
+        ⟨relGood_of_none L hs, hA⟩
     · exact hlaw _ _ _ _ (hf.cons _) _
   · have hv := splits_fresh i u (slot_spec L hs).2.2
     refine law_setA (R := Fin K → FlockDeploy.Coin) s'
@@ -374,8 +374,8 @@ theorem law_freshA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
     · intro x r r' o hr
       exact logGood_congr L _ _ (offChunk_agree L hs rfl hr _)
     · intro r τ hA
-      obtain ⟨log, hl⟩ := hf.out ⟨.fresh l, b, List.ofFn (freshVal (r i) u)⟩ k fs' ts _ τ
-      refine (agFrom_cons L hl).2 ⟨fun j u' hs' => ?_, hA⟩
+      refine (agFrom_cons L (hf.out ⟨.fresh l, b, List.ofFn (freshVal (r i) u)⟩ k fs' ts _ _).choose_spec).2
+        ⟨fun j u' hs' => ?_, hA⟩
       have e := hs.symm.trans hs'
       cases e
       rfl
@@ -392,8 +392,8 @@ theorem law_helloA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
   refine law_keepA s' (Ag' := fun tr r o => AgFrom L lg r
     (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩]) o) ?_ fun tr => ?_
   · intro tr r τ hA
-    obtain ⟨log, hl⟩ := hf.out ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ k fs _ _ τ
-    exact (agFrom_cons L hl).2 ⟨relGood_of_none L rfl, hA⟩
+    exact (agFrom_cons L (hf.out ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec tr ++ treeKey tr.1)⟩ k fs _ _
+      _).choose_spec).2 ⟨relGood_of_none L rfl, hA⟩
   · exact hlaw _ _ _ _ (hf.cons _) _
 
 theorem law_roundA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k}
@@ -409,8 +409,8 @@ theorem law_roundA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
   · refine law_keepA s (Ag' := fun dr r o => AgFrom L lg r
       (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩]) o) ?_ fun dr => ?_
     · intro dr r τ hA
-      obtain ⟨log, hl⟩ := hf.out ⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ k fs _ _ τ
-      exact (agFrom_cons L hl).2 ⟨relGood_of_none L hs, hA⟩
+      exact (agFrom_cons L (hf.out ⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ k fs _ _ _).choose_spec).2
+        ⟨relGood_of_none L hs, hA⟩
     · exact hlaw _ _ _ _ (hf.cons _) _
   · obtain ⟨-, -, hu⟩ := slot_spec L hs
     have hv := splits_open j u n hu
@@ -433,9 +433,9 @@ theorem law_roundA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
     · intro dr r r' o hr
       exact logGood_congr L _ _ (offChunk_agree L hs rfl hr _)
     · intro r d τ hg hA
-      obtain ⟨log, hl⟩ := hf.out ⟨.opening i sn n, b,
-        TreeDraw.opened (openW n (bitsOf (openElems (r j) u n)) d).1 n⟩ k fs _ _ τ
-      refine (agFrom_cons L hl).2 ⟨fun j' u' hs' => ?_, hA⟩
+      refine (agFrom_cons L (hf.out ⟨.opening i sn n, b,
+        TreeDraw.opened (openW n (bitsOf (openElems (r j) u n)) d).1 n⟩ k fs _ _ _).choose_spec).2
+        ⟨fun j' u' hs' => ?_, hA⟩
       have e := hs.symm.trans hs'
       cases e
       show TreeDraw.opened (openW n (bitsOf (openElems (r j) u n)) d).1 n = openBits (r j) u n
@@ -509,12 +509,7 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
       by_cases hfitw : usedOf L i.val [] q + widthOf rl.frame ≤ 65536
       · rw [if_pos ⟨hloc, hfitw⟩] at ht
         have hslot : slot L K q rl.frame rl.answers (widthOf rl.frame) = some (i, usedOf L i.val [] q) := by
-          unfold slot
-          rw [hloc]
-          show (if h : i.val < K then
-            (if usedOf L i.val [] q + widthOf rl.frame ≤ 65536 then some (⟨i.val, h⟩, usedOf L i.val [] q) else none)
-            else none) = _
-          rw [dif_pos i.isLt, if_pos hfitw]
+          simp only [slot, hloc, dif_pos i.isLt, if_pos hfitw, Fin.eta]
         have hc := hg i _ hslot
         have hlen : rl.coins.length = 128 * widthOf rl.frame := by
           rw [hc]
@@ -529,14 +524,14 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
             List.getD_eq_getElem _ false hg']
           simp only [openBits, List.getElem_ofFn]
         · rw [List.getD_append_right rl.coins (devBits L i.val (q ++ [rl]) log) false t (by rw [hlen]; omega), hlen,
-            devBits_getD log (q ++ [rl]) hgs (t - 128 * widthOf rl.frame) (by omega), hsnoc]
+            devBits_getD r i log (q ++ [rl]) hgs (t - 128 * widthOf rl.frame) (by omega), hsnoc]
           congr 1
           omega
       · rw [if_neg (fun h => hfitw h.2), fitOf_zero L i.val log (q ++ [rl]) (by rw [hsnoc]; omega)] at ht
         omega
     · rw [if_neg hloc] at hsnoc
       rw [if_neg (fun h => hloc h.1)] at ht
-      rw [if_neg hloc, List.nil_append, devBits_getD log (q ++ [rl]) hgs t (by omega), hsnoc, Nat.add_zero]
+      rw [if_neg hloc, List.nil_append, devBits_getD r i log (q ++ [rl]) hgs t (by omega), hsnoc, Nat.add_zero]
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -604,16 +599,17 @@ theorem coinMapHolds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype
         · by_cases hE : E (Tape.out _ σ (place V θ F c σ L r t))
           · rw [if_pos hA, if_pos hE, if_pos ⟨hE, elemAgrees_of_logGood L reads r hA⟩]
           · rw [if_pos hA, if_neg hE]
-            exact zero_le _
+            exact zero_le
         · rw [if_neg hA]
-          exact zero_le _
+          exact zero_le
     _ = prCoin (fun s : TapeOf V θ F c σ × Coins A x =>
           E ((frame V A x θ F c σ L P).out s.1 s.2) ∧
             ElemAgrees L A x reads ((frame V A x θ F c σ L P).out s.1 s.2) s.2) +
           gapOf V θ F c σ L (A.L.V.k x) := by
         unfold prCoin
         rw [avg_prod, avg_swap]
-        rfl
+        exact congrArg (· + gapOf V θ F c σ L (A.L.V.k x)) (congrArg avg (funext fun t =>
+          congrArg avg (funext fun r => if_congr Iff.rfl rfl rfl)))
     _ = _ := by rw [prCoin_eq_ofReal_pr]
 
 end Verity.SampledTwo.CoinMap
