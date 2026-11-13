@@ -1,5 +1,5 @@
 """kind-scan: each field the network certifier's piece releases to the verifier, by kind. A field is one of the four
-public kinds (`verity.configuration.wire.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
+public kinds (`verity.channel.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
 hiding commitments) or what the network certifier signed (`CERTIFICATE`: its certificates reach the verifier in the
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
@@ -50,7 +50,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.configuration import wire as W
+from verity import channel as W
 
 CERTIFICATE = "certificate"
 KINDS = (*(k for k in W.KINDS if k in W.PUBLIC), CERTIFICATE)
