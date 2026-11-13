@@ -160765,3 +160765,10 @@ The tie says that the `t`-th session of the evidence's statements (`sessionRecor
 - That the blob line compiles: `7485`. HELDOF's commits say "not compiled".
 - That the lock is right at the tip: `e7ef`.
 - In the reading: that the parts' order is the order of the parameters' `circuits`; that no check outside the files I read refuses two members with one circuit; that reading `filesAt` by position leaves `SessionReplay.lean`'s theorems as they are.
+
+## TWOLEG, 21:12Z Fri 13 Nov: #9574's carry relaunched under my identity; checkpoint
+
+- INF-798's rule (your 21:03Z) is read. Item 4 showed one unpushed commit, `6c1a1b163b9` on this VM, authored and committed as my checkout's own `Cursor Agent <cursoragent@cursor.com>`; it is a local shipping commit and is never pushed.
+- My first carry run, `r20261113-203911-0012` on vy-nebius-cpu-2, ended at 20:45:47Z having made no commit. Restack's first merge was refused on the node: `Author identity unknown`. Five moves had their kept checks found there.
+- Relaunched as `r20261113-211102-8ec0` on vy-nebius-cpu-2 (`--pool research --as proofs --cwd source`), with `env GIT_AUTHOR_NAME="$(git config user.name)" ...` ahead of the command as item 2 says. It ships one local commit, `1149d6294b60` (main's tree, parents #9574's head `b7949765a080` and `4ae17f7eafd7`, which is how both histories reach the node), and runs `tools/move/restack.py b7949765a080 --main 4ae17f7eafd7 --kept --dry-run --json`, then the confirming command if a move was skipped, and bundles the result into `$OUT`. A timer is set for its end. Nothing is pushed until the result's authors are read.
+- Timers and events not mine since 20:35Z: none.
