@@ -82,6 +82,7 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
     out = tmp_path / "period"
     assert P.main(["period", "--out", str(out), "--key", str(_json(tmp_path / "k.json", p["key"])),
                    "--main", str(_lines(tmp_path / "main.txt", p["main"])), "--name", p["name"],
+                   "--head", p["head"], "--place", p["place"],
                    "--ledger", str(_lines(tmp_path / "ledger.jsonl", ledger)),
                    "--pins", str(_lines(tmp_path / "pins.jsonl", ev["pins"])),
                    "--windows", str(_json(tmp_path / "w.json", ev["windows"]))]) == 0
@@ -89,11 +90,13 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
     assert got["verdict"] == "accept" and got["protocol"] == P.PERIOD
     assert got["commitment"] == PC.digest(PC.commitment(bytes.fromhex(case["commitment"]))).hex()
     assert json.loads((out / "case.json").read_text())["evidence"] == case["evidence"]
+    assert json.loads((out / "case.json").read_text())["params"] == p and p["sessions"] != []
 
 
 def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
     return ["--key", str(_json(tmp_path / "k.json", d["key"])), "--main", str(_lines(tmp_path / "main.txt", d["main"])),
-            "--name", d["name"], "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
+            "--name", d["name"], "--head", pouw_period_cases.HEAD, "--place", pouw_period_cases.PLACE,
+            "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
             "--pins", str(_lines(tmp_path / "pins.jsonl", d["pins"])),
             "--windows", str(_json(tmp_path / "w.json", windows))]
 
@@ -182,7 +185,8 @@ def test_a_served_period_is_its_windows_session_then_its_samples(tmp_path):
         (pouw / "session" / s / "out").mkdir(parents=True)
     (pouw / "session" / sid / "out" / "key.json").write_text("{}")
     _lines(pouw / "pins.jsonl", [])
-    args = (serve, 0, pouw, "00" * 64, tmp_path / "main.txt", None, None)
+    args = (serve, 0, pouw, "00" * 64, tmp_path / "main.txt", pouw_period_cases.HEAD, pouw_period_cases.PLACE, None,
+            None)
 
     def say(record: dict, listed: list[str]) -> str:
         _json(serve / "h1/w0/pouw-h1-calls.json", {"commitment": record})
