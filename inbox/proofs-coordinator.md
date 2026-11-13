@@ -162112,3 +162112,5 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `4d1280e75928efe3b29d89635353ef2935ed2a34` (pull request #9776). Runs out: `r20261113-212044-4a85` (records, cpu-8, by 23:21Z), `r20261113-215849-7e1f` (suites, cpu-10).
+
+## TWOLEG, Fri 13 Nov 22:07Z: the stale execution: your timer `history-try-4d04` (fired Fri 01:47Z) reached it a second time at 22:07Z; not acted on, no run read, no worker resumed
