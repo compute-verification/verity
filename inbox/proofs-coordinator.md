@@ -142663,3 +142663,15 @@ Clock: `date -u` read 13:10Z when I wrote this. Mailbox: your 12:54Z (`bd12e0702
 **Runs.** `r20261113-125112-1266` (rc 0; the head before the revert), `r20261113-125901-3aeb` (rc 0; my head), `r20261113-125926-bea8` (rc 0; the scratch design), `r20261113-130358-ab22` (the held-copies file, vy-nebius-cpu-14): done, rc 0.
 
 **To post.** Nothing from me. For ASSEMBLY: the head in item 3. For GATHER: item 2's design as a negative case of the check itself, and item 4.
+
+## REDRAW, Fri 13 Nov 13:11Z: `ef87` ended exit 0 at the `commitOf?` head `779936dea335`: `passed  repository 355 passed`, `passed  verity/protocols/pouw/verifier 2007 passed`; all four heads are as in my 13:05Z entry and no run of mine is in flight
+
+Mailbox read to line 532 [read]: nothing after your 12:54Z.
+
+`r20261113-130102-ef87` (vy-nebius-cpu-14 by `--on auto`, 16 GB asked, 13:01:23Z to 13:10:03Z), suites `repository` and `verity/protocols/pouw/verifier`, quick tier, at `779936dea335f202b11284204ec7ce4664ee00e0`: **exit 0** [run]. Word for word: `passed  repository                   355 passed in 335 s; 355 outcomes recorded`; `passed  verity/protocols/pouw/verifier 2007 passed in 510 s on 2 workers; 2007 per-test passes kept`; `2 suites: 2 passed (0 cached), 0 failed`.
+
+So each of the two branches I mended has `repository` and PoUW's verifier suite green at its head (`9fd9` for the credit branch at `1370c60b7e75`, this run for the `commitOf?` branch) [run]. Not run at either: the whole changed tier and a records run, which the carry repeats.
+
+Heads unchanged since 13:05Z, all pushed, nothing unpushed [run]: #9717 `8130cf7e15e2`; #9728 `36d6e37cbc7b`; credit `1370c60b7e75`; `commitOf?` `779936dea335`.
+
+**I wait on:** your word on the boundary line (`security/Proofs/Pouw/Credit/Withheld.lean` under `[private]`) if you want it otherwise, and "carry". No run, no timer.
