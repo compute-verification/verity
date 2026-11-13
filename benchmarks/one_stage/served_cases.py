@@ -69,11 +69,14 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
-  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
-  manifests and R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and its evidence, each
+  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record", "window"}``, the
+  retained passes' manifests, R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and the
+  window record W the passes are held to with its rounds and dropped rounds, whose digest remote ties to the record R is
+  chained right after (`Core.Remote.V1.window`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples and coin record, which the check of this
-  case runs on the blobs instead of the files) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
+  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
+  this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
+  under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
@@ -159,7 +162,12 @@ PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 #: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
-PEARL_PLUS_PARTS = {"params", "manifests", "evidence", "lean", "delta"}
+PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
+#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
+#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
+PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 #: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
@@ -379,14 +387,18 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     files, lean = (parts["evidence"] or {}).get("files"), parts["lean"] or {}
     _need(isinstance(files, list) and all(isinstance(f, dict) for f in files), "the parts' evidence is not each pass's files")
     _need(lean.get("verdict") in ("accept", "reject"), f"the parts' Lean verdict is {lean.get('verdict')!r}")
+    window = parts["window"]
+    _need(isinstance(window, dict) and set(window) == PEARL_PLUS_WINDOW and isinstance(window["record"], dict),
+          f"the parts' window is not {sorted(PEARL_PLUS_WINDOW)} with the window record W the passes are held to")
     blobs = [d / "blobs" / h for h in sorted({h for f in files for h in f.values()})]
     gone = [b for b in blobs if not b.is_file()]
     _need(not gone, f"the parts name {len(gone)} blob(s) that aren't files in {d / 'blobs'}")
-    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest})
+    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest, "window": window})
     accepted = lean["verdict"] == "accept"
+    work = {**(lean.get("work") or {}), **(lean.get("exact_work") or {})}
     answer = {"protocol": PEARL_PLUS, "verdict": lean["verdict"], "reason": lean.get("reason"),
               "commitment": hashlib.sha512(PEARL_PLUS_TAG + b"\0" + commitment).hexdigest(),
-              "public": {**(lean.get("work") or {}), "delta": parts["delta"]} if accepted else None,
+              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"]} if accepted else None,
               "profile": {"draws": parts["params"].get("draws"), "drawn": lean.get("drawn"),
                           "passes": len(parts["manifests"])} if accepted else None}
     case = {"params": parts["params"], "commitment": commitment.hex(),

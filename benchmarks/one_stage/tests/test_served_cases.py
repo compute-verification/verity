@@ -898,28 +898,38 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
 
 def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
-    manifest (its salt key among its fields), the one file its opened tile reads by the blob holding it, and the Lean
-    verdict of record's verdict, tiles sampled and work."""
+    manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
+    dropped round 0, the one file its opened tile reads by the blob holding it, and the Lean verdict of record's verdict,
+    tiles sampled and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
     (piece / "blobs" / hashlib.sha512(blob).hexdigest()).write_bytes(blob)
     parts = {"schema": "verity-pouw/pearl-plus-case-parts/v1", "delta": "1/100",
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
-                        "record": {"commitment": "d0" * 64, "source": "e0" * 32}},
+                        "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
+                                   "draw": {"from": "challenger"}}},
              "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
+             "window": {"dropped": [0], "record": {"window": {"version": 2}, "registered": [], "previous": None},
+                        "rounds": [1]},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
-             "lean": {"verdict": "accept", "reason": None, "drawn": 3, "work": {"credited": 7, "macs": 9}}}
+             "lean": {"verdict": "accept", "reason": None, "drawn": 3,
+                      "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
+                               "over_cap_draws": 0, "give_up": 8},
+                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}}}
     (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     return piece, parts
 
 
 def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_path, capsys):
     """Pearl+'s run case from the parts its piece wrote (`served_passes.py case`): its params as written, its commitment
-    the retained manifests and R's digest (the tie remote's composite of record checks against the policy's record), as
-    canonical JSON, its evidence each pass's files by blob digest and its blobs the parts' own; its answer the Lean verdict
-    of record's under the commitment's digest, SHA-512(tag ‖ 0 ‖ commitment). Nothing of the commitment is printed. A
-    part naming a blob that isn't a file is refused saying so, and the other cases are still written."""
+    the retained manifests, R's digest (the tie remote's composite of record checks against the policy's record) and the
+    window, W with its rounds and dropped rounds (the tie it checks against the record R is chained after), as
+    canonical JSON, exactly the three keys the protocol's decoder takes; its evidence each pass's files by blob digest
+    and its blobs the parts' own; its answer the Lean verdict of record's under the commitment's digest, SHA-512(tag ‖ 0
+    ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up. Nothing of
+    the commitment is printed. A part naming a blob that isn't a file is refused saying so, and so are parts with no
+    window, or one that isn't the protocol's; the other cases are still written."""
     serve, v1, _ = tied_serve(tmp_path / "serve")
     piece, parts = pearlplus_parts(serve)
     private = serve / "private"
@@ -932,14 +942,18 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
     case = json.loads((got / "case.json").read_text())
     commitment = bytes.fromhex(case["commitment"])
-    assert commitment == codec.canonical_json({"manifests": parts["manifests"], "record": digest_of(v1)})
+    assert commitment == codec.canonical_json({"manifests": parts["manifests"], "record": digest_of(v1),
+                                               "window": parts["window"]})
+    assert sorted(json.loads(commitment)) == ["manifests", "record", "window"]
+    assert sorted(case["params"]["record"]) == ["commitment", "draw", "schema", "source"]
     assert (case["params"], bytes.fromhex(case["evidence"])) == (parts["params"], codec.canonical_json(parts["evidence"]))
     h = parts["evidence"]["files"][0]["pearl/w0/rows.bin"]
     assert case["blobs"] == [str(piece / "blobs" / h)]
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "macs": 9, "delta": "1/100"}, "profile": {"draws": 3, "drawn": 3, "passes": 1}}
+        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "profile": {"draws": 3, "drawn": 3, "passes": 1}}
     assert "5a" * 32 not in out and case["commitment"] not in out
     (piece / "blobs" / h).unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
@@ -947,6 +961,15 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD], out
     assert [r["protocol"] for r in refused] == [SC.PEARL_PLUS], refused
     assert "the parts name 1 blob(s) that aren't files" in refused[0]["reason"] and h not in out
+    (piece / "blobs" / h).write_bytes(b"the pass's rows")
+    for n, bad in enumerate(({k: v for k, v in parts.items() if k != "window"},
+                             {**parts, "window": {**parts["window"], "record": "ab" * 64}},
+                             {**parts, "window": {"record": parts["window"]["record"]}})):
+        (piece / "parts.json").write_text(json.dumps(bad, sort_keys=True))
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"w{n}", "--alpha", "1",
+                                      "--gamma", 1, *stand_ins(tmp_path, v1))
+        assert rc == 1 and [r["protocol"] for r in refused] == [SC.PEARL_PLUS], (n, refused)
+        assert "parts" in refused[0]["reason"], (n, refused)
 
 
 def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_path, capsys):

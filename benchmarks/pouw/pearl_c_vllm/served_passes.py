@@ -139,12 +139,15 @@ padding takes off past the totals' credit is the cause ``grid``.
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
-record's run commitment and source; the retained manifests, in order; the evidence, each pass's files the Lean's opened
-tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles sampled and work;
-and the document's δ) and ``blobs/<SHA-512>``, each of those files' bytes once. `served_cases.pearlplus_case` makes the
-case of them once the window's registration record R is made, its commitment naming R's digest. It refuses (exit 2)
-without a Lean verdict or a coin record, on retained passes other than those the document names, and on a Lean verdict
-over another run or source.
+record's run commitment, source, schema and draw (`CASE_RECORD`); the retained manifests, in order; the window, the
+record W the document held the passes to with the coin record's rounds and dropped rounds (``{"dropped", "record",
+"rounds"}``: rounds null and none dropped where the verdict read no retention); the evidence, each pass's files the
+Lean's opened tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles
+sampled, work and exact work; and the document's δ) and ``blobs/<SHA-512>``, each of those files' bytes once.
+`served_cases.pearlplus_case` makes the case of them once the window's registration record R is made, its commitment
+naming R's digest. It refuses (exit 2) without a Lean verdict or a coin record, on retained passes other than those the
+document names, on a Lean verdict over another run or source, and on a document that held the passes to no W, or to
+another than the file it names holds (the protocol's commitment names W).
 """
 from __future__ import annotations
 
@@ -197,6 +200,8 @@ LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
+#: the coin record's fields the protocol's params name (`PouwCheck.PearlPlus.Protocol.recordKeys`)
+CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
@@ -792,6 +797,19 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the retained passes are not the ones the Python verdict read, by name and SHA-256")
     if (lean.get("commitment"), lean.get("source")) != (coin["commitment"], coin["source"]):
         return refuse("the Lean verdict is not on the coin record's run and source")
+    if any(k not in coin for k in CASE_RECORD):
+        return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
+    try:
+        if not doc.get("tie_record"):
+            raise FileNotFoundError("verify --tie named no window record")
+        w = json.loads(Path(doc["tie_record"]).read_text())
+    except (OSError, ValueError):
+        return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
+                      "case's commitment names W")
+    if not isinstance(w, dict) or REG.digest(w) != (doc.get("tie") or {}).get("record"):
+        return refuse("the window record W is not the one the Python verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
     loaded = [VR.load(p, coins) for p in paths]
     files: list[dict[str, str]] = [{} for _ in paths]
@@ -812,9 +830,11 @@ def case(args: argparse.Namespace) -> int:
                 held[h] = len(data)
     parts = {"schema": CASE_SCHEMA,
              "params": {"coins": json.loads((passes / "coins.json").read_text()), "draws": doc["draws"],
-                        "record": {"commitment": coin["commitment"], "source": coin["source"]}},
-             "manifests": [json.loads(p.read_text()) for p in paths], "evidence": {"files": files},
-             "lean": {k: lean.get(k) for k in ("verdict", "reason", "drawn", "work")}, "delta": doc["delta"]}
+                        "record": {k: coin[k] for k in CASE_RECORD}},
+             "manifests": [json.loads(p.read_text()) for p in paths],
+             "window": {"dropped": coin.get("dropped", []), "record": w, "rounds": coin.get("rounds")},
+             "evidence": {"files": files},
+             "lean": {k: lean.get(k) for k in ("verdict", "reason", "drawn", "work", "exact_work")}, "delta": doc["delta"]}
     _private(out / CASE_PARTS, (json.dumps(parts, sort_keys=True) + "\n").encode())
     print(f"case {lean.get('verdict')}: {len(paths)} passes, {sum(map(len, files))} files their "
           f"{len(lean.get('verdicts') or [])} opened tiles read, {len(held)} blobs of {sum(held.values()):,} bytes -> {out}",
