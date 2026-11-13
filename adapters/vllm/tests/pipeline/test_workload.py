@@ -335,6 +335,45 @@ def test_a_stochastic_rows_plan_seeds_each_request_from_the_row_id_and_its_file_
     assert plain["seeds"] == [] and plain["variants"] == {"greedy": greedy} and not any("seed" in r for r in plain["requests"])
 
 
+def test_a_range_of_one_value_plans_that_value_for_every_request():
+    row = "x__fp8__h200__tp8__b8__i256__o{}__mixed__greedy__eager"
+    for most in (1, 2):                                                         # under the least a request may write, and at it
+        p = W.plan(row.format(most), 8, 256, most, sampling="greedy", arrivals="none")
+        assert p[MOST] == [most] * 8 and p["min_output"] == most and len(set(p["input_lengths"])) >= 6
+    assert W.plan(row.format(32), 8, 1, 32, sampling="greedy", arrivals="none")["input_lengths"] == [1] * 8
+    assert [W.plan(row.format(32), 8, longest, 32, sampling="greedy", arrivals="none")["min_input"] for longest in (31, 32)] == [1, 8]
+
+
+#: What a plan decides: the values of a row's sweep block that the row id alone gives.
+PLANNED = ("seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling", "sampling_params", "arrivals", "input_lengths",
+           MOST, "sampling_seeds", "arrival_offsets_s", "arrive_steps")
+
+
+def test_every_stored_workload_made_under_the_generators_length_rule_states_its_row_ids_plan():
+    """The generator still plans the stored rows as it planned them: a row's file is what its Builds and Commits were made from."""
+    made = 0
+    for p in FILES:
+        sweep = json.loads(p.read_text()).get("sweep") or {}
+        if "row_id" not in sweep:
+            continue
+        plan = W.plan(sweep["row_id"], sweep["batch"], sweep["max_input"], sweep["max_output"], sampling=sweep["sampling"],
+                      arrivals=sweep["arrivals"], shared_prefix=sweep.get("shared_prefix", 0))
+        if sweep["length_rule"] == plan["length_rule"]:                         # else a row written by hand, or under an earlier rule
+            assert {k: sweep[k] for k in PLANNED} == {k: plan[k] for k in PLANNED}, p.name
+            made += 1
+    assert made >= 50
+
+
+def test_a_batch_larger_than_the_corpus_starts_each_further_prompt_fourteen_paragraphs_after_the_one_it_wraps_to():
+    paras = W.corpus_paragraphs()
+    at = {f"{para['source']} \N{PILCROW SIGN}{para['index']}": j for j, para in enumerate(paras)}
+    batch = len(paras) + 3
+    p = W.plan(f"x__fp8__h200__tp8__b{batch}__i256__o32__mixed__greedy__eager", batch, 256, 32, sampling="greedy", arrivals="none")
+    first = [at[r["origin"]["paragraphs"][0]] for r in W.build_requests(_CharTok(), p)]
+    assert sorted(first[:len(paras)]) == list(range(len(paras)))               # every paragraph starts one prompt, then
+    assert first[len(paras):] == [(j + 14) % len(paras) for j in first[:3]]
+
+
 def test_a_shared_prefix_rows_manifest_requests_state_each_warm_requests_cached_rows_and_their_producers():
     """`verity_vllm.pipeline.global_program.manifest_requests` on a row that serves with the prefix cache: each request's cached
     rows and the Program ids of the requests that produced them, as the prefix plan gives them; a row without it states neither."""
