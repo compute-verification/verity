@@ -80,6 +80,29 @@ owner = "compute-accounting"
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
 # a pair no file needs any more, which it names to delete.
 [[against]]
+loader = "verity/circuits/call_scope.py"
+loaded = "adapters"
+files = [
+    "verity/circuits/call_scope.py",
+]
+
+[[against]]
+loader = "verity/protocols/proofs/flock"
+loaded = "adapters"
+files = [
+    "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
+]
+
+[[against]]
 loader = "verity/protocols/proofs/flock"
 loaded = "tools"
 files = [
@@ -180,6 +203,18 @@ paths = [
     "verity/circuits/requirement.py",
     "verity/circuits/requirement_units.py",
     "verity/circuits/stacking.py",
+]
+
+[[place]]
+paths = [
+    "verity/circuits/call_scope.py",
+    "verity/circuits/cross_call.py",
+    "verity/circuits/tiny.py",
+    "verity/circuits/word.py",
+]
+loads = [
+    "adapters/vllm",
+    "verity/circuits",
 ]
 
 [[place]]
@@ -294,21 +329,6 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/circuits/ops",
-    "verity/commitments",
-]
-
-[[place]]
-paths = [
-    "verity/circuits/call_scope.py",
-    "verity/circuits/cross_call.py",
-    "verity/circuits/tiny.py",
-    "verity/circuits/word.py",
-]
-loads = [
-    "verity/circuits",
-    "verity/circuits/kernels",
-    "verity/circuits/ops",
-    "verity/circuits/silicon",
     "verity/commitments",
 ]
 
