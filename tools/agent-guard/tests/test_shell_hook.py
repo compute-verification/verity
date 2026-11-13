@@ -282,6 +282,97 @@ def test_printing_a_variable_cursor_lists_as_a_secret_is_refused():
 def test_a_command_the_parser_cannot_read_is_judged_on_its_text():
     assert verdict("echo 'unbalanced; env | cut -d= -f1") == "deny"
     assert verdict("echo 'unbalanced; ls") == "allow"
+    # with a comment or a continued line in it as without one
+    assert verdict("echo 'unbalanced # a note; env") == "deny"
+    assert verdict("echo $'it\\'s' # a note\nenv; echo 'unbalanced'") == "deny"
+    assert verdict("ls \\\n  -l; echo 'unbalanced") == "allow"
+
+
+#: one refused command of each kind of rule, the same command continued over a line's end, and words of its refusal: the
+#: environment, a secret file, a build, a long wait, the VM's tmux server and, asked in a clone of verity, a push of `main`,
+#: a push of another agent's branch and a `git config` that prints tokens
+REFUSED_KINDS = [
+    ("env", "env \\\n  | cut -d= -f1", "would print environment variables' values"),
+    ("cat deploy.env", "cat \\\n  deploy.env", "would print an env or credentials file"),
+    ("cargo build", "cargo \\\n  build", "builds and tests run on our nodes"),
+    ("sleep 3000", "sleep \\\n  3000", "no tool call may block more than 20 minutes"),
+    ("tmux kill-server", "tmux \\\n  kill-server", "would end this VM's tmux server"),
+    ("git push origin main", "git push origin \\\n  main", "only drive and the lander move"),
+    ("git push origin theirs", "git push origin \\\n  theirs", "belongs to agent bc-other"),
+    ("git config --list", "git config \\\n  --list", "would print a GitHub token"),
+]
+
+
+@pytest.mark.parametrize("beside", [
+    "# a note\n{C}", "{C}  # a note", "echo issue#12; {C}", "curl -s https://example.com/#top && {C}",
+    "echo '# not a comment'; {C}", "{CONTINUED}", "{C} # a note; echo \"two\nlines\"",
+    "bash -c '# a note\n{C}'", "bash -c '{CONTINUED}'", 'bash -c "{CONTINUED}"',
+])
+@pytest.mark.parametrize("command, continued, said", REFUSED_KINDS, ids=[kind[0] for kind in REFUSED_KINDS])
+def test_no_comment_and_no_continued_line_hides_a_refused_command(request, command, continued, said, beside):
+    """Every rule reads a command as the shell runs it: a comment hides the rest of its own line and nothing after it, a `#`
+    inside a word or a quoted string hides nothing, and a `\\` at a line's end joins the next line to it, in the command as
+    typed and in what a carrier has run. Read as shlex reads a `#`, a comment from wherever one stands to the text's end,
+    each rule passed whatever stood after one; and a continued line read as two commands, neither the one the shell runs.
+    A comment that hides a quote's opening leaves a quote nothing closes: what stands before it is read all the same."""
+    text = beside.replace("{C}", command).replace("{CONTINUED}", continued)
+    out = request.getfixturevalue("clones")(text, "verity") if command.startswith("git ") else answer(text)
+    assert out["permission"] == "deny" and said in out["agent_message"], (text, out)
+
+
+@pytest.mark.parametrize("command, said", [
+    ("ssh n1 '# a note\ncat deploy.env'", "would print an env or credentials file"),
+    ("eval '# a note\nsleep 3000'", "no tool call may block more than 20 minutes"),
+    ("tmux send-keys -t w '# a note' Enter 'env' Enter", "would print environment variables' values"),
+    ("tmux send-keys -t w 'env \\' Enter '| cut -d= -f1' Enter", "would print environment variables' values"),
+    ("ssh n1 \"bash -c '# a note\nenv'\"", "would print environment variables' values"),
+    ("bash -c 'bash -c \"sleep \\\\\n3000\"'", "no tool call may block more than 20 minutes"),
+    ("bash -lc \"sleep \\\\\n3000\"", "no tool call may block more than 20 minutes"),
+    ("bash -lc \"sleep 1 \\\\\\\\\nsleep 3000\"", "no tool call may block more than 20 minutes"),
+    ("tmux if-shell true 'display-message ok\nkill-server'  # a note", "would end this VM's tmux server"),
+])
+def test_what_a_carrier_runs_is_read_with_its_own_comments_and_continued_lines(command, said):
+    """A quoted string reaches whatever reads it next with its lines as the shell hands them on: a comment in it ends at
+    its own line, a `\\` a pane is sent before `Enter` continues the line typed, and inside double quotes the shell hands
+    on one `\\` of each two, so `\\\\` at a line's end there continues the inner shell's line and four of them end it."""
+    out = answer(command)
+    assert out["permission"] == "deny" and said in out["agent_message"], (command, out)
+
+
+@pytest.mark.parametrize("command", [
+    "# a note", "# env | cut -d= -f1\n  # git push origin main\n# sleep 3000",
+    "# where things stand\ngit status --short", "ls -l tools  # a note", "curl -sI https://example.com/guide#install",
+    "# list, then search\nls tools\nrg -n words_of tools/agent-guard  # the reader\n"
+    "uv run pytest tools/agent-guard/tests/test_envnames.py -k names",
+    "cat > /tmp/note.md <<'EOF'\n# Title\nenv\nsleep 3000\ngit push origin main\nEOF",
+    "python3 - <<'PY'\n# count the names\nimport os  # the environment\nprint(len(os.environ))  # no value is printed\nPY",
+    "# don't forget\ngit log --oneline -5  # what's recent", "ls  # `env` is refused", "sleep 30  # not sleep 3000",
+    "git commit -m 'guard: read past a comment (#12)' -m '# no comment, and env is a word here'",
+    "echo \"$#\" \"${#HOME}\" \"${HOME##*/}\"", "rg -n '^#' README.md; sed -n '/^#/p' README.md",
+    "rg -n \\\n  --glob '*.py' \\\n  words_of tools  # continued", "bash -lc '\n# sync first\nuv sync -q\n# then list\nls\n'",
+    "tmux -f /exec-daemon/tmux.portal.conf send-keys -t build:0.0 'make # quick' C-m",
+    # one command to the shell, and one no rule refuses: the lines joined, and a word that only begins like `env`
+    "timeout 60 \\\n  sleep 5000", "research run --on auto --cwd source -- \\\n  uv run pytest -q", "env#x", "sleep 3000#x",
+])
+def test_a_comment_a_continued_line_and_a_hash_in_a_word_refuse_nothing_the_shell_would_not_run(command):
+    assert answer(command) == {"permission": "allow"}, command
+
+
+def test_a_comment_and_a_continued_line_are_read_as_bash_reads_them(monkeypatch):
+    """`words_of` against bash itself: the simple commands bash runs for a text, and each one's words. Nothing runs: every
+    command is `qa` or `qb`, which no PATH holds, and bash hands a command it cannot find to a function that prints its
+    words."""
+    hook = guard_module("shell_hook", monkeypatch)
+    handler = r'''command_not_found_handle() { printf '%s\0' "$@" $'\1'; }; eval "$1"'''
+    for text in ("# a note\nqa", "qa b # a note\nqb", "qa b # a note; qa c\nqb", "qa a#b; qb", "qa https://example.com/#top && qb",
+                 "qa '# b' \"# c\" 'd'#e; qb", "qa a#b#c #d\nqb", "(qa) # a note\nqb", "qa;#b\nqb", "qa b \\\n  c; qb",
+                 "qa a\\\n#b; qb", "qa a \\\n# b\nqb", "qa \\ #b; qb", "qa a \\# b; qb", "# a note \\\nqa", "qa b # a note \\\nqb",
+                 "qa a\\\\\nqb", "qa a\\\\\\\nqb", "qa \"a\\\nb\"; qb", "qa 'a\\\nb'; qb", "qa \"a # b\\\n # c\"; qb",
+                 "qa \"a\\\\\\\nb\" 'c\\\\\nd'; qb", "qa b # it's\nqb"):
+        out = subprocess.run([shutil.which("bash"), "--norc", "--noprofile", "-c", handler, "bash", text], capture_output=True,
+                             check=True, env={"PATH": "/nonexistent"}).stdout.decode()
+        ran = [command.split("\0")[:-1] for command in out.split("\1\0")[:-1]]
+        assert ran and [words for words, _ in hook.words_of(text)] == ran, text
 
 
 def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_json_is_still_judged():
