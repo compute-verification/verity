@@ -321,14 +321,23 @@ A job's output is its record, `OUT/run.json`, which its own process writes once,
 with the scores in. It holds no weights by default: beside the record, its last checkpoint's E when E is under
 50 MiB. The command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
 
-A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`): each of
-its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
-oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
-The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
-the field is null. Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8,
-`run.THREADS`), before torch computes anything, since what a job trains on a CPU follows that count and the cores
-only its speed. The record states the count (`threads`), and a stopped job continues only at the count its kept
-record states: started at another, it is refused with the `--threads` that continues it.
+A job's products are to be the same every time it runs on one device at one thread count. On a CPU, before torch
+computes anything, each of a job's two processes does two things, over whatever it was started with:
+
+- It holds oneDNN below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`), since oneDNN's AMX kernels can
+  return a wrong bf16 product on a virtual CPU.
+- It holds attention at the math kernel (`run.cpu_attention`), since torch's fused CPU attention kernel can return
+  a wrong tile of its result at more than one thread. The job's own process needs this too, because it scores the
+  checkpoints.
+
+A run in which the fused CPU kernel runs at more than one thread anyway, because a route chose it, is invalid
+(`flops.CPU_FUSED_ATTENTION`). The record names what the route's process set: `cpu_isa` and `cpu_attention`. On a
+GPU a job sets neither and both fields are null.
+
+Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8, `run.THREADS`), before
+torch computes anything. What a job trains on a CPU is to be a function of that count, never of the cores it runs
+on. The record states the count (`threads`), and a stopped job continues only at the count its kept record states:
+started at another, it is refused with the `--threads` that continues it.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
