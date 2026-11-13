@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.definitions.ops.scalar import F32Fmaxf, F32Fminf
+from verity.circuits.ops.scalar import F32Fmaxf, F32Fminf
 
 ROOT = Path(__file__).resolve().parents[5]
 LEAN_GATES = ROOT / "security" / "Proofs" / "Accounting" / "Gates.lean"
