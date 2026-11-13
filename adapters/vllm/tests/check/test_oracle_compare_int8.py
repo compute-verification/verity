@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+import pytest
+
 from verity_vllm.check import oracle_compare as OC
 
 U0 = "aaaaaaaa-0000-0000-0000-000000000000"
@@ -13,7 +15,8 @@ K, D, H, G = 4, 8, 2, 2
 
 
 def _view(alloc, offset, shape, dtype):
-    strides, acc = [], 1
+    strides: list[int] = []
+    acc = 1
     for s in reversed(shape):
         strides.insert(0, acc)
         acc *= s
@@ -39,6 +42,28 @@ def _oracle(instances):
 
 def _span(alloc, lo, hi):
     return bytes((alloc * 16 + b) % 251 for b in range(lo, hi))
+
+
+def test_a_views_byte_range_is_its_storage_span_and_none_where_it_has_no_storage():
+    rng = OC.MatchOracle._view_bytes_range
+    assert rng(_view(3, 2, [K], "int8")) == (3, 2, 2 + K) and rng(_view(3, 2, [K], "float32")) == (3, 8, 8 + 4 * K)
+    assert rng(_view(3, 2, [], "float32")) == (3, 8, 12)
+    assert rng({**_view(3, 0, [2, K], "int8"), "strides": [2 * K, 1]}) == (3, 0, 2 * K + K)       # strided: first element to last
+    for no_storage in (None, {}, {**_view(3, 2, [K], "int8"), "alloc": None}, {k: v for k, v in _view(3, 2, [K], "int8").items() if k != "offset"},
+                       _view(3, 2, [K], "a dtype of no itemsize")):
+        assert rng(no_storage) is None
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5"])
+def test_a_view_whose_allocation_or_offset_is_no_number_is_skipped(field, stated):
+    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), field: stated}) is None
+
+
+@pytest.mark.parametrize("field", ["shape", "strides"])
+@pytest.mark.parametrize("stated", [1, 2.5, True, -1])
+def test_a_view_whose_shape_or_strides_is_a_number_is_skipped(field, stated):
+    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), "strides": [1], field: stated}) is None
 
 
 def test_a_call_boundary_member_is_read_at_its_modules_producer_instances():

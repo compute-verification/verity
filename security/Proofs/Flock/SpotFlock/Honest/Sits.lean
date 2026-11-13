@@ -18,8 +18,8 @@ copies, and none about an accepted run's session. At the instance four hold with
 The fifth is that the reference reads are well formed (`RefReadsWf`). The instance's are `R`'s (`refReadsWf_held`).
 
 So the address premise and the design premises at the instance take only `R`'s reference reads being well formed
-(`addressesConnected_held`, `premises_held`), and `HonestExists` takes that and a run the instance accepts
-(`honest_of_accepts`).
+(`addressesConnected_held`, `premises_held`), and `HonestExists` takes that and a play the instance's verifier
+accepts (`honest_of_accepts`).
 
 The facts the address premise goes through hold at the instance as well: its first stage samples only the layout's
 one slot (`sampleSlots_held`), so the second stage puts a checked proof block at its own outer block's place
@@ -57,8 +57,8 @@ theorem addressesConnected_held (hWf : Claims.Json.Wf R.reads) : AddressesConnec
 theorem premises_held (hWf : Claims.Json.Wf R.reads) : Premises (held R B desc q c₀) :=
   ⟨builtWired_held R B desc q c₀, addressesConnected_held R B desc q c₀ hWf⟩
 
-/-- **`HonestExists`**, from `R`'s reference reads being well formed and a run the instance accepts. -/
-theorem honest_of_accepts (hWf : Claims.Json.Wf R.reads) (hA : Accepts (held R B desc q c₀)) : HonestExists :=
+/-- **`HonestExists`**, from `R`'s reference reads being well formed and a play the instance's verifier accepts. -/
+theorem honest_of_accepts (hWf : Claims.Json.Wf R.reads) (hA : AcceptsPlay (held R B desc q c₀)) : HonestExists :=
   honest_of_owed ⟨R, B, desc, q, c₀, addressesConnected_held R B desc q c₀ hWf, hA⟩
 
 /-! ## What the address premise goes through -/

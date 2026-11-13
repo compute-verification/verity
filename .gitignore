@@ -61,6 +61,7 @@ verity/protocols/flock/prover/tests/fixtures/hidden-outputs
 verity/protocols/flock/prover/tests/fixtures/honest-session
 verity/protocols/flock/prover/tests/fixtures/honest-plain
 verity/protocols/flock/prover/tests/fixtures/plain-tree
+verity/protocols/remote/verifier/composition/tests/fixtures/sampled-two-case
 benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json
@@ -81,7 +82,6 @@ benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
 benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json
 verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json
 verity/protocols/certifier/verifier/tests/fixtures/cache_step_vectors.json
-verity/protocols/certifier/verifier/tests/fixtures/cache_step_v2_vectors.json
 verity/protocols/certifier/verifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
 verity/definitions/silicon/captures/autoproof-probe-vectors.json
