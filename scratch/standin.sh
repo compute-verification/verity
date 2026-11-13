@@ -2,6 +2,7 @@
 # Scratch job, not for landing: builds what the audit runs, then scratch/standin_refusal.py on three stand-in windows.
 # Run from the tree's root under `research run --cwd source`; everything kept is under $OUT.
 set -uo pipefail
+export PATH="$HOME/.elan/bin:$HOME/.local/bin:$PATH"
 OUT=${OUT:-$PWD/out}
 SCR=$(mktemp -d)
 mkdir -p "$OUT"
@@ -10,7 +11,7 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 log "uv sync"
 uv sync --all-packages --extra torch-cpu > "$OUT/uv.log" 2>&1 || { log "uv sync failed"; exit 5; }
 log "lake build flock verifier"
-(cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > "$OUT/lake-flock.log" 2>&1 \
+(cd verity/protocols/flock/verifier && mkdir -p .lake && flock .lake/verity-build.lock lake build flock-verify flock-firewall) > "$OUT/lake-flock.log" 2>&1 \
   || { log "lake build failed"; tail -20 "$OUT/lake-flock.log"; exit 6; }
 log "check_build.sh bin"
 bash verity/protocols/flock/prover/check_build.sh bin "$SCR/flock-circuit" > "$OUT/check-build.log" 2>&1 \
