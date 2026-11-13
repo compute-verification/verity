@@ -840,7 +840,7 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     {dr : Draws} (h : V2Accepts bs a b e p c ev ξ dr) :
     ξ.size ≤ _root_.Spot.Challenger.COIN_BYTES * _root_.Spot.Challenger.MAX_COINS := by
   obtain ⟨-, -, hev, hξ, hdr, -⟩ := h
-  obtain ⟨b', hb'⟩ := Binding.dispatch_evidence hev
+  obtain ⟨b', hb'⟩ := dispatch_evidence hev
   obtain ⟨-, -, -, -, hops, -⟩ :=
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ

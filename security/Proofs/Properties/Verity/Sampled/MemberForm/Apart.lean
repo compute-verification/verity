@@ -163,11 +163,19 @@ def FormApart : Prop :=
     (ms : Array _root_.Spot.OneStageZk.Member),
     V2Accepts bs a b e p c ev ξ dr → p.members = some ms → Apart ms.toList
 
-/-- **The check as it is accepts no parameters that name members**, so its accepts hold `FormApart`
-(`Spot.OneStageZk.checkBlobsAt_accept`). -/
-theorem formApart_refused : FormApart := by
+/-- **The check's accepts' members share no unit**: an accept carries the parse of its parameters' bytes, which the
+sampled component reads by `paramsEitherOfJson` (`dispatch_params`), and that parse names members that share no unit
+(`paramsEitherOfJson_apart`). -/
+theorem formApart : FormApart := by
   intro bs a b e p c ev ξ dr ms h hm
-  obtain ⟨-, -, -, -, -, pub, prof, hacc⟩ := h
-  cases hm.symm.trans (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).2.1
+  obtain ⟨hp, -⟩ := h
+  cases hj : _root_.Core.canonicalJson a with
+  | error _ =>
+    rw [hj] at hp
+    cases hp
+  | ok j =>
+    rw [hj, Trees.ok_bind] at hp
+    obtain ⟨rest, hr⟩ := dispatch_params hp
+    exact paramsEitherOfJson_apart hr hm
 
 end Verity.Sampled.MemberForm

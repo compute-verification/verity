@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 public import Proofs.Properties.Verity.Sampled.MemberForm.Consts
 public import Proofs.Properties.Verity.Sampled.MemberForm.Opens
 public import Proofs.Properties.Verity.Sampled.MemberForm.Run
+public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 public import Proofs.Properties.Verity.Sampled.MemberForm.States
 public import Proofs.Properties.Verity.Sampled.MemberForm.Passes
@@ -58,6 +59,9 @@ the lock) give of the bytes and the release log they accept, each stated at the 
 * `MemberForm.Passes`: a member whose files the form's run held has its files pass at the window's member
   (`filesPass_of_held`, `WindowOn.passes`), and a member whose files pass has roots that fix their domains
   (`FilesPass.rootsFix`).
+* `MemberForm.Named`: the structure's parts (`membersStructure_ok`), what it names each session
+  (`membersTreesHeld_ok`) and a member's record at its tree less the closing round (`memberTreeReason_none`,
+  `tree_round`), below the binding (`Binding.accepted_run`), which reads them at an accept of the form.
 * `MemberForm.Tree`: what a session's record's check gives of its own tree of a log of several, less the tree's
   closing round (`tree_round`, `tree_keyAt`, `tree_rounds_le`, `helloSpec_of_text`).
 * `MemberForm.Opened`: each opening the read shows is the opening its tree shows of that round, with its count, the
