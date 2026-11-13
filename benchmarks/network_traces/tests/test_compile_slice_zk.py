@@ -77,7 +77,7 @@ def test_w212s_unit_charges_code_v1s_window_with_its_length_tails():
     requests' length terms as tails (`window_code.encode`'s ``lens`` on the run's windows, each with its requests'
     output lengths and finishes at code_v1's widths), which is the chain's (`charged`); each of its three requests
     stops at its max_tokens, so no ``max-tokens`` kind is offered there."""
-    from verity.protocols.certifier.prover.window_charge import Advice
+    from verity.protocols.accounting.certifier.prover.window_charge import Advice
     from verity_vllm.pipeline.advice_code import window_code
 
     Z = _load()

@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine.hooks import Hooks
