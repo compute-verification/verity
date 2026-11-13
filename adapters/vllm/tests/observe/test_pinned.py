@@ -25,15 +25,24 @@ def test_the_cuda_runtime_is_looked_for_by_soname_the_versioned_one_first_and_on
     assert pinned._runtime() == "the runtime" and tried == ["libcudart.so.12", "libcudart.so"]
     assert pinned._runtime() == "the runtime" and len(tried) == 2, "the runtime found is kept"
 
+    def loads(name: str) -> str:
+        tried.append(name)
+        return f"loaded {name}"
+
     monkeypatch.setattr(pinned, "_cudart", None)
-    monkeypatch.setattr(pinned.ctypes, "CDLL", lambda name: tried.append(name) or f"loaded {name}")
+    monkeypatch.setattr(pinned.ctypes, "CDLL", loads)
     assert pinned._runtime() == "loaded libcudart.so.12" and tried[2:] == ["libcudart.so.12"]
 
 
 def test_a_machine_with_no_cuda_runtime_is_asked_once_and_device_backed_is_false_there(monkeypatch):
     tried: list[str] = []
+
+    def loads_nothing(name: str):
+        tried.append(name)
+        _no_runtime(name)
+
     monkeypatch.setattr(pinned, "_cudart", None)
-    monkeypatch.setattr(pinned.ctypes, "CDLL", lambda name: tried.append(name) or _no_runtime(name))
+    monkeypatch.setattr(pinned.ctypes, "CDLL", loads_nothing)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     assert pinned._runtime() is None and tried == ["libcudart.so.12", "libcudart.so"]
     assert pinned.device_backed(torch.zeros(2)) is False
