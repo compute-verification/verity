@@ -124287,3 +124287,32 @@ In plain words. Everything I had written has now compiled. The verifier's progra
 **Sunday's move:** the edit is four lines of one file. If top's chain lands first, I make the same edit at `tools/difftest/tests/test_protocol_port.py` and say so.
 
 **State.** The machine was replaced again between 05:21Z and 05:57Z (up since 05:57:34Z); nothing was unpushed. `~/wt/.pen` is this loop's, made at 05:57Z by a `mkdir` that succeeded; there is no other loop. The mailbox holds your 05:29Z and 05:49Z notes and no note on the nodes beyond the line in your message. I hold ONE one-off timer, `crossclose-9671-suites`, due 07:40Z, to read the run and write #9671's ready line in an entry's title.
+
+## RELAX, Fri 13 Nov 06:11Z: the README's trim is open as #9672 at `05484421f8b7`, unmarked: 49,340 to 46,033 bytes, clean with every marked pull request that changes the file; its quick tier runs; line 559's term is #9555's own line, not on `main`, so it can't go in this pull request yet
+
+The file is under its limit at the trim's head and stays under after the six marked pull requests that add to it land. The ready line follows when the quick tier ends. Your 05:49Z line can't be done on `main` today, and I did not stack the trim on #9555 to do it: the reason and my default are under "The term".
+
+**The trim** (branch `cursor/proofs-spot-readme-trim-484c`, head `05484421f8b7fa48c90a595deab8f41e2c4e9e93`, from `main` `b843a10af48a`; one file, 34 lines added, 72 removed):
+- Sizes: `main` 49,340 bytes, the cap 49,152 (`MD_SIZE_CAP`), the head 46,033. [run: `wc -c`, `tests/test_repository.py`]
+- After #9636, which holds #9458: 46,983. After all six marked pull requests that change the file (#9636, #9458, #9537, #9555, #9584, #9075): 48,645, so 507 under. [run: three-way merges of the file alone, in that order, each clean]
+- What went: text the Lean or a docstring states, or that the file said twice; the pull request's body has one row a cut with where it is stated. Nothing moved into another document, no section removed, no heading renamed. [read: each docstring and statement the cuts point to, at `main`]
+- Corrected on sight: the check is R1 to R8 (`Properties.Spot.R8`, `one_stage.registration`'s docstring), and four places said R1 to R7. [read]
+- Merged trees: clean with `main` and with each of the six marked ones. Of the unmarked ones that change the file, #9581, #9595, #9625, #9665 and #9661 are clean; #8139, #8414 and the refused #9363 gain a conflict in this file, and each already conflicts with `main` in other files. [run: `git merge-tree --write-tree`]
+- Markdown caps gate: "1 Markdown file(s) changed, 0 put over the cap". Retired-term sites on the file by the lint's own scanner: 83 on `main`, 73 at the head. [run]
+
+**The term.**
+- `main`'s README has no "component"; the line is the one #9555 adds (head `38b7c6df38ba`, admitted, not landed), its line 559: "one object for the stream's check and a component's". [run: `grep` on `main`, on #9636's head and on #9555's head]
+- The Glossary's row for it says "subprotocols", so the phrase is "one object for the stream's check and a subprotocol's". [read: `GLOSSARY.md` line 241]
+- The lint's scanner does not count "component" at all: the one site it counts on that line is `draw` in `draw_coins` (the file goes 83 to 84 on #9555). So the review found it by reading, and the ratchet will not show it fixed or not. [run: the scanner on #9555's base and head]
+- #9555 writes the same word at three more places, which the review did not name: `Spot/ChallengerDraw.lean` line 2 (the module's docstring), `lean/tests/test_challenger_difftest.py` line 1731 and `tests/test_challenger_coins.py` line 381 (comments). [run: `grep` of its diff]
+- A pull request from `main` can't change a line that is not on `main`, and a trim stacked on #9555's head would carry all of #9555 with it. My default: when #9555 is on `main` I merge `main` into the trim's branch, change the word at all four places if you want them, and give a second ready line. If you mark the trim before that, the word goes in a pull request of its own, a few lines.
+
+**The run.** Quick tier `r20261113-060722-6d29` on vy-nebius-cpu-12, launched 06:07Z at the pushed head, expected to end by about 07:00Z [guess, from the last quick tier's length]. One timer of mine is set for it.
+
+## To post
+
+For #9555's owner, if you want the word fixed at its source instead: "ci's review-44: `README.md` line 559 says 'a component's'; the Glossary's term is 'subprotocol'. The same word is in `Spot/ChallengerDraw.lean`'s docstring (line 2) and in two test comments (`test_challenger_difftest.py` 1731, `test_challenger_coins.py` 381). The lint does not count it. The README's trim (#9672) merges clean with #9555 either way."
+
+**Not established:** the quick tier's verdict; whether 507 bytes is enough room for you (the unmarked period pull requests add about 1.4 KB at the same place, so the file will need a change of shape, not another trim); I ran no test on the VM.
+
+For the table: #9672 | README trim, 49,340 to 46,033 | open, unmarked, head `05484421f8b7` | quick tier `r20261113-060722-6d29` running | the term waits on #9555 landing.
