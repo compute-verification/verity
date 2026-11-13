@@ -213,7 +213,8 @@ theorem witness_wordMend_zero (k : ℕ) (hk : k = 128) (x w : Fin k → ℚ) (hx
       · exact witness_endPlus
       · exact witness_endMinus
     unfold Mend.cutAt
-    rw [hend, witness_noCuts (if m then ⟨0xFE, by decide⟩ else ⟨0x7E, by decide⟩) (by cases m <;> simp), List.getD_eq_getD_getElem?, List.getElem?_replicate]
+    rw [hend, witness_noCuts (if m then ⟨0xFE, by decide⟩ else ⟨0x7E, by decide⟩) (by cases m <;> simp), List.getD_eq_getElem?_getD,
+      List.getElem?_replicate]
     split <;> rfl
   unfold wordMend
   rw [card_eq_zero, filter_eq_empty_iff]
@@ -267,9 +268,12 @@ theorem ttOutPearlCH100Rev1Witness :
       (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
         (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) j) : ℚ) = 0 :=
     sum_eq_zero fun i _ => sum_eq_zero fun j _ => by
-      rw [witness_wordMend_zero _ rfl _ _ (fun l => by simp [wordsVal, witnessAct, wordQ_one])
-        (fun l => by simp [wordsVal, wideWorkload, wordQ_one])]
-      rfl
+      exact_mod_cast witness_wordMend_zero (wideWorkload.layout.shape 0).k rfl
+        (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) i)
+        (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+          (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) j)
+        (fun l => by simp [wordsVal, witnessAct, wordQ_one])
+        (fun l => by simp [wordsVal, wideWorkload, wordQ_one])
   have hzero : witnessSem.unitDebitRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) = 0 := by
     unfold PearlCSem.unitDebitRev1
     dsimp only
@@ -408,15 +412,18 @@ theorem ttOutTilePearlCH100Rev1Witness :
           (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
             (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) e.2) : ℚ) = 0 :=
       sum_eq_zero fun e _ => by
-        rw [witness_wordMend_zero _ rfl _ _ (fun l => by simp [wordsVal, witnessAct, wordQ_one])
-          (fun l => by simp [wordsVal, wideWorkload, wordQ_one])]
-        rfl
+        exact_mod_cast witness_wordMend_zero (wideWorkload.layout.shape 0).k rfl
+          (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) e.1)
+          (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+            (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) e.2)
+          (fun l => by simp [wordsVal, witnessAct, wordQ_one])
+          (fun l => by simp [wordsVal, wideWorkload, wordQ_one])
     rw [tileDebitDev_h100, wide_tileDebit_zero, hmend]
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
     have h2 := creditDevRev1_h100_nonneg (wideWorkload.layout.shape 0)
     have h3 := tileShare_nonneg (wideWorkload.layout.shape 0) (Ico 0 1) (Ico 0 64)
-    positivity
+    exact mul_nonneg (mul_nonneg (by norm_num) h2) h3
   · rw [hNT]
     refine sum_pos' (fun g _ => ?_) ⟨0, by simp, ?_⟩
     · show (0 : ℝ) ≤ (((1 - 1 / 400) * creditDevRev1 devH100
