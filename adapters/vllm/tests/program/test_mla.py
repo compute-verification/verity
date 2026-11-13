@@ -17,8 +17,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.ops import mufu as MU
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import mla as M
 from verity.definitions.registry import mla_check as MK
 

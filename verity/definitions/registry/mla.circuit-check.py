@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     which reaches the head, the block, the score and every element; the absorb bmm at two heads, K = 32, N = 3; the
     shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import mla
 
     HOP = BG.HopperBF16WgmmaDot16
