@@ -156436,3 +156436,48 @@ inverse is `Ideal.Quotient`'s `Classical.choose`. The term I'd use is
 `fun _ _ => FlockLevel3.GF128.of Flock.F128.zero`. [read] `GF128.of a := a` (`GF128Field.lean:199`), and `F128.zero`
 is the structure of two UInt64 zeros (`verity/circuits/base/Base/Field.lean:13–26`). Lean's walk on this term is not
 run.
+
+## ASSEMBLY, Fri 13 Nov 18:51Z: THE JOIN MOVED: `7aeba81f536e2de6d20dd9f8348d1afce13eee82`, MESSAGES's replay line merged and built; beyond the carried `a61b7adf0d83` the tip holds MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the tool's pin, the mend and now MESSAGES's replay line `24f63f743de2`
+
+Your 18:44Z is read: the join takes the move as my commit `1bdb77ac7d99`, after this merge and when `78d7` is rc 0.
+
+**1. The merge** [git]
+
+- `20936c91d40b` to `7aeba81f536e` by a fast-forward, pushed at 18:49Z.
+- Made FRAME's way: `24f63f743de2` with the carried join (`4ac983d9ab60`, the pin regenerated), then that into the join's tip, no conflict.
+- Six files against the old tip: three new ones under `SampledTwo` (`MessagesOpen`, `RoundPrefix`, `SessionReplay`), their three roots in the lakefile and the lock, and the pin.
+
+**2. Its build** [run `r20261113-182504-8613`, cpu-7, rc 0, ended 18:47Z]
+
+- A build of every `SampledTwo` file at the merged tree: `lake` exit 0 in 723 s, nothing failed.
+- A try of each new file, each `lean exit 0`, and no theorem uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`:
+
+| File | Theorems |
+|---|---|
+| `MessagesOpen.lean` | 17 |
+| `RoundPrefix.lean` | 12 |
+| `SessionReplay.lean` | 5 |
+
+- cpu-7 had not built the carried tree before: 1,165 files differed in its build directory, so this run built the leg's dependencies at the new layout as well.
+
+**3. On this machine at `7aeba81f536e`** [run on this machine]
+
+- `pins.py --stale` silent, `lock_roots.py --check` clean, `dup_names.py` the same 17, the five root test files 84 passed. The scoped-words search over the 1,045 added Lean lines: 0 hits.
+- `public_boundary.py`: the same 7 edges as before the merge. The line adds none.
+
+**4. Your 18:31Z item 5, done now** [launched, not back]
+
+- This is the first merge that moves the join, so both reruns are out at `7aeba81f536e`:
+  - `two_stage_small.sh`: `r20261113-184949-7d69`, cpu-1.
+  - the adapter's engine and interior tests with `serve_tax`'s replay: `r20261113-185022-f1c7`, cpu-3.
+- The same commands as `9788` and `5183`.
+
+**5. Next**
+
+- SESSIONOF2's candidate `1bdb77ac7d99` (its merge, my roots and listing, my move): `r20261113-184121-78d7` on cpu-11 is out. The join moves to it when it is rc 0. That entry names the eight edges across the public boundary.
+- Then HELDOF's line, the carried blob head if you have named one by then, else the couples line `02e3d5f39ec1`.
+
+**Not established**
+
+- A records run at this tip. The last one is `4205` at `20936c91d40b`; I run the next after SESSIONOF2's merge, whose lock change (a `compile_time` listing) only that run reads.
+- A kernel replay at any head of the join.
