@@ -2,3 +2,4 @@
 - 08:40Z DENSE: select head bc1841a446 (cherry-picked 63cc12a88e as 7a8901d06d; 'drawn' reworded). Launched at it: driver r20261113-083913-d5b0, tie -0328, tests -80b0, gate r20261113-083914-ec61, LM-head gain pending.
 - 08:57Z DENSE: tests 80b0 and gate ec61 passed at bc1841a446; gain r20261113-084004-3223 done; driver d5b0 and tie 0328 still running.
 - 09:06Z DENSE: 4-layer driver d5b0/tie 0328 past window checks (digest 366fba94c7fc), still in the Program's evaluation; phase probe r20261113-090102-c17f died SIGSEGV in evaluation; launched the value check at 1 layer: , tie .
+- 09:16Z DENSE: value check passed at bc1841a446 (4l d5b0, tie 0328; 1l 32bf, tie 61b1). Head c3f66d06e5 (test evaluates by reference); tests, gate and full-V reference runs launched at it.
