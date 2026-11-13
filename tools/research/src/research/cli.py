@@ -132,6 +132,7 @@ gives the workload a cache dir keyed by reuse_key.  `research data ...` is the s
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
 import importlib.util
 import json
@@ -413,7 +414,11 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         try:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
-            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
+            if asks := getattr(ns, "asks", None):
+                # a run `--on auto` placed carries a pair, its own id, so its late twin can take it from this line (research.asker)
+                ns.id = ns.id or R.new_run_id()
+                asks["wait_s"] = wait_s
+            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
                 from . import suite_size  # noqa: PLC0415
 
@@ -1280,6 +1285,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
+    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)
     return harness_opts
@@ -1439,13 +1445,15 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
               file=sys.stderr)
     source = Path(ns.source).expanduser() if ns.source else None
     urls = lean_records_urls(source, command)
+    sends = [Path(s).expanduser() for s in ns.send]
+    # the request as any machine would take it: what a late twin of the run is launched with too (research.asker)
+    what = dict(project=ns.project, command=command, harness_args=harness_args, cwd=None, env=env, exclusive=ns.exclusive,
+                mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait, custody_ttl=(ns.custody_ttl or "6h") if custody else None,
+                preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
+                gpus=None if queue else ns.gpus, store_read=ns.store_read)
     try:
-        rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
-                            source=source, sends=[*(Path(s).expanduser() for s in ns.send), *([urls] if urls else [])],
-                            cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user, job_namespaces=ns.job_namespaces, gpus=None if queue else ns.gpus,
-                            store_read=ns.store_read, auto=getattr(ns, "placed", None))
+        rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, source=source, sends=[*sends, *([urls] if urls else [])],
+                            queue=queue, auto=getattr(ns, "placed", None), **what)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         ns.cannot_start = str(e) if isinstance(e, remote.CannotStart) else None
@@ -1467,6 +1475,11 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if launch.get("first_record") == "cpu-hold":
         print(f"research: {ns.on} holds it until whole cores of its own are free (research cpu-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
+    if asks := getattr(ns, "asks", None):
+        from . import asker
+
+        asks = {**asks, "home": ns.on, "pool": ns.pool, "commit": rec.get("source_sha")}
+        print(f"research: {asker.leave(run_dir, asks, source, what, sends)}", file=sys.stderr)
     if getattr(ns, "wait", False):
         launched_s = time.monotonic() - getattr(ns, "started", time.monotonic())
         return wait_remote(run_id, run_dir, every_s=ns.wait_every, max_s=max(1.0, waitcap.max_s(ns.wait_max) - launched_s))
@@ -1474,17 +1487,28 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     return 0
 
 
-#: the states `summarize` gives a remote run that will not change again
-ENDED = (*R.TERMINAL, "refused", "launcher-exited", "runner-gone")
+def _moved_to(run_dir: Path) -> Path | None:
+    """The run dir of the late twin that may be the run in ``run_dir`` (`asker.twin`), found here or on its machine, or None."""
+    from . import asker
+
+    if not (tw := asker.twin(run_dir)):
+        return None
+    try:
+        return _run_dir(run_dir.parent, tw["run"], tw["machine"])
+    except (FileNotFoundError, LookupError):
+        return None
 
 
 def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_CAP_S, fetch=None, sleep=None,
-                clock=None) -> int:
+                clock=None, moved=_moved_to) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
-    it ended without one, 3 when the machine refused it). An unreachable machine is waited out, as `research fetch` would be, but
-    no wait outlasts `max_s` of `clock` time: then the run goes on, the check-back command is printed, and it returns
-    STILL_GOING (research.waitcap)."""
+    it ended without one, 3 when the machine refused it). A run that left its line without starting while its late twin may
+    run (``moved``) is followed there: the twin's end is the run's. An unreachable machine is waited out, as `research fetch`
+    would be, but no wait outlasts `max_s` of `clock` time: then the run goes on, the check-back command is printed, and it
+    returns STILL_GOING (research.waitcap)."""
     import time
+
+    from . import asker
 
     sleep, clock = sleep or time.sleep, clock or time.monotonic
     start = clock()
@@ -1492,7 +1516,12 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
     while True:
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
-        if s["state"] in ENDED:
+        if s["state"] in R.ENDED and not asker.started(s) and (twin := moved(run_dir)):
+            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name} is the run "
+                  "now, and this waits for it", file=sys.stderr)
+            run_id, run_dir = twin.name, twin
+            continue
+        if s["state"] in R.ENDED:
             if s["state"] == "refused":
                 rc = 3
             elif s["state"] == "done":
@@ -1584,17 +1613,52 @@ def cmd_cancel(argv: list[str]) -> int:
                                                                      "manual cancel; the runner SIGKILLs what is left 20 s later "
                                                                      "(remote.cancel). A run that hasn't started, held on "
                                                                      "its machine (disk-hold, cpu-hold), is withdrawn: its hold "
-                                                                     "ends and refused.json records it Withdrawn")
+                                                                     "ends and refused.json records it Withdrawn. A run `--on "
+                                                                     "auto` that has a late twin on another machine is cancelled "
+                                                                     "with it: whichever of the two is left")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ns = ap.parse_args(argv)
+    root = R.runs_root(ns.runs_dir)
     try:
-        run_dir = _run_dir(R.runs_root(ns.runs_dir), ns.ref, ns.on, unique=True)
-        out = remote.cancel(run_dir, reason=ns.reason, by=ns.by)
+        run_dir = _run_dir(root, ns.ref, ns.on, unique=True)
     except (FileNotFoundError, LookupError, remote.Refused) as e:
+        print(f"research cancel: {e}", file=sys.stderr)
+        return 1
+    from . import asker
+
+    dirs = [run_dir]
+    if tw := asker.twin(run_dir):
+        # a run `--on auto` moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
+        try:
+            dirs.append(_run_dir(root, tw["run"], tw["machine"], unique=True))
+        except (FileNotFoundError, LookupError, remote.Refused) as e:
+            print(f"research cancel: {run_dir.name}: its late twin {tw['run']} was not found on {tw['machine']} ({e}); if its "
+                  f"asker was still launching it, `research cancel {tw['run']} --on {tw['machine']}` cancels it once it is there",
+                  file=sys.stderr)
+        else:
+            print(f"research cancel: {run_dir.name} has a late twin, {tw['run']} on {tw['machine']}: cancelling what is left of both",
+                  file=sys.stderr)
+            dirs = [d for d in dirs if _may_run(d)] or dirs[:1]
+    return max(_cancel(d, ns.reason, ns.by) for d in dirs)
+
+
+def _may_run(run_dir: Path) -> bool:
+    """Whether the remote run in ``run_dir`` may still run: its records, fetched now, don't say it ended. A machine that
+    doesn't answer leaves it as it was last seen."""
+    with contextlib.suppress(remote.Refused):
+        remote.fetch(run_dir)
+    return R.summarize(run_dir)["state"] not in R.ENDED
+
+
+def _cancel(run_dir: Path, reason: str, by: str) -> int:
+    """`research cancel` of one run: `remote.cancel`, and what it did in words; 0 when the cancel was delivered."""
+    try:
+        out = remote.cancel(run_dir, reason=reason, by=by)
+    except remote.Refused as e:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
     if out.get("withdrawn"):
@@ -1834,6 +1898,14 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
+    if one:
+        from . import asker
+
+        rows[0]["auto"] = asker.told(rows[0], time.time())
+        if twin := _moved_to(one):                              # the run is followed to its late twin: its row comes next
+            with contextlib.suppress(remote.Refused):
+                remote.fetch(twin)
+            rows.append({**(s := R.summarize(twin)), "auto": asker.told(s, time.time())})
     unread = 0
     live = []
     for s in rows:
@@ -1864,9 +1936,11 @@ def cmd_status(argv: list[str]) -> int:
         print(_fmt(s))
         for label, text in s.get("holds") or []:
             print(f"{'':<26}{label:<4} {text}")
+        for text in s.get("auto") or []:
+            print(f"{'':<26}auto {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
-        for line in check or []:
+        for line in (check or []) if s is rows[0] else []:
             print(f"{'':<26}{line}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")

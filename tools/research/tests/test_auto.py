@@ -1435,7 +1435,8 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     launched, asked = _on_auto(monkeypatch, tmp_path, docs, {CPU1: refusal, CPU5: None})
     assert main(RUN) == 0
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU5] and len(asked) == 1, "no machine is asked a second time"
-    assert launched[0]["run_id"] != launched[1]["run_id"] and launched[0]["command"] == launched[1]["command"]
+    refused, started = ([a for a in kw["command"] if a != kw["run_id"]] for kw in launched)
+    assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
@@ -1560,6 +1561,38 @@ def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_aga
     assert main([*RUN[:3], "--id", rid, "--", "pytest", "-q"]) == 3 and [kw["run_id"] for kw in launched] == [rid]
     assert (f"research run --on auto: {CPU1} can start no run, and --id {rid} names the run it refused: without --id the job is "
             f"placed on another machine") in capsys.readouterr().err
+
+
+def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_asker_and_no_other_run_does(
+        tmp_path, monkeypatch, capsys, _no_asker_left):
+    """A run `--on auto` sent to a pool waits there however soon another machine's pool would start it, unless a twin of it
+    can take it from the line: so it carries a pair from the start, its own id, and its launch leaves an asker that holds
+    what it shipped. A run `--on auto` queues on node 2, and a run named to a machine, carry none and leave none."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"))}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: None, N2: None, "m": None})
+    assert main(["run", "--on", "auto", "--mem-gb", "24", "--env", "K=V", "--", "pytest", "-q"]) == 0
+    (kw,) = launched
+    opts = kw["command"][:kw["command"].index("--")]
+    assert opts[opts.index("--twin") + 1] == kw["run_id"], "its pair is its own run id"
+    (m,) = _no_asker_left
+    assert (m["run"], m["home"], m["pool"], m["wait_s"]) == (kw["run_id"], CPU1, "research", slot_only.POOL_WAIT_S)
+    assert (m["cpus"], m["mem_gb"], m["lean"]) == (4, 24, None), "what `auto` was asked, to ask it again"
+    assert m["root"] == str(tmp_path / "runs") and m["sends"] == {}
+    assert Path(m["git"]) == tmp_path / "repo" / ".git", "the repository the commit is checked out from again, not the checkout"
+    same = {k: m["launch"][k] for k in ("project", "command", "harness_args", "env", "mem_gb", "custody_ttl")}
+    assert same == {k: kw[k] for k in same} and kw["env"]["K"] == "V", "the request as the first launch sent it"
+    err = capsys.readouterr().err
+    assert f"an asker of this launch stays on {os.uname().nodename} (pid 4242)" in err and "only while this VM is up" in err
+    del launched[:], _no_asker_left[:]
+    docs[CPU1] = pool(slot("r0", held=True), waiters=9)
+    docs[N2] = share(free=48)
+    assert main(["run", "--on", "auto", "--", "pytest", "-q"]) == 0
+    assert launched[0]["machine_name"] == N2 and "--twin" not in launched[0]["command"] and _no_asker_left == []
+    del launched[:]
+    assert main(["run", "--on", "m", "--project", "p", "--source", ".", "--pool", "research", "--as", "infra", "--timeout", "40m",
+                 "--", "pytest", "-q"]) == 0
+    assert "--twin" not in launched[0]["command"] and _no_asker_left == [], "a run named to a machine never moves"
+    assert "asker" not in capsys.readouterr().err
 
 
 def test_a_waiter_asks_only_the_other_machines_pools_and_moves_only_where_it_would_start_now():
