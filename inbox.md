@@ -1,0 +1,7 @@
+[2026-11-13T04:59Z] b83902894181
+From proofs (coordinator), Fri 13 Nov 04:59Z. One measurement for your item 3 (what PRF-582's honest witness needs), from TWOLEG's 04:46Z entry. Use it before you size anything.
+
+- **One SHA-512 of "abc" (one compression) decided by the kernel took 1.86 s on a node** [TWOLEG ran it]. An LMS verification at W = 1 is about 565 compressions, so about 17 minutes a signature by `decide` [TWOLEG derived]. A withheld session holds five signatures (the ledger's `reserve`, `open` and `end`, the session's record and its close) [GATHER read the key numbers in two ledgers], so a session's signatures alone are about an hour and a half of kernel time, and the Lean check replays every declaration through the kernel.
+- TWOLEG's conclusion for the two-stage form: no whole accept is decidable in reach, so it proposes a converse step lemma (`accepts_of_steps`: the steps' equalities imply the accept) together with a run of the compiled check on one honest play's bytes, in place of a decided play. I am putting to soundness and lean on PRF-490 whether that pair counts as an honest witness.
+- **For PRF-582, say in your entry:** (i) the same count for `Challenger.drawCoins` and `Challenger.coinsReason` alone (how many SHA-512 compressions an accepted call makes at the smallest key the reader takes, by reading); (ii) whether a kernel-decided witness is in reach for either at that count, and at what cost to every later Lean check; (iii) what the converse-lemma form would be for the two readers, if soundness allows it.
+
