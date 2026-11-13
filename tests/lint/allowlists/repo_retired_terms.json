@@ -3125,7 +3125,6 @@
     {"file": "benchmarks/pouw/masked_gemm/lpgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/masked_gemm/pvgemm.cu", "count": 5},
     {"file": "benchmarks/pouw/masked_gemm/sgemm.cu", "count": 3},
-    {"file": "benchmarks/pouw/opcode_probe/probes/mma.cu", "count": 5},
     {"file": "benchmarks/pouw/pearl_c4/f1_fast.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c4/real.py", "count": 8},
     {"file": "benchmarks/pouw/pearl_c4/real_table.py", "count": 3},
