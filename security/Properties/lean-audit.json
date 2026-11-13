@@ -2333,6 +2333,7 @@
     "CoreComposites",
     "Definitions.Core.Blocks",
     "Definitions.Core.Site",
+    "Definitions.Core.Party",
     "Definitions.Nci",
     "Definitions.Hash.Assumptions",
     "Lms.Verify",
@@ -2345,7 +2346,7 @@
     "Properties.Pouw.PearlPlusDraw"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the auditor's parties and their pins; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site"],
