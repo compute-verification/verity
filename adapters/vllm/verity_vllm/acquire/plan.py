@@ -241,7 +241,8 @@ def plan_digest(body: Mapping[str, Any]) -> str:
 
 def value_classes(manifest: Mapping[str, Any]) -> list[ValuePlan]:
     """One Value class per (op_path, output_member, family).  An identity whose row declares it padding or inactive (`boundary_class`,
-    `enablement`) is PRESCRIBED -- materialised by enablement, no runtime producer."""
+    `enablement`) is PRESCRIBED -- materialised by enablement, no runtime producer.  Any other row numbers its `invocation` and its
+    `rank` (absent or empty reads as 0): a value `int()` does not read raises what `int()` raises."""
     rows: list[Mapping[str, Any]] = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
@@ -270,6 +271,10 @@ def value_classes(manifest: Mapping[str, Any]) -> list[ValuePlan]:
         bc = str(r.get("boundary_class") or "")
         if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT:
             v.prescribed_identities += 1
+        else:
+            # a manifest is a file: a row that is not prescribed is refused here when `int()` does not read its invocation or its rank
+            int(r.get("invocation") or 0)
+            int(r.get("rank") or 0)
     return [out[k] for k in sorted(out)]
 
 

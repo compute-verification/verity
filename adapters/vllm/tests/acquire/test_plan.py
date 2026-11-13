@@ -260,6 +260,25 @@ def test_prescribed_padding_identities():
     assert plan2.complete
 
 
+@pytest.mark.parametrize(("field", "value", "error"), [("invocation", "abc", ValueError), ("invocation", [1], TypeError),
+                                                       ("rank", "1.5", ValueError), ("rank", {"a": 1}, TypeError)])
+def test_a_row_numbers_its_invocation_and_rank_unless_it_declares_itself_prescribed(field, value, error):
+    odd = row("instance_outputs", "body.blocks.0.act", "out", step=5, spec="Act_v1", **{field: value})
+    with pytest.raises(error):
+        P.value_classes({"identities": [*base_rows(), odd]})
+    # a row declared padding or inactive is prescribed before either number is read
+    for declared in ({"boundary_class": "padding"}, {"enablement": "inactive"}):
+        classes = {v.value_id: v for v in P.value_classes({"identities": [*base_rows(), {**odd, **declared}]})}
+        v = classes["body.blocks.0.act/out"]
+        assert v.prescribed_identities == 1 and v.identities == 3
+
+
+def test_a_rows_invocation_is_read_before_its_rank():
+    odd = row("instance_outputs", "body.blocks.0.act", "out", step=5, spec="Act_v1", invocation="abc", rank=[1])
+    with pytest.raises(ValueError):
+        P.value_classes({"identities": [odd]})
+
+
 # ------------------------------------------------------------------------------------------------------------------ residuals
 
 def test_residuals_name_the_table():
