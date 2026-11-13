@@ -38,8 +38,8 @@ class _Fake(resolver.Row):
         return self.docs[rel]
 
 
-def _ident(op: str, member: str = "out", step: int = 0) -> dict:
-    return {"program_digest": "p", "request_id": "r0", "step": step, "invocation": 0, "op_path": op, "output_member": member,
+def _ident(op: str) -> dict:
+    return {"program_digest": "p", "request_id": "r0", "step": 0, "invocation": 0, "op_path": op, "output_member": "out",
             "element_range": [0, 4], "rank": 0, "family": "instance_outputs"}
 
 
