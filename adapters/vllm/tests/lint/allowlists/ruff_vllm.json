@@ -511,8 +511,6 @@
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "at_capture", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "at_commit", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "commit_guard", "detail": "`print` found"},
-    {"file": "verity_vllm/protocols/pous.py", "kind": "I001", "symbol": "_encode", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/pous.py", "kind": "I001", "symbol": "install", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "check", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "run", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "stage", "detail": "`print` found", "count": 4},
