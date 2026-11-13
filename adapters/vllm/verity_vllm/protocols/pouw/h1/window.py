@@ -139,8 +139,8 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
 
 def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
     """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
-    whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's draw
-    session may be, so a draw is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
+    whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's sample
+    session may be, so a sample is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
     closed = False
     for e in map(json.loads, lines):
         if not closed:
@@ -300,7 +300,7 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
 
 
 def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
-    """A draw session (`window.DRAW_FAMILIES`, the draw coin alone) reserved withheld at infra's gate, as words (`call`,
+    """A sample session (`window.DRAW_FAMILIES`, the sampling coin alone) reserved withheld at infra's gate, as words (`call`,
     ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `DrawSession` takes it
     (`reserved_of`). `CoinError` when the gate refuses, or reserves it plain."""
     answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")

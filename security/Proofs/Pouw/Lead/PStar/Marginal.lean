@@ -6,11 +6,11 @@ public import Mathlib.Tactic.Abel
 public import Mathlib.Tactic.Ring
 
 /-!
-# A part of the draw caps the whole (proofs)
+# A part of the sample caps the whole (proofs)
 
-A draw `ω` drawn uniformly from a finite type `Ω` whose part `get ω ∈ D` can be overwritten (`set ω d`) splits as the
+A sample `ω` sampled uniformly from a finite type `Ω` whose part `get ω ∈ D` can be overwritten (`set ω d`) splits as the
 part and the rest, `|Ω| = |D|·|rest|`. So if a value `F ω` moves with the part only through a term `g`,
-`F (set ω d) = F ω − g (get ω) + g d`, then `F` hits a value fixed before the draw on at most the share of the draws
+`F (set ω d) = F ω − g (get ω) + g d`, then `F` hits a value fixed before the sample on at most the share of the samples
 that `g` hits it on (`part_fiber_le`): no more than `P/|D|` when no value has more than `P` preimages under `g`. The
 coin lanes' per-word `p*` over the whole of a call's coins is this with `D` one step's row bit and coin lanes.
 -/
@@ -23,8 +23,8 @@ open Finset
 
 variable {Ω D G : Type*} [Fintype Ω] [DecidableEq Ω] [Fintype D] [AddCommGroup G] [DecidableEq G]
 
-/-- **A part of the draw caps the whole**: with `set` overwriting the part `get` reads, and `F` moving with the part only
-through `g`, `F` takes any value on at most `P·|Ω|/|D|` draws when `g` takes none on more than `P` parts. The values
+/-- **A part of the sample caps the whole**: with `set` overwriting the part `get` reads, and `F` moving with the part only
+through `g`, `F` takes any value on at most `P·|Ω|/|D|` samples when `g` takes none on more than `P` parts. The values
 are in any additive group, a word's or a whole tile's. -/
 theorem part_fiber_le (get : Ω → D) (set : Ω → D → Ω) (get_set : ∀ ω d, get (set ω d) = d)
     (set_set : ∀ ω d d', set (set ω d) d' = set ω d') (set_get : ∀ ω, set ω (get ω) = ω) (F : Ω → G) (g : D → G)

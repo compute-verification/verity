@@ -200,7 +200,7 @@ def test_h200_session_runs_the_tables_shapes():
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
     and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
-    gives up the passes' rows over a debit cap, then verifies them at the verdict's draws and checks their outputs in full.
+    gives up the passes' rows over a debit cap, then verifies them at the verdict's samples and checks their outputs in full.
     With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
     rc.txt."""
     sh = (HERE / "h200.sh").read_text()
@@ -232,7 +232,7 @@ def test_h200_session_runs_the_tables_shapes():
     ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
 def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
     """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
-    while the verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap, VOLUNTEER defaults to 1 and
+    while the verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap, VOLUNTEER defaults to 1 and
     one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
     other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
     tree, out = tmp_path / "tree", tmp_path / "out"
