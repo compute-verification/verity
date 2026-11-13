@@ -64,7 +64,7 @@ path = "../../verity/protocols/spot/verifier/lean"
 
 [[require]]
 name = "verity_evaluate"
-path = "../../verity/definitions/evaluate"
+path = "../../verity/circuits/evaluate"
 
 [[require]]
 name = "remote_audit"
@@ -72,7 +72,7 @@ path = "../../verity/protocols/poub/verifier/lean"
 
 [[require]]
 name = "core_requirement"
-path = "../../verity/definitions/requirement"
+path = "../../verity/circuits/requirement"
 
 [[require]]
 name = "core_composition"
