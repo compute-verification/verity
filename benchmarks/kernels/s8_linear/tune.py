@@ -1,5 +1,5 @@
 """An exact kernel's GEMM configs (run.py's `--kernel`: wgmma on sm_90, triton elsewhere) swept at the large model's linears on
-one GPU, ksweep.py's method (benchmarks/hash/exactlin) at these shapes. Per (N, K, M): a coarse grid by M, then the best
+one GPU, ksweep.py's method (benchmarks/kernels/exactlin) at these shapes. Per (N, K, M): a coarse grid by M, then the best
 `--top` refined (wgmma: the raster group; triton: warps x stages), then the best `--top` again with the kernel's default
 config over `--reps` interleaved items (`kbench.timed`: one CUDA graph per config, items of about 10 ms alternating config by
 config, the SM clock read around each). Weight copies past 3x the L2 (`kbench.copies_for`), so the weights stream from DRAM.

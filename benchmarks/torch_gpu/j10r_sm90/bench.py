@@ -54,7 +54,7 @@ BASELINES = ("plain", "wgmma")
 
 def plain_of() -> tuple[str, Callable[..., torch.Tensor]]:
     """(name, fn(x, sx, w, sw)): s8_linear's `int_mm.linear`, the fused epilogue where Triton is, else the eager one."""
-    spec = importlib.util.spec_from_file_location("int_mm", Path(__file__).resolve().parents[1] / "s8_linear" / "int_mm.py")
+    spec = importlib.util.spec_from_file_location("int_mm", Path(__file__).resolve().parents[2] / "kernels" / "s8_linear" / "int_mm.py")
     mod = sys.modules["int_mm"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     epi = "fused" if mod.triton is not None else "eager"
