@@ -6,6 +6,7 @@ from verity_numerical.bench import (
     fixture_sets,
     generate,
     instances,
+    judge,
     latency,
     placement,
     subcircuit_catalog,
@@ -19,7 +20,7 @@ from verity_numerical.checker.v2 import search as search_v2
 
 MODULES = {"generate": generate, "fixture_sets": fixture_sets, "instances": instances, "subcircuit_catalog": subcircuit_catalog,
            "unit_costs": unit_costs, "unit_costs_padding": unit_costs_padding, "unit_costs_prover": unit_costs_prover,
-           "unit_costs_menu": unit_costs_menu, "latency": latency, "cell": cell, "placement": placement, "sweep": sweep,
+           "unit_costs_menu": unit_costs_menu, "latency": latency, "judge": judge, "cell": cell, "placement": placement, "sweep": sweep,
            "search": search, "search_v2": search_v2}
 
 
