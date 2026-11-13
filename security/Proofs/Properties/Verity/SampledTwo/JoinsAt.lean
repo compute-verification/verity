@@ -8,6 +8,7 @@ public import Proofs.Properties.Verity.SampledTwo.StageAlone
 public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.Reached
+public import Proofs.Properties.Verity.SampledTwo.Fits
 
 /-!
 # The two-stage leg's projection at the form's accept, from the coin map's law
@@ -35,8 +36,8 @@ its proof (`CoinMapAgree.lean`).
   `coinsAgree_second_of`, with COINMAP's `devFirst_stage` and `devSecond_stage`);
 * the sessions' releases' agreement and coins (`SessionCoins.sessionsAgree_accepted`, `coinsAgree_sessions`), with
   CUT's `held_size` for `HeldSize`;
-* no coin at the statements' round, the accept on the rounds a run reaches (`reachedAccepts`) and the statement read
-  (`stmtAt`).
+* no coin at the statements' round, the accept on the rounds a run reaches (`reachedAccepts`, with ACCEPTS's
+  `sourcesFit`: an accepted run read at most the coins it has) and the statement read (`stmtAt`).
 
 **The stages' pieces are taken at the case kept on the good plays** (`goodCase C JoinGood`, `GoodCase.lean`).
 STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form accepts, and none of them is known
@@ -58,7 +59,7 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
   one root on the play's log is the cut's with the device's history.
 * **The first stage's coins are read under the parameters' key** (`firstReads`) and **an accepted play on two windows
   shows its sessions' order** (`orderShown`): CUT derives both from the form's accept (`CutAccept.lean`, not on the
-  join yet); `firstDrawn`, `sessionMatches`, `sourcesFit`.
+  join yet); `firstDrawn`, `sessionMatches`.
 * **The interior's log on the play's** (`interiorLogged`), **the messages** (`msgOpens`, `digestBefore`) and **the
   accept** (`playAccepts`, `sessionMsgs`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
@@ -123,12 +124,6 @@ theorem sessionMatches_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h :
     SessionMatches (goodCase C G) :=
   fun o ha => h o (formAccepts_goodCase.1 ha).1
 
-theorem sourcesFit_goodCase {A : Live₂} {C : CaseOf} {G : Verity.Exchange → Prop} (h : SourcesFit A C) :
-    SourcesFit A (goodCase C G) := by
-  intro o i it ha hi
-  obtain ⟨ha', hg⟩ := formAccepts_goodCase.1 ha
-  exact h o i it ha' ((inputOn_goodCase hg).symm.trans hi)
-
 /-- **A stage's draw at the kept case**: `StageDraws` asked of the accepted plays `G` holds of is `StageDraws` at the
 kept case's acceptance and draw. -/
 theorem stageDraws_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} {f : Case → Option (String × ByteArray)}
@@ -154,13 +149,13 @@ theorem input_interior_of {C : CaseOf} {o : Verity.Exchange} (hA : FormAccepts C
 /-- **The first stage's bytes fit in round 0's releases at the stages' locator.** -/
 theorem firstFits_stage (A : Live₂) (C : CaseOf) (ℓ₁ ℓ₂ : String) (G Good : Verity.Exchange → Prop)
     (hG : ∀ o, Good o → G o ∧ CoinMap.FreshWide o.log) (hShow : FirstShown C G)
-    (hDraw : CoinMap.StageDraws (FormAccepts C) (fun o => (C o).bind firstDraw) ℓ₁) (hfit : SourcesFit A C) :
+    (hDraw : CoinMap.StageDraws (FormAccepts C) (fun o => (C o).bind firstDraw) ℓ₁) :
     FirstFits C (CoinMap.stageLocate ℓ₁ ℓ₂) (FormAccepts C) Good := by
   intro o hA hGo
   obtain ⟨hg, hw⟩ := hG o hGo
   obtain ⟨inp, it, hin, hit⟩ := input_interior_of hA
   refine ⟨inp, hin, ?_⟩
-  have hL := (hfit o inp it hA hin hit).1
+  have hL := (sourcesFit A C o inp it hA hin hit).1
   rcases Nat.eq_zero_or_pos inp.source.size with h0 | hpos
   · rw [h0]
     exact Nat.zero_le _
@@ -235,8 +230,6 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
   sessionMatches : SessionMatches C
-  /-- An accepted run read at most the coins it has. -/
-  sourcesFit : SourcesFit A C
   /-- The interior's log, as the check read it, ends the play's. -/
   interiorLogged : SessionCoins.InteriorLogged C LogIsDevice
   /-- The message the check reads at each round opens the digest the play records. -/
@@ -288,7 +281,6 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
   have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_goodCase h.firstDrawn
   have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase h.sessionMatches
-  have hfit' : SourcesFit A (goodCase C JoinGood) := sourcesFit_goodCase h.sourcesFit
   have hDraw₁ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
       (fun o => (goodCase C JoinGood o).bind firstDraw) ℓ₁ := stageDraws_goodCase h.draws₁
   have hDraw₂ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
@@ -309,7 +301,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       hsrc⟩
   have hFit₁ : FirstFits C (joinLocate A tab ℓ₁ ℓ₂) (FormAccepts C) JoinGood :=
     firstFits_goodCase (firstFits_congr (hstage 0 (Nat.zero_le _))
-      (firstFits_stage A (goodCase C JoinGood) ℓ₁ ℓ₂ LogIsDevice JoinGood hG hShow₁ hDraw₁ hfit'))
+      (firstFits_stage A (goodCase C JoinGood) ℓ₁ ℓ₂ LogIsDevice JoinGood hG hShow₁ hDraw₁))
   have hFit₂ : SecondFits A C (joinLocate A tab ℓ₁ ℓ₂) (FormAccepts C) JoinGood :=
     secondFits_goodCase (secondFits_congr (fun n _ hn => hstage n hn)
       (secondFits_stage A (goodCase C JoinGood) ℓ₁ ℓ₂ h.distinctFamilies LogIsDevice JoinGood hG hShow₂ hDraw₂))
@@ -345,7 +337,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     hFit₁ hFit₂ hSess hFirst hSecond hSessions
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
-    (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' h.sourcesFit h.playAccepts h.sessionMsgs)
+    (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C) h.playAccepts h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
 end Verity.SampledTwo
