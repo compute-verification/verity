@@ -111,13 +111,16 @@ theorem canon_null : Flock.canon .null = .ok "null" := by
 /-- **`ScanFits`' and `ScanScopeAcc`'s honest witness** (the two-lemma rule's `_honest`): of what the two take,
 Flock's canonical form accepts a scan (`Flock.canon` at `null`), a Program has a flattening (`Flattens`, at the
 Program with no definitions), and a compiled sampled verifier has a statement in its sampling scope
-(`Claims.SamplingGeneric.Compiled.Scope`, at the toy verifier `Claims.Witness.SamplingGeneric.sksL`). The compiled
-sampled verifier's premise is a named assumption (`Properties.NetworkScan.Assumptions`).
+(`Claims.SamplingGeneric.Compiled.Scope`). The statement names no verifier; the proof stands at the toy verifier
+`Claims.Witness.SamplingGeneric.twoL`, which samples both of its proof blocks and accepts only two empty messages.
+The compiled sampled verifier's premise is a named assumption (`Properties.NetworkScan.Assumptions`).
 `scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: both read `Lean.Json.parse`, a `partial def`
 the kernel can't unfold. -/
 theorem scan_honest : Flock.canon .null = .ok "null" ∧ Flattens default ⟨[], []⟩ ∧
-    (Claims.Witness.SamplingGeneric.sksL Bool).Scope [] :=
-  ⟨canon_null, empty_flattens, Claims.Witness.SamplingGeneric.sksL_scope []⟩
+    ∃ (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg),
+      D.Scope x :=
+  ⟨canon_null, empty_flattens, _, Claims.Witness.SamplingGeneric.twoL Bool, [],
+    Claims.Witness.SamplingGeneric.twoL_scope []⟩
 
 /-- **`ScanFits`' conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a Program and a flattening of
 it, built by hand, which a scan check accepting everything would pass, the layout doesn't fit. The Program has no
