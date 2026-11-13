@@ -17,9 +17,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
-
 from verity_config import Admission
-
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 import verity_bench.cli as cli
@@ -28,10 +26,31 @@ from verity_bench.cli import _parser, main
 from verity_bench.tool import VLLM_BENCH_POINT
 from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, H1, build_bound, h1_config, plugin, protocols_config, resolve_arms, window_steps
-from verity_bench.vllm.engine import (H1_OPENING_STEPS, PASS_COUNTS, ProcessEngineFactory, _kv_cache_tokens,
-                                      _pass_totals, _pearl_c_gate, _pearl_c_run, _ProcessEngine, _VllmEngine, arm_execution,
-                                      engine_args, h1_gate, h1_summary)
+from verity_bench.vllm.arms import (
+    H1,
+    Arm,
+    build_bound,
+    h1_config,
+    plugin,
+    protocols_config,
+    resolve_arms,
+    window_steps,
+)
+from verity_bench.vllm.engine import (
+    H1_OPENING_STEPS,
+    PASS_COUNTS,
+    ProcessEngineFactory,
+    _kv_cache_tokens,
+    _pass_totals,
+    _pearl_c_gate,
+    _pearl_c_run,
+    _ProcessEngine,
+    _VllmEngine,
+    arm_execution,
+    engine_args,
+    h1_gate,
+    h1_summary,
+)
 from verity_bench.vllm.presets import (
     ENGINE_SETTINGS,
     FORMER_SPECS,
@@ -47,11 +66,32 @@ from verity_bench.vllm.presets import (
     resolve_spec,
     served,
 )
-from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, merge, validate
-from verity_bench.vllm.runner import (METRICS, OPTIONAL_METRICS, PER_PASS_TOKENS, ResidentCapacityError, _aggregate,
-                                      _token_digest, _warm, run_benchmark, summarize)
+from verity_bench.vllm.result import (
+    IdentityMismatch,
+    identity_mismatches,
+    judge,
+    merge,
+    validate,
+)
+from verity_bench.vllm.runner import (
+    METRICS,
+    OPTIONAL_METRICS,
+    PER_PASS_TOKENS,
+    ResidentCapacityError,
+    _aggregate,
+    _token_digest,
+    _warm,
+    run_benchmark,
+    summarize,
+)
 from verity_bench.vllm.table import render
-from verity_bench.vllm.timing import HostProbe, decode_time_per_token, inter_token_latencies, percentile, run_trace
+from verity_bench.vllm.timing import (
+    HostProbe,
+    decode_time_per_token,
+    inter_token_latencies,
+    percentile,
+    run_trace,
+)
 
 
 class FakeEngine:
@@ -219,7 +259,6 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
     launcher's form, with the queued point's tool, point command, identity and environment, so plan and check find it."""
 
     from research.pods.nebius.slot_only import through_slot
-
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.setenv("VERITY_BENCH_VENV", "/workspace/jobs/venv312")
@@ -528,7 +567,6 @@ def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_
     """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
     name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
 
-
     name = "llama31-8b-fp8-1gpu"
     former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
     assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
@@ -643,7 +681,6 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
     engine, and that close must not replace the gate's error with a connection error, only say on stderr that the
     handshake broke."""
 
-
     class ExitingConn:
         def send(self, _):
             pass
@@ -724,7 +761,6 @@ def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_
     """A run's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
     happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
 
-
     class Stalls:
         def __init__(self, walls):
             self.walls = list(walls)
@@ -751,7 +787,6 @@ def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_
 def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     """A slow rep must say where its time went: which steps were slow, which requests waited, and whether the host was
     busy, ran slower code or waited on the device."""
-
 
     timing = {
         "steps": [{"s": 0.0123456789, "prefill_tokens": 512, "decode_tokens": 0},
@@ -940,7 +975,6 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled-full` times
     the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
 
-
     spec = resolve_spec("llama31-8b-fp8-1gpu-compiled-full")
     assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
     base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1008,7 +1042,6 @@ def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_
     """`llama31-8b-1gpu-pouw-h1-served` times H1 on the int8 pin over stock FP8 as vLLM serves it, which vLLM can't load
     from the pin (`verity_int8`): its served variant names the pin's BF16 base, and only its engine loads it."""
 
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1-served")
     compiled, int8, h1 = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution, a.model) for a in (compiled, int8, h1)] == [
@@ -1050,7 +1083,6 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
@@ -1083,7 +1115,6 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
-
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
     assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
     assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
@@ -1106,10 +1137,9 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
     (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no challenges flipped (the
     server flips each window's); an unset ``$`` value is refused, naming it."""
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
     from verity.protocols.pouw.verifier import verifier
     from verity_vllm.pipeline import serve_pearl as SPL
-
-    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
 
     def flipped(n):
         raise AssertionError("served_passes.py arm flipped challenges")
@@ -1154,7 +1184,6 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-
     class Run(PPD.PearlCDeviceRun):
         def __init__(self):
             self.details = {"passes": []}
@@ -1184,7 +1213,6 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
     import torch
     from verity.protocols.pouw.verifier.salt import epoch_open_root
-
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
@@ -1234,7 +1262,6 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so every arm's engine
     shares its step budget, sequence bound and KV pool."""
 
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
     pearl = "pouw:pearl-c-sm120-v1-h3"
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1269,12 +1296,11 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from verity_vllm.llm import protocol_context, resolve_options
     from verity_vllm.protocols.pouw import h1 as PH
 
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
     assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
-    assert H1 == f"pouw:{PH.SCHEME}"
+    assert f"pouw:{PH.SCHEME}" == H1
     preset, eager = served(spec.preset, spec.eager)
     args = engine_args(preset, "int8_exact", resident=True, eager=eager)
     assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
@@ -1305,7 +1331,6 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
     arm's gate, and a timed rep's is its `extras.h1_window`."""
 
     from verity_vllm.protocols import pouw
-
 
     calls: list[tuple[Any, ...]] = []
     window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
@@ -1556,7 +1581,6 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
     time, so a decode-only step after a prefill carried the prefill: 1.1 s over 16 tokens instead of 0.4 s. Device
     work still running after the last step means the host steps missed it, and the metric is dropped."""
 
-
     steps = [
         {"forward": True, "s": 0.05, "prefill_tokens": 512, "decode_tokens": 0},
         {"forward": True, "s": 0.9, "prefill_tokens": 0, "decode_tokens": 8},
@@ -1612,7 +1636,6 @@ def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
 def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
     """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
     several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
-
 
     preset, (p32,), arms = inputs()
     p8 = replace(p32, batch=8)
@@ -1692,7 +1715,6 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():
     """From n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
     rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
-
 
     assert summarize([1.0])["n"] == 1 and "ci95" not in summarize([1.0])
     assert summarize([1.0, 3.0])["ci95"] == pytest.approx([2 - 12.706, 2 + 12.706])
@@ -1858,7 +1880,6 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
     """A preempted point reruns whole; if it reran in its run directory and died before writing a
     new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
 
-
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     item = plan.points[0]
@@ -1879,7 +1900,6 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
 def test_the_readme_states_the_contract_the_code_keeps():
     """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""
-
 
     root = Path(__file__).resolve().parents[3]
     readme = (root / "benchmarks/harness/README.md").read_text()
@@ -1908,8 +1928,8 @@ def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_build
     partial = tmp_path / "partial"
     partial.mkdir()
     run = subprocess.run(
-        ["bash", "-c", f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
-                       f'VE_TMP={partial}; {body}'],
+        ["bash", "-c", (f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
+                        f'VE_TMP={partial}; {body}')],
         capture_output=True, text=True,
     )
     assert run.returncode == 143, run.stderr

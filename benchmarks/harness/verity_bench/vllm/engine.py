@@ -30,11 +30,31 @@ from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
 from verity_bench import settings
-from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
-                                    window_steps)
+from verity_bench.vllm.arms import (
+    H1,
+    Arm,
+    Target,
+    build_bound,
+    h1_config,
+    is_h1,
+    plugin,
+    protocols_config,
+    window_steps,
+)
 from verity_bench.vllm.presets import GREEDY, Preset, SweepPoint
-from verity_bench.vllm.runner import BenchEngine, ResidentCapacityError, _numeric_leaves, _token_digest
-from verity_bench.vllm.timing import HostProbe, decode_time_per_token, inter_token_latencies, percentile, run_trace
+from verity_bench.vllm.runner import (
+    BenchEngine,
+    ResidentCapacityError,
+    _numeric_leaves,
+    _token_digest,
+)
+from verity_bench.vllm.timing import (
+    HostProbe,
+    decode_time_per_token,
+    inter_token_latencies,
+    percentile,
+    run_trace,
+)
 
 # `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
 INT8_EXACT_SCOPE = "all"
@@ -285,7 +305,8 @@ class _VllmEngine:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         if precision == "int8_exact":
-            from verity_vllm.program.frontend.kernel_readback import int8_exact_of  # imports torch
+            # kernel_readback imports torch
+            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
 
             got = int8_exact_of(self.llm.model)
             if got != INT8_EXACT_SCOPE:
