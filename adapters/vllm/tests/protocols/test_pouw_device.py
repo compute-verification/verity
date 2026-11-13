@@ -9,6 +9,7 @@ import os
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import native as PN
@@ -197,7 +198,10 @@ def test_the_low_byte_check_names_a_wrong_leaf(five_strips):
     u = nat.index("tile", 1, 1)
     good = ref.leaves[:32 * nat.base["tile"]] + b"".join(PD.lowbyte_leaf(ref.opening(v)) for v in range(nat.base["tile"], nat.base["dequant"])) \
         + ref.leaves[32 * nat.base["dequant"]:]
-    rec = lambda leaves: dataclasses.replace(ref, leaves=leaves, root=PC.units_root(leaves))
+
+    def rec(leaves):
+        return dataclasses.replace(ref, leaves=leaves, root=PC.units_root(leaves))
+
     assert PD.lowbyte_difference(ref, rec(good)) is None
     bad = good[:32 * u] + bytes(32) + good[32 * u + 32:]
     assert PD.lowbyte_difference(ref, rec(bad)).startswith(f"unit {u} (tile (1, 1)) has the wrong low-byte leaf")

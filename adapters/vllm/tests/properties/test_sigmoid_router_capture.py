@@ -4,15 +4,17 @@ expectation is the twin's, and `--check` finds a changed output."""
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
-from verity.definitions.registry import moe
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import moe_twins
+from verity.definitions.registry import moe
 
 from tests.properties import sigmoid_router_capture_gpu as S
+from verity_vllm.engine.env import SERVED_DEFAULTS, served_defaults
 
 U32 = np.uint32
 
@@ -108,10 +110,6 @@ def test_the_sweep_is_every_mufu_logit_and_its_expectation_is_the_twins():
 def test_the_run_is_at_vllms_defaults(monkeypatch):
     """The run clears every switch the process inherited, and its verdict needs vLLM to read the served ones back: a batch-invariant
     run, or one whose grouped top-k is not the fused kernel, is not a GO however its rows compare."""
-    from types import SimpleNamespace
-
-    from verity_vllm.engine.env import SERVED_DEFAULTS, served_defaults
-
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")
     monkeypatch.setenv("VLLM_USE_DEEP_GEMM", "0")
     assert served_defaults() == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_DEEP_GEMM": "0"}
@@ -134,7 +132,7 @@ def test_check_finds_a_changed_output(tmp_path):
     for launch in S.LAUNCHES:
         got[f"{launch}_w"], got[f"{launch}_ids"] = S.twin(R["x"], S.row_bias(R), launch)
     got["block_w"][1, 0] ^= 1
-    np.savez_compressed(tmp_path / S.ROWS_FILE, **R, **got)
+    np.savez_compressed(tmp_path / S.ROWS_FILE, allow_pickle=False, **R, **got)
     rec = S.check(str(tmp_path), workers=1, limit=2)
     assert rec["block"] == {"mismatch": 1, "first": [1]} and rec["warp"] == {"mismatch": 0, "first": []} and rec["ok"] is False
     assert json.loads((tmp_path / S.CHECK_FILE).read_text())["rows"] == 2
