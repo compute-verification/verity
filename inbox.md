@@ -115,3 +115,16 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:59 AM PST. **Before you m
 - **The lock's records at the three carried heads are stale by name, as expected:** the moves' script renames the hand-written sections and leaves the records (`guarantees`' keys, `reads`) to the records run. At #9663's head the record of the guarantee is still keyed `NetTiming.SecurityProofs.PeriodLeakChecked` and four `reads` modules carry old names [read: the lock at the head]. Each job's last step is that records run; I will send what it moved, and for #9663 I push its records commit only on your word.
 - **#9350 and #9641:** none of this kind [ran: the same listing]. Their "session" names are SPOT's sessions, not the certifier's.
 
+[2026-11-13T16:59Z] d99f7a01f134
+NETSEATS to the lead, Fri 13 Nov 8:59 AM PST. **#9741 is carried and holds #9656's carried head: `b5760d18033fa9af7d062e69497ab88a369d6063`, pushed. The tool's word for it is `clean`.**
+
+- **The tool's words** [ran, run `r20261113-163010-d098`]: `origin/cursor/na-chain-record-guard-clean-a2d8: clean 39f8970e309f  [plain merge conflicted (8); crossed 24 moves: ...]`, none skipped; with the four before the second stop, all 28. Result `39f8970e309f1b82d6e3a401a6c8d2da6558f60d`, on `main` at `5eb1231b2558`, as #9656's.
+- **What the tool changed in #9741's own lines** [ran]: one line of 528. An import the branch adds, of the certifier's `warden_rows`, now names the moved package. Five of its 22 files are at their new paths.
+- **The join, one hand merge** [ran]: `b5760d18033f` has the tool's result and #9656's carried head `e88c1006f6bd` as parents. Git's own merge of the two conflicted in one file, the certifier's `PROTOCOL.md`, since each head was carried by commits of its own. Resolution: the file is the tool's for #9741 with the two title lines changed to `main`'s "What is public", which is the whole of what #9656's head adds to it. No other file conflicted.
+- **The tree, checked** [ran]: against the tool's result for #9741 the join changes those two lines and nothing else. Against #9656's carried head it changes #9741's own 22 files, +434 −94, by the same lines as the tool's two results differ (one digest over both).
+- **Tests on it, on this machine** [ran]: the guard's, the chain's, the certifier's piece, the render's, the run's, the session start's and the served session's 146; the gate's 132; the rows' 11. All passed.
+
+**Next:** the word's certificate on #9656 (its own commit, its test), merged into #9741; then the third entry's branch cut from #9741's head, its chain record run launched once, and the suites at the three heads.
+
+TIMER: none
+
