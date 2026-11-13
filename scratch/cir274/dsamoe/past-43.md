@@ -304,3 +304,14 @@ would cut it [inferred, not built]:
 - No length past 256, no batch of more than one request, and no output count past 3 was built; nothing at 78 layers was
   built. The 78-layer figures are computed from 4- and 8-layer counts.
 - No form for SparseMlaSplit's growth was tried (none is ours alone).
+
+## The statement I trust least
+
+That the chain-range fix is the last thing standing between the window and longer prompts. It removes every refusal I
+swept (87-150 at 2 and 3 outputs, and 200 and 256 at 2). But the second mechanism, a coarse range meeting a wire that
+`coalesce` merged across nodes, so that `Wire.box` adds false edges, is not specific to SparseMlaSplit. Any allocation of
+several units that a merged wire's digits cut across could do it: the gathers' levels, BatchedGemm's (B, N, M) block, the
+experts' table reads. Whether it does depends on where `coalesce` puts the wires, so it could come back at a length,
+output count or batch I didn't build. A fix in `ordered` itself (cutting ranges at each wire's digit boundaries, or a
+range a unit where a wire needs it) would close it in general, but that is `verity/commitments/windows/interface.py`,
+not ours [inferred].
