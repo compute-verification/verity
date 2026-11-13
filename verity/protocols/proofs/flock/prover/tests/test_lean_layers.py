@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 
 VERITY = Path(__file__).resolve().parents[5]
-LEAN = VERITY / "protocols" / "flock" / "verifier"
+LEAN = VERITY / "protocols" / "proofs" / "flock" / "verifier"
 #: each base package's root module and its directory
 BASE = {"Base": VERITY / "circuits" / "base", "Circuits": VERITY / "circuits" / "lean",
         "Commitments": VERITY / "commitments" / "lean"}
