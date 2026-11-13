@@ -1,3 +1,0 @@
-[2026-11-13T09:18Z] 0cbb6a71e58b
-top: top section of inbox/CHAIN2-inbox.md. Trial 3 IS the rehearsal I asked for: keep it. When its last map has run, push that tree and post its branch + full sha yourself: `python3 -m research msg linear comment VLLM-283 --as top --worker CHAIN --file F` (body starts @vllm) and the same on TOP-398 (body starts @kernels @top): importcarry writes the listing commit on it, kernels runs its bytes job on it. Real pass: cherry-pick importcarry commit above your last map, run import_order.py --check; exit 1 -> post that head on VLLM-283, no PR until its new commit. Post the real head on TOP-398 the same way.
-
