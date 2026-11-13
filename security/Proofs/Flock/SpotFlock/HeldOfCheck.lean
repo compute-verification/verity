@@ -92,18 +92,21 @@ theorem decided_held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unrea
 theorem heldOf_isSome (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) :
     (heldOf i it u).isSome = heldOk i it u.xs := by
   unfold heldOf heldOk
-  rcases firstOf i with _ | first
-  · rfl
-  rcases cellsOf i it with _ | c
-  · rfl
-  dsimp only [Option.bind]
-  rcases (Spot.Slots.layout first.program first.query).toOption with _ | l
-  · rfl
-  dsimp only [Option.bind]
-  by_cases hz : xsOk u.xs = true
-  · rw [dif_pos hz, isSome_keep, decided_held₀, hz, Bool.true_and]
-  · rw [dif_neg hz]
-    simp [hz]
+  cases firstOf i with
+  | none => rfl
+  | some first =>
+    cases cellsOf i it with
+    | none => rfl
+    | some c =>
+      dsimp only [Option.bind]
+      cases (Spot.Slots.layout first.program first.query).toOption with
+      | none => rfl
+      | some l =>
+        dsimp only [Option.bind]
+        by_cases hz : xsOk u.xs = true
+        · rw [dif_pos hz, isSome_keep, decided_held₀, hz, Bool.true_and]
+        · rw [dif_neg hz]
+          simp [hz]
 
 theorem heldOf_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} (u : Unread) (hk : heldOk i it u.xs = true) :
     ∃ h, heldOf i it u = some h := by
@@ -129,7 +132,7 @@ theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blo
     ∃ u h, unreadOf p bs desc query c₀ more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
   unfold heldOkFiles at hk
   cases hx : refStmtsOf p bs with
-  | none => rw [hx] at hk; cases hk
+  | none => rw [hx] at hk; simp at hk
   | some xs =>
     rw [hx] at hk
     obtain ⟨h, hh, ht⟩ := twoHolds_of_ok ⟨desc, query, xs, c₀, more⟩ hk

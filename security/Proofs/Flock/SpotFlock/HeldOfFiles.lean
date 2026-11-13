@@ -34,7 +34,7 @@ and public files `circuit` and `pub`, the lookup tables `tables`, the sample `dr
 def memberRaw (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : List (String × ByteArray))
     (draw registered : Option ByteArray) : FlockDeploy.Raw :=
   { statement := Spot.OneStageZk.STATEMENT, circuit, publicFile := pub, tables, zk := true, osCoins := false,
-    count := 1, draw, partition := some (Flock.RecordText.printT m.own.partition).toUTF8,
+    count := 1, draw, partition := some (_root_.Flock.RecordText.printT m.own.partition).toUTF8,
     program := some m.own.program, work := none, workTable := none, stratified := none, closure := none, registered,
     publicInputs := none }
 
@@ -50,7 +50,7 @@ def refRawOf (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (t : ℕ)
   let circuit ← (bs.get m.own.circuit "circuit").toOption
   let pub ← (bs.get m.own.pub "public file").toOption
   pure (memberRaw m circuit pub (Spot.OneStageZk.tablesOf bs) none
-    (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
+    (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8))
 
 /-- **The templates' reference statements**, in the params' template order, each `refRawOf`'s bytes. -/
 def refStmtsOf (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) : Option (List Msg) :=
