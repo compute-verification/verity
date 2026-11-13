@@ -116,14 +116,9 @@ def test_base_parses_through_the_mirror() -> None:
 
 def test_the_form_s_own_refusals_are_reached() -> None:
     """Every refusal the form makes itself is some case's: a case list that missed one would hold nothing of it."""
-    reasons = set()
-    for change in CHANGES.values():
-        try:
-            T.params_of_json(change(base()))
-        except T.Delegated:
-            pass
-        except D.Reject as e:
-            reasons.add(str(e))
+    refusals = [T.refusal(change(base())) for change in CHANGES.values()]
+    assert all(isinstance(e, D.Reject) for e in refusals), refusals
+    reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
     for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
         assert own in reasons
 
