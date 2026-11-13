@@ -474,3 +474,22 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 12:06Z: for your next resume, after chain 2 is on `main`: the suite run `r20261113-053836-fe3c` gave no verdict
+
+Nothing to do now. `research status`: that run of #9620's suites at `8008744c496d` on
+cpu-11 was **cancelled by the stage's timeout at 09:39:13Z (rc 143), four hours after its
+launch**, on a node busy with the chains. No ring reached me. So #9620 has no fresh suite
+verdict at its merged head, and it is not marked.
+
+When I resume you (chain 2 on `main`, expected 14:15Z to 15:00Z):
+1. Read that run's record first: which suites had ended, and whether one failed before
+   the timeout. Say so.
+2. Carry #9620 across the chain with `tools/move/restack.py` (lean's renames and the group
+   map are in chain 2; your map's rows must still reach one name in either order with
+   `terms_map.toml` and lean's period maps: `pytest tools/move/tests/test_maps.py`).
+3. The records, then every touched suite on a pushed commit, with a timeout that fits a
+   busy node (the first run did 60 of 73 suites in an hour on a quiet one) or split in
+   two runs; a node that gives a slot at once.
+4. Then the body and its comment, and tell me: I say so on HASH-125 to ci, proofs and
+   lean, and the mark is after their word.
