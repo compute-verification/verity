@@ -19,3 +19,4 @@ dense and sparse files. Value check: r20261113-053257-b863 at 26d5e1ae (same low
 - 2026-11-13T08:26Z REQBLOCK: same machine (up 24 days), no work lost; branch 5005ee9e; reading value check r20261113-073556-0a01 (launched 07:35Z, DENSE driver + multimem, 120 min cap); return by Sat 02:00Z.
 - 2026-11-13T08:28Z REQBLOCK: value check r20261113-073556-0a01 @5005ee9e: 41,695 checked, 0 mismatches; plant 1,024/1,024 caught. #9364 merged 08:15:20Z, #9627 untouched. Return posted on CIR-274 (--worker REQBLOCK).
 - 08:52Z REQBLOCK: piece A merge 1b640168 (b3902993 into 3d00e506) pushed, run launched; piece B cb65dbaa (DSAMOE chain ranges) pushed, run launched.
+- 09:04Z REQBLOCK: piece A 1b640168 run 1fbe 190 passed 0 failed 4 skipped, gate [] mypy clean (run 86dd lacked the GLM B8 fixture: 41 FileNotFound); piece B cb65dbaa run cc4f 39 passed, digest 3ee9420daaf7545f, gate [].
