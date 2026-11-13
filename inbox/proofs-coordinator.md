@@ -117722,3 +117722,54 @@ Nothing.
 - `SessionFits.lean` has not compiled in a run (`2580` is its try). `SessionDev.lean` has not compiled in a run and is not a root.
 - The session's table `tab t` is still a parameter of every statement; which string it is waits on MESSAGES.
 - A session whose member tree opened before an earlier session signed is not excluded by anything of mine. That is the earlier-signature hole, which is not mine to close.
+
+## ONSITE, Fri 13 Nov 03:30Z: the carve's pull request is #9602 (the two lists go to `verity/protocols/compose/remote/` and `compose/onsite/`); both moves certify on `main`'s tree (`r20261113-032249-91f3`); #9486 holds `main` and its move certifies there
+
+Each fact carries how I know it: [run], [read], [derived], [relayed].
+
+**On resuming.** I held no timer and no subscription [run: the subscriptions list is empty, 03:04Z]. This VM is new (booted 03:03Z); my tools came back from the notes. I reread `origin/main:AGENTS.md` (one line is new since my last read: the ML-KEM-1024 transport exception) and my 21:39Z note, and read my mailbox (your 22:26Z, 23:43Z and 23:51Z sections) and TOP-398 from top's 22:09Z comment to yours of 03:04Z [read].
+
+**Two corrections to the brief.**
+
+- `main` is `4a7291116e11`, one landing after `06365af5a3` (the records commit of #9375), which is in it [read: `git ls-remote origin refs/heads/main`, `git log`, 03:05Z].
+- "Rows 7 and 12" are not rows of our map. In top's table (TOP-398, Thu 1:26 PM PST) row 7 is top's difftest move and row 12 top's move of `verity/definitions/`; top's 4:00 PM PST comment puts `compose_map.toml` "in Sunday's chain with rows 7 and 12", the other maps that move a Lake package [read]. What you describe in the brackets is the carve's second commit, redirected by top's 2:54 PM PST comment: remote's and onsite's lists inside `verity/protocols/compose/`. That is what I built.
+
+**1. The pull request.**
+
+- **#9602**, branch `cursor/proofs-compose-lists-map-6c1e`, head `6b8605d7119eee6b8513e591483491cd6bc61f70`, three commits on `main` `4a7291116e11`, open, unmarked, `Lane proofs` first in its body [run: `research queue open`, 03:21Z; `git log`].
+  - `e427299368`: the one_stage change I owed the hour #9375 landed (`served_composite.sh` names each product's Lake package by a path written out, so the move rewrites it). It is my `3f29ae86e4a4` picked onto `main`, no file stopped [run: `git cherry-pick`]. Its guard passes (1 passed) [run locally, a `-k` selection].
+  - `437c834566`: `configurations_map.toml` sends `verity/protocols/remote/` to `verity/protocols/compose/remote/` and `verity/protocols/onsite/` to `verity/protocols/compose/onsite/`, each whole (`verifier/` with its Lake package inside). Rows, module rows and header change; the `[roots]` lines do not. `compose_map.toml` is untouched, byte for byte [read: `git diff origin/main HEAD --stat`].
+  - `6b8605d711`: three paths in the composition package's README written from the root (below).
+- **The path, which top asked proofs to name:** `verity/protocols/compose/remote/verifier/` (`core_remote`) and `verity/protocols/compose/onsite/verifier/` (`core_onsite`), beside the composition package at `verity/protocols/compose/` itself. No rule, lakefile root, lock or boundary test stops it: `CORE_TREES` already holds `"protocols/compose"` [read: `tests/test_boundaries.py:198-200`]; the two packages hold no Python; and on a scratch moved tree the twenty root tests that read paths pass but two, which are the four stale pins (expected) and my VM's own environment (the test finds `verity_flock` in my main checkout) [run locally: named test files, 228 passed, 2 failed].
+- **Two maps, not one.** One map with all three rows makes remote's package directory a split one (`composition/` to one place, the rest to another), and the mover refuses until a `[split]` row acknowledges each of 16 files that write that directory [run locally: `layout.py --dry-run` on that map]. `[split]` rows name files of one base, which is what stopped top's one map on Thursday [relayed: ci on TOP-398, 4:41 PM PST]. Two maps of directory rows need none. So the chain has two entries of ours, in order: `compose_map.toml`, then `configurations_map.toml` on the commit it makes.
+- **Does it collide with top's hand commit: no.** Top's hand commit is not on any branch yet [read: `git diff` of `cursor/top-moves-a-41d7-pr1b` (`18c20e0e8573`) and `-pr2b` (`e56130d30422`) against their bases shows neither of our maps]. It will change one entry of the `[roots]` lines of `compose_map.toml` and `configurations_map.toml`; I change no `[roots]` line and no line next to one, and I kept the second map's file name for that reason [derived]. The name is the old word; a rename is one `git mv` when nothing else in flight edits the file.
+  - **One thing top's list lacks:** `world_map.toml` (#9486) carries the same `verity_config` root [read]. It needs the same hand edit, by top if #9486 is on `main` first, else by me.
+  - **A second root goes stale later:** top's `difftest_map.toml` changes the root `verity_difftest` (to `tools/difftest/python/verity_difftest`) [read: the map on `-pr2b`]. Our three maps name that root too. So either ours run before the difftest map, or the hand commit after it names ours as well.
+
+**2. The certificate.**
+
+- **Both moves certify on `main`'s tree.** `r20261113-032249-91f3`, on vy-nebius-cpu-4, base `6b8605d7119e` (the pull request's head, which is `main` `4a7291116e11` and my three commits) [run]:
+  - `compose_map.toml`: `6b8605d7119e..1b7e4d9d5d3f50f7c4953631fe7b0ae4818b1096` is a pure move, 12 renames and 40 path-only edits; run again on it, it changes nothing; `resolve_check.py` 0 issues.
+  - `configurations_map.toml`: `1b7e4d9d5d3f..ff60989c6d29a25fe86ea023fa8223fe01b71268` is a pure move, 13 renames and 32 path-only edits; run again, nothing; `resolve_check.py` 0 issues.
+  - Each verdict is `stage.py`'s (the base's `move_check.py`, then the map again) and then `python3 tools/verity/check/move_check.py BASE HEAD` on each commit by itself, which is what `verity check move BASE HEAD` runs [read: `tools/verity/cli/verity_cli/__init__.py:59-61`]. Staging took 5 min, the checks 1 min 40 s.
+  - The same run is now regenerating the four pins on the staged tip; it ends with a bundle of the three commits. The two staged commits are in the run's `out/staged.bundle`; I push them to a scratch branch when it ends.
+- **It took one fix.** The first try (`r20261113-031715-cb59`, and `r20261113-031651-57e7`, the same job on another node) certified the first move and refused the second on one file: the composition package's README names remote's and onsite's packages by three relative paths, and once the lists sit inside the directory the README is in, the mover rewrites each to a bare name (`onsite/verifier`), which the certificate refuses as an edit beyond moved paths [run]. It is the same case as the world's README line. `6b8605d711` writes the three from the root; nothing else was refused.
+
+**3. #9486 (`world_map.toml`).**
+
+- Its quick tier passed: `r20261112-212908-8f08`, rc 0, 11 of 11 suites, at `0a13c1c90cb3` [run; `job.json`'s `source_sha`]. (`r20261112-194809-9cc5` was cut at its cap.)
+- I merged `main` once: head `93817fbb2f8af377ca38a71057eb47a69dea51e1`, no file stopped, pushed [run: `git merge`, `git ls-remote`]. Its own change against `main` is still two files [read: `git diff --stat origin/main HEAD`].
+- On that head: the gate passes (`ratchet_gate.py origin/main HEAD`) and the two map test files pass (10 passed) [run locally]. **The move certifies there:** `r20261113-031936-2dd7`, rc 0: `93817fbb2f8a..63c2b83609da` is a pure move, 6 renames and 11 path-only edits; run again it changes nothing; `resolve_check.py` 0 issues [run].
+- What the merge touches, run again on a node: the suites `tools/move`, `repository` and `verity-graph`, quick tier, `r20261113-032430-9441`, running [run]. Its ready line follows that run. I did not run all 11 again: the merge changes neither of its two files.
+- **Can it ride Friday's chain:** by the same rule as ours, no sooner than ours. It moves a Lake package (`core_world`), so lean's condition for the maps that do applies to it [relayed: lean on TOP-398, 4:17 PM PST]. It is independent of our two maps: it certified as a third commit after them on Thursday and certifies on `main` alone today [run: `r20261112-213040-2ca7`, `2dd7`].
+
+**What is not established.**
+
+- No suite has run on a moved tree, and no Lean check. The moves touch 86 of 127 suites by Thursday's listing; I have not timed that tier.
+- That our maps certify after top's tonight chain (it is not on `main`; its branches do not hold #9375, so my commits do not pick onto them). The rehearsal you promised top follows the hour that chain is on `main`: one run of about ten minutes.
+- That our first map certifies when `verity/protocols/compose/` already exists, as top's `live_challenger_map.toml` would leave it (`verity/composite/` to `verity/protocols/compose/`, with two empty `__init__.py`) [read: that map on `-pr2b`]. A scratch run with those two files in place is out: `r20261113-032649-32ce`.
+- The pins: the four that record `security/Proofs/lake-manifest.json` go stale with each of these moves, as before; the chain's last commit regenerates them (7 min 30 s on Thursday's rehearsal, `2ca7`) [run].
+
+**Runs out:** `r20261113-032249-91f3` (the certificate, done; its pins step running, about 10 min more); `r20261113-032430-9441` (#9486's three suites on the merged head, on vy-nebius-cpu-1); `r20261113-032649-32ce` (scratch: the two moves with `compose/` already there); `r20261113-032917-8294` (scratch: top's three maps of tonight picked onto `main`, the hand commit of the `verity_config` root, then our two maps and the world's). Each should end by 03:50Z if it holds a slot [derived: the first three took a slot within a second].
+
+Next entry by 04:30Z, sooner when the runs end.
