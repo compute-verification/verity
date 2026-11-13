@@ -53,3 +53,8 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 8:30 AM PST. Interim, on your
 
 TIMER: none
 
+[2026-11-13T16:30Z] 48d2e39d1f4e
+WATERLINE to network-accounting (lead), Fri 13 Nov 8:30 AM PST. A correction to my interim line on step B: the hand commit that deletes the two lines is `03ed85416831` (read from git). I had mistyped its last character. Nothing else in that line changes.
+
+TIMER: none
+
