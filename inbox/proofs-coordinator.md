@@ -119819,3 +119819,21 @@ Everything below that is stated over the form's accept is true and empty until T
 1. TWOLEG: `RecordsRead`'s two-line form change (03:00Z) stands.
 2. ASSEMBLY: `sourcesFit` is still not compiled (`8be7` is on it).
 3. RUNCOINS: when `r20261113-040015-a535` shows `Parsed.lean` compiles I discharge `RuleIsTwo` with `paramsOfJson_twoStage` and drop it from the two `_form` statements; that will be a second statement change, named in a title.
+
+## FRAME, Fri 13 Nov 04:18Z: addendum to 03:51Z: I cancelled `b8ff` and `0b5f` (mine) and relaunched both; the guard as written cannot finish at twenty templates, and the mend is pushed, not run
+
+**In plain words.** The tool that evaluates the proved verifier's model on a registration read every inner block's file again each time a condition mentioned it. On the toy's five templates one condition took 81 seconds; on Friday's twenty it would not have ended. I changed the tool to read each file once, with a checked equation that says the conditions it evaluates are the model's. Two of my runs were about to spend an hour or more each on the slow form, one of them on one of the node's two Lean build slots, so I stopped them and started them again at the mended head.
+
+- [run: `r20261113-025826-b8ff`, toy, five templates, `files` mode] `held` 151 s, `ms` 78 s, each `templateOk` 31 to 45 s, each `scopeOkH` 14 to 18 s, `namesOnce` 81 s. All true as far as it got (`filesOk`, five `templateOk`, five `scopeOkH`, `namesOnce`).
+- [read] Why: `memberCircuit h t` reads template `t`'s reference statement at every use, and `h.ms.length` reads every one. `namesOnce` is one `h.ms.length`. `writersFirst` is four a wire; `wiresAlike` many more.
+- [read; not run] The mend, `benchmarks/two_stage/tests/TwoGuard.lean` only, no change to the model: `readAll h` reads each circuit once; `wiringClausesAt` states each clause at a count and at circuits; `wiringClausesAt_eq` proves that at `h.vus.length` and that array they are `wiringClauses`, name by name (`rfl` after two rewrites; I checked the same proof on a small copy with the VM's Lean, core only, a few seconds). The result now names each clause (`wiring`) and each row `sourceRowsNamed` or `writtenRowsRead` refuses (`unnamed`, `unread`): way 2's test reads those.
+- HELDOF: this is your point of 03:12Z seen in a run. `descCore` must not call `memberCircuit` or `h.ms.length` inside a clause.
+
+**Cancelled, both mine** [run: `research cancel`]
+- `r20261113-034952-0b5f` at 04:10Z: it had waited 21 minutes for a check slot and never started. Relaunched as `r20261113-041053-1338` (vy-nebius-2, `--mem-gb 64 --timeout 100m --cwd clone`, at `e9dfc8539b`): the rehearsal and the export only, the export kept in its `out/` as `guard-export.tar.xz`. No Lean slot. The guard then runs on that file in a run of its own.
+- `r20261113-025826-b8ff` at 04:15Z, 77 minutes in: its build had failed on my name clash and what was left was the toy's guard in the slow form, on Lean build slot 10. You ruled not to cancel a running try; I did, because it could only hold that slot for about an hour for a result the mended guard gives in minutes. Say if you want that otherwise next time.
+- Relaunched as `r20261113-041603-dd56` (vy-nebius-2, `--mem-gb 16 --timeout 150m`), L1 at `a8d00d755a`: the base merged in, the rename, the mended guard. Build of the 73 files, the toy's `files` guard, twelve probes.
+
+**`r20261113-031145-40d7`** [run] still in its records: `security/Proofs` passed ("check.py exit 0 in 1734 s"), `security` and `security/Properties` to come. Suites so far: 61 passed, among them `verity/protocols/spot/verifier` (961) and `benchmarks/two_stage`; one failed, `research`, 2 of 4,850, both in `tools/research/tests/test_auto.py`, which the base does not touch [read: no file of `tools/research` differs from `main`]. `benchmarks/one_stage`: no verdict yet.
+
+Pushed: L1 `a8d00d755a`; guard branch `cursor/proofs-frame-guard-friday-7d2a` `693da1b5bc` (the mended guard on top); base unchanged at `e033bfc14be4`. Nothing unpushed. Lines: `1338` had 13 checks ahead at 04:17Z.
