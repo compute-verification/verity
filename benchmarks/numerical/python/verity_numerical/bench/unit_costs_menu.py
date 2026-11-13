@@ -50,8 +50,9 @@ import json
 import math
 import shutil
 import sys
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 from verity.commitments.windows.interface import K_MAX, PACK_LOG
 from verity_flock import rec_residuals as RR

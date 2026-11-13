@@ -36,9 +36,10 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from .. import settings
 from . import census as CN
@@ -112,7 +113,7 @@ class Cell:
         return json.dumps(asdict(self), indent=1, default=str) + "\n"
 
     @classmethod
-    def load(cls, path: str | Path) -> "Cell":
+    def load(cls, path: str | Path) -> Cell:
         return cls(**json.loads(Path(path).read_text()))
 
 

@@ -66,8 +66,9 @@ import argparse
 import json
 import math
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity.commitments.windows.interface import K_MAX, PACK_LOG
 

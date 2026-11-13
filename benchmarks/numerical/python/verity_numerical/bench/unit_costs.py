@@ -65,11 +65,12 @@ import ast
 import json
 import math
 import multiprocessing
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 from . import census
 from verity.circuits.boolean.forms import Circuit
