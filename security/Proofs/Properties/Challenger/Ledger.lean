@@ -52,7 +52,7 @@ theorem plainAt_mono {d : Nat} {j : Json} (h : PlainAt d j) : ∀ {e : Nat}, d �
 theorem plainAt_built {d : Nat} {l : List (String × Json)} {ks : List String} (hks : l.map (·.1) = ks)
     (hs : ks.Pairwise (· < ·)) (hk : ∀ k ∈ ks, PlainStr k) (hv : ∀ p ∈ l, PlainAt d p.2) :
     PlainAt (d + 1) (Json.mkObj l) :=
-  Entry.plainAt_mkObj (distinct_of_keys (hks ▸ hs)) (fun p hp => hk _ (hks ▸ List.mem_map_of_mem hp)) hv
+  Entry.plainAt_mkObj (distinct_of_keys (hks ▸ hs)) (fun _ hp => hk _ (hks ▸ List.mem_map_of_mem hp)) hv
 
 /-! ## The first entry's `prev` -/
 
