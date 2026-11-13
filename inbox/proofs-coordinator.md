@@ -115334,3 +115334,51 @@ Nothing.
 - `StageAlone.lean`, `SecondCoins.lean` (as fixed), `CoinBytes.lean`, `StageCut.lean` and `StageCoins.lean` have not compiled yet; `5bd3` is the first try that reaches them.
 - The first stage's family is still the one the evidence's segment names.
 - The known hole (a signature from an earlier period passes) is noted, not worked around.
+
+## ACCOUNTS, Fri 13 Nov 02:40Z: Site v2's records run passed (exit 0) and the 16 suites passed at the merged head; the one pull request is open, unmarked: #9593 at `d8c696eda108`. The ready line waits only for #9375 on `main`.
+
+**Heads, all pushed.** Site v2 `cursor/proofs-site-v2-1dc6` at `d8c696eda108`, which is #9593's head. The two lists `cursor/proofs-composites-f4cc` at `1b478b7fdf27`. #9312 `b034e9d200b5` and #9313 `19474e53e4f7`, unmarked, not touched.
+
+**What passed** (both runs on vy-nebius-2, both on the tree at `2d8a2ac46c2c` [read: each run's `job.json`]; the head adds one commit that changes the properties lock alone)
+
+| Run | Its own verdict |
+|---|---|
+| `r20261113-012523-6349`, records | done, exit 0, 02:36:53Z, 67 min in its slot. `security` PASS (27,240 declarations, 1111 guarantees). `security/Proofs` PASS (198,517 declarations). `security/Properties`: against the old lock every failure is a record difference and no witness is refused; with the record it wrote, PASS (3281 declarations, 466 guarantees). Axioms: the three only [read: stdout lines 9, 573, 598, and of the properties part 569, 570, 1530, 1542]. |
+| `r20261113-012523-9fef`, suites | 16 suites: 16 passed (0 cached), 0 failed [read: stdout line 48, and one `passed` line a suite]. `--quick`. The Site's difftest against the Lean is in `verity-core-sampled-proofs` (318 passed, 2 skipped), the registration's in `verity-core-composition` (19 passed). |
+
+At 02:13Z `6349` was building, not waiting for a place: it took its slot at 01:29:22Z [read: its `slot.json`], had finished `security` (2077 s) and was auditing `security/Properties`. The restated witness passes the lock's rule: the properties audit prints no `witnesses:` line [run: `rg -c` over its part of stdout].
+
+### Lock records that move
+
+Read from the run's review and confirmed by comparing each lock at `d8c696eda108` with `main`'s, section by section [run on the VM, `json` compare]. No other section of any lock differs (no premise list, no witness list, no trust gap).
+
+- **`security/Properties/lean-audit.json`** (regenerated record committed, `d8c696eda1`):
+  - five guarantees' own records: `Properties.Site.checks` and `refusedAt` (`unfolded_hash`: `Checks` and `RefusedAt` restated), `checks_honest`, `checks_nontrivial`, `refusedAt_nontrivial` (`signature` and `type_hash`);
+  - three entries of what guarantees read: `CoreProtocol.Site` (19 definitions changed, 36 new; read by the thirteen), `Definitions.Core.Site` (18 changed, 36 new; read by 54 guarantees: 12 `Properties.Site`, 14 of the inference-only policy's check, 1 `Properties.Pouw`, 4 `Properties.Remote`, 23 `Verity.*`), `Properties.Core.Site` (12 changed, 4 new; read by the thirteen).
+- **`security/lean-audit.json`** (`c2fce58ca8`): one entry of what guarantees read, `Definitions.Core.Site` (`Verity.Site.Link`, `Verity.Site.Loc` changed; `Verity.Site.Kind.auditorHost` new), read by 136 guarantees. The lock this run regenerated is byte for byte the committed one [run: `cmp`].
+- **`security/Proofs/lean-audit.json`**: nothing.
+
+### The pull request
+
+[#9593](https://github.com/compute-verification/verity/pull/9593), "The Site's second form: registered figures for hosts, memory and clocks, and a complete inventory". Open, unmarked, no label, mergeable with `main` [run: `gh pr view 9593` at 02:38Z]. Opened with `research queue open`, linked to MEM-279 by the tool. Its body's first paragraph says what moves in the locks; it quotes the five changed texts before and after (the four of Daniel's yes and `refusedAt_nontrivial`, said there to be a witness and not a guarantee about the Site); it ends `Lane proofs`, `Refs MEM-279`. The tool warned that MEM-279 carries no label naming a live goal of the Goals page; that label is yours to set.
+
+### The ready line: not yet, by your 01:44Z order
+
+#9375 is not on `main` (open at 02:39Z [run: `gh pr view 9375`]); you said to merge `main` after it and before the ready line.
+
+- **As it stands**, at `d8c696eda108`: every check I can run has passed, and `main` (`8c11a1d5abff` at 02:39Z) has changed no Lean file, no lock and no file this branch changes since the commit I merged [run: `git diff --name-only e86d9204135c origin/main`, 45 commits]. If you would rather mark before #9375, the line is: *#9593 at `d8c696eda108`: records exit 0 (`r20261113-012523-6349`), 16 of 16 suites (`r20261113-012523-9fef`), five listed texts change, all in the body.*
+- **When #9375 is on `main`:** I merge `main` (the lock's merge driver installed), run the records again on vy-nebius-2 at 115 GB (it builds the Site's files and everything that imports them; about 70 min in a slot) with the 16 suites beside it, commit any record that moved, and give the line at the new head.
+
+### The moves
+
+- **#9575** (tonight's first move): it changes none of the files either of my branches changes [run: `gh api …/pulls/9575/files`, 222 files, 316 paths with the old names, against Site v2's 26 files and the two lists' 38: none in common], and none of my changed files names `verity_config` or `verity/settings.py` [run: `rg`]. If it lands before #9593 does, I carry the branch with `tools/move/restack.py`, as ordered.
+- **`compose_map.toml` and `configurations_map.toml`: neither is mine.** I wrote neither, and neither branch changes a file under `tools/move/` [run: `git diff --name-only` of each branch against `main`]. They are the carve's. What they carry of mine when they run: Site v2 has one file under `verity/protocols/remote/verifier/composition/` (the registration difftest's test); the two lists have eight under `verity/protocols/remote/` and `onsite/`.
+- **Two more moves carry Site v2's files** [read: `tools/move/hardware_map.toml` on `main`; relayed: TOP-398 for the first]: the Site's file to `verity/device.py` (`verity/hardware/site/__init__.py` and its test), and the data sheets' map, on `main` as a map since #9562 and not run, which turns `verity/hardware/nodes/__init__.py` into `verity/hardware/nodes.py`. Each is one more reason to land #9593 before them or to restack after.
+
+### Not established
+
+- The whole `check` and the kernel replay: not run. The records run is the fast path.
+- Anything at a head merged with #9375: it is not on `main`.
+- The two lists at today's `main`: `main` has since changed four files that branch changes; it waits on #9268, open at 02:13Z.
+
+**Next.** A one-off timer wakes me at about 03:20Z to look for #9375 on `main`; then the merge, the records run and the suites, and the ready line when they are read.
