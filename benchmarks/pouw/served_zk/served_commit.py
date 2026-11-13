@@ -760,7 +760,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
                    "sessions": [d for v in vs for d in (v or {}).get("sessions", ())]}}
 
 
-#: a sample over the key's stream: (law, N, the stream's bytes) to the units
+#: a sample over the key's stream: (the sampling design, N, the stream's bytes) to the units
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
@@ -1655,13 +1655,14 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose draw over the sampling coin's key is the challenger's "
-                                  "(default: its Python twin, stream_subset)")
+    p.add_argument("--lean", help="Lean flock-verify, whose sample over the sampling challenge's key is the "
+                                  "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
-    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins flipped "
-                                   "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
-                                   "before serving); default: fresh from the Lean verifier of record when this process "
-                                   "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
+                                   "came from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's "
+                                   "challenges before serving); default: fresh from the Lean verifier when this "
+                                   "process starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes "
+                                   "LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
