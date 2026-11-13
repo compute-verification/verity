@@ -38,13 +38,14 @@ from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.protocols.pouw import prover
 
 from . import row_tables as RTB
 
 __all__ = ["CFLAGS", "DEVICE_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "TAB_WORDS", "Args", "DeviceLibrary", "Pending", "Plan", "built",
            "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready", "side_stream", "step_roots", "table_domain_id"]
 
-CUDA_DIR = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "pouw" / "prover" / "kernels" / "pouw_cuda"
+CUDA_DIR = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
 #: the headers `ncp2.cuh` and `row_table.cuh` include by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment):
