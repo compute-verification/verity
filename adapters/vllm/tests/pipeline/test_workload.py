@@ -162,6 +162,10 @@ def test_a_tp_workload_requires_the_batch_invariance_its_target_declares(tmp_pat
     target = json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False})
     doc = _generate(tmp_path, "x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", target=target)
     assert doc["engine"]["env"] == {"VLLM_BATCH_INVARIANT": "0"} and doc["engine"]["target"]["batch_invariant"] is False
+    more = json.dumps({**json.loads(target), "fp8_block_gemm": "cutlass"})           # a variable the row's label does not set
+    assert _generate(tmp_path, "x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", target=more)["engine"]["env"] == {
+        "VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0"}
+    assert "env" not in _generate(tmp_path, "x__fp8__h200__tp1__b1__i256__o32__mixed__greedy__eager", target=more)["engine"]
 
 
 @pytest.mark.parametrize("row_id, rc", [
@@ -206,6 +210,9 @@ def test_a_shared_prefix_row_starts_every_longer_prompt_with_one_prefix_and_turn
     assert all(r.get("shared_prefix_tokens") == (128 if r in sharers else None) for r in reqs)
     assert all(len(r["prompt_token_ids"]) == r["prompt_len"] for r in reqs)
     assert doc["engine"]["args"]["enable_prefix_caching"] is True and doc["sweep"]["shared_prefix"] == 128
+    assert [r["arrival_offset_s"] for r in reqs] == p["arrival_offsets_s"] and len({r["request_id"] for r in reqs}) == 8
+    lengths = W.workload_doc(p, hf_repo="org/x", revision="0" * 40, case="X", tok=None)["requests"]
+    assert lengths == [{k: v for k, v in r.items() if k not in ("prompt_token_ids", "prompt_text", "origin")} for r in reqs]   # but for its prompt
     plain = W.workload_doc(_prefix_row(0), hf_repo="org/x", revision="0" * 40, case="X", tok=_CharTok())
     assert "enable_prefix_caching" not in plain["engine"]["args"] and "shared_prefix" not in plain["sweep"]
     assert not any("shared_prefix_tokens" in r for r in plain["requests"])
@@ -508,11 +515,12 @@ def test_the_generator_writes_each_prompt_in_the_ids_of_the_models_tokenizer_and
     monkeypatch.setattr(_Tokenizer, "asked", set())
     snap = _snapshot(tmp_path)
     monkeypatch.setenv("HF_HOME", str(tmp_path))
-    out = tmp_path / "w.json"
+    out = tmp_path / "rows" / "of" / "w.json"                                                  # in a directory that is made for it
     opts = W.Options(row_id="x__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager", hf_repo="org/x", revision=REV, batch=8,
                      max_input=256, max_output=32, case="X", arrivals="staggered", out=str(out))
     assert W.main(opts) == 0
     doc = json.loads(out.read_text())
+    assert out.read_text() == json.dumps(doc, indent=1, ensure_ascii=False) + "\n" and not out.read_text().isascii()
     reqs = doc["requests"]
     assert [len(r["prompt_token_ids"]) for r in reqs] == [r["prompt_len"] for r in reqs] == doc["sweep"]["input_lengths"]
     assert all(r["prompt_text"] == "".join(map(chr, r["prompt_token_ids"])) for r in reqs) and len({r["prompt_text"] for r in reqs}) == 8
