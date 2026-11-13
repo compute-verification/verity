@@ -1,5 +1,5 @@
-"""cover272_v4.py [--v5] COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass,
-(with --v5 and scratch/cir272/p3-plan.json, the third pass's lists i and j too, as `circuits/request-cover/v5`), `circuits/request-cover/v4`,
+"""cover272_v4.py [--v5|--v6] COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass,
+(with --v5 and scratch/cir272/p3-plan.json, the third pass's lists i and j too, as `circuits/request-cover/v5`; with --v6 and p4-plan.json, list k's extras too, under `beside_extras`, as v6), `circuits/request-cover/v4`,
 written over COVER.json, which must be v3 (`art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888`, the record
 NET-390 quoted; `git show 9a0d813ec490:scratch/cir271/cover.json`).
 
@@ -50,16 +50,23 @@ LISTS = {
 }
 
 V4 = "art:fd2160d5541b057b59c6fb8fc1a105ff2c3f9939cd6a078352cd988c55eee67e"
-V5 = sys.argv[1] == "--v5"
+V6 = sys.argv[1] == "--v6"
+V5 = sys.argv[1] in ("--v5", "--v6")
 if V5:
     sys.argv.pop(1)
+if V6:
+    LISTS["k"] = ("fourth pass: two extras beside listed types, SparseMlaHeadScores_v2 at NVIS=63 (beside t161) then NVIS=21 (beside "
+                  "t113), FIRST=true, each named directly in its row; --mem-gb 64, limits 3600 and 2400 s, budget 6600 s (types-p4k.tsv)")
     LISTS["i"] = "third pass: t019 (its Boolean version, 9000 s), then t032 (6000 s); --mem-gb 160, budget 15600 s (types-p3i.tsv)"
     LISTS["j"] = "third pass: t031 (its Boolean version, 9000 s); --mem-gb 160, budget 9600 s (types-p3j.tsv)"
 cover_path, plan_path, runs_dir = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 cover, plan = json.loads(cover_path.read_text()), json.loads(plan_path.read_text())
 split = plan.pop("_split", None)
 third = plan.pop("_third", None)
+fourth = plan.pop("_fourth", None)
 assert V5 == (third is not None), "--v5 takes scratch/cir272/p3-plan.json, and only it"
+assert V6 == (fourth is not None), "--v6 takes scratch/cir272/p4-plan.json, and only it"
+BESIDE = (fourth or {}).get("beside", {})
 assert cover["schema"] == "circuits/request-cover/v3", cover["schema"]
 RUNS = []
 for a in sys.argv[4:]:
@@ -98,7 +105,7 @@ for R in RUNS:
     form = {l.split("\t")[0]: l.split("\t") for l in (out / "form.tsv").read_text().splitlines() if l}
     names = {n["tag"]: n for n in map(json.loads, (out / "names.jsonl").read_text().splitlines()) if n.get("tag")}
     for tag in [l.split("\t")[0] for l in (out / "types.tsv").read_text().splitlines() if l]:
-        b = by_block[plan[tag]["block"]]
+        b = by_block[plan[BESIDE.get(tag, tag)]["block"]]
         ce = names[tag].get("census") or {}
         r = {"run": R["run"], "node": R["node"], "list": R["list"], "mem_gb": R["mem_gb"], "tree": TREE, "staged_unit": form[tag][2],
              "lookup": {"kind": ce.get("kind"), "zk_refusal": ce.get("zk_refusal"), "error": ce.get("error") or names[tag].get("error"),
@@ -176,6 +183,12 @@ for tag, p in plan.items():
         k: p.get(k) for k in ("run", "order", "list", "limit_s", "mem_gb")}, "v3": {k: old.get(k) for k in ("run", "outcome", "why", "text", "state",
                                                                                            "verdicts", "stage", "needs", "zk_refusal")}}
 
+if V6:
+    cover["beside_extras"] = {
+        tag: {"tag": tag, "extra": "beside", **seen[tag],
+              "earlier_form": {k: T[of].get(k) for k in ("tag", "block", "blocks", "k_log", "staged_unit", "outcome", "why")}}
+        for tag, of in BESIDE.items() if tag in seen}
+
 for b in cover["blocks"]:
     r = next((x for x in T.values() if x["block"] == b["block"]), None)
     if r is None:
@@ -187,7 +200,11 @@ for b in cover["blocks"]:
 on = [b for b in cover["blocks"] if b["on_card"]]
 total = sum(b["blocks"] for b in on)
 cnt = Counter(b["bound_outcome"] for b in on)
-cover["schema"] = "circuits/request-cover/v5" if V5 else "circuits/request-cover/v4"
+cover["schema"] = "circuits/request-cover/v6" if V6 else "circuits/request-cover/v5" if V5 else "circuits/request-cover/v4"
+if V6:
+    cover["fourth_pass"] = {**fourth, "plan": "scratch/cir272/p4-plan.json", "runs": [r for r in RUNS if r["list"] == "k"],
+                            "mem_gb": 64, "budget_s": {"k": 6600}, "tree": "5427f12eabf1 (bound.sh as at 33d7c7dfd8c2)",
+                            "supersedes": "art:3d708c34f04b952ef68d1f4b39a390c38cb8898c627354055f442661bc200e75"}
 if V5:
     cover["third_pass"] = {**third, "plan": "scratch/cir272/p3-plan.json", "runs": [r for r in RUNS if r["list"] in third["lists"]],
                            "mem_gb": 160, "stage_stop_gb": 156, "lean_gate_gb": 150, "budget_s": {"i": 15600, "j": 9600},

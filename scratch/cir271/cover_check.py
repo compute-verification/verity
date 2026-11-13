@@ -55,6 +55,13 @@ if "bound_totals" in c:
                 assert r.get("run") in {x["run"] for x in c["second_pass"]["runs"]}, t
             elif "plan" in r:
                 assert (r["outcome"], r.get("why")) == ("not-run", "estimate-past-64GB"), t
+    for t, r in (c.get("beside_extras") or {}).items():
+        assert t not in ty and r["extra"] == "beside" and r["earlier_form"]["tag"] in ty, t
+        v = r.get("verdicts") or {}
+        h, np_, od = v.get("B.verify.held"), v.get("B.verify.no-program"), v.get("B.verify.other-def")
+        held = bool(h and h["exit"] == 0 and h["accepted"] is True)
+        ctl = held and all(x and x["exit"] == 1 and x["accepted"] is False for x in (np_, od))
+        assert (r["outcome"] == "accepted") == ctl and (r["outcome"] == "held-control-off") == (held and not ctl), t
     out["bound"] = {"types": len(on), "blocks": total, "by_outcome": bt,
                     "shares": {g: [n, k, round(100 * k / total, 4)] for g, (n, k) in shares.items()},
                     "tags": dict(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values())),
