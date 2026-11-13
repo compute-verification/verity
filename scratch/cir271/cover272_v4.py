@@ -25,7 +25,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"  # runs a and b; c and d at 82a2979f9601 (scratch/cir272 only)
+TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"  # runs a and b; c and d at 82a2979f9601, f and g at a03c53314c89 (scratch/cir272 only)
 CHANGES = [
     "form.py: the list as run stages census:<the lookup's boolean_version> where names.jsonl gives a zk_refusal",
     "session: serve and prove get --tables DIR when the stage wrote tables/",
@@ -33,6 +33,16 @@ CHANGES = [
     "each Lean check is stopped past 62 GB resident, as the stager is",
     "Lean checks run when 4.42 x circuit.txt's GiB is at most 60 GB (job.sh's 6 x + 4 GB is logged beside it)",
 ]
+LISTS = {
+    "a": "p2.py: half of the types v3 left, cheapest first (scratch/cir272/types-p2a.tsv)",
+    "b": "p2.py: the other half (types-p2b.tsv)",
+    "c": "p2b.py at 07:5xZ: the DsaMqaLogits types past A's and B's estimated reach (types-p2c.tsv)",
+    "d": "p2b.py: the 14 types the 64 GB rule left out in v3, at --mem-gb 160 (types-p2d.tsv)",
+    "e": "p2b.py: the 18 extras for the first slot A or B freed (types-p2e.tsv); not launched, since A's and B's lists held them "
+         "too and B reached 8 of them",
+    "f": "after A and B ended: the 10 extras and t171, t173, t175, t177, t179, which A and B listed, did not reach, and no live run held (types-p2f.tsv)",
+    "g": "the rest of those: t172, t174, t176, t178, t202 (types-p2g.tsv)",
+}
 
 cover_path, plan_path, runs_dir = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 cover, plan = json.loads(cover_path.read_text()), json.loads(plan_path.read_text())
@@ -127,7 +137,7 @@ for R in RUNS:
         reached = not (r.get("why") == "not-reached" or r.get("text") == "not started")
         if tag in seen:
             assert not (reached and seen[tag]["_reached"]), f"{tag} staged in two runs: {seen[tag]['run']} and {R['run']}"
-            if not reached and (seen[tag]["_reached"] or R["list"] != plan[tag].get("list")):
+            if not reached and (seen[tag]["_reached"] or seen[tag]["list"] == plan[tag].get("list")):
                 continue
         seen[tag] = {**r, "_reached": reached}
 
@@ -160,7 +170,7 @@ cnt = Counter(b["bound_outcome"] for b in on)
 cover["schema"] = "circuits/request-cover/v4"
 cover["second_pass"] = {"issue": "CIR-272", "tree": TREE, "branch": "cursor/circuits-cir272-bound-6f04", "plan": "scratch/cir272/p2-plan.json",
                         "runs": RUNS, "threads": 8, "mem_gb": 64, "stage_stop_gb": 62, "lean_gate_gb": 60, "lean_stop_gb": 62,
-                        "budget_s": 21000, "runner_changes": CHANGES, "split": split, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
+                        "budget_s": 21000, "runner_changes": CHANGES, "split": split, "lists": LISTS, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
 cover["bound_totals"] = {s: [n, sum(b["blocks"] for b in on if b["bound_outcome"] == s)] for s, n in sorted(cnt.items())}
 groups = {"accepted": [s for s in cnt if s.startswith("accepted")], "refused": ["refused"], "held-control-off": ["held-control-off"],
           "not-run": [s for s in cnt if s.startswith("not-run")], "running": ["running"]}
