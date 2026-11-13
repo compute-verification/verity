@@ -1140,7 +1140,6 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
     _say(f"sweep ok={doc['sweep']['ok']} served={json.dumps(doc['sweep']['served'])} "
          f"model={json.dumps({k: v['consistent'] for k, v in doc['sweep']['model'].items()})}")
     specs, captured = [], []
-    cap: list[dict] | dict
     for _, name, M, pool in picked:
         try:
             records, sp, cap = case_launches(work, name, M, pool, routed[name], launches, W, sms, types)
