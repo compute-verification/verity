@@ -439,9 +439,7 @@ DONE_SOURCES = ("public-cap", "eos-token")
 
 def rows_of_record() -> frozenset[str]:
     """The row ids ``RECORDS`` lists (none without the file)."""
-    if not RECORDS.is_file():
-        return frozenset()
-    rows = json.loads(RECORDS.read_text()).get("rows")
+    rows = json.loads(RECORDS.read_text()).get("rows") if RECORDS.is_file() else None
     return frozenset(rows) if rows else frozenset()
 
 
