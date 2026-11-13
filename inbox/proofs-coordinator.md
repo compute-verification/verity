@@ -132010,3 +132010,84 @@ Clock: `date -u` read 09:10Z. Mailbox read at 09:10Z: nothing after your 08:55Z 
 - `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef9d` (the README's patch only, so far).
 - `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771` (chain 2's base, the map, its move, the README's patch, the tests' patch).
 - `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`; `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded).
+
+## ASSEMBLY, Fri 13 Nov 09:10Z: THE TABLE FOR SOUNDNESS (PRF-490), of `JoinsAt`'s 23 fields as they stand at `82ad1c6cb5`: every field is universal as stated, none is per-play; 11 have no play in them at the game's own plays, 1 has a lemma from the form's check (written, NOT compiled), 11 are facts of the play that no refusal gives today
+
+**The table is of the fields after the changes since my 07:39Z item 6: 23, not 25.** `recordsHeldAt`, `recordsRead`, `twoHolds` and `firstTreeless` are theorems now, `heldAt` is `partsHeldAt`, and `heldOfAt` and `portsDistinctAt` came in. No field's statement is changed for the table. The join is at `82ad1c6cb5` = the `cb2d54f3d8` of my 09:00Z entry + ADDRROW's `c9ba3542f8` (named compiled by ADDRROW2 at 09:03Z; one new file, `RowTable.lean`, outside the join's theorem) + the pin's line. Not compiled; no run out.
+
+**In plain words.** Soundness asked which of the join's premises one odd accepted play can make false. As written, all of them quantify over more than the play the bound is about. But they are of three kinds. Eleven say nothing about a play once they are asked only at the plays of the game in hand: they are facts of the parameters, the commitment, the device or the instance's own maps, and no play can falsify them. One follows from the form's check, by a lemma that is written and not compiled. Eleven are facts of what the prover sent in a play, and nothing the form refuses makes them true: those are the ones soundness's point is about.
+
+**How to read the table.**
+- **Ranges over** is the field's own quantifier today [read: `JoinsAt.lean` and each definition at `82ad1c6cb5`]. "Every accept" is every exchange `o` with `FormAccepts C o`, whatever its parameters and commitment. "Good accepts" adds `JoinGood o`.
+- **Reads** is what of the exchange the statement depends on [read].
+- **Kind**: `instance`, `lemma` or `play`, as in the three notes under the table.
+
+| # | field | ranges over | reads | kind | what makes it true; owner; compiled? |
+|---|---|---|---|---|---|
+| 1 | `ledgerInOrder` | every exchange after θ on two windows, accepted or not | request, log, close and draw, through the deployment's ledger lines | instance (the device) | a lemma of the modelled device, none written; soundness's device pull request |
+| 2 | `distinctFamilies` | no exchange | `ℓ₁`, `ℓ₂` | instance | TWOLEG's `Shown.paramsOfJson_families`, compiled at `1e20910586`; the line that reads `ℓ₁`, `ℓ₂` off θ is not written |
+| 3 | `family₁` | good accepts | the case's parameters only | instance (θ) | lemma not written; mine |
+| 4 | `family₂` | good accepts | the case's parameters only | instance (θ) | lemma not written; mine |
+| 5 | `otherRoots` | good accepts | the evidence's two sessions' roots | play | no lemma; two refusals on two windows would give it (CUT's 07:03Z item 1); TWOLEG's form, after Friday; not written |
+| 6 | `firstDrawn` | every accept | the evidence's challenges and the run's first read | lemma | STAGECOINS's `firstDrawn_of C caseIsSent`, written at `5f7eec4add`, not compiled |
+| 7 | `sessionMatches` | every accept | the evidence's interior record and challenges | play | no lemma on any branch I read; its second half is `rfl` at the join's cut; STAGECOINS |
+| 8 | `msgOpens` | good accepts | the message the reading reads at each round, against `Dg` | play | no check gives it; MESSAGES; `Opens` and `Explains` replace it |
+| 9 | `digestBefore` | two plays of the frame at one tape, the first a good accept | both plays' digests | play (two plays) | no refusal can give it: it is about the strategy; `FixedBefore` replaces it, MESSAGES's entry due 10:45Z |
+| 10 | `partsHeldAt` | every accept | the parameters, and the run's first-stage bytes through the replay sample's size | play as stated; instance if asked at every size | `HeldOf.partsAt_of_partsAre` from `PartsAre` (on the join); `PartsAre` itself: no check, HELDOF |
+| 11 | `heldOfAt` | every accept | the parameters and the commitment's record only | instance (θ, `c`) | no lemma that the copy `heldOf` builds is `A.h`; HELDOF |
+| 12 | `portsDistinctAt` | every accept | the parameters only | instance (θ) | nothing refuses a `ports` object that holds a key twice; the keys' refusal, held by you |
+| 13 | `stmtsRead` | every accept | the evidence's session statements, the reading's | play | no lemma from the accept; MESSAGES's reading and SESSIONOF2 |
+| 14 | `roundsHeldAt` | every accept | the reading's session statements | play | no lemma; SESSIONOF2 |
+| 15 | `scopeHeldAt` | every accept | the reading's session statements | play | no lemma concludes it; SESSIONOF's `memberSession_ok` is one piece, compiled at `98ba037e04` |
+| 16 | `pinHeldAt` | every accept | the reading's session statements | play | no lemma; `PinHeld`'s docstring: no check of round 2 makes it |
+| 17 | `sessionsRun` | every accept, and every challenges that agree with what the check read | the evidence's sessions, the provers `P'` | play | no lemma; SESSIONCOINS and MESSAGES |
+| 18 | `sessionMsgs` | the same | the same | play | no lemma; SESSIONCOINS and MESSAGES |
+| 19 | `wiring` | every exchange after θ the sampled verdict accepts | the verdict | instance | the composite's wiring; no instance of `JoinsAt` is written |
+| 20 | `caseIsSent` | every exchange `C` has a case of | the case map | instance | by how the instance defines `C`; not written |
+| 21 | `caseCommits` | every exchange `C` has a case of | the case map | instance | the same |
+| 22 | `stmtX` | no exchange | `c`, `x` | instance | it says which `x` the commitment carries |
+| 23 | `signer` | no exchange | the vocabulary's signer | instance | the instance's |
+
+**1. The eleven of kind `instance`** (1 to 4, 11, 12, 19 to 23; and 10 if asked at every size).
+- [read] Every play of the game after θ, `F` and `c` ends with those three (`Sampled.Binding.play_reaches`), and what the prover sent carries the play's parameters and commitment (`Exchange.sent`). So a statement that reads only the parameters and the commitment says one thing at every play of one game.
+- [read] That is what 3, 4, 11 and 12 read. `firstDraw` and `secondDraw` take their label from the case's parameters alone. `heldOf` reads `i.params`, `i.rule`, `i.record`, `i.closure`, `it.params`, `it.replay` and `it.circuits`, which `inputOf` fills from the parameters and the commitment and nothing of the evidence. The ports are the two registrations'.
+- [derived] So at the game's plays each is true or false of θ and `c`, and no odd play changes it. The instance makes them true by what it names: `ℓ₁` and `ℓ₂` as θ's two families, `A.h` as the copy `heldOf` builds at θ and `c`.
+- [read] **As stated they range wider**: over every exchange `C` has an accepted case of, with any parameters and any commitment. ACCEPTS's 07:27Z found `heldOfAt` false at a `C` that accepts two records, for that reason.
+- [derived] The instance closes that with no change to the join: `joined` asks its acceptance only `∀ o, o.params = θ → Verdict o → Acc o`, so a case map that has a case only where `o.params = θ` still gives `wiring`, `caseIsSent` and `caseCommits`. For the commitment, ACCEPTS's `atStmt C x` keeps the plays whose statement is `x` (compiled in `4204`); the join does not call the `_at` forms yet.
+- `ledgerInOrder` reads no accept and no case: it says the deployment's two sessions' ledger lines are in the device's order at every request, log and close. An accepted play cannot falsify it. It is still not a lemma: the model takes the ledger lines as given.
+- `portsDistinctAt` is true or false of θ; a θ whose `ports` holds a key twice makes the theorem empty for that θ, which is what a refusal in the parser would remove.
+
+**2. The one of kind `lemma`** (6). `firstDrawn_of (C) (hC : CaseIsSent C) : FirstDrawn C` on STAGECOINS's branch, three commits above its two pattern lines, each subject "not compiled". When it compiles the field is `firstDrawn_of C h.caseIsSent` and leaves `JoinsAt`, as `firstTreeless` did today.
+
+**3. The eleven of kind `play`** (5, 7 to 10, 13 to 18). One accepted play that fails one of these makes the field false and the theorem empty at that instance. None has a lemma from the form's check. What I read of each:
+- `otherRoots`: CUT's two refusals (a first session whose roots show any root of the interior's family; an interior session whose roots show a boundary root other than the boundary registration's digest). With both it is a lemma.
+- `sessionMatches`: its second half holds by `rfl` (`firstCoins e := e.coins`). Its first half says the evidence's interior record has the digest of its canonical text read back. [guess] `commitmentOf`'s own check that the text is canonical gives it. Nobody has written it.
+- `partsHeldAt`: ACCEPTS's 08:47Z found no check that holds the interior program's strata to the held copy's parts. `PartsAre` is the same fact at every sample size, reads no play, and `partsFit` decides it at one size.
+- `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`: they hold the session statements the evidence carries to the held copy's templates. [read] `ScopeHeld`'s and `PinHeld`'s docstrings say no check of round 2 makes either. The per-member form's step does check each session (`MemberChecks.memberSession_ok` gives `sessionOk` for one member session whose statement has its template's shape), but no theorem takes that to any of the four at the form's accept. SESSIONOF2's `session_of_held` (compiled at `d45f63a86c`) reads `RoundsHeld`, `ScopeHeld` and `PinHeld`; it gives none of them.
+- `sessionsRun`, `sessionMsgs`: that Flock's verifier accepts each session's prover `P'` on every challenges agreeing with what the check read, and that its messages are the ones read. `sessionsRun`'s docstring says what an honest play needs for the two to hold together; SESSIONOF2's `session_of_held` gives them from what rows 14 to 16 say and ACCEPTS's `twoHolds_at`.
+- `msgOpens`, `digestBefore`: your 06:05Z ruling stands (the join takes `Opens`, `FixedBefore`, `Explains`). `digestBefore` compares two plays at one tape, so it is not a statement about one exchange and no refusal of the form can make it a lemma of the accept. MESSAGES's entry for `FixedBefore`, due 10:45Z, is not in the inbox as I write; I read it when it is and amend this row.
+
+**4. Where a `play` field can be stated per-play** [derived from the statements of `joined`, `CutBound`, `ReachedAccepts` and `ProjectionBound`; nothing here is written or compiled].
+- **In `Good`.** `joined` asks its stage and session pieces only at accepts with `Good`, and `CutBound` owes `Pr[verdict ∧ ¬Good]`. A fact Φ put in `Good` is asked of no play it fails on, but someone must then bound `Pr[accept ∧ ¬Φ]`. Today only the cut does that, for `ReadIsDevice`, with the forger's term.
+- **Already narrower than stated.** `firstDrawn` and `sessionMatches` are stated at every accept, and `joinedOfLaw` uses each only at the case kept on the good plays (`goodCase C JoinGood`). Each can be restated there in one line, from "every accept" to "good accepts", with no other change. `otherRoots`, `family₁`, `family₂` and `msgOpens` are stated that way already.
+- **The nine of the run's accept (10 to 18) cannot go into `Good` today.** They reach `joined` through `hReach`, which carries `Acc` and no `Good`. Giving it `Good` is a change to `joined` and to `Projection.lean`'s `AcceptsRun`. I have not read whether the proofs under them use the accept only at good plays.
+- **In the event.** `ProjectionBound` bounds `Pr[verdict]`. A bound on `Pr[verdict ∧ Φ]` asks Φ of nothing else and charges nothing, and says nothing of the plays where Φ fails. That is a change to `ProjectionBound`'s statement, and to what the bound tells its reader.
+
+**5. Step 2 of your 06:05Z ruling** (restate over `Messages.frameBy`): the join's last proof compiled at `401d7ef808`, so step 2 is due when MESSAGES hands me the statement and the lemma. `MessagesOpen.lean` is not on the join. Lines that read `joinFrame`, `joinMiss`, `msgOpens` or `digestBefore` [run: `rg -c`]: `JoinsAt.lean` 7, `Joined.lean` 21, `JoinedCoupling.lean` 10, `JoinedForm.lean` 3, `JoinElems.lean` none.
+
+## Runs
+
+None out. No timer held.
+
+## NEEDS
+
+- **STAGECOINS:** a head named compiled over `1e20910586`, as in my 09:00Z entry. If `firstDrawn_of` is compiled in it, row 6 leaves the table.
+- **MESSAGES:** `FixedBefore`'s row, for row 9.
+- **You:** nothing to decide before the table is read. I change no field's statement until you say which rows move and where.
+
+## Not established
+
+- That any row's "instance" reading is proved: no instance of `JoinsAt` is written on any branch I have read, so rows 1 to 4, 11, 12 and 19 to 23 are premises of the join until one is. The reading says only that no accepted play of the game can falsify them.
+- That `sessionMatches`' first half follows from `commitmentOf`: a guess from reading the definitions.
+- That the nine run's-accept premises can take `Good`: not read.
+- Anything compiled at `82ad1c6cb5`. The last compiled head of the join is `401d7ef808` (`22d3`), where the structure had 25 fields.
