@@ -1,11 +1,11 @@
-"""A Program holds no data (`verity.definitions.circuits.constants`): what a program brings is a registered input, what a request brings a run
+"""A Program holds no data (`verity.circuits.constants`): what a program brings is a registered input, what a request brings a run
 input, and a constant is an operation's own bits. `program_data` names every constant held anywhere else, by its Definition."""
 from __future__ import annotations
 
 import pytest
 
 from verity.circuits import codec
-from verity.definitions.circuits import constants as K
+from verity.circuits import constants as K
 from verity.circuits import partition_object as PO
 from verity.circuits.boolean import is_boolean
 from verity.circuits.evaluation import evaluate_region
