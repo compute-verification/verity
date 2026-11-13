@@ -37,7 +37,7 @@ own code, as (b) says.
 
 ## (a) The lifecycle as run
 
-Every party is a sans-IO party of the deployment layer (`verity/configuration/deploy/`), run by `runtime.run` in simulated mode:
+Every party is a sans-IO party of the deployment layer (`verity/runtime/`), run by `runtime.run` in simulated mode:
 in one process, on seeded coins and virtual clocks, with the manifest's channels and latencies. The model is two
 4x4 int8 matmuls (`forward`: y = sat(W2 relu(W1 x) >> 7) >> 7) with a 16-bit running state; one request is one proof
 block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and an execution block is `LifecycleBlock(N)`: N units
@@ -167,7 +167,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/commitments/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
 | `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
-| `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/configuration/deploy/` (`party`, `manifest`, `runtime.run`) |
+| `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/runtime/` (`party`, `manifest`, `runtime.run`) |
 
 ## (c) What this exposes
 

@@ -18,7 +18,7 @@ loads from a static table: core imports no protocol. The modes:
 - `replay`: each party here re-run from its own transcript (`replay`), stopping by name at the first entry that differs.
 
 A `Host` holds one party: its endpoints (one per peer and source), its transcript, and the rules no party passes. Before
-any protocol message each channel to a live peer runs the handshake (`verity.configuration.wire.handshake`), signed with the party's
+any protocol message each channel to a live peer runs the handshake (`verity.runtime.handshake`), signed with the party's
 key; the party never sees it, and starts once every handshake is done. A frame the wire refuses, a handshake refused, a
 channel that closes before its party starts (`closed`), a message the party sends that its manifest doesn't declare on
 that channel (`undeclared`), an exception out of the party (`party-died`) and a run in which nothing more can happen
@@ -45,13 +45,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.wire import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
-from verity.configuration.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
+from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
+from verity.runtime.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
-from .manifest import SOURCES, Manifest, PlaceResult, place, site_of
-from .party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
+from verity.protocol import SOURCES, Manifest, PlaceResult, place, site_of
+from verity.party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
