@@ -117,6 +117,7 @@
   "Proofs.Properties.Challenger.Lines",
   "Proofs.Properties.Spot.Period",
   "Proofs.Properties.Spot.PeriodLedger",
+  "Proofs.Properties.Spot.PeriodSigned",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Verity.Sampled.Messages",
