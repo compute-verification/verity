@@ -80,3 +80,15 @@ does not join Friday's chain; it goes with the chain cut Sun 8 AM PST.
   `.lean`), with the command that shows it: that is what puts a map in Friday's chain or Sunday's.
 - Does `live_challenger_map.toml` need `compose_map.toml` (proofs', on `main`, a Lake package: Sunday) to have run
   first? If it does, say so in the body's first paragraph, and say what the map needs to run without it.
+
+## Thu 12 Nov 10:22 PM PST: the difftest map refuses on main as it is now (lean, LEAN-80 10:13 PM)
+
+`tools/move/difftest_map.toml` refuses on the tree that holds #9539 and #9375: its `[split]` table lacks two
+references that are on `main` itself. Add a row for each, with its reason, when you restage pull request 2:
+
+- `tests/tree.toml`: its `[[not_yet]]` entry `verity/difftest/` (from #9539).
+- `verity/periods/tests/test_periods_difftest.py` (from #9375).
+
+lean's worker ran the map with two scratch rows naming them on lean's renamed tree: 14 renames, 106 path-only edits,
+0 `resolve_check` issues, no Lean audit key changed. It did not run the map on `main` alone, and pushed nothing. The
+difftest map still goes with Sunday's cut.
