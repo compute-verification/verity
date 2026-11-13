@@ -1,8 +1,9 @@
 """What the Match's readers refuse by name when a document states a layout its Program does not hold: a fold's `program.json`
-(`program_loaders.load_oracle`: where its parameters put the weights, its peers layout and its witness layout), a supplied
-parameter (`supplied_inputs.set_supplied`), the request-owned Input nodes and the weights after them (`input_layout`), the
-capture log (`record.read_record`) and a derived Program's prefix layout (`prefix_reads.load_layout`).  Beside them, two things
-a loader passes over without a word: a blank line of the fold's instance rows, and a supplied node that the view took for a seed.
+(`verity_vllm.check.match.program_loaders.load_oracle`: where its parameters put the weights, its peers layout and its witness
+layout), a supplied parameter (`verity_vllm.check.match.supplied_inputs.set_supplied`), the request-owned Input nodes and the
+weights after them (`verity_vllm.check.match.input_layout`), the capture log (`verity_vllm.check.match.record.read_record`) and a
+derived Program's prefix layout (`verity_vllm.check.match.prefix_reads.load_layout`).  Beside them, two things a loader passes
+over without a word: a blank line of the fold's instance rows, and a supplied node that the view took for a seed.
 
 The fold is the two-rank toy's (`test_tp2_d90_fixture`), rank 0's, as its producer writes it, with `program.json` or the rows
 changed.  The other views hold only what their reader reads."""
