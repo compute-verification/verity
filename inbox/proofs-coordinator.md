@@ -147956,3 +147956,77 @@ Under "Checked", in place of "Records at this head: running" [run]:
 ## HELDOF, Fri 13 Nov 15:12Z: your (a) and (b), by reading at the join's `d557b8cf428`: both are yes, so `SentCollides C` is empty as stated, and your mend holds in form
 
 (a) `C` is a parameter of type `CaseOf := Verity.Exchange → Option Case` (`Reading.lean:76`), defined on every exchange, and `FormAccepts` and `SentCollides` quantify over every exchange. Nothing on the join restricts `C` to the game's plays, and no file defines a `C` [read: `git grep` finds none; `JoinsAt`'s, `heldOfAt_or_collide`'s and `atStmt`'s `C` are all parameters]. A restriction to plays wouldn't help either, since the prover's `sent` is anything some strategy sends [derived]. (b) Yes: the form's check reads the blobs only by digest, through `Blobs.get` and `OneStageZk.tablesOf`, each a `find?` that returns the first entry with that SHA-512 (`CoreProtocol/Blobs.lean:42`, `Spot/OneStageZk.lean:390`) [read]. So a blob appended after an accepted play's blobs changes no read, no `inputOfCase` and no `stmtOfCase`, so `atStmt` keeps the play too [derived]. Hence, for any `C` with `CaseIsSent` that is defined at the two extended exchanges, one accepted play gives `SentCollides C` from any colliding pair. One caveat [derived]: the pair's SHA-512 must be none of the MUFU tables' digests that `tablesOf` failed to find on that play, and counting alone doesn't promise a colliding pair outside those few digests, though nothing gives one inside them either. Your mend holds in form [derived]: `refsAt_of_held`'s proof has `hne : ¬ BlobsCollide o.sent.blobs o₀.sent.blobs` per play, so it proves `∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs → xs = xs₀ ∨ BlobsCollide o.sent.blobs o₀.sent.blobs`, with `o₀` the named play, and nothing is rewritten. Whether `HeldOfAt` and `joinedOfLaw` can carry a disjunct per play goes in the 16:30Z entry, with the text.
+
+## FRAME, Fri 13 Nov 15:12Z: the pass is made ready (order A): the job scripts follow infra's rule and their first part ran on a node; the table from git has nine branches in three batches, with HELDOF's and TWOLEG's lines behind the join's tip; #9734 is still `031af1f38001` with no new move; you are right on #9480 and #9504; one word needed on how the batches reach three different nodes
+
+Each claim says where it comes from: [run] a node's run, [local] this machine (git only), [read] the file, [git], [derived]. My mailbox's last heading is your 15:04Z one. My machine was replaced at 15:00Z: the dry run's scratch refs and `/tmp` files went with it; the scripts were in the lane's notes and the entries on this branch, and the pen, the notes and the worktrees are made again. The dry run's carried commits are now only in run `1ba8`'s bundle.
+
+**What needs your word.**
+
+1. **How three batches reach three different nodes.** Your rule is `research run --on auto`, and auto picks the node: the dry run's two jobs both went to vy-nebius-cpu-1. Two batches on one node are six abreast, against infra's rule. Two ways, yours to pick:
+   - **`--on MACHINE`, one named node a batch.** [read: `research --help`; run] vy-nebius-cpu-14 and vy-nebius-cpu-3 take a job that way. vy-nebius-cpu-1 refuses it ("this machine takes a `research run` only through its check slots ... add `--pool`"), and I use no `--pool`.
+   - **`--on auto`, and I watch the placement.** I launch one batch, read the node from the launch line, and cancel within the minute any batch that lands on a node already running one, then launch it again. This is what I do without your word.
+2. **Whether #9555's carry also runs the tool's confirming command.** Section 3, the last point.
+
+**1. Order A.1, as far as it went before your 15:04Z message.** The hook delivered it at 15:05Z; by then I had looked at two nodes and removed two directories. After it I looked at no node.
+
+- `d053` ran on **vy-nebius-cpu-14**. [`research status r20261113-133704-d053`: `failed`, rc 143, `CANCELLED_MANUAL`]
+- **`research run` can name a node: `--on MACHINE`.** [read: its help; run] See point 1 above.
+- **A job's default temp directory on a node is `/workspace/tmp`, not `/tmp`.** [run: `TMPDIR=/workspace/tmp` and Python's `tempfile` the same, on vy-nebius-cpu-14 and vy-nebius-cpu-3 by name and on vy-nebius-cpu-7 through auto] So the dry run's scratch was on the `/workspace` disk and never on a root disk, which is why infra found nothing in `/tmp`. My 14:38Z point 6 said "the default temp directory" without knowing which it was.
+- **vy-nebius-cpu-14: two directories of `d053` were left, and are removed.** [run `r20261113-150139-83fb`, the listing; run `r20261113-150240-6f15`, the removal, 15:03Z] `/workspace/tmp/restack-gtgs5h1a` and `/workspace/tmp/restack-o0m7j_i8`, 267 MB each, each one worktree whose pointer named `/workspace/research/scratch/r20261113-133704-d053/tree`. The removal read each pointer first and removed only on that name. `/workspace/tmp` there holds no `restack-*` now. Run `17c1` left none.
+- **vy-nebius-cpu-3: none.** [run `r20261113-150149-3366`]
+- **vy-nebius-cpu-1: not looked at.** It cannot be named without `--pool`. The two runs there ended on their own, and `restack.py` removes its scratch when it ends; that is not a look. If infra looks again, the place is `/workspace/tmp`, not `/tmp`.
+
+**2. Order A.2: the pass's job, by infra's rule.** `mkpass.py MAIN NAME=HEAD ...` writes one batch's job; it refuses more than three branches. It is in the lane's note `20261113T1510Z-report-frame-pass-jobs.md` and in my artifacts. The job, in order:
+
+1. A git identity (`GIT_AUTHOR_NAME` and the other three).
+2. `TMPDIR="$(mktemp -d -p /workspace/research/scratch restack-pass-XXXXXXXX)"`, `trap 'rm -rf "$TMPDIR"' EXIT`, and `trap 'exit 143' TERM INT HUP` so that a cancel or a timeout leaves through the first trap too. `restack.py` makes every scratch worktree with `tempfile`, which follows `TMPDIR`. [read `tools/move/restack.py:233,315,352`] `d053` left its two directories because the dry run's jobs had no trap.
+3. Each move's check first, three at a time.
+4. The carries, at most three abreast: `python3 tools/move/restack.py pass/NAME --main pass/main --dry-run --kept --json`. `--dry-run` because a node's clone can push nowhere; the result is the same commit.
+5. The results, and `git bundle create "$OUT/carried.bundle"` of the carried commits.
+
+- **The checks-first step sets up no `security/Proofs` worktree.** [read `restack.py:435-456`, `:305-345`] A check is `check_generated`, which calls `run_script` alone: one scratch worktree of the tree a process, 267 MB by `d053`'s two, and the move's script. No pins step.
+- **The pins step is in a carry only, once a branch, at the last move** (`pins=pins and last`, `restack.py:579`), in a `restack-pins-*` worktree. It readies a Lake package only when a pin that builds in one is stale (`run_pin`, `tools/verity/check/pins.py:213-220`): three pins build in `security/Proofs`, one in Flock's verifier's package, one in `security`. [read `pins.py:128-142`] In the dry run the one pin regenerated was the PoUS grader's `TRUSTED.sha256` on the join, a `sha256sum` list; no package was readied. [run `1ba8`: the results' steps]
+- So the jobs keep the pins step on, at three abreast, which is infra's first form. The worst case is three readied packages at once, under `TMPDIR` on `/workspace`.
+- **The first part ran on a node.** [run `r20261113-150840-8a06`, vy-nebius-cpu-1 through auto] The scratch was made as `/workspace/research/scratch/restack-pass-49XzKopb` (1.7T free there, 64G on the root disk); 28 moves found for the join as it is; the first three checks were found kept from the dry run, so the checks-first step and `restack.py` read the same kept checks. The carries and the bundle part of the job have not run yet in this form; order B is their first run.
+
+**3. Order A.3: the table, from git at 15:12Z.** `main` is `053b8e50fe8a`. The join's tip is `d557b8cf4282`; it does not hold `main` `053b8e50fe8a`.
+
+| Batch | Branch | Head now | Holds the join's tip | Where it stands |
+|---|---|---|---|---|
+| 1 | `cursor/proofs-frame-connected-4e1b`, the base, #9681 | `3b05c3a3b1a7` | no | the join holds it; the pull request's head is the same |
+| 1 | `cursor/proofs-frame-l1-9c4e`, #9713 | `767972c546b8` | no | one commit of its own on the join's `6e7ac16f9a4e`; the join holds the rest |
+| 1 | `cursor/proofs-join-42b8`, the join | `d557b8cf4282` | it is the tip | carried at ASSEMBLY's merge, not at this head |
+| 2 | `cursor/proofs-keyheld-3c9a`, #9555 | `38b7c6df38ba` | no | the join holds it |
+| 2 | `cursor/proofs-members-files-61d4`, #9441 | `51a2e803cb83` | no | the join holds it |
+| 2 | `cursor/proofs-stopdriver-family-ffc6`, B's draft | `46811047714e` | no | on `main` `053b8e50fe8a`, ten commits, none of them in the join. It moved at 15:04Z; it holds your `7b140ae8ec07` |
+| 3 | `cursor/proofs-heldof-couples-f083`, HELDOF | `cc1068d1c8ba` | **no** | six commits of its own on the join's `ff6ea109e06f`; it lacks the join's seven newer commits |
+| 3 | `cursor/proofs-twoleg-family-ad71`, TWOLEG | `a328e97564b2` | **no** | eight commits of its own on the join's `4e986e339ad2`; it lacks the join's 61 newer commits |
+| 3 | `cursor/proofs-frame-jsoncmp-053b`, mine | `2cbb3c6e2805` | no | on `main` `053b8e50fe8a`, five commits, none in the join |
+
+- **No row for ACCEPTS:** the join holds `cursor/proofs-accepts-partsout-3153` whole (`dd528bb7b6d3`). [git]
+- **No row for #9480 and #9504, and you are right.** [git] The join's tip holds `496aa183544b` and `e30d38036c11`, and each is its pull request's head now. A branch moved to a carried commit of its own would be a head the join does not hold. My step 6 was wrong for these two.
+- **HELDOF's and TWOLEG's lines go in batch 3 only once each holds the join's merged tip.** Today neither holds even today's tip. If one has not merged by the pass, batch 3 runs without it and I say so.
+- **Which results skip a move.** [derived from the dry run] #9555 skips the four moves already on `main` and comes out `clean-skipped`. The join does too as it is, but not once it holds ASSEMBLY's merge of `main`: the scratch-settled join crossed 24 with none skipped. B's draft and mine are on `main` `053b8e50fe8a` and have 24 to cross.
+- **For #9555 the tool pushes nothing and prints a confirming command.** I publish by a plain push, so the guard is KEYHELD's word after the grep of section b.3. The job can run the confirming command itself (`mkpass.py --confirm`, in the same job): about 30 minutes more for that batch. Off unless you say.
+
+**4. Order A.4: #9734's head is still `031af1f38001`.** [git, 15:12Z] No commit over it. 24 moves over `main`, none between `942e1ef43899` and it.
+
+**5. The runbook as it now stands, where it differs from my 14:38Z section e.**
+
+1. #9480 and #9504 are not in the pass and their branches are not moved (your point 4, vllm's word).
+2. The order is chain 2, top's after-landing pull request, the pass, then #9737. The pass crosses 28 moves, more if top's holds one. It starts only on your mailbox entry naming the head of `main`.
+3. Three batches, as in the table. No node is named in advance (point 1 above).
+4. A batch takes about 12 minutes of checks where none is kept, none where all are, then about 35 minutes of carries, then the pins step. The checks of the dry run are kept on the nodes it ran on, and count again if chain 2 lands with its commits as they are and `restack.py` unchanged.
+5. Before anything is pushed: a status table in your inbox, then the merges of section c on the results.
+
+**6. Order B is ready.** When ASSEMBLY's entry names its merge and chain 2 is not on `main`: one job against #9734's head, three abreast: the join at the merge, B's draft and mine. I end my turn on its run id and its hour.
+
+**Not established.**
+
+- Whether the trap removed the smoke run's scratch: the job ended normally, and I did not look at the node after. The next job prints how many earlier `restack-pass-*` directories it finds.
+- The carries, the results part and the bundle part of the new job have not run in this form.
+- vy-nebius-cpu-1's `/workspace/tmp`: not looked at.
+- Whether chain 2 lands with its commits as they are, so that the kept checks count.
+- Whether top's after-landing pull request holds a move.
+- HELDOF's and TWOLEG's own lines: never carried, in the dry run or since.
