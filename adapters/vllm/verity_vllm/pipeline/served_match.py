@@ -337,7 +337,7 @@ class ServedCommit:
                    "steps_unrun": rep.get("steps_unrun"), "mismatch": rep.get("failures"), "errors": self.src.errors,
                    "why": rep.get("error") or ("every value replays word for word from the committed values" if ok else "see mismatch/errors"),
                    "method": "sampled-exact-replay: the served Build's Program (acquire.served) on the committed values word for word "
-                             "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded draw of "
+                             "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded sample of "
                              "each request's rows; the logits and the sampled ids of every request"}
         linkage = {"result": linked_ok, "pairs": pairs, "unlinked_n": len(unlinked), "linked": pairs - len(unlinked), "unlinked": unlinked[:16],
                    "horizon": horizon, "prompt_linked": prompt_linked, "embed_op_path": SERVED_IDS, "committed_chain": chain,

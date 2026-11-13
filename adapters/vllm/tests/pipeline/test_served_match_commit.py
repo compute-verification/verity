@@ -295,7 +295,7 @@ def _c2(monkeypatch, row: sm.ServedCommit, report: Any, chain: dict[str, Any] = 
 
 
 REPLAY_METHOD = ("sampled-exact-replay: the served Build's Program (acquire.served) on the committed values word for word "
-                 "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded draw of "
+                 "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded sample of "
                  "each request's rows; the logits and the sampled ids of every request")
 LINKAGE_METHOD = ("per (engine step, request): the committed ids are the declared prompt at the request's first step and its "
                   "previous step's sampled id at every later step (served_check inputs); committed sampled(s) == committed ids(s+1)")
