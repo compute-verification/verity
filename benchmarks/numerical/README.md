@@ -82,7 +82,7 @@ casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/sil
   C++ `group_sum` statement for statement -- scan for the maximum exponent from the floor, align each term by
   `(magnitude << rescale) >> (max - exponent)`, sum with signs, `bit_length`, `exponent = max + width - W`, shift to `W` bits,
   denormalise below `-126`, shift back by `rescale`, the two zero rules -- generalised by the `width`, `zero_exponent` and
-  `groups` parameters. `bf16_product` is `multiply_bfloat16_to_gfloat` (same `<< 9`, same `ea or 1`), `pack_fp32` is
+  `groups` parameters. `term.bf16_product` is `multiply_bfloat16_to_gfloat` (same `<< 9`, same `ea or 1`), `term.pack_fp32` is
   `operator float` with saturation to an infinity added where the C++ masks the exponent field, and `tc_dot` adds the sticky
   saturation of an overflowing group (measured on the RTX 4090, not in the simulator). Two representational differences: zero
   terms are skipped in the maximum (the C++ gives every zero the exponent `E_ZERO`, so the maximum is the same), and Python
@@ -135,6 +135,8 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 #   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
 ~~~
 
+### Measured, with no run named here
+
 Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
 1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
 18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); wp1.probe.4090 (SUCCESS,
@@ -173,25 +175,25 @@ record returns to a finite value). Log entry D8.
 
 ## The checker: FP8
 
-`verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
-significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
-break both -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
+`verity_numerical.checker` checks the FP8 step beside BF16's. On BF16 the adder is at least as wide as the accumulator's
+significand (`width >= acc_sig`, 25 >= 24), and one exponent width serves operands and accumulator alike. Hopper/Ada E4M3
+have neither -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
 the grouped add (`verity.definitions.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
 E4M3 has a 4-bit exponent with its own NaN rule (`0x7F`/`0xFF` are the NaNs, `0x7E` = 448 is finite, there are no infinities).
 
-What changed (`python/verity_numerical/checker/`):
+Where (`python/verity_numerical/checker/`):
 
 - `params.py`: `Params` carries the operand format (`sig`, `exp`, `op_nan_rule` in `{"ieee", "e4m3"}`) and the accumulator's
   (`acc_sig`, `acc_exp`, defaulting to `exp`) and admits `width < acc_sig` -- the *lossy* case, with `acc_drop = acc_sig - width`.
   `Params.from_model(model)` derives them from a `GroupSum`; at `AMPERE_BF16_M16N8K16` it is `REAL`. `TOY_LOSSY` is the small
-  lossy instance. Contracts, hint layout and outputs at `REAL` / `TOY` / `TINY` are byte-identical to before (every BF16 test
-  passes unchanged); the census over the checker's contracts is unaffected at `REAL`.
-- `gadgets.py`: one new gadget, `RescaleState` (`M = 2^drop * P + r`, `r < 2^drop`, `P < 2^W`): the truncation of the incoming
+  lossy instance; `REAL`, `TOY` and `TINY` are not lossy.
+- `gadgets.py`: `RescaleState` (`M = 2^drop * P + r`, `r < 2^drop`, `P < 2^W`): the truncation of the incoming
   significand to the adder width, placed before `AlignState` on lossy paths only. `Normalise` produces a `width`-bit magnitude
   and scales it back up exactly (`norm_up`) where the truncation no longer folds into one floor division. `Bf16Decode` (alias
   `OperandDecode`) admits the E4M3 NaN rule through one extra range check; the accumulator gadgets read the `acc_*` widths.
-  No new *family* in `verity_sp1.proofs.families` was needed: the cast-free `veritor.tensor-core.<pipeline>@2` sets already
-  describe the FP8 pipelines' `tc_dot32` / `tc_dot32_0`; the rescale is a gadget of the checker's decomposition of that step.
+  The rescale is no family of its own: the cast-free `veritor.tensor-core.<pipeline>@2` sets (`FP8_HOPPER_FAMILY` and
+  `FP8_ADA_FAMILY` in `verity.definitions.circuits.targets.target`) describe the FP8 pipelines' `tc_dot32` / `tc_dot32_0`, and
+  it is a gadget of the checker's decomposition of that step.
 - `reference.py`, `step.py`, `search.py`: use the split formats; `gen_step` / `check_step_expr` route lossy paths through
   `RescaleState`. `z3_group_step` and the `v2` arithmetisation remain BF16-only and raise `Reject` / `ValueError` when asked
   for a lossy or two-exponent-width configuration rather than answering wrongly.
