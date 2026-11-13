@@ -22,13 +22,28 @@ are then facts about arrays.
   audit and that audit's record (`windowAt_step`). Along `run`'s fold over the windows and their evidence, while no
   audit is undecided, window `i` passed with one audit, made at the records of the windows before it (`FoldGood`,
   `foldGood_step`, `foldlM_prefix`).
-* **Each committed root once** (`committedOnce`): the two together, a window's place being its root's alone
-  (`index_eq_of_nodup`).
+* **Whose each session is** (`registeredIn_ok`). Where `registeredIn` returns, every window is in a period that
+  commits this registration's circuit, every other session of the lane is in a period that commits another, and it
+  returns those, each with its circuit (`othersOf`).
+* **Each root committed under this registration once** (`committedOnce`): the three together. A root the lane
+  committed is a window or an other session, so a period that commits a circuit lists its session; under this
+  registration's circuit it is a window, whose place is its root's alone (`index_eq_of_nodup`).
+* **The others** (`othersElsewhere`): the published others are `othersOf` of the ledger's half's, so each is a root
+  the lane committed under another circuit, each such root is one of them, and none is there twice
+  (`othersOf_nodup`).
+* **The decoder** (`decodedMeans`): `AuditParams.of` reads the ledger's key from the key's JSON it keeps
+  (`paramsOf_key`) and refuses an `audit` that names a key a window sets or leaves unset (`none_of_keys`).
+* **The session audited** (`auditedSession`): `auditedIn` reads the first of the ledger's windows on the window's
+  root (`auditedIn_root`), and the ledger's windows share no root (`wins_inj`), so it is the window's own session.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
+
+open private strOf from Spot.ChallengerSession
 
 namespace Properties.Spot.Period
 
@@ -630,45 +645,114 @@ theorem windowAt_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Ev
 theorem foldlM_spec {α σ ε : Type} (f : σ → α → Except ε σ) (init : σ) (xs : Array α) :
     ⦃⌜True⌝⦄ xs.foldlM f init ⦃⇓? r => ⌜xs.foldlM f init = .ok r⌝⦄ := ok_spec _
 
--- `mvcgen` splits `run` at the ledger's half, the count of the evidence's windows and the fold
+/-- What `registeredIn` returns of the ledger's half's other sessions: each one a period committing a circuit lists,
+by that circuit and its session. -/
+def othersOf (r : Read) (others : Array Session) : Array Other :=
+  others.filterMap fun s =>
+    (registrationOf r s.session).map fun d => ({ registration := d, session := s.session } : Other)
+
+/-- What `registeredIn` checked where it returns: every window is this registration's, every other session of the
+lane is listed by a period that committed another circuit, and it returns those (`othersOf`). -/
+theorem registeredIn_ok {p : AuditParams} {r : Read} {ws : Windows} {os : Array Other}
+    (h : registeredIn p r ws = .ok os) :
+    (∀ w ∈ ws.windows, registrationOf r w.session = some p.registration) ∧
+      (∀ s ∈ ws.others, ∃ d, registrationOf r s.session = some d ∧ d ≠ p.registration) ∧
+      os = othersOf r ws.others := by
+  refine of_triple (Q := fun os => (∀ w ∈ ws.windows, registrationOf r w.session = some p.registration) ∧
+      (∀ s ∈ ws.others, ∃ d, registrationOf r s.session = some d ∧ d ≠ p.registration) ∧
+      os = othersOf r ws.others) ?_ h
+  clear h
+  unfold othersOf
+  mvcgen [registeredIn, -Spec.throw_Except, throw_spec]
+  rename_i _ o1 hn1 hf1 _ o2 hn2 hf2 _ o3 hn3 hf3
+  have h1 := hf1.trans (none_of_forall hn1)
+  have h2 := hf2.trans (none_of_forall hn2)
+  have h3 := hf3.trans (none_of_forall hn3)
+  refine ⟨fun w hw => ?_, fun s hs => ?_⟩
+  · have := Array.find?_eq_none.1 h1 w hw
+    simpa using this
+  · have a := Array.find?_eq_none.1 h2 s hs
+    have b := Array.find?_eq_none.1 h3 s hs
+    cases hd : registrationOf r s.session with
+    | none => simp [hd] at a
+    | some d => exact ⟨d, rfl, fun hdp => by simp [hd, hdp] at b⟩
+
+theorem registeredIn_spec (p : AuditParams) (r : Read) (ws : Windows) :
+    ⦃⌜True⌝⦄ registeredIn p r ws ⦃⇓? os => ⌜registeredIn p r ws = .ok os⌝⦄ := ok_spec _
+
+/-- A session `othersOf` returns is one of the others, under the circuit its period committed. -/
+theorem othersOf_mem {r : Read} {others : Array Session} {o : Other} (ho : o ∈ othersOf r others) :
+    ∃ s ∈ others, registrationOf r s.session = some o.registration ∧ o.session = s.session := by
+  obtain ⟨s, hs, hso⟩ := Array.mem_filterMap.1 ho
+  obtain ⟨d, hd, rfl⟩ := Option.map_eq_some_iff.1 hso
+  exact ⟨s, hs, hd, rfl⟩
+
+/-- Each of the others that a period committing a circuit lists is returned by `othersOf`, under that circuit. -/
+theorem mem_othersOf {r : Read} {others : Array Session} {s : Session} {d : String} (hs : s ∈ others)
+    (hd : registrationOf r s.session = some d) : (⟨d, s.session⟩ : Other) ∈ othersOf r others :=
+  Array.mem_filterMap.2 ⟨s, hs, by rw [hd]; rfl⟩
+
+theorem filterMap_map_sublist {α β γ : Type} (f : α → Option β) (g : β → γ) (k : α → γ)
+    (h : ∀ a b, f a = some b → g b = k a) (l : List α) : ((l.filterMap f).map g).Sublist (l.map k) := by
+  induction l with
+  | nil => exact List.Sublist.slnil
+  | cons a l ih =>
+    cases hfa : f a with
+    | none =>
+      rw [List.filterMap_cons_none hfa, List.map_cons]
+      exact ih.cons _
+    | some b =>
+      rw [List.filterMap_cons_some hfa, List.map_cons, List.map_cons, h a b hfa]
+      exact ih.cons_cons _
+
+/-- `othersOf` returns no session twice where the others hold none twice. -/
+theorem othersOf_nodup {r : Read} {others : Array Session} (h : (others.toList.map (·.session)).Nodup) :
+    ((othersOf r others).toList.map (·.session)).Nodup := by
+  unfold othersOf
+  rw [Array.toList_filterMap]
+  refine List.Sublist.nodup (filterMap_map_sublist _ _ _ (fun a b hab => ?_) _) h
+  obtain ⟨d, -, rfl⟩ := Option.map_eq_some_iff.1 hab
+  rfl
+
+-- `mvcgen` splits `run` at the ledger's half, whose each session is, the count of the evidence's windows and the fold
 set_option maxHeartbeats 4000000 in
-/-- What `run` read where it returns: the ledger's half's sessions and windows, as many windows' evidence, and the
-fold of `windowAt` over the windows with their evidence, from the empty state. -/
+/-- What `run` read where it returns: the ledger's half's sessions and windows, whose each session is, as many
+windows' evidence, and the fold of `windowAt` over the windows with their evidence, from the empty state. -/
 theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
-    {x : Windows × Progress} (h : _root_.Spot.Period.run inner p c e bs = .ok x) :
-    ∃ r, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok x.1 ∧
-      e.windows.size = x.1.windows.size ∧
+    {x : Array Other × Progress} (h : _root_.Spot.Period.run inner p c e bs = .ok x) :
+    ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧ registeredIn p r ws = .ok x.1 ∧
+      e.windows.size = ws.windows.size ∧
       ∃ f : Progress → Window × WindowEvidence → Except (Code × String) Progress,
-        (x.1.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
+        (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
         ∀ st w ev, f st (w, ev) = windowAt inner p r c.ledger e.pins bs st w ev := by
-  refine of_triple (Q := fun x => ∃ r, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok x.1 ∧
-      e.windows.size = x.1.windows.size ∧
+  refine of_triple (Q := fun x => ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧
+      registeredIn p r ws = .ok x.1 ∧ e.windows.size = ws.windows.size ∧
       ∃ f : Progress → Window × WindowEvidence → Except (Code × String) Progress,
-        (x.1.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
+        (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
         ∀ st w ev, f st (w, ev) = windowAt inner p r c.ledger e.pins bs st w ev) ?_ h
   clear h
   mvcgen [_root_.Spot.Period.run, -Spec.throw_Except, throw_spec, -Spec.foldlM_array, foldlM_spec, read_spec,
-    windowsIn_spec]
-  all_goals exact ⟨_, by assumption, by assumption, beq_iff_eq.1 (by assumption), _, by assumption,
-    fun _ _ _ => rfl⟩
+    windowsIn_spec, registeredIn_spec]
+  all_goals exact ⟨_, _, by assumption, by assumption, by assumption, beq_iff_eq.1 (by assumption), _,
+    by assumption, fun _ _ _ => rfl⟩
 
-/-- What `checkWith` ran where it accepts: `run` returned, with no audit undecided, and the period publishes the
-windows it passed with the lane's other sessions. -/
+/-- What `checkWith` ran where it accepts: `run` returned, with no audit undecided, and the period publishes this
+registration's circuit and the windows it passed, with the lane's sessions that are other registrations'. -/
 theorem checkWith_accept {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : Public} {prof : Array Core.Integrity} (h : checkWith inner p c e bs = .accept pub prof) :
-    ∃ ws st, _root_.Spot.Period.run inner p c e bs = .ok (ws, st) ∧ st.undecided = none ∧
-      pub = { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop, windows := st.passed,
-              others := ws.others } ∧
+    ∃ others st, _root_.Spot.Period.run inner p c e bs = .ok (others, st) ∧ st.undecided = none ∧
+      pub = { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop,
+              registration := p.registration, windows := st.passed, others := others } ∧
       prof = st.passed.flatMap fun x => x.audits.map (·.profile) := by
   unfold checkWith at h
   split at h
   · cases h
-  · rename_i ws st hrun
+  · rename_i others st hrun
     split at h
     · cases h
     · rename_i hund
       cases h
-      exact ⟨ws, st, hrun, hund, rfl, rfl⟩
+      exact ⟨others, st, hrun, hund, rfl, rfl⟩
 
 /-- What the check's state `st` holds once it has read the windows and evidence `pre`, with no audit undecided:
 one passed window and one record for each, and window `i` passed with one audit, the check's at that window after
@@ -729,10 +813,9 @@ theorem foldInv_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evi
 /-- **What the period's check accepts** (`Properties.Spot.Period.AcceptMeans`). -/
 theorem acceptMeans : AcceptMeans := by
   intro inner p c e bs pub prof h
-  obtain ⟨ws, st, hrun, hund, hpub, hprof⟩ := checkWith_accept h
-  obtain ⟨r, hr, hw, hsize, f, hfold, hf⟩ := run_ok hrun
-  have hw' : windowsIn p.ledger r = .ok ws := hw
-  have hsize' : e.windows.size = ws.windows.size := hsize
+  obtain ⟨others, st, hrun, hund, hpub, hprof⟩ := checkWith_accept h
+  obtain ⟨r, ws, hr, hw, hreg, hsize, f, hfold, hf⟩ := run_ok hrun
+  have hreg' : registeredIn p r ws = .ok others := hreg
   have hfold' : (ws.windows.zip e.windows).toList.foldlM f ({} : Progress) = .ok st := by
     rw [Array.foldlM_toList]
     exact hfold
@@ -770,7 +853,7 @@ theorem acceptMeans : AcceptMeans := by
   subst hpub
   subst hprof
   dsimp only
-  refine ⟨rfl, rfl, rfl, r, ws, hr, hw', ?_, rfl, hsize', rfl, st.before, hbs.trans hps.symm, fun i hi => ?_⟩
+  refine ⟨rfl, rfl, rfl, rfl, r, ws, hr, hw, hreg', ?_, hsize, rfl, st.before, hbs.trans hps.symm, fun i hi => ?_⟩
   · refine Array.ext (by rw [Array.size_map]; exact hpsz) fun i h1 h2 => ?_
     rw [Array.getElem_map]
     obtain ⟨_, _, a, record, h3, -, -⟩ := hat i (by rw [Array.size_map] at h1; exact h1)
@@ -780,21 +863,38 @@ theorem acceptMeans : AcceptMeans := by
     rw [h1]
     exact h3
 
-/-- **Each root committed on a session with the sample's family is one published window, with one audit entry**
+/-- **Every root committed under this registration is one published window, with one audit entry**
 (`Properties.Spot.Period.CommittedOnce`). -/
 theorem committedOnce : CommittedOnce := by
   intro inner p c e bs pub prof h
-  obtain ⟨-, -, -, r, ws, hr, hw, hmap, hoth, -, -, records, -, haud⟩ := acceptMeans inner p c e bs pub prof h
+  obtain ⟨-, -, -, -, r, ws, hr, hw, hreg, hmap, -, -, records, -, haud⟩ := acceptMeans inner p c e bs pub prof h
+  obtain ⟨hwin, hoth, -⟩ := registeredIn_ok hreg
   have hwo : windowsOf p.ledger c.ledger = .ok ws := by
     unfold windowsOf
     exact bind_ok.2 ⟨r, hr, hw⟩
   obtain ⟨wins, periods, hck, hreach, hcom, hwins, -, -, hroots, -, -⟩ := ledgerMeans p.ledger c.ledger ws hwo
+  obtain ⟨hck', -⟩ := read_ok hr
+  have hwe : wins = r.wins := (Prod.mk.inj (Except.ok.inj (hck.symm.trans hck'))).1
+  subst hwe
   have hsz : pub.windows.size = ws.windows.size := by
     rw [← hmap, Array.size_map]
   have hget : ∀ j (hj : j < pub.windows.size) (hj' : j < ws.windows.size),
       pub.windows[j].window = ws.windows[j] := fun j hj hj' => getElem_of_map_eq hmap j hj hj'
-  refine ⟨(wins, periods), hck, hreach, fun x hx hC hS => ?_, fun x hx hC hS => ?_, fun w hw => ?_⟩
-  · obtain ⟨w, hwm, hwr, hws⟩ := (hcom x hx hC).1 hS
+  refine ⟨r, hr, hck', hreach, fun x hx hC => ⟨?_, fun hthis => ?_⟩, fun w hw => ?_⟩
+  · by_cases hS : Sampled p.ledger x
+    · obtain ⟨w, hwm, -, hws⟩ := (hcom x hx hC).1 hS
+      exact ⟨p.registration, by rw [← hws]; exact hwin w hwm⟩
+    · obtain ⟨s, hs, -, hss⟩ := (hcom x hx hC).2 hS
+      obtain ⟨d, hd, -⟩ := hoth s hs
+      exact ⟨d, by rw [← hss]; exact hd⟩
+  · have hS : Sampled p.ledger x := by
+      by_cases hS : Sampled p.ledger x
+      · exact hS
+      · obtain ⟨s, hs, -, hss⟩ := (hcom x hx hC).2 hS
+        obtain ⟨d, hd, hne⟩ := hoth s hs
+        rw [hss, hthis] at hd
+        exact (hne (Option.some.inj hd).symm).elim
+    obtain ⟨w, hwm, hwr, hws⟩ := (hcom x hx hC).1 hS
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hwm
     have hi' : i < pub.windows.size := by rw [hsz]; exact hi
     obtain ⟨we, a, record, -, ha, -, -⟩ := haud i hi'
@@ -806,30 +906,43 @@ theorem committedOnce : CommittedOnce := by
     · have hj' : j < ws.windows.size := by rw [← hsz]; exact hj
       rw [hget j hj hj'] at hjr
       exact index_eq_of_nodup (List.nodup_append.1 hroots).1 hj' hi (hjr.trans hwr.symm)
-  · obtain ⟨s, hs, hsr, hss⟩ := (hcom x hx hC).2 hS
-    exact ⟨s, by rw [hoth]; exact hs, hsr, hss⟩
   · obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hw
     have hj' : j < ws.windows.size := by rw [← hsz]; exact hj
     obtain ⟨x, hx, hC, hS, hxr, hxs, -⟩ := hwins ws.windows[j] (Array.getElem_mem hj')
-    exact ⟨x, hx, hC, hS, by rw [hget j hj hj']; exact hxr, by rw [hget j hj hj']; exact hxs⟩
+    exact ⟨x, hx, hC, hS, by rw [hxs]; exact hwin _ (Array.getElem_mem hj'), by rw [hget j hj hj']; exact hxr,
+      by rw [hget j hj hj']; exact hxs⟩
 
-/-- **With no other session published, every root the lane committed is audited**
-(`Properties.Spot.Period.EveryRootAudited`). -/
-theorem everyRootAudited : EveryRootAudited := by
-  intro inner p c e bs pub prof h hnone
-  obtain ⟨-, -, -, r, ws, hr, -, -, -, -, -, records, hrec, haud⟩ := acceptMeans inner p c e bs pub prof h
-  obtain ⟨hck, -⟩ := read_ok hr
-  obtain ⟨wp, hck', hreach, hsam, hoth, -⟩ := committedOnce inner p c e bs pub prof h
-  have hwp : wp = (r.wins, r.periods) := Except.ok.inj (hck'.symm.trans hck)
-  rw [hwp] at hsam hoth
-  refine ⟨r, hr, hck, hreach, records, hrec, fun x hx hC => ?_⟩
-  by_cases hS : Sampled p.ledger x
-  · obtain ⟨i, hi, hroot, hses, -, huniq⟩ := hsam x hx hC hS
-    obtain ⟨we, a, record, hwe, ha, hrc, hA⟩ := haud i hi
-    exact ⟨i, hi, hroot, hses, huniq, we, a, record, hwe, ha, hrc, hA⟩
-  · obtain ⟨s, hs, -⟩ := hoth x hx hC hS
-    rw [hnone] at hs
-    simp at hs
+/-- **The published others are exactly the roots the lane committed under another circuit**
+(`Properties.Spot.Period.OthersElsewhere`). -/
+theorem othersElsewhere : OthersElsewhere := by
+  intro inner p c e bs pub prof h
+  obtain ⟨-, -, -, -, r, ws, hr, hw, hreg, -⟩ := acceptMeans inner p c e bs pub prof h
+  obtain ⟨hwin, hoth, hpo⟩ := registeredIn_ok hreg
+  have hwo : windowsOf p.ledger c.ledger = .ok ws := by
+    unfold windowsOf
+    exact bind_ok.2 ⟨r, hr, hw⟩
+  obtain ⟨wins, periods, hck, -, hcom, -, hothers, -, -, hses, -⟩ := ledgerMeans p.ledger c.ledger ws hwo
+  obtain ⟨hck', -⟩ := read_ok hr
+  have hwe : wins = r.wins := (Prod.mk.inj (Except.ok.inj (hck.symm.trans hck'))).1
+  subst hwe
+  refine ⟨r, hr, fun x hx hC d hd hne => ?_, fun o ho => ?_, ?_⟩
+  · by_cases hS : Sampled p.ledger x
+    · obtain ⟨w, hwm, -, hws⟩ := (hcom x hx hC).1 hS
+      have hthis := hwin w hwm
+      rw [hws, hd] at hthis
+      exact (hne (Option.some.inj hthis)).elim
+    · obtain ⟨s, hs, -, hss⟩ := (hcom x hx hC).2 hS
+      refine ⟨⟨d, s.session⟩, ?_, rfl, hss⟩
+      rw [hpo]
+      exact mem_othersOf hs (by rw [hss]; exact hd)
+  · rw [hpo] at ho
+    obtain ⟨s, hs, hsd, hos⟩ := othersOf_mem ho
+    obtain ⟨d, hd, hne⟩ := hoth s hs
+    obtain ⟨x, hx, hC, -, -, hxs⟩ := hothers s hs
+    have hdo : d = o.registration := Option.some.inj (hd.symm.trans hsd)
+    refine ⟨by rw [← hdo]; exact hne, x, hx, hC, by rw [hxs]; exact hsd, by rw [hos]; exact hxs⟩
+  · rw [hpo]
+    exact othersOf_nodup (List.nodup_append.1 hses).2.1
 
 /-! ## The decoder -/
 
@@ -875,12 +988,6 @@ theorem decodedMeans : DecodedMeans := by
 
 /-! ## The session audited at a window -/
 
-section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
-
-open private strOf from Spot.ChallengerSession
-
 -- `mvcgen` splits `auditedIn` into one goal per check it makes of the window and its `end`
 set_option maxHeartbeats 4000000 in
 /-- `auditedIn` reads the session of the first of the ledger's windows whose root is the one the caller names. -/
@@ -903,8 +1010,6 @@ theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {ro
   rw [getD_root] at hfind
   exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 (Array.find?_some hfind), hses⟩
 
-end
-
 /-- **The session audited at a window is the window's** (`Properties.Spot.Period.AuditedSession`). -/
 theorem auditedSession : AuditedSession := by
   intro p ledger r ws w au opened hr hw hmem ha
@@ -914,6 +1019,7 @@ theorem auditedSession : AuditedSession := by
   obtain ⟨r', stop, sampled, hr', -, hR⟩ := returned_of hwo
   have hrr : r' = r := Except.ok.inj (hr'.symm.trans hr)
   rw [hrr] at hR
+  obtain ⟨s, hs, hwr, hws, -⟩ := hR.sampled_of_window hmem
   obtain ⟨win, hwin, hroot, hses⟩ := auditedIn_root ha
   obtain ⟨x, hx, -, hxr, hxs, -, -⟩ := hR.win_of_session (hR.mem_sampled.1 hs).1
   have hxw : win = x := wins_inj hR.dist hwin hx (Or.inl (hroot.trans (hwr.trans hxr.symm)))

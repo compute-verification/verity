@@ -11,8 +11,9 @@ public import Proofs.Properties.Challenger.Lines
 says what a line of the device's own ledger says, or the finder outputs a break (`read_lines`, `Lines.line_at`,
 `ledgerLinesOfDevice`).
 
-Two entries whose texts without their `sig` agree have one number (`Lines.seq_of_text`). So where the device
-numbers its lines, its line that says what presented line `i` says is its line `i` (`ledgerOfDevice`).
+Two entries whose texts without their `sig` agree have one number (`Lines.seq_of_text`). So where each entry of the
+device's ledger is the line at its own number, its line that says what presented line `i` says is its line `i`
+(`ledgerOfDevice`).
 -/
 
 @[expose] public section
@@ -64,11 +65,9 @@ theorem ledgerOfDevice : LedgerOfDevice := by
           unsignedText own = some s := by
       intro i line hi
       obtain ⟨e, s, own, e', hle, hei, hs, hown, he', hs'⟩ := line_at (dev := dev) hlines hseq hsig hb hi
-      obtain ⟨j, hj⟩ := List.getElem?_of_mem hown
-      obtain ⟨e'', he'', hj'⟩ := hnum j own hj
-      have hee : e'' = e' := Option.some.inj (he''.symm.trans he')
-      have hij : i = j := by
-        rw [← hei, ← hj', hee]
+      have hj := hnum own hown e' he'
+      have hij : i = e'.seq := by
+        rw [← hei]
         exact seq_of_text hle he' hs hs'
       exact ⟨own, s, by rw [hij]; exact hj, unsignedText_eq hle hs, unsignedText_eq he' hs'⟩
     refine .inl ⟨lines, rfl, hreach, ?_, fun line hl => ?_, ?_⟩
