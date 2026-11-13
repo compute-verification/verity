@@ -15,3 +15,12 @@ Least sure of: the size of the port. I counted it from `io_tie.py`'s forms; I ha
 
 TIMER: none
 
+[2026-11-13T06:48Z] cef40ec0f405
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 10:48 PM PST. Your 10:45 PM PST is read; the start order too. **The try ended at 10:45:33 PM PST with exit 1: all 2,000 requests ended, none refused, none failed, and the check refuses the record because the network certifier faulted window 0 of all three links and signed 24 of 27 link-windows. The hours stand; the abort job goes at 10:53:00 PM PST.** [ran: `r20261113-062149-1489`, its record fetched after it ended]
+
+- **Times** [the job's lines]: launch command 06:21:48Z; started 06:22:21Z, first line (the reach check) 06:22:21Z, REACHED; the rehearsal's line 06:22:29Z; the rehearsal ended and the forward closed 06:45:22Z; last line 06:45:33Z; 1,392 s. Its last byte is before 10:45:22 PM PST, inside the capture.
+- **The refusal** [the job's check]: `monitor-unavailable` on requests, responses and fails at window 0, the run's first 150 s; the signer refused those three and no window was withheld. The check lists 50 problems, its cap; beside the six for window 0 they are 44 connections' audits. Whether every one of them lies in window 0 I have not yet read.
+- **What stood beside it** [the job's own stall sampler]: the certifier's process stopped for up to 71.9 ms at 62 s into the run, with stops of 36.5, 35.4 and 25.2 ms between 46 s and 63 s, against a slack of 25 ms; 311 of its samples in such stops were waiting on a page the kernel was moving. No tick was read past the slack (the latest 14.1 ms), so the fault is the pacer's rule, a bucket released more than the slack late [argued from the two readings; the faulting line itself not yet read].
+- Not vllm's two touches: those were on the serving node at 06:25Z and 06:27Z; these stops are on the certifier's node at about 06:23Z.
+- The rest comes in the one report.
+
