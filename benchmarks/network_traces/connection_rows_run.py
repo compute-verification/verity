@@ -54,10 +54,11 @@ longest request and most ids, until the classes' rows, the lengths table's slots
 carry in an execution phase are used up; with `--load rows`, every row of every class, whether or not a grid carries
 that much. `--lengths` is the lengths rows' form, 1 by default. Under 2 the classes are `P,O`, the default ones the
 same sizes, and an execution phase holds at most R = `WardenParams.phase_releases` releases over all the classes:
-`--load grid` stops there too, and `--load rows` is R releases of the one class whose rows are the most bytes, the
-costliest close the schedule has. With `--request-words` (under `--lengths 2`) the schedule has request words
-under the greatest response cap it takes, and each release's request is the canonical id request of its class's
-most prompt ids, which the publisher's build reads the words of. It then times, over `--phases` execution phases: the device's own hand of it to
+`--load grid` stops there too, and `--load rows` is R releases of the one class whose rows are the most bytes, each
+its longest request and most ids: a ceiling, whether or not an execution phase releases that much. With
+`--request-words` (under `--lengths 2`) the schedule has request words under the greatest response cap it takes, and
+each release's request is the canonical id request of its class's most prompt ids, which the publisher's build
+reads the words of. It then times, over `--phases` execution phases: the device's own hand of it to
 `warden_serve`'s publisher process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result

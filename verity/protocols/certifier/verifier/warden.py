@@ -325,7 +325,9 @@ class WardenParams:
         its connection's admission, so an execution phase's releases are of connections admitted in T +
         `ingress_buckets` − 1 buckets in a row; and a connection holds its lane through its admission's bucket + D,
         so the connections admitted in any D + 1 buckets in a row are live together, at most `lanes` of them. It is
-        a bound: at some schedules a load releases R in an execution phase, and at others none does."""
+        a bound: at some schedules a load releases R in an execution phase, and at others none does. It does not
+        use that the device releases no request in its admission's bucket, so it may count one bucket more than a
+        load can reach."""
         return self.lanes * -(-(self.window + self.ingress_buckets - 1) // (self.delay + 1))
 
     @property

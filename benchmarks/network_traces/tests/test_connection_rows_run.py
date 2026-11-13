@@ -605,11 +605,12 @@ COSTED_LOADS = {"grid": (90, 1195378), "rows": (96, 1360768)}
 def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_execution_phases(tmp_path):
     """Without `--lengths` the cost command measures the schedule and the load it measured before it took the flag,
     held to that digest and those loads. With `--lengths 2` the default classes are the same sizes, each (P, O), and
-    the schedule another. Its `rows` load is the costliest close the schedule has: R = `phase_releases` releases, all
-    of the class whose rows are the most bytes, each its longest request and most ids. Its `grid` load is the
-    classes in turn and no more than R releases or than the grids carry. At a small schedule the close hands
-    execution phase 0 alone, and its tables are the lengths and fails tables' and the one class's R rows three
-    times, the other class's of no row; a class of the other form's numbers is refused by the schedule."""
+    the schedule another. Its `rows` load is a ceiling, whether or not an execution phase releases that much: R =
+    `phase_releases` releases, all of the class whose rows are the most bytes, each its longest request and most
+    ids. Its `grid` load is the classes in turn and no more than R releases or than the grids carry. At a small
+    schedule the close hands execution phase 0 alone, and its tables are the lengths and fails tables' and the one
+    class's R rows three times, the other class's of no row; a class of the other form's numbers is refused by the
+    schedule."""
     default = crr.costed(crr.parser().parse_args(["cost", "--out", "x"]))
     assert (default.lengths, default.content, default.digest.hex()) == (1, crr.CLASSES, COSTED_DIGEST)
     for load, (releases, handed) in COSTED_LOADS.items():
