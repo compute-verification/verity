@@ -110756,3 +110756,32 @@ Not established: that the file elaborates.
 - [derived] The READY line for #9373 comes when `7cde` ends and `522c` has run; no Lean file differs between the two closes, so `7cde`'s verdict is the new close's.
 
 **Elsewhere.** [run] `859f` (#9237's quick tier) has been in vy-nebius-2's line since 00:27Z; at 00:43Z I move it to vy-nebius-cpu-11 as your split says.
+
+## PERIODREAD, Fri 00:42Z: PR 2's Lean build and its 24 difftests pass; two quick tiers have waited 80 and 49 minutes on vy-nebius-2 without starting; the whole proofs file for `CommittedOnce` is written and pushed, never compiled, and its first try is in line
+
+Mailbox read by git at `23c3e423be` (00:30Z; last heading "Fri 13 Nov 00:23Z: where to send your next Lean try"). I can pause: yes, everything below is pushed.
+
+**Machine and waits (your 00:23Z ask), all vy-nebius-2:**
+- `r20261112-232219-e334` (PR 2: Lean build + difftests): done rc 0, 3922.7 s wall, of which about 60 min waiting for a place and a tree. [run]
+- `r20261112-231708-ddb2` (#9537's records): launched 23:17Z, took Lean slot `build/4` at 00:04Z (47 min in line), running, 65 GiB. [run: `research status` 00:40Z]
+- `r20261112-232219-a005` (PR 2's quick tier, no Lean): waiting since 23:22Z, 80 min, not started. [run]
+- `r20261112-235319-090e` (#9546's quick tier, no Lean): waiting since 23:53Z, 49 min, not started. [run]
+- `r20261113-004124-1ca7` (PR 4: `--try` of the proofs file, then `--build` of `PeriodLedger.lean` and `Challenger/Window.lean`): launched 00:41Z, 16 GB, `--timeout 3600`. It is my second run that will want a tree there while `ddb2` holds one; your rule says one try at a time, and `ddb2` is a records run, not a try, so I sent it. If you read the rule as one tree, say so and I cancel it. If it has not started by 00:57Z I cancel it and resend `--on vy-nebius-cpu-11`.
+- The two quick tiers are not Lean tries, so I have not moved them. **Ask:** may I cancel `a005` and `090e` and resend them to vy-nebius-cpu-11 too? They gate PR 2's opening and #9546's ready line and have done nothing for over an hour.
+
+**Results.**
+- PR 2 (`cursor/proofs-prf600-period-audit-9c4e` at `5dacc95eab9e`): `LEAN-BUILD exit 0` (501 jobs, `sampled-proofs-difftest` built), `24 passed in 128.52s`, `PYTEST exit 0`. [run `e334`] Not opened: waits for `a005`.
+- `Numbered`: your 00:17Z word says PR 3's docstring already holds the sentence that it goes when the device's definition carries the numbering. It did not [read: `security/Properties/Spot/PeriodLedger.lean` at `7d…` before this commit]. I added it: PR 3's branch `cursor/proofs-prf600-period-statements-e2a7` is now at `f2889fd3ce`. No statement changed, only the docstring.
+- PR 4 (`cursor/proofs-prf600-period-proofs-4c9a` at `012683ee8f`, pushed): `security/Proofs/Properties/Spot/Period.lean`, 838 lines, with `ledgerMeans : LedgerMeans`, `acceptMeans : AcceptMeans`, `committedOnce : CommittedOnce`, and its root in `security/Proofs/lakefile.toml`. `modules.py --check` passes. [run on the VM: rc 0] **Nothing in it has been elaborated.**
+
+**How the proof goes** [derived, from the code and statements as read]: `read`, `windowsIn`, `caseAt`, `windowAt` and `run` are each read back with `mvcgen` into a plain statement of what an `.ok` return means (as `checked_ok` does for the ledger); `windowsOf`'s return gives a structure `Returned` (ledger checked, reaches the period's end, sessions pairwise distinct, sampled windows and others are the two halves of the sessions by `period ∈ periods`); `LedgerMeans` is read off it; `run`'s fold carries an invariant (the first `i` passed windows are the first `i` sampled windows, each with one audit that holds `AuditedAt` against the records before it); `AcceptMeans` is that invariant at the end; `CommittedOnce` is both, with "exactly once" from the roots' `Nodup`.
+
+**Two things you should know before they surprise you:**
+1. `Array.partition` has no lemma in core, Batteries or Mathlib, and its body is not exposed. The file proves `partition_toList` itself, with `import all Init.Data.Array.Basic` and an `mvcgen` invariant (core's own pattern in `Std/Data/String/ToNat.lean`). If that fails twice, the other way is to write `windowsIn` with two `filter`s, which is a change to PR 2's verifier code and reruns PR 2's build and difftests. I say before doing it.
+2. The file imports `Proofs.Flock.Soundness.Discharge.Exec.Setup` privately for `array_mapM_ok_getElem` rather than proving it again. Its import closure is wide; if the slot's tree has it stale, the first try pays for that build.
+
+**`CommittedOnce`'s hour:** stays Fri 22:00Z for now. It moves earlier only when the first try shows how far the file is from elaborating; I say at Fri 04:00Z as promised.
+
+**Heads pushed:** #9537 `44b84839217d`; PR 2 `5dacc95eab9e`; PR 3 `f2889fd3ce`; PR 4 `012683ee8f`; #9546 `ee245a981c3e`; scratch `cursor/proofs-prf600-periodread-scratch-0b7e` `8e8b7ef7a8`. Unpushed: nothing but scratch under `/tmp/periodread` (launch logs, bodies already on the scratch branch).
+
+**Not established:** that any line of PR 4's proofs file elaborates; that PR 3's two statement files elaborate at `f2889fd3ce` (the docstring edit only; they elaborated at the head before it only in part: `Period.lean` yes [run `2771` never ran; earlier run in my 22:44Z entry], `PeriodLedger.lean` not yet); `line_of_device` in `Window.lean`; #9537's records (`ddb2` running); both quick tiers. Still unanswered from 23:54Z: may I run `lean` on the VM on a core-only scratch file (no Mathlib, under 1 GB, seconds)? It would have let me test `partition_toList` now instead of in line.
