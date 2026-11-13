@@ -20,6 +20,9 @@ from rep 0's end to rep 1's front.
 
     VERITY_REPROUNDS_DIR=FORM_DIR python3 tools/verity/lean/lean_changed.py --try FILE
 
+With `VERITY_REPROUNDS_RENUMBER` set, one pass only: `Flock.Zk.verify` on the same two uneven splits with each round's
+own number `k` set to its place in its stream, so the record's reader takes them and a later line has to refuse.
+
 The blobs are taken under the digests `blobs.txt` lists, not hashed here.
 -/
 
@@ -74,7 +77,11 @@ def reshape (record : String) (a b : String) (f : Array Json → Array Json → 
     (streams[ib]!.setObjVal! "rounds" (Json.arr rb'))
   pure (j.setObjVal! "streams" (Json.arr streams')).compress
 
-def template (verify : Bool) (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledTwo.Params)
+/-- The rounds `rs`, each round's own number `k` set to its place among them. -/
+def renumber (rs : Array Json) : Array Json :=
+  (Array.range rs.size).map fun i => rs[i]!.setObjVal! "k" (Lean.toJson i)
+
+def template (verify renum : Bool) (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledTwo.Params)
     (e : VStar.Recursive.SampledTwo.Evidence) (t : Nat) : IO Unit := do
   let some x := stmtAtCase k t | say t0 s!"template {t}: the case gives no session statement"
   say t0 s!"template {t}: session statement of {x.length} bytes"
@@ -93,15 +100,19 @@ def template (verify : Bool) (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledT
   | none => say t0 s!"template {t}: sessionMsgs: none"
   if !verify then return
   let tabs := FlockDeploy.tabsOf sts
-  say t0 s!"template {t}: Zk.verify, the record as kept: {verdict (Flock.Zk.verify spec tabs record proofs)}"
   let names := spec.repStreams.map (·.2.2)
   if names.size != 2 then die s!"template {t}: {names.size} rep streams, not two"
   let (a, b) := (names[0]!, names[1]!)
-  let same ← reshape record a b fun ra rb => (ra, rb)
-  say t0 s!"template {t}: Zk.verify, re-serialized: {verdict (Flock.Zk.verify spec tabs same proofs)}"
+  if !renum then
+    say t0 s!"template {t}: Zk.verify, the record as kept: {verdict (Flock.Zk.verify spec tabs record proofs)}"
+    let same ← reshape record a b fun ra rb => (ra, rb)
+    say t0 s!"template {t}: Zk.verify, re-serialized: {verdict (Flock.Zk.verify spec tabs same proofs)}"
+  let fix : Array Json × Array Json → Array Json × Array Json :=
+    fun q => if renum then (renumber q.1, renumber q.2) else q
+  let tag : String := if renum then ", each round renumbered to its place" else ""
   let cases : List (String × (Array Json → Array Json → Array Json × Array Json)) :=
-    [("one round from rep 1's front to rep 0's end", fun ra rb => (ra.push rb[0]!, rb.extract 1 rb.size)),
-     ("one round from rep 0's end to rep 1's front", fun ra rb => (ra.pop, #[ra.back!] ++ rb))]
+    [("one round from rep 1's front to rep 0's end" ++ tag, fun ra rb => fix (ra.push rb[0]!, rb.extract 1 rb.size)),
+     ("one round from rep 0's end to rep 1's front" ++ tag, fun ra rb => fix (ra.pop, #[ra.back!] ++ rb))]
   for (what, f) in cases do
     let r ← reshape record a b f
     match FlockDeploy.liveOf spec r with
@@ -109,26 +120,30 @@ def template (verify : Bool) (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledT
     | .error err => say t0 s!"template {t}: {what}: liveOf refused: {err}"
     say t0 s!"template {t}: {what}: Zk.verify: {verdict (Flock.Zk.verify spec tabs r proofs)}"
 
-def main (verify : Bool) (args : List String) : IO UInt32 := do
+def main (verify renum : Bool) (args : List String) : IO UInt32 := do
   let [dir] := args | IO.eprintln "usage: RepRoundsProbe.lean FORM_DIR" *> pure 2
-  say 0 s!"pass: {if verify then "the verdicts" else "the counts"}"
+  let pass : String := if verify then "the verdicts" else "the counts"
+  let only : String := if renum then ", the renumbered splits only" else ""
+  say 0 s!"pass: {pass}{only}"
   let t0 ← IO.monoMsNow
   let k ← readCase dir
   say t0 s!"read the case: {k.blobs.entries.size} blobs"
   let (p, e) ← ofO "formOf" (formOf k)
   say t0 s!"templates {p.circuits.size}, stmts {e.stmts.size}, statements {e.statements.size}"
   for t in List.range p.circuits.size do
-    template verify t0 k p e t
+    template verify renum t0 k p e t
   pure 0
 
 end Verity.SampledTwo.RepRoundsProbe
 
 #eval show IO Unit from do
   if let some a := (← IO.getEnv "VERITY_REPROUNDS_DIR") then
-    let rc ← Verity.SampledTwo.RepRoundsProbe.main false [a]
-    if rc != 0 then throw (IO.userError s!"RepRoundsProbe: exit {rc}")
+    if (← IO.getEnv "VERITY_REPROUNDS_RENUMBER").isNone then
+      let rc ← Verity.SampledTwo.RepRoundsProbe.main false false [a]
+      if rc != 0 then throw (IO.userError s!"RepRoundsProbe: exit {rc}")
 
 #eval show IO Unit from do
   if let some a := (← IO.getEnv "VERITY_REPROUNDS_DIR") then
-    let rc ← Verity.SampledTwo.RepRoundsProbe.main true [a]
+    let renum := (← IO.getEnv "VERITY_REPROUNDS_RENUMBER").isSome
+    let rc ← Verity.SampledTwo.RepRoundsProbe.main true renum [a]
     if rc != 0 then throw (IO.userError s!"RepRoundsProbe: exit {rc}")
