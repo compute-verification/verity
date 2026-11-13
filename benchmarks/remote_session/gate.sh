@@ -6,13 +6,18 @@
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
 #          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
-#          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
-#          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
+#          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
+#          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
+#          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
-#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
+#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after;
+#          with BIND=0 no `--model`, so the period signs no model and the auditor's line finds none to bind the store to.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
-#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
-#          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, and with BIND=1, the default, MODEL with ENGINES arenas of
+#          ARENA_BLOCKS: the store bound to MODEL's pinned checkpoint); its `status` every 30 s until it ends, then the
+#          run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc. BIND=0 asks for a
+#          run that binds the store to no model: the verifier holds no checkpoint, and the store is the developer's
+#          choice. BIND other than 0 or 1 is refused (exit 2) before any request, whatever the VERB.
 #          With SESSIONS the request asks for that many sessions of one coin a window in place of PACED's paced ones:
 #          WINDOWS windows of WINDOW_MS, SAMPLES openings a window (each the verifier's own default where unset). The
 #          host's run takes one form, so SESSIONS beside PACED or PACE_PASS_MS, or one of the three without SESSIONS, is
@@ -29,9 +34,14 @@
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
-# the verifier host's host key).
+# the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
 set -u
 VERB=${1:?probe, open, host, close, audit, fire or form}
+BIND=${BIND:-1}
+case $BIND in
+  0 | 1) ;;
+  *) echo "BIND is $BIND: 1 binds the store to MODEL's pinned checkpoint, 0 to none"; exit 2 ;;
+esac
 if [ -n "${SESSIONS:-}" ]; then
   [ -z "${PACED:-}${PACE_PASS_MS:-}" ] || {
     echo "SESSIONS asks for sessions of one coin a window and PACED or PACE_PASS_MS for paced ones: the host's run" \
@@ -77,12 +87,19 @@ circuit() {
 }
 
 main_line() {
-  # origin/main's first-parent history into $OUT/main.probe.txt, fetched as auditor.sh fetches it
+  # main's first-parent history into $OUT/main.probe.txt, from MAIN_FROM: origin where origin is a repository main is
+  # pushed to (GitHub, a bare repository), else, where origin is a checkout, that checkout's own origin. A run's clone
+  # (--cwd clone) has its source root as origin, a checkout whose origin/main stood still when it was made; the node's
+  # bare repository behind it holds main as the newest launch pushed it. Nothing falls back to a checkout's copy.
   local unshallow=()
   [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
-  { git fetch -q "${unshallow[@]}" origin +refs/heads/main:refs/remotes/origin/main \
-      || git fetch -q "${unshallow[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
-    >> "$OUT/fetch.probe.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
+  MAIN_FROM=$(git remote get-url origin 2> /dev/null) || { MAIN_FROM="(no origin)"; return 3; }
+  if [ "$(git -C "$MAIN_FROM" rev-parse --is-bare-repository 2> /dev/null)" = false ]; then
+    MAIN_FROM=$(git -C "$MAIN_FROM" remote get-url origin 2> /dev/null) \
+      || { MAIN_FROM="(the checkout $MAIN_FROM has no origin)"; return 3; }
+  fi
+  git fetch -q "${unshallow[@]}" "$MAIN_FROM" +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.probe.log" 2>&1 \
+    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
 }
 
 probe() {
@@ -92,9 +109,15 @@ probe() {
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
   main_line || {
-    echo "can't read origin/main's first-parent history (fetch.probe.log), so COMMIT can't be checked on it"; exit 3; }
+    echo "can't fetch main's first-parent history from $MAIN_FROM (fetch.probe.log), so COMMIT can't be checked on it:" \
+      "nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never the" \
+      "source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
+      "before (git fetch origin main), whose launch pushes its origin/main there, and tell infra if it still fails"
+    exit 3; }
+  echo "main from $MAIN_FROM at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
-    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it"; exit 3; }
+    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it, or" \
+      "relaunch from a checkout fetched just before (git fetch origin main) if main has moved past it since"; exit 3; }
   if [ -n "${DRY:-}" ]; then
     [ -f "$GATE_KEY" ] && echo "DRY: the gate key $GATE_KEY is here" || echo "DRY: no gate key at $GATE_KEY"
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | grep -q -F "$AUDITOR_FP" \
@@ -156,8 +179,10 @@ EOF
 }
 
 open_period() {
+  local model=()
+  [ "$BIND" = 0 ] || model=(--model "$MODEL")
   gate "$CHALLENGER" ledger > "$OUT/ledger.before.jsonl"
-  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" --model "$MODEL" \
+  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" "${model[@]}" \
     > "$OUT/period-open.out" 2> "$OUT/period-open.err"
   local r=$?
   echo "period-open rc $r"
@@ -168,7 +193,8 @@ open_period() {
 }
 
 host_run() {
-  local form words r run
+  local form words r run bound=()
+  [ "$BIND" = 0 ] || bound=(--model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS")
   if [ -n "${SESSIONS:-}" ]; then
     form=(--sessions "$SESSIONS" ${WINDOWS:+--windows "$WINDOWS"} ${WINDOW_MS:+--window-ms "$WINDOW_MS"}
       ${SAMPLES:+--samples "$SAMPLES"})
@@ -177,8 +203,8 @@ host_run() {
     form=(--paced "${words[@]}" --pace-pass-ms "$PACE_PASS_MS")
   fi
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" "${form[@]}" \
-    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
-    --model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS" > "$OUT/host-run.json" 2> "$OUT/host-run.err"
+    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" "${bound[@]}" \
+    > "$OUT/host-run.json" 2> "$OUT/host-run.err"
   r=$?
   echo "host run rc $r"
   cat "$OUT/host-run.json" "$OUT/host-run.err"
@@ -248,6 +274,7 @@ fire() {
   echo "fire $(date -u +%FT%TZ): waiting for $PROVER_RUN to hold $ENGINES GPUs on $PROVER_NODE${by:+, leased by $LEASE_BY}"
   for ((k = 0; ; k++)); do
     if ! l=$(leased); then
+      [ -n "${DRY:-}" ] && { echo "DRY: can't read $PROVER_NODE's leases; would wait until $PROVER_RUN holds $ENGINES"; break; }
       # one failed read waits for the next; ten running (five minutes) end the wait
       fails=$((fails + 1))
       [ $fails -lt 10 ] || { echo "can't read $PROVER_NODE's leases $fails times running: nothing opened"; exit 3; }
