@@ -6,3 +6,4 @@
 - correction: the line above was written at 08:59Z (00:59 PST), not 09:01Z
 - 09:26Z (01:26 PST): 560e passed (vllm at 3d484ece: 17864p 565s; declared 96, bound 74.7). ffde 3 of 5 passed, verity-flock next. 667c waiting on ffde's Lean tree lock (same node, cpu-5), up to 14400 s, left as is. d445 running. Pass 3.
 - correction: the line above was written at 09:23Z (01:23 PST), not 09:26Z
+- 09:24Z (01:24 PST): launching enumerations at the new base 8854b8249777 (enum2-base) and #9660 head 1333bd53 (enum2-head), 48 GB each: 2e99b1cf..8854b824 changes 1465 vllm files, so the coordinator's 2e99 listing is not assumed to hold.
