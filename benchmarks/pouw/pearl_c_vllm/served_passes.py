@@ -121,11 +121,11 @@ line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside
 ``uncredited`` is where an accepted run's linears' MACs went uncredited, call by call (`verify_run.uncredited_calls`, the
 verify document's ``uncredited``), for a verdict whose document predates it: the passes in DIR (``pass-*/manifest.json``,
 found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serves) read as `verify` reads them against
-``DIR/coins.json``, at that document's draws, δ and over-cap draws. It draws nothing and judges nothing. It writes
-``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the document accepted, the
-passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and the totals are its
-credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why and exits 1, writing
-nothing.
+``DIR/coins.json``, at that document's draws, δ and draws over the inert-work bound. It draws nothing and judges
+nothing. It writes ``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the
+document accepted, the passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and
+the totals are its credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why
+and exits 1, writing nothing.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
