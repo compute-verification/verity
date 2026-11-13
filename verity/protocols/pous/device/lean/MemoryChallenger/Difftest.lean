@@ -90,10 +90,10 @@ def lmsVerifyFn (j : Json) : V Json := do
   pure (.bool (← lmsVerify p (← hex j "public_key") (← hex j "session") (← hex j "record") (← hex j "signature")))
 
 private def setupRecordOf (j : Json) : V SetupRecord := do
-  pure { passed := ← passedOfJson j "input", blocks := ← J.nat j "blocks" "input", commitment := ← hex j "commitment",
-         salt := ← hex j "salt", root := ← hex j "root" }
+  pure { blocks := ← J.nat j "blocks" "input", commitment := ← hex j "commitment", salt := ← hex j "salt",
+         root := ← hex j "root" }
 
-/-- `SetupRecord(passed, blocks, commitment, salt, root).value()`. -/
+/-- `SetupRecord(blocks, commitment, salt, root).value()`. -/
 def setupRecordFn (j : Json) : V Json := do pure (hexJ (← (← setupRecordOf j).value))
 
 /-- `setup_record_message(I, session, record)`. -/
