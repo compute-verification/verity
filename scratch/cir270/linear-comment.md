@@ -7,7 +7,7 @@ What it does, for someone new to this:
 - The test checks `hashBound` against the two `norm_num` theorems in `TwoOneWaitNumbers.lean`: the mirror's exact value at their numerals must be at most their right side, and the command must print the same figure. It does not show that `hashBound` is the guarantee's bound; that is the next step, the facts' `bound` field.
 - Whether a statement bounds a probability is read from its Lean text (marked `~`), unless a Lean check's facts are given with `--facts` or `--run`.
 
-Suites: SUITES_LINE
+Suites: every suite passed at the head `b694e1efa6`: `verity-lean-audit` in `r20261112-230540-4042`, and the five other suites that read `lean_audit.py` in `r20261112-232904-fee1`. The other 117 passed at `3bf908ae14`, which differs from the head only in the Lean audit's list of files no audit reads.
 
 Not done:
 - mirrors for the recursion, the ZK loop, `deltaPub` and PoUB;

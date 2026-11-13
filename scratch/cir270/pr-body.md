@@ -129,7 +129,7 @@ The two lines held to an instance, as the command prints them. **Proofs has not 
 
 ## The gate
 
-`python3 adapters/vllm/tools/ratchet_gate.py origin/cursor/proofs-expcalls-4d1e HEAD --json` at `GATE_SHA`:
+`python3 adapters/vllm/tools/ratchet_gate.py origin/cursor/proofs-expcalls-4d1e HEAD --json` at `b694e1efa637d9a11f6fda3337d893a63b203be5`:
 
 ```
 "failures": []
@@ -137,7 +137,13 @@ The two lines held to an instance, as the command prints them. **Proofs has not 
 
 ## Runs
 
-SUITES_RUN_LINE
+Each run's suites went through `research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py [SUITE...]'`. What I read in each, from its `stdout.log`:
+- `r20261112-185255-879d` (source `ae5f7461cc`): cancelled while it waited for a slot, because its source was stale. It never started.
+- `r20261112-190622-216d` (source `3bf908ae14ee643d640575dd9c3a226269530a66`), every suite: 123 suites, 122 passed (0 cached), 1 failed. `verity-lean-audit` had 753 passed and 2 failed, both in `test_not_read.py`: the three new files in the Lean tool's directory were not in `lean_audit.NOT_READ`. `b694e1efa6` adds them, and changes nothing else.
+- `r20261112-230540-4042` (source `b694e1efa637d9a11f6fda3337d893a63b203be5`), `verity-lean-audit` alone: 755 passed, 0 failed.
+- `r20261112-232904-fee1` (source `b694e1efa637d9a11f6fda3337d893a63b203be5`), the five other suites that declare `lean_audit.py` as an input: 5 passed (0 cached), 0 failed. `verity-check` 970 passed; `verity-network-e2e` 70 passed; `verity/protocols/certifier/verifier/network` 85 passed; `research` 4,697 passed, 3 skipped; `repository` 356 passed.
+
+The other 117 suites passed at `3bf908ae14` and read none of what `b694e1efa6` changed.
 
 ## Not done
 
@@ -155,4 +161,4 @@ SUITES_RUN_LINE
 - The whole `check`.
 - `lean-audit`: this PR changes no Lean file and no lock.
 - `circuit-check`: no circuit changes.
-NOT_RUN_EXTRA
+- The 117 suites that don't read `lean_audit.py`, at the head: they passed at `3bf908ae14`, and the head differs from it only in `lean_audit.NOT_READ`.
