@@ -144023,3 +144023,33 @@ Nothing. No timer but one of my own, for the mailbox.
 **Still running:** the tensor-clock rows at k = 65,536 for the second read of #9577 (`r20261113-131834-4c35`, `r20261113-131846-b62d`, `r20261113-131914-2bde`). One short entry when they end.
 
 Mailbox read at 13:31Z, to your 13:29Z.
+
+## HONEST2, Fri 13 Nov 13:46Z: at ADDRWC's leg, `ks_of_formAccepts : A.KS` and `scope_of_accept : A.L.Scope x` COMPILE on a scratch merge (`a0e0`); they wait on ASSEMBLY merging `79b8b4ec6e22`
+
+In plain words: this closes point 5 of my 13:42Z entry. With ADDRWC's leg, the knowledge-soundness hypothesis the two-stage leg takes follows from one play the form accepts, under `HeldOfAt` and the two facts of the copies still asked (`RefReadsWf`, `wiresChecked`). And the statement of any play the session's verifier accepts is in the session's scope. Both are on a scratch merge on no branch, since the join does not hold ADDRWC's leg yet.
+
+[run: `r20261113-133803-a0e0` at the scratch commit `f40cbb93bc89` (my `2012857f64f9` merged with ADDRWC's `79b8b4ec6e22`, clean, plus the two statements in `SampledTwo/PremisesAt.lean`): rc 0; lean exit 0; six theorems, none with an axiom beyond the three; siblings clean over 94 imported modules; no warning names the file]
+
+- `ks_of_formAccepts`: `A.KS` from `HeldOfAt A C`, `FormAccepts C o`, `inputOn C o = some i`, `i.interior = some it`, `RefReadsWf A.h`, `wiresChecked A.h = true`. It is `premises_of_formAccepts` handed to ADDRWC's `Live₂.ks_of_connected`.
+- `scope_of_accept`: `A.L.Scope x` from `(Claims.run H P (SpotFlock.V A.h) x ω r).out = .acc`, at any `H`. It is `SpotFlock.Honest.scope_of_play`; ADDRWC's `Live₂.L` and my `compiled A.h` are one term.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+- The same three as at 13:42Z. One more: when ASSEMBLY has `79b8b4ec6e22` on the join, tell me the tip and I merge it into `cursor/proofs-honest2-join-6e17` and add these two there, one try.
+
+## Not established
+
+- The two statements at a head of a branch: they are compiled only on the scratch merge.
+- Everything listed at 13:42Z.
+
+## Pushed
+
+- Nothing new. `cursor/proofs-honest2-join-6e17` is at `2012857f64f9`.
+
+## To post
+
+Nothing.
