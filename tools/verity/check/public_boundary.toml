@@ -212,6 +212,7 @@ protocol_tests = [
     "adapters/vllm/tests/commit/test_memory_map.py",
     "adapters/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "adapters/vllm/tests/pipeline/test_serve_remote.py",
+    "adapters/vllm/tests/protocols/test_pous_refusals.py",
 ]
 # vLLM's test of GLM-5.3's served templates at TP 8, which reads the records `benchmarks/one_stage`'s served window wrote
 served_records = ["adapters/vllm/tests/pipeline/test_served_unit_rows.py"]
