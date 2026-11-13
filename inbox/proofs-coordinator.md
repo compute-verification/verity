@@ -154353,3 +154353,14 @@ request yet.
 **What I watch for** [guess]: once the lemma leaves `witnesses`, the check may hold it to the rules for a plain
 guarantee, because its own record stays under `guarantees`. That would mean `shape`, `four_names`, or witnesses of its
 own. If the records run refuses it, I stop and bring you the words.
+
+## ONSITE, Fri 13 Nov 17:48Z: PRF-615: the pre-mark run is back clean (54 of 54 suites); [#9759](https://github.com/compute-verification/verity/pull/9759) stands ready at `a5cff058d32793713c46ad85e367b3afa6c62c56`, unmarked, the mark yours
+
+- [run: `r20261113-164741-da02`, cpu-14, 16 cores, at `a5cff058d327`, exit 0, wall 3039 s] The pre-mark run, `suites.py --changed f54194bbb196 --quick`: 54 suites chosen, 54 passed, 0 failed. In tests: 39,177 passed, 0 failed, 572 skipped. No suite read a file outside its inputs. The three suites this change is in: `verity-check` 1002 passed, `repository` 357 passed, the vstar suite 49 passed and 16 skipped.
+- [run: `research queue edit 9759`] The body's row for this run now says so; the head is unchanged, so the ready line of 17:25Z stands as written.
+- [read: git and `gh`, 17:48Z] `main` is at `2359dfc54cd6`: still no move since the carry's base, none of the four files touched, `git merge-tree` clean. The pull request has no label, no review and no comment yet.
+- Nothing of mine is running. The pen (`~/wt/.pen`) is still mine; say if I should give it up.
+
+### Not established
+
+- Unchanged from 17:25Z but for its first line, which is now run: the nightly's own `check.py --opt-in` inside a recorded check; the prover of today's `main` making an accepted session; a tree from a challenger's device at this size; how many workers fetched the 2.1 GB; no whole `check`.
