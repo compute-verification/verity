@@ -256,34 +256,34 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     none of a rehearsal's traffic (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, `--temperature`,
     `--top-p`). The schedule is always the scan's, at the request's tick and class (`scan_schedule`), in the id egress
     form: the one the certifier's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
-    `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in link-windows, 1 to
-    the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
+    `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in execution phases,
+    1 to the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
   - *Start.* The gate refuses the request while a rehearsal or another session runs, a key whose height can't sign
-    the session's link-windows (`warden_height`: `--height`, the deployed key's by default) and `--minutes` under
-    `session_minutes` (the link-windows' span, the key's generation and the check). It writes `request.json` (the
-    request, `client_port` and `windows` in it) and starts the rehearsal's unit; the reply, at once, is the request
-    with `run` and `unit`.
-  - *How long a session can be.* Its link-windows last windows · T · τ, T the scan's 32 buckets a link-window and τ
-    its tick (`--bucket-ms`: 100 ms unless given, at most 4000). Two bounds hold it: `--windows` is at most 1119
-    (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`CERTIFIER_MINUTES`), of which the start and the
-    check take three and the key one second each 4096 of its signatures (`session_minutes`). With the least height
-    that signs the link-windows (`warden_height`: 13 for 1119), the longest session at each tick is
-    - τ = 100 ms (a link-window 3.2 s): 1119 link-windows, 59 min 40 s, `--minutes 63`;
-    - τ = 200 ms (6.4 s): 1119 link-windows, 119 min 21 s, `--minutes 123`;
-    - τ = 250 ms (8 s): 1119 link-windows, 149 min 12 s, `--minutes 153`;
-    - τ = 280 ms to 4000 ms: the gate's 170 minutes bound it, at the whole link-windows in 167 minutes less the
-      key's seconds, whatever the tick: 313 link-windows, 166 min 56 s, at 1000 ms; 78, 166 min 24 s, at 4000 ms.
+    the session's execution phases (`warden_height`: `--height`, the deployed key's by default) and `--minutes`
+    under `session_minutes` (the execution phases' span, the key's generation and the check). It writes
+    `request.json` (the request, `client_port` and `windows` in it) and starts the rehearsal's unit; the reply, at
+    once, is the request with `run` and `unit`.
+  - *How long a session can be.* Its execution phases last windows · T · τ, T the scan's 32 buckets an execution
+    phase and τ its tick (`--bucket-ms`: 100 ms unless given, at most 4000). Two bounds hold it: `--windows` is at
+    most 1119 (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`CERTIFIER_MINUTES`), of which the start
+    and the check take three and the key one second each 4096 of its signatures (`session_minutes`). With the least
+    height that signs the execution phases (`warden_height`: 13 for 1119), the longest session at each tick is
+    - τ = 100 ms (an execution phase 3.2 s): 1119 execution phases, 59 min 40 s, `--minutes 63`;
+    - τ = 200 ms (6.4 s): 1119 execution phases, 119 min 21 s, `--minutes 123`;
+    - τ = 250 ms (8 s): 1119 execution phases, 149 min 12 s, `--minutes 153`;
+    - τ = 280 ms to 4000 ms: the gate's 170 minutes bound it, at the whole execution phases in 167 minutes less the
+      key's seconds, whatever the tick: 313 of them, 166 min 56 s, at 1000 ms; 78, 166 min 24 s, at 4000 ms.
 
-    Up to τ = 279 ms the 1119 link-windows are the bound, 59 min 40 s · τ / 100 ms. At the deployed key's height,
-    20 (the default), the key takes four minutes more: `--minutes 67` at 100 ms, and from 273 ms the whole
-    link-windows in 162 min 44 s. The relay listens only once its key is made, so a load that must start soon gives
-    the least `--height` its `--windows` need. A load's last connection is admitted `WardenParams.span` + 1 buckets
-    before the end ("End", and the runner's "A session").
+    Up to τ = 279 ms the 1119 execution phases are the bound, 59 min 40 s · τ / 100 ms. At the deployed key's
+    height, 20 (the default), the key takes four minutes more: `--minutes 67` at 100 ms, and from 273 ms the whole
+    execution phases in 162 min 44 s. The relay listens only once its key is made, so a load that must start soon
+    gives the least `--height` its `--windows` need. A load's last connection is admitted `WardenParams.span` + 1
+    buckets before the end ("End", and the runner's "A session").
   - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
     `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
     relay's listener, a free port of the loopback here (`forward_argv`). It then runs
-    `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` link-windows, and
-    the check.
+    `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` execution phases,
+    and the check.
   - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
     relay's cells both ways (`verity.protocols.accounting.certifier.verifier.warden`: `cells` sending, `Shim`
     reading) at the schedule the deployment names. The port answers only while the unit's ssh is up: a connection
@@ -292,13 +292,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
     `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
     connection made before it waits in the relay's queue, which holds the schedule's `queue` and refuses the next.
-  - *End.* The relay stops when its `--windows` link-windows have run, windows · T · τ after the origin. The runner
-    then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries `end`
-    and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its first
-    link-window, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a failed
-    run, as a rehearsal's.
+  - *End.* The relay stops when its `--windows` execution phases have run, windows · T · τ after the origin. The
+    runner then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries
+    `end` and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its
+    first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
+    failed run, as a rehearsal's.
   - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
-    and schedule and each link-window's certificates and registrations, and in `end.json` the check's verdict and
+    and schedule and each execution phase's certificates and registrations, and in `end.json` the check's verdict and
     counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
     cells' salts, the relay's log and the check. The gate holds no traffic and no client's log, so the check
     (`warden_serve.py check`) reads the records, their certificates, the registrations and the audit, and nothing of
@@ -307,7 +307,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   - *A connection open at the session's end is cut.* One still in the queue is closed with no cell and is in no
     record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
     been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
-    s + D, with no `END` or `FAIL`, makes the check refuse the link-window of its admission, so the run isn't
+    s + D, with no `END` or `FAIL`, makes the check refuse the execution phase of its admission, so the run isn't
     accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`WardenParams.span`:
     D + ⌊(egress cells − 1) / r⌋ buckets).
   - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
@@ -1617,23 +1617,23 @@ def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGH
     return _minutes(-(-groups * scan_group_windows(tokens) * SCAN["--window"] * bucket_ms // 1000), height)
 
 
-#: a relay session's `--windows`, its length in link-windows: at most what the gate's longest rehearsal runs
+#: a relay session's `--windows`, its length in execution phases: at most what the gate's longest rehearsal runs
 #: (`warden_windows` of `WARDEN_REQUESTS`' most), so a session's key and records are no larger than a rehearsal's
 SESSION_WINDOWS = (1, warden_windows(WARDEN_REQUESTS[1]))
 
 
 def session_minutes(windows: int, height: int = REHEARSAL_HEIGHT[1],
                     window_ms: int = SCAN["--window"] * SCAN["--bucket-ms"]) -> int:
-    """The fewest minutes a relay session of `windows` link-windows of `window_ms` takes: `warden_minutes` with the
-    link-windows' span in place of the arrivals, so its start, its check and its key at `height` as a rehearsal's."""
+    """The fewest minutes a relay session of `windows` execution phases of `window_ms` takes: `warden_minutes` with
+    their span in place of the arrivals, so its start, its check and its key at `height` as a rehearsal's."""
     return _minutes(-(-windows * window_ms // 1000), height)
 
 
 def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: int) -> dict:
     """A relay session's request, less its schedule's flags: `--client-port`, the port of the peer's loopback its
     clients connect to (not the endpoint's, and none of the challenge links', which the peer's ssh forwards already),
-    and `--windows` (`SESSION_WINDOWS`) link-windows of `window_ms`, refused when the key at `--height` can't sign
-    them (`warden_height`) or `--minutes` is under `session_minutes` of them."""
+    and `--windows` (`SESSION_WINDOWS`) execution phases of `window_ms`, refused when the key at `--height` can't
+    sign them (`warden_height`) or `--minutes` is under `session_minutes` of them."""
     client = bounded("--client-port", a.client_port, 1024, 65535)
     if client == port or client in PORTS:
         raise Refused(f"--client-port {client}: a port of the peer's loopback for the relay's clients, not the "
@@ -1641,11 +1641,11 @@ def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: i
     windows = bounded("--windows", a.windows, *SESSION_WINDOWS)
     if a.height < (least := warden_height(windows)):
         raise Refused(f"--height {a.height}: the key's {1 << a.height} one-time signatures don't sign {windows} "
-                      f"link-windows: give --height {least} or more, or fewer --windows")
+                      f"execution phases: give --height {least} or more, or fewer --windows")
     if minutes < (least := session_minutes(windows, a.height, window_ms)):
-        raise Refused(f"--minutes {minutes}: {windows} link-windows of {window_ms} ms take {least} minutes (their "
-                      f"span, the start, the check and the key at height {a.height}): give --minutes {least} or "
-                      f"more, or fewer --windows")
+        raise Refused(f"--minutes {minutes}: {windows} execution phases of {window_ms} ms take {least} minutes "
+                      f"(their span, the start, the check and the key at height {a.height}): give --minutes {least} "
+                      f"or more, or fewer --windows")
     return {"device": "warden", "peer": a.peer, "port": port, "client_port": client, "windows": windows,
             "minutes": minutes, "height": a.height, "scan": True}
 
@@ -2576,7 +2576,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
     `LOAD_READY_S` to come up after it. A relay session's request (it has ``client_port``) runs `warden_serve.py
     session` instead: the relay alone, with no client and no traffic, listening on this host's 127.0.0.1:`listen`
-    (where the peer's clients' forward ends) for the request's link-windows, its upstream, key, schedule and
+    (where the peer's clients' forward ends) for the request's execution phases, its upstream, key, schedule and
     watermark as a scan rehearsal's."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
@@ -2663,7 +2663,7 @@ def _listening(command: Callable[..., list[str]], listen: int) -> Callable[..., 
 def _stop_with(tunnel: subprocess.Popen, proc: subprocess.Popen) -> None:
     """Stops a relay session's runner `proc` once its `tunnel` exits, if it still runs: its clients reach the relay
     through that ssh alone, so a session nobody can reach ends there and says so, rather than run out its
-    link-windows holding the unit."""
+    execution phases holding the unit."""
     tunnel.wait()
     if proc.poll() is None:
         with suppress(ProcessLookupError):

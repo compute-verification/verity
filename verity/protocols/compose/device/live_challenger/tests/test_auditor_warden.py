@@ -407,13 +407,13 @@ def test_a_warden_rehearsals_watermark_is_recorded_and_passed_on_only_when_asked
     assert "--minutes 3: 100 requests take" in json.loads(refusals[0][1])["refused"]
 
 
-#: a relay session of 20 link-windows at the scan's schedule (64 s of them), its clients' port 8012 on the peer
+#: a relay session of 20 execution phases at the scan's schedule (64 s of them), its clients' port 8012 on the peer
 SESSION = ["relay-session", *REQUEST[1:5], "--client-port", "8012", "--windows", "20", "--minutes", "5", "--height",
            "10"]
 
 
 def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_with_the_rehearsals(host):
-    """`relay-session` records the peer, the endpoint's port, the clients' port and its link-windows, always with
+    """`relay-session` records the peer, the endpoint's port, the clients' port and its execution phases, always with
     ``scan`` and never with a rehearsal's traffic or sampling; its tick, class and watermark are recorded only when
     given, as a scan rehearsal's. It shares the rehearsals' unit: one of any of them runs at a time, and a key that
     reads only starts none."""
@@ -443,7 +443,7 @@ def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_w
     assert rc == 0 and {k: v for k, v in json.loads(out).items() if k not in doc} == \
         {"bucket_ms": 200, "scan_class": "w63k4", "watermark": True}
     rc, out = gate(host, SESSION[:-2], started=started, token="ab34")
-    assert rc == 3 and "--minutes 5: 20 link-windows of 3200 ms take 9 minutes" in json.loads(out)["refused"]
+    assert rc == 3 and "--minutes 5: 20 execution phases of 3200 ms take 9 minutes" in json.loads(out)["refused"]
 
     rc, out = gate(host, SESSION, key=None, started=started, token="ab56")
     assert rc == 3 and json.loads(out)["refused"] == \
@@ -462,11 +462,11 @@ def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_w
     (SESSION + ["--windows", "0"], "--windows '0': 1 to 1119"),
     (SESSION + ["--windows", "1120"], "--windows '1120': 1 to 1119"),
     (SESSION + ["--windows", "205", "--minutes", "170"],
-     "--height 10: the key's 1024 one-time signatures don't sign 205 link-windows: give --height 11 or more, or "
+     "--height 10: the key's 1024 one-time signatures don't sign 205 execution phases: give --height 11 or more, or "
      "fewer --windows"),
-    (SESSION + ["--minutes", "4"], "--minutes 4: 20 link-windows of 3200 ms take 5 minutes (their span, the start, "
+    (SESSION + ["--minutes", "4"], "--minutes 4: 20 execution phases of 3200 ms take 5 minutes (their span, the start, "
                                    "the check and the key at height 10): give --minutes 5 or more, or fewer --windows"),
-    (SESSION + ["--bucket-ms", "200"], "--minutes 5: 20 link-windows of 6400 ms take 6 minutes"),
+    (SESSION + ["--bucket-ms", "200"], "--minutes 5: 20 execution phases of 6400 ms take 6 minutes"),
     (SESSION + ["--bucket-ms", "50"], "--bucket-ms '50': 100 to 4000"),
     (SESSION + ["--scan-class", "w1"], "--scan-class 'w1': one of ['w63', 'w63k4']"),
     (SESSION + ["--scan"], "relay-session: unrecognized arguments: --scan"),
@@ -479,7 +479,7 @@ def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_w
     (SESSION[:2] + ["nobody"] + SESSION[3:], "--peer 'nobody': one of"),
 ])
 def test_the_gate_refuses_a_relay_session_it_cant_check_and_writes_nothing(host, argv, why):
-    """Each refusal the verb adds (the clients' port, the link-windows, the key and the minutes they take), each
+    """Each refusal the verb adds (the clients' port, the execution phases, the key and the minutes they take), each
     flag of a rehearsal's traffic or sampling, which a session has none of, and the scan rehearsal's own refusals of
     what the two share."""
     rc, out = gate(host, argv, started=[])
@@ -487,15 +487,15 @@ def test_the_gate_refuses_a_relay_session_it_cant_check_and_writes_nothing(host,
     assert not host.certifier.exists()
 
 
-def test_the_longest_relay_session_is_an_hour_of_link_windows_at_the_scans_tick_and_the_gates_minutes_past_280_ms():
-    """The numbers the module docstring gives a runner that asks whether its load fits: a session's link-windows last
-    windows · T · τ; `SESSION_WINDOWS`' most are 59 min 40 s at the scan's tick, and from τ = 280 ms the gate's most
-    `--minutes` bounds them, to the whole link-windows in 167 minutes less the key's seconds (162 min 44 s at the
-    deployed key's height, from 273 ms)."""
+def test_the_longest_relay_session_is_an_hour_at_the_scans_tick_and_the_gates_minutes_past_280_ms():
+    """The numbers the module docstring gives a runner that asks whether its load fits: a session's execution phases
+    last windows · T · τ; `SESSION_WINDOWS`' most are 59 min 40 s at the scan's tick, and from τ = 280 ms the gate's
+    most `--minutes` bounds them, to the whole execution phases in 167 minutes less the key's seconds (162 min 44 s
+    at the deployed key's height, from 273 ms)."""
     T = A.SCAN["--window"]
 
     def longest(tick: int, height: int | None = None) -> tuple[int, int, float]:
-        """The most link-windows the gate takes at `tick`, their `--minutes` and their span in seconds."""
+        """The most execution phases the gate takes at `tick`, their `--minutes` and their span in seconds."""
         w = A.SESSION_WINDOWS[1]
         while A.session_minutes(w, height or A.warden_height(w), T * tick) > A.CERTIFIER_MINUTES[1]:
             w -= 1
@@ -515,7 +515,7 @@ def test_the_longest_relay_session_is_an_hour_of_link_windows_at_the_scans_tick_
             assert most - (0 if height else key) - T * tick / 1000 - 1 < span <= most, (tick, height)
     assert longest(100, 20)[:2] == (1119, 67)
     assert (A.session_minutes(1119, 13), A.session_minutes(1119, 20)) == (63, 67)
-    # a rehearsal's link-windows hold its tail, so the same 1119 as a session's leave the check a minute more
+    # a rehearsal's execution phases hold its tail, so the same 1119 as a session's leave the check a minute more
     assert A.warden_minutes(A.WARDEN_REQUESTS[1], 13) == 60 and A.warden_height(1119) == 13
     assert [A.session_minutes(1, h) for h in (10, 20)] == [4, 8]
 
@@ -532,9 +532,9 @@ def session(source: str, seen: list):
 def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_status_says_when_it_listens(
         host, tmp_path):
     """The unit's ssh forwards the peer's client port to the relay's listener, a free port here that is not the
-    tunnel's own local end, and the unit runs `warden_serve.py session` there for the request's link-windows at the
-    scan's schedule. `status` carries ``relay``: null until the relay's `deployment.json` is whole, then where a client
-    connects and the deployment; the end is a rehearsal's (`warden_outcome`), saying the session ended."""
+    tunnel's own local end, and the unit runs `warden_serve.py session` there for the request's execution phases at
+    the scan's schedule. `status` carries ``relay``: null until the relay's `deployment.json` is whole, then where a
+    client connects and the deployment; the end is a rehearsal's (`warden_outcome`), saying the session ended."""
     ssh = ["-i", "KEY", "research@peer"]
     assert A.forward_argv(ssh, 40002, 8011, (8012, 40003)) == [
         *A.TUNNEL_SSH, "-L", "127.0.0.1:40002:127.0.0.1:8011", "-R", "127.0.0.1:8012:127.0.0.1:40003", *ssh]
@@ -590,9 +590,9 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
 
 def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_tunnel_closed(host):
     """A session's clients reach its relay through the unit's ssh alone. When that ssh exits (the peer refused a
-    forward, or the link dropped) the unit stops the session's runner rather than let it run out its link-windows
-    with no client, and the end is nonzero and says the tunnel closed, whatever the check then reads; a session whose
-    runner fails says so as a rehearsal does."""
+    forward, or the link dropped) the unit stops the session's runner rather than let it run out its execution
+    phases with no client, and the end is nonzero and says the tunnel closed, whatever the check then reads; a
+    session whose runner fails says so as a rehearsal does."""
     rc, out = gate(host, SESSION, started=[])
     run = json.loads(out)["run"]
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: [sys.executable, "-c", ""],

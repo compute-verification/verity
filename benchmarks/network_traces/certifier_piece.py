@@ -102,7 +102,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 * **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
   run's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
   - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
-    the peer's loopback the load's clients connect to and ``--windows`` the session's length in link-windows. By
+    the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases. By
     default ``--height`` is the least whose key signs them (`auditor.warden_height`) and ``--minutes``
     `auditor.session_minutes` plus `served_session.MARGIN`, at most the gate's. This tree's gate checks the request
     first. It returns once the gate's ``status`` shows the relay listening: exit 0, with
@@ -110,7 +110,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     ``deployment``, the relay's (its schedule, ``origin_unix`` and ``windows``), and one line on stdout naming the
     run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
     1 when the session ended before its relay listened, the reason in OUT/session.json. The session then runs to
-    its link-windows' end whatever its caller does: nothing ends it early, and its last connection is admitted
+    its execution phases' end whatever its caller does: nothing ends it early, and its last connection is admitted
     `WardenParams.span` + 1 buckets before that end.
   - ``close`` runs after the load: it waits for the session's end, keeps the lane's fetch where the piece reads it
     (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
@@ -397,7 +397,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
     try:
         if a.client_port is None or a.windows is None:
             raise SS.Refused("--session: with --client-port PORT, the peer's loopback port the load's clients "
-                             "connect to, and --windows N, the session's length in link-windows")
+                             "connect to, and --windows N, the session's length in execution phases")
         if a.warmup:
             raise SS.Refused("--session sends no request of its own: --warmup is the rehearsal front's")
         if a.height == HEIGHT:
@@ -1081,7 +1081,7 @@ def parser() -> argparse.ArgumentParser:
                    help="the gate's relay session, kept up for the served run's own load: no group is sent")
     f.add_argument("--client-port", type=int, metavar="PORT",
                    help="with --session: the port of the peer's loopback the load's clients connect to")
-    f.add_argument("--windows", type=int, metavar="N", help="with --session: its length, in link-windows")
+    f.add_argument("--windows", type=int, metavar="N", help="with --session: its length, in execution phases")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)

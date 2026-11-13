@@ -1081,7 +1081,7 @@ def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_rel
     at_200 = CP.SS.A.session_minutes(20, CP.HEIGHT, 32 * 200) + CP.SS.MARGIN
     assert at_200 > minutes and _asked(tmp_path)[2].endswith(
         f"--windows 20 --minutes {at_200} --height 10 --bucket-ms 200 --scan-class w63")
-    # the longest session at the scan's tick: the least height that signs its link-windows, and its minutes at it
+    # the longest session at the scan's tick: the least height that signs its execution phases, and its minutes at it
     assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", serve="serve-long")) == 0
     assert (CP.SS.A.warden_height(1119), CP.SS.A.session_minutes(1119, 13) + CP.SS.MARGIN) == (13, 66)
     assert _asked(tmp_path)[4].endswith("--windows 1119 --minutes 66 --height 13 --scan-class w63k4")
@@ -1123,8 +1123,9 @@ def test_a_sessions_front_waits_on_the_gates_status_and_says_why_one_never_liste
     (("--client-port", "7811", "--windows", "20"), "the gate refuses it: --client-port 7811: a port of the peer's"),
     (("--client-port", "8012", "--windows", "1120"), "the gate refuses it: --windows '1120': 1 to 1119"),
     (("--client-port", "8012", "--windows", "1100", "--height", "11"),
-     "the gate refuses it: --height 11: the key's 2048 one-time signatures don't sign 1100 link-windows"),
-    ((*SESSION_FLAGS, "--minutes", "4"), "the gate refuses it: --minutes 4: 20 link-windows of 3200 ms take 5 minutes"),
+     "the gate refuses it: --height 11: the key's 2048 one-time signatures don't sign 1100 execution phases"),
+    ((*SESSION_FLAGS, "--minutes", "4"),
+     "the gate refuses it: --minutes 4: 20 execution phases of 3200 ms take 5 minutes"),
     ((*SESSION_FLAGS, "--bucket-ms", "50"), "the gate refuses it: --bucket-ms '50': 100 to 4000"),
 ])
 def test_a_session_this_trees_gate_refuses_is_refused_before_the_gate_is_asked(tmp_path, monkeypatch, flags, why):

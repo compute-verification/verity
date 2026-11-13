@@ -315,11 +315,11 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
                 assert took <= A.warden_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
 
 
-def test_the_gates_relay_session_is_session_at_the_scans_schedule_and_its_minutes_cover_its_link_windows(tmp_path):
-    """`relay-session` runs `session` at the listener the gate gives it, for the request's link-windows, at the
+def test_the_gates_relay_session_is_session_at_the_scans_schedule_and_its_minutes_cover_its_length(tmp_path):
+    """`relay-session` runs `session` at the listener the gate gives it, for the request's execution phases, at the
     schedule a scan rehearsal of its tick and class runs at, in the id egress form `serve` releases, and takes none
-    of `rehearse`'s traffic. For every tick the gate takes, in 100 ms steps, and every count of link-windows that
-    fits its minutes there, at the least height that signs them, `session_minutes` covers the link-windows, the
+    of `rehearse`'s traffic. For every tick the gate takes, in 100 ms steps, and every count of execution phases
+    that fits its minutes there, at the least height that signs them, `session_minutes` covers their span, the
     origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
@@ -859,7 +859,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 
 
 def _session(tmp_path: Path, windows: int):
-    """The gate's `relay-session` command for `windows` link-windows at the scan's w63k4 schedule, parsed, with its
+    """The gate's `relay-session` command for `windows` execution phases at the scan's w63k4 schedule, parsed, with its
     schedule, and a maker of `n` id requests of the class's most tokens with their id-form answers."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
@@ -876,15 +876,16 @@ def _session(tmp_path: Path, windows: int):
     return args, p, load
 
 
-def test_a_session_serves_its_link_windows_to_clients_not_its_own_and_its_check_accepts_the_records_alone(
+def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accepts_the_records_alone(
         tmp_path, monkeypatch):
     """`session` as the gate's `relay-session` runs it: one `serve` at the gate's listener for the request's
-    link-windows and no other process, so no traffic and no client of its own. In `serve`'s place here, the relay
-    on a virtual clock takes a load from another party's clients, eight connections arriving across the session's
-    three link-windows, the last at the last bucket that still ends inside the run, and their log stays with them.
-    The run's own check, on the records alone, accepts: every link-window certified and registered and the audit,
-    counting no connection. The clients' check is theirs, from their own log against the run's records: every
-    connection ended, its request and its answer the audited connection's, each cell of the egress schedule."""
+    execution phases and no other process, so no traffic and no client of its own. In `serve`'s place here, the
+    relay on a virtual clock takes a load from another party's clients, eight connections arriving across the
+    session's three execution phases, the last at the last bucket that still ends inside the run, and their log
+    stays with them. The run's own check, on the records alone, accepts: every execution phase certified and
+    registered and the audit, counting no connection. The clients' check is theirs, from their own log against the
+    run's records: every connection ended, its request and its answer the audited connection's, each cell of the
+    egress schedule."""
     args, p, load = _session(tmp_path, 3)
     last = args.windows * p.window - p.span - 1
     arrive = [0, 0, 7, p.window - 1, p.window, p.window + 8, 2 * p.window, last]
@@ -910,10 +911,10 @@ def test_a_session_serves_its_link_windows_to_clients_not_its_own_and_its_check_
 
     monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=Serve, PIPE=None))
     assert ws.rehearse(args) == 0
-    ((a, warden),) = served
+    ((a, relay),) = served
     out = args.out
     assert (a.listen, a.upstream, a.windows) == (("127.0.0.1", 40002), ("127.0.0.1", 40001), 3)
-    assert {e["admitted"] // p.window for e in warden.log} == {0, 1, 2} and warden.log[-1]["admitted"] == last
+    assert {e["admitted"] // p.window for e in relay.log} == {0, 1, 2} and relay.log[-1]["admitted"] == last
     assert not {"traffic.json", "client.json", "client.log", "groups.json"} & {f.name for f in out.iterdir()}
     result = json.loads((out / "check.json").read_text())
     assert result["accepted"] and result["problems"] == [] and result["connections"] == []
@@ -942,11 +943,11 @@ def test_a_session_serves_its_link_windows_to_clients_not_its_own_and_its_check_
 
 
 def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_which(tmp_path):
-    """A session stops at its last link-window's end and cuts what is open, and the records say what each was. One
+    """A session stops at its last execution phase's end and cuts what is open, and the records say what each was. One
     admitted at bucket s with s + D inside the run and no room to end (the first bucket past windows · T − span − 1)
-    has data and no `END` in the record: the audit refuses it in its admission's link-window, and the check the run,
-    every link-window still certified. Ones admitted later are cut before s + D: their requests are whole in the
-    ingress record, their egress is padding, the audit takes them and the check accepts, counting them as not
+    has data and no `END` in the record: the audit refuses it in its admission's execution phase, and the check the
+    run, every execution phase still certified. Ones admitted later are cut before s + D: their requests are whole in
+    the ingress record, their egress is padding, the audit takes them and the check accepts, counting them as not
     ended. One still in the queue then (it arrived behind four that hold the lanes) got no cell and is in no
     record. The clients' own logs say `cut` for each."""
     args, p, load = _session(tmp_path, 2)
@@ -956,19 +957,19 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
     def run(name: str, arrive: list[int]):
         out = tmp_path / name
         out.mkdir()
-        warden = _run(out, tmp_path / f"key-{name}", *load(len(arrive)), windows=args.windows, params=p,
-                      id_payload=p.payload, arrive=dict(enumerate(arrive)))
+        relay = _run(out, tmp_path / f"key-{name}", *load(len(arrive)), windows=args.windows, params=p,
+                     id_payload=p.payload, arrive=dict(enumerate(arrive)))
         own = json.loads((out / "client.json").read_text())["connections"]
         (out / "client.json").unlink()
         records = ws.read_records(out, p)
-        return warden, own, ws.check(out), ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+        return relay, own, ws.check(out), ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
 
-    warden, own, result, audit_ = run("ends", [end - p.span - 1])
-    assert result["accepted"] and warden.log[0]["ended"] == end - 1 and not warden.log[0]["cut"]
+    relay, own, result, audit_ = run("ends", [end - p.span - 1])
+    assert result["accepted"] and relay.log[0]["ended"] == end - 1 and not relay.log[0]["cut"]
     assert [c["outcome"] for c in own] == ["end"] and audit_["connections"][0]["ended"] == end - 1
 
-    warden, own, result, audit_ = run("late", [end - p.span])
-    assert warden.log[0]["cut"] and warden.log[0]["ended"] is None and [c["outcome"] for c in own] == ["cut"]
+    relay, own, result, audit_ = run("late", [end - p.span])
+    assert relay.log[0]["cut"] and relay.log[0]["ended"] is None and [c["outcome"] for c in own] == ["cut"]
     assert own[0]["kinds"].count(ws.KIND_CHARS[DATA]) == p.slots and ws.KIND_CHARS[END] not in own[0]["kinds"]
     assert not result["accepted"] and result["problems"] == [
         "audit: connection 1: its egress isn't padding to s + D, data in every slot, one END or FAIL, padding"]
@@ -976,9 +977,9 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
     assert result["summary"]["certified_windows"] == 6 and all(w["certified"] for w in result["windows"])
 
     early = end - p.delay + 3
-    warden, own, result, audit_ = run("early", [early] * p.lanes + [early + 1])
+    relay, own, result, audit_ = run("early", [early] * p.lanes + [early + 1])
     assert result["accepted"] and result["problems"] == [] and audit_["accepted"]
-    assert [(e["admitted"], e["ended"], e["cut"], e["ingress_cells"], e["egress_cells"]) for e in warden.log] == \
+    assert [(e["admitted"], e["ended"], e["cut"], e["ingress_cells"], e["egress_cells"]) for e in relay.log] == \
         [(early, None, True, 1, 0)] * p.lanes + [(None, None, True, 0, 0)]
     assert [(c["ordinal"], c["admitted"], c["ended"], c["egress_bytes"]) for c in audit_["connections"]] == \
         [(o, early, None, 0) for o in range(1, p.lanes + 1)]

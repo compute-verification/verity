@@ -112,8 +112,8 @@ session (`check_load`) at the relay's roots.
 **A session** (`session`, the gate's `relay-session`): the relay kept up for clients that are not its own. It is
 `rehearse` without its traffic and its client, and runs through the same code: a key in a scratch directory, `serve`
 as a process at `--listen` (the gate's: a port of the loopback its ssh forwards the peer's client port to) for exactly
-`--windows` link-windows, then `check`. It makes no request, so it asks the endpoint nothing before a client does, and
-writes no `traffic.json`, `client.log` or `client.json`.
+`--windows` execution phases, then `check`. It makes no request, so it asks the endpoint nothing before a client does,
+and writes no `traffic.json`, `client.log` or `client.json`.
 - *Where a client connects, and what tells it the relay is ready.* `serve` writes `deployment.json` once it listens:
   the listener, the schedule, the session, the key, the run id, `windows` and `origin_unix`, bucket 0's start,
   `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
@@ -122,13 +122,13 @@ writes no `traffic.json`, `client.log` or `client.json`.
 - *The end.* The relay ticks windows · T buckets from the origin and stops; nothing ends it earlier. A connection
   still open then is cut (`warden.Warden.run`): one in the queue gets no cell and is in no record; one admitted at
   bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit
-  takes; one cut from s + D on, with no `END` or `FAIL`, is refused by the audit in the link-window of its admission
-  (`warden.audit`). A connection admitted by bucket windows · T − `WardenParams.span` − 1 ends inside the run.
+  takes; one cut from s + D on, with no `END` or `FAIL`, is refused by the audit in the execution phase of its
+  admission (`warden.audit`). A connection admitted by bucket windows · T − `WardenParams.span` − 1 ends inside the run.
 - *A full queue.* A connection that arrives while the queue holds the schedule's `queue` gets one `REFUSED` cell, and
-  the relay certifies no record of the link-window it arrived in, so `check` does not accept the run: a client has
-  no more connections open at once than the schedule's lanes and queue hold.
+  the relay certifies no record of the execution phase it arrived in, so `check` does not accept the run: a client
+  has no more connections open at once than the schedule's lanes and queue hold.
 - *What the check holds.* With no `client.json`, `check` holds what it holds of the records alone: every
-  link-window's certificates and registrations and the audit. That each cell reached its client in its bucket, and
+  execution phase's certificates and registrations and the audit. That each cell reached its client in its bucket, and
   that a client's bytes are the records', is the client's to check, from its own log against the run: the summary's
   `requests`, `ended` and `cells_in_their_bucket` count no connection.
 - *What it establishes.* The records cover the connections that crossed the relay. A server reached by another
@@ -1192,7 +1192,7 @@ def _addresses(text: str) -> list[tuple[str, int]]:
 
 def traffic_windows(args, params: WardenParams, model: str, out: Path) -> int:
     """A rehearsal's traffic, written to `out` (`traffic.json`, and a `--window-per-group` run's `groups.json`), and
-    the link-windows its run lasts: to its last request's time and `--tail`, its groups' windows, and under
+    the execution phases its run lasts: to its last request's time and `--tail`, its groups' windows, and under
     `--lengths 2` as many as admit its last request (`closing_windows`)."""
     traffic = traffic_of(args, model)
     (out / "traffic.json").write_text(json.dumps(traffic))
@@ -1218,7 +1218,7 @@ def own_client(me: list[str], out: Path) -> int:
 
 def rehearse(args) -> int:
     """`rehearse`, and `session` (the module docstring's "A session"): the same run with no traffic and no client,
-    the relay at `--listen` for `--windows` link-windows."""
+    the relay at `--listen` for `--windows` execution phases."""
     kept = args.command == "session"
     _check_paced(args)
     if args.prompts is not None and not args.ids:
@@ -1294,7 +1294,7 @@ def parser() -> argparse.ArgumentParser:
     c = sub.add_parser("client", help="the traffic, through the shim")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
-    se = sub.add_parser("session", help="serve at --listen for --windows link-windows with no client, then check")
+    se = sub.add_parser("session", help="serve at --listen for --windows execution phases with no client, then check")
     pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no network certifier")
     for q in (k,):
         q.add_argument("--dir", required=True, type=Path)
@@ -1339,7 +1339,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
     for q in (s, se):
-        q.add_argument("--windows", required=True, type=int, help="the run's length, in link-windows")
+        q.add_argument("--windows", required=True, type=int, help="the run's length, in execution phases")
     se.set_defaults(ids=True, prompts=None, window_per_group=False, load_store=None)
     s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
                    help="sample the network certifier's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
