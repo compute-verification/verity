@@ -1,0 +1,47 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "c68135b49d63b1dc38ce60d8a3037405c9996066",
+ "top": "bc64a9ad6fb448de241501c93c14fc0eadcfebad",
+ "changes": [
+  {
+   "name": "c68135b49d63..bc64a9ad6fb4",
+   "commit": "bc64a9ad6fb448de241501c93c14fc0eadcfebad",
+   "base": "c68135b49d63b1dc38ce60d8a3037405c9996066",
+   "pr": null,
+   "verdict": "passed",
+   "why": "9814 -> 9814 ratchet exceptions; ruff finds nothing new in the 1 Python file(s) it changes; no direct environment read is new in the 1 Python file(s) it changes; no silent except handler is new in the 1 Python file(s) it changes; no lane-text site is new in the 3 file(s) it changes; no retired-term site is new in the 3 file(s) it changes",
+   "before": 9814,
+   "after": 9814,
+   "touched": [
+    "tests/lint/allowlists/superseded_versions.json"
+   ],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [
+    "tools/verity/circuit_check/tests/test_superseded_versions.py"
+   ],
+   "counted": {
+    "repo_env_reads": [
+     "tools/verity/circuit_check/tests/test_superseded_versions.py"
+    ],
+    "repo_silent_excepts": [
+     "tools/verity/circuit_check/tests/test_superseded_versions.py"
+    ],
+    "repo_lane_text": [
+     "tests/README.md",
+     "tools/verity/circuit_check/pyproject.toml",
+     "tools/verity/circuit_check/tests/test_superseded_versions.py"
+    ],
+    "repo_retired_terms": [
+     "tests/README.md",
+     "tools/verity/circuit_check/pyproject.toml",
+     "tools/verity/circuit_check/tests/test_superseded_versions.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}

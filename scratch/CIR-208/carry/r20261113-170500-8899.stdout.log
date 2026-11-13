@@ -1,0 +1,17 @@
+fixtures: 141 registry entries checked, 0 blobs (0.0 MB) downloaded
+passed  repository                   361 passed in 456 s; 361 outcomes recorded
+        ran because: input . changed (d85ee280009f -> 0f6d4228707b): .agents/skills/authoring-skills/SKILL.md, .agents/skills/friction/SKILL.md, .agents/skills/kernel-engineering/SKILL.md, .agents/skills/lean-proofs/SKILL.md, .agents/skills/process-design/SKILL.md, .agents/skills/testing/SKILL.md, .agents/skills/using-slack/registry.json, .gitattributes and 7181 more; input AGENTS.md changed (66394649bb4f -> ab613100f7c3); input adapters/vllm changed (5a1957a248bc -> a7c275bf1f59): adapters/vllm/README.md, adapters/vllm/conftest.py, adapters/vllm/manifests/README.md, adapters/vllm/pyproject.toml, adapters/vllm/ruff.toml, adapters/vllm/tests/acquire/fa2_attn_oracle.py, adapters/vllm/tests/acquire/test_call_boundary_source.py, adapters/vllm/tests/acquire/test_served_device.py and 405 more ...
+
+17 tests took over 5 s without the `slow` mark, so --quick still runs them:
+    45.8 s  repository: tests/test_seed_ports.py::test_only_pouw_mints_a_seed
+    41.7 s  repository: tests/test_boundaries.py::test_a_file_loads_only_its_own_row_or_an_earlier_one
+    25.4 s  repository: tests/lint/test_repo_retired_terms.py::test_no_new_retired_terms
+    25.4 s  repository: tests/test_no_wall_clock.py::test_tests_do_not_depend_on_wall_clock_time
+    13.7 s  repository: tests/test_retired_terms.py::test_no_retired_term_in_prose
+    12.0 s  repository: tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy
+    10.5 s  repository: tests/test_retired_terms.py::test_no_retired_word_in_a_new_lean_name
+     9.6 s  repository: tests/lint/test_repo_lane_text.py::test_no_new_lane_text
+     8.9 s  repository: tests/test_boundaries.py::test_nothing_outside_benchmarks_imports_it
+     8.8 s  repository: tests/test_repository.py::test_no_secret_like_literals
+
+1 suites: 1 passed (0 cached), 0 failed; 7.6 min of test time; logs in /home/research/.cache/verity/tests-slot-r3/logs/20261113T170515-1249253
