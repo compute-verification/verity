@@ -37,6 +37,7 @@ in the balance. The port follows the composition's rule, `verdict`, which change
 
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import importlib.util
@@ -369,6 +370,16 @@ def _str(x: dict, k: str) -> str:
     return x[k]
 
 
+@functools.lru_cache(maxsize=1)
+def _answers(components: tuple, ps: tuple, ev: tuple, blobs: tuple) -> list[tuple[str, dict]]:
+    """Each subprotocol's answer on its case of a composition's, those that read blobs on ``blobs``. A composition's
+    evidence is megabytes, and the difftest asks for its subprotocols' answers once for the outcome and once more for each
+    thing it counts, so the last composition's are kept."""
+    return [(C.id, C.answer({"commitment": k[2].hex(), "evidence": k[3].hex(), "params": json.loads(n[1]),
+                             **({"blobs": list(blobs)} if getattr(C, "blobs", False) else {})}))
+            for C, n, k in zip(components, ps, ev)]
+
+
 @dataclass(frozen=True)
 class Product:
     """`Core.Composition.product id components`."""
@@ -408,9 +419,7 @@ class Product:
             return "evidence: not the composition's components, once each, in order"
         if any(k[1] != n[1] for n, k in zip(ps, ev)):
             return "evidence: a case carries params other than the composition's"
-        return [(C.id, C.answer({"commitment": k[2].hex(), "evidence": k[3].hex(), "params": json.loads(n[1]),
-                                 **({"blobs": list(blobs)} if getattr(C, "blobs", False) else {})}))
-                for C, n, k in zip(self.components, ps, ev)]
+        return copy.deepcopy(_answers(self.components, tuple(ps), tuple(ev), tuple(blobs)))
 
     def binds(self, answers: list[tuple[str, dict]], c: bytes) -> bool:
         """`Core.Composition.binding id answers = some c`: every subprotocol's digest is there, and they bind to `c`."""
