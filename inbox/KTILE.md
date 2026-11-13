@@ -522,3 +522,48 @@ do it now rather than carry it:
    on HASH-130 (at most 100 words). **Tell me; the word to infra is mine.**
 
 Return by Fri 13 Nov 09:00Z.
+
+## Fri 13 Nov 06:10Z: HASH-130 is read and closed: my yes for the 31 went to infra with your finding about the store's missing blobs. NEXT: HASH-131, the plan for moving GPU code beside what runs it. By reading; no code changes
+
+**Since your return:** infra has the word (INF-767): all 31 may go; `die6` released on the
+hash lane's decision of 21 Oct; the 395 absent blobs named to infra as its finding. Using
+`research data verify` instead of `fetch --list`'s `remote: true`, and saying that 27
+tarballs cannot be decompressed without their first chunk, turned a guess ("likely nothing to
+keep") into a fact. #9542 and #9603 are on `main` (both merged 05:31Z).
+
+**HASH-131** (read its text: it is this brief, and it says what is settled). Daniel read the
+architecture page tonight. Its section 7 has a row of kernels': GPU code is in 61 directories,
+49 under `benchmarks/` (my count of Thursday evening), and a served run loads PoUW's kernel
+from `benchmarks/`, which the page forbids. I promised on it **a plan with days by Fri 13 Nov
+6 PM PST**. You know these directories from HASH-104 and HASH-127. The work:
+
+1. **The table.** A row for every directory on `main` that holds GPU sources. State the rule
+   that counts a directory (`.cu`, `.cuh`, `.ptx`, a cubin or its build script; say what
+   you do with Python that drives a GPU, such as the adapter's `engine/int8_*.py` and Triton
+   kernels) and compare your count with 61 and 49; if they differ, say by which directories.
+   For each row: what it is in a line; its owner (`research msg owners PATH`); **what loads it
+   and how, by file and line** (an import, a path built in code, a shell step, a job script,
+   a suite's inputs); whether a served run, a protocol's prover, a commitment, a dashboard
+   number, a test only, or nothing reads it; **where it goes at the end state**
+   (`verity/protocols/<p>/prover/`, `verity/protocols/pouw/prover/kernels/`,
+   `verity/commitments/`, the adapter, `benchmarks/kernels/`), or that it is deleted, with
+   the reason.
+2. **For each row that moves: what follows a path.** A binary's digest or pin
+   (`overhead_arm.json`, `sass_pins.json`, a `MANIFEST.sha256`, an `art:`), a build script's
+   embedded path (does the cubin's sha256 change when its directory does? HASH-102's four
+   conditions), a suite's declared inputs, a list in `tests/test_boundaries.py`, a row of
+   `tools/verity/check/public_boundary.toml`, a move map. And what must hold after the move.
+3. **What is already moving, by whom, so the table shows it and does not plan it twice:**
+   memory-accounting's two provers (its #9061, Fri 13 Nov); the machine-code check
+   (compute-research, Fri after noon PST); PoUW's package (compute-accounting with vllm and
+   kernels, not before Tue 17 Nov); the served kernels' circuits (top, vllm, circuits).
+   Read each one's PR or map and say which rows of the table it takes.
+4. **The plan, on one page:** the moves in order, each with its owner, what it waits on and
+   a day you would propose; PoUW's first; what is deleted instead of moved (it joins the cut
+   of our three benchmark directories, Fri 20 Nov); what cannot be dated and why. **Mark
+   each line as read, run, or guessed.**
+5. A note, the table as TSV beside it, one comment on HASH-131 (at most 100 words). **No
+   branch, no PR, no file in the tree.** The days are agreed by me with vllm and
+   compute-accounting on Friday; your plan is what I bring.
+
+Return by Fri 13 Nov 14:00Z. If the table is done earlier, return then.
