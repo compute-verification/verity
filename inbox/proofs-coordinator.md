@@ -128107,3 +128107,106 @@ Other facts:
 Pushed heads: `cursor/proofs-stopdriver-stop-reason-ffc6` at `725720f8a4a063cf898e180ebbab169092bff91e` (#9699).
 Unchanged: across `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624), cards
 `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`. No run of mine is out.
+
+## GATHER, Fri 13 Nov 07:43Z: the second try's final head is `984cb027efa30548bd370a1f0e04830e8d12be1a`: its Friday-size rehearsal `1822` ended exit 0 with all eight checks true; `cost` is true with serving's runner as it stands and needs no argument (`a2c6` shows it); one reprint over its kept files is running (`a5a7`)
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, final. The whole of `r20261113-053940-1822` ran at it and ended exit 0: two small rehearsals, 67 named tests, and Friday's shape at `rate:1/1 --k 4`. I stand behind it for the 20:00Z try. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`, not moved. [run: `git ls-remote`, 07:39Z; the run's `out/head.txt`]
+
+**In plain words.** The code for Friday's second try is settled. A rehearsal at Friday's size passed on it: all 8 outer blocks were replayed, 4 of every 64 inner blocks were proved, Lean accepted every proof, and the result is withheld only by the switch that keeps the two-stage accept off, as ruled. It ran on a made-up class on CPUs, not on what the engine served.
+
+Marks: [run] a command I ran this turn, with the time I read; [read] a file or issue I read this turn, with the place; [relayed]; [derived] my reasoning, tested by nothing; [guess]. Mailbox read to its last heading, your 07:29Z, at 07:42Z [run]; your 06:37Z, 07:22Z and 07:29Z read whole. I wrote nothing on Linear.
+
+### To post
+
+Words for VLLM-300, as they stand. Serving's lead wrote at 06:45Z that the `cost` answer is no longer needed there, so the second paragraph is yours to post or leave. [read: VLLM-300, 07:37Z]
+
+> **`r20261113-053940-1822` ended exit 0 at 07:10Z. The noon PST try's (20:00Z) audit head is `984cb027efa30548bd370a1f0e04830e8d12be1a`, final.** What ran: a made-up class of the served shape (8 outer blocks of 64 tokens, the select as 20 units, its inputs committed, under a stop rule), `--replay rate:1/1 --k 4`, a local challenger, development keys, no card. All eight `SMALL` fields true. 20 sessions; 60 of 60 verdicts true, Lean's and the Python verifier's; 18 of 18 changed copies refused; the second stage's check `ok`; the outcome withheld by `two-stage-form` alone. `second` took 53 minutes; the job's summed peak was 61.4 GiB. It does not show an audit of a served class, and it used no card.
+>
+> **`cost`.** `second` at this head writes into `summary.json` what its parts cost, and `cost` checks only that those fields are there and well formed: for each session, the cards it held (0 or 1), its card where it held one, and its proving's seconds; for the audit's staging, 0 cards; for the interior's commitment, its seconds and 0 cards. Your runner needs to pass no argument for it: `second` writes them whatever it is given. Without `--devices` each session says 0 cards and its seconds on the CPU. `--devices` only moves the sessions' proving onto the cards named, and `--replay-record` only copies the replay's cost into the summary, which `cost` does not read. `r20261113-062847-a2c6` shows it: its `SMALL` line has `"cost": true` with `second_served.sh` as it stands, and its exit 1 is `second-inputs` alone. `cost` reads false only where `second` stops before its sessions run, and there the other fields are false too.
+
+### 0. The standing lines
+
+- **The pen:** the machine was replaced twice in this turn, at 07:38:38Z and at 07:42:12Z. I took `~/wt/.pen` again each time, last at 07:42:44Z; the owner line is this loop's. Nothing unpushed was lost. The run's small files were already copied to the artifacts. [run: `uptime -s`]
+- **Events that were not mine, acted on in no way:**
+  - 06:34Z to 06:35Z: four of your old timers, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z` and `runs-ended-resumes-0505z`.
+  - 07:38Z, and the same again at 07:42Z: seven completion notices addressed to you, from CUT, ACCEPTS, HELDOF, COUNT, SESSIONCOINS, ASSEMBLY and SESSIONOF. SESSIONOF's says its turn ended in an error, with no output.
+- **Your 07:22Z and 07:29Z:** no `main` is merged into either tree. Daniel's words are used from this entry on. The reprint runs on vy-nebius-2 and not `--on auto`, because the kept files it reads are on that machine.
+
+### 1. The rehearsal `r20261113-053940-1822`
+
+- **Where and when:** vy-nebius-2, pool proofs, 80 GB asked, at `984cb027efa3`. It took slot `p9` at 05:40:14Z after 10 seconds and ended at 07:10:00Z, exit 0, after 89.9 minutes. [run: `status.json`, `slot.json`, 07:35Z]
+- **Its four parts, each exit 0** [run: `out/rc.txt`]:
+  - the 20-unit class under a stop rule with the select's inputs committed, every outer block replayed, V = 2,560;
+  - the same class with history tables, V = 2,560;
+  - 67 named tests;
+  - Friday's shape at the second try's design.
+
+**The Friday-size part.** A made-up class: V = 154,880, 8 outer blocks of 64 tokens, 20 units a token, so 10,240 inner blocks; 4 prompt ids; `--challenger local`; no `--devices`.
+
+- **The check's line** [run: `out/friday/expect.txt`]: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`
+- **By name from `summary.json`** [run: `run-table.py`, 07:36Z]:
+  - `held` true.
+  - First stage: 8 of 8 outer blocks.
+  - Second stage: 640 inner blocks, 4 in each of 160 cells, proved in 20 sessions of 32 units.
+  - Verdicts: 60 of 60 true, 20 each of `lean-draw`, `lean-verify` and `m0-verifier`.
+  - Changed copies: 18 of 18 refused.
+  - Checks before the sample: 22 of 22. Pins: 20 of 20.
+  - `round_two`: `ok`, no codes.
+  - Outcome: `accepted` false, `statements` `["two-stage-form"]`, `interior` `["statements"]`, `replay_sample` `[]`.
+  - `record`: `{"failed": [], "own_reads": true}`.
+- **What the second stage cost, as the summary now says it** [run: the summary's fields by name, 07:36Z]:
+
+| Part | Seconds | Cards |
+|---|---|---|
+| The interior's commitment | 34.7 | 0 |
+| The audit's staging before the sample | 316.1 | 0 |
+| The audit's staging after the sample | 8.4 | 0 |
+| The proof server's prover, busy over the 20 sessions | 77.1 | 0 |
+| Lean's verify, summed over the 20 sessions | 574.5 | 0 |
+
+  - Every session: `gpus` 0, `device` null, `prove_seconds_source` `busy`. The proof server's `devices` and card clocks are null.
+  - A session's Lean verify took 26.0 to 34.4 seconds.
+- **Times** [run: the files' times]: the made-up serve wrote the class at 06:13:27Z; `first` ended at 06:16:38Z; `second` ran from 06:16:39Z to 07:09:57Z, 53.3 minutes.
+- **Memory** [run: `job-memory.py` on `resources.jsonl`, 07:36Z]: the job's summed peak was 61.4 GiB at 06:54:40Z. `b025`, the same shape at `e20b7c981b46`, peaked at 61.2 GiB.
+
+**What it does not show.** [derived]
+- It audited a made-up class, not a served one.
+- It used no card: `--devices` was not given.
+- The outcome is refused, so it establishes no figure for the class.
+
+### 2. `cost`, with my sources
+
+- **What makes it true** [read: `two_stage_small.py:180–195` at `984cb027efa3`]: `costed(summary)` holds where
+  - every session in `audit.timing` has `gpus` 0 or 1, a `device` exactly when `gpus` is 1, and a number under the key its `prove_seconds_source` names (`busy_s` or `session_s`);
+  - `audit.staging.gpus` is 0;
+  - `interior_commit` has a number of seconds and `gpus` 0.
+- **`second` writes all of them with no argument** [read: `two_stage.py:1181`; `a5.py:798` and `1515–1522`]. Without `--devices` the proof server is made with no card and each session says `gpus` 0, `device` null, source `busy`.
+- **`--replay-record` adds the key `replay`,** which `costed` does not read. [read: `two_stage.py:1136–1137`]
+- **`a2c6` shows it** [run 07:37Z: `rg` on its `out/rehearsal.txt` on vy-nebius-cpu-14]: `chain rc=1`; `round_two` codes `["second-inputs"]`; `SMALL` with `"round_two": false, "outcome": false, "cost": true`, the other five true.
+- **Serving's run again with the inputs committed passed** [relayed: VLLM-300, round2 06:57Z]: `r20261113-064300-7b8d` at `984cb027efa3` through serving's own runner, with a `--logits` class and `--kept`, exit 0, `SMALL` 8 of 8, `FORM` 6 of 6.
+
+### 3. What serving has done since my 06:32Z entry
+
+All relayed. [read: VLLM-300, 07:37Z and 07:41Z]
+
+- **Your post was taken as written** (serving's lead, 06:36Z): 13:10Z at `1536ba03d343`, serve and audit; 20:00Z at `984cb027efa3` once `1822` ends exit 0.
+- **`first` on the served class is accepted** (`r20261113-062722-0921`, at `1536ba03d343`, `rate:1/2 --k 1`): it sampled 4 of 8 outer blocks. No `second` has run on a served class.
+- **The three needs are met in serving's tools, none yet on a served class:**
+  - `--kept`: its copy tool takes the kept inputs with `KEPT=1` and its runner passes `--kept`. Shown on made-up files.
+  - The design: its launcher passes `REPLAY` and `K` (notes commit `7e328ba94b`). A real `first` through it with both set has not run.
+  - The class: the 20:00Z try audits a serve of serving's logits tree, planned for 12:25Z.
+- **Serving's own rehearsal of the second design through its runner** (`r20261113-065433-c03c`, 144 GB) was still waiting for memory at 07:06Z.
+
+### Runs
+
+- `r20261113-073934-a5a7` (vy-nebius-2, 20 GB, 120-minute limit): the reprint over `1822`'s kept files at `984cb027efa3`. Launched 07:39:34Z; its print started at 07:40:22Z, with under a minute's wait. Expected end about 08:40Z. [run: its `out/start.txt`; guess, from `b73a`'s 54 minutes] One timer of mine, at about 08:45Z.
+
+### Not established
+
+- A two-stage audit of a served class: none yet, by anyone.
+- `--devices` on any class by me.
+- The reprint over `1822`'s kept files: running.
+
+### Still due
+
+- The reprint's lines when `a5a7` ends.
