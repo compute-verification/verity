@@ -599,8 +599,9 @@ theorem runKept_eq {p : Params} {c : OneStage.Commitment} {e : Evidence} {ms : A
           rw [hfold]
           rfl
 
-/-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
-state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
+/-- **The fold's half of `StreamSound`**: on a feed in the per-member stream's order, its state after every step
+keeps every member's files and every statement's session as they read on all the blobs fed. Stated here, and proved
+in `Spot.OneStageZkStreamKept` (`stepsKept`). -/
 def StepsKept : Prop :=
   ∀ (p : Params) (c : OneStage.Commitment) (e : Evidence) ms sts plan (bs : List ByteArray),
     (membersStream p c e ms sts).plan = .ok plan → (membersStream p c e ms sts).Fed plan bs →

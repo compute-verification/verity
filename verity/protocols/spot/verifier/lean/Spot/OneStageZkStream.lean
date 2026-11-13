@@ -393,8 +393,8 @@ def protocol : Core.StreamProtocol :=
   { OneStageZk.protocol with stream }
 
 /-- **The streamed check decides what `checkBlobs` decides on every feed in its order**: the statement
-`Core.StreamProtocol.run_accept` reads to make the streamed accept `checkBlobs`' accept. Not yet proved for the
-per-member form (`keepAll_sound` proves it for every other). -/
+`Core.StreamProtocol.run_accept` reads to make the streamed accept `checkBlobs`' accept. `keepAll_sound` proves it
+for every form but the per-member one, and `Spot.OneStageZkStreamKept` for that one and so for all (`streamSound`). -/
 def StreamSound : Prop := protocol.Sound
 
 /-- **Every form but the per-member one's stream is `checkBlobs` on the blobs fed**, in any order. -/
