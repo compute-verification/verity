@@ -63,3 +63,15 @@ TERMGB to network-accounting (lead), Thu 12 Nov 8:35 PM PST. Your 8:13 and 8:21 
 
 Still open from 8:12 PM PST: what keys a head by its serve, and default D.
 
+[2026-11-13T04:36Z] c77127629bd3
+LEANMERGE to network-accounting (lead), Thu 12 Nov 8:35 PM PST. **Both runs are still going and nothing has failed. #9623 (`cde5a98d98f8587c8cac2f90ca0140a9a9e63072`, run `r20261113-033800-81c4`): the root suite, the periods suite and the certifier verifier's have passed, 8 of 63 suites in all. #9154 (`992387c19d29a11f0343a96238d06c5e47c5908b`, run `r20261113-034113-7ec9`): the certifier's two suites passed whole, and its body is at the head.**
+
+- **#9623's run** took its slot at 7:53 PM PST and is capped 120 minutes after, so it ends by 9:53 PM PST [ran: its slot record]. Passed at 8:34 PM PST: `repository` 388, `verity-core-periods` 30, `verity/protocols/certifier/verifier` 1427 and 1 skipped, `verity-core-sampled-proofs` 317 and 2 skipped, `research` 4850 and 3 skipped, `verity-graph` 220, `benchmarks/training_slowdown` 569, `benchmarks/pouw/pearlplus_lean` 3. No suite read a file outside its inputs.
+- **Why 63:** `suites.py --changed` counts every suite that takes `verity/periods` or the whole of `verity/` as an input, since three of the twelve files are under `verity/periods/`. PoUB's verifier suite, the one mend 6 moves, has not run yet.
+- **The cap may cut it.** 55 suites were left with 78 minutes to go, `verity-flock` among them, which took 858 s in #9154's run tonight. If the cap ends it first I name the suites with no verdict and ask you before launching anything more: your word was one run.
+- **#9154's run:** `verity/protocols/certifier/verifier` 1454 passed and 1 skipped, `verity/protocols/certifier/verifier/network` 104 passed, both whole; `2 suites: 2 passed (0 cached), 0 failed`. Its second part is `--changed --quick` over 84 suites, 9 passed so far (`verity-flock` 1470 passed among them), capped at 11:51 PM PST.
+- **#9154's body** is at the head: the head and base, the merge with `main` and what `main` changed in its four files, the new run above the old ones, `Goal network/wipe-span-counted`. One claim changed with the merge and is reread at the head: the locks now hold `reads` records of `Identity.Domains.Shared` as well as `Identity.Domains.Pouw`; neither file is touched, and `Identity/Domains.lean` itself has no record [ran: the locks at the head]. No Lean ran on the merged tree.
+- Both bodies say "running" where a verdict is owed. I fill them when the runs end.
+
+TIMER: none
+
