@@ -39,7 +39,7 @@ import numpy as np
 import torch
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import int8_exact as IE
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
