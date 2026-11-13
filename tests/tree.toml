@@ -288,12 +288,6 @@ means = "its tests, a suite of its own"
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
 
 [[not_yet]]
-path = "verity/protocols/reporting.py"
-to = "into verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/registration.py"
 to = "verity/protocols/accounting/registration/"
 owner = "top"
@@ -323,13 +317,6 @@ path = "verity/claims/"
 to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
 owner = "soundness"
 day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/periods/"
-to = "verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
 path = "fixtures/"

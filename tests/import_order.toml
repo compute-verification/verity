@@ -363,12 +363,6 @@ reaches = [
 
 [[place]]
 paths = [
-    "verity/periods",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/protocols/accounting/certifier/device",
 ]
 
@@ -434,7 +428,6 @@ loads = [
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -445,11 +438,9 @@ reaches = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 loaded_by = [
@@ -474,12 +465,10 @@ reaches = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/accounting/poub/verifier",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -499,9 +488,7 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
     "verity/protocols/accounting/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -526,8 +513,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -537,8 +522,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -737,12 +720,6 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "verity/protocols/reporting.py",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/protocols/tests",
 ]
 trusted = true
@@ -753,6 +730,8 @@ paths = [
     "verity/config.py",
     "verity/party.py",
     "verity/protocol.py",
+    "verity/tests/tests/test_periods.py",
+    "verity/tests/tests/test_periods_difftest.py",
 ]
 trusted = true
 loads = [

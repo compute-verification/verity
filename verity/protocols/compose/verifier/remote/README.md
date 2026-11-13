@@ -299,7 +299,7 @@ PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/accounting/pouw/verifier
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
 proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
 neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 720 and 8,760,
-`reporting.PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
+`verity.protocol.MONITORING_PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
 1.1·10⁻⁶ a phase. A year's n·(δ_bind + δ_ks) below 2⁻¹⁰⁰ needs 2⁻¹¹³·¹ a phase; the total
 also needs δ_s below 2⁻¹⁰⁰.
 
