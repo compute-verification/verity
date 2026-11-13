@@ -129740,3 +129740,38 @@ This closes two of the lines I left as not established at 07:59Z. Nothing in tha
 - Anything on chain 2's staged head: at 11:30Z, when top posts it.
 
 I end my turn here. Timers of mine: one for the Lean run and lean's head at about 09:30Z, one for chain 2's staged head at 11:30Z.
+
+## SERVEDCARD, Fri 13 Nov 08:18Z: `EmbeddingRead_v1` proved on CPU and accepted by Flock's Lean verifier, 10 of 10 sessions, at `cursor/prove-time-tmpl-unit-6e08` `661f49a54a`; correction to 07:21Z: the Lean check needs `--program`, which `lean-shard.sh` already writes, and only `--statement` is new
+
+**The CPU check passes on both types.** Run `r20261113-075838-57c0` on vy-nebius-cpu-5 (11 CPUs), from `661f49a54a` [run]:
+- **Units:** `census:EmbeddingRead_v1{V=256,H=4}@2` and `census:EmbeddingRead_v1{V=256,H=96}@2`, each N = 2 instances, k_log 23, 2,500,350 and 2,586,540 ANDs.
+- **Stage step:** `flock-tmpl-unit` was built in the run and placed each unit (`"ok":true`). The placed rows are 338,343,730 bytes for H=4 and 350,579,694 bytes for H=96 [run].
+- **Prove step:** `prove_time.sh` on CPU (`PT_DEVICE=cpu`, `WARM=1 RUNS=4`) passed `--tmpl-unit` to both the server and the prover. For each type, 5 of 5 sessions were accepted by the live Rust verifier. Peak memory was 4.99 GiB for the largest process [run].
+- **Lean verifier:** every session was verified once by `verity bench prove lean-verify`, at statement `verity/flock-circuit/tmpl`, with the Program from the stage record's `word` as `program-word.json` and no partition file.
+  - H=4: 5 of 5 accepted, labelled "accepted on the provisional unit cover, units as stated, the Program not held to the circuit", 25.6 s to 26.3 s wall each, 5.72 GiB peak [run].
+  - H=96: 5 of 5 accepted, same label, 26.3 s to 27.2 s wall each, 5.78 GiB peak [run]. The check's last line is "done: 10 accepted of 10 sessions" [run].
+- **Partition rule:** `flock-circuit/unit-cover/v0`, so `lean_verify.py` withholds the partition. It is the same label the rehearsal gave the batched GEMM statement [run].
+
+The prover's own median time (`prove_total_s`) on these 11 CPUs was 0.878 s for H=4 and 0.897 s for H=96, each on N = 2 [run]. The previous run, `r20261113-073754-004b` on vy-nebius-cpu-14 (16 CPUs), gave 0.748 s and 0.734 s; its Lean step lacked the Program [run]. These are CPU times on shared pool machines, not a card figure, and they do not go in the table.
+
+**The branch needed a second commit, now pushed.** The first check, `r20261113-072008-025f`, refused both statements before any session: "a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)" [run].
+- **Cause:** `stage.py`'s census path stages a read as the templated statement, as serving does, but wrote no `unit.tmpl`. Only the `read:` type wrote one, so the stage step had nothing to place [read].
+- **Fix, `661f49a54a`:** `stage_census` writes `unit.tmpl` and `unit.layout` whenever its stager builds the templated statement. The stage record's `statement.id` now names that statement.
+- **Test:** `test_main_writes_a_templated_statements_template` fails on the old `stage.py` and passes on the fix [run]. The branch's 17 tests pass and ruff is clean [run].
+- **Branch:** `ae27e4331f` then `661f49a54a`, on `main` `2e99b1cf48`. No merge of `main` since, per your 07:22Z mail.
+
+**Correction to my 07:21Z scope.** I wrote that `--partition` and `--program` were not what the Lean check was missing. `--program` is. A session verified without it is refused with `ProvedScope.NO_PROGRAM`, which `verify` reaches only after every other check has passed. The second check's 10 sessions all ended there [run, read]. I also wrote that a read's stage record has no `word`. That holds only for the `read:` type; a `census:` read's record carries one [run]. So `lean-shard.sh` needs much less than I said:
+- **`--program`:** its restage already writes `program-word.json` from `word` for every census type, a read included. The program-writing code in the CPU check is the same [read].
+- **`--partition`:** not passed under `unit-cover/v0`; `lean_verify.py` withholds it [read].
+- **`--statement`:** the one change. `lean-shard.sh`'s verify now passes the statement id from the circuit's META line (in the notes as `overhead-run/lean-shard.sh`, sha256 `9ac3fcd51b9aa896…`).
+  - A flat statement's META names `verity/flock-circuit`, the default, so the flat types verify as before [read].
+  - This version has not run on a kept read. The CPU check above runs the same verify through its own script [derived].
+
+**Both legs are within reach for cards 4 and 5, under three conditions** [derived]:
+- The retry's stage job stages from `661f49a54a` or later.
+- Its `PT_TMPL_UNIT` points to a `flock-tmpl-unit` built on disk, because node A's `/dev/shm` is noexec.
+- The Lean leg uses the `lean-shard.sh` above.
+
+The remaining risk is the GPU prover: no templated statement has been proved on it, and the CPU check does not test its own limits (12 slot types, the nonzero-count bound, the zero-knowledge shape). A refusal would show in its first minute [read]. I launch nothing on cards before your go at 14:00Z.
+
+For the table: `EmbeddingRead_v1` has, on CPU only, 5 of 5 prove-step sessions a type and a Lean verdict on each, accepted under the unit-cover label. It has no card time yet; that comes only from the retry on cards 4 and 5 if you give the go.
