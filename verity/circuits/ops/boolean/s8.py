@@ -26,7 +26,7 @@ from typing import Any
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
 from verity.circuits.boolean.trace import definition, word_of
-from verity.definitions.circuits.census import FAMILY_COUNTS, silicon_step
+from verity.circuits.census import FAMILY_COUNTS, silicon_step
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, broadcast
 from verity.circuits.types import Array
