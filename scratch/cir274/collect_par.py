@@ -1,7 +1,7 @@
 """CIR-274 (REQBLOCK): `scratch/cir271/collect43.py` with the W ranks compiled in parallel, one process a rank (fork), then
 composed as `tp_steps.compile_tp` composes them, and `pipeline.tp.wires.sites_circuit` over the bindings. A rank's
 `RankSites` comes back with its Definitions by reference (a registered one by id, a binding as its Definition and record),
-so the parent's are the ones it would have built. Run from adapters/vllm:
+so the parent's are the ones it would have built. `interface.layout` is computed once a Definition. Run from adapters/vllm:
 
     ../../.venv/bin/python ../../scratch/cir274/collect_par.py OUT LAYERS LP
 
@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import multiprocessing as mp
+import os
 import pickle
 import re
 import resource
@@ -35,6 +36,21 @@ from verity_vllm.program.tp_workload import TpWorkload  # noqa: E402
 
 from verity.circuits import codec as C, defs as D  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.commitments.windows import interface as I  # noqa: E402
+
+_LAYOUTS: dict[int, tuple] = {}
+_layout = I.layout
+
+
+def _layout_once(fn):
+    """`interface.layout`, a function of its Definition alone, computed once a Definition (the window's 4-layer profile spends
+    nearly all of `sites_circuit` recomputing it)."""
+    if (got := _LAYOUTS.get(id(fn))) is None:
+        got = _LAYOUTS[id(fn)] = (fn, _layout(fn))
+    return got[1]
+
+
+I.layout = _layout_once
 
 
 def _rebind(defn, bindings):
@@ -112,12 +128,31 @@ def main() -> None:
         workload = TpWorkload(digests, bindings)
         rec["compile_s"] = round(time.perf_counter() - t0, 1)
         live = [b for b in bindings if b is not None]
+        prof = None
+        if os.environ.get("COLLECT_PROFILE"):
+            import cProfile
+            prof = cProfile.Profile()
+            prof.enable()
+        t = time.perf_counter()
         sites = TW.sites_circuit(bindings, "class-g")
+        rec["sites_s"] = round(time.perf_counter() - t, 1)
+        t = time.perf_counter()
         try:
             in_order(sites)
             backward = None
         except AssertionError as e:
             backward = str(e)[:2000]
+        rec["in_order_s"] = round(time.perf_counter() - t, 1)
+        t = time.perf_counter()
+        blocks = proof_blocks(sites)
+        rec["proof_blocks_s"] = round(time.perf_counter() - t, 1)
+        if prof is not None:
+            import pstats
+            prof.disable()
+            s = io.StringIO()
+            pstats.Stats(prof, stream=s).sort_stats("cumulative").print_stats(60)
+            pstats.Stats(prof, stream=s).sort_stats("tottime").print_stats(40)
+            (out / f"profile_{lp}_l{layers}.txt").write_text(s.getvalue())
         kinds = Counter(re.sub(r"\[\d+, \d+\)", "[..)", re.sub(r"request \d+'s collective \d+ \[\d+, \d+\): rank \d+'s node \d+ ",
                                                                 "", u)) for u in sites.unwired)
         rec.update({"workload": workload.digest, "sites": [len(x.sites) for x in live],
@@ -125,14 +160,15 @@ def main() -> None:
                     "units": dict(sorted(sites.circuit.units.items())), "templates": len(sites.circuit.templates),
                     "template_ids": sorted(descriptor_id(fn) for fn, _ in sites.circuit.templates),
                     "wires": len(sites.circuit.wires), "unwired": dict(sorted(kinds.items())),
-                    "proof_blocks": proof_blocks(sites), "backward": backward})
+                    "proof_blocks": blocks, "backward": backward})
     except BaseException as e:  # noqa: BLE001 - a refusal is a result
         rec.update({"error": f"{type(e).__name__}: {e}"[:3000], "trace": traceback.format_exc()[-3000:]})
     rec["wall_s"] = round(time.perf_counter() - t0, 1)
     rec["peak_gib"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1048576, 2)
     (out / f"collect_{lp}_l{layers}.json").write_text(json.dumps(rec, indent=1) + "\n")
     print("REQBLOCK collect_par " + json.dumps({k: rec.get(k) for k in ("layers", "LP", "sites", "wires", "templates", "unwired",
-                                                                       "proof_blocks", "backward", "compile_s", "wall_s",
+                                                                       "proof_blocks", "backward", "compile_s", "sites_s",
+                                                                       "in_order_s", "proof_blocks_s", "wall_s",
                                                                        "peak_gib", "error")}))
 
 
