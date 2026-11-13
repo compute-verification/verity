@@ -70,7 +70,7 @@ theorem length_insOf_le (u : ℕ) :
   refine length_le_of_window (a := 2 + u * (bitsRows c).nIn) ?_ fun g hg => ?_
   · unfold Spot.Bits.insOf
     exact List.nodup_range.filter _
-  · obtain ⟨hs, hr, hκ, ho⟩ := mem_insOf.1 hg
+  · obtain ⟨hs, hr, hκ, ho⟩ := NeededBitsOf.mem_insOf.1 hg
     obtain ⟨g', hg', hw⟩ := exists_of_owner ho
     have hin := lt_inputs_of_row_none hs hr
     rw [keyProg_inputs] at hin
