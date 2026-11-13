@@ -334,3 +334,33 @@ def test_the_word_that_no_head_comes_is_signed_for_its_execution_phase_link_sess
     for params in (LEN, PLAIN):
         with pytest.raises(ValueError, match="lengths is 2"):
             CR.no_head_digest(LINK, 3, params)
+
+
+def test_the_word_that_no_head_comes_reads_one_way_only(tmp_path):
+    """The word has one record, the one `no_head` writes, and its certificate is read as a registration's is. One
+    that states the same word another way is refused for the way it is written, each by name: the execution phase as
+    a bool or as a float equal to it, the certificate's key, digest or signature in upper case or with a space
+    between its bytes, and a certificate with a key beside its three or that is no object."""
+    issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
+    key = issuer.signer.public_key()
+    doc = json.loads(json.dumps(CR.no_head(CR.attest_no_head(issuer, LINK, 1, TWO), TWO)))
+
+    def refused(changed, why):
+        with pytest.raises(ValueError, match=why):
+            CR.check_no_head(changed, key, signers.SESSION, TWO, LINK, 1)
+
+    CR.check_no_head(doc, key, signers.SESSION, TWO, LINK, 1)
+    for window in (True, 1.0):
+        refused(doc | {"window": window}, f"the word's window is {window}, which is not written as the schedule's 1")
+    signed = doc["certificate"]
+    for k, v in signed.items():
+        assert v != v.upper()
+        for text in (v.upper(), v[:2] + " " + v[2:], " " + v, v + "\n"):
+            assert bytes.fromhex(text) == bytes.fromhex(v)
+            refused(doc | {"certificate": signed | {k: text}},
+                    f"the word's certificate doesn't read: its {k} is hex in lower case")
+    refused(doc | {"certificate": signed | {"extra": 0}},
+            "the word's certificate doesn't read: it holds the keys .* and no other")
+    refused(doc | {"certificate": {k: v for k, v in signed.items() if k != "key"}},
+            "the word's certificate doesn't read: it holds the keys")
+    refused(doc | {"certificate": list(signed)}, "the word's certificate doesn't read: it holds the keys")

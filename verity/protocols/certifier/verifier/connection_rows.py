@@ -521,8 +521,8 @@ def _stated(what: str, got: Any, want: Any) -> None:
     if _is(got, want):
         return
     if got == want:
-        raise ValueError(f"{what} {got!r}, which is not written as the schedule's {want!r}: a registration's integer "
-                         f"is an int, neither a bool nor a float")
+        raise ValueError(f"{what} {got!r}, which is not written as the schedule's {want!r}: an integer is written as "
+                         f"an int, neither a bool nor a float")
     raise ValueError(f"{what} {got!r}, and the schedule's {want!r}")
 
 
@@ -534,8 +534,18 @@ def _unhex(text: Any, what: str) -> bytes:
     return bytes.fromhex(text)
 
 
-#: a registration's certificate's keys
+#: the keys of a certificate in a registration or in the word that no head comes
 CERTIFICATE = ("key", "digest", "signature")
+
+
+def _certificate(c: Any, link: str, window: int) -> Certificate:
+    """The certificate of the link's egress in the execution phase that a registration or the word that no head comes
+    holds, read the one way both write it: its three keys and no other, each hex in lower case with no space
+    (`_unhex`). ValueError naming what fails."""
+    if not isinstance(c, Mapping) or set(c) != set(CERTIFICATE):
+        raise ValueError(f"it holds the keys {sorted(CERTIFICATE)} and no other")
+    return Certificate(_unhex(c["key"], "its key"), link, Direction.EGRESS, window, _unhex(c["digest"], "its digest"),
+                       _unhex(c["signature"], "its signature"))
 
 
 def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
@@ -587,12 +597,8 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
         domains[name] = dom
     head = Head(link, window, params.digest, tuple(entries))
     try:
-        c = doc["certificate"]
-        if not isinstance(c, Mapping) or set(c) != set(CERTIFICATE):
-            raise ValueError(f"it holds the keys {sorted(CERTIFICATE)} and no other")
-        cert = Certificate(_unhex(c["key"], "its key"), link, Direction.EGRESS, window,
-                           _unhex(c["digest"], "its digest"), _unhex(c["signature"], "its signature"))
-    except (KeyError, TypeError, ValueError) as e:
+        cert = _certificate(doc["certificate"], link, window)
+    except ValueError as e:
         raise ValueError(f"the registration's certificate doesn't read: {e}") from None
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
@@ -629,18 +635,16 @@ def no_head(certificate: Certificate, params: WardenParams) -> dict[str, Any]:
 def check_no_head(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
                   window: int) -> None:
     """The verifier's read of the word that an execution phase has no head, under the network certifier's key and
-    session and the schedule's parameters: ValueError naming what fails."""
+    session and the schedule's parameters: ValueError naming what fails. The word reads one way only, as `no_head`
+    writes it, and its certificate as a registration's does (`_certificate`)."""
     want = {"format": NO_HEAD, "link": link, "window": window, "parameters": params.digest.hex()}
     for k, v in want.items():
-        if doc.get(k) != v:
-            raise ValueError(f"the word's {k} is {doc.get(k)!r}, and the schedule's {v!r}")
+        _stated(f"the word's {k} is", doc.get(k), v)
     if set(doc) != set(want) | {"certificate"}:
         raise ValueError(f"the word holds the keys {sorted(set(want) | {'certificate'})} and no other")
     try:
-        c = doc["certificate"]
-        cert = Certificate(bytes.fromhex(c["key"]), link, Direction.EGRESS, window, bytes.fromhex(c["digest"]),
-                           bytes.fromhex(c["signature"]))
-    except (KeyError, TypeError, ValueError) as e:
+        cert = _certificate(doc["certificate"], link, window)
+    except ValueError as e:
         raise ValueError(f"the word's certificate doesn't read: {e}") from None
     if cert.digest != no_head_digest(link, window, params):
         raise ValueError("the word's certificate doesn't sign that the execution phase has no head")
