@@ -3598,6 +3598,40 @@ MATCHES_PUBLIC = D.Port(PIECES, "matches_public", matches_public, st.one_of(
     JSON), package=PACKAGE)
 
 
+def public_ports(j):
+    j = _json(j)
+    rec = j.get("record") if isinstance(j, dict) else None
+    roots = rec.get("roots") if isinstance(rec, dict) else None
+    if not isinstance(roots, list):
+        raise D.Reject("the record's roots are not a list")
+    if not all(isinstance(r, dict) and isinstance(r.get("port"), str) for r in roots):
+        raise D.Reject("a registered root is not an object with a string port")
+    try:
+        return _json(R.public_ports(rec))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+
+
+def _roots(ports: list[str], x: int) -> list[dict]:
+    """A registration's roots at `ports`, every fifth with no domain or leaves."""
+    return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
+            {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
+
+
+#: Port names a member's roots carry (one holding a `/`), and members' names (one template's two chunks, another's, one
+#: with no `/`)
+OWN_PORTS = st.sampled_from(["x", "sx", "o0", "w/row"])
+MEMBER_NAMES = st.sampled_from(["T{K=1}/c0", "T{K=1}/c1", "A/c0", "T"])
+PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(OWN_PORTS, max_size=4), st.integers(0, 63)),
+    st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
+              st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"])),
+        min_size=1, max_size=4), st.integers(0, 63)),
+    JSON), package=PACKAGE)
+
+
 def _public_items(a: dict, change, x: int) -> dict:
     """`check_public`'s input from an audit: its record, the check's query, the verifier's ports and registered values as
     the Spec's values, and every item they and the templates may show declared; maybe changed."""
@@ -5455,7 +5489,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400), (TABLES_HELD, 300),
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
+              (MATCHES_PUBLIC, 400), (PUBLIC_PORTS, 300), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
               (SECOND_INTERIOR_READS, 200), (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200),
               (REPLAY_RETURNED, 300), (SECOND_SCHEDULE, 300),

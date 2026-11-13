@@ -116,17 +116,17 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
 
 
 def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
-           more: dict[str, str] | None = None) -> tuple[int, dict, Path, str]:
+           more: dict[str, str] | None = None, design: str = DESIGN) -> tuple[int, dict, Path, str]:
     """``records_audit.py audit`` of ``window`` into ``tmp/audit`` as `v3c_audit` runs it, on a local challenger's coins,
-    with ``more`` added to its environment -> (its exit code, its summary, its out directory, the end of its output for
-    a failure's message)."""
+    under the sampling design ``design`` (``--law``), with ``more`` added to its environment -> (its exit code, its
+    summary, its out directory, the end of its output for a failure's message)."""
     out, main = tmp / "audit", tmp / "main.txt"
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
                                                  "verity/protocols/flock/prover/python", "adapters/vllm"))
     argv = [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(window),
-            "--law", DESIGN, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+            "--law", design, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
                                                                                     for x in (f"--{k}", str(p))),
             "--ports", "2", "--out", str(out), *flags]

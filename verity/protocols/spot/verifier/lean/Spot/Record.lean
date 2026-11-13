@@ -67,8 +67,9 @@ def registeredRoots (rec : Json) : Array (String × Json) :=
     | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, getD e "root")
     | _ => acc) #[]
 
-def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run do
-  let reg := byPort rec
+/-- `matchesPublic` at the registration's roots by port `reg`, as the public file names its ports: the record `rec`'s
+own (`byPort`), or a window's one member's with its name taken off (`OneStageZk.publicPorts`). -/
+def matchesPublicBy (reg : Array (String × Json)) (rec scheme roots domains population : Json) : Check := Id.run do
   let regRoots := reg.map fun (p, r) => (p, getD r "root")
   let regDomains := reg.map fun (p, r) => (p, getD r "domain")
   let mut c : Check := {}
@@ -81,6 +82,9 @@ def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run
   if !jeq population (getD rec "population") then
     c := c.fail "population" (obj [("registered", getD rec "population"), ("public", population)])
   return c
+
+def matchesPublic (rec scheme roots domains population : Json) : Check :=
+  matchesPublicBy (byPort rec) rec scheme roots domains population
 
 def sessionRegistered (verdicts : Array (String × Json)) : Option (Array (String × Json)) := Id.run do
   let mut out : Option (Array (String × Json)) := none

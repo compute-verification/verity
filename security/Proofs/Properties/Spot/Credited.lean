@@ -364,9 +364,9 @@ theorem bool_of_not_not {b : Bool} (h : ¬ (!b) = true) : b = true := by
 
 /-- The registration's checks against a public file pass only at the file's population: the last is the registration's
 `population` against the one the file names. -/
-theorem population_of_matchesPublic {rec s r d pop : Json}
-    (h : (Record.matchesPublic rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
-  unfold Record.matchesPublic at h
+theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d pop : Json}
+    (h : (Record.matchesPublicBy reg rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
+  unfold Record.matchesPublicBy at h
   try dsimp only at h
   repeat' split at h
   all_goals first
@@ -456,6 +456,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     obtain ⟨hd, hhd, hph⟩ := bind_ok hph
     rw [Units.headerOf_loadPublic hl] at hhd
     obtain rfl := Except.ok.inj hhd
+    try dsimp only at hph
+    obtain ⟨_, -, hph⟩ := bind_ok hph
     try dsimp only at hph
     split at hph
     · first

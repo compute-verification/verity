@@ -836,11 +836,50 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
+#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+TABLE_PORT = "row-table"
+#: `OneStageZk.ROW_TABLES`
+ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "
+              "form is refused on a window with row tables until its guarantee covers a root every member reads")
+#: `OneStageZk.NOT_ONE_MEMBER`
+NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: the one statement's public file is held to "
+                  "a registration whose ports are bare, or are all one window member's, <member>/<port>")
+
+
+def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
+    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
+    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
+    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
+    (`ROW_TABLES`) or names no port."""
+    roots = rec["roots"]
+    ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
+    if all("/" not in p for p in ports):
+        return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    if None in names or len(names) != 1:
+        raise ValueError(NOT_ONE_MEMBER)
+    name, = names
+    out: dict[str, Any] = {}
+    for r in roots:
+        port = r.get("port")
+        if not isinstance(port, str):
+            raise ValueError("roots: a root of the registration names no port")
+        if port == TABLE_PORT:
+            raise ValueError(ROW_TABLES)
+        bare = port[len(name) + 1:]
+        out.pop(bare, None)
+        out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
+    return out
+
+
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
-                   population: int) -> Verdict:
-    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record."""
+                   population: int, reg: Mapping[str, Any] | None = None) -> Verdict:
+    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record, at
+    the record's roots by port ``reg`` (`Record.matchesPublicBy`; the record's own by default, `Record.matchesPublic`,
+    or v2's one statement's, `public_ports`)."""
     c = _Collect()
-    reg = {r["port"]: r for r in rec["roots"]}
+    reg = {r["port"]: r for r in rec["roots"]} if reg is None else reg
     if scheme != rec["scheme"]:
         c.fail("scheme", {"registered": rec["scheme"], "public": scheme})
     if {p: r["root"] for p, r in reg.items()} != dict(roots):
@@ -854,7 +893,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
-           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
-           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
-           "registered_entries", "unwindowed", "window_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "PROTOCOL", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
+           "refuse_unwindowed", "registered_entries", "unwindowed", "window_domain"]
