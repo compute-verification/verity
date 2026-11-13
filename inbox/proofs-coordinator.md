@@ -154936,3 +154936,57 @@ Nothing.
 - The run id is `r20261113-180531-594b`; `research run` returned at 18:05:41Z [run: the launch log]. It waits for one slot of cpu-6's research pool; its 30 minutes count from the slot. The launch line is my 17:27Z entry's, `OOMPolicy=continue` kept, from the import's branch at `fb3e260c42d1`.
 - The changed job was rehearsed first on vy-nebius-cpu-14: the audit named was not there, the job read the names beside it, took the one audit, opened its `case.json` alone, and ended as designed, exit 1 on the empty case; the scratch is on a disk there, not in memory [run `r20261113-175507-01d7`].
 - One line follows when it ends, with its exit and the last peak.
+
+
+## RATING, Fri 13 Nov 18:06Z: row 3 [run]: at k = 65,536 and sm_120 the tile rule refuses the dead-pair tile (7 planted groups) on three salts, both n and both price records, 11.7 to 11.8 times its cap; an honest tile passes on all twelve with 0 mends. Over #9735's old head `4d4950f1bb9`. #9735: the carried commit is pushed as a fast-forward, head `9dca1601a6d7`; its records run and suites are running, no ready line yet
+
+**In plain words.** The deeper shape says what 8192³ said. The one class that carries over to sm_120 computes the right numbers and would be cheap enough to be the event, and the mend's rule refuses its tile by a factor of about twelve. An honest tile is nowhere near the cap. So the rows as found at sm_120 are done at both shapes: one class of four exists there, and the mend holds on it. The pull request is on its new head; I give the ready line when its two runs end.
+
+### Row 3: k = 65,536, whole 64 × 64 tiles, three salts (`r20261113-165450-b426`, `r20261113-165450-3467`, `r20261113-165451-39d1`)
+
+Each run's clone is of `4d4950f1bb99`, the old head: I launched them at 16:54Z, before the carry. The sweep is at `6d48b81e4e8`. Scheme `pearl-c-sm120-v1-h3`. All `--on auto`, exit 0. Each tile goes through the rule four times: n = 8,192 and n = 65,536, at `devSm120v1 Prices.sm120` and at `devSm120v1 Prices.sm120Loop`.
+
+**The honest tile** (Gaussian rows from the sweep's generator, not served activations) [run]:
+
+| Salt | Flagged atoms | Mends | Debit at `Prices.sm120` | Share of the cap, n = 8,192 | Share of the cap, n = 65,536 | Rule, all four |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ef58fa9e` | 234 | 0 | 7,956 | 2.8% | 2.8% | passes |
+| `1980ceec` | 236 | 0 | 8,024 | 2.8% | 2.8% | passes |
+| `92f061ee` | 246 | 0 | 8,364 | 2.9% | 2.9% | passes |
+
+- The caps at `Prices.sm120`: 288,063.5 (n = 8,192) and 285,999.1 (n = 65,536). At `Prices.sm120Loop` the debits are 7,978.0, 8,046.2 and 8,387.1 against 288,850.5 and 286,786.1, the same shares.
+- 0 debited elements, 0 later zeros. The flagged atoms are of 8,388,608 atom-words a tile.
+- The reference program gives all 4,096 words on every salt and costs 100.01% to 100.04% of the credit. No event.
+
+**The dead-pair tile**, 7 planted groups, the program priced at 256 units sharing a weight [run]:
+
+| Salt | Words equal | Mends | n | Debit at `Prices.sm120` | Over the cap | Over the cap at `Prices.sm120Loop` | Rule, both records |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ef58fa9e` | 4,096 of 4,096 | 3,211,264 | 8,192 | 3,391,810 | 11.77 times | 11.74 times | **refuses** |
+| | | | 65,536 | 3,378,090 | 11.81 times | 11.78 times | **refuses** |
+| `1980ceec` | 4,096 of 4,096 | 3,211,264 | 8,192 | 3,393,510 | 11.78 times | 11.75 times | **refuses** |
+| | | | 65,536 | 3,379,790 | 11.82 times | 11.79 times | **refuses** |
+| `92f061ee` | 4,096 of 4,096 | 3,211,264 | 8,192 | 3,394,632 | 11.78 times | 11.75 times | **refuses** |
+| | | | 65,536 | 3,380,912 | 11.82 times | 11.79 times | **refuses** |
+
+- The rule's words: "the replayed debit 3391810 exceeds the cap 288063 (ρ·the credited cells' credit)". The rows' own rules pass; the cap refuses.
+- The mends are 784 a word: 112 a planted group, as at 8192³.
+- The program, a word, at `Prices.sm120`: 69,535.9 at n = 8,192 (98.87% of the credit 70,328.0, 99.22% of the bound 70,082.0) and 69,015.1 at n = 65,536 (98.84% of 69,824.0, 99.19% of 69,579.8). At `Prices.sm120Loop` the shares are the same to two decimals (69,726.5 of 70,520.1 and 69,205.0 of 70,016.1).
+- [inference, arithmetic on the rows] Again the refusal is by the mends alone: without that term the debit is 58% to 64% of the cap, so the tile would pass, with every word right and the program 0.8% under the bound. I did not run the rule of `main` at sm_120.
+- [run, local smoke, not a row] Before the tiles came back I checked the 7-group words on a 2 × 2 tile at k = 65,536: 4 of 4.
+
+**What row 3 does not say** is what rows 1 and 2 do not say (my 16:54Z): no class built for the 26-bit atom, the batch forms only, my own copies of the cost functions at sm_120's prices. Seven groups is as many as the class as found can plant there by my reading (the planted total must fit 24 bits); I did not try 8.
+
+**The sm_120 rows as found are now complete**: rows 1, 2 and 3 are run, and row 4 has nothing to run. Nothing of the sweep is in flight.
+
+### #9735 across chain 2
+
+- [run] `4d4950f1bb99` is an ancestor of `9dca1601a6d7`. I pushed `9dca1601a6d7bd7a6fb69c98623a5187fcc745df` to `cursor/proofs-rating-debit-4ba7` at 17:20Z: a plain push, `4d4950f1bb9..9dca1601a6d`, not refused. Its base on `main` is `4ae17f7eafd7`.
+- [run] The pull request's change is the same after the carry. File by file, 26 of the 27 files have the same added and removed line counts against the new base as the old head had against the old one, six of them at their new paths under `verity/protocols/accounting/pouw/`.
+- [run] The one that differs is `security/Properties/lean-audit.json` (617 in and 575 out, where it was 103 and 61). Read as data, it differs from the new base in the pull request's own 104 leaves and in the order of three lists (`roots`, `meaning`, one `trust_gap` entry), each holding the same entries as the base's. No entry is lost or added. Whether the records run rewrites that order is what its result will say.
+- [run] My own search of the 2,406 added lines agrees with FRAME's: no added line names a path or a module that is gone. The one token that resolves to nothing, `verity/pouw/v2`, is in a gloss about the retired lead that `main` has too.
+- Running at `9dca1601a6d7`, both `--on auto`: the records run `r20261113-172245-63a8` (`lean_changed.py --records security --update`; it waited for a slot from 17:23Z and took one at 17:50Z) and the suites `r20261113-172250-a922` (`suites.py --changed 4ae17f7eafd7 --quick`, running since 17:23Z).
+- I cancelled `r20261113-174555-77cb`: a second launch of the records run, made while the first waited. It never took a slot.
+- The ready line follows when both end. If the records run regenerates a record I commit it on top and say so.
+
+Mailbox read at 18:06Z; nothing newer than your 17:07Z.
