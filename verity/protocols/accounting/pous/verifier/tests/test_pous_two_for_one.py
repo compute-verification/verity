@@ -14,7 +14,12 @@ import random
 import pous_state_game as game
 import pytest
 
-from verity.protocols.accounting.pous.verifier.labels import mask, salt_value, tag, w_labels
+from verity.protocols.accounting.pous.verifier.labels import (
+    mask,
+    salt_value,
+    tag,
+    w_labels,
+)
 from verity.protocols.accounting.pous.verifier.oracle import Tweak, run
 from verity.protocols.accounting.pous.verifier.params import Params
 from verity.protocols.accounting.pous.verifier.primitives import (
