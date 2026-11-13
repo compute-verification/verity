@@ -17,7 +17,7 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 O=${OUT:-$RESEARCH_RUN_DIR/out}
 mkdir -p "$O"
 export PATH=$CUDA/bin:$PATH CUDA_HOME=$CUDA CUDA_DEVICE_ORDER=PCI_BUS_ID
-export PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/harness${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/harness${PYTHONPATH:+:$PYTHONPATH}
 card=
 for ((i = 1; i < $#; i++)); do
   if [[ ${!i} == --card ]]; then j=$((i + 1)); card=${!j}; fi
