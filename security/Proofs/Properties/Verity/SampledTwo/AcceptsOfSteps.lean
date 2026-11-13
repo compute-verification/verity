@@ -13,9 +13,10 @@ step before it returned, so no step holds the evidence to anything the listed on
   and it prints back to that text.
 * `firstTreeless_of_lines`: `firstTreeless` passes where the first session's log reads as lines none of which is a
   coin tree's.
+* `digestIs_of`: `digestIs` passes where the record's digest is the one named.
 * `inputAt_of_steps`: `inputAt` returns where the interior registration's commitment reads, its sample's bytes are
   read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
-  registration's record reads back (`readBack`).
+  registration's record reads back (`readBack`), the boundary's with the commitment's digest.
 * `accepts_of_steps`: the check accepts where `inputAt` returned, neither stage's bytes run past one coin's
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
@@ -67,6 +68,17 @@ theorem firstTreeless_of_lines {p : Params} {e : Evidence} {ls : List String} (h
     · simp only [hl, hany, bind, Except.bind, Bool.false_eq_true, ↓reduceIte]
   · rfl
 
+/-- **`digestIs` passes where the record's digest is the one named** (the converse of `digestIs_ok`). -/
+theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok d) : digestIs j d = .ok () := by
+  unfold digestIs
+  rw [ok_bind _ h]
+  first
+    | (rw [if_pos rfl]
+       rfl)
+    | (simp only [↓reduceIte]
+       rfl)
+    | (simp; done)
+
 /-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok`). -/
 theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {s : String} {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {vs : Array (String × Json)}
@@ -75,21 +87,23 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (h4 : OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r) (h5 : r.all = true)
     (h6 : stamped p e bs r.out = .ok vs)
     (h7 : Spot.getD e.interior.base.receipt "received" = Json.str received₂)
-    (h8 : readBack c.record = .ok j₁) (h9 : readBack e.record = .ok j₂) :
+    (h8 : readBack c.record = .ok j₁) (h9 : readBack e.record = .ok j₂)
+    (h10 : Registration.digest j₁ = .ok c.digest) :
     inputAt p c ξ e bs =
       .ok (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs) := by
+  have hd := digestIs_of h10
   unfold inputAt
   first
-    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, bind, Except.bind, pure, Except.pure, Bool.not_true,
+    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, bind, Except.bind, pure, Except.pure, Bool.not_true,
         Bool.false_eq_true, ↓reduceIte]
        first | done | rfl)
     | (rw [ok_bind _ h1, ok_bind _ h2, ok_bind _ h3, ok_bind _ h4]
        simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
        rw [ok_bind _ h6]
        simp only [h7]
-       rw [ok_bind _ h8, ok_bind _ h9]
+       rw [ok_bind _ h8, ok_bind _ hd, ok_bind _ h9]
        rfl)
-    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, bind, Except.bind, pure, Except.pure]
+    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, bind, Except.bind, pure, Except.pure]
        done)
 
 /-- **Steps 1 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the

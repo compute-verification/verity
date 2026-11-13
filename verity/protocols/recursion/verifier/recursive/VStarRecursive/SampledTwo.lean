@@ -50,7 +50,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
      statement check, at the rest; it reads each registration's record as the verifier's own parser reads the
-     record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`);
+     record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`), and the boundary's
+     so read has the digest the commitment names (`digestIs`, `RECORD_DIGEST`);
      the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
@@ -311,9 +312,20 @@ def readBack (record : Json) : V Json := do
   let s' ← Flock.canon j
   if s' == s then pure j else throw RECORD_READ
 
+def RECORD_DIGEST : String :=
+  "the boundary registration's record, as the verifier's parser reads it, does not have the commitment's digest: " ++
+    "the run of record reads the first stage's challenges after the digest of the record it is given"
+
+/-- **The record `j` has the digest `digest`** (check, 4; `RECORD_DIGEST`): the run of record takes a registration's
+digest from the record it is given (`Registration.digest`), and the check's commitment names one (`digest`), so the
+boundary's read-back record is held to the commitment's. -/
+def digestIs (j : Json) (digest : ByteArray) : V Unit := do
+  let d ← Registration.digest j
+  if d = digest then pure () else throw RECORD_DIGEST
+
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
 session accepting, and the run of record's input over the stamped verdicts, each registration's record as the
-verifier's parser reads it (`readBack`). -/
+verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`). -/
 def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
@@ -323,6 +335,7 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let vs ← stamped p e bs r.out
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   let j₁ ← readBack c.record
+  digestIs j₁ c.digest
   let j₂ ← readBack e.record
   pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
 
@@ -638,6 +651,12 @@ def protocol : Core.BlobProtocol where
 -- an object whose tree holds one key twice, which no parser returns: its text reads back as one key
 #guard match readBack (Json.obj ⟨⟨.inner 2 "a" (Json.num 1) (.inner 1 "a" (Json.num 2) .leaf .leaf) .leaf⟩⟩) with
   | .error why => why == RECORD_READ
+  | .ok _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => (digestIs (Json.mkObj [("a", Json.null)]) d).toOption.isSome
+  | .error _ => false
+#guard match digestIs (Json.mkObj [("a", Json.null)]) ByteArray.empty with
+  | .error why => why == RECORD_DIGEST
   | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
