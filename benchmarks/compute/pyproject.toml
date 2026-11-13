@@ -4,6 +4,7 @@
 # it (`uv run tools/verity/check/suites.py benchmarks/compute`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.verity.tests]
 # run.py reads the run's output directory through verity_config's SHARED registry, which is built on verity/settings.py

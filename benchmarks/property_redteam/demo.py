@@ -27,13 +27,17 @@ import random
 import struct
 import sys
 
+import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value
-from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
-                                                 BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
-                                                 S32_MIN, s32_value)
 from verity.definitions.registry import catalog
+from verity.definitions.registry.ref_prims import gather_f32
+from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
+from verity.definitions.silicon.integer import (
+    BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
+)
+from verity.definitions.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
 from verity.protocols.poub.verifier import codec as C
 
 M32 = (1 << 32) - 1
@@ -65,7 +69,6 @@ def classify(pid: str) -> str:
 def primitives() -> dict[str, PrimitiveDefinition]:
     """Every registered primitive, with the catalog's ops and registry loaded (`catalog.load`); a module that fails to
     import is named on stderr."""
-    import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
     for e in catalog.load(("ops", "registry"))[1]:
         print(f"skip {e}", file=sys.stderr)
     return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
@@ -124,11 +127,11 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
                              "sum_at_K_max": at, "exact_at_K_max": at == k_s8 * 16384,
                              "one_more_product_clamps_to_S32_MAX": one_more == S32_MAX,
                              "instructions": full + 2, "each_instruction_K": 32,
-                             "u8xs8_PV_at_131072_context_exceeds_K_max": 131072 > k_u8s8}
+                             "u8xs8_PV_at_131072_context_exceeds_K_max": k_u8s8 < 131072}
 
     # The runtime incoming accumulator: a value r in [0, 2^23) the circuit holds biased toward the s32 edge (any earlier
     # chain or add puts it there once); each threshold test then adds a short constant chain (<= 17 IMMA steps).
-    def draw() -> tuple[int, int]:
+    def sample() -> tuple[int, int]:
         T = rng.randrange(1, 1 << 22)
         r = rng.randrange(0, 1 << 23) if rng.random() < 0.5 else max(0, T + rng.randrange(-2, 3))
         return r, T
@@ -137,7 +140,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     sat_base = S32_MAX - (1 << 23)
     sat_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         d1 = s32_value(_shift(IMMA_SAT, r + sat_base, (1 << 23) - T + 1))
         d2 = s32_value(_shift(IMMA_SAT, r + sat_base, (1 << 23) - T))
         sat_ok += (d1 - d2) == int(r < T)
@@ -148,7 +151,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     wrap_base = (1 << 31) - (1 << 23)
     wrap_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         d = _shift(IMMA_WRAP, r + wrap_base, (1 << 23) - T)
         wrap_ok += (d >> 31) == int(r >= T)
     out["wrap_runtime_C_sign_is_compare"] = {"trials": trials, "exact": wrap_ok}
@@ -158,7 +161,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     add = REGISTRY.defs["I32Add_v1"].evaluate
     split_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         half = r // 2
         p2 = _shift(IMMA_WRAP, (r - half) + wrap_base, (1 << 23) - T)
         split_ok += (add(half, p2) >> 31) == int(r >= T)
@@ -212,7 +215,6 @@ def section_floors(prims: dict[str, PrimitiveDefinition]) -> dict:
     # A runtime-indexed gather over constant words is a lookup table: it realizes any function of the index.  Here a
     # 128-entry f32 column holds (i^2 + 7i) mod 251, and the gather returns its entry exactly: a data-dependent
     # nonlinearity property/v1 does not budget (the census counts gathers and fan-in, the budget does not read them).
-    from verity.definitions.registry.ref_prims import gather_f32
     table = [f32(float((i * i + 7 * i) % 251)) for i in range(128)]   # an arbitrary nonlinear table of the 7-bit index
     g = gather_f32(128)
     idx = 100
