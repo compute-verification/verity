@@ -29,8 +29,8 @@ namespace Properties.Pouw.PearlPlus
 
 open PouwCheck.PearlPlus
 
-/-- **The tied circuit's cells are the run's real cells at W's entries**: a cell is one it ties exactly when it is a real
-cell of the run `R` whose call's A rows, y and weight's B rows W registers (`Verity.ValueTie.CellAt`). -/
+/-- **The tied circuit's cells are the run's real cells at W's entries**: a cell is one it ties exactly when it is a
+real cell of the run `R` whose call's A rows, y and weight's B rows W registers (`Verity.ValueTie.CellAt`). -/
 def TiesTheRun {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Verity.ValueTie.Cut C}
     (T : Verity.ValueTie.Tying C θ L) (R : Run) : Prop :=
   ∀ c : Cell, c ∈ T.cells ↔ ∃ (p : Pass) (r : UnitRecord) (da db dy : PouwCommit.RowsDomain)

@@ -42,7 +42,8 @@ theorem lt_of_mem_tiles {s : Scheme} {m n : ℕ} {rows cols : List ℕ} {j : ℕ
     exact lt_of_mem_block hj
   · simp [hlt] at hx
 
-theorem real_of_credited {passes : List Pass} {c : Cell} (hc : c ∈ creditedCells passes) : c ∈ realCells passes := by
+theorem real_of_credited {passes : List Pass} {c : Cell} (hc : c ∈ creditedCells passes) :
+    c ∈ realCells passes := by
   rw [creditedCells, List.mem_toFinset] at hc
   obtain ⟨⟨p, pi⟩, hp, hc1⟩ := List.mem_flatMap.1 hc
   obtain ⟨⟨r, pos⟩, hr, hc2⟩ := List.mem_flatMap.1 hc1
@@ -71,7 +72,7 @@ theorem cellAt_of_real (htm : TieMeans) {R : Run} (hR : R.HeldToW) {c : Cell} (h
   simp only [List.mem_zipIdx_iff_getElem?] at hp hr
   obtain ⟨da, dy, yRoot, hda, hdy, -, hA, hY, hB⟩ := hcall pi p pos r hp hr
   obtain ⟨db, hdb, hB⟩ := hB hw
-  refine ⟨p, r, da, db, dy, _, _, yRoot, ?_⟩
+  refine ⟨p, r, da, db, dy, p.rootsA[pos]!, (p.weightRoots.lookup r.matmul.weight).getD ByteArray.empty, yRoot, ?_⟩
   unfold Verity.ValueTie.CellAt
   exact ⟨hp, hr, List.mem_range.1 hi, List.mem_range.1 hj, hda, hdb, hdy, hA, hB, hY⟩
 
