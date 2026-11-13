@@ -135901,3 +135901,56 @@ I do not hold the 08:31Z text for this item, so I took it as the two rows of par
   2. `struct_lower` writes Flock's template file (`struct_lower.py:57` imports `tmpl`), whose parser is in Flock's Lean (`flock/verifier/Flock/Tmpl.lean`). Either that format becomes the circuit language's, or the structural lowering returns a structure and Flock writes the file.
 - **No verifier changes either way** [derived]: Flock's Lean reads the circuit file and never the lowering.
 - **Not read:** the other modules of the prover that name a served circuit (the row's "F4; circuits 2"), and which of the 14 the adapter and SPOT import.
+
+## HONEST2, Fri 13 Nov 10:40Z: COMPILED HEAD `c810b61f91` (`ea85` and `f9ae`, both rc 0, six files, 65 theorems, probes clean): where the second stage puts a checked inner block is a THEOREM at the instance (`sits_held`), the instance passes the run's population check (`popOk_held`), and the address premise there takes ONLY `R`'s reads being well formed. Since then ADDRROW2's `7e52dfb8e2` is merged and STATEMENT CHANGED: `Bnd.units` is GONE, the address premise at the instance is one use of `addressesConnected_of_firstK`, and two of my five files are DELETED; PUSHED at `191488fbab`, NOT compiled (try `r20261113-103808-f386`)
+
+**In plain words.** An hour ago the design premises at my instance rested on two things besides an accepted run: the reference statement's reads being well formed, and where the second stage puts a checked inner block (proof block). The second is now proved at the instance, and that compiles. Then ADDRROW2 proved the whole address premise, for any registration, from five facts about what the auditor holds. At my instance four of the five are true by how the instance is built. So I replaced my own proofs with one use of that theorem. The instance got smaller: the boundary registration no longer has to say that its population is one unit, and two files of lemmas that only served my own proofs are deleted. That last step is pushed, not compiled.
+
+Clock: `date -u` read 10:39Z. Mailbox: read at 10:25Z, nothing since your 09:52Z.
+
+**1. What compiled** [run: lines quoted from each run's `stdout.log`].
+- `r20261113-095550-ea85` (`--on auto`, vy-nebius-cpu-1, 09:55Z to 10:16Z, `done rc=0 class=SUCCESS`), at `d947e22ec8`, on the join's base: `SampleBelow` "lean exit 0 in 106 s", `Honest/Instance` "273 s", `Wiring` "57 s", `Written` "53 s", `Runs` "174 s", `Sits` "350 s"; each probe "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound", N = 3, 28, 16, 3, 3, 11.
+- `r20261113-101928-f9ae` (`--on auto`, vy-nebius-cpu-7, 10:19Z to 10:35Z, `done rc=0 class=SUCCESS`), at `c810b61f913d97de80211b8fb1cc263d9f17d45e`: the same six, all "lean exit 0", probes clean; `Instance` now 29 theorems (`popOk_held`).
+- Sibling checks, as you asked for new files: `SampleBelow` and `Instance` in `f9ae`, `Sits` in `ea85`. Each: "no built module of its package that doesn't import [it] declares a name it does". **Their reach is small**: "92 imported", "4114 unchecked" (`f9ae`); "107 imported", "4100 unchecked" (`ea85`). So a name clash with most of the package is not ruled out by them.
+
+**2. STATEMENTS compiled since 09:58Z** [run: `ea85`, `f9ae`], namespace `SpotFlock.Honest`, all at `held R B desc q c₀`:
+- `sampleSlots_held : AddressRow.SampleSlots (held R B desc q c₀)` (the definition's own text, `= .ok l`)
+- `sits_held : AddressRow.Sits (held R B desc q c₀)`
+- `rowFact_held (hWf : Claims.Json.Wf R.reads) : RowFact (held R B desc q c₀) (wireMap …) (returned …) (addressOf …)`
+- `addressesConnected_held (hWf : Claims.Json.Wf R.reads) : AddressesConnected (held R B desc q c₀)`
+- `premises_held (hWf : Claims.Json.Wf R.reads) : Premises (held R B desc q c₀)`
+- `honest_of_accepts (hWf : Claims.Json.Wf R.reads) (hA : Accepts (held R B desc q c₀)) : HonestExists`
+- `popOk_held : Spot.Slots.popOk (held R B desc q c₀).reg.first.program (held R B desc q c₀).reg.first.query 1 = true`
+
+**3. Since `f9ae`: STATEMENT CHANGED** [written, not compiled; in `f386`].
+- Merged ADDRROW2's compiled head `7e52dfb8e2` (`38a7f5459c`, no conflict): `RowSample`, `RowPublished`, `RowFirst`.
+- **`Bnd.units` is gone.** `Bnd` is back to seven fields (`g`, `gs`, `boundaryNames`, `interiorPorts`, `layout`, `design`, `firstK`). The field served `sample_held` only; ADDRROW2's `units_of_popOk` now gives the population from the population check, which the instance passes by its layout (`popOk_held`).
+- **`Honest/Sits.lean` is 81 lines.** The six statements of item 2 other than `popOk_held` stand as they are. Their proofs changed:
+  - `addressesConnected_held hWf := addressesConnected_of_firstK (refReadsWf_held … hWf) (always_held …) (popOk_held …) B.firstK (wiresChecked_held …)`
+  - `sampleSlots_held := AddressRow.sampleSlots_of_firstK (popOk_held …) B.firstK`
+  - `rowFact_held` by `rowFact_of_firstK`; `sits_held` by `sits_of_slots` as before; `premises_held` and `honest_of_accepts` read `addressesConnected_held`.
+- **Deleted, with no reader left** [run: `rg` over `security/` at my head, and `git grep` on the join's `75f438d9f7` and ADDRROW2's head: no file outside `Honest/` names any of them]:
+  - `Honest/Written.lean` whole (`port_of_heldLink`, `written_of_rowsRead`, `written_of_two`). Its one reader was my own proof of the published rows, which ADDRROW2's `publishedRows_of_runs` replaces for every registration. What goes with it: `written_of_two` said that where the design evaluates, every row the template's units write is one of `R`'s ports, the converse of a hypothesis `two_of_ref` takes. It is at `c810b61f91` if anyone wants it back.
+  - `Honest/Runs.lean` whole: `premises_of_row` and `honest_of_row` are folded into `premises_held` and `honest_of_accepts`; `refReadsWf_held` moved to `Sits.lean` unchanged.
+  - From `Sits.lean`: `linked_of_two`, `publishedRows_held`, `sample_held`.
+- `Honest/` is three files, 634 lines: `Instance`, `Wiring`, `Sits`.
+
+**4. What the instance takes now** [derived from items 2 and 3; holds once `f386` passes].
+- `Premises (held R B desc q c₀)`: `Claims.Json.Wf R.reads`. Nothing else.
+- `HonestExists`: that and one accepted run.
+- The design evaluating (`two_of_ref`, unchanged, compiled): five decided facts of `R`'s circuit.
+- ADDRROW2's five facts, at the instance: reference reads well formed (asked of `R`); no inner block always checked (`rfl`); the population check at 1 (from `Bnd.layout`); a first stage of count 1 (`Bnd.firstK`); the condition on the wires (there is none).
+
+**STOP RULE.** The lock's edit is `roots`: 310 after the merge, 308 after the two modules leave; the lakefile loses the same two names in the same commit; no duplicate root, every named module has a file [run: a script over both]. No listed guarantee, named assumption, `unwitnessed` entry or verifier touched. `Bnd` is read by no listed statement and constructed nowhere. The files deleted are mine.
+
+**NEEDS.** Nothing from you. ASSEMBLY: my next compiled head deletes `Honest/Runs.lean` and `Honest/Written.lean` and their two root names; the join has no reader of them.
+
+**Not established.**
+- That `191488fbab` compiles: `r20261113-103808-f386` (`--on auto`, vy-nebius-cpu-3, launched 10:38Z) tries `Instance`, `Wiring`, then `Sits` with `--siblings`.
+- A whole build of `security/Proofs` at my head, and a records run. ADDRROW2's 10:26Z item 6 says `RunsAs/Statement.lean` does not build on its base, which is now mine too [read, not run by me]; none of my files imports it [run: they compile].
+- A sibling check that reaches more than about 100 modules.
+- An accepted run, any concrete `Ref` or `Bnd`.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c` (written, not compiled). The last compiled head is `c810b61f913d97de80211b8fb1cc263d9f17d45e`. Nothing unpushed. Run out: `r20261113-103808-f386`, one.
+
+**To post.** Nothing.
