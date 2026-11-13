@@ -1,27 +1,25 @@
-# Remote, onsite and the rule that joins them, into the protocol that composes: what `tools/move/layout.py --map
+# The rule that joins protocols, into the protocol that composes: what `tools/move/layout.py --map
 # tools/move/compose_fix_map.toml` moves and rewrites.
 #
 # Remote and onsite are the two lists of protocols compose accepts, and the composition (`core_composition`,
-# `Core.Composition`) is the rule that joins the protocols on one registration, which both require. All three go
-# inside `verity/protocols/compose/`, under its `verifier/`, each Lake package a directory of its own: a protocol's
-# directory holds only `verifier/`, `prover/`, `device/`, its README, its suite and its package files
-# (`tests/tree.toml`'s `verity/protocols/NAME/`), so a Lake package's lakefile and sources can't sit at `compose/`
-# itself.
+# `Core.Composition`) is the rule that joins the protocols on one registration, which both require. All three go inside
+# `verity/protocols/compose/`, under its `verifier/`, a directory each: a protocol's directory holds only `verifier/`,
+# `prover/`, `device/`, its README, its suite and its package files (`tests/tree.toml`'s `verity/protocols/NAME/`), so
+# a Lake package's lakefile and sources can't sit at `compose/` itself. Three maps, run in this order, each on the
+# commit the one before it makes: `compose_fix_map.toml`, `compose_fix_remote_map.toml`, `compose_fix_onsite_map.toml`.
+# Each moves one Lake package, since the three packages' `.gitignore` files are byte-identical and git pairs identical
+# files across directories at random, which `move_check.py` can't certify when two of them move in one commit. Together
+# they replace `compose_map.toml` (the composition to `compose/` itself) and `configurations_map.toml` (remote and onsite
+# to `verity/configurations/`), which the layout of record no longer has.
 #
-# - `verity/protocols/remote/verifier/composition/` to `verity/protocols/compose/verifier/composition/`, with its suite
-#   (`pyproject.toml`, `tests/`), whose name stays; `verity/protocols/remote/verifier/` (the Lake package `core_remote`)
-#   to `verity/protocols/compose/verifier/remote/`; `verity/protocols/onsite/verifier/` (`core_onsite`, with the command
-#   that picks between the two) to `verity/protocols/compose/verifier/onsite/`. Each moves whole and laid out as it was.
-# - A Lean module is named from its package's root (`CoreComposition.Tie`, `CoreRemote`, `CoreOnsite`), so no Lean
-#   module, declaration or lock record changes; what changes in a lakefile or a manifest is a path to these packages,
-#   and nothing else. No `.lean` file's bytes change ([rewrite] exclude).
-# - `remote/verifier/` holds the composition today, so the map splits it: a reference to remote's package as a whole
-#   follows its larger part, remote's own, and each such reference is acknowledged in [split].
-# - It replaces `compose_map.toml` (the composition to `compose/` itself) and `configurations_map.toml` (remote and
-#   onsite to `verity/configurations/`), which the layout of record no longer has.
-# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs after the chain that
-# moves `verity_config` to `tools/config/` and before `protocol_groups_map.toml`; `live_challenger_map.toml`, which
-# makes `compose/device/`, runs before it or after.
+# - `verity/protocols/remote/verifier/composition/` to `verity/protocols/compose/verifier/composition/`, whole and laid
+#   out as it was, with its suite (`pyproject.toml`, `tests/`), whose name stays.
+# - A Lean module is named from its package's root, so no Lean module, declaration or lock record changes; what changes
+#   in a lakefile or a manifest is a path to a package, and nothing else. No `.lean` file's bytes change ([rewrite]).
+# - No directory is split, so the map has no [split] table.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. The three run after the chain
+# that moves `verity_config` to `tools/config/` (their [roots]) and before `protocol_groups_map.toml`;
+# `live_challenger_map.toml`, which makes `compose/device/`, runs before them or after.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
@@ -29,13 +27,11 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 
 [paths]
 "verity/protocols/remote/verifier/composition/" = "verity/protocols/compose/verifier/composition/"
-"verity/protocols/remote/verifier/" = "verity/protocols/compose/verifier/remote/"
-"verity/protocols/onsite/verifier/" = "verity/protocols/compose/verifier/onsite/"
 
 [retired]
-# the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and each row is a
-# directory's, so a file only a branch has under one is carried
-paths = ["verity/protocols/remote/", "verity/protocols/onsite/"]
+# the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
+# directory's, so a file only a branch has under it is carried
+paths = ["verity/protocols/remote/verifier/composition/"]
 
 [drop]
 paths = []
@@ -61,25 +57,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
 
-[split]
-# references to a directory this move splits that stay right: "old file: old directory" = why
-"benchmarks/one_stage/kept_composite.sh: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"benchmarks/prove_path/tests/test_remotetie.py: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"demos/vllm/README.md: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"security/Proofs/lake-manifest.json: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"security/Properties/lake-manifest.json: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"security/README.md: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"tools/verity/check/drive.toml: verity/protocols/remote/verifier" = "the low-risk exclusions list remote's package and the composition each, and each follows its own part"
-"verity/protocols/inference_only/verifier/nci/README.md: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"verity/protocols/onsite/verifier/lake-manifest.json: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"verity/protocols/onsite/verifier/lakefile.toml: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"verity/protocols/pouw/verifier/README.md: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-"verity/protocols/spot/verifier/README.md: verity/protocols/remote/verifier" = "a reference to remote's package, the composite `core_remote`, which follows remote's own part; the composition goes to its own directory beside it"
-
 [modules]
-# the renames [paths] implies (`layout.py --modules`): each directory as a dotted path. No module lives in them: the
-# packages are Lean, and the suite's files run as files.
-"verity.protocols.onsite.verifier" = "verity.protocols.compose.verifier.onsite"
-"verity.protocols.remote.verifier" = "verity.protocols.compose.verifier.remote"
+# the rename [paths] implies (`layout.py --modules`): the directory as a dotted path. No module lives in it: the
+# package is Lean, and the suite's files run as files.
 "verity.protocols.remote.verifier.composition" = "verity.protocols.compose.verifier.composition"
