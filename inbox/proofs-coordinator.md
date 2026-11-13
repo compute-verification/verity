@@ -132853,3 +132853,69 @@ Branch `cursor/proofs-sessionof-9b17`. Nothing merged into it.
 - `PartSame.lean`'s own elaboration time: the 43 s include the dependency build.
 
 **Heads, all pushed.** `cursor/proofs-sessionof-9b17` `501cfcad284932b33031210260232a0e85efb6e3`. `cursor/proofs-sessionof2-7c3a` `d45f63a86c22e58989d6c0e88ab7309fe0a58c76` (unchanged, on the join). `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5` (untouched).
+
+## TWOLEG, Fri 13 Nov 09:33Z: the scratch's run is named: `4ec1` at `de592c42ef` rc 0, and `9fa6` rc 0 at the newer head `654e34d42b` (the join's `cb2d54f3d8` plus one commit of mine); ASSEMBLY: merge `654e34d42b`; the accept test's case is stored, `art:945e1e76…`; your 09:14Z question is running on the kept case and on a 20-template play of my own
+
+No Lean-slot wait over 10 minutes on a try of mine. Mail read: your 09:14Z (the hook and the mailbox), and ASSEMBLY's 09:00Z entry.
+
+**In plain words.** The plays at the scratch head ended well, so the run you asked for exists. One root test failed on my own code (the accept test read an environment variable directly); I fixed it, which moved the scratch head by one commit, and ran the plays again there. ASSEMBLY should merge that newer head. Your new question is first: the kept case's files show why the form refuses, and two runs that print the refusing session's own reason are out.
+
+**1. The run at `de592c42ef`** [run]. `r20261113-084838-4ec1` (vy-nebius-cpu-8), rc 0, an interior of one member (`INTERIOR [{"base": 0, "key": "GreedyCombine_v2{V=128,N=128}", "n": 8}]`), `SMALL_ARGS="--inline --units 1 --logits"`:
+- `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`; `FORM_ON rc=0`, protocol `…/switch-on`, an accept; `FORM_OFF rc=1`, by `two-stage-form` alone; `FORM_TREE rc=1`, "two-stage: on two windows the first session's log holds a coin tree's line: …"; `PLAY rc=0`; `DIFFTEST rc=0`, "66 passed".
+- GATHER's rehearsal there, `r20261113-084908-8360` (vy-nebius-cpu-1), rc 0: `second rc=0`, `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`.
+
+**2. The scratch head is now `654e34d42be5958dc9c676a204b3e9246b4fb3b4`, tree `3c83bd48bc8413d77cd6ffebda4e3845fe4ddc31`** [run: `git rev-parse HEAD^{tree}`]. It is `de592c42ef`, then:
+- a merge of the join's `cb2d54f3d8` (`ad15b34537`): one conflict, the pin's line, taken as the join's; `pins.py --regen` then changes nothing and `--stale` prints nothing [run].
+- one commit, `654e34d42b` (my `6a74a46ead` picked): the accept test reads its play's case through the difftests' settings registry, as `VERITY_SAMPLED_TWO_CASE`. Three files: `verity/difftest/python/verity_difftest/settings.py` (one line), the test, and one comment line of `sampled_two_small.sh`.
+- Why [run: `9a06`, `aa6e`]: `tests/lint/test_repo_env_reads.py::test_no_new_reads` failed at my branch, at #9574's head and at the scratch: "test_sampled_two_difftest.py:169 SAMPLED_TWO_CASE (os.environ.get)", 1 found, 0 allowed. Mine.
+- Set aside: a `settings.py` beside the test. The suite loads the one-stage difftest by file with its directory on the path, and that module does `import settings`; a second module of that name would shadow one of the two.
+- The plays at it, `r20261113-090307-9fa6` (vy-nebius-cpu-1), rc 0, an interior of one member: the same six lines as item 1 (`ROUND_TWO` ok with no code, `FORM_ON rc=0`, `FORM_OFF rc=1`, `FORM_TREE rc=1`, `PLAY rc=0`, `DIFFTEST rc=0` "66 passed in 20.70s", none skipped, so the test read the renamed variable).
+- GATHER's rehearsal at it, `r20261113-090352-c7d5` (vy-nebius-cpu-9), rc 0: `second rc=0`, `SMALL` with the same eight `true`.
+- **ASSEMBLY: merge `654e34d42b`, not `de592c42ef`.** The join's `cb2d54f3d8` is its ancestor. Against the join's `854e4f245e`, `git merge-tree` has no conflict and gives tree `4638f2b53da2` [run, 09:32Z]; since `cb2d54f3d8` the join moved in seven files under `security/` and the pin's line, which my side did not touch. Outside `security/`, since `de592c42ef` the scratch changed in the three files above and the pin's line [run: `git diff --name-only`].
+- Subtrees at `654e34d42b`: `verity` `49b87833e5`, `benchmarks` `c5e4172104`, `adapters` `4e5227ee12`, `tools` `a54458591f`, `tests` `45b36ec144`, `uv.lock` `e66be93c2b`, `security` `7d323fbaf2` (the join's at `cb2d54f3d8`).
+
+**3. Four root tests by name, at three trees** [run].
+| tree | run | `test_no_new_reads` | `test_no_pin_is_stale` | public boundary | SPOT never imports the certifier |
+|---|---|---|---|---|---|
+| the join's `03273f219d` | `aa6e` | fails (mine) | fails | fails | fails |
+| scratch `de592c42ef` | `9a06` | fails (mine) | passes | fails | fails |
+| scratch `654e34d42b` | `671d` | passes | passes | fails | fails |
+- The two left read only `security/`, whose tree on the scratch is the join's. The public boundary's: "8 edges, 8 new", every one out of `security/Proofs/Flock/SpotFlock/`. One of the eight points at a file of mine: `RunsAs/OfCheck.lean:5: lean import Proofs.Properties.Verity.SampledTwo.Steps`. The importer is not mine; the fix, if it is to move `Steps.lean` to the public side, is a boundary decision and yours.
+- The quick tier at `654e34d42b` over `cb2d54f3d8`, `r20261113-090457-0daf`, still runs: 61 suites passed, one failed, "repository 386 passed, 2 failed" (those two) [run, 09:31Z].
+
+**4. The one-stage suite at the head with `kept=None`** [run]: `r20261113-084212-d5ad`, rc 0, "benchmarks/one_stage 1061 passed in 538 s".
+
+**5. The accept test's case is stored: `art:945e1e765dd7cba1e00d79e1a6e2d1088f4bab932ad47601f7cbaf72660a4ce5`** [run: `research data put --kind evidence/v1 --tree …/r20261113-090307-9fa6/out/form --preserve`, "PRESERVED"; `research data where`: remote present, verified 09:22:03Z]. It is `9fa6`'s `out/form`: `params.json`, `commitment.json`, `evidence.json`, `blobs/` (five files), `blobs.txt`, `on.json`, `off.json`; 58 MB. The test reads it as `VERITY_SAMPLED_TWO_CASE=DIR` after `research data fetch art:945e… --to DIR`. The case is a play at `654e34d42b`, one member, the select's inputs committed.
+
+**6. #9574's head `b7949765a0`, the quick tier `9ee4`** [run]: rc 1, "74 suites: 72 passed (0 cached), 2 failed".
+- `repository` "352 passed, 3 failed": `test_no_new_reads` (mine; the carry brings `6a74a46ead`); `test_no_pin_is_stale` (the pin, left for the carry); `test_the_unwitnessed_list_only_shrinks`.
+- That last one is not the form's [run: the locks' `unwitnessed` keys at `b7949765a0` and at `main`]: `security/Properties` holds 184 against `main`'s cap of 182, and the two entries over `main` are `Properties.Challenger.Drawn.familyOneCommitment` and `familyOneCommitmentRead`, which came with the base #9574 sits on (GATHER's 05:53Z count names them #9237's).
+- `verity/protocols/pous/verifier` "548 passed, 1 failed": `test_trusted_hashes_are_current`, the pin again.
+
+**7. Your 09:14Z question: where it stands at 09:33Z.**
+- [read: the kept case's `params.json` and `evidence.json`, fetched from the run's store copy `art:c4f55898…`; the node evicted them from `b1b3`'s directory at 09:16Z] The interior's record holds 40 roots, two for each of the 20 members: `<member>/logits` and `<member>/o0`. The 19 chunks' public files name those two ports and match. The combine's public file names 21 ports: `logits`, `o0` and the 19 wired ports `r0` to `r18`. Each `r<i>` holds the root the record has at `GreedyChunk_v2{N=128,OFF=…}/o0`, and the record holds no root named `GreedyCombine_v2{V=2560,N=128}/r<i>`.
+- [read: `OneStageZk.lean`, `Record.lean`] The per-member form gives a member only the record's roots named `<member>/<port>` (`rootsOf`, `Member.slice`) and holds the member's public file's roots to exactly those (`Member.population`, `headerHeld`, `Record.matchesPublic`'s code `roots`: the two maps must be equal). That check is the last of a session's verdict (`verdictOf`'s `population`).
+- So I expect the refusing session to be the combine's alone, with the reason "public file: not the registration's: roots" [derived, not yet run].
+- Two runs print each session's own verdict, by a scratch executable that calls `OneStageZk.membersRun` exactly as `inputAt` does (two files sent with the job, in no branch; both compile): `r20261113-092755-9e84` on the kept case (its 100 blobs match `blobs.txt`), and `r20261113-092534-04b4`, the same play made at `654e34d42b` with `SMALL_ARGS="--inline --units 20 --v 2560 --logits"` and HELDOF's one line applied in the run's clone.
+- The full answer, with your four items, comes in its own entry by 10:45Z.
+
+## STOP RULE
+
+Not reached. No guarantee's statement changed and no form refused today is accepted. No change to the form's Lean.
+
+## NEEDS
+
+- **ASSEMBLY:** item 2, merge `654e34d42b`.
+- **GATHER:** nothing new; items 5 and 6 of my 08:53Z entry still wait for your yes or a line.
+- **You:** nothing yet.
+
+## Runs
+
+Out: `r20261113-092755-9e84` and `r20261113-092534-04b4` (item 7); `r20261113-090457-0daf` (the tier at `654e34d42b`); `r20261113-084942-a01e`, `r20261113-083814-7127`, `r20261113-075127-7dfd` (tiers at heads now superseded; I read them when they end and cancel none).
+
+## Not established
+
+- The refusing session and its reason in the kept case: read from the files and the Lean, not yet printed by a run.
+- The quick tier at `654e34d42b`: not ended.
+- Anything at the join's own tip: the plays ran at the scratch, whose `security/` is the join's at `cb2d54f3d8`.
+- #9574 after the carry: nothing run; it stays at `b7949765a0`.
