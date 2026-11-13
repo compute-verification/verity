@@ -29,6 +29,7 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
+from verity_vllm.pipeline import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import tick_plugin as tp
 
@@ -1103,14 +1104,14 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
 
 
 def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does():
-    """`so.request_line` over first lines well formed and not: it gives a line's method and target where the network
+    """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
     certifier puts its release on a request that begins with the line, and None where the certifier passes the bytes on
     as the client wrote them."""
     for line, is_one in REQUEST_LINES:
         sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
         assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
-        assert so.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
+        assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
 
 
 def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_release_over_http():
@@ -1146,7 +1147,7 @@ def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_r
         wm.sendall(REL.WATERMARK_END)
         end = read_all(wm)
     assert [a.split(b"\r\n", 1)[0] for a in answers] == [b"HTTP/1.1 400 Bad Request"] * 2
-    assert all(so.NO_REQUEST_LINE.encode() in a for a in answers)
+    assert all(hd.NO_REQUEST_LINE.encode() in a for a in answers)
     assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
     assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
     s = e.gate.summary()
@@ -1160,7 +1161,7 @@ def test_serve_openai_names_a_header_as_the_network_certifier_does():
     colon, on which the network certifier then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
     once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
-    place: whichever fields the certifier kept, the server's headers (`so.header_fields`) give the certifier's
+    place: whichever fields the certifier kept, the server's headers (`hd.header_fields`) give the certifier's
     release, as the certifier's own reader does."""
     run = bytes.fromhex(RUN)
 
@@ -1181,7 +1182,7 @@ def test_serve_openai_names_a_header_as_the_network_certifier_does():
         for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
             line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
             assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert sa.release_of(so.header_fields(fields)) == (RUN, 3, 1), (pre, post)
+            assert sa.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times():
