@@ -27,25 +27,21 @@ its digest, with a collision as the second way out: two of the blobs sent differ
   the blobs hold): `names_same`.
 
 So `RefsAt` holds at the reference statements of any one accepted play, or two of the blobs sent collide, on a case
-map whose accepted plays all passed the tables' check at one registration (`TablesHeldAt`): `refsAt_of_held`, and
-`heldOfAt_or_collide` for the held copies at the cases at one statement.
+map whose accepted plays all passed the tables' check at one registration (`TablesHeldAt`): `refsAt_of_held`.
 
 ## What the form checks of the tables
 
-The form runs the tables' check only in a member's statement (the first step of `statementOf`), and reads a member's
-statement only where one of the evidence's statements names the member (`runMembers`). `accepted_tables` is that
-check at an accepted play: each member a statement names has its circuit file on the blobs, and the file looks up
-exactly the tables the blobs hold (`Properties.Spot.HoldsRegisteredTables`). So `TablesHeldAt C q` holds where every
-accepted play names the registration `q` in a statement (`NamesAt`, `tablesHeldAt_of_names`).
+The per-member form's run reads every member's statement, whichever members the sample holds
+(`Spot.OneStageZk.membersRun_files`), and a member's statement begins with the tables' check at the member's own files
+(`Properties.Spot.SecurityProofs.statement_tables`). So every member of an accepted play's parameters has its circuit
+file on the blobs, and the file looks up exactly the tables the blobs hold (`accepted_tables`), and on a case map
+whose accepted plays decode one parameters (`DecodesAt`) every accepted play passed the check at template 0's member
+(`tablesHeldAt_of_accept`). `refsAt_of_accept` is `RefsAt` from `CaseIsSent` and `DecodesAt` alone, or a collision,
+and `heldOfAt_or_collide` the held copies at the cases at one statement.
 
 ## What this does not show
 
-* `NamesAt` or `TablesHeldAt` at any case map. An accepted play whose evidence names no statement runs the tables'
-  check at no member, and two accepted plays that name different members are held to two circuit files' lookups. The
-  reference statement of every template reads the tables the blobs hold, whether or not a statement names its member.
-  So the read no digest pins is which of the verifier's pinned tables a play's blobs hold, at a play that names no
-  statement of a registration every other accepted play names.
-* That an accepted play names a statement, or that two members' circuit files look up the same tables.
+* `DecodesAt` at any case map, or that two members' circuit files look up the same tables.
 -/
 
 @[expose] public section
@@ -115,22 +111,6 @@ private theorem filterMap_eq_of_names {τ : Type} {name : τ → String} {L : Li
       rw [htt, hgt] at hgt'
       cases hgt'
     | some y => rw [hb t ht x y hft hgt]
-
-private theorem foldlM_step {σ α ε : Type} {f : σ → α → Except ε σ} :
-    ∀ (l : List α) (s : σ) {r : σ}, l.foldlM f s = .ok r → ∀ z ∈ l, ∃ s₁ s₂, f s₁ z = .ok s₂
-  | [], _, _, _, z, hz => by cases hz
-  | a :: l, s, r, h, z, hz => by
-    rw [List.foldlM_cons] at h
-    obtain ⟨s', hs', h'⟩ := ebind_ok h
-    rcases List.mem_cons.1 hz with rfl | hz'
-    · exact ⟨s, s', hs'⟩
-    · exact foldlM_step l s' h' z hz'
-
-private theorem mapError_ok {ε α : Type} {x : Except ε α} {f : ε → ε} {a : α} (h : x.mapError f = .ok a) :
-    x = .ok a := by
-  cases x with
-  | error e => cases h
-  | ok a' => cases h; rfl
 
 /-! ## A collision among the blobs sent -/
 
@@ -260,72 +240,28 @@ theorem refStmts_same {p : VStar.Recursive.SampledTwo.Params} {F F' : Array Byte
 
 /-! ## What the form checks of the tables -/
 
-/-- **A statement the per-member form stepped passed the tables' check at its member** (`tablesHeld`, the first step
-of `statementOf`). -/
-theorem stepMember_tables {slice : _root_.Spot.OneStageZk.Member → Lean.Json} {bs : Core.Blobs}
-    {r r' : _root_.Spot.OneStageZk.Run}
-    {z : _root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member}
-    (h : _root_.Spot.OneStageZk.stepMember slice bs r z = .ok r') :
-    _root_.Spot.OneStageZk.tablesHeld z.2.own bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.stepMember at h
-  have h := mapError_ok h
-  unfold _root_.Spot.OneStageZk.runFrom at h
-  obtain ⟨a, hst, -⟩ := ebind_ok h
-  unfold _root_.Spot.OneStageZk.Member.statement at hst
-  obtain ⟨a', ha', -⟩ := ebind_ok hst
-  unfold _root_.Spot.OneStageZk.statementOf at ha'
-  obtain ⟨⟨⟩, ht, -⟩ := ebind_ok ha'
-  exact ht
-
-/-- **The per-member form's run passed the tables' check at each member a statement names.** -/
-theorem runMembers_tables {slice : _root_.Spot.OneStageZk.Member → Lean.Json}
-    {ms : Array _root_.Spot.OneStageZk.Member} {sts : Array _root_.Spot.OneStageZk.StatementFiles}
-    {want : Array ℕ} {bs : Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
-    (h : _root_.Spot.OneStageZk.runMembers slice ms sts want bs = .ok r) :
-    ∃ held, _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
-      ∀ z ∈ (sts.zip held).toList, _root_.Spot.OneStageZk.tablesHeld z.2.own bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.runMembers at h
-  obtain ⟨held, hheld, h⟩ := ebind_ok h
-  obtain ⟨r', hfold, -⟩ := ebind_ok h
-  rw [← Array.foldlM_toList] at hfold
-  refine ⟨held, hheld, fun z hz => ?_⟩
-  obtain ⟨r₁, r₂, hstep⟩ := foldlM_step _ _ hfold z hz
-  exact stepMember_tables hstep
-
-theorem membersRun_tables {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
-    {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
-    {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
-    (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) :
-    ∃ held, _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
-      ∀ z ∈ (sts.zip held).toList, _root_.Spot.OneStageZk.tablesHeld z.2.own bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.membersRun at h
-  simp only [Verity.Sampled.bind_ok] at h
-  obtain ⟨held, -, h⟩ := h
-  split at h
-  · simp only [Verity.Sampled.bind_ok] at h
-    obtain ⟨_, hthrow, -⟩ := h
-    cases hthrow
-  · simp only [Verity.Sampled.bind_ok] at h
-    obtain ⟨ts, -, _, -, L, -, _, -, _, -, _, -, _, -, roots, -, hrun⟩ := h
-    exact runMembers_tables hrun
-
-/-- **Each member a statement of an accepted play names has its circuit file on the play's blobs, and the file looks
-up exactly the pinned tables the blobs hold.** -/
+/-- **Every member of an accepted play's parameters, sampled or not, has its circuit file on the play's blobs, and
+the file looks up exactly the pinned tables the blobs hold.** -/
 theorem accepted_tables {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {c : _root_.Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
     (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e) :
-    ∃ held, _root_.Spot.OneStageZk.membersHeld p.members e.statements = .ok held ∧
-      ∀ z ∈ (e.statements.zip held).toList, Properties.Spot.HoldsRegisteredTables z.2.own k.blobs := by
-  obtain ⟨k', p', e', s, c₂, ξ₂, r, hk', hp', he', -, -, -, hrun⟩ := SessionCoins.accepted_ran hA
+    ∀ m ∈ p.members, Properties.Spot.HoldsRegisteredTables m.own k.blobs := by
+  obtain ⟨k', p', e', s, c₂, ξ₂, r, hk', hp', -, -, -, -, hrun⟩ := SessionCoins.accepted_ran hA
   have hkk : k' = k := Option.some.inj (hk'.symm.trans hk)
   subst hkk
-  obtain ⟨g1, -, g3⟩ := hdec
+  obtain ⟨g1, -, -⟩ := hdec
   have hpp : p' = p := Except.ok.inj (hp'.symm.trans g1)
   subst hpp
-  have hee : e' = e := Except.ok.inj (he'.symm.trans g3)
-  subst hee
-  obtain ⟨held, hheld, ht⟩ := membersRun_tables hrun
-  exact ⟨held, hheld, fun z hz => Properties.Spot.SecurityProofs.tablesHeld_ok (ht z hz)⟩
+  obtain ⟨roots, -, hf⟩ := _root_.Spot.OneStageZk.membersRun_files hrun
+  intro m hm
+  obtain ⟨a, ha, -⟩ := hf m hm
+  exact Properties.Spot.SecurityProofs.statement_tables ha
+
+theorem memberOf_mem {p : VStar.Recursive.SampledTwo.Params} {t : ℕ} {m : _root_.Spot.OneStageZk.Member}
+    (h : memberOf p t = some m) : m ∈ p.members := by
+  unfold memberOf at h
+  obtain ⟨_, -, hf⟩ := Option.bind_eq_some_iff.1 h
+  exact Array.mem_of_find?_eq_some hf
 
 /-! ## `RefsAt`, or a collision -/
 
@@ -335,26 +271,19 @@ tables the blobs hold. -/
 def TablesHeldAt (C : CaseOf) (q : _root_.Spot.OneStageZk.Own) : Prop :=
   ∀ o k, FormAccepts C o → C o = some k → Properties.Spot.HoldsRegisteredTables q k.blobs
 
-/-- **Every accepted play names the registration `q` in a statement**: one of its evidence's statements is held to a
-member whose registration is `q`. -/
-def NamesAt (C : CaseOf) (q : _root_.Spot.OneStageZk.Own) : Prop :=
-  ∀ o k p c e held, FormAccepts C o → C o = some k → Decoded k p c e →
-    _root_.Spot.OneStageZk.membersHeld p.members e.statements = .ok held →
-    ∃ z ∈ (e.statements.zip held).toList, z.2.own = q
-
-/-- **The form's check gives `TablesHeldAt` at a registration every accepted play names in a statement**
-(`accepted_tables`). -/
-theorem tablesHeldAt_of_names {C : CaseOf} {q : _root_.Spot.OneStageZk.Own} (hN : NamesAt C q) :
-    TablesHeldAt C q := by
+/-- **Every accepted play passed the tables' check at template 0's member**, on a case map whose accepted plays
+decode one parameters (`accepted_tables`). -/
+theorem tablesHeldAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params}
+    {m₀ : _root_.Spot.OneStageZk.Member} (hP : DecodesAt C P) (hm : memberOf P 0 = some m₀) :
+    TablesHeldAt C m₀.own := by
   intro o k hA hk
   have hA' := hA
-  obtain ⟨k', hk', p, c, e, pub, prof, hdec, -⟩ := hA'
+  obtain ⟨k', hk', p, c, e, -, -, hdec, -⟩ := hA'
   have hkk : k' = k := Option.some.inj (hk'.symm.trans hk)
   subst hkk
-  obtain ⟨held, hheld, ht⟩ := accepted_tables hA hk hdec
-  obtain ⟨z, hz, hzq⟩ := hN o _ p c e held hA hk hdec hheld
-  rw [← hzq]
-  exact ht z hz
+  have hpP : p = P := hP o _ p c e hA hk hdec
+  subst hpP
+  exact accepted_tables hA hk hdec m₀ (memberOf_mem hm)
 
 /-- **Two plays' blobs that passed the tables' check at one registration hold the pinned tables of one list of names,
 or collide**: the circuit file under the registration's digest is one file, or two blobs collide. -/
@@ -396,15 +325,36 @@ theorem refsAt_of_held {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {q :
   have hne : ¬ BlobsCollide o.sent.blobs o₀.sent.blobs := fun hc => hcol ⟨o, o₀, hA, hA₀, hc⟩
   exact (refStmts_same hx hx₀ ((names_same hh hh₀).resolve_right hne)).resolve_right hne
 
+/-- **The reference statements of one accepted play are every accepted play's, or two of the blobs sent differ under
+one SHA-512**, on a case map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode one
+parameters (`DecodesAt`). Where the parameters name a template, every accepted play passed the tables' check at
+template 0's member (`tablesHeldAt_of_accept`); where they name none, every play's reference statements are none. -/
+theorem refsAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {o₀ : Verity.Exchange} {k₀ : Case}
+    {c₀ : _root_.Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
+    (hS : CaseIsSent C) (hP : DecodesAt C P)
+    (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
+    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C := by
+  by_cases hz : P.circuits.size = 0
+  · refine .inl fun o k p c e xs hA hk hdec hx => ?_
+    have hpP : p = P := hP o k p c e hA hk hdec
+    subst hpP
+    have h1 := SpotFlock.HeldOf.refStmtsOf_length hx
+    have h2 := SpotFlock.HeldOf.refStmtsOf_length hx₀
+    rw [hz] at h1 h2
+    rw [List.eq_nil_of_length_eq_zero h1, List.eq_nil_of_length_eq_zero h2]
+  · obtain ⟨r, hr, -⟩ := SpotFlock.HeldOf.refStmtsOf_getElem? hx₀ (Nat.pos_of_ne_zero hz)
+    obtain ⟨m₀, -, -, hm, -⟩ := refRawOf_some hr
+    exact refsAt_of_held hS hP (tablesHeldAt_of_accept hP hm) hA₀ hk₀ hd₀ hx₀
+
 /-- **The held copies at the cases at one statement, or two of the blobs sent differ under one SHA-512**:
-`heldOfAt_at` with `RefsAt` from `refsAt_of_held`, at the reference statements `xs₀` of one accepted play. -/
+`heldOfAt_at` with `RefsAt` from `refsAt_of_accept`, at the reference statements `xs₀` of one accepted play. -/
 theorem heldOfAt_or_collide {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
-    {j : Lean.Json} {q : _root_.Spot.OneStageZk.Own} {o₀ : Verity.Exchange} {k₀ : Case}
+    {j : Lean.Json} {o₀ : Verity.Exchange} {k₀ : Case}
     {c₀ : _root_.Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
     (u₀ : Unread) (hS : CaseIsSent C) (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
-    (hT : TablesHeldAt (atStmt C x) q) (hA₀ : FormAccepts (atStmt C x) o₀) (hk₀ : atStmt C x o₀ = some k₀)
+    (hA₀ : FormAccepts (atStmt C x) o₀) (hk₀ : atStmt C x o₀ = some k₀)
     (hd₀ : Decoded k₀ P c₀ e₀) (hx₀ : refStmtsOf P k₀.blobs = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
     (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x) :=
-  (refsAt_of_held (caseIsSent_at x hS) hP hT hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA
+  (refsAt_of_accept (caseIsSent_at x hS) hP hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA
 
 end Verity.SampledTwo
