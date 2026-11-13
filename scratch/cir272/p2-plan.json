@@ -66,7 +66,20 @@
    "kind": "measured",
    "stage_gb": 62.1
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "3 x Fp8GroupQuantUe8m0_v1{K=2048,G=128} (t033, accepted: 8724721893 bytes, 21.38 GB, 550 s staging, 1,391 s in all), linear in K; its own run r20261112-215921-f101 stopped its stager past 62 GB at 613 s",
+   "kind": "inferred",
+   "stage_s": 1650,
+   "stage_gb": 64.1,
+   "circuit_gib": 24.38,
+   "lean_gb": 107.7,
+   "total_s": 4063
+  },
+  "list": "d",
+  "order": 14,
+  "limit_s": 6000,
+  "mem_gb": 160
  },
  "t099": {
   "tag": "t099",
@@ -87,7 +100,20 @@
    "lean_gb": 98.5,
    "total_s": 2877
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 926.0 s at 15.25 GB to 23925068134 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 926,
+   "stage_gb": 15.2,
+   "circuit_gib": 22.28,
+   "lean_gb": 98.5,
+   "total_s": 3132
+  },
+  "list": "d",
+  "order": 12,
+  "limit_s": 6000,
+  "mem_gb": 160
  },
  "t100": {
   "tag": "t100",
@@ -129,9 +155,19 @@
    "total_s": 1623
   },
   "run": true,
-  "limit_s": 3246,
-  "order": 54,
-  "list": "b"
+  "limit_s": 3058,
+  "order": 1,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 522.4 s at 9.2 GB to 10922772583 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 522,
+   "stage_gb": 9.2,
+   "circuit_gib": 10.17,
+   "lean_gb": 45.0,
+   "total_s": 1529
+  },
+  "mem_gb": 160
  },
  "t106": {
   "tag": "t106",
@@ -153,9 +189,19 @@
    "total_s": 1665
   },
   "run": true,
-  "limit_s": 3330,
-  "order": 56,
-  "list": "b"
+  "limit_s": 3242,
+  "order": 2,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 536.0 s at 9.9 GB to 11765231749 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 536,
+   "stage_gb": 9.9,
+   "circuit_gib": 10.96,
+   "lean_gb": 48.4,
+   "total_s": 1621
+  },
+  "mem_gb": 160
  },
  "t107": {
   "tag": "t107",
@@ -177,9 +223,19 @@
    "total_s": 1734
   },
   "run": true,
-  "limit_s": 3468,
-  "order": 58,
-  "list": "b"
+  "limit_s": 3440,
+  "order": 3,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 558.3 s at 10.57 GB to 12603324174 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 558,
+   "stage_gb": 10.6,
+   "circuit_gib": 11.74,
+   "lean_gb": 51.9,
+   "total_s": 1720
+  },
+  "mem_gb": 160
  },
  "t108": {
   "tag": "t108",
@@ -201,9 +257,19 @@
    "total_s": 1827
   },
   "run": true,
-  "limit_s": 3600,
-  "order": 61,
-  "list": "a"
+  "limit_s": 3654,
+  "order": 4,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 588.2 s at 11.25 GB to 13441414551 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 588,
+   "stage_gb": 11.2,
+   "circuit_gib": 12.52,
+   "lean_gb": 55.3,
+   "total_s": 1827
+  },
+  "mem_gb": 160
  },
  "t109": {
   "tag": "t109",
@@ -225,9 +291,19 @@
    "total_s": 1903
   },
   "run": true,
-  "limit_s": 3600,
-  "order": 63,
-  "list": "a"
+  "limit_s": 3858,
+  "order": 5,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 612.5 s at 12.06 GB to 14279505297 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 612,
+   "stage_gb": 12.1,
+   "circuit_gib": 13.3,
+   "lean_gb": 58.8,
+   "total_s": 1929
+  },
+  "mem_gb": 160
  },
  "t110": {
   "tag": "t110",
@@ -248,7 +324,20 @@
    "lean_gb": 62.2,
    "total_s": 2470
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 794.9 s at 12.89 GB to 15117596251 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 795,
+   "stage_gb": 12.9,
+   "circuit_gib": 14.08,
+   "lean_gb": 62.2,
+   "total_s": 2189
+  },
+  "list": "d",
+  "order": 7,
+  "limit_s": 4378,
+  "mem_gb": 160
  },
  "t111": {
   "tag": "t111",
@@ -269,7 +358,20 @@
    "lean_gb": 65.7,
    "total_s": 2147
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 691.2 s at 13.57 GB to 15955687204 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 691,
+   "stage_gb": 13.6,
+   "circuit_gib": 14.86,
+   "lean_gb": 65.7,
+   "total_s": 2162
+  },
+  "list": "d",
+  "order": 6,
+  "limit_s": 4324,
+  "mem_gb": 160
  },
  "t112": {
   "tag": "t112",
@@ -290,7 +392,20 @@
    "lean_gb": 69.1,
    "total_s": 2268
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 729.9 s at 14.25 GB to 16793780205 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 730,
+   "stage_gb": 14.2,
+   "circuit_gib": 15.64,
+   "lean_gb": 69.1,
+   "total_s": 2278
+  },
+  "list": "d",
+  "order": 8,
+  "limit_s": 4556,
+  "mem_gb": 160
  },
  "t113": {
   "tag": "t113",
@@ -332,7 +447,20 @@
    "lean_gb": 76.0,
    "total_s": 2853
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 918.2 s at 15.6 GB to 18469962111 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 918,
+   "stage_gb": 15.6,
+   "circuit_gib": 17.2,
+   "lean_gb": 76.0,
+   "total_s": 2621
+  },
+  "list": "d",
+  "order": 9,
+  "limit_s": 5242,
+  "mem_gb": 160
  },
  "t115": {
   "tag": "t115",
@@ -374,7 +502,20 @@
    "lean_gb": 82.9,
    "total_s": 2989
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 962.2 s at 16.95 GB to 20146146065 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 962,
+   "stage_gb": 16.9,
+   "circuit_gib": 18.76,
+   "lean_gb": 82.9,
+   "total_s": 2819
+  },
+  "list": "d",
+  "order": 10,
+  "limit_s": 5638,
+  "mem_gb": 160
  },
  "t117": {
   "tag": "t117",
@@ -416,7 +557,20 @@
    "lean_gb": 89.8,
    "total_s": 3132
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 1008.1 s at 18.31 GB to 21822332068 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1008,
+   "stage_gb": 18.3,
+   "circuit_gib": 20.32,
+   "lean_gb": 89.8,
+   "total_s": 3020
+  },
+  "list": "d",
+  "order": 11,
+  "limit_s": 6000,
+  "mem_gb": 160
  },
  "t119": {
   "tag": "t119",
@@ -458,7 +612,20 @@
    "lean_gb": 96.8,
    "total_s": 3301
   },
-  "run": false
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 1062.5 s at 19.7 GB to 23507238390 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1062,
+   "stage_gb": 19.7,
+   "circuit_gib": 21.89,
+   "lean_gb": 96.8,
+   "total_s": 3229
+  },
+  "list": "d",
+  "order": 13,
+  "limit_s": 6000,
+  "mem_gb": 160
  },
  "t121": {
   "tag": "t121",
@@ -1787,14 +1954,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 5435290,
-   "stage_s": 214,
-   "stage_gb": 7.9,
-   "circuit_gib": 1.53,
-   "lean_gb": 6.8,
-   "total_s": 549
+   "total_s": 665,
+   "stage_gb": 12.8,
+   "circuit_gib": 2.91,
+   "lean_gb": 12.9
   },
   "run": true,
   "limit_s": 1098,
@@ -1812,14 +1977,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 5978819,
-   "stage_s": 236,
-   "stage_gb": 8.7,
-   "circuit_gib": 1.68,
-   "lean_gb": 7.4,
-   "total_s": 604
+   "total_s": 726,
+   "stage_gb": 14.0,
+   "circuit_gib": 3.21,
+   "lean_gb": 14.2
   },
   "run": true,
   "limit_s": 1208,
@@ -1837,14 +2000,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 6522348,
-   "stage_s": 257,
-   "stage_gb": 9.5,
-   "circuit_gib": 1.83,
-   "lean_gb": 8.1,
-   "total_s": 659
+   "total_s": 786,
+   "stage_gb": 15.3,
+   "circuit_gib": 3.51,
+   "lean_gb": 15.5
   },
   "run": true,
   "limit_s": 1318,
@@ -1862,14 +2023,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 7065877,
-   "stage_s": 279,
-   "stage_gb": 10.3,
-   "circuit_gib": 1.99,
-   "lean_gb": 8.8,
-   "total_s": 714
+   "total_s": 846,
+   "stage_gb": 16.5,
+   "circuit_gib": 3.81,
+   "lean_gb": 16.8
   },
   "run": true,
   "limit_s": 1428,
@@ -1887,14 +2046,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 7609406,
-   "stage_s": 300,
-   "stage_gb": 11.1,
-   "circuit_gib": 2.14,
-   "lean_gb": 9.5,
-   "total_s": 769
+   "total_s": 907,
+   "stage_gb": 17.8,
+   "circuit_gib": 4.11,
+   "lean_gb": 18.2
   },
   "run": true,
   "limit_s": 1538,
@@ -1912,14 +2069,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 8152935,
-   "stage_s": 322,
-   "stage_gb": 11.9,
-   "circuit_gib": 2.29,
-   "lean_gb": 10.1,
-   "total_s": 824
+   "total_s": 967,
+   "stage_gb": 19.0,
+   "circuit_gib": 4.41,
+   "lean_gb": 19.5
   },
   "run": true,
   "limit_s": 1648,
@@ -1937,14 +2092,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 8696464,
-   "stage_s": 343,
-   "stage_gb": 12.6,
-   "circuit_gib": 2.45,
-   "lean_gb": 10.8,
-   "total_s": 879
+   "total_s": 1028,
+   "stage_gb": 20.3,
+   "circuit_gib": 4.71,
+   "lean_gb": 20.8
   },
   "run": true,
   "limit_s": 1758,
@@ -1962,14 +2115,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 9239993,
-   "stage_s": 365,
-   "stage_gb": 13.4,
-   "circuit_gib": 2.6,
-   "lean_gb": 11.5,
-   "total_s": 934
+   "total_s": 1088,
+   "stage_gb": 21.5,
+   "circuit_gib": 5.01,
+   "lean_gb": 22.1
   },
   "run": true,
   "limit_s": 1868,
@@ -1987,14 +2138,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 9783522,
-   "stage_s": 386,
-   "stage_gb": 14.2,
-   "circuit_gib": 2.75,
-   "lean_gb": 12.2,
-   "total_s": 988
+   "total_s": 1149,
+   "stage_gb": 22.8,
+   "circuit_gib": 5.31,
+   "lean_gb": 23.5
   },
   "run": true,
   "limit_s": 1976,
@@ -2012,14 +2161,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 10327051,
-   "stage_s": 408,
-   "stage_gb": 15.0,
-   "circuit_gib": 2.9,
-   "lean_gb": 12.8,
-   "total_s": 1043
+   "total_s": 1209,
+   "stage_gb": 24.1,
+   "circuit_gib": 5.61,
+   "lean_gb": 24.8
   },
   "run": true,
   "limit_s": 2086,
@@ -2037,14 +2184,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 1087058,
-   "stage_s": 43,
-   "stage_gb": 1.6,
-   "circuit_gib": 0.31,
-   "lean_gb": 1.4,
-   "total_s": 110
+   "total_s": 182,
+   "stage_gb": 2.7,
+   "circuit_gib": 0.52,
+   "lean_gb": 2.3
   },
   "run": true,
   "limit_s": 900,
@@ -2062,14 +2207,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 10870580,
-   "stage_s": 429,
-   "stage_gb": 15.8,
-   "circuit_gib": 3.06,
-   "lean_gb": 13.5,
-   "total_s": 1098
+   "total_s": 1270,
+   "stage_gb": 25.3,
+   "circuit_gib": 5.91,
+   "lean_gb": 26.1
   },
   "run": true,
   "limit_s": 2196,
@@ -2087,14 +2230,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 11414109,
-   "stage_s": 450,
-   "stage_gb": 16.6,
-   "circuit_gib": 3.21,
-   "lean_gb": 14.2,
-   "total_s": 1153
+   "total_s": 1330,
+   "stage_gb": 26.6,
+   "circuit_gib": 6.21,
+   "lean_gb": 27.4
   },
   "run": true,
   "limit_s": 2306,
@@ -2112,14 +2253,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 11957638,
-   "stage_s": 472,
-   "stage_gb": 17.4,
-   "circuit_gib": 3.36,
-   "lean_gb": 14.9,
-   "total_s": 1208
+   "total_s": 1390,
+   "stage_gb": 27.8,
+   "circuit_gib": 6.51,
+   "lean_gb": 28.8
   },
   "run": true,
   "limit_s": 2416,
@@ -2137,14 +2276,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 12501167,
-   "stage_s": 493,
-   "stage_gb": 18.2,
-   "circuit_gib": 3.52,
-   "lean_gb": 15.5,
-   "total_s": 1263
+   "total_s": 1451,
+   "stage_gb": 29.1,
+   "circuit_gib": 6.81,
+   "lean_gb": 30.1
   },
   "run": true,
   "limit_s": 2526,
@@ -2162,14 +2299,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 13044696,
-   "stage_s": 515,
-   "stage_gb": 19.0,
-   "circuit_gib": 3.67,
-   "lean_gb": 16.2,
-   "total_s": 1318
+   "total_s": 1511,
+   "stage_gb": 30.3,
+   "circuit_gib": 7.11,
+   "lean_gb": 31.4
   },
   "run": true,
   "limit_s": 2636,
@@ -2187,14 +2322,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 13588225,
-   "stage_s": 536,
-   "stage_gb": 19.8,
-   "circuit_gib": 3.82,
-   "lean_gb": 16.9,
-   "total_s": 1373
+   "total_s": 1572,
+   "stage_gb": 31.6,
+   "circuit_gib": 7.4,
+   "lean_gb": 32.7
   },
   "run": true,
   "limit_s": 2746,
@@ -2212,14 +2345,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 14131754,
-   "stage_s": 558,
-   "stage_gb": 20.5,
-   "circuit_gib": 3.97,
-   "lean_gb": 17.6,
-   "total_s": 1428
+   "total_s": 1632,
+   "stage_gb": 32.9,
+   "circuit_gib": 7.7,
+   "lean_gb": 34.1
   },
   "run": true,
   "limit_s": 2856,
@@ -2237,14 +2368,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 14675283,
-   "stage_s": 579,
-   "stage_gb": 21.3,
-   "circuit_gib": 4.13,
-   "lean_gb": 18.2,
-   "total_s": 1483
+   "total_s": 1693,
+   "stage_gb": 34.1,
+   "circuit_gib": 8.0,
+   "lean_gb": 35.4
   },
   "run": true,
   "limit_s": 2966,
@@ -2262,14 +2391,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 15218812,
-   "stage_s": 601,
-   "stage_gb": 22.1,
-   "circuit_gib": 4.28,
-   "lean_gb": 18.9,
-   "total_s": 1538
+   "total_s": 1753,
+   "stage_gb": 35.4,
+   "circuit_gib": 8.3,
+   "lean_gb": 36.7
   },
   "run": true,
   "limit_s": 3076,
@@ -2287,14 +2414,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 15762341,
-   "stage_s": 622,
-   "stage_gb": 22.9,
-   "circuit_gib": 4.43,
-   "lean_gb": 19.6,
-   "total_s": 1592
+   "total_s": 1814,
+   "stage_gb": 36.6,
+   "circuit_gib": 8.6,
+   "lean_gb": 38.0
   },
   "run": true,
   "limit_s": 3184,
@@ -2312,14 +2437,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 1630587,
-   "stage_s": 64,
-   "stage_gb": 2.4,
-   "circuit_gib": 0.46,
-   "lean_gb": 2.0,
-   "total_s": 165
+   "total_s": 242,
+   "stage_gb": 4.0,
+   "circuit_gib": 0.82,
+   "lean_gb": 3.6
   },
   "run": true,
   "limit_s": 900,
@@ -2337,19 +2460,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 16305870,
-   "stage_s": 644,
-   "stage_gb": 23.7,
-   "circuit_gib": 4.59,
-   "lean_gb": 20.3,
-   "total_s": 1647
+   "total_s": 1874,
+   "stage_gb": 37.9,
+   "circuit_gib": 8.9,
+   "lean_gb": 39.3
   },
   "run": true,
-  "limit_s": 3294,
-  "order": 55,
-  "list": "a"
+  "limit_s": 3600,
+  "order": 1,
+  "list": "c"
  },
  "t205": {
   "tag": "t205",
@@ -2362,19 +2483,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 16849399,
-   "stage_s": 665,
-   "stage_gb": 24.5,
-   "circuit_gib": 4.74,
-   "lean_gb": 20.9,
-   "total_s": 1702
+   "total_s": 1934,
+   "stage_gb": 39.1,
+   "circuit_gib": 9.2,
+   "lean_gb": 40.7
   },
   "run": true,
-  "limit_s": 3404,
-  "order": 57,
-  "list": "a"
+  "limit_s": 3600,
+  "order": 2,
+  "list": "c"
  },
  "t206": {
   "tag": "t206",
@@ -2387,19 +2506,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 17392928,
-   "stage_s": 686,
-   "stage_gb": 25.3,
-   "circuit_gib": 4.89,
-   "lean_gb": 21.6,
-   "total_s": 1757
+   "total_s": 1995,
+   "stage_gb": 40.4,
+   "circuit_gib": 9.5,
+   "lean_gb": 42.0
   },
   "run": true,
-  "limit_s": 3514,
-  "order": 59,
-  "list": "a"
+  "limit_s": 3600,
+  "order": 3,
+  "list": "c"
  },
  "t207": {
   "tag": "t207",
@@ -2412,19 +2529,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 17936457,
-   "stage_s": 708,
-   "stage_gb": 26.1,
-   "circuit_gib": 5.04,
-   "lean_gb": 22.3,
-   "total_s": 1812
+   "total_s": 2055,
+   "stage_gb": 41.7,
+   "circuit_gib": 9.8,
+   "lean_gb": 43.3
   },
   "run": true,
   "limit_s": 3600,
-  "order": 60,
-  "list": "b"
+  "order": 4,
+  "list": "c"
  },
  "t208": {
   "tag": "t208",
@@ -2437,19 +2552,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 18479986,
-   "stage_s": 729,
-   "stage_gb": 26.9,
-   "circuit_gib": 5.2,
-   "lean_gb": 23.0,
-   "total_s": 1867
+   "total_s": 2116,
+   "stage_gb": 42.9,
+   "circuit_gib": 10.1,
+   "lean_gb": 44.6
   },
   "run": true,
   "limit_s": 3600,
-  "order": 62,
-  "list": "b"
+  "order": 5,
+  "list": "c"
  },
  "t209": {
   "tag": "t209",
@@ -2462,19 +2575,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 19023515,
-   "stage_s": 751,
-   "stage_gb": 27.7,
-   "circuit_gib": 5.35,
-   "lean_gb": 23.6,
-   "total_s": 1922
+   "total_s": 2176,
+   "stage_gb": 44.2,
+   "circuit_gib": 10.4,
+   "lean_gb": 46.0
   },
   "run": true,
   "limit_s": 3600,
-  "order": 64,
-  "list": "b"
+  "order": 6,
+  "list": "c"
  },
  "t210": {
   "tag": "t210",
@@ -2487,19 +2598,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 19567044,
-   "stage_s": 772,
-   "stage_gb": 28.4,
-   "circuit_gib": 5.5,
-   "lean_gb": 24.3,
-   "total_s": 1977
+   "total_s": 2237,
+   "stage_gb": 45.4,
+   "circuit_gib": 10.7,
+   "lean_gb": 47.3
   },
   "run": true,
   "limit_s": 3600,
-  "order": 65,
-  "list": "a"
+  "order": 7,
+  "list": "c"
  },
  "t211": {
   "tag": "t211",
@@ -2512,19 +2621,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 20110573,
-   "stage_s": 794,
-   "stage_gb": 29.2,
-   "circuit_gib": 5.66,
-   "lean_gb": 25.0,
-   "total_s": 2032
+   "total_s": 2297,
+   "stage_gb": 46.7,
+   "circuit_gib": 11.0,
+   "lean_gb": 48.6
   },
   "run": true,
   "limit_s": 3600,
-  "order": 66,
-  "list": "b"
+  "order": 8,
+  "list": "c"
  },
  "t212": {
   "tag": "t212",
@@ -2537,19 +2644,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 20654102,
-   "stage_s": 815,
-   "stage_gb": 30.0,
-   "circuit_gib": 5.81,
-   "lean_gb": 25.7,
-   "total_s": 2087
+   "total_s": 2357,
+   "stage_gb": 47.9,
+   "circuit_gib": 11.3,
+   "lean_gb": 49.9
   },
   "run": true,
   "limit_s": 3600,
-  "order": 67,
-  "list": "a"
+  "order": 9,
+  "list": "c"
  },
  "t213": {
   "tag": "t213",
@@ -2562,19 +2667,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 21197631,
-   "stage_s": 837,
-   "stage_gb": 30.8,
-   "circuit_gib": 5.96,
-   "lean_gb": 26.3,
-   "total_s": 2142
+   "total_s": 2418,
+   "stage_gb": 49.2,
+   "circuit_gib": 11.6,
+   "lean_gb": 51.3
   },
   "run": true,
   "limit_s": 3600,
-  "order": 68,
-  "list": "b"
+  "order": 10,
+  "list": "c"
  },
  "t214": {
   "tag": "t214",
@@ -2587,14 +2690,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 2174116,
-   "stage_s": 86,
-   "stage_gb": 3.2,
-   "circuit_gib": 0.61,
-   "lean_gb": 2.7,
-   "total_s": 220
+   "total_s": 302,
+   "stage_gb": 5.2,
+   "circuit_gib": 1.12,
+   "lean_gb": 4.9
   },
   "run": true,
   "limit_s": 900,
@@ -2612,19 +2713,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 21741160,
-   "stage_s": 858,
-   "stage_gb": 31.6,
-   "circuit_gib": 6.11,
-   "lean_gb": 27.0,
-   "total_s": 2196
+   "total_s": 2478,
+   "stage_gb": 50.5,
+   "circuit_gib": 11.9,
+   "lean_gb": 52.6
   },
   "run": true,
   "limit_s": 3600,
-  "order": 69,
-  "list": "a"
+  "order": 11,
+  "list": "c"
  },
  "t216": {
   "tag": "t216",
@@ -2637,19 +2736,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 22284689,
-   "stage_s": 879,
-   "stage_gb": 32.4,
-   "circuit_gib": 6.27,
-   "lean_gb": 27.7,
-   "total_s": 2251
+   "total_s": 2539,
+   "stage_gb": 51.7,
+   "circuit_gib": 12.19,
+   "lean_gb": 53.9
   },
   "run": true,
   "limit_s": 3600,
-  "order": 70,
-  "list": "b"
+  "order": 12,
+  "list": "c"
  },
  "t217": {
   "tag": "t217",
@@ -2662,19 +2759,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 22828218,
-   "stage_s": 901,
-   "stage_gb": 33.2,
-   "circuit_gib": 6.42,
-   "lean_gb": 28.4,
-   "total_s": 2306
+   "total_s": 2599,
+   "stage_gb": 53.0,
+   "circuit_gib": 12.49,
+   "lean_gb": 55.2
   },
   "run": true,
   "limit_s": 3600,
-  "order": 71,
-  "list": "a"
+  "order": 13,
+  "list": "c"
  },
  "t218": {
   "tag": "t218",
@@ -2687,19 +2782,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 23371747,
-   "stage_s": 922,
-   "stage_gb": 34.0,
-   "circuit_gib": 6.57,
-   "lean_gb": 29.0,
-   "total_s": 2361
+   "total_s": 2660,
+   "stage_gb": 54.2,
+   "circuit_gib": 12.79,
+   "lean_gb": 56.5
   },
   "run": true,
   "limit_s": 3600,
-  "order": 72,
-  "list": "b"
+  "order": 14,
+  "list": "c"
  },
  "t219": {
   "tag": "t219",
@@ -2712,19 +2805,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 23915276,
-   "stage_s": 944,
-   "stage_gb": 34.8,
-   "circuit_gib": 6.72,
-   "lean_gb": 29.7,
-   "total_s": 2416
+   "total_s": 2720,
+   "stage_gb": 55.5,
+   "circuit_gib": 13.09,
+   "lean_gb": 57.9
   },
   "run": true,
   "limit_s": 3600,
-  "order": 73,
-  "list": "a"
+  "order": 15,
+  "list": "c"
  },
  "t220": {
   "tag": "t220",
@@ -2737,19 +2828,17 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 24458805,
-   "stage_s": 965,
-   "stage_gb": 35.5,
-   "circuit_gib": 6.88,
-   "lean_gb": 30.4,
-   "total_s": 2471
+   "total_s": 2781,
+   "stage_gb": 56.7,
+   "circuit_gib": 13.39,
+   "lean_gb": 59.2
   },
   "run": true,
   "limit_s": 3600,
-  "order": 74,
-  "list": "b"
+  "order": 16,
+  "list": "c"
  },
  "t221": {
   "tag": "t221",
@@ -2762,16 +2851,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 25002334,
-   "stage_s": 987,
-   "stage_gb": 36.3,
-   "circuit_gib": 7.03,
-   "lean_gb": 31.1,
-   "total_s": 2526
+   "total_s": 2841,
+   "stage_gb": 58.0,
+   "circuit_gib": 13.69,
+   "lean_gb": 60.5
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 75,
   "list": "a"
@@ -2787,16 +2874,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 25545863,
-   "stage_s": 1008,
-   "stage_gb": 37.1,
-   "circuit_gib": 7.18,
-   "lean_gb": 31.8,
-   "total_s": 2581
+   "total_s": 2901,
+   "stage_gb": 59.3,
+   "circuit_gib": 13.99,
+   "lean_gb": 61.8
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 76,
   "list": "b"
@@ -2812,16 +2897,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 26089392,
-   "stage_s": 1030,
-   "stage_gb": 37.9,
-   "circuit_gib": 7.34,
-   "lean_gb": 32.4,
-   "total_s": 2636
+   "total_s": 2962,
+   "stage_gb": 60.5,
+   "circuit_gib": 14.29,
+   "lean_gb": 63.2
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 77,
   "list": "a"
@@ -2837,16 +2920,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 26632921,
-   "stage_s": 1051,
-   "stage_gb": 38.7,
-   "circuit_gib": 7.49,
-   "lean_gb": 33.1,
-   "total_s": 2691
+   "total_s": 3022,
+   "stage_gb": 61.8,
+   "circuit_gib": 14.59,
+   "lean_gb": 64.5
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 78,
   "list": "b"
@@ -2862,14 +2943,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 2717645,
-   "stage_s": 107,
-   "stage_gb": 4.0,
-   "circuit_gib": 0.76,
-   "lean_gb": 3.4,
-   "total_s": 275
+   "total_s": 363,
+   "stage_gb": 6.5,
+   "circuit_gib": 1.42,
+   "lean_gb": 6.3
   },
   "run": true,
   "limit_s": 900,
@@ -2887,16 +2966,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 27176450,
-   "stage_s": 1072,
-   "stage_gb": 39.5,
-   "circuit_gib": 7.64,
-   "lean_gb": 33.8,
-   "total_s": 2746
+   "total_s": 3083,
+   "stage_gb": 63.0,
+   "circuit_gib": 14.89,
+   "lean_gb": 65.8
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 79,
   "list": "a"
@@ -2912,16 +2989,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 27719979,
-   "stage_s": 1094,
-   "stage_gb": 40.3,
-   "circuit_gib": 7.79,
-   "lean_gb": 34.5,
-   "total_s": 2801
+   "total_s": 3143,
+   "stage_gb": 64.3,
+   "circuit_gib": 15.19,
+   "lean_gb": 67.1
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 80,
   "list": "b"
@@ -2937,16 +3012,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 28263508,
-   "stage_s": 1115,
-   "stage_gb": 41.1,
-   "circuit_gib": 7.95,
-   "lean_gb": 35.1,
-   "total_s": 2855
+   "total_s": 3204,
+   "stage_gb": 65.5,
+   "circuit_gib": 15.49,
+   "lean_gb": 68.5
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 81,
   "list": "a"
@@ -2962,16 +3035,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 28807037,
-   "stage_s": 1137,
-   "stage_gb": 41.9,
-   "circuit_gib": 8.1,
-   "lean_gb": 35.8,
-   "total_s": 2910
+   "total_s": 3264,
+   "stage_gb": 66.8,
+   "circuit_gib": 15.79,
+   "lean_gb": 69.8
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 82,
   "list": "b"
@@ -2987,16 +3058,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 29350566,
-   "stage_s": 1158,
-   "stage_gb": 42.7,
-   "circuit_gib": 8.25,
-   "lean_gb": 36.5,
-   "total_s": 2965
+   "total_s": 3325,
+   "stage_gb": 68.1,
+   "circuit_gib": 16.09,
+   "lean_gb": 71.1
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 83,
   "list": "a"
@@ -3012,16 +3081,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 29894095,
-   "stage_s": 1180,
-   "stage_gb": 43.5,
-   "circuit_gib": 8.41,
-   "lean_gb": 37.2,
-   "total_s": 3020
+   "total_s": 3385,
+   "stage_gb": 69.3,
+   "circuit_gib": 16.39,
+   "lean_gb": 72.4
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 84,
   "list": "b"
@@ -3037,16 +3104,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 30437624,
-   "stage_s": 1201,
-   "stage_gb": 44.2,
-   "circuit_gib": 8.56,
-   "lean_gb": 37.8,
-   "total_s": 3075
+   "total_s": 3445,
+   "stage_gb": 70.6,
+   "circuit_gib": 16.69,
+   "lean_gb": 73.7
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 85,
   "list": "a"
@@ -3062,16 +3127,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 30981153,
-   "stage_s": 1223,
-   "stage_gb": 45.0,
-   "circuit_gib": 8.71,
-   "lean_gb": 38.5,
-   "total_s": 3130
+   "total_s": 3506,
+   "stage_gb": 71.8,
+   "circuit_gib": 16.98,
+   "lean_gb": 75.1
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 86,
   "list": "b"
@@ -3087,16 +3150,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 31524682,
-   "stage_s": 1244,
-   "stage_gb": 45.8,
-   "circuit_gib": 8.86,
-   "lean_gb": 39.2,
-   "total_s": 3185
+   "total_s": 3566,
+   "stage_gb": 73.1,
+   "circuit_gib": 17.28,
+   "lean_gb": 76.4
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 87,
   "list": "a"
@@ -3112,16 +3173,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 32068211,
-   "stage_s": 1266,
-   "stage_gb": 46.6,
-   "circuit_gib": 9.02,
-   "lean_gb": 39.9,
-   "total_s": 3240
+   "total_s": 3627,
+   "stage_gb": 74.3,
+   "circuit_gib": 17.58,
+   "lean_gb": 77.7
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 88,
   "list": "b"
@@ -3137,14 +3196,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 3261174,
-   "stage_s": 129,
-   "stage_gb": 4.7,
-   "circuit_gib": 0.92,
-   "lean_gb": 4.1,
-   "total_s": 329
+   "total_s": 423,
+   "stage_gb": 7.7,
+   "circuit_gib": 1.72,
+   "lean_gb": 7.6
   },
   "run": true,
   "limit_s": 900,
@@ -3162,16 +3219,14 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 32611740,
-   "stage_s": 1287,
-   "stage_gb": 47.4,
-   "circuit_gib": 9.17,
-   "lean_gb": 40.5,
-   "total_s": 3295
+   "total_s": 3687,
+   "stage_gb": 75.6,
+   "circuit_gib": 17.88,
+   "lean_gb": 79.0
   },
-  "run": true,
+  "run": false,
   "limit_s": 3600,
   "order": 89,
   "list": "a"
@@ -3187,14 +3242,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 3804703,
-   "stage_s": 150,
-   "stage_gb": 5.5,
-   "circuit_gib": 1.07,
-   "lean_gb": 4.7,
-   "total_s": 384
+   "total_s": 484,
+   "stage_gb": 9.0,
+   "circuit_gib": 2.02,
+   "lean_gb": 8.9
   },
   "run": true,
   "limit_s": 900,
@@ -3212,14 +3265,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 4348232,
-   "stage_s": 172,
-   "stage_gb": 6.3,
-   "circuit_gib": 1.22,
-   "lean_gb": 5.4,
-   "total_s": 439
+   "total_s": 544,
+   "stage_gb": 10.2,
+   "circuit_gib": 2.32,
+   "lean_gb": 10.2
   },
   "run": true,
   "limit_s": 900,
@@ -3237,14 +3288,12 @@
    "not-reached"
   ],
   "estimate": {
-   "basis": "DsaMqaLogits_v3{N=1} at 2 instances (r20261112-125341-11a8: 1087058 ANDs, 328220292 bytes, 1.58 GB, 42.9 s) taken linear in N x instances",
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
    "kind": "inferred",
-   "ands": 4891761,
-   "stage_s": 193,
-   "stage_gb": 7.1,
-   "circuit_gib": 1.38,
-   "lean_gb": 6.1,
-   "total_s": 494
+   "total_s": 605,
+   "stage_gb": 11.5,
+   "circuit_gib": 2.61,
+   "lean_gb": 11.6
   },
   "run": true,
   "limit_s": 988,
@@ -3267,8 +3316,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 106,
-  "list": "b"
+  "order": 17,
+  "list": "e"
  },
  "x02": {
   "tag": "x02",
@@ -3286,8 +3335,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 105,
-  "list": "a"
+  "order": 16,
+  "list": "e"
  },
  "x03": {
   "tag": "x03",
@@ -3305,8 +3354,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 101,
-  "list": "a"
+  "order": 12,
+  "list": "e"
  },
  "x04": {
   "tag": "x04",
@@ -3324,8 +3373,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 100,
-  "list": "b"
+  "order": 11,
+  "list": "e"
  },
  "x05": {
   "tag": "x05",
@@ -3343,8 +3392,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 99,
-  "list": "a"
+  "order": 10,
+  "list": "e"
  },
  "x06": {
   "tag": "x06",
@@ -3362,8 +3411,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 98,
-  "list": "b"
+  "order": 9,
+  "list": "e"
  },
  "x07": {
   "tag": "x07",
@@ -3381,8 +3430,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 97,
-  "list": "a"
+  "order": 8,
+  "list": "e"
  },
  "x08": {
   "tag": "x08",
@@ -3400,8 +3449,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 96,
-  "list": "b"
+  "order": 7,
+  "list": "e"
  },
  "x09": {
   "tag": "x09",
@@ -3419,8 +3468,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 95,
-  "list": "a"
+  "order": 6,
+  "list": "e"
  },
  "x10": {
   "tag": "x10",
@@ -3438,8 +3487,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 94,
-  "list": "b"
+  "order": 5,
+  "list": "e"
  },
  "x11": {
   "tag": "x11",
@@ -3457,8 +3506,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 93,
-  "list": "a"
+  "order": 4,
+  "list": "e"
  },
  "x12": {
   "tag": "x12",
@@ -3476,8 +3525,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 92,
-  "list": "b"
+  "order": 3,
+  "list": "e"
  },
  "x13": {
   "tag": "x13",
@@ -3495,8 +3544,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 91,
-  "list": "a"
+  "order": 2,
+  "list": "e"
  },
  "x14": {
   "tag": "x14",
@@ -3514,8 +3563,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 104,
-  "list": "b"
+  "order": 15,
+  "list": "e"
  },
  "x15": {
   "tag": "x15",
@@ -3533,8 +3582,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 103,
-  "list": "a"
+  "order": 14,
+  "list": "e"
  },
  "x16": {
   "tag": "x16",
@@ -3552,8 +3601,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 102,
-  "list": "b"
+  "order": 13,
+  "list": "e"
  },
  "x17": {
   "tag": "x17",
@@ -3571,8 +3620,8 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 107,
-  "list": "a"
+  "order": 18,
+  "list": "e"
  },
  "x18": {
   "tag": "x18",
@@ -3590,7 +3639,291 @@
   },
   "run": true,
   "limit_s": 1800,
-  "order": 90,
-  "list": "b"
+  "order": 1,
+  "list": "e"
+ },
+ "_split": {
+  "at_s": 9300,
+  "runs": {
+   "a": "r20261113-051534-0fa1",
+   "b": "r20261113-051633-810f"
+  },
+  "reach": {
+   "a": {
+    "ended": [
+     "t124",
+     "t125",
+     "t146",
+     "t163",
+     "t165",
+     "t166",
+     "t167",
+     "t183",
+     "t184",
+     "t186",
+     "t187",
+     "t190",
+     "t225",
+     "t238",
+     "t239"
+    ],
+    "may_reach": [
+     "t191",
+     "t193",
+     "t195",
+     "t197",
+     "t169",
+     "t199",
+     "t201",
+     "t172",
+     "t174",
+     "t176"
+    ],
+    "beyond": [
+     "t178",
+     "t202",
+     "t204",
+     "t205",
+     "t206",
+     "t108",
+     "t109",
+     "t210",
+     "t212",
+     "t215",
+     "t217",
+     "t219",
+     "t221",
+     "t223",
+     "t226",
+     "t228",
+     "t230",
+     "t232",
+     "t234",
+     "t237",
+     "x13",
+     "x11",
+     "x09",
+     "x07",
+     "x05",
+     "x03",
+     "x15",
+     "x02",
+     "x17"
+    ]
+   },
+   "b": {
+    "ended": [
+     "t126",
+     "t135",
+     "t157",
+     "t162",
+     "t180",
+     "t182",
+     "t185",
+     "t188",
+     "t189",
+     "t192",
+     "t203",
+     "t214",
+     "t236",
+     "t240"
+    ],
+    "may_reach": [
+     "t164",
+     "t168",
+     "t194",
+     "t196",
+     "t198",
+     "t181",
+     "t200",
+     "t171",
+     "t173",
+     "t175",
+     "t177"
+    ],
+    "beyond": [
+     "t179",
+     "t105",
+     "t106",
+     "t107",
+     "t207",
+     "t208",
+     "t209",
+     "t211",
+     "t213",
+     "t216",
+     "t218",
+     "t220",
+     "t222",
+     "t224",
+     "t227",
+     "t229",
+     "t231",
+     "t233",
+     "t235",
+     "x18",
+     "x12",
+     "x10",
+     "x08",
+     "x06",
+     "x04",
+     "x16",
+     "x14",
+     "x01"
+    ]
+   }
+  },
+  "dsa_fit": {
+   "points": [
+    [
+     14,
+     901,
+     17.852153778076172,
+     4.111281701363623,
+     "r20261113-051534-0fa1",
+     "t186"
+    ],
+    [
+     11,
+     721,
+     14.293529510498047,
+     3.1724733896553516,
+     "r20261113-051534-0fa1",
+     "t183"
+    ],
+    [
+     15,
+     960,
+     19.03753662109375,
+     4.424217169173062,
+     "r20261113-051534-0fa1",
+     "t187"
+    ],
+    [
+     7,
+     460,
+     8.97589111328125,
+     1.9873849721625447,
+     "r20261113-051534-0fa1",
+     "t238"
+    ],
+    [
+     5,
+     330,
+     6.447235107421875,
+     1.4268163042142987,
+     "r20261113-051534-0fa1",
+     "t225"
+    ],
+    [
+     18,
+     1190,
+     22.60921859741211,
+     5.363027390092611,
+     "r20261113-051534-0fa1",
+     "t190"
+    ],
+    [
+     8,
+     530,
+     10.15621566772461,
+     2.267668830230832,
+     "r20261113-051534-0fa1",
+     "t239"
+    ],
+    [
+     12,
+     781,
+     15.481575012207031,
+     3.485408858396113,
+     "r20261113-051534-0fa1",
+     "t184"
+    ],
+    [
+     3,
+     290,
+     3.9437255859375,
+     0.8662471575662494,
+     "r20261113-051633-810f",
+     "t203"
+    ],
+    [
+     4,
+     311,
+     5.127021789550781,
+     1.1465314915403724,
+     "r20261113-051633-810f",
+     "t214"
+    ],
+    [
+     2,
+     200,
+     2.614299774169922,
+     0.5859633022919297,
+     "r20261113-051633-810f",
+     "t192"
+    ],
+    [
+     6,
+     421,
+     7.790138244628906,
+     1.7071001613512635,
+     "r20261113-051633-810f",
+     "t236"
+    ],
+    [
+     13,
+     801,
+     16.66991424560547,
+     3.7983462335541844,
+     "r20261113-051633-810f",
+     "t185"
+    ],
+    [
+     9,
+     610,
+     11.35042953491211,
+     2.5479545947164297,
+     "r20261113-051633-810f",
+     "t240"
+    ],
+    [
+     16,
+     1050,
+     20.228527069091797,
+     4.737152639776468,
+     "r20261113-051633-810f",
+     "t188"
+    ],
+    [
+     10,
+     661,
+     12.785507202148438,
+     2.859537921845913,
+     "r20261113-051633-810f",
+     "t182"
+    ],
+    [
+     17,
+     1090,
+     21.419578552246094,
+     5.05009001493454,
+     "r20261113-051633-810f",
+     "t189"
+    ]
+   ],
+   "total_s": [
+    60.70588235294122,
+    60.44117647058823
+   ],
+   "stage_gb": [
+    0.1839015437107463,
+    1.2568010068407245
+   ],
+   "circuit_gib": [
+    -0.07976636261788794,
+    0.2993719429257052
+   ]
+  }
  }
 }
