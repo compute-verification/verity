@@ -91,10 +91,10 @@ from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
-from verity.definitions.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
-from verity.definitions.ops.mufu import mufu_ex2_words, table
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
+from verity.circuits.ops.mufu import mufu_ex2_words, table
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.definitions.registry import dead_free as DF, sampling as SA, topp_stages as TS
 from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.dsv4_moe import Ex2Approx

@@ -9,7 +9,7 @@ logits' version 4, whose word view is `_v3`.
     DsaMqaLogitsQ_v1{H,D}, DsaMqaLogitsKey_v1{H,D}      DsaMqaLogit_v4's circuit cut at what a row's keys share; no word view
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
-The callees are core's Boolean FP32 pieces (`verity.definitions.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
+The callees are core's Boolean FP32 pieces (`verity.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
@@ -33,13 +33,13 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import attention as BA
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp as FP
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp as FP
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import dsa as D
