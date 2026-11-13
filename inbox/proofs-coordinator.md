@@ -122733,3 +122733,30 @@ In plain words: the ten-premise top statements compile, at the head that has RUN
 **Not established.** That my files compile on TWOLEG's head (read only, 05:30Z item 3). Anything about a run: the form accepts no play, and the accept stays off on Friday (PRF-490), so these theorems are true and empty.
 
 **Next.** I end the turn: nothing of mine is building and nothing is left for me to write until TWOLEG's head compiles or item 4 has an owner. Resume me for either.
+
+## HISTORY, Fri 13 Nov 05:38Z: ASSEMBLY, MERGE `4d5a24fe63`. `DeviceOrder.lean`, `DeviceRead.lean` and `Device.lean` ALL COMPILE at `19734e8d9f` (`r20261113-035036-7f94`, rc 0; 5, 1 and 35 theorems, three axioms). `4d5a24fe63` adds only the taken-hypothesis wording and my three lock roots, over TWOLEG's and CUT's new heads; its try is in line
+
+**In plain words.** The proof that the auditor's device released the first stage's coins in the first session and the second stage's in the second now compiles, under the three facts about the device's ledger that soundness decided to take as stated hypotheses until the device model writes its ledger line by line. I marked those facts as taken in the file, in the words you gave, and added my three files to the list of files the records audit reads. One more run confirms the files still build after merging the other two workers' new heads.
+
+Clock: `date -u` read 05:36Z. Mailbox read at 05:34Z (your 05:32Z, whole). Pen: `~/wt/.pen` created by this loop at 05:34Z. Events not mine: none reached me.
+
+**1. `r20261113-035036-7f94`** (vy-nebius-2), head `19734e8d9f`: **done, rc 0** [run]. "tries: DeviceOrder rc=0 DeviceRead rc=0 Device rc=0". Its build log shows "Built Proofs.Properties.Verity.SampledTwo.CutOrder".
+- "`DeviceOrder.lean`: lean exit 0 in 520 s"; "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`ledgerOpens_mono`, `endsBefore_mono`, `ledgerOpens_of_opensOn`, `printsInOrder_dev₂`, `cutOrder_dev₂`).
+- "`DeviceRead.lean`: lean exit 0 in 780 s"; "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`Device.lean`: lean exit 0 in 621 s"; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- So `PrintsInOrder (dev₂ S₁ S₂ cut o) w₁ w₂ o.log`, CUT's definition word for word, is compiled under `LedgerInOrder` (my (a) to (c)) [run].
+
+**2. On soundness's decision** [read: my file]. `LedgerInOrder` keeps its shape. Its docstring now carries your wording: "It is taken as a hypothesis, not proved: it is a lemma of the modelled device once the model builds that device's whole ledger line by line, and no statement takes it then." `printsInOrder_dev₂` and `cutOrder_dev₂` each say "`LedgerInOrder` is taken, not proved." No issue or pull request id. No device lines are built; `RunSetup` and `History` are unchanged. `Apart` (in `Device.lean`, a hypothesis of `printsTwo_dev₂`, `binds_dev₂`, `cut_dev₂`, `cutRead_dev₂`) is the older fallback of the same kind; I left its wording, since `DeviceOrder` replaces it on CUT's path. Say if you want it marked the same way.
+
+**3. Pushed** [run]. `cursor/proofs-history-d2e7` at `4d5a24fe63`. Since `19734e8d9f`: merges of TWOLEG's `356c08be0a` and CUT's `b69d0b4b22` (clean; CUT's `PrintsInOrder`, `LedgerOpens` and `EndsBefore` unchanged [read: diff]), then one commit: `DeviceOrder.lean`'s docstrings, and in `security/Proofs/lean-audit.json` three names appended at the end of `roots` (`…SampledTwo.Device`, `…DeviceRead`, `…DeviceOrder`), nothing else in the lock.
+- [read] CUT's own files (`Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutOrder`, `CutFirst`, `CutAccept`) are in the lakefile but not in the lock's `roots` at this head: CUT's to add.
+
+**4. Run** [run]. `r20261113-053555-2f67` (vy-nebius-2) at `4d5a24fe63`: the same three tries, launched 05:36Z. CUT's `Cut.lean` and `CutRead.lean` changed under my files in the merge, so this run is what says they still build. [guess] It ends by about 06:30Z.
+
+STOP RULE: not reached. One lock edit, the one allowed. No listed guarantee or named assumption changes; nothing of mine is stated at the form's accept for a lock.
+
+NEEDS: nothing.
+
+To post: nothing.
+
+Not established: that my files build at `4d5a24fe63` (`2f67`). `LedgerInOrder` and `Apart` at any deployment (taken). That the form accepts an honest play; `binds_dev₂`, `cut_dev₂`, `cutRead_dev₂` and `cutOrder_dev₂` say nothing of a run until it does. The known hole: on the play's own two windows the history holds exactly this play's runs.
