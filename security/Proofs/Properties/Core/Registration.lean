@@ -127,11 +127,12 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
     have hr := Properties.Site.refuses Core.Site.Registration.sha512 A c s.site s.head x
     have hf : refusal ∘ Core.Registration.Refusal.site = Properties.Site.refusal := rfl
     rw [Core.Registration.Entry.refusal, Option.map_map, hf, hr,
-      entry_refusal_sheet (D₁ := Properties.Site.digests Core.Site.Registration.sha512) (D₂ := digests E) rfl, hS, ← hH,
-      Verity.Registration.refusal]
+      entry_refusal_sheet (D₁ := Properties.Site.digests Core.Site.Registration.sha512) (D₂ := digests E) rfl, hS,
+      ← hH, Verity.Registration.refusal]
+    have hn' : (s.items.map (Verity.Registration.Item.key ∘ item B)).Nodup := by simpa using hn
     cases x
     simp [entry, regEntry, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
-      Verity.Registration.Entry.items, Verity.Registration.Entry.declared?, hI, hn]
+      Verity.Registration.Entry.items, Verity.Registration.Entry.declared?, hI, hn']
   | information q items =>
     have hk : ((s.items.map (item B) ++ items.map (item B)).map Verity.Registration.Item.key) =
         (s.items ++ items).map Core.Registration.Item.key := by
