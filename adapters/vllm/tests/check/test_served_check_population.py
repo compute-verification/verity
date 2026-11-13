@@ -2,7 +2,7 @@
 step's notes, and what it answers where they leave a note out.
 
 The served check's own tests reconcile the reports of whole served runs; these hold the cases a run of theirs does not
-reach: a step the Build plans nothing for, and notes that are not the check's.
+reach: a step the Build plans nothing for, notes that are not the check's, and more findings of a kind than it names.
 """
 from __future__ import annotations
 
@@ -52,6 +52,21 @@ ABSENT: Any = object()
 
 def _checks(build: dict, notes: dict) -> dict:
     return SC.population(build, {"steps": {"0": notes}}, ranks=[0])["query_checks"]
+
+
+def test_each_finding_names_its_first_six_and_counts_them_all():
+    """Seven identities of one step's ids, each stating three rows.  Under notes that reach none, seven are without rows; under
+    notes whose batch gives each request two rows, seven disagree; under those notes and a Build that holds no identity, seven
+    noted values are outside the query.  `NAMED` of each are named."""
+    requests = [f"r{i}" for i in range(7)]
+    build = _build([_identity(0, r, "c00.input", "ids", rows=3) for r in requests])
+    notes = {"batch": {"ok": True, "rows": dict.fromkeys(requests, 2)}, SERVED_IDS: {"ok": True, "requests": requests}}
+    at = [{"request_id": r, "step": 0, "op_path": "c00.input", "member": "ids"} for r in requests]
+    without, disagree = _checks(build, {})["identities_without_rows"], _checks(build, notes)["rows_disagree"]
+    assert without == {"n": 7, "first": at[:6]}
+    assert disagree == {"n": 7, "first": [a | {"manifest_height": 3.0, "program_rows": 2} for a in at[:6]]}
+    outside = _checks(_build(), notes)["vus_outside_query"]
+    assert (outside["n"], len(outside["first"])) == (7, 6)
 
 
 @pytest.mark.parametrize("batch", [ABSENT, None, {}, {"ok": True}, {"ok": True, "rows": None}, {"ok": True, "rows": {}}],

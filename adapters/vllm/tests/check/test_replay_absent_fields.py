@@ -28,6 +28,7 @@ from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 from verity_vllm.records.required_manifest import SCHEMA
+from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 ABSENT: Any = object()
 NO_LIST = pytest.mark.parametrize("left_out", [ABSENT, None, []], ids=["absent", "null", "empty"])
@@ -138,8 +139,8 @@ def test_plane_entries_without_an_identity_are_no_committed_plane(left_out):
 
 
 def test_a_plane_whose_entry_states_no_encoding_is_named_unread_and_its_layer_is_not_compared():
-    """The store knows no dtype for such an entry, so the check reads no words of the plane.  It names the first `ALIAS_NAMED`,
-    as it does of the pairs it reads and finds identical: here every pair, the store's bytes being zeros."""
+    """The store knows no dtype for such an entry, so the check reads no words of the plane.  Of thirteen it names the first
+    twelve (`ALIAS_NAMED`), as it does of the pairs it reads and finds identical: here every pair, the store's bytes being zeros."""
     bf16 = {"dtype": "bf16"}
 
     def check(layers: int, up: Any = ABSENT, down: Any = ABSENT) -> dict:
@@ -148,15 +149,15 @@ def test_a_plane_whose_entry_states_no_encoding_is_named_unread_and_its_layer_is
         return POP.moe_plane_alias_check(OP.CommittedStore({"entries": entries}, _committed))
 
     fact = check(1, up=bf16)
-    assert (fact["result"], fact["compared"], fact["read_errors_n"]) == (None, 0, 1)
+    assert (fact["schema"], fact["result"], fact["compared"], fact["read_errors_n"]) == (MOE_PLANE_ALIAS_CHECK_SCHEMA, None, 0, 1)
     assert fact["read_errors"] == [{"request_id": "r0", "step": 0, "layer": 0, "plane": "down",
                                     "why": "unknown dtype '' of (r0, step 0, moe/L0/down)"}]
-    many = check(POP.ALIAS_NAMED + 1)
-    assert many["compared"] == 0 and [e["layer"] for e in many["read_errors"]] == list(range(POP.ALIAS_NAMED))
+    many = check(13)
+    assert many["compared"] == 0 and [e["layer"] for e in many["read_errors"]] == list(range(12))
     assert {e["plane"] for e in many["read_errors"]} == {"up"}
-    stated = check(POP.ALIAS_NAMED + 1, up=bf16, down=bf16)
-    assert (stated["result"], stated["compared"], stated["identical_n"], stated["read_errors"]) == (False, POP.ALIAS_NAMED + 1, POP.ALIAS_NAMED + 1, [])
-    assert [pair["layer"] for pair in stated["identical"]] == list(range(POP.ALIAS_NAMED))
+    stated = check(13, up=bf16, down=bf16)
+    assert (stated["result"], stated["compared"], stated["identical_n"], stated["read_errors"]) == (False, 13, 13, [])
+    assert [pair["layer"] for pair in stated["identical"]] == list(range(12))
 
 
 @NO_LIST
@@ -291,17 +292,19 @@ def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out, tmp_pa
 @pytest.mark.parametrize("left_out", [ABSENT, None, 0], ids=["absent", "null", "zero"])
 def test_an_executed_prefix_that_states_no_lag_anchors_its_last_phase_under_lag_0(left_out, tmp_path):
     """The mixed-stop record's first request, of thirty-two steps: as served, stopping twenty steps short of its last; and served
-    thirty-one tokens, where its lag step is its last step.  Under LAG 0 neither has a lag step."""
+    thirty-one tokens, where its lag step is its last step.  Under LAG 0 neither has a lag step, nor has the second where its
+    record states no served length: it is then taken to have run to its last step."""
     facts = XP._linked_facts(tmp_path)
-    for served in (11, 31):
-        record = POP.executed_prefix_of_record("r0", **facts | {"a_r": served, "served_len_commit": served})
+    short, reaching = (POP.executed_prefix_of_record("r0", **facts | {"a_r": served, "served_len_commit": served}) for served in (11, 31))
+    for record, served in ((short, 11), (reaching, 31)):
         anchor, stated = POP.phase_anchor(32, _with(record, "lag", left_out)), POP.phase_anchor(32, record)
         assert (record["faults"], record["n_exec"]) == ([], served + 1)
         assert (anchor["last_step"], anchor["lag_step"], "is the lag step" in anchor["why"]) == (served, None, False)
         assert (stated["last_step"], stated["lag_step"], "is the lag step" in stated["why"]) == (served, served, True)
-    short = POP.phase_anchor(32, _with(POP.executed_prefix_of_record("r0", **facts), "lag", left_out))
-    assert short["why"].startswith("the request stopped at a_r 11 under LAG 0: steps [12, 32) are not executed; its last EXECUTED step 11 is the "
-                                   "EOS step (LAG 0: no lag step)")
+    assert POP.phase_anchor(32, _with(short, "lag", left_out))["why"].startswith(
+        "the request stopped at a_r 11 under LAG 0: steps [12, 32) are not executed; its last EXECUTED step 11 is the EOS step (LAG 0: no lag step)")
+    unsaid = POP.phase_anchor(32, _with(reaching, "a_r", ABSENT))
+    assert (unsaid["last_step"], unsaid["lag_step"], "is the lag step" in unsaid["why"]) == (31, None, False)
 
 
 
