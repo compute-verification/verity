@@ -119162,3 +119162,32 @@ STOP RULE: not reached. NEEDS: none beyond my 03:59Z entry's (which TWOLEG sessi
 **Not established**, unchanged from 03:37Z: the difftest rows' Lean answers and `flock_form` (both in `d582`), and the records at the merged tree.
 
 **Next.** I read `d582` when it ends. If its difftest fails I fix the twin or the row and say so. The ready line waits on the records after that.
+
+## RUNCOINS, Fri 13 Nov 04:05Z: nothing new compiled since 04:00Z; item B is written (`paramsOfJson_twoStage`, against the form's parser `VStar.Recursive.SampledTwo.paramsOfJson`) and in line, on `cursor/proofs-runcoins-accepted-5c1e` = `f079d353a5`
+
+**In plain words.** The form's parameter parser throws on any rule that is not two-stage. I proved that the parameters it returns have a two-stage rule, so the theorem that the form's check, when it accepts, accepted a two-stage run no longer needs that hypothesis. The proof steps through the parser's own function one binding at a time. It reads none of the parser's particular checks, only that the rule it returns is the one it matched as two-stage, so a change to the parser's other checks tonight should leave the proof standing. It has not compiled yet. Like `acceptedTwo_of_check`, the new theorem is about the form's accept, which no play reaches today (TWOLEG's 03:15Z reading), so it says nothing about a run until TWOLEG's honest play passes.
+
+**B. The rule hypothesis** [read; derived]
+- The function: `VStar.Recursive.SampledTwo.paramsOfJson`, which is the form's `protocol.params`. It binds `rule ← Select.Rule.ofJson (getD j "rule")`, then `let .twoStage _ _ _ := rule | throw "the rule is not two-stage"`, and returns `{ …, rule, … }`.
+- New file `security/Proofs/Flock/SpotFlock/RunsAs/Parsed.lean` (49 lines, a lakefile root), with two theorems:
+  - `paramsOfJson_twoStage (h : paramsOfJson j = .ok p) : ∃ grain replay k, p.rule = .twoStage grain replay k`. The proof unfolds `paramsOfJson` and repeats `bind_eq_ok`, `split` and `dsimp only` until the return; it names no check of the parser.
+  - `acceptedTwo_of_parsed (hj : paramsOfJson j = .ok p) (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof)`: `acceptedTwo_of_check`'s conclusion, with no `hp`.
+- [run, my VM, not a record] A scratch copy of `paramsOfJson`'s text over stubbed callees elaborated with the same proof and only the three axioms.
+- If TWOLEG's change adds a binding or a check before the return, the same loop walks it. It would stop only if the returned record's `rule` were no longer the matched variable.
+
+**Runs** [run: `research status --on vy-nebius-2`, 04:01Z, all `waiting` for a check slot]
+- `r20261113-035548-49aa`: `RunsAs.lean` at `d3cb96c006` (merged head of `cursor/proofs-runcoins-2d88`), which builds every RunsAs file (`Played`, `Coins`, `Within` among them).
+- `r20261113-040015-a535`: `RunsAs/Parsed.lean` at `f079d353a5` (merged head of `cursor/proofs-runcoins-accepted-5c1e` plus `Parsed.lean`), which builds `OfCheck.lean` on the merged tree too.
+- `r20261113-035238-6fd1` (`Within.lean` before the merge): I cancelled it at 04:03Z, unstarted after 10 minutes, because `49aa` builds the same file on the merged head.
+
+**Heads** [run: `git push`]. `cursor/proofs-runcoins-2d88` = `d3cb96c006`, unchanged since 04:00Z. `cursor/proofs-runcoins-accepted-5c1e` = `f079d353a5`; ACCEPTS, its merged head of 04:00Z was `71ebf98c65` and `f079d353a5` adds only `Parsed.lean` and its lakefile line. Nothing is unpushed.
+
+**C.** ACCEPTS took `ReadsWithin`. Mine (`RunsAs/Within.lean`, `reads_within`) is already written and in `49aa`; keep whichever compiles first.
+
+**STOP RULE.** Before: no listed guarantee's statement or named assumption changed; the verifier accepts no form it refused. After: the same. No lock or verifier file is touched.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** Every theorem in this entry until `49aa` and `a535` end. `Parsed.lean` on the real tree.
