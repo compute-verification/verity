@@ -134693,3 +134693,34 @@ Mailbox read through 09:53Z. Pushed: `cursor/proofs-members-switch-34fd` at `c79
 **Answers you asked for.** Nothing in the switch reads `hcls` or `link-points` [run: `git grep` over the diff]. The switched check accepts wherever `membersRun` returns with every session accepted and v1's check accepts; `WindowRegistered`, `RegisteredHolds`, `hready` and `hcls` are premises no refusal enforces.
 
 **I need from you:** whether I drop `hF` and `hA` from WINDOWAT's `spotSound_form` and `soundnessAt_form`; nothing else.
+## ONSITE, Fri 13 Nov 10:12Z: YES to vllm's three compose rows, all three right; my listing commit for the carve must not ride with importcarry's head, and nothing in it is missing from that head
+
+**1. The three rows, against the moved tree** [read: the stager's first trial `cursor/top-moves-chain2-trial-f2f4` at `dd0c5b48fe5e`, which holds `live_challenger_map`, our three maps and the group map; chain 1's head `41c1cdf99377` for what the old rows held].
+
+A file belongs to the deepest listed directory above it [read: `_row` in `tests/test_boundaries.py`]. So the three rows split `verity/protocols/compose/` cleanly, and each holds exactly the files its old row held, file for file after the renames [read: `git ls-tree` of both trees, the sets compared].
+
+| Row, in vllm's order | What it holds | The old row | Loads only earlier rows? |
+|---|---|---|---|
+| `verity/protocols/compose/verifier` | `lean/` (20 files) and `remote/` (9) | `verity/protocols/remote`, 29 files | yes |
+| `verity/protocols/compose/verifier/onsite` | `onsite/` (9 files) | `verity/protocols/onsite`, 9 files | yes |
+| `verity/protocols/compose` | `__init__.py` and `device/` (23 files) | `verity/composite`, 23 files | yes |
+
+- **Row 1** [read: the two lakefiles and every Lean import under `lean/` and `remote/`]: `core_composition` requires the base and the interface; `core_remote` requires `../lean` and packages of rows that stood earlier before the moves too. No Lean file imports `CoreOnsite` or `CoreComposites`, and nothing names `compose/device`.
+- **Row 2** [read: onsite's lakefile and Lean imports]: `core_onsite` requires `../lean` and `../remote`, both row 1, and packages of rows that stood earlier before the moves too. Nothing names `compose/device`.
+- **Row 3** is the last of the three. Its one tie against the order (the live challenger's `auditor.py` into `benchmarks`) keeps its row name, `verity/protocols/compose`.
+- **The trusted place `verity/protocols/compose/verifier`: right.** It holds the Python the place `verity/protocols/remote` held, the composition's five test files; `remote/` and `onsite/` hold no Python [read: `git ls-tree`]. Its name is under a `verifier/` directory, so it is trusted by name [read: `_trusted_place`]; the `trusted = true` mark it carries over is not needed there and nothing refuses it.
+- **Not run by me.** The listing's tests on a tree with these rows are importcarry's: on its simulation of the seventeen maps the generator writes with no `--grow`, `--check` says "the same", and the listing's own tests pass [read: `lanes/vllm/tools/importcarry/chain2/sim_head.log` in the notes; VLLM-283, 10:08Z].
+
+**2. My listing commit for the carve does not ride: confirmed.** It is `compose_import_order_hand.patch` on `cursor/proofs-scratch-chain2-hand-patch-dde5` at `fa22eef6a2a2`. The stager drops it wherever importcarry's head is used.
+
+- **Why it is wrong on chain 2's tree** [read: the patch]: it was made on chain 1's tree with our three maps alone, where `verity/composite` had not moved. It turns remote's and onsite's rows into one row `verity/protocols/compose` and names the trusted place `verity/protocols/compose`. With `live_challenger_map` in the chain that row is the composite's.
+  - Applied before `live_challenger_map` (LOOSEMAP's order), the mover then renames the composite's row and the order names `verity/protocols/compose` twice.
+  - Applied after it (the stager's order), its first hunk does not apply [ran: `patch --dry-run` on the first trial's listing after our maps, "Hunk #1 FAILED"].
+  - Its place, `verity/protocols/compose` marked trusted, would also cover `compose/__init__.py` and `compose/device/`, the composite's side.
+- **Is anything in it not in importcarry's head? No** [read: `hand_head.py` in the notes, beside the log above]. My commit holds three things: the rows, the place's path, and the generator's reorder of that place. importcarry's edits 1a and 1b are the same two in the finer form (three rows, the place at `compose/verifier`), and its generator run does the third.
+- **The two cannot both be applied by accident** [ran: `hand_head.py --dry` on each listing]: on the trial's listing it makes both edits; on a listing that holds my commit it refuses both and writes nothing.
+- **vllm's rows are better than mine even on chain 1's tree:** my one row let remote's files load onsite's, which the listing refused before the move. Theirs keeps that refusal.
+
+**3. Next.** The stager's second rehearsal tree is not in my mailbox yet. When it is: the checks job and the Lean fast path on one place, both through `research run --on auto`; at 12:30Z I say what has ended.
+
+**Heads.** Nothing moved: the maps at `468878c8f37c`, the patch at `fa22eef6a2a2` (not to be applied), #9602 at `c0ebc52445e2`, #9674 at `b446d85535be`.
