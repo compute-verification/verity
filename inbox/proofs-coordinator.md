@@ -117622,3 +117622,26 @@ Branch `cursor/proofs-sessionof-5c1e` at `5d37e0ecf4`, pushed. Nothing is unpush
 > A `lean_changed.py --try` run launched with `--mem-gb 24` reached 247 GB resident on vy-nebius-cpu-12 (`r20261113-021208-c0e3`, one `lean` process, a tactic of its owner's in a loop) before its owner cancelled it. The flag reserves, it does not cap. A try could run `lean` under a hard address-space limit.
 
 **Not established.** `paramsParsed_program`, and so `params_desc` without a hypothesis. Which step of my tactic grows. Whether `c0e3` slowed another run. Everything of ACCEPTS's item beyond the reading above: no statement is written. `SetsUp`'s `hfam` against #9566's `families_params` is as my 02:13Z entry left it.
+
+## ADDRWC, Fri 03:27Z: the copy's source half written, 6 of its 9 theorems compiled (run r20261113-024237-4359); fixed try running (r20261113-032451-ed34)
+
+In plain words: I am proving the copy condition (`CopiesAt`) at a bit an inner block reads from its outer block's inputs: the column the layout picks for that bit has the bit's port bit as its key. The helper lemmas compile. The three that carry the result failed on a name clash and two elaboration slips, now fixed and being compiled again. Nothing new needs a decision; the base now hands me the scope facts I had listed as FRAME's.
+
+- `AddressFacts/CopySrc.lean`, 9 theorems. Compiled with only `propext`, `Classical.choice`, `Quot.sound`: `srcPos_leaf`, `msgAt_bit8`, `srcAt_bit8`, `srcKey_bit8`, `rowBit_facts`, `sourceBits_mem` [run r20261113-024237-4359]. Failed in that run: `exists_wire_src`, `pickAny_of_wire`, `copiesRef_src` [run r20261113-024237-4359]. Inside `namespace SpotFlock`, `Built` named a different definition (one taking a `Held`), two `getElem!_pos` calls lacked their array, and one rewrite was dependent. All three fixed at `91599c8785` [read].
+- `copiesRef_src (hd : two h s = some d) (hO : PortsOnce h) (hs : (i, t, rp) ∈ sourceBits h.ms) (hleaf : rp.leaf = k) : ∃ m, h.ms[t]? = some m ∧ CopiesRef m.1 (pickAny h t k i) (portNamed h t rp.row) rp.bit` is the source half of `CopiesAt` [read: stated; not compiled].
+- How [derived]:
+  - A source bit is the gate `2 + k·B + b` whose input `b` is its own key, and its index is its position (`posOf_of_lt_inputs`).
+  - Unit `k`'s input column `b` is on that gate (`exists_wire_src`), so `pickAny` picks a column on it whether or not the unit reads it (`pickAny_of_wire`).
+  - `rowBit_keyRowOf` and `Layout.keyRowOf_wire` give that column's key as the bit's port and bit, and `PortsOnce` makes that port `portNamed`'s.
+  - No hypothesis beyond `two` and `PortsOnce`.
+- From the base [read: `Code.lean`, `AddressesGive.lean`]: `two` now includes `membersScoped` (every member passes `scopeOkH`), and `scoped_wiring_of_two` gives it. `scopeOkH_spec` gives `outNet = unitNet`, which the copy's written half (`OutRef`) needs. `rowsFit_of_scopeH` gives `outRowPorts = replicate 1`, which the `qsort` route to `PortsOnce` needs [derived].
+- Next: the written half, `OutRef` at `pickAny`'s column on a returned output's gate [derived]:
+  - Under `replicate 1` that column is the stacked computed column `upv·nIn + k·(nComp+1) + 1 + (outCol − nIn)`, the only one on that gate.
+  - Its port and word come from `outPos_eq` and `outPortOf_spec`.
+  - Then `CopiesAt` follows from both halves, by `BitOf`'s two cases.
+
+Size: 8 files, 1451 lines [read: wc]. Theorems left: `copiesRef_src` (fixed, compiling), the written half, `CopiesAt`'s assembly, and `PortsOnce` (either FRAME's decided check or the `qsort` lemma). I expect the source half compiled by 04:00Z and the written half by 07:00Z [guess].
+
+Not established: the source half is not compiled yet. The written half and `CopiesAt` are not written. `PortsOnce` is not proved. Branch `cursor/proofs-addrwc-60f3` at `91599c8785`.
+
+To post: none.
