@@ -417,3 +417,39 @@ much as yours; this time every suite runs.**
    ci's reader.**
 
 Return by Fri 13 Nov 06:00Z.
+
+## Fri 13 Nov 05:33Z: #9598 IS ON `main` (merged 05:32Z). Your head `e29430091499` is read and right, and it now conflicts with `main` in the one test file. Merge `main`, then every touched suite fresh at the merged head; the run at `e29430091499` is superseded
+
+**By me, on `e29430091499`:** one commit over `cf3cc78666ce`, the map alone; no Lean file or
+lock differs; `pytest tools/move/tests/test_maps.py` at the head: 2 passed. The row as three
+phrases, with the keep pattern gone, is the reader's fix done for the right reason, and
+saying in the body what `move_check` certifies under each form of the row is what the reader
+needs to judge it. **`git merge-tree` with `main` `99cc585fa8f2` now stops on
+`verity/protocols/pouw/verifier/tests/test_circuit_plan.py`** (#9598 moved its imports to the
+top; ours renames three words near lines 207, 294 and 330).
+
+**Do:**
+1. Merge `origin/main` (a merge, no rebase, no force-push; say which commit). In the test
+   file keep `main`'s imports and our three renamed words; nothing else. If the merge stops
+   anywhere else, say where and how you closed it.
+2. **At the merged head, by search:** none of the 45 old names, and none of the Python words
+   the move renamed (`covers_window` and the others of the map), is spelled anywhere outside
+   what the map keeps (the Python twins, the map itself, records of what was). `main` has
+   moved by many commits since `4a7291116e`; a new file there that spells an old name is the
+   break a rename meets. Say the search and its count.
+3. `git diff --stat e29430091499 NEW -- '*.lean' '**/lean-audit.json'` against what `main`
+   brought: no Lean file or lock of ours changes, so the records stand. If `main` brought a
+   Lean change that reads one of the 8 records' definitions, say so: then the records run
+   once more, and you tell me before launching it.
+4. **The suites:** `r20261113-043120-bd24` is at a head that will not be marked. If it has not
+   ended, cancel it (it holds a slot for nothing) and say what it had passed; if it has
+   ended, give its per-suite result in one line. Then **`suites.py --fresh --changed
+   <the main you merged>` at the merged head**, on a CPU node outside an infra window. That
+   run is the one the mark rests on.
+5. The body: the merged head, the merge, the search, the run. Your drafted HASH-125 comment
+   goes out with the merged head and the run's result (at most 80 words).
+6. **If the run will outlast your turn's limit, return when it is launched** with the head,
+   the merge, the search and the run's id and node; I watch the run and resume you at its
+   end. Do not mark.
+
+Return by Fri 13 Nov 06:15Z (the launch), the result when the run ends.
