@@ -84,6 +84,9 @@ from verity_vllm.config import option
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.records.schema_ids import INT8_ERROR_REPORT_SCHEMA
+
+__all__ = ["COMMANDS", "main"]
 
 RECIPE = "verity-int8-channel127/v1"
 RECIPE_V2 = "verity-int8-channel127/v2"
@@ -145,7 +148,8 @@ def fp8_exact(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarr
     v = E4M3_VALUES[codes]
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    return v * _block_rows(s, lo, *codes.shape, block).astype(np.float64)
+    rows, k = codes.shape
+    return v * _block_rows(s, lo, rows, k, block).astype(np.float64)
 
 
 def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarray:
@@ -153,7 +157,8 @@ def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np
     v = F.e4m3fn_value(codes)
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    u = np.ascontiguousarray(v * _block_rows(s, lo, *codes.shape, block), dtype=np.float32).view(np.uint32)
+    rows, k = codes.shape
+    u = np.ascontiguousarray(v * _block_rows(s, lo, rows, k, block), dtype=np.float32).view(np.uint32)
     return ((u + np.uint32(0x7FFF) + ((u >> 16) & np.uint32(1))) >> 16).astype(np.uint16)
 
 
@@ -169,7 +174,8 @@ class Fp8Base:
 
 
 def fp8_base(cfg: dict[str, Any], recipe: F.Recipe) -> Fp8Base:
-    qc = cfg.get("quantization_config") or {}
+    held = cfg.get("quantization_config")
+    qc = held if held else {}   # a config with no block (absent, null or empty) is refused by the fields it lacks
     bs = qc.get("weight_block_size")
     if (qc.get("quant_method") != "fp8" or qc.get("fmt", "e4m3") != "e4m3" or not isinstance(bs, list) or len(bs) != 2
             or bs[0] != bs[1] or not isinstance(bs[0], int) or bs[0] <= 0):
@@ -232,7 +238,8 @@ class _Base:
     """Rows of a base shard's 2-D tensors, read exactly (float64), or as their raw words."""
 
     def __init__(self, f, base: int, header: dict[str, Any], plan: Fp8Base):
-        self.f, self.base, self.header, self.plan, self._scales = f, base, header, plan, {}
+        self.f, self.base, self.header, self.plan = f, base, header, plan
+        self._scales: dict[str, np.ndarray] = {}
 
     def raw(self, name: str, lo: int, hi: int) -> bytes:
         info = self.header[name]
@@ -277,22 +284,23 @@ def fp8_base_shard(src: Path, dst: Path, plan: Fp8Base, recipe: F.Recipe) -> tup
         rd = _Base(f, base, header, plan)
         scales = {source: np.concatenate([recipe.scales(rd.exact(source, lo, hi)) for lo, hi in _stripes(shape[0])])
                   for _, _, shape, kind, source in layout if kind == "scale"}
-        sink = F._Sink(dst)
-        sink.write(head)
-        for name, _, shape, kind, source in layout:
-            if kind == "scale":
-                sink.write(scales[source].astype("<f4").tobytes())
-            elif kind == "weight":
-                for lo, hi in _stripes(shape[0]):
-                    sink.write(recipe.quantize(rd.exact(source, lo, hi), scales[source][lo:hi]).tobytes())
-            elif kind == "dequant":
-                for lo, hi in _stripes(shape[0]):
-                    sink.write(rd.served_bf16(source, lo, hi).astype("<u2").tobytes())
-            else:
-                a, b = header[source]["data_offsets"]
-                for at in range(a, b, F._CHUNK):
-                    sink.write(F._read(f, base + at, base + min(at + F._CHUNK, b)))
-        digest = sink.close()
+        with open(dst, "wb") as out:
+            sink = F._Sink(out)
+            sink.write(head)
+            for name, _, shape, kind, source in layout:
+                if kind == "scale":
+                    sink.write(scales[source].astype("<f4").tobytes())
+                elif kind == "weight":
+                    for lo, hi in _stripes(shape[0]):
+                        sink.write(recipe.quantize(rd.exact(source, lo, hi), scales[source][lo:hi]).tobytes())
+                elif kind == "dequant":
+                    for lo, hi in _stripes(shape[0]):
+                        sink.write(rd.served_bf16(source, lo, hi).astype("<u2").tobytes())
+                else:
+                    a, b = header[source]["data_offsets"]
+                    for at in range(a, b, F._CHUNK):
+                        sink.write(F._read(f, base + at, base + min(at + F._CHUNK, b)))
+        digest = sink.digest()
     n_vocab = sum(1 for n, i in header.items() if n != "__metadata__" and len(i["shape"]) == 2 and plan.vocab in i["shape"])
     return digest, {name: dst.name for name, *_ in layout}, n_vocab, sum(b - a for a, b in offsets.values())
 
@@ -393,14 +401,15 @@ def report(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | 
     tensors: dict[str, dict[str, Any]] = {}
     for part in F.map_shards(report_shard, [(bdir / fn, mdir / fn, plan, recipe) for fn in shards], jobs):
         tensors.update(part)
-    return {"schema": "verity-vllm/int8-error-report/v1", "role": entry["role"], "recipe": recipe.id, "revision": entry["revision"],
+    return {"schema": INT8_ERROR_REPORT_SCHEMA, "role": entry["role"], "recipe": recipe.id, "revision": entry["revision"],
             "base": {"repo": base["repo"], "revision": base["revision"]}, "summary": summarize(tensors),
             "tensors": dict(sorted(tensors.items()))}
 
 
 def recipe_of(entry: dict) -> F.Recipe:
     """The int8 recipe a pin was made by (its `recipe.id`)."""
-    rid = (entry.get("recipe") or {}).get("id")
+    held = entry.get("recipe")
+    rid = held.get("id") if held else None
     if rid not in RECIPES:
         raise C.UsageError(f"{entry.get('role')}: recipe {rid!r} is none of the int8 recipes {sorted(RECIPES)}")
     return RECIPES[rid]
