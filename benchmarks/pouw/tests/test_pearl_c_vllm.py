@@ -67,8 +67,8 @@ from verity.protocols.pouw.verifier.serving import SchemeId
 from verity.protocols.spot.device import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "prover" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 

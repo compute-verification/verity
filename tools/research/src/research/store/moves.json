@@ -2233,6 +2233,11 @@
       "paths": {
         "verity/protocols/pouw/receipts/": "verity/protocols/pouw/verifier/receipts/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/pouw/clear/": "verity/protocols/pouw/prover/clear/"
+      }
     }
   ]
 }
