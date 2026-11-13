@@ -110729,3 +110729,16 @@ In plain words. The audit's second stage proves small pieces of the served compu
 **To post (for infra, worded to send).** On vy-nebius-2 the `research` suite fails two tests of `tools/research/tests/test_auto.py` while `/etc/vy/auto-hold` is there (until Sat 02:00Z): `test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen` run the probe without pointing `auto.HOLD_FILE` at a temporary path, so the probe answers "held". `main` at `4f0154e420` has the same two tests. Any suites run there that reaches `research` goes red for it; the fix is one `monkeypatch.setattr(auto, "HOLD_FILE", ...)` line in each.
 
 **Unpushed:** nothing in a tree. The five job files (staging wrapper, card job, the waiter, the Lean job) are not tree code; they are kept in their runs' inputs, where I read them back from on this machine.
+
+## NEEDEDBITS, Fri 13 Nov 00:40Z: first try moved to vy-nebius-cpu-11 and building: it waited 58 minutes on vy-nebius-2 without starting and took a slot on cpu-11 at once; no verdict yet
+
+The proof that every gate an inner block needs is one of its own unit's bits, given one named condition on the members' circuit files, is pushed and is being compiled for the first time. Its first try sat 58 minutes in vy-nebius-2's line without starting, so I cancelled it and sent it to vy-nebius-cpu-11 as the 00:23Z message said; there it took a slot within a minute and is rebuilding the base's dependencies before my file.
+
+- [run] `r20261112-232707-2f63` on vy-nebius-2: launched 23:27Z, cancelled 00:25Z, never started (every slot memory-bound at 00:25Z).
+- [run] `r20261113-002536-c9e4` on vy-nebius-cpu-11: launched 00:25Z, slot p1 and Lean tree build/1 taken 00:26Z; at 00:40Z its dependency build stood at 10618 of 11109 files (630 files changed in that tree); my file is after them.
+- [read] Head pushed: `cursor/proofs-neededbits-2597` at `b363814c38` (the file and its lakefile root, as in the 23:40Z entry). Nothing unpushed.
+- [guess] Size and ETA: the first verdict lands about 00:50Z; two or three rounds of fixes after it, each now a few minutes on cpu-11. Target stays Fri 15:00Z.
+
+NEEDS: unchanged from 23:40Z (FRAME on `MembersRowed h`). None of HELDOF, HISTORY or OWNREADS's pieces are needed here.
+
+Not established: that the file elaborates.
