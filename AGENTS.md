@@ -25,8 +25,7 @@ what the layout's design has and the tree does not.
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
-    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
