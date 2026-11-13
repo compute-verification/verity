@@ -27,7 +27,9 @@ names them, so that the check and the statement read one definition.
   declared to hold a registered read of a parameter, a table read of a table's root or of its domain id, or a port
   of an opening of a table (`Declared`); a row a wire or ingress fills, or nothing fills, is declared to hold none
   of them. A table is an entry of `registered.tables`, over a registered parameter, or a history table
-  (`historiesOf`), over a parameter of its own name that is no registered parameter's.
+  (`historiesOf`), over a parameter of its own name that is no registered parameter's. A history's initial state is
+  θ only where the record declares it as a registered parameter, with a table of `registered.tables` over it: a
+  check asks θ of the registered parameters alone.
 
 `Held` is why a check counts a row as θ: `Declared`'s reasons, an opening's with the pin of its reader. Whether a
 declared row is θ, and the pin, are the check's to decide, from the trusted input and the instance: nothing here
