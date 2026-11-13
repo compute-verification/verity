@@ -13,6 +13,9 @@ from collections.abc import Iterable, Sequence
 
 from pysat.solvers import Solver
 
+#: what `theory/checked_strip.py` and the tests read
+__all__ = ["Cnf", "SOLVER"]
+
 SOLVER = "cadical153"
 
 

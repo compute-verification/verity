@@ -44,7 +44,7 @@ import json
 from fractions import Fraction
 
 from verity.circuits import codec
-from verity.circuits.defs import PrimitiveDefinition, Registry
+from verity.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.circuits.program import input_id, is_input, is_registered
 from verity.circuits.types import type_from_json
 
@@ -65,9 +65,9 @@ def _unevaluated(*_a):
     raise NotImplementedError("the NCI check evaluates no gate")
 
 
-def declared(desc: dict) -> Registry:
+def declared(desc: dict) -> DefinitionTable:
     """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
-    reg = Registry()
+    reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
         if d.get("form") == "primitive" and input_id(fid) is None:
             name, _, version = fid.rpartition("_v")
@@ -487,17 +487,15 @@ def check_count(inst) -> dict:
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
 
-REGISTRATION_V1 = "verity/registration/v1"
-REGISTRATION_V2 = "verity/registration/v2"
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 
 
 def record_digest(rec: dict) -> str:
-    """`registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its canonical JSON."""
-    import hashlib
-    tag = REGISTRATION_V2 if rec.get("format") == REGISTRATION_V2 else REGISTRATION_V1
-    return hashlib.sha512(tag.encode() + b"\0" + codec.canonical_json(rec)).hexdigest()
+    """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
+    canonical JSON."""
+    from verity.protocols.spot.verifier.one_stage.registration import digest
+    return digest(rec)
 
 
 def lower(t) -> list[tuple[int, int]]:
