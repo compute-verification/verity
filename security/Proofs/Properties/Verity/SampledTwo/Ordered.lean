@@ -58,6 +58,8 @@ theorem stagesOrdered_order {p : Params} {e : Evidence} (h : stagesOrdered p e =
       · cases h
       · rename_i heq
         obtain ⟨en, r, he, hr, hlt⟩ := orderReason_none heq
-        exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+        first
+          | exact ⟨first, second, rfl, rfl, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+          | exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
 
 end VStar.Recursive.SampledTwo
