@@ -1,4 +1,4 @@
-"""The node files: one TOML file per kind of node (``<kind>.toml``, beside this file), holding what a node's
+"""The node files: one TOML file per kind of node (``hardware/nodes/<kind>.toml``), holding what a node's
 registration states that no card does.
 
 A node is a host and the GPUs it carries. Its file names the GPU card and how many of it the node carries
@@ -17,7 +17,7 @@ Stdlib and the cards only.
 
 The readers of node files (``kinds``, ``load``) take ``directory``, and every reader that reads a card file (``load``,
 ``leaves``, ``ways_out``) takes ``cards_directory``, the directories the files are in, so that a reader whose copy of
-them is not in this package names where it is; ``None`` is ``NODES`` or ``cards.CARDS``, read when the reader is called.
+them is not in ``NODES`` or ``cards.CARDS`` names where it is; ``None`` is those two, read when the reader is called.
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
 card's ``memory.bandwidth_max``, the server's channels. A disk's is its own interface's where the disk states one (a
