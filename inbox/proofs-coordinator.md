@@ -114100,3 +114100,67 @@ NEEDS:
 Not established: anything of `NeededBitsHeld.lean` compiled (try `r20261113-014817-691c`, cpu-12, in line since 01:49Z); that no honest Friday template returns an input or its constant [guess: none does, since `Bits.check` would refuse it and the running pipeline runs it].
 
 Heads: `cursor/proofs-neededbits-2597` at `fdad33da82`, pushed. Unpushed: nothing.
+
+## SESSIONOF, Fri 02:13Z: compiled: SessionOf, A12 and AcceptedChecks with its descriptor hypothesis; dropping that hypothesis is four of five theorems compiled, the last in a try now
+
+**In plain words.** The session the verifier sets up from the parameters and the registered files is built and compiled (`SessionOf.lean`). The lemma that an accepted play gives the checks it is built from compiles (`AcceptedChecks.lean`), with one hypothesis about the parameters that I am removing. That hypothesis says the parameters' program text parses to the verifier's program. To remove it I prove it from how the verifier reads its parameters (`ParamsProgram.lean`). Four of that file's five theorems compiled in the last try. The fifth reads the program back out of the one-stage parser's result, and its fix is in a try now. Once it compiles, `AcceptedChecks` takes only one hypothesis about the parameters: that the sampling design is a plain subset sample.
+
+**Compiled** [run]:
+- `Sampled/SessionOf.lean` (`r20261112-224310-72d4`).
+- `FailClosed/ZkHiddenM1P.lean`, row A12 (`r20261112-221059-0a7f`).
+- `Sampled/AcceptedChecks.lean` at `0307abb78b`, with `hdesc`, row A13 included (`r20261112-231038-d6f5`).
+- Each with only `propext`, `Classical.choice` and `Quot.sound`.
+
+**Not yet compiled.** In `r20261113-011808-c879`, four of `ParamsProgram.lean`'s five theorems elaborated:
+- `paramsOfJson_program`, `zkParams_program`, `params_program` and `params_desc` [run].
+- The fifth, `paramsParsed_program`, did not. `ret_walk` generalizes each `let` that isn't a join point, and the parser binds its result with `let p : Params := …`. `dsimp only` would substitute it, but it also inlines every join point and ran out of heartbeats (`r20261113-013055-eae7`) [run].
+- The fix is a 30-line `ret_walk_zeta` in my file. It substitutes ordinary `let`s and hands every other step to `FlockSoundness.Refine.retStep`, which it reuses unchanged. `ParamsProgram.lean` meta-imports `Refine.Walk` for it.
+- In `r20261113-021208-c0e3` on vy-nebius-cpu-12 (head `a1890c3b01`), with `AcceptedChecks.lean` after it. At 02:13Z it waits for a check slot with 6 ahead. [guess] Verdict by 03:00Z.
+- Earlier waits [run]: this try's previous run waited 21 minutes for a check slot on cpu-12 at 01:31Z, then 7 more for a Lean build tree. `r20261112-232552-dee6` on vy-nebius-2 ended exit 1 (its errors were mine, fixed since).
+
+**#9566** (`LiveDevice.lean` at `856ae01ece`): my statements meet it as soundness says [read, derived].
+- `sessionOf_setsUp`'s `hfam` is `∀ p key label, ParamsAt θ p → p.base.challenger = some (key, label) → (label, MAX_COINS) ∈ V.families θ`.
+- At `V := LiveDevice.base H δ`, `V.families` is `families` by `rfl`, so `hfam := fun _ _ _ hp hc => families_params hp hc`.
+- `base` sets `read := readOf`, `programDigest := programDigestOf` and `publicDigest := publicDigestOf`, so `sessionOf_setsUp`'s `hc`, `hp` and `hr` are `fun _ => rfl`.
+- `hε` takes `B.ε := (V.certOf θ).ε`. `B` also needs `k` with `rateM1 k < 1`.
+- So `(sessionOf θ F B).isSome` is `sessionOf_isSome B h` from `h : SessionChecks θ F`, and `SessionChecks` at the registered files comes from `sessionChecks_of_verdict`.
+- Nothing of mine needs `pubOf_holds`. It is the key side, the challenger history's key, which the session doesn't read.
+- None of this joining is compiled. The two files are on different branches.
+
+**Between my branch and a pull request for `SessionOf.lean`:**
+1. Merge #9475's head (my base `871ab913c3` is in) and, after #9375, `main`, then rebuild.
+   - `SessionOf` takes `V` as a parameter and builds no `Vocab`, so `macs` should need nothing [derived].
+   - `cursor/soundness-prf579-rest-8fb2` (`b43e513454`) moves `Live.OpensReady` from `OpensAt.lean` into `Instance.lean` with the same single field `ports`, so `live_opensReady`'s `⟨W.checks.ports⟩` stands [read].
+2. The two steps #9566 took: a root line for each new module in `security/Proofs/lean-audit.json`, and PoUS's `TRUSTED.sha256` regenerated [read: `856ae01ece`, `c3bceb74c6`]. Both go under NEEDS, since the lock isn't mine.
+3. The deprecated `dif_pos` in `sessionOf_isSome`, which warns.
+4. Whether `ParamsProgram` and `AcceptedChecks` go in the same pull request. I'd put all four files in one if `r20261113-021208-c0e3` passes, else `SessionOf` and `ZkHiddenM1P` alone. Nothing else imports my files, and nothing in them says "round".
+
+**MEMBERS** (`cursor/proofs-members-subset-391b` at `1c64505a51`): I would rather wait than merge [derived].
+- Its merge-base with my branch is `5f0c008aa0`, a `main` commit, not #9475's head. Merging it now would bring a different `main` into my base.
+- It splits `OneStageZk.paramsOfJson` into `paramsParsed` followed by `SUBSET_ONLY`'s refusal. That breaks my `zkParams_program` as written: the fix is one line, `paramsOfJson_parsed`, then the same walk over `OneStageZk.paramsParsed`.
+- Once it is on my base, `hsub` follows from `paramsOfJson_subset` and a lemma that `lawAt` reads `getD law "law" = .str "subset"` as `.subset kd`. I'd write that lemma then.
+
+**ACCEPTS (item 3).**
+- What `sessionChecks_of_verdict` needs of one session is `Accepted.checksWitness`'s premises: `Accepted (inputsAt p cf pf) t p.base.verifier n` at that session's transcript; `ParamsAt θ p`; a named challenger; the descriptor (`params_desc`); `lawAt … = .ok (.subset kd)`; and the record's draw being `printedDraw (.subset kd) S`. `sessionChecks_of_verdict` only derives these from the one-statement verdict.
+- So a two-stage member check reuses `Accepted.checksWitness` directly, once it gives each member's statement as `inputsAt` of that member's files with an `Accepted` at it.
+- ACCEPTS: please write the three clauses, as Lean or as text, in your entry. I'll state the member form as a new theorem in `AcceptedChecks.lean` over them and say which of the six premises each gives.
+
+**HELDOF (NEEDS 5)**: not me. `SessionReading.stmts` and `msg` are MESSAGES's, per MESSAGES's and COINMAP's entries and COINMAP's `withCoins`, which keeps them. My files build the verifier's `Live` session from the parameters and files, not the play's session statements [read].
+
+### STOP RULE
+Nothing. `ParamsProgram` adds lemmas about the verifier's existing parse and a tactic local to my file. No guarantee, lock, assumption or verifier file changed [run: `git diff --stat 871ab913c3` shows my four files and the lakefile's root lines].
+
+### NEEDS
+1. Lean (the lock), when a pull request is prepared: root lines for `Proofs.Properties.Verity.Sampled.SessionOf`, `.AcceptedChecks`, `.ParamsProgram` and `Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1P` in `security/Proofs/lean-audit.json`, and PoUS's `TRUSTED.sha256` regenerated, as #9566 did.
+2. Soundness: the joining at `LiveDevice.base`, which is the `hfam`/`hc`/`hp`/`hr` above. It is yours, in the instance, or mine in a new file once both are on one base. Say which.
+
+### To post
+Nothing.
+
+Branch `cursor/proofs-sessionof-5c1e`, pushed head `a1890c3b01`, nothing unpushed.
+
+Not established:
+- That `paramsParsed_program` compiles with `ret_walk_zeta`, including whether `meta import` of `Refine.Walk` beside its plain import is accepted.
+- That `AcceptedChecks` compiles without `hdesc`.
+- That my files still build after merging the rest branch or #9375.
+- Any joining with #9566, which I have read, not compiled.
