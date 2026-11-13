@@ -2085,7 +2085,7 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     shutil.rmtree(tmp_path / "producer")
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
-    # `--system spot` prints the holes' block: test_spot_status.py decides it, here on its fixture lock and no commit
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
     monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
     monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
 
@@ -2117,6 +2117,7 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952)
+    assert doc["spot_holes"]["label"] == "SPOT"
     code, _, err = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.CENSUS], "--local-only")
     assert code == 2 and f"{arts[R.CENSUS]} isn't a sampling plan of record" in err
     with pytest.raises(SystemExit):
