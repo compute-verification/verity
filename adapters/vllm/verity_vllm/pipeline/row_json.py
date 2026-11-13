@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-__all__ = ["field_of", "load_json", "read_json", "write_json"]
+__all__ = ["field_of", "listed_of", "load_json", "read_json", "write_json"]
 
 
 def read_json(path: str | Path) -> Any:
@@ -31,3 +31,9 @@ def load_json(path: str | Path) -> Any:
 def field_of(block: Any, key: str) -> Any:
     """``key`` of a document's ``block``; None where the block is absent, null or empty."""
     return block.get(key) if block else None
+
+
+def listed_of(block: Any, key: str) -> Any:
+    """What a document's ``block`` lists under ``key``, to count or to walk; nothing where the list is absent, null or empty."""
+    xs = block.get(key)
+    return xs if xs else ()

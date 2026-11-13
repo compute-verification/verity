@@ -45,7 +45,7 @@ def _binding() -> dict:
                                     "ok": None, "not_applied": "no committed runner.sampler/sampled_token_ids in the binding map"}}
     return {"rules_version": B.RULES_VERSION, "program_digest": "p" * 64, "map_digest": "d" * 64, "entries_n": 0,
             "collector": {"variant": "native", "retention": "host"},
-            "population": {"source": "required-manifest", "digest": "q" * 64, "n": 12, "requests": 2, "steps": 3, "ranks": 1},
+            "population": {"source": "required-manifest", "digest": "q" * 128, "n": 12, "requests": 2, "steps": 3, "ranks": 1},
             "coverage": cov, "context": {"ok": True, "why": None}, "openings_population": {"n": 4, "opened": 4, "verified": 4}}
 
 
@@ -75,7 +75,7 @@ def test_a_single_gpu_binding_loads_as_its_writers_wrote_it():
 def test_a_tp_rank_a_failed_binding_and_a_sealed_window_load():
     cov = B.coverage_check([], {"digest": "d" * 64, "entries_n": 0, "entries": []})
     rank = {"rules_version": B.RULES_VERSION, "rank": 1, "program_digest": "p" * 64, "map_digest": "d" * 64, "entries_n": 0,
-            "population": {"source": "structure x workload", "digest": "q" * 64, "n": 0, "steps": 3, "requests": ["r0", "r1"], "ranks": [1]},
+            "population": {"source": "structure x workload", "digest": "q" * 128, "n": 0, "steps": 3, "requests": ["r0", "r1"], "ranks": [1]},
             "coverage": cov, "context": {"ok": True, "why": None}}
     r = CommitBinding.of(rank, "rank 1")
     assert r.population.requests is None and r.population.request_ids == ("r0", "r1")
