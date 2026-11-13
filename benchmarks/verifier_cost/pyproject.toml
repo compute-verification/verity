@@ -12,8 +12,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_mains.py"]
 # The three Lake packages a Main.lean is elaborated in, each named by its lakefile because the test builds the modules the
 # main imports there (so check runs the suite after lean-build); `verity` holds them, the packages they require by path,
-# and what whole_run.py imports: sampled proofs' difftest module, with the reference verifier and the circuits under it.
+# and what whole_run.py imports: sampled proofs' difftest module, with the reference verifier and the circuits under it,
+# and the difftest harness's Python (`verity_difftest`) it speaks to the Lean through.
 inputs = ["verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
           "verity/protocols/spot/verifier/lean/lakefile.toml",
-          "verity"]
+          "verity", "verity/difftest/python/verity_difftest"]
