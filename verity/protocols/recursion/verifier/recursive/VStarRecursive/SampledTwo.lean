@@ -12,7 +12,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`); its
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
     share of replay blocks by count is their share by weight; it names the challenger at the interior's key
-    (`ONE_KEY`), so both stages' coins are read under one key;
+    (`ONE_KEY`), so both stages' coins are read under one key, and a coin family other than the interior's
+    (`SAME_FAMILY`), so each stage's coins are a family of their own;
   * `rule`: the selection, two-stage only (`Select.Rule.twoStage`);
   * `values` and `public`: the Spec's boundary values (`{"name", "registered"}`) and the items both registrations
     show; `challenger`: the challenger's name its receipts carry; `delta`: the audit records' δ;
@@ -55,9 +56,19 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      first stage's copy of the auditor's ledger is a prefix of the second stage's (`LEDGER_PREFIX`), and on the
      second's, read under the parameters' challenger key, the first stage's session's `end` line has a lower `seq`
      than the second stage's session's `reserve` line (`STAGES_ORDER`);
-  5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
-     the public output and the integrity profile;
+  5. the interior audit's verdict at its coins under the second stage's law (`secondCheck`), which gives the public
+     output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
+
+**The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
+registration is sampled under two laws: its record's, a subset of all its `m` proof blocks (`subsetLaw`), which R1
+holds it to as the run of record does, and the second stage's, which its sample is drawn under. It reads the draw the
+coins `ξ₂` give under the second stage's law, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
+subset law, the evidence's draw held to the second stage's law (`Draw.checkDraw`), the record's checks over its proved
+units (`OneStage.recordChecks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's law.
+That law is computed, never read from the evidence (`secondLawOf`): `Select.secondLaw` of the first stage's sample (the
+proved units of the draw the run of record decided) over the replay block's cells under the interior's query
+(`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage draws by.
 -/
 module
 
@@ -94,6 +105,10 @@ def ONE_KEY : String :=
   "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
 
 /-- The refusal of public outputs: no verdict this form computes reports any. -/
+def SAME_FAMILY : String :=
+  "the boundary and the interior name one coin family: each stage's coins are a family of their own, released " ++
+    "after their own registration's digest"
+
 def OUTPUTS_REFUSED : String :=
   "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 
@@ -168,6 +183,8 @@ def paramsOfJson (j : Json) : V Params := do
   let key := getD (getD (getD j "boundary") "challenger") "key"
   if key matches .null then throw ONE_KEY
   if !jeq key (getD (getD ip "challenger") "key") then throw ONE_KEY
+  let label := getD (getD (getD j "boundary") "challenger") "label"
+  if (label matches .str _) && jeq label (getD (getD ip "challenger") "label") then throw SAME_FAMILY
   let interior ← paramsAt (Json.mkObj (without ip "proofs"))
   let circuits ← Spot.Run.templateCircuits (getD ip "proofs") interior.verifier.query
   let .obj _ := getD it "replay" | throw "the interior's replay is not a program object"
@@ -367,6 +384,61 @@ def stagesOrdered (p : Params) (e : Evidence) : V Unit :=
       | none => .ok ()
   | _, _, _ => .ok ()
 
+/-- **The second stage's law** (check, 5), computed and never read: `Select.secondLaw` of the first stage's sample, the
+proved units of the draw the run of record `run` decided (its `draw`), over the cells the replay block's program has
+under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
+second stage computes it. -/
+def secondLawOf (p : Params) (run : Json) : V Json := do
+  let .twoStage _ _ k := p.rule | throw "the rule is not two-stage"
+  let q := p.interior.verifier.query
+  let ns ← Select.replayCells p.replay q
+  let ks ← k.over (← Select.templateIds q) ns
+  pure (Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
+
+/-- The interior registration's law as the run of record reads it: a subset of all its `m` proof blocks. -/
+def subsetLaw (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
+
+/-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the draw held to the second stage's law `law`, the
+record's checks, the verdicts, and the bound under `law` at δ `delta`, as `OneStage.check` has them. -/
+def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (law : Json)
+    (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
+  let rec_ := c.record
+  let codes := Registration.check rec_ v
+  if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
+  let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") law
+  if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
+  let failed := OneStage.recordChecks rec_ (Flock.hexOf c.digest) e
+  if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
+  match OneStage.verdictOf e.verdicts with
+  | .reject r => .reject r
+  | .undecided r => .undecided r
+  | .accept () () =>
+  match Record.profileDraw law with
+  | some draw =>
+    let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
+    let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
+    .accept
+      { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
+        bound := Bound.boundOf m draw delta,
+        perTemplate := (Bound.strataOf m draw).map (·.map fun s => (s.name, Bound.stratumBound s delta)) }
+      { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
+        levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := m, draw := some draw }],
+        delta, drawn := #[(Record.LEVEL, units.size)] }
+  | none => .reject "the law the draw passed under has no profile"
+
+/-- **The interior audit's check at the second stage's law** (check, 5; module docstring, **the last step**): the
+interior registration's population `m`; the draw the coins `ξ₂` give under `law` (`OneStage.coinsReason` at the
+verifier whose law is `subsetLaw m`, so that the draw is `law`'s, `Draw.flockLaw`), every coin opened read; then
+`secondChecked` at that verifier. -/
+def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (law : Json)
+    (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
+  match nat? (getD c.record "population") with
+  | none => .reject "registration: the interior record names no population"
+  | some m =>
+    match OneStage.coinsReason { v with law := subsetLaw m } law c.record e.draw ξ₂ with
+    | some why => .reject s!"draw: coins: {why}"
+    | none => secondChecked { v with law := subsetLaw m } delta c m law e
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger. -/
@@ -378,7 +450,8 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   sourceRead ξ run
   interiorUnshown p e
   stagesOrdered p e
-  pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
+  let law ← secondLawOf p run
+  pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/

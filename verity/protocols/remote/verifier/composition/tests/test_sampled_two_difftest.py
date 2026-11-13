@@ -36,8 +36,8 @@ def _key(seed: int) -> dict:
     return sys.modules["test_challenger_difftest"]._ledger_session(random.Random(f"two-stage-form/{seed}"), seed=seed).key.to_json()
 
 
-def _challenged(p: dict, seed: int = 0) -> dict:
-    return {**p, "challenger": {"key": _key(seed), "label": "draw"}}
+def _challenged(p: dict, label: str, seed: int = 0) -> dict:
+    return {**p, "challenger": {"key": _key(seed), "label": label}}
 
 
 @functools.cache
@@ -45,8 +45,10 @@ def _base_text() -> str:
     c = OS._two_stage_case(0)
     it = c["interior"]
     return canonical({
-        "form": T.TWO_STAGE, "boundary": _challenged(c["params"]), "challenger": c["challenger"], "delta": c["delta"],
-        "interior": {"members": {}, "params": _challenged(it["params"]), "replay": it["replay"], "values": it["values"]},
+        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/first"), "challenger": c["challenger"],
+        "delta": c["delta"],
+        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second"), "replay": it["replay"],
+                     "values": it["values"]},
         "outputs": [], "public": c["public"], "rule": c["rule"], "values": c["values"]})
 
 
@@ -100,6 +102,7 @@ CHANGES = {
     "interior-no-challenger": lambda p: _set(p, ("interior", "params", "challenger"), DROP),
     "interior-other-key": lambda p: _set(p, ("interior", "params", "challenger", "key"), _key(1)),
     "interior-params-empty": lambda p: _set(p, ("interior", "params"), {"challenger": p["interior"]["params"]["challenger"]}),
+    "interior-same-family": lambda p: _set(p, ("interior", "params", "challenger", "label"), "draw/first"),
     "interior-no-window": lambda p: _set(p, ("interior", "params", "window_root"), DROP),
     "interior-proofs": lambda p: _set(p, ("interior", "params", "proofs"), {"templates": "x"}),
 }
@@ -119,7 +122,7 @@ def test_the_form_s_own_refusals_are_reached() -> None:
     refusals = [T.refusal(change(base())) for change in CHANGES.values()]
     assert all(isinstance(e, D.Reject) for e in refusals), refusals
     reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
-    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
+    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.SAME_FAMILY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
         assert own in reasons
 
 
