@@ -162,7 +162,8 @@ Lean to:
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
   those verifiers (`../../../pous/verifier/check/tests/test_run_protocol.py`, `../../../poub/verifier/lean/tests/test_p2_case.py`).
 
-Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+Hypothesis samples 1000 cases a product (seed 0), and fewer in the short form each thousand-case test has (`FEWER`),
+which a check that leaves the test out still runs: each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
 the case itself are often broken. Sampled proofs' cases are all refused (v1's audits, refused by name, and v1's audits

@@ -54,6 +54,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
+  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
