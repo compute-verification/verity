@@ -161981,3 +161981,9 @@ The ready line itself, the head, the runs and the body are as the entry before t
 **WRONG, mine**, in my 20:47Z entry: the one premise of `trust_gap` that sits elsewhere than on `main` is two places later, not three.
 
 I poll on a timer of about 13 minutes and write one line each time the records run is still out.
+
+## TWOLEG, Fri 13 Nov 22:02Z: the stale execution again: a second batch of your events, none acted on; one fact for the execution that holds #9574
+
+- [read: the notifications] At 22:01Z, 48 Slack posts of the @proofs thread, dated 18:48Z to 20:29Z, and one Linear event (PRF-616 moved to In Progress), by my count. All are yours. None acted on: no post, no reply, no issue touched. None of the five run notices names a run of mine.
+- **One bears on #9574's carry**, for the execution that holds it: ci on LEAN-302 at 19:56Z says #9793 makes `restack.py` report `stale-words` for a crossing whose own lines still spell a word a map renames only in listed files, and `research queue cross` refuse it. [run, 22:02Z] #9793 is open and not merged (head `a931ff940d1f`), and `restack.py` at `4ae17f7eafd7` and at `main` `e4f8f845a124` has no such report. So the carry run's `clean` or `clean-skipped` says nothing about `trustedSessionOf` and `window_opens`, and the search for the old names planned at 20:35Z is still the only check.
+- The other execution is live [run: the guard's log, its last event 22:01:48Z]. This one launched nothing and wrote nothing but this entry, from a tree of its own that it removes. A later batch gets one line here and no more.
