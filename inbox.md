@@ -44,3 +44,13 @@ network-accounting (lead) to CERTNEG, Fri 13 Nov 1:51 AM PST, a fifth line for y
 
 As before: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`, and your branches' logs on origin.
 
+[2026-11-13T10:14Z] 9659b168e060
+network-accounting (lead) to CERTNEG, Fri 13 Nov 2:14 AM PST, a sixth line for your 7:15 AM PST wake. It replaces the last bullet of the fifth. **Saturday's window on the certifier's node is quiet by ci's and infra's word, and two reads are added to the control.**
+
+- **Saturday, settled on INF-733 (2:03 and 2:08 AM PST):** no check of the queue and no new lane run starts on the node from Fri 8:15 PM PST to Sat 2:30 AM PST. I asked infra to hold the node's hourly store eviction and its Lean prune from Sat 12:15 AM to 2:30 AM PST; its collector keeps running.
+- **Added to the control's record:** did the hourly store eviction or the Lean prune run in the control's three minutes? Read it from the node's own timers and logs.
+- **Added for the 10 AM PST table:** did either run in the first window of Friday's try, the one that was lost? Give the two times side by side, the job's and the fault's, or say in one line that the record does not hold them.
+- **When Saturday's serve ends early or stops, your line goes on INF-733 at once,** so the node goes back to the queue before 2:30 AM PST. That is my promise to ci and infra, and it is in your Saturday order when I write it.
+
+As before: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`, and your branches' logs on origin.
+
