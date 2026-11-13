@@ -102,14 +102,11 @@
     {"file": "tests/program/predict/test_template_counts.py", "kind": "arg-type", "symbol": "test_rows_past_index_topk_count_their_selection_and_the_slots_they_read", "detail": "", "count": 2},
     {"file": "tests/program/predict/test_template_counts.py", "kind": "arg-type", "symbol": "test_rows_past_index_topk_in_several_blocks_count_each_blocks_selection", "detail": "", "count": 2},
     {"file": "tests/program/predict/test_template_counts.py", "kind": "var-annotated", "symbol": "_instances", "detail": "", "count": 2},
-    {"file": "tests/program/test_compiled_relations_warm_vml.py", "kind": "func-returns-value", "symbol": "test_commit_replay_warms_before_it_replays", "detail": ""},
     {"file": "tests/program/test_derive_negative.py", "kind": "override", "symbol": "DataDependentSlice.forward", "detail": ""},
     {"file": "tests/program/test_derive_realhf.py", "kind": "assignment", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_derive_realhf.py", "kind": "attr-defined", "symbol": "_probe_patches", "detail": ""},
     {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "CubeNorm.forward", "detail": ""},
     {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "LlamaStyleNorm.forward", "detail": ""},
-    {"file": "tests/program/test_sampling_split.py", "kind": "arg-type", "symbol": "<module>", "detail": ""},
-    {"file": "tests/program/test_sampling_split.py", "kind": "attr-defined", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_superseded_kept.py", "kind": "arg-type", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": ""},
     {"file": "tests/program/test_superseded_kept.py", "kind": "union-attr", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": "", "count": 3},
     {"file": "tests/program/test_superseded_kept.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
@@ -152,7 +149,6 @@
     {"file": "verity_vllm/check/match/decomp_profile.py", "kind": "method-assign", "symbol": "_install_profile_counters", "detail": ""},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "assignment", "symbol": "_divergence_report", "detail": ""},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "assignment", "symbol": "compare_steps", "detail": "", "count": 4},
-    {"file": "verity_vllm/check/match/program_compare.py", "kind": "attr-defined", "symbol": "_canon_step_relative", "detail": "", "count": 4},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "attr-defined", "symbol": "main", "detail": "", "count": 6},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "dict-item", "symbol": "audit_padding", "detail": "", "count": 2},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "index", "symbol": "compare_steps", "detail": "", "count": 2},
@@ -190,8 +186,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._select_modules", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter.register_weights", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/row_tables_device.py", "kind": "assignment", "symbol": "device_lib", "detail": ""},
-    {"file": "verity_vllm/config.py", "kind": "index", "symbol": "done_source_refusal", "detail": ""},
-    {"file": "verity_vllm/config.py", "kind": "union-attr", "symbol": "done_source_refusal", "detail": "", "count": 2},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "arg-type", "symbol": "loaded_code_objects", "detail": "", "count": 6},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "assignment", "symbol": "loaded_code_objects", "detail": ""},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "call-overload", "symbol": "loaded_code_objects", "detail": ""},
@@ -531,7 +525,6 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "var-annotated", "symbol": "KvDevice.encode", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "misc", "symbol": "BoundaryWindows.check", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "var-annotated", "symbol": "BoundaryWindows.__init__", "detail": "", "count": 2},
-    {"file": "tests/engine/test_stock.py", "kind": "attr-defined", "symbol": "fake_vllm", "detail": "", "count": 4},
-    {"file": "tests/lint/test_vllm_surface.py", "kind": "var-annotated", "symbol": "test_every_entry_resolves_at_the_installed_vllm", "detail": "", "count": 2}
+    {"file": "tests/engine/test_stock.py", "kind": "attr-defined", "symbol": "fake_vllm", "detail": "", "count": 4}
   ]
 }

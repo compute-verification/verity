@@ -277,6 +277,14 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
         merge_ranks([m0, m0])
     with pytest.raises(ValueError, match="one Program digest"):
         merge_ranks([m0, dict(m1, program_digest=m0["program_digest"])])
+    with pytest.raises(ValueError, match=r"declare worlds \[2, 3\]"):
+        merge_ranks([m0, dict(m1, ranks=3)])
+    with pytest.raises(ValueError, match=r"declare worlds \[1\]"):
+        merge_ranks([dict(m0, ranks=1)])
+    with pytest.raises(ValueError, match="different step compositions"):
+        merge_ranks([m0, dict(m1, steps=[0, 1])])
+    with pytest.raises(ValueError, match=f"disagree on alias '{SITE}'"):
+        merge_ranks([m0, dict(m1, op_path_aliases={SITE: [f"{W}.embed", 0]})])
 
 
 def test_return_slot_policy_is_switchable():
