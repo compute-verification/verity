@@ -6,12 +6,17 @@ of torch's flash attention backward on cc 12.0 under deterministic algorithms, i
 It keeps, of one head each:
 
     rows/NAME/...    query rows (`rows`) with their q, dO, O, LSE and dQ, and the keys and values of the key blocks they see
-                     (`k`, `v`: keys 0 .. the last such block's end); `ns` is the kernel's dQ buffers at that capture's B and H
+                     (`k`, `v`: keys 0 .. the last such block's end, those past the last row zeroed, since no row sees them);
+                     `ns` is the kernel's dQ buffers at that capture's B and H
     block/NAME/...   the last key block (`BN` keys) with its dK and dV, and the rows at and below it with their q, dO, O and LSE
 
     rows/xl/wide     B 2, H 24 (4 buffers), q and k N(0, 9): rows 0, 5 and 127 (one key block, of which they see 1, 6 and all
                      128 keys), 130 (two) and 621 (five, so one buffer holds two parts: its word 2 is another under the sum
                      in the key blocks' order)
+    rows/s/wide      B 2, H 8, q and k N(0, 9): row 43, whose dQ words are others with dims 2 and 3 of a thread's dP sum
+                     swapped or dims 2 to 7 reversed
+    rows/l16/wide    B 2, H 16, q and k N(0, 9): row 14, whose dQ words are others with dim 0 of a thread's dP sum fused after
+                     dim 2
     block/l16/unit   B 2, H 16, q and k N(0, 1): keys and rows 896 to 1,023, two query blocks, of a head whose dK and dV
                      both have words that are others with the query blocks first to last or a block's k16 steps reversed
 
@@ -29,7 +34,9 @@ import numpy as np
 from verity.definitions.registry.fa2_train_bwd import train_sdpa_backward
 
 #: name -> (capture case, which of its heads, (B, H), rows)
-ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621))}
+ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621)),
+        "s/wide": ("bwd/s/det/wide", 3, (2, 8), (43,)),
+        "l16/wide": ("bwd/l16/det/wide", 3, (2, 16), (14,))}
 #: name -> (capture case, which of its heads, (B, H))
 BLOCK = {"l16/unit": ("bwd/l16/det/unit", 3, (2, 16))}
 
@@ -49,7 +56,9 @@ def cut(d) -> dict[str, np.ndarray]:
         for f in ("q", "do", "o", "lse", "dq"):
             out[f"rows/{name}/{f}"] = d[f"{case}/{f}"][head][r]
         for f in ("k", "v"):
-            out[f"rows/{name}/{f}"] = d[f"{case}/{f}"][head][:keys]
+            a = d[f"{case}/{f}"][head][:keys].copy()
+            a[max(r) + 1:] = 0
+            out[f"rows/{name}/{f}"] = a
     for name, (case, head, bh) in BLOCK.items():
         T, BN = d[f"{case}/q"].shape[1], _head(d, case, bh)["BN"]
         for f in ("q", "do", "o", "lse", "k", "v", "dk", "dv"):

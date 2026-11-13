@@ -2,8 +2,9 @@
 with the kernel's dQ buffers at that B and H, and refuses the rest.  The Definitions give the capture's dQ, dK and dV words
 (`fixtures/fa2_train_bwd_sm120.npz`, cut by `fixtures/fa2_train_bwd_sm120.py` from the capture `cc12_fa2_backward_capture`
 cites) on rows and keys that reach each part of the kernel: rows that see one, a few and every key of their diagonal block, a
-row over two key blocks, a row over five whose word tells the kernel's buffers from the sum in the key blocks' order, and a key
-block through its two query blocks, the one on the diagonal last.  A small head is its rows and keys in the kernel's order, the
+row over two key blocks, a row over five whose word tells the kernel's buffers from the sum in the key blocks' order, two rows
+whose words are others under three other orders of a thread's dP sum, and a key block through its two query blocks, the one on
+the diagonal last.  A small head is its rows and keys in the kernel's order, the
 head at a stand-in shape's statics keeps its signature and builds, and each Definition on bits (`boolean_fa2_train_bwd`) gives
 its words on random inputs."""
 from __future__ import annotations
@@ -94,11 +95,14 @@ def _loop(q, k, v, do, o, lse, bm: int, bn: int, orders=(KERNEL,)):
     return parts, grads
 
 
-def _parts(d, case: str, i: int, r: int) -> list[int]:
-    """Row r's dQ parts of the key blocks it sees, in the key blocks' order."""
+def _parts(d, case: str, i: int, r: int, order=None) -> list[int]:
+    """Row r's dQ parts of the key blocks it sees, in the key blocks' order; with `order`, its dP sum is `_dpsum`'s in that
+    order rather than `Fa2TrainBwdPre`'s."""
     D = d[f"{case}/q"].shape[1]
     q, do = _ints(d[f"{case}/q"][i]), _ints(d[f"{case}/do"][i])
-    pre = evaluate(bind(W.Fa2TrainBwdPre, D=D), do, _ints(d[f"{case}/o"][i]), [int(d[f"{case}/lse"][i])])
+    pre = _ints(evaluate(bind(W.Fa2TrainBwdPre, D=D), do, _ints(d[f"{case}/o"][i]), [int(d[f"{case}/lse"][i])]))
+    if order is not None:
+        pre[0] = _dpsum(d[f"{case}/do"][i], d[f"{case}/o"][i], True, order)
     parts: list[int] = []
     for b in range(r // BN + 1):
         keys = slice(b * BN, (b + 1) * BN)
@@ -120,9 +124,13 @@ def test_each_row_s_dq_is_the_captured_kernels_words() -> None:
             if NP > NS:
                 in_order = _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=NP, NS=NP), parts))
                 assert in_order != _ints(d[f"{case}/dq"][i]), (case, r)
+            for order in ORDER_TOLD.get(case, ()):
+                other = _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=NP, NS=NS), _parts(d, case, i, r, order)))
+                assert other != _ints(d[f"{case}/dq"][i]), (case, r, order)
             seen.append((case, r, NP, NS))
-    assert seen == [("rows/xl/wide", 0, 1, 4), ("rows/xl/wide", 5, 1, 4), ("rows/xl/wide", 127, 1, 4),
-                    ("rows/xl/wide", 130, 2, 4), ("rows/xl/wide", 621, 5, 4)]
+    assert seen == [("rows/l16/wide", 14, 1, 6), ("rows/s/wide", 43, 1, 8), ("rows/xl/wide", 0, 1, 4),
+                    ("rows/xl/wide", 5, 1, 4), ("rows/xl/wide", 127, 1, 4), ("rows/xl/wide", 130, 2, 4),
+                    ("rows/xl/wide", 621, 5, 4)]
 
 
 @pytest.mark.slow
@@ -205,6 +213,10 @@ def _tiny_bf16(rng, shape, lo: int, hi: int):
 
 #: the order a thread takes its eight dims' products in: the kernel's, and the source's
 DIM_1_FIRST, IN_TURN = (1, 0, 2, 3, 4, 5, 6, 7), tuple(range(8))
+#: the kernel's order with dims 2 and 3 swapped, with dims 2 to 7 reversed, and with dim 0 fused after dim 2
+SWAP_2_3, REVERSED_2_TO_7, DIM_0_AFTER_2 = (1, 0, 3, 2, 4, 5, 6, 7), (1, 0, 7, 6, 5, 4, 3, 2), (1, 2, 0, 3, 4, 5, 6, 7)
+#: the fixture's rows whose dQ words are others under these orders of the dP sum
+ORDER_TOLD = {"rows/s/wide": (SWAP_2_3, REVERSED_2_TO_7), "rows/l16/wide": (DIM_0_AFTER_2,)}
 
 
 def _dpsum(do, o, fused: bool, order=DIM_1_FIRST) -> int:
