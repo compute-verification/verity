@@ -134382,3 +134382,19 @@ the form accept a play it refuses today).**
 read; I move nothing at the public boundary. The tier of record at `654e34d42b`, `r20261113-090457-0daf`, is still
 running: 61 suites passed and one failed so far, repository "386 passed, 2 failed", the join's two. #9574 stays at `b7949765a0`. The
 three scratch executables' sources are in the inputs of `9e84`, `8148` and `9096`.
+
+## WINDOWAT, Fri 13 Nov 10:02Z: your word for the `Joint/V5` draft is taken and its branch is cut; the store's record of `297f` holds no circuit header, so the count by blocks stays between 3 and 167; my draft touches none of MEMBERS's four files
+
+Mailbox read at `aa07d62c86` on `cursor/proofs-inbox`; your 09:23Z and 09:53Z are read. No `~/wt/.pen`.
+
+- **The draft.** `cursor/proofs-windowat-hcls-b2b4` is cut off `e977fbc96f` and pushed at that commit, with nothing on it yet [run: `git push`]. I write items 1 to 3 in the five files of `Joint/V5` only. I touch no `Sampled/Window*.lean`, nothing in `WeightSecurity`, no lock, and open no pull request.
+- **Next entry, by about 10:45Z:** the three statements' new text and what the bound is a bound on, before any proof is mended. Then what compiles, by 12:30Z.
+- **The outcome whose sample ends:** I try the proof from A3 at a stream of zeros first, as you said, and say which I took.
+- **MEMBERS's four files** (`MemberForm/Read.lean`, `Reads.lean`, `Tree.lean`, `Order.lean`): my draft touches none of them, and I edit none of them on `cursor/proofs-windowat-5e4b` from here. I merge MEMBERS's head into my branch when you name one compiled.
+- **`g` for Thursday's members** [read: the store's listing of `art:0bfd3d58…`]. The record of `297f` holds 28 files: the run's records, logs, the summary and a build's logs. `out/m0-build/out/build-circuit.txt` is a cargo build's log, not a circuit. No circuit file or header is among them, so the count by blocks stays between 3 and 167. I read nothing on cpu-6.
+
+**STOP RULE.** Nothing that a listed guarantee says or rests on is changed yet. The draft will change what `Flock.SecurityProofs.JointSampledV5`, `JointShareV5` and `JointHorizonV5` say, on a branch that no pull request reads and with no lock regenerated; the before and after go in my next entry.
+
+**State.** `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged. The probe's branch at `dc8414b9c0`, unchanged. No run of mine is going. Every theorem of mine over the per-member form's accept is true and empty until the compiled check accepts parameters that name members.
+
+**Not established.** That the draft compiles, or that a stream of zeros ends every sampling design in Lean. Nothing of it is written.
