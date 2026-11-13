@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.OkLe
+public import Flock.PortRoots
 
 /-!
 # The setup reads the lookup tables only by name
@@ -9,7 +10,8 @@ flock-verify reads a lookup table only by `find?` at a name its circuit lists (`
 `Typed.hold` at each table a type reads), and refuses the circuit where the table is missing. So more tables change
 nothing: where `T'` finds by name whatever `T` finds (`TablesExtend T T'`), every circuit parsed with `T` is parsed with
 `T'` (`parse_okLe`, `hmOutParse_okLe`, `parseCommit_okLe`), and where the circuit file parses with `T`, a one-table
-session `T'` sets up is the one `T` sets up (`setupTables_back`). Tables found among the pinned MUFU tables, whose
+session `T'` sets up is the one `T` sets up (`setupTables_back`), and the ports and roots check is the one at `T`
+(`portRoots_back`). Tables found among the pinned MUFU tables, whose
 names are distinct (`mufu_nodup`), extend those found where more are found alike (`extend_filterMap`).
 
 The proofs walk both runs at once with `ok_le_walk` (`Refine/OkLe.lean`), which leaves the table reads.
@@ -131,6 +133,22 @@ theorem setupTables_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArra
   · exact setupHidden_back hext hpc _ _ _ _ _ _
   · exact setupH_back hext ht hr _ _ _ _ _
   all_goals exact absurd hcount ‹_›
+
+/-- **A circuit `ProvedScope.circuitOf` reads with `T` it reads with `T'`**, on either tag. -/
+theorem circuitOf_okLe (hext : TablesExtend T T') (tags : Tags) (cf : ByteArray) :
+    OkLe (ProvedScope.circuitOf tags cf T) (ProvedScope.circuitOf tags cf T') := by
+  unfold ProvedScope.circuitOf
+  split
+  · exact parseCommit_okLe hext _ _
+  · exact parse_okLe hext _ _ _ _
+
+/-- **The ports and roots check with tables `T'` that extend `T` is the one with `T`** (`PortRoots.checkOf` at the
+circuit `ProvedScope.circuitOf` reads), where the circuit file parses with `T`: it reads the circuit only. -/
+theorem portRoots_back (hext : TablesExtend T T') {tags : Tags} {cf pf : ByteArray} {c : Circuit}
+    (hp : ProvedScope.circuitOf tags cf T = .ok c) :
+    PortRoots.checkOf (ProvedScope.circuitOf tags cf T') tags pf =
+      PortRoots.checkOf (ProvedScope.circuitOf tags cf T) tags pf := by
+  rw [hp, circuitOf_okLe hext tags cf c hp]
 
 /-! ## Tables found among the pinned MUFU tables -/
 

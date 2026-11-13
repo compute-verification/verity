@@ -583,51 +583,69 @@ theorem registeredFiles : I.RegisteredFiles := by
 
 /-- **v2's session at the registered files' files**: at parameters naming the one-stage form where the deployment runs
 a session, committed files that name the registered circuit and public files, and that some play's sampled verdict
-accepts, are files v2 sets that session up on, and the session's files pass `verify --zk`'s ports check
-(`Live.OpensReady`). -/
+accepts on blobs holding each pinned table at its registered file (`TablesSent`), are files v2 sets that session up
+on, and the session's files pass `verify --zk`'s ports check (`Live.OpensReady`). -/
 def SessionAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F A, I.session θ = some A → (∃ p, ParamsAt θ p) →
     I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) →
     I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) →
-    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent) →
       SetsUp I.base θ F A ∧ A.OpensReady
 
-/-- A play that some strategy wins with nonzero probability is won on some tape. -/
-theorem exists_tape_of_prob_ne {β : Type} {p : β → Prop} {g : Verity.Game β} {σ : Verity.Game.Strategy g}
-    (h : Verity.Game.prob p g σ ≠ 0) : ∃ t : Verity.Game.Tape g σ, p (Verity.Game.Tape.out g σ t) := by
-  by_contra hn
-  simp only [not_exists] at hn
-  refine h (le_antisymm ?_ zero_le)
-  calc Verity.Game.prob p g σ = Verity.Game.prCoin fun t => p (Verity.Game.Tape.out g σ t) :=
-        Verity.Game.prob_eq_prCoin _ _ σ
-    _ ≤ Verity.Game.prCoin fun _ : Verity.Game.Tape g σ => False := Verity.Game.prCoin_mono fun t ht => hn t ht
-    _ = 0 := Verity.Game.prCoin_false
-
-/-- **`Covers` at the deployed vocabulary**: where the deployment runs no session, the published δ is `⊤`
-(`deltaOf`); where it runs one that v2 doesn't set up on the committed files, an accepting play's files pass the file
-check, so under the further finders' premises they name the registered files (`namedFile_eq`), where v2 sets the
-session up (`SessionAt`). -/
-theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hSa : I.SessionAt k) :
-    Covers (I.vocab K) k I.sessions := by
-  intro θ F hS hP c σ hcr
-  rcases hA : I.session θ with _ | A
-  · exact le_top.trans_eq (I.deltaOf_none hA _).symm
-  refine le_of_eq_of_le ?_ zero_le
-  by_contra hne
-  obtain ⟨t, hv⟩ := exists_tape_of_prob_ne hne
+/-- **No accepted play sends the pinned tables where v2 sets no session up**: at parameters where the deployment runs a
+session that v2 doesn't set up on the committed files, an accepting play's files pass the file check, so under the
+further finders' premises they name the registered files (`namedFile_eq`), where v2 sets the session up (`SessionAt`)
+on every accepted play that sends the pinned tables. -/
+theorem not_tablesSent (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hSa : I.SessionAt k)
+    {θ : ByteArray} {F : Array ByteArray} (hS : I.sessions θ F = none) (hP : ∃ p, ParamsAt θ p) {A : Live}
+    (hA : I.session θ = some A) (c : ByteArray) (σ : Verity.Game.Strategy ((I.vocab K).game θ F c))
+    (hcr : (I.vocab K).finderCR .sampled θ F c σ) (t : Verity.Game.Tape (I.base.game θ F c) σ)
+    (hv : I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t)) : ¬ TablesSent (Verity.Game.Tape.out _ σ t).sent := by
+  intro ht
   have hreach : Verity.Game.Reaches (I.base.game θ F c) (Verity.Game.Tape.out _ σ t) :=
     Verity.Game.Tape.reaches_out _ σ t
-  have hv' : I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t) := hv
   obtain ⟨hθ, hF, -⟩ := Binding.play_reaches hreach
   have hreg : I.base.Registered θ F := by
-    have h1 := hv'.1
+    have h1 := hv.1
     rw [hθ, hF] at h1
     exact h1
   have hR := hRg θ F hP hreg
   obtain ⟨h1, h2⟩ := I.fileCR K hcr
-  have hs := hSa θ F A hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv'⟩
+  have hs := hSa θ F A hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv, ht⟩
   rw [I.sessions_of hA hs.1 hs.2] at hS
   cases hS
+
+/-- **The read finder's success is at most SPOT's collision bound** under its premise (`Vocab.FinderCR`). -/
+theorem readFinder_le_sampledBound {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
+    (Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤ I.sampledBound θ ((I.vocab K).cost θ F c σ) := by
+  have h1 := (I.vocab K).finderPr_le_crBound h
+  have hf : (I.vocab K).finder .sampled θ F c σ = Binding.readFinder I.base I.dev θ F c σ := rfl
+  have hb : ∀ t, (I.vocab K).crBound θ .sampled t = I.sampledBound θ t := fun _ => rfl
+  rw [hf, hb] at h1
+  exact h1
+
+/-- **The session's δ adds the read finder's bound** (`Live.delta`). -/
+theorem ofReal_le_deltaOf {θ : ByteArray} {A : Live} (hA : I.session θ = some A) (t : ℕ) :
+    ENNReal.ofReal (I.sampledBound θ t) ≤ I.deltaOf θ .sampled t := by
+  rw [I.deltaOf_some hA]
+  unfold Live.delta
+  exact le_add_self
+
+/-- **`Covers` at the deployed vocabulary**: where the deployment runs no session, the published δ is `⊤`
+(`deltaOf`); where it runs one that v2 doesn't set up on the committed files, no accepted play sends the pinned tables
+(`not_tablesSent`), so each holds a pinned table at other bytes than its registered file, a SHA-512 collision the read
+finder outputs (`Binding.verdict_le_of_tables`), at most its collision bound under its premise (`Vocab.FinderCR`),
+which the session's δ adds (`ofReal_le_deltaOf`). -/
+theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hSa : I.SessionAt k) :
+    Covers (I.vocab K) k I.sessions := by
+  intro θ F hS hP c σ hcr hFC
+  rcases hA : I.session θ with _ | A
+  · exact le_top.trans_eq (I.deltaOf_none hA _).symm
+  have hb : Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
+      ENNReal.ofReal ((Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
+    Binding.verdict_le_of_tables I.base k I.dev θ F c σ (I.not_tablesSent K k hRg hSa hS hP hA c σ hcr)
+  exact hb.trans ((ENNReal.ofReal_le_ofReal (I.readFinder_le_sampledBound K hFC)).trans (I.ofReal_le_deltaOf hA _))
 
 /-! ## The other subprotocols' targets are the base's -/
 
