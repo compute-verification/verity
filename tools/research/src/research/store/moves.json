@@ -2198,6 +2198,12 @@
       "paths": {
         "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/": "verity/protocols/compose/remote/",
+        "verity/protocols/onsite/": "verity/protocols/compose/onsite/"
+      }
     }
   ]
 }
