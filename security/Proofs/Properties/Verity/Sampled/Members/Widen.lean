@@ -43,9 +43,14 @@ noncomputable def extend (S : Verity.Sampled.Widening) : JointAuditV5 where
   fintypeΩ := inferInstance
   nonemptyΩ := inferInstance
   src ω := w.src ω.1
-  hcls k ω := by
-    have h := w.hcls k ω.1
+  hcls k ω hω := by
+    have h := w.hcls k ω.1 hω
     dsimp only [Bridge.execSel] at h ⊢
+    exact h
+  hend := by
+    obtain ⟨ω, h⟩ := w.hend
+    refine ⟨(ω, Classical.arbitrary S.T), ?_⟩
+    dsimp only [sampleEnded] at h ⊢
     exact h
 
 /-- The widened audit samples what the registered audit does at the sample's own coins. By `dsimp`, not `rfl`:

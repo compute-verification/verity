@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
+public import Proofs.Flock.EndToEnd.Joint.V5.Ends
 
 /-!
 # Sampled proofs' leg over a window of several members, each its own session
@@ -245,6 +246,8 @@ structure Window where
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
+  /-- the stream holds the bytes the sampling design's stages read first -/
+  hfirst : Flock.Bridge.firstRead law nJ ≤ Lb 0
   hcls : ∀ m ∈ ms, ∀ ω : Ω,
     mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
       mPtsOf m.D.unroll.g (m.kd / nTab m.I)
@@ -275,10 +278,11 @@ noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
   nonemptyΩ := W.nΩ
   Lb := W.Lb
   src := W.src
-  hcls := fun k ω => by
+  hcls := fun k ω _ => by
     obtain ⟨m, hm, he⟩ := List.mem_map.1 (List.get_mem (W.ms.map fun m => m.toV5 t) k)
     rw [← he]
     exact W.hcls m hm ω
+  hend := Flock.Guarantees.JointAuditV5.hend_of_zeros W.src W.hA3 W.hlaw W.hns W.hfirst
 
 /-- **The window with the sample's coins widened by the coins `S`**: the sample reads only the device's bytes, so its
 law is the window's and A3 holds at the widened coins (`uniform_fst`). -/
