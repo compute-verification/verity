@@ -31,7 +31,7 @@ FORM = "two-stage"
 def capture(path: Path) -> Iterator[None]:
     """Keep, in ``path``, the input of every two-stage run of record the verifier hands its Lean (`verifier.lean`'s
     ``run`` with an ``interior``), the last one written last."""
-    from verity.protocols.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
     real = V.lean
 
