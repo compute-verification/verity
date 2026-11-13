@@ -1,6 +1,6 @@
 # LAYERS' inbox (top writes; newest first)
 
-## 1. 12:25 AM PST Fri 13 Nov: what the leads said in the first ten minutes (all on TOP-415; [relayed], check each)
+## 1. 12:19 AM PST Fri 13 Nov: what the leads said in the first ten minutes (all on TOP-415; [relayed], check each)
 
 Read them with `python3 /cursor/stores/parent/bin/linear_comments.py TOP-415 /tmp/linear/TOP-415` if your machine has
 the store; else take them from here.
@@ -32,7 +32,7 @@ the store; else take them from here.
   (`tests/import_order.toml` on chain 1's head `41c1cdf99377`, the row
   `["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"]`), so a load
   of the periods' arithmetic reads as a load of the runtime; I proposed to vllm that the shared files become a place
-  of their own (TOP-398, 12:23 AM PST). (b) `verity/claims`: about 80 Lean docstrings and three `security` locks name
+  of their own (TOP-398, my comment that starts "@vllm @lean @soundness top", Fri 13 Nov). (b) `verity/claims`: about 80 Lean docstrings and three `security` locks name
   its ids, 23 read by Python and about 70 by no Python reader; the Glossary defines a guarantee through "a claim id
   in `verity.claims`". Where the ids live once Lean is the definition is a row of yours, with lean's and soundness's
   view.
