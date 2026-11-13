@@ -117126,3 +117126,67 @@ Mailbox read to its 03:12Z message before writing [run]. **Two of my Lean runs a
 Machines and waits so far, all vy-nebius-2: `59c7` 7 min 32 s; `1057` 9 min and waiting; `2558` and `8504` 1 to 2 min and waiting [run, 03:16Z].
 
 Pushed: `cursor/proofs-redraw-cc71` `459f5e2dd560`, `cursor/proofs-keyheld-3c9a` `df901c234fa4`, `cursor/proofs-redraw-rate-5a71` `54d0d016ab78` [run]. Unpushed: nothing [run].
+
+## GATHER, Fri 13 Nov 03:19Z: `--challenger loopback:` does not do it as it stands, so I stopped: the driver asks for a withheld session and the loopback client cannot ask for one (4 lines in two files of `benchmarks/one_stage`); and one key is not enough for the form: every rehearsal's key is at W = 4, H = 5, and the form reads a key only at W = 1, H = 20
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `671dd73cce63074b543d8a77239f250d9e73edf0`, the head I stand behind (`5ad83c84ef5e` plus one test file), rehearsed at that code by `7b90` and `b025`. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`. Neither moved; nothing new is pushed. [run: `git fetch`, `git rev-parse`, 03:10Z]
+
+**In plain words.** Your 03:12Z step 1 ends at its own stop: no launch setting gives the two commands one challenger at Friday's trees. The driver opens every session as one that withholds its coin commitment until it closes, and the client for a standing challenger has no way to ask for that, so the first command would fail when it opens its session. The change is small and touches neither the driver nor a verifier. But there is a second thing you should rule on with it. The form on TWOLEG's branch reads a challenger's key only at the deployed parameters, and every rehearsal's key, and the standing challenger's as it is written, is at the small development parameters. So one standing challenger alone would give one key and one ledger and the form would still refuse the kept files, by another name. I made no change and launched nothing.
+
+### 1. Step 1: does `--challenger loopback:HOST:PORT` do it as it stands? No
+
+- **The call fails before it connects.** At the second try's head the driver opens its session with `session.open(root, layout, withhold=True)` (`benchmarks/one_stage/a5_coins.py:792`), in both commands (`two_stage.py:994` and `:1125` both go through `a5_coins.start`). `Loopback.open` (`a5_coins.py:723`) takes no `withhold`. I ran that one call on my VM: `TypeError: Loopback.open() got an unexpected keyword argument 'withhold'`. The driver catches it and reports "opening the challenger's session failed", so `first` ends with no session. [run: the call on a `Loopback` at `671dd73cce`, 03:14Z; read for the rest]
+- **The standing challenger opens only plain sessions.** Its `open` passes root, layout, minutes and scheme to its one local host and nothing else (`challenger_party.py:69–70`), and the sample's verifier takes only a withheld session's coins. Its own test opens plain sessions. [read: `challenger_party.py`, `tests/test_challenger_party.py:50–94`]
+- **The same at the first try's head and on `main`** (`496aa18354`: the same lines; `origin/main` at `b7a779f695`: `a5_coins.py:700` and `:769`, `challenger_party.py:69–70`). [run: `git show` of each, 03:11Z]
+- **The change, which I have not made** (two files, no test or driver or verifier changed in behaviour under `local`):
+  1. `a5_coins.py`, `Loopback.open`: take `withhold: bool = False`, send it in the request, and return the commitment as `str | None`.
+  2. `challenger_party.py`, `Party.handle`, the `open` op: pass `withhold=bool(req.get("withhold", False))` to `self.local.open`; the reply's `commitment` is then `null`, as `Local.open` returns it for a withheld session (`a5_coins.py:595–626`).
+  3. The docstring's request line, and one test in `test_challenger_party.py`: a withheld open answers no commitment and its ledger's `open` line says `withheld`.
+- **Not shown:** that this is all it takes. I read the rest of the path (`start`'s close and `finish`, `a5_coins.py:797–826`) and saw nothing else that is a local session's alone, but I ran none of it through a standing challenger.
+
+### 2. A second refusal the same rehearsal would meet: the key's parameters
+
+- **The form reads a key only at W = 1, H = 20.** Its parameters parse the interior audit's through `OneStageZk.membersParamsOfJson` (`SampledTwo.lean:166–167` on `cursor/proofs-twoleg-c5e5` at `b774e651d2`, after `ONE_KEY` at `:160–161`; the same lines on `cursor/proofs-twoleg-e0ff` at `9a20c71e69`), which calls `OneStageZk.paramsOfJson`, which throws `KEY_PARAMS` for a challenger key not at `Lms.deployed` (`Spot/OneStageZk.lean:132–137`, `:254`, `:825–831`; `Lms/Verify.lean:47`: `deployed := ⟨64, 1, 20⟩`). With `ONE_KEY` making the boundary's key the interior's, both stages need one key at those parameters. [read, 03:15Z and 03:19Z]
+- **Every rehearsal's key is at W = 4, H = 5.** Both stages' evidence in `b025` and `240a` carries `"H": 5, "W": 4`. The two-stage driver never asks `start` for a deployed key (`two_stage.py` has no `deployed`; `a5_coins.LOCAL_PARAMS = (4, 5)`, `:83`; only `benchmarks/prove_path/records_audit.py:870` passes one). [run: each `second/coins.json`, `evidence[i].key`, 03:13Z; read]
+- **The standing challenger's key is at W = 4, H = 5 too:** `Party` makes its host with `AC.Local(root, main)` and no parameters (`challenger_party.py:52`), and its docstring says v2 refuses a case sampled on its coins for that reason (`:9–10`). [read]
+- **So, whatever the ledger shows,** the form's check on `b025`'s kept files refuses at its parameters: by `ONE_KEY` if they name the two keys the evidence carries, by `KEY_PARAMS` if they name one of them for both. And a rehearsal under one standing challenger as written would be refused by `KEY_PARAMS`. TWOLEG should know this before it runs the check on `b025`'s files. [derived]
+- **What a deployed key takes:** `Party` and `Host` taking the key's parameters and a worker count and handing them to `Local`, which already takes both (`a5_coins.py:572`); about 4 more lines and a test. The key is then a whole tree of 2^20 leaves made when the challenger starts, over the machine's cores. I have not measured how long that takes on vy-nebius-2, nor seen it run in a two-stage audit. [read; the cost not known]
+
+### 3. What `b025` and `240a` pass of the form's own two-window check, and one thing at 8 of 8
+
+- **`interiorUnshown` finds nothing in either.** Where the two windows differ, it refuses if the first session's log shows a coin of the second stage's family (`draw/0`) released after the interior registration's digest. In both runs the first session's log shows `draw/0` only after the first registration's digest and `draw/1` only after the stop class's. [run: each first session's log against each interior registration's digest, 03:13Z; read against the Lean text by me, not run through Lean]
+- **At 8 of 8 the second window's root does not wait for the first stage's coins.** It is a hash of the first registration's digest and the list of sampled outer blocks (`interior_rows.py:341–344`), and at `rate:1/1` that list is every outer block whatever the coins are. I recomputed it from the first registration's digest and the list 0 to 7 alone and got the root the second ledger's `open` line names, in both runs. So at 8 of 8 no hash puts the second session after the first stage's coins: only a ledger can. Below 8 of 8 the root holds the sample those coins drew. [run: recomputed for `b025` and `240a`, 03:13Z]
+
+### 4. What one standing challenger's ledger would hold
+
+- One host for the challenger's whole life: one key, one ledger file, handed whole at each `finish` (`challenger_party.py:48–52`, `:76–77`; `a5_coins.py:628–639`). [read]
+- Each ledger line's `seq` is the count of lines before it and its `prev` the hash of the last (`verity/composite/device/live_challenger/auditor.py:821–832`). So the first session's `reserve`, `open`, `end` would be 0 to 2 and the second's 3 to 5, in one chain under one key. [read; derived]
+- The challenger refuses an `open` while a session is open (`session-open`) and a second session on a root (`root-opened`) (`challenger_party.py:62–67`), so the second session cannot be reserved before the first has ended. [read]
+- The first stage's kept evidence would then carry the ledger's first three lines and the second stage's all six. [derived; not run]
+- The first window's root is the same in `240a` and `b025` (`361c46fcde51…`): the stand-in serve's run root does not change between rehearsals. A standing challenger must therefore be new for each rehearsal, or it refuses the root. [run: the two ledgers' `open` lines]
+
+### 5. Step 5: who names `--challenger`
+
+- **In my rehearsal, the launch does,** with no script change: `two_stage_small.sh` passes `SMALL_FIRST` to `first` and `SMALL_SECOND` to `second` after its own `--challenger local` (`:73`, `:78–79`), and the last `--challenger` given is the one taken (`:25–26`). The challenger itself needs a starter in the job's command, before the first command and stopped after the second; there is no command for it in the tree today (`challenger_party.py` has `Host.start` and no `main`). [read]
+- **On Friday, serving's launcher does,** in both commands: `CHALLENGER` for the first (`twostage_first.sh:37`, default the gate; tonight's wrapper sets `CHALLENGER=local`, `s20_tonight.sh:51–54`) and `CHALLENGER_ARGS` for the second (`second_served.sh:86`, default `--challenger local`). [read: serving's notes as cloned at 03:11Z]
+- **What that leaves open:** a `loopback:` address reaches one host. If serving runs the two commands as two jobs, the challenger has to outlive the first job and both have to be on its machine. I have not read how serving runs Friday's two commands. [read; not established]
+
+### 6. What I need from you
+
+1. **Where the change goes.** I would put it on a branch of its own off the second try's head, `cursor/proofs-gather-one-challenger-6a9b`, so that neither of Friday's trees moves until you say; the small rehearsal and then `b025`'s command run there.
+2. **Whether the key goes to W = 1, H = 20 in the same change.** Without it the rehearsal answers your step 2 (one key, one chain, the order by `seq`, the checks by name) and TWOLEG's check still refuses its kept files by `KEY_PARAMS`.
+
+With your word I make it and launch the small rehearsal on vy-nebius-2 at once. Until then I change nothing.
+
+### 7. Two loops, and a new machine
+
+- Two GATHER loops have been writing under one id. The 02:32Z to 03:06Z entries, the head `671dd73cce` and the runs `bf1a`, `3243` and `1a73` are the other loop's; I stand behind them as read. This loop was handed your 03:00Z and 03:12Z messages by the hooks.
+- The machine was replaced between 03:07Z and 03:09Z (up 0 minutes at 03:09Z): `/tmp` and the fetched runs went, and nothing unpushed was lost. I have seen no sign of the other loop since its 03:07Z note. **Unless you say otherwise, this loop holds the pen from here:** the rehearsal above, the reruns `3243` and `1a73` (both running at 03:16Z), VLLM-300 and VLLM-412, the estimate. [run: `uptime`, `research status`, 03:09Z to 03:16Z]
+
+### 8. Not established
+
+- That the change of section 1 is all a standing challenger needs: read, not run.
+- How long a key at W = 1, H = 20 takes to make, and whether the audit's checks by name pass under one.
+- How TWOLEG's check takes its parameters' keys from kept files.
+- How serving runs Friday's two commands: one job or two, one machine or two.
+- Anything on the engine or on cards in my runs.
