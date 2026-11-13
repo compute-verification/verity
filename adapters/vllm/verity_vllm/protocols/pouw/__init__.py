@@ -26,7 +26,7 @@ weights were served.  Pearl-C commits one pass per engine step, a step held to w
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.pouw.verifier.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.protocols.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in a window whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+runs beside SPOT only in a window whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
