@@ -195,9 +195,9 @@ def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_to
         ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
     what = got["expected"][0]["what"]
     assert "5 normalisations" in what and what.endswith("beside 2 plain normalisations on both sides")
-    for config, record in ((added(cpu, log(*norms(0, 0, 1)[2:])), cuda),
-                           (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 11, 11 * n))))):
-        got = of_record.compare(step(config), step(record), SHAPE)
+    for mine, record in ((added(cpu, log(*norms(0, 0, 1)[2:])), cuda),
+                         (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 11, 11 * n))))):
+        got = of_record.compare(step(mine), step(record), SHAPE)
         assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
 
 
