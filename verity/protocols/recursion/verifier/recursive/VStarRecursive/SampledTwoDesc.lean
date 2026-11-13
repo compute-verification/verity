@@ -1,0 +1,317 @@
+/-
+The two-stage form's descriptor check (`descOk`): what the auditor's copies of a two-stage registration must satisfy
+before a run is read against them, decided on the form's params, its blobs and the run of record's input
+(`Spot.Run.Input`, its interior `Spot.Run.Interior`), once per template and never per unit, request or bit:
+
+* the first stage: the boundary registration `Run.run` hands `Select.select` (`firstOf`), its replay layout
+  (`Slots.layout`) and the design `Select.select` samples on it (`firstLaw`), well formed on the layout's strata
+  (`designOk`);
+* the second stage's cells and counts, as `Run.run` computes them (`cellsOf`), a count of at least `1` and a cell for
+  each template;
+* each template's reference statement: its member's (`memberOf`) circuit and public files on the blobs, the pinned
+  tables, and its partition object and registered reads as `flock-verify verify --zk` reads their text (`refOf`),
+  set up as `verifyCmd` sets a statement up (`setupAt`), in Flock's masked scope (`zkOk`), of a length each field's
+  encoding holds (`fits`), reading as a member's (`templateOk`), fitting the two-stage scope (`memberOk`) and in the
+  scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
+* the registered wiring, on the templates' names, the outer block's links and wires and the reference reads: each name
+  one template's (`namesOnce`), each wire's writer before its reader (`writersFirst`), each wire's reader port like its
+  writer's output port (`wiresAlike`), each reference read no link or wire names a port of the interior
+  registration (`refReadsOwn`), and an interior registration that registers no value.
+
+The registered wiring's five checks over every source or written bit (whether each source bit is at a named port,
+whether each wired one has a gate to go to, and the three checks of the written bits) are not decided here: each walks
+every unit, and waits on a per-template form.
+
+Nothing calls this module yet. Its definitions have the shapes of the two-stage verifier's own (`SpotFlock.Code`), over
+the components the form holds in place of the auditor's held copies, and a proof (`SpotFlock.HeldOfDesc`) reads each
+of those as this one.
+-/
+module
+
+public import VStarRecursive.SampledTwo
+
+@[expose] public section
+
+namespace VStar.Recursive.SampledTwoDesc
+
+open Lean (Json)
+open Flock
+
+/-! ## The first stage, the cells and the requests -/
+
+/-- **The boundary registration the first stage samples on**, as `Run.run` hands `Select.select`: the verifier's copies
+with the law and work table the rule expands over the record's population, the resolved rule and the closure map. -/
+structure First where
+  verifier : Spot.Registration.Verifier
+  rule : Spot.Select.Rule
+  closure : Option (Array (Int × Array Int))
+
+/-- `Run.run`'s boundary registration at the run of record's input; none where a step of it is refused. -/
+def firstOf (i : Spot.Run.Input) : Option First := do
+  let v := i.params.verifier
+  let n ← Spot.nat? (Spot.getD i.record "population")
+  let rule ← i.rule.over n (Spot.Select.strataSizes v.program v.query)
+  let law ← (rule.lawOver n).toOption
+  let workTable ← (i.rule.tableOver v.program v.query v.workTable).toOption
+  let resolved ← (Spot.Select.resolve i.rule v.program v.query).toOption
+  pure ⟨{ v with law := law, workTable := workTable }, resolved, i.closure⟩
+
+/-- **The second stage's cells and counts**, as `Run.run` computes them: each template's proof blocks in a replay block
+and the two-stage rule's count in each; none under a one-stage rule or where either is refused. -/
+def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array Nat × Array Nat) := do
+  let ns ← (Spot.Select.replayCells it.replay it.params.verifier.query).toOption
+  match i.rule with
+  | .twoStage _ _ k => do
+    let ids ← (Spot.Select.templateIds it.params.verifier.query).toOption
+    let ks ← (k.over ids ns).toOption
+    pure (ns, ks)
+  | _ => none
+
+/-- **The requests of a boundary layout**: its proof blocks that are a unit's. -/
+def requests (l : Spot.Slots.SlotOrder) : Nat := (l.blocks.filter fun b => b.unit.isSome).size
+
+/-- **The first stage's law**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
+the law it derives over the program's population, or the one the rule names where it derives none. -/
+def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
+    V (Option Draw.Law) := do
+  let n ← Spot.Partition.units d query
+  let named ← rule.lawOver n
+  let derived ← Spot.Draw.deriveLaw d query named table
+  match rule with
+  | .all => pure none
+  | _ => do
+    let parsed ← Spot.Draw.flockLaw ((derived.map (·.toJson)).getD named) n
+    pure (some (derived.getD parsed))
+
+/-- **A law is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/
+def lawOk (ns : List Nat) : Option Draw.Law → Bool
+  | none => true
+  | some (.subset K) => 1 ≤ K && K ≤ ns.sum
+  | some (.bernoulli num den) => 0 < den && num ≤ den
+  | some (.stratified K _) => 1 ≤ K && K ≤ ns.sum && ns.all (1 ≤ ·)
+  | some (.work _ ws) => (ws.toList.map (·.work)).length == ns.length &&
+      (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
+      0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
+
+/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's law and the input
+class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/
+def designOk (law : Option Draw.Law) (l : Spot.Slots.SlotOrder) : Bool :=
+  [law, none].length == l.classes.size &&
+    ([law, none].zip (l.classes.toList.map fun c => c.toList.map (·.size))).all fun p => lawOk p.2 p.1
+
+/-! ## The templates' reference statements -/
+
+/-- **Template `t`'s member**: the first of the interior audit's members whose circuit is the one the params name for
+template `t`. -/
+def memberOf (p : SampledTwo.Params) (t : Nat) : Option Spot.OneStageZk.Member :=
+  (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
+
+/-- A file read as JSON, as `flock-verify verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+def jsonOf (what : String) (b : ByteArray) : Except String Json :=
+  match String.fromUTF8? b with
+  | none => .error s!"{what}: not UTF-8"
+  | some t => (Flock.JsonParse.parse t).mapError fun e => s!"{what}: not JSON: {e}"
+
+/-- `verifyCmd`'s refusal of a public header that names an identifier where it holds none of its own. -/
+def noIdentifier (st : Stmt) : V Unit :=
+  match st.pub.header.getObjVal? "identifier" with
+  | .error _ => pure ()
+  | .ok _ => throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
+
+/-- **`verify --zk`'s setup** of a statement of one table at no sample, with no recursive input and no public input
+words: `--zk`'s tags `tz` and coins, the statement's tags `tags`, the files and the verifier's own partition object,
+program and registered reads. -/
+def setupAt (tz tags : Tags) (circuit pub : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (partition : Option Json) (program : Option ByteArray) (registered : Option (Array Registered.Port)) :
+    V (SessionSpec × Array Stmt) := do
+  if !tz.hm96Rows then
+    throw s!"{tz.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
+  RecSetup.checkInner none none (pure (none, none))
+  let (spec, sts) ← Stmt.setupTables tz circuit pub coins 1 tables none partition program none none none none
+  for st in sts do
+    checkRegistered st registered
+    noIdentifier st
+  Registered.checkFull registered none
+  RecSetup.checks none none tags tables sts circuit partition program registered none none none
+  sts.forM Zk.shapeOk
+  sts.forM (RecCoins.check · registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
+  sts.forM (RecVStar.checkPubRows · registered none none)
+  pure (spec, sts)
+
+/-- **A template's reference statement, read and set up**: its statement's tags, `--zk`'s tags, its circuit and public
+files, the pinned tables, the text of its partition object and registered reads, as read back, its program, and the
+session and tables its setup gives. -/
+structure Ref where
+  tags : Tags
+  tz : Tags
+  circuit : ByteArray
+  pub : ByteArray
+  tables : List (String × ByteArray)
+  partitionB : ByteArray
+  partition : Json
+  program : ByteArray
+  registeredB : Option ByteArray
+  registered : Option (Array Registered.Port)
+  spec : SessionSpec
+  sts : Array Stmt
+
+/-- **Template `t`'s reference statement**: its member's statement under `--zk` on the blobs, at no sample, with its
+member's public file and registered reads, read and set up as `flock-verify verify --zk` reads and sets it up. -/
+def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
+  let some m := memberOf p t | throw s!"template {t}: no member's circuit is the one the params name"
+  let circuit ← bs.get m.own.circuit "circuit"
+  let pub ← bs.get m.own.pub "public file"
+  let some tags := Tags.byName? Spot.OneStageZk.STATEMENT | throw "unknown statement"
+  if tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
+  let partitionB := (RecordText.printT m.own.partition).toUTF8
+  let partition ← jsonOf "partition" partitionB
+  let registeredB := m.own.registered.map fun j => (RecordText.printT j).toUTF8
+  let registered ← registeredB.mapM fun b => do Registered.ofJson (← jsonOf "registered reads" b)
+  let tables := Spot.OneStageZk.tablesOf bs
+  let tz := Zk.tags tags (Zk.maskLogOf circuit) 1
+  let (spec, sts) ← setupAt tz tags circuit pub (.tree (Zk.coinSpec (tags.tableNames 1))) tables (some partition)
+    (some m.own.program) registered
+  pure { tags, tz, circuit, pub, tables, partitionB, partition, program := m.own.program, registeredB, registered,
+         spec, sts }
+
+/-- **Every field of a reference statement fits its encoding's length word**: each file, table and text under
+`2^64` bytes. -/
+def fits (r : Ref) : Bool :=
+  decide (r.circuit.size < 2 ^ 64) && decide (r.pub.size < 2 ^ 64) && decide (r.tables.length < 2 ^ 64) &&
+    r.tables.all (fun q => decide (q.1.toUTF8.size < 2 ^ 64) && decide (q.2.size < 2 ^ 64)) &&
+    decide (r.partitionB.size < 2 ^ 64) && decide (r.program.size < 2 ^ 64) &&
+    r.registeredB.all fun b => decide (b.size < 2 ^ 64)
+
+/-- **A session's statement is in Flock's masked scope**: it sets up with `1` to `200` tables at at most two link
+points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
+def zkOk (spec : SessionSpec) (sts : Array Stmt) : Bool :=
+  0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
+    sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
+
+/-- **The statement circuit** of a reference statement: the circuit the scope check parses, a templated statement's
+unrolled; `default` where it doesn't parse. -/
+def Ref.stmt (r : Ref) : Circuit :=
+  HmOut.unrolled (match ProvedScope.circuitOf r.tz r.circuit r.tables with
+    | .ok c => c
+    | .error _ => default)
+
+/-- **A reference statement reads as a member's**: hidden outputs and untyped tags, a circuit file whose descriptor
+reads, a statement circuit whose unit has at most `2^32` rows, one table, and each port a `sha512/row/v2` row. -/
+def templateOk (r : Ref) : Bool :=
+  r.tz.hiddenOutputs && !r.tz.typed &&
+    (match Desc.parseStmt r.tz r.circuit r.tables with
+      | .ok _ => true
+      | .error _ => false) &&
+    decide (r.stmt.unit.unitLog ≤ 32) && (r.sts.toList.map (·.m)).length == 1 && r.stmt.ports.all ProvedScope.v2Row
+
+/-- **The templates' reference statements**, in the params' template order. -/
+def refsOf (p : SampledTwo.Params) (bs : Core.Blobs) : Option (List Ref) :=
+  (List.range p.circuits.size).mapM fun t => (refOf p bs t).toOption
+
+/-- **Template `t`'s circuit**: its reference statement's statement circuit, the first template's past them. -/
+def circAt (rs : List Ref) (t : Nat) : Circuit :=
+  (rs.map Ref.stmt).getD t ((rs.map Ref.stmt).headD default)
+
+/-! ## A member's size -/
+
+/-- A member's unit source gates, `B` of its key program: `upv` copies of the unit's input bits, the bits before its
+constant row. -/
+def unitIns (c : Circuit) : Nat := c.upv * min (c.unit.inWords * WORD) c.unit.constPos
+
+/-- A member's stacked unit rows' computed rows: `upv` copies of the unit net's computed rows, each with its constant
+row. -/
+def unitRows (c : Circuit) : Nat := c.upv * (c.unit.constPos - min (c.unit.inWords * WORD) c.unit.constPos + 1)
+
+/-- A member's lowered size over `n` units: the constant, the zero and `B` source gates a unit, then `R` rows a unit,
+three gates each. -/
+def memberSize (c : Circuit) (n : Nat) : Nat := 2 + n * unitIns c + 3 * (n * unitRows c)
+
+/-- **A member fits the two-stage scope**, over `n` units: `unitLog ≤ 32`, an instance a unit at least, and at most
+`UNIT_CLASS_MAX` gates in its program. -/
+def memberOk (c : Circuit) (n : Nat) : Bool :=
+  decide (c.unit.unitLog ≤ 32) && decide (0 < c.upv) && decide (memberSize c n ≤ Spot.OneStageZk.UNIT_CLASS_MAX)
+
+/-! ## The registered wiring -/
+
+/-- The link that names template `t`'s session port `port`, as the second stage finds it. -/
+def linkOf (links : Option (Array Spot.SecondStage.Link)) (t port : String) : Option Spot.SecondStage.Link :=
+  (links.getD #[]).find? fun l => l.template == t && l.port == port
+
+/-- The wire that names template `t`'s session port `port`, as the second stage finds it. -/
+def wireOf (wires : Option (Array Spot.SecondStage.Wire)) (t port : String) : Option Spot.SecondStage.Wire :=
+  (wires.getD #[]).find? fun w => w.template == t && w.port == port
+
+/-- The first of `T` templates named `name`. -/
+def writerOf (T : Nat) (names : List String) (name : String) : Option Nat :=
+  (List.range T).find? fun t => names.getD t "" == name
+
+/-- A template name's place: the first template of the name, `T` where none has it. -/
+def posOf (T : Nat) (names : List String) (name : String) : Nat := (writerOf T names name).getD T
+
+/-- The first port of circuit `c` named `name`; port `0` where none is. -/
+def portNamed (c : Circuit) (name : String) : Nat :=
+  ((List.range c.ports.size).find? fun q => c.ports[q]!.name == name).getD 0
+
+/-- **Each name is one template's.** -/
+def namesOnce (T : Nat) (names : List String) : Bool := decide ((List.range T).map fun t => names.getD t "").Nodup
+
+/-- **Each wire's writer's part is before its reader's.** -/
+def writersFirst (T : Nat) (names : List String) (wires : Option (Array Spot.SecondStage.Wire)) : Bool :=
+  (wires.getD #[]).all fun w => decide (posOf T names w.writer < posOf T names w.template)
+
+/-- Wire `w`'s port at reader `t` is like its writer's output port: as many words, and the same row schema; true where
+the wire's writer names no template. -/
+def wireAlike (T : Nat) (names : List String) (circ : Nat → Circuit) (w : Spot.SecondStage.Wire) (t : Nat) : Bool :=
+  match writerOf T names w.writer with
+  | some tw =>
+    ((circ t).ports[portNamed (circ t) w.port]!).words == ((circ tw).ports[portNamed (circ tw) w.wport]!).words &&
+      PortRoots.schemaOf (circ t) (portNamed (circ t) w.port) == PortRoots.schemaOf (circ tw) (portNamed (circ tw) w.wport)
+  | none => true
+
+/-- **Each wire's reader port is like its writer's output port**, at every template of the wire's reader's name. -/
+def wiresAlike (T : Nat) (names : List String) (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) :
+    Bool :=
+  (wires.getD #[]).all fun w => (List.range T).all fun t => !(w.template == names.getD t "") || wireAlike T names circ w t
+
+/-- **Each reference read at a port no link or wire names reads a port of the interior registration** (`ports`). -/
+def refReadsOwn (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (refReads : Nat → Json) (ports : List String) : Bool :=
+  (List.range T).all fun t =>
+    (Spot.entries (Spot.getD (refReads t) "ports")).all fun pe =>
+      (linkOf links (names.getD t "") pe.1).isSome || (wireOf wires (names.getD t "") pe.1).isSome ||
+        match Spot.getD pe.2 "value" with
+        | .str v => ports.contains v
+        | _ => false
+
+/-! ## The check -/
+
+/-- **The registered wiring's checks decided per template**, at `T` templates named `names`, the links and wires, the
+templates' circuits, their reference reads and the interior registration's verifier `vi`. -/
+def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) (refReads : Nat → Json)
+    (vi : Spot.Registration.Verifier) : Bool :=
+  namesOnce T names && writersFirst T names wires && wiresAlike T names wires circ &&
+    refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList && (vi.registered.map (·.1)).toList.isEmpty
+
+/-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
+record's input `i` and interior `it`. -/
+def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Bool :=
+  match firstOf i, cellsOf i it, refsOf p bs with
+  | some f, some (ns, ks), some rs =>
+    match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
+        (firstLaw f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
+    | some l, some law =>
+      let T := it.circuits.size
+      let names := (it.circuits.map (·.1)).toList
+      let links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
+      let wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
+      let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
+      p.circuits.size == T && !rs.isEmpty &&
+        rs.all (fun r => fits r && zkOk r.spec r.sts && templateOk r && ProvedScope.scopeOkH r.stmt) &&
+        (List.range T).all (fun t => memberOk (circAt rs t) (requests l * ns.getD t 0)) && designOk law l &&
+        ks.size == T && ks.toList.all (1 ≤ ·) && ns.size == T &&
+        wiringOk T names links wires (circAt rs) refReads it.params.verifier
+    | _, _ => false
+  | _, _, _ => false
+
+end VStar.Recursive.SampledTwoDesc
