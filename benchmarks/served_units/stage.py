@@ -227,7 +227,8 @@ RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
     "dsa-topk": (("census:DsaTopKShortRow_v1{TOPK=2048}",), "the census's Definition"),
     "s8-linear": (("s8-coord",), "its block, the W8A8 coordinate"),
     "router": (("router-row", "router-slots"), "the router's Boolean version, its row form or its slots form"),
-    "dsa-q": (("dsa-q-row",), "the indexer query's Boolean version"),
+    "dsa-q": (("census:DsaIndexerQ_v1{H=32,D=128,ROPE=64}", "dsa-q-row"),
+              "the census's whole Definition of the indexer query, or its Boolean version"),
     "rmsnorm-cuda": (("rmsnorm-v8",), "the fused RMSNorm the census serves"),
     "sparse-mla-head": (('census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},'
                          'SCALE={"f64":"0x1.0000000000000p-4"}}', 'census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}'),
@@ -239,7 +240,7 @@ RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
     "rmsnorm-triton": ((), "the census has no Definition of it"),
     "silu-quant": ((), "the census has no Definition of it"),
 }
-RETIRED_EITHER = {"moe-w13", "router"}
+RETIRED_EITHER = {"moe-w13", "router", "dsa-q"}
 
 
 @dataclass(frozen=True)

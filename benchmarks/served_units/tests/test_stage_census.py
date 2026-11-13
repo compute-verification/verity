@@ -203,6 +203,9 @@ def test_retired(stage):
             if isinstance(cen, stage.Census):
                 assert CR.zk_refusal(template(cen.name(S))) is None, r
     assert not {name for name, (instead, _) in stage.RETIRED.items() if not instead} ^ {"moe-w2", "rmsnorm-triton", "silu-quant"}
+    with pytest.raises(SystemExit) as stop:
+        stage.parse("dsa-q")
+    assert "stage census:DsaIndexerQ_v1{H=32,D=128,ROPE=64} or dsa-q-row in its place" in str(stop.value)
     block = stage.RETIRED["sparse-mla-head"][0][0].removeprefix("census:")
     census = block.replace("_v2", "_v1")
     assert CR.zk_refusal(template(census)).endswith(f"name its Boolean version {block}")
