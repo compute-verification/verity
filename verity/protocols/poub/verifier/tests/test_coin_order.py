@@ -66,23 +66,23 @@ class Recorded(P.Local):
         self.calls.append(("run", challenge))
         return super().run(challenge, t, i, previous)
 
-    def open(self, t, draws):
+    def open(self, t, sampled):
         self.calls.append(("open", t))
-        return super().open(t, draws)
+        return super().open(t, sampled)
 
     def end(self, commitment, openings) -> None:
         self.calls.append(("end", commitment, tuple(openings)))
         super().end(commitment, openings)
 
 
-def honest(verify: int | None = None) -> tuple[P.Period, Recorded]:
+def honest(verify: int | None = None) -> tuple[P.Run, Recorded]:
     c = Clock()
     prover = Recorded("n0", STORE, entropy=Entropy(b"salts"))
     return P.session("n0", prover, COINS, verify=verify, clock=c, sleep_until=c.sleep_until), prover
 
 
 @pytest.fixture(scope="module")
-def ended() -> tuple[P.Period, Recorded]:
+def ended() -> tuple[P.Run, Recorded]:
     return honest()
 
 

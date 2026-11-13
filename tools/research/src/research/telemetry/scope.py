@@ -56,13 +56,16 @@ clock = time.monotonic
 sleep = time.sleep
 
 
-def claim(path: Path, doc: dict[str, Any]) -> bool:
-    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it."""
+def claim(path: Path, doc: dict[str, Any], mode: int | None = None) -> bool:
+    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it.
+    `mode`: the file's, for one another user reads (mkstemp's is the owner's alone)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(doc, f)
+            if mode is not None:
+                os.fchmod(f.fileno(), mode)
         os.link(tmp, path)
         return True
     except FileExistsError:

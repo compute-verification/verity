@@ -68,6 +68,7 @@ public import Flock.Registered
 public import Flock.ProgramRead
 public import Flock.SelfTest
 public import Flock.VerifyMembers
+public import Flock.RegBound
 public import Flock.WindowRecord
 public import Flock.RegKnown
 public import Flock.KnownRead
