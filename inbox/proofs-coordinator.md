@@ -113456,3 +113456,53 @@ Your 02:00Z word read in the mailbox. [run] `cursor/proofs-r7-certified-b6a0` fa
 Not established: both locks; the quick tier at this head; anything at a head holding `main`.
 
 For the table: RELAX | R7 | `3c020f77568d` (Option A) | tries of the two changed files pass, axioms clean; four suites passed at `df7342a16519` | records `cc14` about 03:35Z, quick tier `35be` about 03:15Z | PR not open | ready line Fri 06:00Z
+
+## OWNREADS, Fri 13 Nov 02:04Z: nothing new compiled yet (the try of `RefReadsWf` at `heldOf` waits for a slot); FINDING: the parser lemma does not reach these reads, so one premise stays, and it needs your choice
+
+In plain words: I wrote the lemma you asked for, and it is in a try. It does not come out the way your message expected. The reference reads that `heldOf` holds are not read from the reference statements. They are the registered reads in the auditor's parameters, because those are the ones the second stage's check compares against. The form parses its parameters with Lean's own JSON parser, and no proof can look inside that parser. So the fact "these reads are well-formed trees" cannot be proved from the parser. It has to be either checked or assumed, and that is a choice about what the guarantee rests on, so it is yours and Daniel's, not mine.
+
+**1. What is written** (branch `cursor/proofs-refreadswf-a64c`, pushed at `f4162d4c2a`: HELDOF's `47c3da67a8` with my `cursor/proofs-ownreads-9a1c` merged, plus one new file, `security/Proofs/Flock/SpotFlock/HeldOfReads.lean`, 100 lines, on its own root line). Not compiled: the try is `r20261113-015807-1593` on vy-nebius-cpu-12, waiting for a slot since 01:58Z. [run: launched]
+- `ReadsWf cs := ∀ c ∈ cs, Claims.Json.Wf c.2.2.2`: the registered reads of each template's entry `(template, circuit, header, registered)` are well-formed trees.
+- `refReadsWf_of (hh : heldOf i it u = some h) (hw : ReadsWf it.circuits) : RefReadsWf h`.
+- `refReadsWf_form (hh : heldOfForm p c ξ ξ₂ e received₂ vs u = some h) (hw : ReadsWf p.circuits) : RefReadsWf h`, at the form's run of record.
+- `ownReads_of_heldOf` and `ownReads_form`: the same two with `refReadsOwn h = true` added, giving `OwnReads h`.
+
+**2. Why `parse_wf` does not reach** [read]:
+- `heldOf` sets `refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null` (`HeldOf.lean`, `held₀`). It does not read `u.xs`, so `refStmtsOf p bs` plays no part. This is forced: `HeldMatches.refReads` asks that the held reads be the ones the run's check uses.
+- At the form, `it.circuits = p.circuits` (`SampledTwo.inputOf`), and `p.circuits` comes from `Spot.Run.templateCircuits (getD ip "proofs") …` inside `SampledTwo.paramsOfJson j`.
+- `j` is what `Core.canonicalJson` returns (`Protocol.answer`: `canonicalJson params >>= P.params`), and `canonicalJson` parses with `Lean.Json.parse`. Its `anyCore` and `objectCore` are `partial def`s, so the kernel cannot unfold them. `FlockComplete.JsonRT.parse_wf` is about the verifier's own parser, `Flock.JsonParse.parse`, which only the session files go through (`FlockDeploy.jsonOf`).
+- The tree already says this elsewhere: `Spot/Json.lean` on `sortedKeys` ("Proofs can't see inside `Json.parse`"), and `BindsDeployed.lean` takes `JsonTrailingSpace` as a hypothesis for the same reason.
+
+**3. Is the premise really needed, or only my proof's?** It is needed. [derived] If a reference reads object were a tree whose search misses its `ports` field, `refReadsOwn` would pass with nothing to check, while `second-values` could still pass on the printed text. Sorted keys alone (the existing `Spot.sortedKeys` check) are not enough either: the check blanks fields with `setKey`, which inserts into the tree, and Std's insert is only specified on balanced trees.
+
+**4. Three ways to close it. STOP RULE applies to (i) and (ii), so I do none of them:**
+- (i) A named assumption on Lean's parser: `∀ s j, Lean.Json.parse s = .ok j → Claims.Json.Wf j`. It is true by reading the parser (it builds every object by `insert` from the empty tree). Before: the two-stage guarantee rests on no fact about `Lean.Json.parse`'s trees here. After: it names one. To use it I would also have to carry `Wf` from the parsed parameters down to `p.circuits`, through `paramsOfJson` and `templateCircuits`: about 150 lines, two or three tries.
+- (ii) A decided check, with no assumption: a `Bool` that tests every object of the reads is a balanced tree with increasing keys, and a lemma that it gives `Wf`. I can write both (about 100 lines, one new file, two or three tries). Someone must then run it: `heldOf`'s `decided` on the proof side (HELDOF), and in the end the form, which would refuse parameters that fail it. Before: the form accepts such parameters. After: it refuses them. Its cost is one walk over the parameters' reads, which is description-sized.
+- (iii) Keep `ReadsWf p.circuits` as a premise of the two-stage theorem for Friday, and pick (i) or (ii) after.
+- My recommendation: (iii) for Friday, then (ii). It adds no assumption, and it follows what the challenger session's reader already does with `sortedKeys`.
+
+**5. The call FRAME's assembly makes** [read: `AddressesGive.lean`, `Facts.lean` and `Code.lean` at `d702f45e9e`]. On FRAME's branch `refReadsOwn h` is already a conjunct of `wiringOk h`, and an accepted run gives `wiringOk h = true` (`CheckedRun.wiring_of_ok`). So in `wiring_of_wiringOk` the premise `(hOwn : OwnReads h)` becomes `(hWf : RefReadsWf h)`, and its two lines become:
+```
+  obtain ⟨-, hfirst, hnamed, hmove, halike, hwhole, hunwired, -, hown, -⟩ := (wiringOk_iff h).1 hw
+  exact ⟨hN, hI, hO, hR, portsMember h, ownReads_of hown hWf, hnamed, hmove, hfirst, halike, hwhole, hunwired⟩
+```
+with `public import Proofs.Flock.SpotFlock.OwnReads` added. `addressesConnected_of_runs` and `addressesConnected_of_blocks` then take `hWf : RefReadsWf h` in place of `hOwn`. At the form, `hWf` is `HeldOf.refReadsWf_form hh hw`. I have not compiled `OwnReads.lean` against FRAME's head; `refReadsOwn` moved there from `WiringOk.lean` to `Code.lean` with the same text. [read]
+
+**6. `Apart` at `dev₂`: its size, before I write anything** [read: HISTORY's 01:56Z entry, `Device.lean` at `f54420243d`, `Properties/Challenger.lean`].
+- HISTORY is right that `Apart` is a fact about the deployment, and that the live device as written lets the prover's request choose each open line's window. Which of its (a), (b), (c) closes that is not mine to choose, and (a) and (b) change the device.
+- What I can prove now is the reduction, in one new file of about 50 lines with two theorems: if each session's ledger lines open only its own run and only on its own window, and the two sessions' ids differ, then `Apart` holds on two different windows. That names exactly what a two-session device has to give for each session.
+- What I cannot start: `Apart` at a live two-session device. That device does not exist (HISTORY sizes it at about 250 lines), and the proof needs a round trip of the ledger line's text that no lemma gives yet.
+- I write the reduction next, on a branch of my own from HISTORY's head, unless you say it is not worth having.
+
+NEEDS:
+- Coordinator: a choice among (i), (ii), (iii) of section 4. Until then I carry `ReadsWf` as the premise.
+- HELDOF (`bc-3ddfb587-549a-5964-9ddf-80547065f684`): nothing now. Under (ii), one conjunct in `decided`.
+- FRAME: the change of section 5 when it takes `OwnReads.lean` in.
+
+To post: nothing.
+
+Not established:
+- That `HeldOfReads.lean` compiles.
+- That `OwnReads.lean` compiles against FRAME's head.
+- `ReadsWf` at any real parameters.
+- Anything about `Apart` beyond reading.
