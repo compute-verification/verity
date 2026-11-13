@@ -240,3 +240,42 @@ on VLLM-264 with what the carry across chain 2 changes in the gate's 75 files.**
 #8671's carry across the chain with `tools/move/restack.py` (a carry's scratch on a node
 goes under `/workspace/research/scratch`), its suites, and what vllm still has to read.
 Commit and push before the launch and before you end.
+
+## Fri 13 Nov 16:23Z: the gate's verdict is with vllm (VLLM-264). NEXT, two things: #8671 across chain 2, and one small pull request for ci (two undeclared reads)
+
+Read: your return, and the run's `stdout.log` on node A myself: five gates and the replay,
+exit 0, one minute on the card. **Saying that which kernel ran in the `wgmma` gate is
+deduced and not recorded, with the 20 and the 8, is what makes the verdict usable: I
+passed it to vllm in those words.**
+
+**1. #8671 across chain 2** (`main` is `4ae17f7eafd7`):
+- Carry it once with `tools/move/restack.py` (top, TOP-398, 15:44Z: on a node the carry's
+  scratch goes under `/workspace/research/scratch`, at most three branches abreast; or
+  `restack.py --no-pins` and one `pins.py --regen`). Do not rebase by hand.
+- **At the carried head, the 75 files the gate loads against `e1534673e8ec`'s:** which keep
+  path and bytes, which moved, which have rewritten lines and what kind (import lines,
+  paths). Your list from last night was made on two maps; the chain ran seventeen and
+  the served map was left out, so make it again on `main`. A table in your note, five
+  lines on VLLM-264.
+- The touched suites on a pushed commit, `verity.__file__` printed; the gate's CPU
+  replay of today's dump against the carried head's evaluators (no card).
+- Then the body, and tell me the head: I name it to vllm, whose read is due Sat 02:00Z.
+- **Propose, do not write yet:** the line in the gate's record that names the kernel
+  each call ran (`int8_wgmma` or Triton), with a test; as a change after #8671.
+
+**2. A small pull request of its own, for ci (CI-526, 15:50Z; my answer there):** the
+executor's graph faults two of our test files for reads their suites do not declare.
+From `main`, branch `cursor/kernels-declared-reads-<four hex>`, two entries:
+- `benchmarks/torch_gpu/commit_slots/pyproject.toml`: the `[[tool.verity.tests.reads]]`
+  entry for `tests/test_slots.py` gains
+  `verity/commitments/tests/fixtures/layouts/families-shared-1024b.layout.json`;
+- `benchmarks/torch_gpu/p2_stage/pyproject.toml`: a `[[tool.verity.tests.reads]]` entry
+  for `tests/test_p2_stage.py` with `benchmarks/torch_gpu/p2_stage/served_weights.py`.
+Check on `main` that these are the reads the guard names (run each test file under the
+suite's guard, or read how ci's comment found them) and that nothing else of
+`benchmarks/torch_gpu`, `benchmarks/hash` or `benchmarks/moe_align` is undeclared the
+same way. Both suites pass. Open it unmarked and tell me its number: I name it on CI-526
+and mark it. **This one first if it is ten minutes; it is promised by 22:00Z.**
+
+Return with both, or at once on something that stops either. CHECKPOINT each 30 minutes;
+commit and push before each long run and before you end.
