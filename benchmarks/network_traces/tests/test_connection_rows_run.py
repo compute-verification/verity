@@ -21,9 +21,9 @@ import json
 
 import pytest
 
-from verity.protocols.certifier.verifier import connection_rows as CR
-from verity.protocols.certifier.verifier import content_rows as CT
-from verity.protocols.certifier.verifier.warden import Released, WardenParams
+from verity.protocols.accounting.certifier.verifier import connection_rows as CR
+from verity.protocols.accounting.certifier.verifier import content_rows as CT
+from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams
 
 import test_stop_verdicts as TSV
 from test_warden_serve import _run, ws
