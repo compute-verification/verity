@@ -187,7 +187,5 @@ class AcquireCorrespondence:
         return "unmutated" if not f.get("output_mutated_after", True) else "mutated-after-hook"
 
 
-AnnotationCorrespondence = AcquireCorrespondence      # the adapter's former name (callers written against it keep working)
-
-__all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence", "AnnotationCorrespondence",
+__all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence",
            "RuntimeTree", "RUNTIME_TREE_SCHEMA", "RUNNER_PATH", "mro_names", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
