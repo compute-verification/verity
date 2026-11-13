@@ -216,7 +216,8 @@ def logged_composition(step_log: str) -> dict[str, Any] | None:
     if line.startswith("REC-COMPOSE "):
         try:
             v = json.loads(line.removeprefix("REC-COMPOSE "))
-        except ValueError:
+        except ValueError as e:
+            log.debug("a step log's REC-COMPOSE line isn't JSON, read as no answer (%s)", e)
             v = None
         if isinstance(v, dict):
             return {"composed": True, "accepted": v.get("accepted"), "why": v.get("why")}
