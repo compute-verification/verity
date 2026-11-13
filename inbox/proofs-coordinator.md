@@ -160594,3 +160594,50 @@ your 20:28Z point 2 says. Its two other notes are kept: the leaf's names are `hm
 one-off timer for the two runs I owe a read of (`60ae`, `518f`).
 
 Monday holds as I see it [guess].
+
+## REDRAW, Fri 13 Nov 21:08Z: THE CREDIT BRANCH MERGED WITH THE MENDED #9728 IS 842b6a88ecc27464905a4a774e78d04c810c0a8a ON cursor/proofs-redraw-credit-merged-4de2 and its two settled files build; #9728's records run is out and `security/Proofs` passes; the carry left #9728's cap at 184 where its body says 182; the identity rule is read, and the 59 `restack carry` commits on #9795 are from my own carry
+
+1. **The merged head is `842b6a88ecc27464905a4a774e78d04c810c0a8a` on `cursor/proofs-redraw-credit-merged-4de2`.** [git] A new branch cut from the carried credit head `1526d32a242649f41de617a840ee596b042eaa39`, with one merge commit whose second parent is `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a`. Pushed 20:39Z. `cursor/proofs-carried-honest-credit-4ae1` and `cursor/proofs-honest-credit-9d1e` are where they were (`1526d32a2426`, `1370c60b7e75`). It has one merge base with `main`, `4ae17f7eafd7`.
+2. **Three files conflicted, each settled as I simulated it.** [git]
+   - `Steps.lean`: the mended file whole, byte for byte `7915e17cd346`'s. The credit branch's copy was `ca0ae1a5b314`'s, unchanged.
+   - `Withheld.lean`: three hunks, each the credit branch's line under the new names: `[(p.label, [p.after])]` in `session_read`'s statement and in `hsn`, and `record_read h`. The merged file is byte for byte the credit branch's copy with the mend's renames applied.
+   - Against the carried credit head the merge changes those two files and nothing else: 29 lines for 29 (22 in `Steps.lean`, 7 in `Withheld.lean`), all of them the mend's.
+   - `tools/pous_grader/TRUSTED.sha256`: written by its own command, never a side picked. The result is byte for byte the credit branch's file, because the lakefile it records is the credit branch's (#9728's roots and its own one): its line for `security/Proofs/lakefile.toml` is `d2c497fd8075…`, the merged lakefile's digest. `pins.py --stale` and `pins.py --regen` exit 0.
+3. **The two files build at the merged head.** [run] `verity lean try` on vy-nebius-cpu-8, slot `build/1`:
+   - `Steps.lean`, `r20261113-204055-2be3`: "Build completed successfully (1263 jobs)"; "lean exit 0 in 171 s"; "axiom probe: none of its 20 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+   - `Withheld.lean`, `r20261113-204421-b6f7`: "Build completed successfully (10791 jobs)"; "lean exit 0 in 306 s"; "axiom probe: none of its 51 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+4. **#9728's records run is out at `7915e17cd346`.** [run] `r20261113-203529-51aa` on vy-nebius-cpu-8, launched 20:35Z: `lean_changed.py --records security/Proofs --update`, with the quick suites of what the head changes over `4ae17f7eafd7` beside it (54 files; FRAME's job for a carried head). At 21:02Z: `security/Proofs` "AUDIT: PASS", "check.py exit 0 in 943 s", 204963 declarations in 4062 modules; `security` is in its audit. The ready line follows when it and the suites are back.
+5. **The carry left #9728's cap at 184; its body says it comes down to 182.** [git] [local]
+   - The body: `UNWITNESSED["security/Properties"]` in `tests/test_lean_packages.py` "comes down from 185 to 182, the list's size". The reviewed head `36d6e37cbc7b` held 182.
+   - `main` at `4ae17f7eafd7` lowered it from 185 to 184 on its own, and the caps driver takes the larger of two lowerings. So the carried head holds 184 and no longer changes the file, over a list of 182.
+   - It warns and fails nothing: `test_the_unwitnessed_list_only_shrinks` passes at `7915e17cd346` with "`unwitnessed` in security/Properties is 182, under its cap of 184: lower UNWITNESSED['security/Properties'] to 182" (that test alone, on this VM, 4 passed in 0.88 s).
+   - **I lower it to 182 in a commit of its own on `cursor/proofs-carried-9728-4ae1`, before the ready line**, so the head does what the body says. Its one sentence in the body then reads "from 184 to 182"; I edit the body when you say.
+6. **#9728 is not stacked on #9717's marked head, and the stack is clean.** [git] `7915e17cd346` holds #9717 as the carry left it, not `3e1103ded562ad68a1e8c2286491c82b7c314782`. `git merge-tree` of the two exits 0: the merged tree differs from `7915e17cd346`'s in `security/lean-audit.json` and `security/Properties/lean-audit.json` alone (+14 −16), which are #9717's regenerated records. I say in the ready line whether the records run writes those same records. The merge itself is yours to order, as you did for #9717 on #9555.
+
+7. **Infra's rule on identities (your 21:02Z) is read. Item 4: the one commit I had not pushed, this entry's, is under my checkout's own identity, `Cursor Agent <cursoragent@cursor.com>`.** [git]
+   - I export no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` on this VM, and no job of mine that is running commits (the records run and the tries make none).
+   - Already on the remote, pushed before your message, and not rewritten: commits under `restack carry <noreply@invalid>` that `main` lacks, on the four heads I hold work on.
+
+   | Head | Under `restack carry` | Under my identity | Whose carry |
+   |---|---|---|---|
+   | #9717, `3e1103ded562` (marked) | 118 | 21 | FRAME's |
+   | #9795, `a669fecb7e22` (marked) | 59 | 6 | **mine**: `r20261113-162220-7b85` exported the name, as the lane's note had it |
+   | #9728 carried, `7915e17cd346` | 60 | 43 | FRAME's |
+   | the merged credit, `842b6a88ecc2` | 120 | 62 | FRAME's two carries; my push of 20:39Z added one commit, the merge, under my identity |
+
+### Not established
+
+- The credit branch's own file, `security/Proofs/Pouw/Credit/Withheld.lean` (510 lines, it imports `Challenger.Withheld`), was not built at the merged head, nor was any file but the two. Say the word and I try it on vy-nebius-cpu-8.
+- No records run and no suite at the merged credit head. [read] Its properties lock still holds `Spot.Challenger.sessionNamed` and `Spot.Challenger.sessionOf` under their old names, and its cap is 184 over a list of 181: the same two things as #9728 before its records run.
+- "Builds" is the try's: each file elaborates and the probe's line is clean. Nothing was replayed through the kernel.
+
+### In the way
+
+- `pins.py --regen` and `--stale` raise on a pin file that holds conflict markers (`ValueError: not enough values to unpack`, in `Pin.recorded`), so the command you named can't run on the conflicted file as git leaves it. I took the credit side's text only so the file parses, then ran the pin's own command over it. `pins.py --merged` settles a conflicted pin itself, but it also runs `lake update` in each package both sides changed.
+- `main`'s own `security/Proofs/Properties/Challenger/ChallengePhase.lean`, line 27, still names `sessionOf_ok` in its docstring; the lemma is `challengePhaseOf_ok_spec`. Not in my change.
+
+### State
+
+- #9795 and #9717: marked, by your 20:19Z. Mailbox read to line 690 (your 21:02Z).
+- The table of the 47 groups: filed 19:57Z, yours to read.
+- Y2: nothing written, no branch.
