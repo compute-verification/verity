@@ -31,8 +31,8 @@
                                     --on auto); --siblings: then fail on a name another module of its package declares too
     verity lean deployed [--rev REV] [--today YYYY-MM-DD]
                                     the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
-                                    each one's gap as the Lean check computes it, and each open or gap premise once by
-                                    name; --today defaults to today in America/Los_Angeles (deployed.py)
+                                    each one's gap as the running checkout's Lean check computes it, and each open or gap
+                                    premise once by name; --today defaults to today in America/Los_Angeles (deployed.py)
 """
 from __future__ import annotations
 

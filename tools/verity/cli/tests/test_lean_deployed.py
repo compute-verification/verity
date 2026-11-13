@@ -85,8 +85,8 @@ def test_a_premise_two_locks_list_is_counted_once_with_equal_fields_and_with_two
     assert out["locks"] == ["a/lean-audit.json", "b/lean-audit.json"]
     assert premise(out, "S.Same") == {
         "name": "S.Same", "kind": "open", "owner": "x", "issue": "X-1", "due": "2030-12-31",
-        "listed": [{"lock": "a/lean-audit.json", "owner": "x", "issue": "X-1", "due": "2030-12-31"},
-                   {"lock": "b/lean-audit.json", "owner": "x", "issue": "X-1", "due": "2030-12-31"}],
+        "listed": [{"lock": "a/lean-audit.json", "kind": "open", "owner": "x", "issue": "X-1", "due": "2030-12-31"},
+                   {"lock": "b/lean-audit.json", "kind": "open", "owner": "x", "issue": "X-1", "due": "2030-12-31"}],
         "overdue": False, "in_gap_of": ["A.G"]}
     split = premise(out, "S.Split")
     assert (split["owner"], split["issue"], split["due"]) == (None, "X-1", None)
@@ -124,7 +124,8 @@ def test_a_lock_without_owners_issues_or_dates_reads_as_nulls():
                                   "unfolded_hash": None, "gap": ["N.P"],
                                   "held_differs": {"only_held": [], "only_computed": ["N.P"]}}]
     assert out["premises"] == [{"name": "N.P", "kind": "open", "owner": None, "issue": None, "due": None,
-                                "listed": [{"lock": "pkg/lean-audit.json", "owner": None, "issue": None, "due": None}],
+                                "listed": [{"lock": "pkg/lean-audit.json", "kind": "open", "owner": None, "issue": None,
+                                            "due": None}],
                                 "overdue": False, "in_gap_of": ["N.G"]}]
     assert out["totals"]["by_owner"] == {}
 
@@ -137,14 +138,20 @@ def test_a_held_gap_that_differs_from_the_computed_one_is_reported_and_one_that_
         ("H.G", ["H.Now"], {"only_held": ["H.Gone"], "only_computed": ["H.Now"]}), ("H.Same", ["H.Now"], None)]
 
 
-def test_a_premise_takes_the_first_kind_of_the_sections_that_list_it():
-    """`open` before `assumption` before `domain`, across locks; a gap's premise no section lists has no kind."""
+def test_a_premise_takes_the_first_kind_of_the_sections_that_list_it_and_each_listing_keeps_its_own():
+    """`open` before `assumption` before `domain`, across locks, and each `listed` entry is its lock's section; a gap's
+    premise no section lists has no kind and no listing."""
     a = lock({"K.G": {"open": ["K.Both", "K.Unlisted"], "assumptions": ["K.AssumedToo"]}}, ["K.G"],
              open={"K.Both": entry()}, assumptions={"K.AssumedToo": entry(None, None, None)})
     b = {"domain": {"K.Both": {"owner": "@o", "why": "w"}, "K.AssumedToo": {"owner": "@o", "why": "w"}}}
     out = run({"a/lean-audit.json": a, "b/lean-audit.json": b})
     assert [(p["name"], p["kind"], len(p["listed"])) for p in out["premises"]] == [
         ("K.AssumedToo", "assumption", 2), ("K.Both", "open", 2), ("K.Unlisted", None, 0)]
+    assert premise(out, "K.Both")["listed"] == [
+        {"lock": "a/lean-audit.json", "kind": "open", "owner": "o", "issue": "X-1", "due": "2030-12-31"},
+        {"lock": "b/lean-audit.json", "kind": "domain", "owner": "o", "issue": None, "due": None}]
+    assert [e["kind"] for e in premise(out, "K.AssumedToo")["listed"]] == ["assumption", "domain"]
+    assert premise(out, "K.Unlisted")["listed"] == []
     assert premise(out, "K.Both")["issue"] is None, "the domain entry gives no issue, so the locks don't agree"
     assert out["totals"]["open"] == 1
 
@@ -213,11 +220,13 @@ def test_a_rev_that_is_no_commit_ends_it_with_exit_1(repo, monkeypatch, capsys):
     assert capsys.readouterr().err.startswith("verity lean deployed: no commit 'no-such-rev' here")
 
 
-def test_the_help_says_where_today_is_taken(capsys):
+def test_the_help_says_where_today_and_the_gap_are_taken(capsys):
     with pytest.raises(SystemExit) as e:
         verity_cli.main(["lean", "deployed", "--help"])
     assert e.value.code == 0
-    assert "default today's date in America/Los_Angeles" in " ".join(capsys.readouterr().out.split())
+    said = " ".join(capsys.readouterr().out.split())
+    assert "default today's date in America/Los_Angeles" in said
+    assert "The gap is computed by the running checkout's Lean check (tools/verity/lean/check.py), on REV's locks." in said
 
 
 def test_on_the_trees_own_locks_each_gap_is_the_lean_checks_and_each_gap_premise_has_a_row():

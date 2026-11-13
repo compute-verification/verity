@@ -16,8 +16,8 @@ The object, its keys in this order and every list sorted by name:
   `trust_gap` entry and the computed gap differ;
 - `premises`: each open premise of any lock and each premise of any gap, once by name: its `kind` (`KINDS`, by the section
   that lists it; where locks list it in different sections, the first of `KINDS` among them), its `owner`, `issue` and `due`
-  (the value every lock listing it gives, else null), `listed` (each lock that lists it, with that lock's `owner`, `issue`
-  and `due`), `overdue` (its earliest `due` written YYYY-MM-DD, `check.OPEN_DUE`, is before `today`) and `in_gap_of`
+  (the value every lock listing it gives, else null), `listed` (each lock that lists it, with the `kind`, `owner`, `issue`
+  and `due` of that lock's entry), `overdue` (its earliest `due` written YYYY-MM-DD, `check.OPEN_DUE`, is before `today`) and `in_gap_of`
   (the deployed guarantees whose gap holds it);
 - `totals`: `deployed`, `gap_zero`, `gap_premises` (distinct names over all gaps), `open` (premises of kind `open`),
   `overdue`, `owners_differ` (premises whose locks name different owners) and `by_owner` ({owner: its `deployed`,
@@ -104,7 +104,8 @@ def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -
         for section in KINDS:
             for name, entry in (lock.get(section) if isinstance(lock.get(section), dict) else {}).items():
                 entry = entry if isinstance(entry, dict) else {}
-                listings.setdefault(name, []).append((section, {"lock": path, "owner": _owner(entry.get("owner")),
+                listings.setdefault(name, []).append((section, {"lock": path, "kind": KINDS[section],
+                                                                "owner": _owner(entry.get("owner")),
                                                                 "issue": _str(entry.get("issue")), "due": _str(entry.get("due"))}))
     guarantees.sort(key=lambda r: (r["name"], r["lock"]))
     holders: dict[str, set[str]] = {}
@@ -114,7 +115,7 @@ def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -
     premises = []
     for name in sorted({n for n, ls in listings.items() if any(s == "open" for s, _ in ls)} | set(holders)):
         ls = listings.get(name, [])
-        listed = sorted((e for _, e in ls), key=lambda e: e["lock"])
+        listed = sorted((e for _, e in ls), key=lambda e: (e["lock"], list(KINDS.values()).index(e["kind"])))
         agreed = {f: vs.pop() if len(vs := {e[f] for e in listed}) == 1 else None for f in ("owner", "issue", "due")}
         dues = [e["due"] for e in listed if e["due"] and check.OPEN_DUE.fullmatch(e["due"])]
         premises.append({"name": name, "kind": next((KINDS[s] for s in KINDS if any(s == t for t, _ in ls)), None), **agreed,
@@ -176,7 +177,9 @@ def main(args: list[str], repo: Path | None = None) -> int:
                                  "object: each deployed guarantee's gap as the Lean check computes it (`trust_gaps`) beside "
                                  "the one its lock holds, and each open or gap premise once by name, with its owners, issue "
                                  "and due date in every lock that lists it, read from the locks (lean-audit.json) at REV by "
-                                 "git alone. It reports what the locks record, no verdict.")
+                                 "git alone. The gap is computed by the running checkout's Lean check "
+                                 "(tools/verity/lean/check.py), on REV's locks. It reports what the locks record, no "
+                                 "verdict.")
     ap.add_argument("--rev", default="HEAD", help="the commit whose locks it reads (default HEAD)")
     ap.add_argument("--today", type=datetime.date.fromisoformat, metavar="YYYY-MM-DD",
                     help=f"the day a due date is overdue after (default today's date in {ZONE})")
