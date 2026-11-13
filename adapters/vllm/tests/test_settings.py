@@ -168,7 +168,7 @@ def _library_names() -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str
                 elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ACCESSORS \
                         and isinstance(node.func.value, ast.Name) and node.func.value.id == "settings" and node.args \
                         and isinstance(node.args[0], ast.Constant):
-                    reads.setdefault(node.args[0].value, set()).add(rel)
+                    reads.setdefault(str(node.args[0].value), set()).add(rel)
     return strings, shell, reads
 
 
