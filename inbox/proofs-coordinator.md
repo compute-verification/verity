@@ -136687,3 +136687,63 @@ Clock: `date -u` read 10:52Z when I wrote this. Mailbox: your 10:31Z by the hook
 **Runs.** `r20261113-102309-0622` done rc 0 (item 2). `r20261113-103605-7caa` done rc 0 (item 1). None out.
 
 **To post.** Nothing.
+
+## REDRAW, Fri 13 Nov 10:54Z: the one-call witness compiles, at the first build (10:48Z): `credited … = .ok [0]` under a derived key. It took the no-call lemma's name and place; its records run goes when 87d9 ends
+
+Mailbox read to line 497, your 10:31Z and 10:37Z messages [read]. The pen is mine (made 10:21Z); the launcher's reflog holds the machine's own clone and checkout and nothing else [run].
+
+**Compiled.** `security/Proofs/Pouw/Credit/Withheld.lean` on `cursor/proofs-honest-credit-9d1e`:
+
+- at `edff3835abe869bf72e8e77f32394d6f1c72ec42`, run `r20261113-104705-7cb9` (vy-nebius-cpu-11, pool proofs, 16 GB asked, no wait): `Built Proofs.Pouw.Credit.Withheld`, `lean-build: security/Proofs: exit 0`, no line of the log names the file, so no warning on it [run]. This head holds both lemmas, the no-call one and the one-call one.
+- at `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`, run `r20261113-105031-2c2b` (same machine, 16 GB, no wait): exit 0, no warning on the file [run]. This head holds the one-call lemma only, under the name the lock lists.
+
+The statement, as it stands at the head [read, the file's line 482]:
+
+```lean
+theorem drawWithheld_honest :
+    ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds draw : Json),
+      Lms.keygen Lms.deployed seed = .ok k ∧
+        PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
+          calls served commit rounds draw = .ok [0]
+```
+
+**What it is made of**, against the sizing of 10:34Z [read, the file]:
+
+- `root_one`: `creditedRoot` at one row and one round, for any row with the five facts it reads (an object, plain, index 0, credit bit set, `tables.z` a digest) and any round with its three (an object, its root a digest, its opened challenge reads). The script of the scratch model went through unchanged.
+- `CallRow`: the case writer's fourteen fields (`pouw_credit_cases._row`: base, bound, credit, index, k, layer, leaves, module, n, rows, served, step, tables, units), index 0, credit true; `row_plain`, `row_index`, `row_bit`, `row_z`.
+- `roundOf`: a round's root and its opened challenge with no path; `round_root`, `round_coin`.
+- `rootOne`, `credited_one`, and the theorem at a concrete call (one row of 64 by 4096, one unit, module `q_proj`, tables' digests zero bytes) and a round of zero bytes.
+- Thirteen lemmas and seven definitions, not eleven lemmas [read, counted in the file]; one build, not two to four [run]. The file is 510 lines, where I guessed about 590: the no-call parts went [run].
+- `credited_play` now takes the sample root `creditedRoot` computed as a hypothesis, so the session's half is written once [read].
+
+**It took the no-call lemma's place** [run, `ae6df4b23cfc`]. The one-call statement implies the no-call one (take `got = [0]`) [derived], so I gave it the name `drawWithheld_honest` and deleted the no-call lemma with `root_ok`, `rootOf` and `rootOf_size`. The lock's hand-kept lines do not change: the witness's name, the stub under `@proofs`, the cap 181 [read]. The words "a window of no call, crediting nothing" and "accepts, credits nothing shown" are gone from the docstring with the lemma they described; it now says "on a window of one call" and "`credited` under that key accepts the window and returns call 0" [read]. **Say "keep" and I put the no-call lemma back beside it** from `edff3835abe8`, where both build.
+
+**What it does not show**, unchanged from 10:34Z and written in the file's header and the theorem's docstring [read]:
+
+- `credited` is one step of `window`. It reads the round's opened challenge and checks it against nothing (`roundsCheck` does), and it returns the credit bits whatever the proofs' outcome. The lemma shows this step returns call 0, not that `window` credits it.
+- The row is the case writer's, not the adapter's writer's: I read `pouw_credit_cases._row` only [read].
+- The tables' digests and the round's challenge are zero bytes: `credited` only parses them.
+
+**Not run yet:** `check.py` on a witness that ends `= .ok [0]`. Its records run goes to vy-nebius-2 when `r20261113-102457-87d9` ends (running, sent 10:24Z; about 11:10Z [guess]); one try at a time there. I do not copy `87d9`'s records into the branch: its record of `drawWithheld_honest` is of the statement that is gone. I report its verdict as what shows `check.py` takes the lemma's form, and the new run regenerates from the lock as it stands (the list at 182 entries until the run takes `drawWithheld` off it) [derived].
+
+**The day.** The witness is compiled Fri 13 Nov 10:48Z [run]. Listed with regenerated records: Fri 13 Nov about 12:00Z if the next records run passes [guess].
+
+**Session branch** (`cursor/proofs-honest-session-7c1e`, head `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`):
+
+- `r20261113-103238-da9d` (vy-nebius-cpu-3, 16 GB, no wait), PoUS's suite at the head: `passed  verity/protocols/pous/verifier 555 passed, 15 skipped in 211 s`, exit 0 [run].
+- `r20261113-102627-2b97` (vy-nebius-cpu-7, 32 GB), the nine suites at `d75b179659ed`: still running at 10:52Z; its one verdict so far is PoUS's, failed on the pin, which `da9d` answers [run].
+- The pull request's body is written, with a section saying the pin moved for the lakefile's new roots only. I open it unmarked when `2b97` ends and write its ready line here, as you say. No records run of PoUS's package [relayed, your 10:37Z].
+- I take ci's line on the retired word in `verity/protocols/spot/verifier/README.md` in that pull request's follow-up [relayed, your 10:31Z].
+
+**A correction to my 09:22Z entry.** I wrote that the test of the two parsers sweeps "seven kinds of mutation". It sweeps two honest kinds and six kinds of mutation, 40 records [relayed, my note of 09:43Z], and draws 150 more [read, the test's `examples=150`]. The pull request's body draft says six.
+
+**Events not mine:** none since 10:27Z.
+
+**Heads, all pushed, nothing unpushed** [run]:
+
+- `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d`, the pull request of (a), unmarked.
+- `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`.
+- `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`.
+- `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
+
+**I wait on:** `r20261113-102457-87d9` (about 11:10Z [guess]), then the one-call records run (about 42 minutes after it starts [guess]); and `r20261113-102627-2b97` for the session pull request.
