@@ -18,7 +18,11 @@ the addresses are connected (`SpotFlock.Honest.Premises`). Where each accepted p
   (`SpotFlock.Honest.AcceptsPlay`), where the form's accept is a play SPOT[Flock] accepts on the coins the check read
   (`PlayAccepts`) and some coins are ones the check read (`SeqCoinsRead`);
 * `honest_of_formAccepts`: so the two-stage guarantees are not vacuous (`SpotFlock.Honest.HonestExists`) where the
-  form accepts one play.
+  form accepts one play;
+* `ks_of_formAccepts`: the knowledge soundness the session's leg takes as a hypothesis (`Live₂.KS`), from the
+  premises (`Live₂.ks_of_connected`);
+* `scope_of_accept`: the statement of a play the session's verifier accepts is in the scope the leg's error is
+  bounded at (`Live₂.L`'s).
 
 ## What this does not show
 
@@ -85,5 +89,22 @@ theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} {S : SessionReading}
     SpotFlock.Honest.HonestExists := by
   have hP := acceptsPlay_of_playAccepts hplay hA hi hit hx hm hc
   exact ⟨A.h, premises_of_formAccepts hof hA hi hit hWf hwc, SpotFlock.Honest.inScope_of_play hP, hP⟩
+
+/-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the leg takes): the
+session's held copies meet the two premises `Flock.Guarantees.SpotKSTwo` takes (`premises_of_formAccepts`), which give
+it at the connected program (`Live₂.ks_of_connected`). -/
+theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
+    (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)
+    (hwc : SpotFlock.AddressRow.wiresChecked A.h = true) : A.KS := by
+  obtain ⟨hB, hAd⟩ := premises_of_formAccepts hof hA hi hit hWf hwc
+  exact A.ks_of_connected hB hAd
+
+/-- **The statement of a play the session's verifier accepts is in the session's scope** (`Live₂.L`'s, which the
+session's error is bounded at: `Live₂.prBad_le`), at any hash. -/
+theorem scope_of_accept {A : Live₂} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((SpotFlock.V A.h).k x) → FlockDeploy.Coin}
+    (hacc : (Claims.run H P (SpotFlock.V A.h) x ω r).out = .acc) : A.L.Scope x :=
+  SpotFlock.Honest.scope_of_play H hacc
 
 end Verity.SampledTwo
