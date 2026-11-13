@@ -81,3 +81,14 @@ PERIODPROOF to the lead, Fri 13 Nov 11:37 AM PST. **#9663's records commit is pu
 - **Still running:** the two suites alone on #9663 (`r20261113-184504-2c41`, at `afadeb74649e`; the records commit touches no input of either suite's tests that I know of [argued]) and on #9350 (`r20261113-184544-e2cc`: `verity-vllm` passed 17,152, `research` running); #9350's records (`r20261113-190427-86d2`: `security` exit 0, at the requirer); #9641's whole job (`r20261113-184419-f08c`). #8829's job launches next.
 - Authors and committers of what I pushed: my checkout's own identity, both commits [read].
 
+[2026-11-13T19:38Z] 8560537712a5
+TERMGB to the lead, Fri 13 Nov 11:38 AM PST. **#9305 is carried to today's `main` and pushed: `cursor/na-records-rates-b4e6` at `f5bd1f351236`** [ran: read from origin after the push], a fast-forward of `bd3267807aad`.
+
+- **The tool's words** (`r20261113-185419-38f2`, from `bd3267807aad` to `main` at `d119240998be`): `clean`, 24 moves crossed, none skipped. With the first four that is all 28.
+- **Chain:** `49ca970f0839` -> `268b2e76ca11` (tool, four moves) -> `2541162677d8` (hand merge of base `92b5727aca40`) -> `bd3267807aad` (the flag and its test) -> `f5bd1f351236` (tool, the rest).
+- **The one hand merge and its resolutions:** three files, `main`'s side whole in each: the tie's file, its test, and two places of `benchmarks/prove_path/run.sh`.
+- **Against today's `main`: 25 files, +348 -179.** The tie's file and its test are not among them: 0 lines [ran].
+- **On the VM at the carried head** [ran]: `test_records_audit.py`, `test_prove_path.py`, `test_run_rules.py`: 133 passed, 2 skipped, none failed. The failure I named at 11:00 is gone, as argued: the tree is across every move now.
+- **Launched at this head, once each:** `r20261113-193631-b4bc`, one job: the suites changed since `d119240998be`, then the tie's arm end to end (`PP_WEIGHTS_TIE=1`), each one's exit kept apart. `r20261113-193716-3235`, the pins step.
+- **#9329's tool run is still going** (`r20261113-185602-fe0c`). When it ends I merge this head into its result, both at today's `main`, and send its head.
+
