@@ -27,6 +27,8 @@ from verity_vllm.query.units import ValueRef
 
 R = ValueRef
 N = 4
+#: the implementation's name of the Program module `W`: the wrapper holds the served model under one more `model`
+IMPL = "model"
 EMBED_W, A_W, B_W, TIED_W = f"{W}.embed.weight", f"{W}.a.weight", f"{W}.b.weight", f"{W}.tied.weight"
 IDS = InputView(-2, "ids", "Value<32>", (Port("ids", 0, 1, 1, 32),))
 RES: dict[str, Any] = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}
@@ -51,8 +53,15 @@ def _two_bodies(*read: str) -> ProgramView:
                      _call(2, "Gemm_v1", f"{W}.b/linear[0]", [R(1, "out"), *(R(-1, f) for f in read)])))
 
 
+def _corr(P: ProgramView) -> Correspondence:
+    """`P`'s correspondence where the implementation's paths are the Program's less the wrapper's prefix."""
+    corr = Correspondence(P, implementation_paths=(f"{IMPL}.embed",))
+    assert corr.prefix == "model." and corr.implementation_path(f"{W}.embed") == f"{IMPL}.embed"
+    return corr
+
+
 def _manifest(P: ProgramView, res: dict[str, Any] = RES, **kw: Any) -> dict[str, Any]:
-    return request_manifest(P, Correspondence(P), res, request_id="r0", **kw).manifest
+    return request_manifest(P, _corr(P), res, request_id="r0", **kw).manifest
 
 
 def _rows(m: dict[str, Any], family: str) -> list[dict[str, Any]]:
@@ -73,7 +82,8 @@ def test_a_population_refuses_a_query_it_does_not_know_and_a_program_with_no_sam
 def test_bodies_sharing_parameters_that_not_one_of_them_owns_are_not_aliased_and_the_manifest_is_incomplete(read, owners):
     owned = _two_bodies(A_W)
     assert shared_instances(owned, Correspondence(owned), {R(-1, A_W): A_W}) == ({f"{W}.a": (f"{W}.a", 0), f"{W}.b": (f"{W}.a", 1)}, [])
-    assert _manifest(owned)["complete"]
+    m = _manifest(owned)
+    assert (m["complete"], m["unmodelled"], m["op_path_aliases"]) == (True, {}, {f"{IMPL}.b": [f"{IMPL}.a", 1]})
 
     P = _two_bodies(*read)
     fault = f"shared parameters {sorted(read)} read by 2 identical bodies with {owners} registered owner(s): not aliased"
@@ -86,15 +96,15 @@ def test_a_value_and_a_weight_of_no_single_width_are_spelt_mixed():
     out = CallView(1, "Gemm_v1{N=4}", "Gemm_v1", "call", f"{W}.a/linear[0]", (Port("out", 0, N, N, None),), (R(0, "out"), R(-1, A_W)))
     m = _manifest(_program(_weights(EMBED_W, A_W, width=None), (out,)))
     assert m["complete"]
-    assert [(x["op_path"], x["dtype"]) for x in _rows(m, "weights")] == [(A_W, "mixed"), (EMBED_W, "mixed")]
-    assert [(x["op_path"], x["dtype"]) for x in _rows(m, "instance_outputs")] == [(f"{W}.a", "mixed"), (f"{W}.embed", "bf16")]
+    assert [(x["op_path"], x["dtype"]) for x in _rows(m, "weights")] == [(f"{IMPL}.a.weight", "mixed"), (f"{IMPL}.embed.weight", "mixed")]
+    assert [(x["op_path"], x["dtype"]) for x in _rows(m, "instance_outputs")] == [(f"{IMPL}.a", "mixed"), (f"{IMPL}.embed", "bf16")]
 
 
 def test_a_required_member_of_no_width_is_unmodelled():
     P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W)], n=0),))
     m = _manifest(P)
-    assert (m["complete"], m["unmodelled"]) == (False, {f"Gemm_v1 under {W}.a (out: width 0)": 1})
-    assert [x["op_path"] for x in _rows(m, "instance_outputs")] == [f"{W}.embed"]
+    assert (m["complete"], m["unmodelled"]) == (False, {f"Gemm_v1 under {IMPL}.a (out: width 0)": 1})
+    assert [x["op_path"] for x in _rows(m, "instance_outputs")] == [f"{IMPL}.embed"]
 
 
 def test_one_member_that_calls_of_two_definitions_produce_is_unmodelled_and_keeps_the_first():
@@ -102,10 +112,10 @@ def test_one_member_that_calls_of_two_definitions_produce_is_unmodelled_and_keep
         return (_call(1, "Gemm_v1", f"{W}.a/node[0]", [R(0, "out"), R(-1, A_W)]), _call(2, second, f"{W}.a/node[1]", [R(1, "out")]))
 
     one = _manifest(_program(_weights(EMBED_W, A_W), middle("Gemm_v1")))
-    assert one["complete"] and [(x["spec"], x["rows"]) for x in _rows(one, "instance_outputs") if x["op_path"] == f"{W}.a"] == [("Gemm_v1", 2)]
+    assert one["complete"] and [(x["spec"], x["rows"]) for x in _rows(one, "instance_outputs") if x["op_path"] == f"{IMPL}.a"] == [("Gemm_v1", 2)]
     m = _manifest(_program(_weights(EMBED_W, A_W), middle("Mul_v1")))
-    assert (m["complete"], m["unmodelled"]) == (False, {f"Mul_v1 under {W}.a (out: two producers Gemm_v1 4 / Mul_v1 4)": 1})
-    assert [(x["spec"], x["rows"], x["position"]) for x in _rows(m, "instance_outputs") if x["op_path"] == f"{W}.a"] == [("Gemm_v1", 1, [1, 0])]
+    assert (m["complete"], m["unmodelled"]) == (False, {f"Mul_v1 under {IMPL}.a (out: two producers Gemm_v1 4 / Mul_v1 4)": 1})
+    assert [(x["spec"], x["rows"], x["position"]) for x in _rows(m, "instance_outputs") if x["op_path"] == f"{IMPL}.a"] == [("Gemm_v1", 1, [1, 0])]
 
 
 def test_a_warm_programs_cached_rows_are_no_token_ids():
@@ -116,9 +126,9 @@ def test_a_warm_programs_cached_rows_are_no_token_ids():
         return [x["op_path"] for x in _rows(_manifest(P, res), "input_token_ids")]
 
     assert cached_prefix_inputs(P, RES) == cached_prefix_inputs(P, {**RES, "prefix": None}) == frozenset()
-    assert token_ids(RES) == [f"{W}.a", f"{W}.embed"], "a Program whose derive names no prefix reads the input as the prompt's"
+    assert token_ids(RES) == [f"{IMPL}.a", f"{IMPL}.embed"], "a Program whose derive names no prefix reads the input as the prompt's"
     assert cached_prefix_inputs(P, {**RES, "prefix": {"input": 2}}) == {R(-3, "prefix")}
-    assert token_ids({**RES, "prefix": {"input": 2}}) == [f"{W}.embed"]
+    assert token_ids({**RES, "prefix": {"input": 2}}) == [f"{IMPL}.embed"]
     assert cached_prefix_inputs(P, {**RES, "prefix": {"input": 1}}) == {R(-2, "ids")}, "the wrapper's input index, not a name"
 
 
@@ -144,8 +154,8 @@ def test_one_value_is_the_rank_local_partial_of_one_collective_only():
         return _call(cid, "AllReduceMultimem_v1", f"{W}.embed/{node}/all_reduce", [R(0, "out"), R(-2 - cid, f"peers_{cid - 1}")])
 
     P = _rank_program((reduce(1, "all_reduce"), reduce(2, "all_reduce_1")), 2)
-    pop = Population(P, Correspondence(P), tp=TP)
-    fault = f"EmbeddingShard_v1 under {W}.embed: one Value is the rank-local partial of two collectives"
+    pop = Population(P, _corr(P), tp=TP)
+    fault = f"EmbeddingShard_v1 under {IMPL}.embed: one Value is the rank-local partial of two collectives"
     assert pop.tp_faults == [fault]
     assert (pop.collectives, pop.partial_of, pop.carries) == ({1: "all_reduce", 2: "all_reduce"}, {R(0, "out"): 1}, set())
     assert pop.operand == {1: R(0, "out"), 2: R(0, "out")}
@@ -154,7 +164,7 @@ def test_one_value_is_the_rank_local_partial_of_one_collective_only():
     assert [x["output_member"] for x in _rows(m, "tp_rank_partials")] == ["part_rank0"]
 
     alone = _rank_program((reduce(1, "all_reduce"),), 1)
-    assert Population(alone, Correspondence(alone), tp=TP).tp_faults == [] and _rank_manifest(alone)["complete"]
+    assert Population(alone, _corr(alone), tp=TP).tp_faults == [] and _rank_manifest(alone)["complete"]
 
 
 @pytest.mark.parametrize(("family", "good", "bad", "shown"), [
@@ -169,12 +179,12 @@ def test_a_collective_that_reads_another_bodys_value_has_outputs_its_partial_can
                                        (R(0, "out"), R(-3, "peers_0"))),), 1)
 
     P = program(good)
-    carried = Population(P, Correspondence(P), tp=TP)
+    carried = Population(P, _corr(P), tp=TP)
     assert (carried.tp_faults, carried.carries, carried.operand) == ([], {1}, {1: R(0, "out")})
 
     P = program(bad)
-    pop = Population(P, Correspondence(P), tp=TP)
-    fault = (f"{family} under {W}.site: an operand from another body and output ports {shown} (all_reduce: outputs of one width; "
+    pop = Population(P, _corr(P), tp=TP)
+    fault = (f"{family} under {IMPL}.site: an operand from another body and output ports {shown} (all_reduce: outputs of one width; "
              f"all_gather: one output, a multiple of world {WORLD}, expected)")
     assert (pop.tp_faults, pop.carries, pop.operand, pop.site) == ([fault], set(), {1: R(0, "out")}, {})
     m = _rank_manifest(P)
