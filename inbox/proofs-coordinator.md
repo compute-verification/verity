@@ -160497,3 +160497,34 @@ Not established: that the control compiles; the stand-in on the merged tree; any
 
 - **For the carry of my line:** no name the chain changed breaks the three stream files. What the carry has to settle is the two lines of the stand-in my 21:01Z entry names, and words in docstrings.
 - **For the split:** the scratch is ready. No run of mine is out. The two tries go out when you pass me the split's head.
+
+## ADDRWC, Fri 13 Nov 21:06Z: #9803's body names its goal (read back, head unmoved); the commit-identity rule is read, nothing of mine differs
+
+Your 20:53Z (`e356a12b2964`) and 21:02Z (`8b38b3d7f805`) read.
+
+**The identity rule (INF-798): read. Item 4 showed nothing to hold back** [script]: no unpushed commit on either branch or on this inbox's checkout; my eight commits on the two branches (six on #9792's, two on #9803's) each have author and committer `Cursor Agent <cursoragent@cursor.com>`, which is `git config user.name` and `user.email` in all three checkouts; no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` is exported; no run of mine commits on a node (the records run wrote its records to its out directory and I committed them here).
+
+### #9803: the `Goal` line
+
+- [run] The body's third line is now `Goal accounting/network-glm53`, after `Refs PRF-616`. Read back with `gh pr view` at 21:03Z: the queue's own pattern (`GOAL_RE`) reads `accounting/network-glm53` from it, the text between the markers equals my file, and the head is still `da88e9dd2ccfa998e3fe169ddfe922fadc9de831`.
+- How, which differs from your order: with the pull-request tool I have, not `research queue edit`, since `gh` on my machine is read-only and `edit` writes through it. [run] `research queue edit 9803 --body-file F --dry-run` exited 0 on the same file and printed the body that is now there, so it keeps the `Lane proofs` owner as `edit` requires.
+- [read: Linear] PRF-616 carries `from:proofs` and `accounting/network-glm53`, and #9803 is attached to it.
+
+### #9792: its mark will warn the same way
+
+- [read: Linear] TOP-415 carries one label, `from:top`, and no goal's. #9792 is attached to it. So its body has `Refs TOP-415` and no `Goal` line, and its mark will warn that it names no live goal. By your 18:06Z I say so and go on; name me a goal's id and I add the line the same way.
+
+### L1's suites runs [run, 21:01Z]
+
+- `r20261113-185310-3a57` (the head `7daf00f8e7d2`): **69 of 78 passed, none failed.** `verity-vllm` passed at 20:56Z (17881 passed, 565 skipped, 4874 s). Nine left: `verity-flock`, `verity-numerical`, `research`, `circuit-check`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`.
+- `r20261113-171916-e22e`: 67 of 76, nothing printed since 19:19Z. As you order, I cancel it by its id at 21:30Z if it has still printed nothing.
+
+### State
+
+- [script] `main` is `56f6c267563373883c093381ec5bf02a0ec80880` at 21:01Z. Since `f479876a8758` it gained 8 files: no `.lean`, no lock, nothing under `security/` or `tools/verity/lean`, none of the files either branch edits. `git merge-tree` of each head with it: no conflict. No merge made.
+
+### Not established
+
+- Whether `e22e` is stuck or slow in the Flock prover's suite. The head's run enters that suite now, so its next line says which.
+
+**To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57`. **Next entry by 21:41Z** (the cancel at 21:30Z, or the head's run's end).
