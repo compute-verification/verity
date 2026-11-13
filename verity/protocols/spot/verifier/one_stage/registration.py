@@ -19,7 +19,8 @@
     object must be over the verifier's program), and for a verifier that reads the registration log's declarations
     (Declared day), the program is the one circuit the log declares for the window's day;
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
-    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain; a port the layout wires to
+    another port's tree (`"wired"`) has that port's root (`R3-wired`);
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same

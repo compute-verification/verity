@@ -13,7 +13,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
-  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
+  ports, roots, leaves and domains, a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`),
+  anchors (`R5`), previous record, window, the
   window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
   rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
