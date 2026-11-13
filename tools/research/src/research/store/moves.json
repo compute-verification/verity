@@ -2296,6 +2296,17 @@
       "paths": {
         "verity/hardware/world/": "verity/protocols/interface/world/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/flock/pod/": "verity/protocols/flock/prover/pod/",
+        "verity/protocols/flock/tool.py": "verity/protocols/flock/prover/tool.py",
+        "verity/protocols/flock/agreement/": "verity/protocols/flock/prover/agreement/",
+        "verity/protocols/spot/candidates.py": "verity/protocols/spot/prover/candidates.py",
+        "verity/protocols/spot/costfit.py": "verity/protocols/spot/prover/costfit.py",
+        "verity/protocols/spot/optimize.py": "verity/protocols/spot/prover/optimize.py",
+        "verity/protocols/spot/plancheck.py": "verity/protocols/spot/prover/plancheck.py"
+      }
     }
   ]
 }

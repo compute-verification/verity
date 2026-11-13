@@ -1,5 +1,5 @@
 """The agreement corpus's coverage: every form the Lean verifier distinguishes is exercised by some entry of
-`../agreement/vectors.json` (which `../agreement/ci.py` runs through `agree.py` on both verifiers), or is named in `UNCOVERED`,
+`agreement/vectors.json` (which `agreement/ci.py` runs through `agree.py` on both verifiers), or is named in `UNCOVERED`,
 which only shrinks. The forms, each read from where the verifier or the agreement check defines it:
 
 - each statement version (`Flock.Tags.all` and `Tags.templated`), covered by a replayable or live set whose
@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 
 #: forms no entry of vectors.json exercises yet; an entry leaves this list in the change that adds its vector
 UNCOVERED = frozenset({
@@ -131,7 +131,7 @@ def test_every_form_of_the_verifier_has_a_vector():
     missing = sorted(have - cov - UNCOVERED)
     assert not missing, (
         "vectors.json exercises no vector of these forms the Lean verifier distinguishes: add a replayable or live set "
-        "(or an expectation) that exercises each to verity/protocols/flock/agreement/vectors.json, or, only if no pinned build "
+        "(or an expectation) that exercises each to verity/protocols/flock/prover/agreement/vectors.json, or, only if no pinned build "
         "can record one, name it in UNCOVERED:\n" + "\n".join(missing))
 
 

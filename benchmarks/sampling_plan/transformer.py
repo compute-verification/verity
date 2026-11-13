@@ -53,10 +53,10 @@ from inputs import CARDS, I, cap, observations  # noqa: E402
 
 from verity.protocols import reporting
 from verity.protocols.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.protocols.spot.costfit import Fitted, fit  # noqa: E402
+from verity.protocols.spot.prover.candidates import Shape, cuts, shape_of  # noqa: E402
+from verity.protocols.spot.prover.costfit import Fitted, fit  # noqa: E402
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.protocols.spot.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
+from verity.protocols.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.circuits.codec import descriptor_id  # noqa: E402
