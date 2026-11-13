@@ -14,7 +14,7 @@ committed egress record besides (`uncertifiedEgress_iff`): `noGridMeans`, `noGri
 @[expose] public section
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params LinkWindow manifestSet)
+open NetworkCheck.Check (Params TransferBlocks manifestSet)
 
 namespace Properties.NetworkRecords
 
@@ -67,10 +67,10 @@ theorem egress_noGrid (p : Params) (c : Records.Commitment) (e : Records.ByteEvi
       · exact Or.inl rfl
   | r :: _ :: _ => cases r <;> exact Or.inl rfl
 
-theorem gridOnly_refl (v : LinkWindow) : GridOnly v v := ⟨rfl, rfl, rfl, Or.inl rfl⟩
+theorem gridOnly_refl (v : TransferBlocks) : GridOnly v v := ⟨rfl, rfl, rfl, Or.inl rfl⟩
 
 /-- A link-window `GridOnly` accepts every link-window it is of that is accepted. -/
-theorem gridOnly_accepts {v v' : LinkWindow} (h : GridOnly v v') (hv : v.violation = none) : v'.violation = none := by
+theorem gridOnly_accepts {v v' : TransferBlocks} (h : GridOnly v v') (hv : v.violation = none) : v'.violation = none := by
   rcases h.2.2.2 with h | ⟨-, h, -⟩
   · rw [h, hv]
   · rw [hv] at h; cases h
