@@ -157087,3 +157087,69 @@ A timer of 25 minutes is set while these are out.
 
 - No records run and no suite at this head; they are the join's after the merge.
 - The seven probes still out.
+
+## FRAME, Fri 13 Nov 19:05Z: STATUS TABLE 7: #9728 AND REDRAW'S CREDIT BRANCH ARE CARRIED AND PUBLISHED (`ca0ae1a5b314` and `1526d32a2426`; each `clean-skipped`; #9728's own two files name two declarations the chain renamed, so it will not build until REDRAW mends them); MESSAGES's word line is launched as job 12, merged with the join's old tip first, because as it stands it conflicts with the first move's base
+
+Every carry names `4ae17f7eafd7`. Last message read: yours of 19:00Z. #9555 is marked, so I write no ready line for
+it; the eight suites' verdict comes in one entry when `71a9` ends.
+
+### 1. Job 11 [run: `r20261113-181801-da82`, vy-nebius-cpu-12, ended exit 0]
+
+| Line | Head carried | Tool's words | Carried head | Published on | Old-names grep |
+|---|---|---|---|---|---|
+| #9728 | `36d6e37cbc7b` | `clean-skipped`: 24 moves crossed, 4 skipped, last step pins | `ca0ae1a5b314f93483258335d9e08909b8c25ff7` | `cursor/proofs-carried-9728-4ae1` | 0 of 4,347 added lines |
+| REDRAW's credit branch | `1370c60b7e75` | `clean-skipped`: the same | `1526d32a242649f41de617a840ee596b042eaa39` | `cursor/proofs-carried-honest-credit-4ae1` | 0 of 4,912 |
+
+- The four skipped moves are the four #9555's carry skipped (`config_map.toml`, `settings_map.toml`,
+  `bench_instances_map.toml`, `flat_files_map.toml`); `--confirm` was off. The grep covers their maps too: 0 lines.
+- Each holds its own head and `4ae17f7eafd7` [git]. I added no commit. Each merges with today's `main`
+  `ff95b899ecf8` with no conflict [local].
+- **The late-carry test** [local]:
+  - #9728, against a `main` that holds carried #9555 and #9717: **passes**. No conflict, and the merged tree is its
+    own carried tree.
+  - The credit branch, against a `main` that holds carried #9555, #9717 and #9728: **fails in the pin file alone**,
+    `tools/pous_grader/TRUSTED.sha256`. Published on the rule you set for GATHER. Its pin file differs from carried
+    #9728's, so whoever merges the two regenerates it (`pins.py --regen`) and never picks a side.
+  - The carried #9717 in that test is `ec2749859711`, before REDRAW's commit of the two regenerated locks.
+- **The words check: #9728 will not build as carried** [local]. Over `4ae17f7eafd7` it adds 3,278 Lean lines, 27 hits
+  of 5 words, two unresolved, and both are in #9728's own lines over the carried #9717:
+
+  | Name the line still uses | Now | Where |
+  |---|---|---|
+  | `sessionNamed` | `challengePhaseNamed` | `security/Proofs/Properties/Challenger/Steps.lean`, 7 lines |
+  | `trustedSessionOf` | `trustedChallengePhaseOf` | `Steps.lean`, 7 lines; `security/Proofs/Properties/Challenger/Withheld.lean`, 2 lines |
+
+  Some of those lines are docstrings and some are statements and `unfold`s. It is ASSEMBLY's finding again: the
+  chain renamed these only in a list of files, and #9728's two new files are in no list. REDRAW's to mend; I mended
+  nothing.
+- The credit branch: 3,802 Lean lines over `4ae17f7eafd7`, the same 27 hits and the same two names, all #9728's. Its
+  own 581 lines over the carried #9728: 0 hits. It does not hold the carried #9728 as an ancestor; over it, 9 files,
+  +626 −73 [git].
+
+### 2. Job 12, MESSAGES's word line: `r20261113-190254-b325`, vy-nebius-cpu-12, launched 19:03Z, waits for a slot
+
+- **What it carries is `92abd1afff9e560b655563eab78a309d98c8b680`: the word line `c4ddda089f44` merged with the
+  join's old tip `6bae773eb345`**, made by me with no conflict and nothing settled, as for the four (your choice 2 of
+  17:23Z).
+- Why not the head as it stands [local, `git merge-tree`]: `c4ddda089f44` holds MESSAGES's `ec033a945fd7` but not the
+  join's tip, and the first move's base `92b5727aca40` conflicts with it in
+  `adapters/vllm/verity_vllm/engine/sampler_capture.py` and `benchmarks/one_stage/a5.py`. Those are the two files
+  MESSAGES's `ec033a945fd7` stopped at in my 17:17Z table. The tool would stop there.
+- Over `ec033a945fd7` the word line changes four files, +870 −2: `SampledTwo/LogStrings.lean`,
+  `SampledTwo/RoundOne.lean`, `security/Proofs/lakefile.toml`, `security/Proofs/lean-audit.json` [git].
+- **If you want the head carried as it stands instead, say so and I cancel `b325`.** Otherwise its row comes with the
+  test against a `main` that holds the carried join, the mended join after it, the words check, and the branch
+  `cursor/proofs-carried-messages-word-4ae1`.
+
+### 3. Out [run, 19:04Z]
+
+| Run | What | State |
+|---|---|---|
+| `r20261113-185123-71a9`, vy-nebius-cpu-3 | the eight suites at #9555's head | waits for a slot since 18:51Z |
+| `r20261113-164151-1e2c`, vy-nebius-cpu-5 | #9555's records | still running; its slot ends it at 19:12Z |
+| `r20261113-190254-b325`, vy-nebius-cpu-12 | job 12 | waits for a slot |
+
+One figure of my 18:52Z entry was wrong: the eight suites took 11 to 19 minutes together in the other three runs,
+not 14 to 19.
+
+Next, as ordered: the sizing of way (b) on #9713, in one entry, before any line of it is written.
