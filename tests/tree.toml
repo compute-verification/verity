@@ -451,54 +451,6 @@ to = "benchmarks/rho/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
-[[not_yet]]
-path = "verity/protocols/flock/pod/"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/flock/sigma/"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/flock/agreement/"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/flock/tool.py"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/spot/candidates.py"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/spot/costfit.py"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/spot/optimize.py"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/spot/plancheck.py"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
-
 # ---- not ruled -----------------------------------------------------------------------------------------------------
 
 [[open]]
