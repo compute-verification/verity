@@ -3,31 +3,32 @@
 machine, one a server.
 
 ~~~text
-challenger -> verifier    Commitment {phase} + the coin commitment's root, for every phase before the first is begun;
-                          Coin {phase, opening}, a coin opened once, after what the verifier recorded
-verifier   -> challenger  Open {phase, label} + what the coin follows (64 bytes); Done, once every phase is decided
-verifier   -> prover      Begin {phase} + the phase's coin commitment root; Salt {phase, opening}, the salt coin;
-                          Sample {phase, opening} + the sample, its sampling coin and the proof blocks it samples; End
+challenger -> verifier    Commitment {phase} + the challenge commitment's root, for every phase before the first is
+                          begun; Coin {phase, opening}, a challenge opened once, after what the verifier recorded
+verifier   -> challenger  Open {phase, label} + what the challenge follows (64 bytes); Done, once every phase is decided
+verifier   -> prover      Begin {phase} + the phase's challenge commitment root; Salt {phase, opening}, the salt
+                          challenge; Sample {phase, opening} + the sample, its sampling challenge and the proof blocks
+                          it samples; End
 prover     -> verifier    Root {phase} + the root the salt follows; Registration {phase} + the registration;
                           Proof {phase} + the sampled proof blocks' proofs (private)
 ~~~
 
-The challenger holds each phase's challenges: `coins.Challenger`, its salt coin and its sampling coin and their hm96
-salts sampled from its own coins (the `coins` need, in `coins.Challenger`'s order) and committed before the phase is
-begun. It opens a coin only on the verifier's `Open`, after what the verifier recorded (`coins.CoinOpening.after`), and
-never twice, so a retry never resamples; a second `Open` of one coin is refused `out-of-phase`. It finishes on `Done`
-with each coin it opened, ``{"phase", "label", "after"}``.
+The challenger holds each phase's challenges: `coins.Challenger`, its salt challenge and its sampling challenge and
+their hm96 salts, sampled from what its `coins` need gives (in `coins.Challenger`'s order) and committed before the
+phase is begun. It opens a challenge only on the verifier's `Open`, after what the verifier recorded
+(`coins.CoinOpening.after`), and never twice, so a retry never resamples; a second `Open` of one challenge is refused
+`out-of-phase`. It finishes on `Done` with each challenge it opened, ``{"phase", "label", "after"}``.
 
 The verifier begins phase ``i`` once phase ``i − 1`` is decided and the challenger's commitment for ``i`` is in. It
-asks for the salt coin only once the prover's root is recorded, and for the sampling coin only once the registration
-is, so no challenge is opened before what it follows is committed. It holds each opening to the phase's commitment, its
-label and what it recorded (`coins.coin_reason`), and refuses the run ``coin`` when one doesn't open. Its machine gives
-it:
+asks for the salt challenge only once the prover's root is recorded, and for the sampling challenge only once the
+registration is, so no challenge is opened before what it follows is committed. It holds each opening to the phase's
+commitment, its label and what it recorded (`coins.coin_reason`), and refuses the run ``coin`` when one doesn't open.
+Its machine gives it:
 
-- ``registered(phase, registration) -> bytes``: the registration's digest, the one the sampling coin follows
+- ``registered(phase, registration) -> bytes``: the registration's digest, the one the sampling challenge follows
   (`core_check.digest` of `core_check.commitment`), or a ValueError when it isn't PoUW's, which rejects the phase;
-- ``sample(phase, registration, opening) -> bytes``: the proof blocks the sampling coin samples, a uniform subset of K′
-  of the registered N, as `core_check` holds a sample to;
+- ``sample(phase, registration, opening) -> bytes``: the proof blocks the sampling challenge samples, a uniform subset
+  of K′ of the registered N, as `core_check` holds a sample to;
 - ``check(phase, registration, salt, opening, sample, proof) -> {"verdict", "reason"}``: the Lean verifier over the
   sampled proof blocks' proofs and `pouw-check`'s `check` of the phase (`PouwCheck.check`), on the challenges it was
   given.
@@ -36,23 +37,23 @@ Each phase's line is an output entry of the record, and the verifier finishes wi
 
     {"phase": I, "registration": DIGEST | None, "verdict": accept|reject|undecided|error, "reason": R}
 
-A phase whose registration isn't PoUW's is rejected with no sampling coin opened, and the next phase is begun: a
+A phase whose registration isn't PoUW's is rejected with no sampling challenge opened, and the next phase is begun: a
 phase credits only itself. A capability that is `Unavailable` makes that phase's line ``error``. The prover's machine
 gives it:
 
 - ``open(phase) -> bytes``: the 64-byte root the salt follows: the weights' root a credit period's open signs, or a live
   phase's open root (`salt.window_open_root`);
-- ``serve(phase, salt) -> bytes``: the phase served on the salt coin's noise, its values committed, and its
+- ``serve(phase, salt) -> bytes``: the phase served on the salt challenge's noise, its values committed, and its
   registration;
 - ``prove(phase, opening, sample) -> bytes``: the sampled proof blocks proved in zero knowledge.
 
-The prover holds the salt coin to the commitment it was sent with `Begin` and to the root it sent (`coins.coin_reason`),
-and refuses the run ``coin`` when it doesn't open. It finishes on `End` with how many phases it proved. Either side
-refuses by name a frame out of phase (``out-of-phase``), a phase out of range (``schema``) and a peer that leaves before
-it sent what the party waits on (``closed``).
+The prover holds the salt challenge to the commitment it was sent with `Begin` and to the root it sent
+(`coins.coin_reason`), and refuses the run ``coin`` when it doesn't open. It finishes on `End` with how many phases it
+proved. Either side refuses by name a frame out of phase (``out-of-phase``), a phase out of range (``schema``) and a
+peer that leaves before it sent what the party waits on (``closed``).
 
 A certified phase's salt is the network certifier's (`salt.revealed`), a layer of its own that these parties don't hold;
-a live phase's round coins (`window.live_challenger`) aren't in them yet either.
+a live phase's round challenges (`window.live_challenger`) aren't in them yet either.
 """
 
 from __future__ import annotations
@@ -77,10 +78,10 @@ CHALLENGER, PROVER, VERIFIER = "challenger", "prover", "verifier"
 SALT, SAMPLING = Co.LABELS
 MAX_PHASES = 1 << 10
 PHASE_COINS = len(Co.LABELS) * (Co.COIN_BYTES + Co.HM96.salt_bytes)
-"""The bytes of its coins one phase's `coins.Challenger` reads."""
+"""The bytes of the `coins` need one phase's `coins.Challenger` reads."""
 ROOT = Body(size=DIGEST_BYTES["sha512"], max=DIGEST_BYTES["sha512"])
 (ASK,) = sources.ASKS["coins"].types
-"""The message that asks the coins need for bytes."""
+"""The message that asks the `coins` need for bytes."""
 PHASE = Int(0, MAX_PHASES - 1)
 OPENING = Json(1 << 12)
 MANIFEST = Manifest(
@@ -127,21 +128,21 @@ def _ended(m: Message) -> str:
 
 
 class _Stream:
-    """`coins.Challenger`'s entropy: the bytes the challenger's coins gave, read in order, each once."""
+    """`coins.Challenger`'s entropy: the bytes the challenger's `coins` need gave, read in order, each once."""
 
     def __init__(self, data: bytes) -> None:
         self.data = data
 
     def __call__(self, n: int) -> bytes:
         if n > len(self.data):
-            raise ValueError(f"the phase's coins hold {len(self.data)} bytes, not {n}")
+            raise ValueError(f"the phase's challenge bytes are {len(self.data)}, not {n}")
         out, self.data = self.data[:n], self.data[n:]
         return out
 
 
 class ChallengerParty:
-    """The challenger: every phase's coins committed before the first is begun, each coin opened once on the verifier's
-    `Open` (module docstring)."""
+    """The challenger: every phase's challenges committed before the first is begun, each challenge opened once on the
+    verifier's `Open` (module docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:
@@ -176,8 +177,8 @@ class ChallengerParty:
 
 
 class Verifier:
-    """The verifier: each phase begun, its coins asked for once what they follow is recorded, and decided on its proofs
-    (module docstring)."""
+    """The verifier: each phase begun, its challenges asked for once what they follow is recorded, and decided on its
+    proofs (module docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.given = identity.capabilities
@@ -273,7 +274,8 @@ class Verifier:
 
 
 class Prover:
-    """The prover: each phase opened on `Begin`, served on its salt coin, and its sample proved (module docstring)."""
+    """The prover: each phase opened on `Begin`, served on its salt challenge, and its sample proved (module
+    docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.given: Mapping[str, Callable[..., Any]] = identity.capabilities

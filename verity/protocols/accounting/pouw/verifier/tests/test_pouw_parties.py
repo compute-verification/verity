@@ -1,6 +1,6 @@
 """PoUW's execution phases as three parties of the deployment layer (`parties`), run in simulated time: the challenger
-commits each phase's coins before the phase is begun, opens the salt coin after the prover's root and the sampling coin
-after the registration's digest, and the verifier decides each phase on its own."""
+commits each phase's challenges before the phase is begun, opens the salt challenge after the prover's root and the
+sampling challenge after the registration's digest, and the verifier decides each phase on its own."""
 
 from __future__ import annotations
 
@@ -71,14 +71,15 @@ def simulated(tmp_path, phases=2, prover=None, challenger=P.ChallengerParty, ver
 
 
 def challengers(phases: int) -> list[Co.Challenger]:
-    """The challenger's coins as its seeded `coins` need gives them, one `coins.Challenger` a phase."""
+    """The challenger's challenges as its seeded `coins` need gives them, one `coins.Challenger` a phase."""
     src, ask = S.seeded(SEED, P.CHALLENGER, "coins"), Received("coins", Message(P.ASK, {"n": P.PHASE_COINS}))
     return [Co.Challenger(i, P._Stream(src.on(ask)[0].message.body)) for i in range(phases)]
 
 
 def test_each_phase_is_decided_on_coins_opened_after_what_they_follow(tmp_path) -> None:
-    """Every phase accepts. The challenger's commitments are `coins.Challenger`'s on its coins, and it opened each
-    phase's salt coin after the prover's root and its sampling coin after the registration's digest, once each."""
+    """Every phase accepts. The challenger's commitments are `coins.Challenger`'s on its `coins` need, and it opened
+    each phase's salt challenge after the prover's root and its sampling challenge after the registration's digest, once
+    each."""
     r = simulated(tmp_path, phases=3)
     assert r.status == "completed", r.outcomes
     lines = r.outcomes[P.VERIFIER]["outcome"]["phases"]
@@ -114,7 +115,7 @@ def test_a_registration_that_is_not_pouws_rejects_its_phase_with_no_sampling_coi
 
 
 class OtherCoins(P.ChallengerParty):
-    """Opens phase 0's salt coin from coins it never committed to."""
+    """Opens phase 0's salt challenge from randomness it never committed to."""
 
     def on(self, r):
         if r.message.type == "Open" and (r.message.fields["phase"], r.message.fields["label"]) == (0, P.SALT):
@@ -142,7 +143,7 @@ def test_a_frame_the_verifier_did_not_ask_for_ends_the_run_out_of_phase(tmp_path
 
 
 def test_a_coin_is_opened_once(tmp_path) -> None:
-    """A second `Open` of one coin is refused: a retry never resamples."""
+    """A second `Open` of one challenge is refused: a retry never resamples."""
 
     class Again(P.Verifier):
         def _open(self, label, after):
