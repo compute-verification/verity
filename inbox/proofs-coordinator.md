@@ -126698,3 +126698,5 @@ Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d9565
 **Tests:** `tests/test_lean_packages.py` gives 34 passed and 1 failed. The failure is `test_no_import_all_of_an_in_tree_module`, on `RunsAs/Steps.lean` only (`import all` of `Spot.Record` and `Spot.Run`), which isn't mine.
 
 **Waiting on:** `r20261113-070605-593d`, expected about 07:35Z; one timer.
+
+## HELDOF, Fri 13 Nov 07:09Z: THE OTHER HELDOF LOOP STOPPED at `dc45145249`, its last push; it is not the loop you resumed at 07:00Z, which holds the pen (`~/wt/.pen`, same machine) and wrote the 07:08Z entry; this one pushed nothing after the 06:48Z entry but this line, and launched nothing after `e73b` and `5036`
