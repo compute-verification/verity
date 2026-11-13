@@ -6,7 +6,7 @@ from URb.
 instruction reading URx and one reading URy; each thread writes `tid·v1` and `tid ^ v2`.  An LDCU's destination is
 byte 2 of its low instruction word and an ALU instruction's uniform source byte 4.  The rewrite finds the four words
 in the cubin's SASS, sets those bytes, and checks the rewritten cubin's SASS names URa and URb where URx and URy were;
-it refuses (exit 3) any cubin whose SASS isn't that shape.
+it refuses (`REFUSED: ...` on stderr, exit 1) any cubin whose SASS isn't that shape.
 
     python3 chip_ur.py CUOBJDUMP urt.cubin A B OUT.cubin
 """
@@ -14,8 +14,13 @@ it refuses (exit 3) any cubin whose SASS isn't that shape.
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 LINE = re.compile(r"/\*[0-9a-f]+\*/\s+(.*?)\s*;\s*/\* 0x([0-9a-f]{16}) \*/")
+
+
+class Refused(ValueError):
+    """A cubin whose SASS isn't the shape `urt` assembles to, or a pair of registers the rewrite can't use."""
 
 
 def sass(cuobjdump: str, path: str) -> list[tuple[str, int]]:
@@ -29,39 +34,47 @@ def plan(code: list[tuple[str, int]]) -> list[tuple[int, int, int]]:
     for offset in ("0x388", "0x398"):
         loads = [(text, word) for text, word in code if re.fullmatch(rf"LDCU UR(\d+), c\[0x0\]\[{offset}\]", text)]
         if len(loads) != 1:
-            raise SystemExit(f"REFUSED: {len(loads)} loads of c[0x0][{offset}]")
+            raise Refused(f"{len(loads)} loads of c[0x0][{offset}]")
         text, word = loads[0]
         reg = int(re.search(r"UR(\d+)", text).group(1))
         if (word >> 16) & 0xFF != reg:
-            raise SystemExit(f"REFUSED: {text}: byte 2 of {word:#018x} is not UR{reg}")
+            raise Refused(f"{text}: byte 2 of {word:#018x} is not UR{reg}")
         reads = [(t, w) for t, w in code if not t.startswith("LDCU") and re.search(rf"\bUR{reg}\b", t)]
         if len(reads) != 1 or (reads[0][1] >> 32) & 0xFF != reg:
-            raise SystemExit(f"REFUSED: UR{reg}'s reads are {reads}")
+            raise Refused(f"UR{reg}'s reads are {reads}")
         out += [(word, 2, reg), (reads[0][1], 4, reg)]
     return out
 
 
-def main() -> None:
-    cuobjdump, src, a, b, dst = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
+def rewrite(cuobjdump: str, src: str, a: int, b: int, dst: str) -> None:
+    """Write `dst`, the cubin `src` with v1 in URa and v2 in URb; `Refused` where the cubin or the registers don't allow it."""
     if not (0 <= a < 255 and 0 <= b < 255 and a != b):
-        raise SystemExit("REFUSED: a and b are distinct uniform registers, 0..254")
+        raise Refused("a and b are distinct uniform registers, 0..254")
     code = sass(cuobjdump, src)
     steps = plan(code)
     used = {int(r) for text, _ in code for r in re.findall(r"\bUR(\d+)\b", text)} - {steps[0][2], steps[2][2]}
     others = used | {r + 1 for r in used}  # a named register may be the low half of a 64-bit pair
     if {a, b} & others:
-        raise SystemExit(f"REFUSED: UR{a} or UR{b} is one the kernel uses for something else ({sorted(others)})")
-    blob = bytearray(open(src, "rb").read())
+        raise Refused(f"UR{a} or UR{b} is one the kernel uses for something else ({sorted(others)})")
+    blob = bytearray(Path(src).read_bytes())
     for (word, at, _), new in zip(steps, (a, a, b, b)):
         raw = word.to_bytes(8, "little")
         if blob.count(raw) != 1:
-            raise SystemExit(f"REFUSED: {word:#018x} is not unique in the cubin")
+            raise Refused(f"{word:#018x} is not unique in the cubin")
         i = blob.index(raw)
         blob[i + at] = new
-    open(dst, "wb").write(bytes(blob))
+    Path(dst).write_bytes(bytes(blob))
     want = plan(sass(cuobjdump, dst))
     if [r for _, _, r in want] != [a, a, b, b]:
-        raise SystemExit(f"REFUSED: the rewritten SASS names {[r for _, _, r in want]}, not UR{a}, UR{b}")
+        raise Refused(f"the rewritten SASS names {[r for _, _, r in want]}, not UR{a}, UR{b}")
+
+
+def main() -> None:
+    cuobjdump, src, a, b, dst = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
+    try:
+        rewrite(cuobjdump, src, a, b, dst)
+    except Refused as e:
+        sys.exit(f"REFUSED: {e}")
     print(f"urt: v1 in UR{a}, v2 in UR{b}")
 
 

@@ -575,7 +575,7 @@ theorem logged_draw {V : Vocab d α} {k : Verity.Registration.Composite} (hR : D
 
 /-- **The session's sample at a sample whose sample ends** with `units` is the units it ended with. -/
 theorem draw_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) =
+    (h : _root_.Spot.Draw.drawUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) =
       .ok (units, read)) :
     A.L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   unfold Live.L
@@ -588,7 +588,7 @@ theorem extend_draw (A : Live) (S : Widening) (ω : A.Ω × S.T) : (A.extend S).
 /-- **v2's units are the session's sample** at a sample whose bytes start with the coins v2 drew them from, at a session
 whose sampling design and population are the ones v2 drew under. -/
 theorem draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ}
-    {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (A : Live) (ω : A.Ω) (hL : A.law = L)
+    {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (A : Live) (ω : A.Ω) (hL : A.design = L)
     (hn : A.n = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (A.src ω 0))) :
     A.L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨_, _, _, _, _, _, _, _, _, _, read, hdu⟩ := h
@@ -607,7 +607,7 @@ theorem coupled_draw {V : Vocab d α} {k : Verity.Registration.Composite} (K : C
     (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params}
     (hθ : ParamsAt o.params p₀) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
-      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.law = L → A.n = n →
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.design = L → A.n = n →
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.Spot.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
@@ -626,7 +626,7 @@ theorem coupled_draw_coins {V : Vocab d α} {k : Verity.Registration.Composite} 
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m B (κ ω) 0)) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
-      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.law = L → A.n = n →
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.design = L → A.n = n →
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hθ hv hl

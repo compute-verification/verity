@@ -178,10 +178,10 @@
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/protocols/flock/prover/tests/fixtures/rec-links",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "verity/protocols/spot/verifier/tests/fixtures/form-refusals",
   "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5": "verity/definitions/silicon/discrepancy_log.json",
-  "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
+  "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -254,6 +254,9 @@
       "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
       "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903"
+    ],
+    "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": [
+      "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81"
     ]
   }
 }
