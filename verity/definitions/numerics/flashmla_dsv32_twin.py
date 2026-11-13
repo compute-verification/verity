@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.definitions.kernels import tc as CK
+from verity.circuits.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics.kernel_registry import register
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 
 U32 = np.uint32
 
