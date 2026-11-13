@@ -1,10 +1,10 @@
 **REQBLOCK (CIR-271), sizing the serving-cut builder. The smallest class that keeps all 29 Definitions is 43 prompt ids and 2 outputs (a prefill and one decode step), at all 78 layers.**
 - Its node Program is 1,627,200 calls in 142 bindings, built in 50.9 s at a 2.65 GiB peak (run r20261112-234945-6a7d). It is about 1.70 billion proof blocks, inferred from the card's blocks per call.
-- The collectives already lower to units that pass both checks at one and two prompt tokens: `pipeline/tp/wires.sites_circuit`.
+- The collectives already lower to units, in `pipeline/tp/wires.sites_circuit`, and its test asserts both checks at one and two prompt tokens. At (43, 2) its binding refuses: `program/tp_binding.py:155-157` takes no read of a combine's output inside a batch node, and class G's registered form batches the prefill's 43 rows (run r20261112-235830-743a). A 1-token prompt passes, and 2 or 8 tokens refuse the same way (run r20261113-000113-31d8).
 - `window_circuit`'s `_Builder` is the frame to extend, but it knows only Llama's 10 families.
 - The day for the whole builder is Thu 19 Nov 6 PM PST [Fri 20 Nov 02:00Z], and Mon 16 Nov 6 PM PST [Tue 17 Nov 02:00Z] for a first cut: rank 0 with every Definition but the collectives.
 
-All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-cir271-scratch-6f04`, over `main`'s code at `5f0c008aa04`. Each runs `build_node_program` eager with one request declared in φ's workload (part 1 below says why). I changed no builder.
+All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-cir271-scratch-6f04`, over `main`'s code at `5f0c008aa04`. The ladder (`smallest.py`) runs `build_node_program` eager with one request declared in φ's workload (part 1 below says why). The collectives probe (`collect43.py`) runs `tp_steps.compile_tp` and `sites_circuit` on compile_cost's class-G φ. I changed no builder.
 
 1. **The smallest class that keeps every Definition: (43, 2), at 78 layers and eight ranks, with a prefill and one decode step.**
    - The ladder (`smallest.py`, runs r20261112-233124-a438, r20261112-234639-9638 and r20261112-234945-6a7d, at 3 or 4 layers, then all layers for 42 and 43). Each line counts the 29 Definitions of the (256, 32) Program that are missing at that shape:
@@ -33,7 +33,7 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
      - It lowers Llama's `FAMILIES` only (`window_circuit.py:672-673`), refuses peers (`:197-200`), and under class G stops at the launch (`:680`).
    - `pipeline/tp/wires.sites_circuit` (`:269`), over `pipeline/tp/grain.lower` and `program/tp_binding.derive` (`:188`).
      - It emits every collective site of the eight rank Programs: per-rank coordinate gathers into 96-word rows, one combine unit a chunk with its parts cut 8 ways, the chunks' gather, the fused norm, and the token select's groups plus combine (`wires.py:10-20`).
-     - `tests/program/predict/test_tp_steps.py:83-108` asserts, for GLM-5.3 TP8 with one- and two-token prompts, no free read of a combine output and no unit failing `check_proof_block`. That test is opt-in (`VERITY_VLLM_CLASS_G_WINDOW=1`); I did not run it.
+     - `tests/program/predict/test_tp_steps.py:83-108` asserts, for GLM-5.3 TP8 with one- and two-token prompts, no free read of a combine output and no unit failing `check_proof_block`. That test is opt-in (`VERITY_VLLM_CLASS_G_WINDOW=1`), and the workload file it reads isn't in the tree (`test_steps.py:748`). I ran its body's calls from `collect43.py` instead (part 3).
 
    | split | emits calls today | names or lays out only | what a builder lacks |
    |---|---|---|---|
@@ -51,7 +51,8 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
    A builder would call `_Builder` through a node-by-node lowering like `window_circuit._Program.lower`, covering GLM's 29 families, and `sites_circuit` for the collectives. Today's `_Program` lacks GLM's families, peers and a class launch.
 
 3. **Where the wires will not pass.** A wire reads one writer's row whole, and a port with several writers is cut k ways along its outer elements or read through `AllGather_v1` with cut parts (`interface.py:38-45`). A unit has at most 256 rows, one of them past 111 B, within 2^27 bits (`interface.py:307-311`, `:322-344`).
-   - The collectives use both forms and pass at one and two tokens (read, not run). Per rank, the 6,144 coordinate words go through `AllGather_v1{WORLD=96,N=1}`. A combine reads 8 parts of 96 words, and `AllGather_v1{WORLD=64,N=96}` builds the row (`grain.py:5-12`). Inferred: at (43, 2) the multimem all-reduce is 264,192 words a rank (43 × 6,144) in more chunks, and fits.
+   - At (43, 2) the collectives do not get as far as the wires (run r20261112-235830-743a, `scratch/cir271/collect43.py`, 4 layers, compile_cost's class-G φ, 12.1 s). `TW.sites_circuit` refuses in `tp_binding.rank_sites`: "rank 0's Program 7f36f17ae005fc05: node 2 (RMSNormCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=768}) reads collective node 1's output in a batch node: a combine's output is read by calls" (`program/tp_binding.py:155-157`). Class G's registered form is batched (`steps.py:483-485`, `build.py:694`), and the norm after the embedding all-reduce reads it in a batch over the prefill's rows. That is the first fix, in `tp_binding`, which is vllm's: one reader a batch iteration. Neither of `interface.py:38-45`'s forms is at issue there. The line is two prefill rows. With a 1-token prompt and 2 outputs it passes at 4 layers (run r20261113-000113-31d8: 20 sites; combines `AllGather_v1{WORLD=8,N=19360}`, `AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}` and `AllReduceRmsNormMnnvl_v1{…}`; 90 templates, 768 wires, nothing unwired, no proof block refused, no backward wire; 175.2 s, 1.37 GiB). With 2 or 8 prompt ids it refuses as at 43 (same run). The opt-in test's two-token request prefills both rows in one step (`test_tp_steps.py:56`), so inferred: that test would refuse today too.
+   - Past that, the collectives use both forms; the test asserts they pass at one and two tokens (read, not run by me). Per rank, the 6,144 coordinate words go through `AllGather_v1{WORLD=96,N=1}`. A combine reads 8 parts of 96 words, and `AllGather_v1{WORLD=64,N=96}` builds the row (`grain.py:5-12`). Inferred: at (43, 2) the multimem all-reduce is 264,192 words a rank (43 × 6,144) in more chunks, and fits.
    - A whole-row reader after a COORDS or COLS split (RoPE and the norms after the q/kv coordinates; the residual add after MoeSum) would see 6,144 one-word writers, past 256 for the cut form. It needs the same two-level gather. That fits, but nothing emits it outside a collective site.
    - Attention and the indexer read one writer row a key. At (43, 2) that is at most 44 rows, which fits; at (256, 32) it is 287, past 256.
    - Where neither form fits (inferred): in the node form, a key's 576-word latent row comes from two writers, `DsaRMSNorm` (512) and `RoPEHeadGptJ` (64). The cut form splits only between outer elements, and `AllGather_v1`'s parts are equal.
@@ -60,7 +61,7 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
 
 4. **The pieces, in order:**
    1. The class Program at (43, 2), as the registered rank form. With one declared request it builds today: run r20261112-202908-e9ba built that form at (256, 31). vllm owns a class launch without a declared request (`steps.py:474-486`, `launch_context.py:133`). Done-check: the eight rank digests and `check_ranks`.
-   2. The collectives: `compile_tp` plus `sites_circuit` at (43, 2). Done-check: `test_tp_steps.py:83` at that prompt, with unwired and proof blocks both empty. It needs only piece 1.
+   2. The collectives at (43, 2): `tp_binding.rank_sites` taking a combine output read inside a batch node (`tp_binding.py:155-157`), then `compile_tp` plus `sites_circuit`. Done-check: `scratch/cir271/collect43.py` at 43 and 78 layers with unwired and proof blocks both empty. `test_tp_steps.py:83` reads a workload file that isn't in the tree (`test_steps.py:748`), so it needs a fix too. It rests only on piece 1.
    3. The frame: `adapters/vllm/verity_vllm/program/predict/node_window.py`, `_Program` for GLM with peers taken from `sites_circuit`'s combine outputs. Done-check: `check_wires`, `check_proof_block` and a digest at one MoE layer (4 layers).
    4. The family lowerings, by two workers side by side once piece 3 fixes its interface:
       - (a) the dense families: DeepGemm and FlashInfer parts with `Fp8GroupQuantUe8m0`, the LM-head slices, `EmbeddingShard`, the norms' parts and columns, RoPE, SiluMul, ResidualAdd, MoeSum, and the part-3 gathers;
@@ -70,9 +71,10 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
    6. Assembly at (43, 2) with 78 layers: `check_wires`, `check_proof_block` on every template, the window digest, and a unit census against part 1's estimate. It runs remotely. Two workers can split pieces 2 and 3, and then 4a and 4b.
 
 5. **The day.** The whole is Thu 19 Nov 6 PM PST [Fri 20 Nov 02:00Z]; a first cut, rank 0 alone at (43, 2) with all 29 Definitions and the collectives' peer rows left free as in today's per-rank windows, is Mon 16 Nov 6 PM PST [Tue 17 Nov 02:00Z].
-   - It rests on four things:
+   - It rests on five things:
      - two workers from Fri 13 Nov;
      - vllm taking a new module under `program/predict/`;
+     - vllm's fix to `tp_binding` for reads inside a batch node by Tue 17 Nov (the whole needs it; the first cut doesn't);
      - proofs' `GreedySelect_v1` landing by Tue 17 Nov;
      - cpu-13 for runs: the (43, 2) node builds in under a minute at 2.65 GiB, but the window will be larger.
    - The least-trusted part: the count of reads neither wire form takes (part 3). It is unknown until a `settle` names them, and each one needs either a writer re-cut or a fused Definition like `DsaLatentRow`.
@@ -106,7 +108,7 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
 - Size: the census's 11,275,271,992 blocks at (256, 32) reproduce from its per-family figures. The (43, 2) class is about 15% of it (inferred).
 
 **Not established:**
-- That the collectives pass at (43, 2): `test_tp_steps` asserts it at one and two tokens only, and I did not run it.
+- That the collectives pass at (43, 2) once batched reads are bound: today they refuse first (run r20261112-235830-743a), and `test_tp_steps` asserts a pass at one and two tokens only. I did not run that test, since its workload file isn't in the tree.
 - The proof-block count at (43, 2): it is an estimate.
 - How many partial-row reads a GLM lowering meets.
 - That WIDE_COORDS and FINAL appear: read from the dictionaries.
@@ -115,4 +117,4 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
 
 The statement I trust least is the day. It rests on piece 3's interface holding for 21 families that no lowering covers yet, and on the count of reads in part 3, which no run has measured.
 
-@@STAMP@@
+REQBLOCK, Thu 12 Nov 4:05 PM PST
