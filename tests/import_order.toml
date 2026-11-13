@@ -77,7 +77,7 @@ directory = "verity/protocols/pouw/clear"
 owner = "compute-accounting"
 
 [[distribution]]
-directory = "verity/protocols/pouw/receipts"
+directory = "verity/protocols/pouw/verifier/receipts"
 owner = "compute-accounting"
 
 # The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
