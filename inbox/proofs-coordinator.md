@@ -131194,3 +131194,146 @@ Clock: `date -u` read 08:48Z. Pen: `~/wt/.pen` is mine. Mailbox read to your 08:
 - Whether `wiresChecked` follows from clauses `wiringOk` already has: I did not look for a proof either way.
 
 NEEDS: nothing. RUNCOINS and OWNREADS: section 3 names your files.
+
+## HELDOF, Fri 13 Nov 08:50Z: the bound that failed was the member's WHOLE program, 1,136,714 gates against 262,144; it is now a unit's bound (2,080 here), COMPILED at `4c407b6deb`, and `memberOk` PASSES on the small play; `descOk` decides `wiresMoveRows`, COMPILED, no `walksOk`; the one clause still failing is `registersNone`, which is FRAME's `second-inputs`; NO accepted play has passed `descOk` yet: on a scratch merge with GATHER's class the second stage accepts and the form REFUSES a session; TWOLEG's call still must not go in
+
+In plain words: three of the four things between `descOk` and a pass on the small play are done and compiled. The
+size bound was the wrong one and is restated a unit at a time. FRAME's last clause is decided by the check, so the
+proof side needs no extra hypothesis. What is left is not mine to change: the small play registers the select's
+`logits` after the first stage's sample, which the model, my check and FRAME's rule all refuse. A play that does not is
+GATHER's class. I put it on a scratch tree with TWOLEG's form and my check: the second stage accepts it, the form
+refuses one of its sessions, and my executable stopped there too. The executable now runs the check without the
+sessions; that run is out. My 07:48Z entry promised "one line" after one run. It took an hour.
+
+**1. Which bound failed, and by how much** [run] (`r20261113-075045-9b52`, vy-nebius-cpu-7, tree `6853749ed0`, rc 1)
+- `play: descOk false, refused at memberOk`
+- `play: clauses that fail: memberOk; registersNone`
+- `template 0: unitLog 15, upv 1, inWords 16, constPos 17152, unitIns 2048, unitRows 15105, requests 6, cells 4, count 1, n 24, memberSize 1136714, bound 262144, memberOk false, returnedBits 32`
+- `play with template 1 named as template 0: not made, the play has 1 template`
+- `play with its interior registering a value: descOk false, refused at memberOk`
+- The size: 2 + 24·2048 + 3·(24·15105) = 1,136,714 gates, 4.34 times the bound. One unit is 47,363 gates, so the old
+  bound refused any template with more than 5 units of this Definition, and the play has 24 [derived].
+- `unitLog 15 ≤ 32` and `upv 1 > 0` hold. Only the size failed.
+
+**2. The bound is now a unit's, in the model and in the check** [run]
+- `MemberFits`' last clause, `partitions_keyProg`'s hypothesis and `ScopeDesc.memberOk` read a unit's inputs plus its
+  returned output bits: `(bitsRows c).nIn + BlockCommits.outBits c ≤ unitClassMax`. That is the merge of my block
+  branch `fd41320f42` (`efdfc5779b`), your 01:44Z order.
+- The verifier's `SampledTwoDesc.memberOk` is the same expression (`unitIns c + outBits c`), so `memberOk_eq` is still
+  `rfl` (`4c407b6deb`). `memberSize` and `unitRows` are gone from the check.
+- Compiled at `4c407b6deb`:
+  - `r20261113-080811-e982`: "`HeldOfDesc.lean`: lean exit 0 in 353 s", "none of its 46 theorems uses an axiom beyond
+    propext, Classical.choice and Quot.sound", no sibling clash.
+  - `r20261113-080811-ce7a`: "`HeldOfRun.lean`: lean exit 0 in 263 s", "none of its 22 theorems uses an axiom beyond
+    propext, Classical.choice and Quot.sound".
+- On the play (`r20261113-080832-b38e`, vy-nebius-cpu-7, tree `50ddbe83cb` = `4c407b6deb` + TWOLEG's form, rc 1):
+  - `play: descOk false, refused at registersNone`
+  - `play: clauses that fail: registersNone`
+  - `template 0: unitLog 15, upv 1, inWords 16, constPos 17152, unitIns 2048, outBits 32, bound 262144, memberOk true, requests 6, cells 4, count 1, units 24`
+  - `play with template 1 named as template 0: not made, the play has 1 template`
+  - `play with its interior registering a value: descOk false, refused at registersNone`
+- So 2,080 against 262,144, whatever the count of units.
+
+**3. `wiresMoveRows` is decided by the check: `heldOkDesc_of_descOk` takes no `walksOk`** [run]
+- FRAME's `013955525dbe` is merged (`2dc81c6add`). `descOk`'s wiring clause now holds `wiresMoveRows`, written as the
+  model's is, clause for clause, on the design's rows and the cells (`f2f669ffc4`).
+- `heldOkDesc_of_descOk (u₀) (hd : descOk p bs i it = true) : heldOkDesc p bs i it u₀ = true`. No other hypothesis.
+- Compiled: `r20261113-075847-4d69` at `f2f669ffc4` ("lean exit 0 in 307 s", 46 theorems, axioms clean), and again in
+  `e982` at `4c407b6deb`.
+- The play passes the clause (it is not in `b38e`'s failing list). That says little: this play has no wire.
+
+**4. `registersNone` is `second-inputs`: the small play is outside the model, by FRAME's design** [run, read]
+- `b38e`, the same play: `second rc=1`; its `TWO` line has `"held": false`, `round_two.codes = ["second-inputs"]`,
+  `outcome.accepted = false`. `FORM_ON rc=1` and `FORM_OFF rc=1`: in both, the run of record's interior audit has
+  `checks.statements.codes = ["second-inputs"]`.
+- The model says the same: `wiringOk` holds `h.interiorNames.values.isEmpty`, and the check mirrors it.
+- So the three agree. TWOLEG's 08:16Z entry has the same finding from the other side.
+
+**5. GATHER's class on a scratch tree: the second stage accepts, the form refuses a session** [run]
+The tree is `cursor/proofs-heldof-logitsrun-f684`: `50ddbe83cb` + GATHER's `984cb027efa3` + three scratch commits. It
+is for runs only. The five files and eleven places TWOLEG names are resolved there; ASSEMBLY or GATHER may read how.
+Each run: `SMALL_ARGS="--inline --units 20 --v 2560 --logits"`, 20 templates (19 `GreedyChunk_v2`, 1
+`GreedyCombine_v2`), 8 units each.
+- `r20261113-081325-62dc` (vy-nebius-cpu-3, `4e80cbfd20`, rc 1): the serve and the first stage pass. `second` raises
+  in `a5.audit`: `KeyError: 'GreedyCombine_v2{V=2560,N=128}/r0'`.
+  - Cause [read]: `a5.py` asks the registration's record for the root of every port of a member's header before it
+    calls `REG.bind_ports`. The combine's wired port has no root there. That code came with `ca2e80f1ed` on `main`;
+    GATHER's line and TWOLEG's are both from before it, FRAME's and the join are after.
+  - So this raises on the join too, once GATHER's class is there [derived].
+- `r20261113-082445-b1b3` (vy-nebius-cpu-8, `508b06a084`, rc 2): one scratch line, which hands `bind_ports` only the
+  roots the registration holds. Not reviewed by anyone.
+  - `second rc=0`. `TWO`: `"held": true`, `"round_two": {"ok": true, "codes": []}`, `outcome.statements =
+    ["two-stage-form"]` alone. `A5`: accepted, 20 of 20 `lean-verify` true.
+  - `FORM_ON rc=1` and `FORM_OFF rc=1`, both `"reason":"two-stage: proofs: a session's verifier did not accept"`.
+    That is `SampledTwo.inputAt`'s third step, `OneStageZk.membersRun` [read].
+  - `DESC rc=2`: `undecoded: proofs: a session's verifier did not accept`. My executable decoded the play through
+    `inputAt`, so it never reached `descOk`.
+  - The case is kept: `/workspace/research/runs/r20261113-082445-b1b3/out/form` on vy-nebius-cpu-8.
+- So at a tree with FRAME's rule, a play that commits the select's inputs is accepted by the second stage [one run, on
+  a scratch merge with one unreviewed line]. The form, as it is, does not take it.
+
+**6. The executable now runs the check where the form's sessions refuse** [run for the build; the verdict is out]
+- `descOk` reads the params, the boundary registration, the rule and the interior's params, replay block and
+  circuits. It reads no session, verdict or challenge [read: `i.params`, `i.record`, `i.rule`, `i.closure`, `it`].
+- `206efc8e5d`: where `inputAt` refuses, the executable prints the form's reason and runs the check on
+  `SampledTwo.inputOf`'s input with no verdicts. It builds: `r20261113-084150-23d2`, "Built «sampled-two-desc»:exe",
+  "Build completed successfully (473 jobs)".
+- `23d2` (vy-nebius-cpu-4, scratch `b290831555`) is at its second stage at 08:47Z. It ends about 09:05Z with the
+  first verdict of `descOk` on a play with wires, and the first real refused case (20 templates, so the renamed play
+  is made).
+
+**7. One mend for landing: my module was an orphan of the recursive package** [read, run]
+- TWOLEG's `a1b0` failed on "orphan: VStarRecursive/SampledTwo.lean is not imported by the roots". The same rule
+  (`check.py`, `orphan.file`) names `VStarRecursive/SampledTwoDesc.lean` at any tree that holds my head as it was at
+  `4c407b6deb` [derived: no records run of mine].
+- `750a6fda13`: the root imports it. `r20261113-083521-aa30`: "`VStarRecursive.lean`: lean exit 0 in 603 s", no
+  sibling clash. The line sits above the root's other imports, so it merges with TWOLEG's `744ded04cb` with no
+  conflict in that file [run: `git merge-tree`].
+- The root's one importer compiles with it: `r20261113-083521-54a4`, "`Proofs/Properties/Verity/Recursive.lean`: lean
+  exit 0 in 775 s", "none of its 17 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+
+### STOP RULE
+
+Not reached. The size bound is weaker than the one it replaces, by your order: it bounds a unit's inputs and returned
+output bits, no longer the member's program, and `partitions_keyProg` is proved from it. No lock names `MemberFits`,
+`memberOk` or `partitions_keyProg` [read].
+
+### NEEDS
+
+1. **TWOLEG: the call to `descOk` still must not go in.** No accepted play has passed it. `23d2` gives the first
+   verdict on a play in the model's scope; I write it here when it ends.
+2. **GATHER or ASSEMBLY: `a5.audit` raises on GATHER's class at any tree after `ca2e80f1ed`** (item 5). Whoever
+   carries GATHER's second try onto the join owns the mend. My scratch line is one candidate, not a reviewed one.
+3. **TWOLEG: the form refuses a session of the wired play that the second stage's own Lean verify accepts** (item 5).
+   The kept case is named above. Your `--units 1` rehearsal may or may not show it; this is `--units 20`.
+4. **ASSEMBLY: my head against TWOLEG's named head `1e20910586` has one conflict**, `recursive/lakefile.toml`: both
+   add an executable at one place. Take both, as `cursor/proofs-heldof-descrun-f684` does.
+5. **The lock at my head is stale**: FRAME's records are not in it, and `MemberFits` and `partitions_keyProg` changed.
+   The join's records run regenerates it. I run none before the carry unless you say.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- That `descOk` passes on any accepted play. None has run to a verdict.
+- Why the form refuses a session of the wired play.
+- That the scratch line in `a5.audit` is the right mend.
+- That the 23 modules outside those two tries' closure still build at my head. None names `MemberFits`, `memberOk` or
+  `partitions_keyProg` [read]. Five tries that cover all 23 run one after another, to about 09:20Z; the first,
+  `SpotFirstHit.lean`, is "lean exit 0 in 288 s".
+- What the recursive package's audit says of `SampledTwoDesc` once it reads it: no records run.
+- That a unit's inputs plus returned output bits is exactly the count `Spot.Partition` refuses on ("commits … bits,
+  more than the widest class"): not compared.
+- `heldOfAt_of_desc`: not started; it waits on your word.
+
+### Branches
+
+- `cursor/proofs-heldof-4c7b` at `206efc8e5d`. Compiled: `4c407b6deb` (items 2 and 3), `750a6fda13`'s root and its
+  importer, and `206efc8e5d`'s executable. The public-boundary check at this head names six edges, none in a file of
+  mine [run on my VM: `public_boundary.py`].
+- `cursor/proofs-heldof-descrun-f684` at `50ddbe83cb`: scratch, my head + TWOLEG's form.
+- `cursor/proofs-heldof-logitsrun-f684` at `b290831555`: scratch, that + GATHER's `984cb027efa3`.
+- I hold the pen (`~/wt/.pen`, since 07:45:22Z). No other HELDOF entry or commit since 07:48Z [read, 08:48Z].
+- One timer, `heldof-logits-23d2`, for 09:08Z; then I end this turn.
