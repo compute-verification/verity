@@ -102,7 +102,7 @@ def warden(tmp_path_factory):
         fetches[name] = d / f"{name}.tar.gz"
         with tarfile.open(fetches[name], "w:gz") as tar:
             tar.add(run, arcname=RUN)
-    cells = [json.loads(x)["registration"] for x in (run / "out" / "cells.jsonl").read_text().splitlines()]
+    cells = [json.loads(x)["registration"] for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
     registrations = [r for d_ in (Direction.INGRESS, Direction.EGRESS) for r in cells
                      if (r["link"], r["direction"], r["window"]) == (WC.WS.LINK, d_.value, w)]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
