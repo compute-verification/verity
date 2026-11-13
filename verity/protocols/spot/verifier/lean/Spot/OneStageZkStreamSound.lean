@@ -356,7 +356,7 @@ theorem statementAt_of {slice : Member → Json} {bs : Core.Blobs} :
         | true =>
           simp only [hn] at hf
           cases hf
-          exact ⟨a, ha, by simp [statementAt, List.lookup]⟩
+          exact ⟨a, ha, by simp [statementAt, List.lookup]; rfl⟩
         | false =>
           simp only [hn] at hf
           obtain ⟨b, hb, hs⟩ := statementAt_of hr hf
