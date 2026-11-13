@@ -276,7 +276,7 @@ theorem loadedGivesUp : LoadedGivesUp := by
 /-- What `afterTie` establishes once it gives a plan. -/
 theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : Plan}
     (h : afterTie i passes tie = .ok pl) :
-    pl.passes = passes ∧ pl.root = runCommitment passes ∧
+    pl.passes = passes ∧ pl.tie = tie ∧ pl.root = runCommitment passes ∧
     (∀ c, i.held = some c → c.commitment = pl.root ∧ pl.source = c.source ∧
       (i.source = none ∨ i.source = some c.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
@@ -348,7 +348,7 @@ theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : P
     · cases h
   dsimp (config := { zeta := false }) only [jdr] at h
   cases h
-  exact ⟨rfl, rfl, hheld, hnone, key, drawn, hk, hdr, rfl, rfl, rfl⟩
+  exact ⟨rfl, rfl, rfl, hheld, hnone, key, drawn, hk, hdr, rfl, rfl, rfl⟩
 
 theorem planMeans : PlanMeans := by
   intro i pl h
@@ -400,7 +400,7 @@ theorem planMeans : PlanMeans := by
   rw [ha] at h
   have hpl : pl' = pl := Except.ok.inj h
   subst hpl
-  obtain ⟨hpass, hroot, hheld, hnone, key, drawn, hk, hdr, htodo, hdrawn, hpicks⟩ := afterTie_ok ha
+  obtain ⟨hpass, -, hroot, hheld, hnone, key, drawn, hk, hdr, htodo, hdrawn, hpicks⟩ := afterTie_ok ha
   subst hpass
   exact ⟨rfl, hp, fun p hm => eq_of_not_bne fun hb => hsalt (List.any_eq_true.2 ⟨p, hm, hb⟩), hserved, hroot,
     hheld, hnone, key, drawn, hk, hdr, htodo, hdrawn, hpicks⟩

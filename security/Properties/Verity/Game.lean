@@ -16,6 +16,7 @@ public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
 public import Properties.Verity.Sha512
+public import Properties.Verity.Tied
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -661,8 +662,8 @@ the device's signature, with their SHA-512 calls bounded by the strategy's (`fin
 device's messages in a play and the forger's on each of its coins bounded by the published `Q` (`signs_le`,
 `forger_signed`), and the other finders each subprotocol's bound reads,
 each with its budget in the strategy's calls (`finders`); the committed circuit's gates a play computed after
-their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
-budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
+their window's coin; the world each play realizes; the declaration's registered inputs, the cut's layout of the
+committed circuit, whose y gates no registered input is, and the inference-only policy's budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
 read at that boundary as the wipe's game;
 the deployment's honest prover; and the certificates, survivor threshold, errors, forgery bounds and losses the
 composite publishes, from the parameters and the strategy's SHA-512 calls alone.
@@ -739,6 +740,10 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- the declaration's registered inputs `θ`, input gates of the committed files' circuit -/
   theta : (θ : ByteArray) → (F : Array ByteArray) → Finset (Fin (read θ F).circuit.N)
   theta_input : ∀ θ F, ∀ g ∈ theta θ F, (read θ F).circuit.isInput g = true
+  /-- the cut's layout of the committed files' circuit: its cells, each one's y an input row of a cut linear -/
+  cut : (θ : ByteArray) → (F : Array ByteArray) → ValueTie.Cut (read θ F).circuit
+  /-- **y's gates are outside `θ`**: a served y is a prover value until the tie holds it, never registered -/
+  theta_cut : ∀ θ F, Disjoint (cut θ F).y (theta θ F)
   /-- the inference-only policy's maximum inference block size `Γ`, in gates -/
   gates : ByteArray → ℕ
   /-- the inference-only policy's limit `α` on fresh input, in bits per gate -/
