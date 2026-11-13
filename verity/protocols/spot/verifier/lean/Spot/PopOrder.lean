@@ -4,7 +4,8 @@ population, and `layout` builds the input class too, a proof block per root inpu
 `popOkRanges` reads only the query's ranges (`Partition.evaluate`) and its units' gates (`Partition.unitGates`): the
 strata's segments (`Draw.strataOf`, as `layout` reads them) chain `0, 1, …, n - 1` (`chain_iff`), and each of those units
 has gates. `popOk_eq_popOkRanges` is the equality, so `popOk` runs as `popOkRanges` in every module compiled after this
-one (`Run.run` among them), and `popOk` itself is unchanged.
+one (`Run.run` and `OneStageZk.popHeld` among them), and `popOk` itself is unchanged. A module that calls `popOk`
+without this one among its imports runs it as stated, off the layout.
 -/
 module
 
@@ -15,8 +16,8 @@ public import Spot.Slots
 
 `chain` and `segsOf`, the population's segments in slot order; `popOkRanges`, `Slots.popOk` read off the query's ranges
 and unit gates with no proof block built; the lemmas up to `popOk_of` that tie the two; and `popOk_eq_popOkRanges`,
-the `@[csimp]` equality under which `popOk` runs as `popOkRanges`. `Spot.Run` imports it, so its `population-order`
-checks run `popOkRanges`.
+the `@[csimp]` equality under which `popOk` runs as `popOkRanges`. `Spot.Run` and `Spot.OneStageZk` import it, so the
+run's `population-order` checks and the one-stage check's (`OneStageZk.popHeld`) run `popOkRanges`.
 -/
 
 @[expose] public section
