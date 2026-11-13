@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
-#   1. build   flock-circuit (verity/protocols/flock/prover/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
+#   1. build   flock-circuit (verity/protocols/proofs/flock/prover/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
 #   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, `+public-weights` for its --public-weights,
 #              `+packed-weights` for --public-weights --packed) at each N of
 #              PT_NS, or of its own list (UNIT@N,N...; a census type's N may be stage.py's full or full/D), PT_JOBS at a
@@ -35,7 +35,7 @@ WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=$
 TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
 if [ $DEV = gpu ]; then
-  . verity/protocols/flock/prover/pod/cuda-13.3.sh
+  . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
 set -f  # a census name's brackets are not a glob
@@ -56,7 +56,7 @@ done)
 if has build; then
   echo "== build $(date -u +%T)"
   ( flock 9; MODE=build GPU=$([ $DEV = gpu ] && echo 1 || echo 0) SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build \
-    bash verity/protocols/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
+    bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $BUILT | tee $O/binary.sha256
 fi
@@ -64,7 +64,7 @@ fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $FW/py && $UV pip install -q --python $PY numpy blake3; } || exit 1
-export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
 # KEY: the staging tree's digest, over the Python under KEY_PATHS, the list window.py's KEY_PATHS repeats. A path the tree no
 # longer holds would leave the key without what was under it, and a statement staged before a change there would be proved
 # as current: the run stops instead

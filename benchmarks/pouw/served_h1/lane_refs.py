@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1zy as ZY
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as ZY
 
 if TYPE_CHECKING:
     import ctypes

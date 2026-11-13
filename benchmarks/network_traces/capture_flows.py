@@ -438,11 +438,11 @@ def record_counts(run: Path) -> dict:
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
     import warden_serve as ws
-    from verity.protocols.certifier.verifier.active import DATA
-    from verity.protocols.certifier.verifier.certificate import record_head
-    from verity.protocols.certifier.verifier.grid import row_count
-    from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-    from verity.protocols.certifier.verifier.warden import END, WardenParams, audit, read_cell
+    from verity.protocols.accounting.certifier.verifier.active import DATA
+    from verity.protocols.accounting.certifier.verifier.certificate import record_head
+    from verity.protocols.accounting.certifier.verifier.grid import row_count
+    from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+    from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
