@@ -64,7 +64,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import and_reduce
 from verity.circuits.boolean.trace import part as _part
-from verity.definitions.circuits.census import BooleanWork, NoBooleanWork
+from verity.circuits.census import BooleanWork, NoBooleanWork
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
