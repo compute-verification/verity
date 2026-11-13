@@ -6,7 +6,7 @@ Goal proofs/security-numbers-audited
 
 The tags: [run] is a run named with its commit, [read] is what I read in the tree or a log, [inferred] is my conclusion from those.
 
-This PR holds #9346 (proofs' `cursor/proofs-expcalls-4d1e` at `949c03c3a7a1`), which adds `Flock.SecurityProofs.SpotOneWaitTwo`. [read] The coordinator marks this PR. Until #9346 is on `main`, `repository`'s unwitnessed cap and the ratchet gate fail on #9346's files (see The gate and Runs). [run]
+This PR holds #9346 (proofs' `cursor/proofs-expcalls-4d1e` at `949c03c3a7a1`), which adds `Flock.SecurityProofs.SpotOneWaitTwo` (not shown to accept any play). [read] The coordinator marks this PR. Until #9346 is on `main`, `repository`'s unwitnessed cap and the ratchet gate fail on #9346's files (see The gate and Runs). [run]
 
 ## Unwitnessed guarantees print no number
 
@@ -35,7 +35,7 @@ The row text for each form of entry (bits cell / witness missing cell), each hel
 - `security/Proofs` lists no guarantee.
 
 **The two mirrored guarantees whose numbers it removes** [run, same run; compared with the command at `7effbf40c705`, run locally]:
-- `Flock.SecurityProofs.SpotOneWaitTwo`, mirrored by `hashBound`. Its entry is `missing: honest`.
+- `Flock.SecurityProofs.SpotOneWaitTwo` (not shown to accept any play), mirrored by `hashBound`. Its entry is `missing: honest`.
 - `Flock.SecurityProofs.MaskedKS`, mirrored by `KS`. Its entry has both hashes, so both witnesses are missing.
 
 Guarantees with a number went from 16 to 14 and mirrored lines from 84 to 76. No other guarantee's number changed. [run]
@@ -106,7 +106,7 @@ A mirror evaluates one term of a bound, so a guarantee's security in bits is at 
 
 [read: `bits_pins.json` at `d2a084f91f38`; the Printed column: run `r20261113-224235-ea48`]
 
-Every guarantee except `SpotOneWaitTwo` is pinned by its `unfolded_hash`. Definitions are pinned as well as guarantees because a statement's hash names the definitions it reads only by name: restating `εregAt` moves its `reads` hash and leaves `compilerKSReg`'s `unfolded_hash` unchanged. [read]
+Every guarantee except `SpotOneWaitTwo` (not shown to accept any play) is pinned by its `unfolded_hash`. Definitions are pinned as well as guarantees because a statement's hash names the definitions it reads only by name: restating `εregAt` moves its `reads` hash and leaves `compilerKSReg`'s `unfolded_hash` unchanged. [read]
 
 Every point whose sizes no card declares says so in its `about` field: SPOT's `N`, `n_PU`, `k` and `openCalls`, Pearl-C's `2^30`, and PoUW's `|L|`. [read]
 
@@ -133,9 +133,9 @@ Where the mirrors differ from the design's `table_v1.py`, for proofs to read:
 2. evaluates the `hashBound` mirror there in exact rationals;
 3. requires that value to be at most the right side.
 
-Both instances are of `SpotOneWaitTwo`, which is under `unwitnessed`. So the test then requires that neither line is printed: no line has the instance as its row, no line of `SpotOneWaitTwo` has bits, and the command's text carries neither the row nor the figure. [read] Once the entry leaves the lock, the same test requires each line printed with the instance's arguments and the mirror's figure. That branch is not exercised at this head. The small-lock test holds the printed figure equal to the mirror's on another mirror. [inferred]
+Both instances are of `SpotOneWaitTwo` (not shown to accept any play), which is under `unwitnessed`. So the test then requires that neither line is printed: no line has the instance as its row, no line of `SpotOneWaitTwo` has bits, and the command's text carries neither the row nor the figure. [read] Once the entry leaves the lock, the same test requires each line printed with the instance's arguments and the mirror's figure. That branch is not exercised at this head. The small-lock test holds the printed figure equal to the mirror's on another mirror. [inferred]
 
-**What the test does not hold:** that `hashBound` at those numerals is `SpotOneWaitTwo`'s bound. That is the mirror's own reading (the guarantee's error reads `hashBound` twice). The facts' `bound` field will check it in step 2. [read]
+**What the test does not hold:** that `hashBound` at those numerals is `SpotOneWaitTwo`'s bound (it is not shown to accept any play). That is the mirror's own reading (the guarantee's error reads `hashBound` twice). The facts' `bound` field will check it in step 2. [read]
 
 **Other tests:** the text pass on a small package; `--facts`, including a `missing` pin; `--run`, with the store stubbed; the period counts on a small census; ordering and exit codes. [read]
 
@@ -162,8 +162,8 @@ Both instances are of `SpotOneWaitTwo`, which is under `unwitnessed`. So the tes
 ## Runs
 
 Each suites run went through `research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py SUITE...'`, over the six suites that read this change's files: `verity-lean-audit`, `verity-cli`, `verity-check`, `research`, the certifier's network verifier and `repository`. What I read in each, from its `stdout.log`:
-- `r20261113-181406-a0b2` (source `7effbf40c705`): 5 passed. `repository` had 361 passed and 1 failed, `test_the_unwitnessed_list_only_shrinks`: `security` has 222 > 221, because #9346's `SpotOneWaitTwo` is unwitnessed and `main` has since lowered the cap. [run]
-- SUITES_RUN_LINE
+- `r20261113-181406-a0b2` (source `7effbf40c705`): 5 passed. `repository` had 361 passed and 1 failed, `test_the_unwitnessed_list_only_shrinks`: `security` has 222 > 221, because #9346's `SpotOneWaitTwo` (not shown to accept any play) is unwitnessed and `main` has since lowered the cap. [run]
+- `r20261113-222745-c790` (source `d2a084f91f38`): 5 passed (0 cached), 1 failed. `verity-lean-audit` 801, `research` 5,086 (3 skipped), `verity-check` 1,006, the certifier's network verifier 104 and `verity-cli` 133 passed. `repository` had 361 passed and 1 failed, the same test with the same cause: `test_the_unwitnessed_list_only_shrinks`, whose cap for `security` is 221 while the lock lists 222 (`SpotOneWaitTwo` (not shown to accept any play), from #9346). This PR changes no lock and no cap. [run; the cause: read]
 - `r20261113-224235-ea48` (source `d2a084f91f38`): the command, text and `--json`, exit 0. [run]
 
 ## Not done
