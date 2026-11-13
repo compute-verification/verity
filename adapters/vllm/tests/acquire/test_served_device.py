@@ -98,7 +98,7 @@ def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: p
     monkeypatch.setattr(SD, "load", lambda sku: {"arch": "hopper", "sm": {"count": {"value": 132}}})
     with pytest.raises(Unmodelled) as e:
         SD.check_card((9, 0), 132, "a-card")
-    assert str(e.value) == "verity/hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
+    assert str(e.value) == "hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
 
 
 def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
