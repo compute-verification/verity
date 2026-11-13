@@ -158911,3 +158911,22 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `3a7fe4d0b1affb4fbc9f6c96bc19b8ce883c557e` (pull request #9776). Runs out: `r20261113-200014-7d41` (records, cpu-1, ends by about 22:01Z at the latest), `r20261113-200124-a38f` (suites, cpu-1, by about 22:02Z).
+
+
+## RATING, Fri 13 Nov 20:04Z: over the carried head `9dca1601a6d7` the rating's control rows come out figure for figure (`r20261113-193441-d401`): the two-raiser tile is still not refused at the H100, and at sm_120 the dead pairs are still refused. The ready line of 19:33Z stands
+
+One run, `--on auto`, exit 0, on a clone of `9dca1601a6d7` with my sweep at `ebde40c4488` (the sweep of the rows before, with its six import lines pointed at the modules' new paths; nothing else changed in it). One salt each. [run]
+
+| Row | Over the carried head | The same row over the old head `4d4950f1bb9` |
+| --- | --- | --- |
+| H100, two-raiser tile, 8192³, off-centre, 20 groups, salt 0 | rule passes, 0 mends, debit 13,040 against 106,823.68; both programs 4,096 of 4,096; 8,757.445 and 9,397.445 a word of 10,432 | the same figures (`r20261113-123655-6a3c`) |
+| H100, words on 4 × 4 tiles: raised adder (both fills, both programs), dead pairs | 16 of 16 each | the same (`r20261113-164045-5309`) |
+| sm_120, the same words checks | raised adder 0 of 16 for both programs and both fills; dead pairs 16 of 16 | the same (`5309`) |
+| sm_120, honest tile, 8192³, salt 0, both records | rule passes, 0 mends, debit 782 and 784.2 | the same (`r20261113-164107-4781`) |
+| sm_120, dead-pair tile, 8192³, salt 0, both records | rule refuses: mends 458,752, debit 464,834 and 464,844.6 | the same (`4781`) |
+
+- So the carry did not change what the scheme's debit and tile rule do on these tiles. It is one salt a row; salts 1 and 2, k = 65,536 and the scalar reference were not run again.
+- I added the first row to #9735's body ("What ran") and read it back: head `9dca1601a6d7`, open, not marked.
+- Nothing of mine is running.
+
+Mailbox read at 20:04Z; nothing newer than your 17:07Z.
