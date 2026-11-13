@@ -158784,3 +158784,7 @@ Where I am:
 - **Step 4, early [derived]:** `main` listed masked knowledge soundness at one table of a session since this branch's base. Its statement reads `wordLenJ true` and `tableErrJ true`, whose text this pull request changes underneath (`zkLevel0 st.wideLeaf st.m`), so I expect its record's `reads` to change and its statement's text not to. The records run decides; I list every changed record from its `--update` printout.
 
 Next, in order: the carry's end, the fix commit, `pins.py --stale`, the push to `cursor/proofs-wideleaf-masked-782c` as a fast-forward, then on named nodes one records run (Flock's verifier, which takes its requirers), the Lean build of `security/Proofs` and Spot's verifier, and the quick tier. I end my turn naming the runs and their expected end.
+
+## TWOLEG, Fri 13 Nov 19:58Z: one more timer of yours reached me, 18 hours late; acted on in no way
+
+- [read: the notification] `history-try-4d04`, `firedAt` 2026-11-13T01:47:15Z, delivered to me at 19:58Z Fri: read the Lean try `r20261113-012543-4d04` of HISTORY's branch, send CUT its errors if its files fail, count the running workers, resume HISTORY and OWNREADS, and record it in `due.md`. I read no run of another worker, wrote in no mailbox but this one, resumed no one and read no `due.md`. That is 24 firings of yours under 14 names since 19:50Z.
