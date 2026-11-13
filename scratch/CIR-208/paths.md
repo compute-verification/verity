@@ -1,21 +1,24 @@
 # CIR-208: every path string the superseded-versions check holds, and the move's row for each
 
-Made at #8463's head `b1409cffb06f0e1b46ca8ee97fc85c28c412523b` (`main` `8c11a1d5ab` merged). The maps are read on
+Made at #8463's head `d9b1f18a28fef36e24a3c3d6b6f6031236c943a6` (`main` `1e4d5c993c08` merged). The maps are read on
 `origin/cursor/top-moves-c-b396` at `680f1541f8c3`: `tools/move/definitions_kept_map.toml`, `definitions_merge_map.toml`,
 `definitions_served_map.toml` and `definitions_lake_map.toml`, which run in that order. "Row" is the `[paths]` row whose old
 side is the longest prefix of the string. "None" means no row of the four maps holds it, so the move leaves it as it is.
 
 ## Run, checked, and only read
 
-- **Run.** `r20261113-025528-cc6a` took this head merged with `680f1541f8c3` (scratch commit `2ef2f56688`) and ran the kept,
-  merge and served maps with `tools/move/layout.py --map M --no-lock`, one commit each. On the moved tree every one of the
-  list's 239 `file` strings names a file; the test file passes (`3 passed`); `--prune` keeps the same 239 entries and
-  changes only the order of 25 lines; and the test file's graph task passes with `undeclared_reads: []`. The maps rewrote
-  207 of the list's lines and no line of the test file or of `tests/README.md`. The job is `scratch/CIR-208/cross_move.sh`.
+- **Run.** `r20261113-032839-64dc` took this head merged with `680f1541f8c3` (scratch commit `dbd6b1bc26`; the one conflict
+  of that merge, in `tools/verity/check/public_boundary.toml`, taken on the move branch's side) and ran the kept, merge
+  and served maps with `tools/move/layout.py --map M --no-lock`, one commit each, then the Lake packages' map. After the
+  three maps, and again after the fourth: every one of the list's 239 `file` strings names a file; the test file passes
+  (`3 passed`); `--prune` keeps the same 239 entries and changes only the order of 25 lines; and the test file's graph
+  task passes with `undeclared_reads: []`. The maps rewrote 207 of the list's lines, 8 lines of circuit-check's
+  `pyproject.toml` (none of them this change's) and no line of the test file or of `tests/README.md`. The job is
+  `scratch/CIR-208/cross_move.sh`. `r20261113-025528-cc6a` had done the same at the earlier head `b1409cffb0`, three maps.
 - **Checked against that run.** The row computed below for each of the list's 64 files gives the path that run wrote, for
   all 64 (`make_paths.py` stops otherwise).
-- **Only read.** The Lake packages' map: none of its rows holds a string here. `cross_move.sh` runs it as a second phase
-  from its next run on; `inflight.md` names that run.
+- **Only read.** That the chain which lands is these four maps as they are at `680f1541f8c3`: the staged branch is cut
+  again before it lands, and a row added or changed after this read is not in this table.
 
 ## The test file, `tools/verity/circuit_check/tests/test_superseded_versions.py`
 
@@ -31,6 +34,7 @@ No path in it is put together from parts: each is one whole string from the repo
 | 52 | `Path(__file__).resolve().relative_to(REPO)` | `PRUNE`, the command the failure prints: the file's own place | follows the file |
 | 58 | `circuit_check` (a module) | the fresh interpreter imports `sidecars` and `targets` from it | none |
 | 59 | `verity.circuits.defs` (a module) | the fresh interpreter's `REGISTRY` | none: the kept and merge maps move modules into `verity.circuits` and rename none that is there |
+| 147 to 165 | `a.py` to `z.py` | made-up file names in the test of the list's own rules (`findings`, `pruned`); no file | none |
 
 The registries' loader, `circuit_check.targets.load_registries`, is not this change's, and it names two modules the served
 map renames (`[modules]`): `verity.definitions.registry` to `verity_vllm.definitions.registry` and
@@ -40,8 +44,8 @@ map renames (`[modules]`): `verity.definitions.registry` to `verity_vllm.definit
 
 | where | string | what it is | row |
 |---|---|---|---|
-| `tools/verity/circuit_check/pyproject.toml` 205 | `tests/lint/allowlists/superseded_versions.json` | the suite's `inputs`: the one path this change adds | none |
-| the same, 227 and 256 | `tests/test_superseded_versions.py` | the test's name in two `[[tool.verity.tests.reads]]` groups, from the suite's directory | none |
+| `tools/verity/circuit_check/pyproject.toml` 208 | `tests/lint/allowlists/superseded_versions.json` | the suite's `inputs`: the one path this change adds | none |
+| the same, 230 and 259 | `tests/test_superseded_versions.py` | the test's name in two `[[tool.verity.tests.reads]]` groups, from the suite's directory | none |
 | `tests/README.md` 35 | `lint/allowlists/superseded_versions.json` | prose, from `tests/` | none |
 | `tests/README.md` 36 | `tools/verity/circuit_check/tests/test_superseded_versions.py` | prose | none |
 | the list, line 2 | `tools/verity/circuit_check/tests/test_superseded_versions.py` | inside its `rule` text | none |
