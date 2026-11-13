@@ -16,3 +16,4 @@
 - 11:26Z (03:26 PST): ffde and 667c running/waiting as before; inbox unchanged. Pass 10.
 - 11:47Z (03:47 PST): ffde and 667c as before; inbox unchanged. Pass 11.
 - 12:08Z (04:08 PST): ffde passed all 5 (22.4 GiB), 667c passed 448/5s (15.7 GiB) at 3d484ece. Bodies final. Posting the CIR-269 comment.
+- 14:23Z (06:23 PST): woke on a new machine (up 0 min); /tmp lost, branches checked out from origin at 1333bd53 / a5c36530, 8854b824 detached. Launching records-first shard 1/4 at 1333bd53 (declared 64, 16 cores) and records-only at 8854b824 (declared 48). Job: tools/records-job.sh.
