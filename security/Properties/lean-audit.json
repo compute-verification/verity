@@ -1162,6 +1162,7 @@
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "honest": ["Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
   "Properties.Challenger.Drawn.familyOneCommitment": {
@@ -6732,6 +6733,9 @@
    },
    "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
    "unfolded_hash": "1c50962c1922c6ddacfb9742353e1de96fdd113bca73ae42a82d7c5ad0282b33"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest": {
+   "owner": "@proofs"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": {
    "owner": "@compute-accounting",
