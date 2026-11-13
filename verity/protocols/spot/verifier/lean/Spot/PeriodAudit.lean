@@ -1,7 +1,9 @@
 /-
 Sampled proofs' period, the audits' half, and the period's check (`verity/sampled-proofs/period/v1`, `protocol`): did
-every root a lane committed at the auditor's challenger during a monitoring period pass sampled proofs' audit, on the
-one sample the challenger gave it?
+every root a lane committed at the auditor's challenger during a monitoring period, on a session reserved with the
+sample's family, pass sampled proofs' audit on the one sample the challenger gave it? A root the lane committed on
+any other session is published among the lane's other sessions, and nothing is held of it: only an answer with no
+other session says that every root the lane committed passed.
 
 The period's check audits every window the ledger's half lists (`Spot.Period.windowsOf`) with the one-stage audit on
 the proofs themselves (`OneStageZk`). The verifier holds one set of parameters for the whole monitoring period
