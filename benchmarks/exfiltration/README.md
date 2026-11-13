@@ -81,7 +81,7 @@ field's name:
 - `verifier`: `{"module": ..., "commit": ...}`, the verifier that checked it and the commit it ran at.
 - `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure), `refuse`, or
   `withheld`: the verifier held back its last accept itself because the form it would accept is not yet proved (every
-  sampled proof accepted, every check before the sample held, every tampered input refused). `withheld` is neither an
+  SPOT proof accepted, every check before the sample held, every tampered input refused). `withheld` is neither an
   accept nor a refusal.
 - `proved_by`: null until a Lean proof covers that verifier, then the Lean guarantee's name.
 - `open`: while `proved_by` is null, and on every `withheld` verdict, what stands between the verdict and proved,
@@ -115,8 +115,17 @@ given share, at which every other figure stays.
 The record is one JSON object (`served_share` in `exfiltration.py`):
 
 - `run`: the served run's id.
+- `commit`: the commit its second stage ran; `runs`: each of its four runs (`serve`, `first`, `replay`, `second`)
+  as `{"run", "commit", "dirty", "why", "machine"}`, null for a run whose directory the reader wasn't given. The
+  resampling holes are read at these commits (below).
 - `prove`, `staging`, `replay`, `interior`: each a list of what held GPUs for that part, one entry a session or a
-  step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held.
+  step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held. A step that started no
+  process on a card is on 0 GPUs and adds no GPU-seconds; a part whose entries are all on 0 GPUs prints "on CPUs: no
+  GPU-seconds" beside its 0. A count under 0 or not a whole number is refused.
+- `prove_seconds_source`: which seconds `prove`'s are. `busy`, the proof server's busy seconds a card: the proving is
+  measured. `session`, a session's seconds with its wait behind the others of its prover included: the proving and
+  the share that sums it print `measured, at most`, an upper bound. Absent, `prove` lacks it and no share is claimed;
+  any other value is refused. Either way a part's GPU-seconds are the seconds held times the GPUs held.
 - `serving`: one such entry, the window's load: the seconds it was served over and the GPUs its engine held.
 - `stock`: one such entry, stock vLLM serving the same load at the same launch settings save Verity's changes. The
   serving charge is the served GPU-seconds less stock's, measured.
@@ -227,7 +236,8 @@ plan of the case, is left out and listed under "Refused".
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures), `simulated` (what a stand-in does in its place: the network certifier's set-time
-  card, the one such input), `assumed`, `missing` (a field a served run's record lacks, with its gap), or `run, not
+  card, the one such input), `assumed`, `missing` (a field a served run's record lacks, with its gap), `measured, at
+  most` or `modeled, at most` (an upper bound: a served run's proving read from its sessions' seconds), or `run, not
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's
   come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
@@ -251,7 +261,11 @@ plan of the case, is left out and listed under "Refused".
 - **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
-- **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record: the label (`SPOT`, or
+- **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
+  over the served run's own code instead: its record's `commit` and each of its runs' commits, each listed, a hole
+  closed only where its fix is an ancestor of every one of them. Where any of the four runs is not given, such a
+  hole prints "closed at the runs read", naming the runs read and those not given, and the label stays `SPOT`. The
+  block holds the label (`SPOT`, or
   `SPOT soundness` only when both holes are closed), each hole's status, and the theorem with its open premises as
   the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
 
