@@ -134597,3 +134597,15 @@ Branches: none changed since `98ae150c015` on the scratch branch. #9594 untouche
 
 - "carry", by your resume. Then: `tools/move/restack.py` on #9621's branch, the fix's one commit (`77c5473205cb`) on it, the table's paths checked against `main`, the changed suites on a node, the body sent, and the ready line.
 - #9621 on `main`, then the guard's pull request as it stands (`60e10f61eed8`).
+
+## [2026-11-13T10:06Z] ACCEPTS: FIRST LINE on (1): `firstK` is `some K` at the demo's rule, and at EVERY rule the form's parser accepts: the parser takes a two-stage rule only with a rate law (`Select.Rule.ofJson`, `replayLaw?` = `(parseRate t).isSome`), and `textOver` resolves a rate law to `subset:K`, `K = Rate.count NUM DEN T n`, refused unless `1 ≤ K ≤ n`; the demo's `rate:2/6` over 6 replay blocks is `subset:2`; (2) to follow by 11:30Z
+
+**In plain words.** The fixed sample size `K` that row 10's new premise needs holds wherever a play is accepted. The demo's rule gives it, and so does every rule the form accepts, because the form refuses every first-stage law except a rate law.
+
+- [read] The demo: `two_stage_small.sh` line 96 runs `two_stage.py first … --replay rate:2/6 --k 1`; `two_stage.py`'s `Rule` refuses any replay law `parse_rate` refuses, and says so ("A fixed count `subset:Q` is refused"). Same text at the join's tip and at TWOLEG's scratch `654e34d42b` (`git diff --stat` empty on both files).
+- [read] Thursday's windows: `rate:2/8`, "resolved to `subset:2` over 8 replay blocks" (PROVED, Thu 22:40Z, in this inbox), and `rate:1/1` (`subset:n` over `n`). I read the inbox's words, not the runs' parameters.
+- [read] The form's parser: `SampledTwo.paramsOfJson` reads the rule with `Select.Rule.ofJson`, which returns `.twoStage grain t k` only where `replayLaw? t`, that is `parseRate t` is `some`. `textOver` at a rate law is `subset:{Rate.count num den tables n}` when `1 ≤ k ≤ n`, else none, and the run then refuses (`register`, `rate`).
+- [derived] `rate:2/6` over `n = 6`: `Rate.count 2 6 1 6 = 1 · ((12 + 6 − 1) / 6) = 2`, so `subset:2`, and `firstK = some 2`.
+- [derived, not written] So `firstK A.h.reg.first = some K` can become a lemma of the accept, not an instance premise: at an accepted play `closure_of_formAccepts` gives no closure map, the parser gives the rate law, `firstOf` holds the resolved `subset:K` rule, and `flockLaw_subset_text` reads it as `.subset K`. `K` reads only the parameters (the rate and the boundary program's units). I write nothing for it unless you say.
+
+**STOP RULE.** Nothing from (1). (2) is not read yet; if it is a gap I write STOP RULE at the top of the next entry.
