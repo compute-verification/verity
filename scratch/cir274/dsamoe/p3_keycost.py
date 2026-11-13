@@ -9,9 +9,10 @@ and Python objects' memory (tracemalloc over a copy); `check_wires` and `ordered
 and without them; the Program's node families; wire patterns by reader family after coalescing. Run from the repository
 root:
 
-    .venv/bin/python p3_keycost.py OUT [LAYERS]
+    .venv/bin/python p3_keycost.py OUT [LAYERS] [PROMPT_IDS] [OUTPUTS]
 
-Writes OUT/keycost_l<LAYERS>.json and one DSAMOE line a stage."""
+Writes OUT/keycost_l<LAYERS>.json (43 prompt ids, 2 outputs, the defaults) or OUT/keycost_l<LAYERS>_p<P>_o<O>.json, and one
+DSAMOE line a stage."""
 import hashlib
 import importlib.util
 import json
@@ -25,6 +26,8 @@ from pathlib import Path
 
 out = Path(sys.argv[1])
 layers = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else 4
+LP = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else 43
+OUTS = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] else 2
 out.mkdir(parents=True, exist_ok=True)
 spec = importlib.util.spec_from_file_location("compile_cost", "benchmarks/compile_cost/run.py")
 cc = importlib.util.module_from_spec(spec)
@@ -37,8 +40,8 @@ from verity_vllm.program.predict import node_window_sparse as NS  # noqa: E402
 from verity_vllm.program.predict import window_builder as WB  # noqa: E402
 from verity_vllm.program.predict.steps import plan_steps, request_program  # noqa: E402
 
-LP, T = 43, 1
-path = out / f"keycost_l{layers}.json"
+T = OUTS - 1
+path = out / (f"keycost_l{layers}.json" if (LP, OUTS) == (43, 2) else f"keycost_l{layers}_p{LP}_o{OUTS}.json")
 rec: dict = {"LP": LP, "outputs": T + 1, "layers": layers, "rank": 0, "sets": "frame,dense,sparse"}
 timers: Counter = Counter()
 
@@ -148,6 +151,34 @@ try:
         "wire_patterns_by_reader_family": dict(by_fam.most_common()),
         "peak_gib": peak(), "rss_gib": rss(),
     }
+    import bisect
+    from collections import defaultdict
+
+    def step_of(tid: str, at: int) -> int:
+        spans = w.b.spans[tid]
+        return spans[bisect.bisect_right([s[0] for s in spans], at) - 1][3]
+
+    reg_ = circuit.registered
+    per_param_open = Counter(o.table for o in reg_.openings)
+    per_param_root = Counter(r.table for r in reg_.roots)
+    xt = [t for t in reg_.tables if "/b" in t.param and t.param.endswith("/table")]
+    open_steps: dict = defaultdict(set)
+    for o in reg_.openings:
+        open_steps[o.table].add(step_of(o.reader, o.at))
+    rec["steps"] = {
+        "steps": w.steps, "moe_nodes": rec["program"]["families"].get("MoeExpertFp8Gemm", 0),
+        "key_wires_by_step": dict(sorted(Counter(step_of(x.reader, x.at) for x in key).items())),
+        "g_wires_by_step": dict(sorted(Counter(step_of(x.reader, x.at) for x in g).items())),
+        "key_wire_radix": dict(Counter(str(x.radix) for x in key).most_common(6)),
+        "expert_tables": len(xt), "expert_table_params": len({t.param for t in xt}),
+        "openings_per_param": dict(Counter(per_param_open[t.name] for t in xt)),
+        "roots_per_param": dict(Counter(per_param_root[t.name] for t in xt)),
+        "opening_steps_per_param": dict(Counter(len(open_steps[t.name]) for t in xt)),
+        "bytes_tables_expert": len(IF.circuit_bytes({"t": [t.doc() for t in xt]})),
+        "bytes_roots": len(IF.circuit_bytes({"t": [r.doc() for r in reg_.roots]})),
+        "bytes_openings": len(IF.circuit_bytes({"t": [o.doc() for o in reg_.openings]})),
+    }
+    save("steps", rec["steps"])
     save("keys", {k: v for k, v in rec["keys"].items() if k != "wire_patterns_by_reader_family"})
 except BaseException as e:  # noqa: BLE001 - a refusal is a result
     rec["error"] = {"error": f"{type(e).__name__}: {e}"[:3000], "trace": traceback.format_exc()[-4000:],
