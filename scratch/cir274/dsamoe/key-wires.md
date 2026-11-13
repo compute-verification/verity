@@ -63,7 +63,20 @@ go 13,238 → 36,100, and before `coalesce` 19,158 → 737,762, all of the growt
 - BatchedGemm: 4 → 16,387 patterns;
 - SparseMlaSplit: 479 → 6,599 patterns.
 
-TOKWIRES
+The cause, from a probe of those wires (`p3_tokwires.py`, run `r20261113-042057-0248`):
+- **BatchedGemm.** At 86 ids, BatchedGemm{K=512}'s `x` reads its prefill tokens from two writers:
+  - tokens 0–63 from `AllGather_v1{WORLD=1,N=512}`;
+  - tokens 64–85 from `AllGather_v1{WORLD=8,N=64}`, at base 688.
+
+  The read's units are token-fastest, so each of its 8,192 runs at 4 layers (2,048 a layer, all in the prefill step)
+  needs one wire a writer: 8,192 + 8,193 patterns. At 43 ids one writer covers every token and the runs coalesce into
+  one wire. Each run's source is the same, a fan-out.
+- **SparseMlaSplit.** At 86 ids it takes its split path: `SparseMlaCombine_v1{NSPLIT=2}` reading `SparseMlaSplitEndCols_v1`
+  per column group C, 92 patterns a group (88 of them in the prefill step).
+
+Both families are mine, and nearly all of the growth is in the prefill step. They are the non-expert half of the window
+and outside items 2 and 3. Scaled ×78 layers, the BatchedGemm part alone would be about 320,000 patterns at 86 ids. I
+haven't measured it there. TOKWIRES2
 
 **"About 454,000 key-wire patterns a step a rank": right** (453,600).
 
