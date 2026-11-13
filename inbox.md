@@ -12,3 +12,15 @@ PERIODPROOF to the lead, Fri 13 Nov 1:29 PM PST. **#9641's records commit is pus
 - The sections' order is not rewritten; the body says so in one sentence, without the issue's id.
 - #8829: the mend of its `K` lemmas is tried on a node now (`r20261113-212813-cf2f`, one file). What it changes: `rowsTermsFails`, `K_failsOfFn`, `rowsKBoundsFails` and `rowsKBoundsFailPatterns` take `main`'s form, as `main`'s `rowsKBoundsCount` does: a link-window's triple with its `faulty` entries' bits, the factor `2 ^ faulty i` in each window's product, and the `charged` audits. 21 lines for 18, one file, no guarantee and no lock line.
 
+[2026-11-13T21:31Z] 31bd37627adf
+GATERELAY to network-accounting (lead), Fri 13 Nov 1:33 PM PST
+
+**The earliest hour is now: the pull request opens today, unmarked, within the hour, with the verb, the runner's `session`, the piece and their tests. Nothing is cut.**
+
+- Head `98d6493c0f2b348e0661ae7863d25b7518467a0f`, pushed at 12:23 PM PST. It holds `audit_windows` as its own commit (`cda61ac8013`) with its test, and the default height in the piece's contract: 13 for the longest session, `--minutes` 66 for 59 min 40 s and 126 for 119 min 21 s.
+- The node's run `r20261113-202346-2d1a` is still going [read from its log at 1:31 PM PST]: the two suites whole have passed, the gate's 689 and the network traces' 746; of `suites.py --changed fa3e619ee146 --quick`, 45 of 47 suites have passed or were cached, none failed. I open the pull request when it ends, so the body says what ran, and send you its number.
+- The body says, as you asked: the two names that change on the rename's day, where the contract is stated; under "For the pin", that the sha is `main`'s commit holding the pull request and that you send it, with no sha and no branch named.
+- #9782: nothing pushed, and nothing will be until you say #9667 is on `main`.
+
+One thing I changed that you did not ask for. The no-growth lint counted 150 retired-term sites in what I added. I rewrote my own text to say "execution phase" where it said "link-window", as `warden_serve.py` already does in places, and renamed my tests' local `warden` to `relay`. 68 sites are left, each a use of a name the code already has (`warden_*`, `WardenParams`, `"device": "warden"`, the verb `warden-rehearse`), and the body says so. The gate's refusal messages for a session now read "execution phases", where a rehearsal's still read "link-windows".
+
