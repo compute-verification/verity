@@ -188,6 +188,33 @@ theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousCon
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
+
+/-- **`StreamedWipe`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`, whose memory is the
+labels and which keeps nothing of its prior content), is accepted by the wipe's own acceptance (`StreamedWipe.Accepts`:
+every answer is its label) with probability 1, at one label of one bit, one challenge, one bit of prior content and
+labels drawn by the PRF that outputs its one-bit key. -/
+theorem StreamedWipe_honest :
+    ∃ (prf : Pous.Bits 1 → Fin 1 → Pous.Bits 1) (P : Pous.StreamedWipe.Prover 1 1 1 1 (1 * 1) 0),
+      Pous.pr (fun x : (Pous.Bits 1 × (Fin 1 → Fin 1)) × Pous.Bits 1 =>
+        Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨fun K _ => K, PousStreamedWipe.honest 1 1 1 1,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
+
+/-- **`StreamedWipe`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, at one label of one bit, one
+challenge, one bit of prior content and memory, no egress and `g = 0`, where the bound is `2^-1`, for some key-free PRF
+and a prover (`keepAll`) that keeps its prior content. -/
+theorem StreamedWipe_nontrivial :
+    ∃ (prf : Pous.Bits 0 → Fin 1 → Pous.Bits 1) (P : Pous.StreamedWipe.Prover 1 1 1 1 1 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        Pous.StreamedWipe.bound 1 1 1 1 1 0 0 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) := by
+  refine ⟨fun _ _ _ => false, Pous.Claims.keepAll 1 1 1 1 1 0 le_rfl, ?_⟩
+  rw [Pous.Claims.winRealBy_acceptAll_keepAll Nat.one_pos le_rfl, Pous.Claims.keepAll_adv_zero Nat.one_pos le_rfl,
+    add_zero, not_le]
+  have hb : Pous.StreamedWipe.bound 1 1 1 1 1 0 0 = 2 / 4 := by
+    norm_num [Pous.StreamedWipe.bound]
+  rw [hb]
+  exact ENNReal.div_lt_of_lt_mul (by norm_num)
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB
 theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
@@ -210,7 +237,8 @@ theorem StreamedWipeMeetsH200_honest :
   omega
 
 /-- **`StreamedWipeMeetsH200`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the H200's
-instance with no egress, for some key-free PRF and a prover (`keepAll`) keeping the threshold's `39,068,035,213` bits. -/
+instance with no egress, for some key-free PRF and a prover (`keepAll`) keeping the threshold's `39,068,035,213`
+bits. -/
 theorem StreamedWipeMeetsH200_nontrivial :
     ∃ (prf : Pous.Bits 0 → Fin 2365587456 → Pous.Bits 512)
       (P : Pous.StreamedWipe.Prover 2365587456 2906 512 39068035213 (2365587456 * 512) 0),

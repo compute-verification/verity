@@ -67,20 +67,24 @@ theorem winRealBy_acceptAll_keepAll {N k b q M E κ : ℕ} (hN : 0 < N) (h : q �
   have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
   exact pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
 
+/-- Against `acceptAll`, the PRF's advantage against the distinguisher built from `keepAll` is 0: it wins on every run
+under either labels. -/
+theorem keepAll_adv_zero {N k b q M E κ : ℕ} (hN : 0 < N) (h : q ≤ M) (prf : Bits κ → Fin N → Bits b) :
+    prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 0 := by
+  have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
+  have hreal := winRealBy_acceptAll_keepAll (E := E) (k := k) hN h prf
+  have hideal : pr (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 1 :=
+    pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
+  unfold prfAdvantage
+  rw [show pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ =>
+      wipeDistinguisherBy acceptAll (keepAll N k b q M E h) (x.1, prf x.2)) = 1 from hreal, hideal, tsub_self]
+
 /-- **`keepAll` breaks every claim's bound at `acceptAll`**: it wins with probability 1, and the PRF's advantage
 against the distinguisher built from it is 0. -/
 theorem keepAll_not_within {N k b q M E κ : ℕ} (hN : 0 < N) (h : q ≤ M) (prf : Bits κ → Fin N → Bits b) :
     ¬ winRealBy acceptAll prf (keepAll N k b q M E h) ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) := by
-  have : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
-  have hreal := winRealBy_acceptAll_keepAll (E := E) (k := k) hN h prf
-  have hideal : pr (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 1 :=
-    pr_of_forall fun x => ⟨trivial, keepAll_keeps h _ _ _⟩
-  have hadv : prfAdvantage prf (wipeDistinguisherBy acceptAll (keepAll N k b q M E h)) = 0 := by
-    unfold prfAdvantage
-    rw [show pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ =>
-        wipeDistinguisherBy acceptAll (keepAll N k b q M E h) (x.1, prf x.2)) = 1 from hreal, hideal, tsub_self]
-  rw [hreal, hadv, add_zero, not_le]
+  rw [winRealBy_acceptAll_keepAll hN h prf, keepAll_adv_zero hN h prf, add_zero, not_le]
   exact pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num)
 
 /-- **A prover that keeps nothing doesn't meet the threshold**: if its keep is a constant `w`, it is accepted and keeps

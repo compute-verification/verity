@@ -4852,6 +4852,10 @@
   "Accounting.SecurityProofs.RateAuditTensorSketch": {
    "honest": ["Accounting.SecurityProofs.RateAuditTensorSketch_honest"],
    "nontrivial": "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial"
+  },
+  "Pous.SecurityProofs.StreamedWipe": {
+   "honest": ["Pous.SecurityProofs.StreamedWipe_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipe_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5508,10 +5512,6 @@
   "Pous.SecurityProofs.BandPubMeetsFamilyD2": {
    "type_hash": "d6d5b8735c565b9d5512ddf8e64a9b7ab74031ec712805a8b20f5dd97be7cfba",
    "unfolded_hash": "e97e7493337d5a1edd3d1a1b57956550968c7d304120254907d51f7fbdcc6d97"
-  },
-  "Pous.SecurityProofs.StreamedWipe": {
-   "type_hash": "b6d3047a8903fca2ea78d5e2de43809c771ce17677637ac8a8233af19922cf1f",
-   "unfolded_hash": "cf5af8fdc8f8e0d874782d15daa44455b9fc1da1ddfbcd06a423a7cc435ab9ce"
   },
   "Pous.SecurityProofs.StreamedWipeMeets141GB": {
    "type_hash": "b6ab57abe9ed0a1a43be839204bb683d6642ecbde4190d898b4a3ccc1d7b6003",
@@ -21484,6 +21484,12 @@
    },
    "type_hash": "6d52bba05419a102487e5c42fdb09b253307186f9ac6328693929fe349dae5d8",
    "unfolded_hash": "3ad4dba7ae60c5f40ffc98633c8c95e1e89b53ca443c386daf173201e8a4f391"
+  },
+  "Pous.SecurityProofs.StreamedWipe_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipe_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGap": {
    "owner": "@compute-accounting",
