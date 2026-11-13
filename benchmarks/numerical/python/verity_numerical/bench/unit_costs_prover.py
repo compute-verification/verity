@@ -74,6 +74,37 @@ from verity.commitments.windows.interface import K_MAX, PACK_LOG
 from . import unit_costs_padding as P
 from .unit_costs import retree
 
+__all__ = [
+    "HIDDEN_ZK",
+    "NODE_GIB",
+    "POSTED_FITS",
+    "REGISTERED_STAGING",
+    "RHO_TABLE",
+    "SLOT_SUMCHECK",
+    "SOURCE",
+    "STAGING",
+    "audit",
+    "check",
+    "descriptions",
+    "find_limit",
+    "fit",
+    "hours",
+    "k1",
+    "lstsq",
+    "main",
+    "menu_t",
+    "pieces_pmf",
+    "pieces_shape",
+    "prover",
+    "render",
+    "rhos",
+    "session",
+    "shape",
+    "staging",
+    "staging_fit",
+    "template_class",
+]
+
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
 NODE_GIB = 1716
 #: one NVIDIA RTX PRO 6000 Blackwell Server Edition: 97,887 MiB
@@ -616,6 +647,10 @@ def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
 
 def prover(inv: Mapping[str, Any], fitted: Mapping[str, Any] | None = None,
            slot: Mapping[str, Any] | None = SLOT_SUMCHECK, **kw: Any) -> dict[str, Any]:
+    """The prover column of the inventory ``inv`` (``prover.json``): the fit (``fitted``, or :func:`fit`'s) and its
+    :func:`check`, the staging fit, a registered and a generic session at each bound 2^j of :data:`POW2`, and each
+    workload's audit (:func:`workload`) under dp4, under dp4t, and under dp4t with the bulk registered (a what-if).
+    ``slot``: the slot sumcheck's constants, or None for Flock's prove alone."""
     fitted = fitted or fit()
     coef = fitted["coef"]
     staging_coef = staging_fit()
@@ -744,6 +779,7 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
 
 
 def render(pr: Mapping[str, Any]) -> str:
+    """``prover.md``: the column ``pr`` (:func:`prover`'s) as text and tables."""
     f = pr["fit"]
     c = f["coef"]
     sc = pr["staging_fit"]["coef"]
@@ -841,6 +877,7 @@ def render(pr: Mapping[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """The command (the module docstring): write ``prover.json`` and ``prover.md`` under ``--out``, and return 0."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for prover.json and prover.md")
