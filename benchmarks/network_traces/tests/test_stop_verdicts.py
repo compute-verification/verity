@@ -1007,6 +1007,38 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     assert SV.of_runs(two, runs, ["s2"]).held == 1 and SV.of_runs(two, runs, ["s1", "s2"]).held == 0
 
 
+def run_files() -> dict[str, dict[str, str]]:
+    """A run's files of each kind these tests hand the reader, by what they hold: the four verdicts' records of a
+    class on a head with the verifiers' controls and the serve's registration, and each way of being less."""
+    first, other, second = head(3, 5, 0), head(3, 6, 0), head(4, 2, 0)
+    theirs = head(3, 5, 0, domain=bytes([1]) * 64)
+    return {"the four": held_files(first, four(first)),
+            "a tie refused": held_files(first, tie_but(first, accepted=False)),
+            "a tie not complete": held_files(first, tie_but(first, complete=False)),
+            "three verdicts": held_files(first, four(first)[1:]), "another head": held_files(other, four(other)),
+            "another execution phase": held_files(second, four(second)), "no record": held_files(first, []),
+            "no registration": {"out/the-verdicts.jsonl": jsonl(four(first))}, "nothing": {"out/another.json": "{}"},
+            "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}]),
+            "the four and no control": held_files(first, four(first), controls=[]),
+            "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True)),
+            "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
+            "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
+            "the four and no serve's registration": held_files(first, four(first), served=[]),
+            "the four of another serve": held_files(first, of_serve("another serve", four(first))),
+            "the four under another registration": held_files(first, under(OTHERS, four(first)), served=[OTHERS]),
+            "the four, the tie at another rate": held_files(first, at_rate(CC.RESPONSE_TIE, "1/8", four(first))),
+            "the four, the tie by a verifier with no control": held_files(first, by_another(four(first))),
+            "the four of the run old as their serve": held_files(first, of_serve("old", four(first))),
+            "the four of the run new as their serve": held_files(first, of_serve("new", four(first))),
+            "another serve's head of the number": held_files(theirs, of_serve("another serve", four(theirs))),
+            "a record of no listed format, of another serve": held_files(
+                first, [unlisted(of_serve("another serve", four(first))[0])]),
+            "the four and a registration that doesn't read": held_files(first, four(first)) | {
+                SV.REGISTRATIONS_FILE: jsonl([registration(first), {"format": "another's"}])},
+            "the four and a serve's registration that doesn't read": held_files(
+                first, four(first), served=[SERVED, "no object"])}
+
+
 def test_a_superseded_run_takes_away_no_refusal(tmp_path):
     """What a superseded run refused on a head stands, whatever a later run accepted on it: a refused verdict, an
     accept that is not complete, a record that doesn't read, and a registration that gives the execution phase
@@ -1090,25 +1122,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
         assert len(got.verdicts) == 4 and got.why[-2] == dropped(4, "old"), name
         assert SV.of_runs(store, ["new"]).held == 1
     # superseding a run never raises what is held, whatever the two runs hold
-    second, theirs = head(4, 2, 0), head(3, 5, 0, domain=bytes([1]) * 64)
-    kept = {"the four": accepts, "a tie refused": held_files(first, tie_but(first, accepted=False)),
-            "a tie not complete": held_files(first, tie_but(first, complete=False)),
-            "three verdicts": held_files(first, four(first)[1:]), "another head": held_files(other, four(other)),
-            "another execution phase": held_files(second, four(second)), "no record": held_files(first, []),
-            "no registration": {"out/the-verdicts.jsonl": jsonl(four(first))}, "nothing": {"out/another.json": "{}"},
-            "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}]),
-            "the four and no control": held_files(first, four(first), controls=[]),
-            "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True)),
-            "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
-            "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
-            "the four and no serve's registration": held_files(first, four(first), served=[]),
-            "the four of another serve": held_files(first, of_serve("another serve", four(first))),
-            "the four under another registration": held_files(first, under(OTHERS, four(first)), served=[OTHERS]),
-            "the four, the tie at another rate": held_files(first, at_rate(CC.RESPONSE_TIE, "1/8", four(first))),
-            "the four, the tie by a verifier with no control": held_files(first, by_another(four(first))),
-            "the four of the run old as their serve": held_files(first, of_serve("old", four(first))),
-            "the four of the run new as their serve": held_files(first, of_serve("new", four(first))),
-            "another serve's head of the number": held_files(theirs, of_serve("another serve", four(theirs)))}
+    kept = run_files()
     seen = lowered = most = 0
     for i, (a, old) in enumerate(kept.items()):
         for j, (b, new) in enumerate(kept.items()):
@@ -1118,4 +1132,130 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 got = SV.of_runs(store, ["old", "new"], superseded).held
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
-    assert (seen, most) == (3 * len(kept) ** 2, 2) == (1452, 2) and lowered
+    assert (seen, most) == (3 * len(kept) ** 2, 2) == (1875, 2) and lowered
+
+
+def things(files: dict[str, str]) -> list[tuple[str, object]]:
+    """What a run's files hold that the reader reads, each with the kind of file that holds it."""
+    kinds = ((SV.REGISTRATIONS_FILE, "registration"), (SV.SERVES_FILE, "serve"), (SV.CONTROLS_FILES, "control"),
+             (SV.RECORDS_FILES, "verdict"))
+    return [(kind, json.loads(line)) for path, text in files.items() for pattern, kind in kinds
+            if fnmatch.fnmatchcase(path, pattern) for line in text.splitlines()]
+
+
+def less_by_one(files: dict[str, str]):
+    """Each way of leaving one thing out of a run's files, with what is left: a whole file, and one record of one."""
+    for path, text in files.items():
+        yield f"the file {path}", {p: t for p, t in files.items() if p != path}
+        lines = text.splitlines(keepends=True)
+        for i in range(len(lines)):
+            yield f"record {i} of {path}", files | {path: "".join(lines[:i] + lines[i + 1:])}
+
+
+def _head(doc: object) -> C.Head | None:
+    try:
+        return SV.head_of(doc)
+    except ValueError:
+        return None
+
+
+def _counts(control: dict) -> bool:
+    kind = SV.FORMATS[control[CC.VERDICT][SV.FORMAT]]
+    return control[CC.VERDICT].get(CC.ACCEPTED) is False and control[SV.REASON] == SV.REASONS[kind]
+
+
+#: the ways a thing the reader is handed stands against another: each is a refusal by the reader's rules, so
+#: leaving such a thing out may raise what is held, and leaving out anything else never does
+STANDS = ("a registration of connection rows that doesn't read", "a second head of an execution phase",
+          "a serve's registration that doesn't read", "a control record that doesn't read",
+          "a control that was not refused for its control's word", "a verdict record that doesn't read",
+          "a verdict that is refused or not complete",
+          "an accept of another serve, or under another registration, than a record that stays on its head",
+          "an accept at another rate than every block", "an accept by a verifier without its control")
+
+
+def stands_against(kind: str, x: object, stays: list[tuple[str, object]], controls: list[object]) -> str | None:
+    """How a thing of a ``kind`` of file stands against what ``stays`` when it is left out, one of `STANDS`, or
+    None where it refuses nothing; ``controls`` are every control record handed."""
+    if kind == "registration":
+        if (head := _head(x)) is None:
+            return STANDS[0]
+        others = [h for k, y in stays if k == kind and (h := _head(y))]
+        second = any((h.link, h.window) == (head.link, head.window) and h.digest() != head.digest() for h in others)
+        return STANDS[1] if second else None
+    if kind == "serve":
+        try:
+            SV.digest_of(x)
+        except ValueError:
+            return STANDS[2]
+        return None
+    if kind == "control":
+        if SV.control_lacks(x):
+            return STANDS[3]
+        of = SV.FORMATS.get(x[CC.VERDICT].get(SV.FORMAT))
+        return STANDS[4] if of is not None and x[SV.CONTROL] == SV.CONTROLS[of][0] and not _counts(x) else None
+    if CC.lacks(x):
+        return STANDS[5]
+    verdict = x[CC.VERDICT]
+    if verdict.get(CC.ACCEPTED) is not True or verdict.get(CC.COMPLETE) is not True:
+        return STANDS[6]
+    if any(k == kind and not CC.lacks(y) and y[CC.VERDICT].get(CC.HEAD) == verdict.get(CC.HEAD)
+           and (y[CC.SERVE], y[CC.REGISTRATION]) != (x[CC.SERVE], x[CC.REGISTRATION]) for k, y in stays):
+        return STANDS[7]
+    if (of := SV.FORMATS.get(verdict.get(SV.FORMAT))) is None:
+        return None
+    if of in SV.RATES and x.get(SV.RATE) != SV.EVERY_BLOCK:
+        return STANDS[8]
+    its = [c for c in controls if not SV.control_lacks(c) and SV.FORMATS.get(c[CC.VERDICT].get(SV.FORMAT)) == of
+           and c[SV.CONTROL] == SV.CONTROLS[of][0] and c[CC.VERIFIER] == x[CC.VERIFIER]]
+    return None if its and all(_counts(c) for c in its) else STANDS[9]
+
+
+def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[str, str]]) -> tuple[int, set[str]]:
+    """Leaves one thing at a time out of what the reader is handed of a run `old` beside a run `new`, over each
+    pair of their files and with neither, the one or the other superseded: one record of each file, each whole
+    file, and the run itself, of the runs handed. Asserts that what is held goes up only where a thing left out
+    stands against one that stays (`stands_against`), and returns how many cases it saw and the ways those that
+    raised it stood. The runs' names are symmetric, so leaving out of `old` covers both."""
+    seen, ways = 0, set()
+    for a, old in olds.items():
+        for b, new in news.items():
+            runs = {"old": old, "new": new}
+            controls = [x for kind, x in things(old) + things(new) if kind == "control"]
+            for superseded in ([], ["old"], ["new"]):
+                before = SV.of_runs(Store(tmp, runs), ["old", "new"], superseded).held
+                for what, less in (("the run, of the runs handed", None), *less_by_one(old)):
+                    handed = Store(tmp, runs if less is None else runs | {"old": less})
+                    after = SV.of_runs(handed, ["new"] if less is None else ["old", "new"], superseded).held
+                    seen += 1
+                    if after <= before:
+                        continue
+                    stays, gone = things(less or {}) + things(new), things(old)
+                    for thing in things(less or {}):
+                        gone.remove(thing)
+                    stood = {why for kind, x in gone if (why := stands_against(kind, x, stays, controls))}
+                    assert stood, (a, b, superseded, what, before, after)
+                    ways |= stood
+    return seen, ways
+
+
+def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one_that_stays(tmp_path):
+    """Whatever is left out of what the reader is handed (a verdict record, a control record, a registration of
+    connection rows, a serve's registration, a whole file, a run), what is held never goes up, unless the thing
+    left out is itself a refusal by the reader's rules (`STANDS`): the reader can't read what it is not handed, so
+    a refusal counts only while it is. Each kind of run files is tried alone and beside the four verdicts of a
+    class, and each way of standing against is met."""
+    kinds = run_files()
+    # the things one run's files can be left without: the run, each file and each record, over the kinds
+    cases = sum(1 + len(list(less_by_one(files))) for files in kinds.values())
+    assert (len(kinds), cases) == (25, 337)
+    seen, ways = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
+    assert (seen, ways) == (2 * 3 * cases, set(STANDS))
+
+
+@pytest.mark.slow
+def test_leaving_a_thing_out_of_any_two_runs_raises_what_is_held_only_where_it_stood_against_one_that_stays(tmp_path):
+    """The same over every pair of the kinds of run files, with neither, the one or the other superseded."""
+    kinds = run_files()
+    seen, ways = left_out(tmp_path, kinds, kinds)
+    assert (seen, ways) == (3 * 337 * len(kinds), set(STANDS))
