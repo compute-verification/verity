@@ -14,7 +14,9 @@ stand-ins move (`Clock`), so every number in a row is one the test states.
 
 Held: the files `main` writes, `verdict.json`, `runs.jsonl`, `steps.jsonl` and `summary.json` whole (a run's root and its coins
 against what the committer and `commit_coins` gave), what each stand-in was handed, the last line printed, and how `main`
-ends: by returning, by exit 3, or by a refusal's sentence.  The last tests stop `main` where it takes the GPU
+ends: by returning, by exit 3, or by a refusal's sentence.  What `main` does after its last run is held arm by arm: a
+compiling engine's loaded code objects, the challenge phase's close, the replay cache's record, the process's peak against
+the host admission's bound, and the remote session's answer.  The last tests stop `main` where it takes the GPU
 (`before_the_lease`) and hold what it does before that with a required-value manifest, with the served source, with a stack
 dump asked for and where the source identity precheck refuses: every line it prints and what the Programs' readers are handed.
 CPU only."""
@@ -696,6 +698,226 @@ def test_an_oracle_compare_that_cannot_be_imported_is_recorded_under_the_same_sc
     assert [(r["schema"], r["method"], r["result"], r["compared"], r["mismatch_n"]) for r in records] == [
         ("verity-sweep/oracle-compare/v1", "oracle-compare", None, 0, 0)] * 2
     assert all(r["why"] == NOT_RUN + r["error"] and r["error"].startswith(("ImportError(", "ModuleNotFoundError(")) for r in records)
+
+
+#: The host admission's record as far as the verdict reads it: the bound it printed, when, and the terms it adds up.
+ADMISSION: Record = {"host_peak_bound_bytes": 8 << 20, "admission_utc": "1969-12-31T23:59:59Z", "admission_monotonic_s": -1.0,
+                     "admission_of_record": {"governing": "the row's"}, "governs_this_run": True, "dominant_contributor": "engine_rss_bytes",
+                     "engine_rss_bytes": 3 << 20, "levels_bytes": 1 << 20, "slack_bytes": None}
+HOST_PEAK_LINE = ("[delta] host peak (process VmHWM) 4 MiB vs bounded HOST BOUND {bound} MiB: {side} by {by} MiB (measured/predicted {ratio}; "
+                  "admission 1969-12-31T23:59:59Z printed_before_run={before}, first run 1970-01-01T00:00:00Z; admission_of_record the row's)")
+
+
+@pytest.mark.parametrize(("more", "bound", "side", "by", "ratio", "before"), [
+    ({}, 8, "under", 4, 0.5, True),
+    ({"host_peak_bound_bytes": 4 << 20}, 4, "under", 0, 1.0, True),
+    ({"host_peak_bound_bytes": 2 << 20, "admission_monotonic_s": 1e9}, 2, "OVER", 2, 2.0, False),
+    ({"host_peak_bound_bytes": 0, "admission_monotonic_s": None}, 0, "OVER", 4, None, None),
+], ids=["under", "at-the-bound", "over-and-printed-late", "a-bound-of-zero-and-no-print-time"])
+def test_the_process_peak_is_held_against_the_newest_host_admissions_bound(tmp_path, stand_ins, capsys, more, bound, side, by, ratio, before):
+    """The verdict's `host_peak`: this process's high-water mark against the bound of the admission record the out directory
+    names last, with whether that record was printed before the first run began.  It is a record and a line, no verdict rule."""
+    stand_ins.verdicts = [(True, None)]
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "host_admission_0.json").write_text(json.dumps({"host_peak_bound_bytes": 1}))
+    (tmp_path / "out" / "host_admission_1.json").write_text(json.dumps({**ADMISSION, **more}))
+    ended = run(tmp_path, capsys)
+    peak = RSS[1] * 1024
+    assert ended.exit is None
+    assert ended.printed[-2:] == [HOST_PEAK_LINE.format(bound=bound, side=side, by=by, ratio=ratio, before=before), PASS_LINE.format(n=2)]
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], host_peak={
+        "process_vmhwm_bytes": peak, "host_peak_bound_bytes": bound << 20, "under_bound": side == "under", "margin_bytes": (bound << 20) - peak,
+        "admission": "host_admission_1.json", "admission_of_record": {"governing": "the row's"}, "governs_this_run": True,
+        "admission_utc": "1969-12-31T23:59:59Z", "first_run_started_utc": UTC, "printed_before_run": before,
+        "dominant_contributor": "engine_rss_bytes", "terms_predicted_bytes": {"engine_rss_bytes": 3 << 20, "levels_bytes": 1 << 20},
+        "terms_sum_bytes": 4 << 20, "measured_over_predicted": ratio})
+
+
+@pytest.mark.parametrize("text", [json.dumps({"admission_utc": "1969-12-31T23:59:59Z"}), "not JSON"], ids=["names-no-bound", "not-json"])
+def test_an_admission_record_that_cannot_be_read_leaves_no_host_peak(tmp_path, stand_ins, capsys, text):
+    stand_ins.verdicts = [(True, None)]
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "host_admission_0.json").write_text(text)
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-2:] == [f"[delta] wrote {ended.out}", PASS_LINE.format(n=2)]
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:])
+
+
+def test_a_commit_whose_remote_session_did_not_accept_exits_3_after_its_verdict(tmp_path, stand_ins, capsys, monkeypatch):
+    """The session's answer is the Commit's last word: asked once, after the verdict is written and the PASS line printed."""
+    from verity_vllm.pipeline import remote_session
+
+    asked = []
+
+    def accepted(rs):
+        asked.append((rs, (tmp_path / "out" / "verdict.json").exists()))
+        return False
+
+    monkeypatch.setattr(remote_session, "accepted", accepted)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit == 3 and asked == [(None, True)] and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:])
+
+
+class Connection:
+    """The challenger's connection as a challenge phase holds it once it is open: an opening of each family's coin after a run's
+    root, then one close, which fails with ``why`` where the phase did not end cleanly."""
+
+    def __init__(self, why: str | None) -> None:
+        self.why = why
+        self.opened: list[tuple[str, int, str]] = []
+        self.closed = 0
+        self.commitment = SimpleNamespace(to_json=lambda: {"scheme": "the stand-in's"})
+
+    def open(self, family: str, index: int, root: bytes) -> SimpleNamespace:
+        self.opened.append((family, index, root.hex()))
+        return SimpleNamespace(coin=bytes([index + 1]) * 64, to_json=lambda: {"family": family, "index": index})
+
+    def close(self) -> None:
+        self.closed += 1
+        if self.why:
+            raise CC.CoinError(self.why)
+
+
+def gate_not_asked(argv: list[str]) -> tuple[int, str]:
+    raise AssertionError(f"a phase that is open asks the gate nothing: {argv}")
+
+
+@pytest.mark.parametrize("why", [None, "the ledger holds no end entry"], ids=["closed", "not-closed"])
+def test_a_challenge_phase_gives_each_run_its_coins_and_is_closed_once_after_the_last(tmp_path, stand_ins, capsys, monkeypatch, why):
+    """A challenge phase reserved for the Commit's instrumented runs: each run's coins are the phase's, a coin of each family
+    opened after that run's root, and its session is recorded without its secret.  A close that did not go cleanly is named in
+    one line and changes no verdict."""
+    connection = Connection(why)
+    phase = CC.ChallengePhase(CC.ChallengerGate("the-gate", gate_not_asked), {"session": "the session"}, 2)
+    phase.client, phase.given = connection, {"session": "the session", "secret": "never recorded"}
+    reserved = []
+
+    def of_options(args: commit.Options, runs: int) -> CC.ChallengePhase:
+        reserved.append(runs)
+        return phase
+
+    monkeypatch.setattr(CC, "of_options", of_options)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    roots = MADE[0].roots[1:]
+    assert ended.exit is None and reserved == [2] and connection.closed == 1 and phase.client is None
+    assert connection.opened == [(family, i, root) for i, root in enumerate(roots) for family in CC.FAMILIES]
+    assert [row["commit"]["extra"]["coins"] for row in ended.rows() if "commit" in row] == [
+        {"source": CC.CHALLENGER, "index": i, "root": root, "session": {"session": "the session"}, "commitment": {"scheme": "the stand-in's"},
+         "keys": {family: f"{i + 1:02x}" * 64 for family in CC.FAMILIES},
+         "openings": {family: {"family": family, "index": i} for family in CC.FAMILIES}}
+        for i, root in enumerate(roots)]
+    line = f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {why}"
+    assert [p for p in ended.printed if "challenger session" in p] == ([line] if why else [])
+    assert ended.doc("verdict.json") == verdict_doc(roots)
+
+
+#: A compiling engine's generated kernels as the adapter reads them at the build, and the code objects loaded after the last run.
+GENERATED: Record = {"per_process_cache_dir": "/cache", "wrappers": 2, "distinct_kernel_sources": 3, "kernel_set_sha256": "a" * 64,
+                     "call_set_sha256": "b" * 64, "loaded": {"modules": 2, "kernels": 3, "executed_set_sha256": "c" * 64}}
+LOADED_END: Record = {"modules": 2, "kernels": 3, "executed_set_sha256": "c" * 64, "per_kernel": {"k": 1}, "modules_list": ["m"]}
+GENERATED_LINE = ("[delta] generated kernels (Inductor output code, per-process dir /cache): pieces 2 distinct kernel sources 3 "
+                  "kernel_set aaaaaaaaaaaaaaaa call_set bbbbbbbbbbbbbbbb")
+LOADED_LINE = ("[delta] loaded code objects after the last run: modules 2 kernels 3 executed_set cccccccccccccccc vs build cccccccccccccccc "
+               "-> replay covered: {covered}")
+
+
+@pytest.fixture
+def compiling(stand_ins, monkeypatch):
+    """`stand_ins` with an engine that compiles: its compile settings say so, and the adapter's three readers of this process's
+    generated kernels and loaded code objects are stood in.  ``generated`` is what the build reads, ``end`` what is loaded
+    after the last run and ``delta`` the comparison's answer."""
+    from verity_vllm.acquire.sources import compiled_source
+
+    s = stand_ins
+    s.generated, s.end, s.delta = copy.deepcopy(GENERATED), copy.deepcopy(LOADED_END), {"ok": True}
+    settings_of = compiled_source.compile_settings
+
+    def loaded_code_objects_delta(start, end):
+        s.calls.append(("loaded_code_objects_delta", {"start": copy.deepcopy(start), "end": end}))
+        return s.delta
+
+    for owner, name, value in [(compiled_source, "compile_settings", lambda llm: {**settings_of(llm), "enforce_eager": False}),
+                               (va, "generated_kernels_of_this_process", lambda: s.generated), (va, "loaded_code_objects", lambda: s.end),
+                               (va, "loaded_code_objects_delta", loaded_code_objects_delta)]:
+        monkeypatch.setattr(owner, name, value)
+    return s
+
+
+@pytest.mark.parametrize(("delta", "covered"), [({"ok": True}, "True"), ({"ok": False, "why": "1 kernel is new"}, "False (1 kernel is new)")],
+                         ids=["covered", "a-new-kernel"])
+def test_a_compiling_engines_loaded_code_objects_are_read_again_after_the_last_run(tmp_path, compiling, capsys, delta, covered):
+    """The kernels generated at the build are recorded then; after the last run the loaded code objects are read again and held
+    against the build's, and the record, the versions and a file of its own say whether every run replayed what was built."""
+    s = compiling
+    s.delta, s.verdicts = delta, [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert [p for p in ended.printed if "generated kernels" in p or "loaded code objects" in p] == [GENERATED_LINE, LOADED_LINE.format(covered=covered)]
+    kernels = {**GENERATED, "loaded_end": {k: LOADED_END[k] for k in ("modules", "kernels", "executed_set_sha256")}, "replay_covered": delta}
+    assert ended.doc("inductor_kernels.json") == kernels and ended.doc("versions.json")["compilation"]["generated_kernels"] == kernels
+    assert ended.doc("inductor_kernels_end.json") == {"loaded": LOADED_END, "delta": delta, "runs": 4}
+    assert [kw for name, kw in s.calls if name == "loaded_code_objects_delta"] == [{"start": GENERATED["loaded"], "end": LOADED_END}]
+
+
+@pytest.mark.parametrize(("generated", "line", "written"), [
+    ({"error": "no cache dir of this process"}, "[delta] generated kernels: no cache dir of this process", False),
+    ({**GENERATED, "loaded": {"error": "no module table"}}, GENERATED_LINE, True),
+], ids=["kernels-not-read", "loaded-objects-not-read"])
+def test_generated_kernels_whose_loaded_objects_were_not_read_at_the_build_are_not_read_again(tmp_path, compiling, capsys, generated, line, written):
+    s = compiling
+    s.generated, s.verdicts = copy.deepcopy(generated), [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert [p for p in ended.printed if "generated kernels" in p or "loaded code objects" in p] == [line]
+    assert ("inductor_kernels.json" in ended.files()) == written and "inductor_kernels_end.json" not in ended.files()
+    assert ended.doc("versions.json")["compilation"]["generated_kernels"] == generated
+    assert not [name for name, _ in s.calls if name == "loaded_code_objects_delta"]
+
+
+REPLAY_CACHE_RULE = "C2 sampled replay once per distinct (run root, manifest digest, seed) per Commit stage; equal-root pairs reference that record"
+
+
+@pytest.mark.parametrize("kept", [True, False], ids=["artifact-kept", "artifact-gone"])
+def test_a_replay_that_a_later_pair_shares_is_counted_in_the_verdict_and_named_in_its_artifact(tmp_path, stand_ins, capsys, monkeypatch, kept):
+    """``--replay-cache``: the first pair's C2 replay is the one evaluated and the two after it, under the same key, share it.
+    The verdict counts the replays that ran and names who shares each; the evaluated pair's artifact, where it is still there,
+    is told who shares it."""
+    from verity_vllm.pipeline import c2_replay
+
+    artifact = tmp_path / "c2_pair0.json"
+    handed = []
+
+    def c2_run(sources, cache):
+        handed.append(sources.pair)
+        if not cache:
+            if kept:
+                artifact.write_text(json.dumps({"sampled_replay": {"result": True}}))
+            cache["the key"] = {"pair": sources.pair, "run_root": sources.rc.run_root.hex(), "artifact": str(artifact), "shared_by": []}
+        else:
+            cache["the key"]["shared_by"].append({"pair": sources.pair, "root_equal": sources.pair == 2})
+
+    monkeypatch.setattr(c2_replay, "run", c2_run)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--replay-cache", "--program-dir", str(tmp_path / "program"), "--pairs", "3")
+    roots = MADE[0].roots[1:]
+    shared = [{"pair": 1, "root_equal": False}, {"pair": 2, "root_equal": True}]
+    assert ended.exit is None and handed == [0, 1, 2] and ended.printed[-1] == PASS_LINE.format(n=3)
+    assert ended.doc("verdict.json") == verdict_doc(roots, replay_cache={
+        "enabled": True, "distinct_replays": 1, "reused_pairs": 2, "rule": REPLAY_CACHE_RULE,
+        "records": [{"evaluated_pair": 0, "run_root": roots[0], "shared_by_pairs": [1, 2], "roots_equal": False}]})
+    assert artifact.exists() == kept
+    if kept:
+        assert json.loads(artifact.read_text()) == {"sampled_replay": {"result": True, "shared_by": shared}}
+
+
+def test_a_replay_cache_no_replay_filled_is_recorded_as_empty(tmp_path, stand_ins, capsys):
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--replay-cache")
+    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], replay_cache={
+        "enabled": True, "distinct_replays": 0, "reused_pairs": 0, "rule": REPLAY_CACHE_RULE, "records": []})
 
 
 class AtTheLease(Exception):
