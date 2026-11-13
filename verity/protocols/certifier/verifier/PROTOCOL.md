@@ -2246,10 +2246,10 @@ prompt ids and a size of ids released, each a power of two.
     last two execution phases, handed at its last close, share a due tick.
   - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network certifier
     (`Warden.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a served
-    run the publisher process sends the line of `rows.jsonl` back and the tick appends it with the tick it left
-    at. That tick is the network certifier's own note of when the line left, beside the signed registration and
-    not under its signature. No check and no verifier reads it. Nothing holds the head's time yet: that is the
-    auditor's side, which is not built.
+    run the publisher process sends the line of `rows.jsonl` back and the tick appends it. The line holds no
+    tick: the tick it left at is the network certifier's own note, in its log alone (`warden.json`'s `heads`).
+    No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
+    not built.
   - **A head back by its due tick** leaves at that tick and never sooner.
   - **A head back later** leaves at the first tick it is back by, at most W = `head_wait` ticks after the due one.
   - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A served

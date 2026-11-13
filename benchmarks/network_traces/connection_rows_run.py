@@ -36,14 +36,13 @@ so a line's rows, its blob of salts and the publisher's build and commit follow 
 
 In a schedule with a head offset (`WardenParams.head_offset`) the publisher's process writes no line. It keeps the
 salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
-(`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) with the
-tick it left at under `tick`. That `tick` is the network certifier's own note of when the line left, beside the
-signed registration and not under its signature. No check and no verifier reads it. Nothing holds the head's time
-yet: that is the auditor's side, which is not built. A line that is not back by the last tick it could leave at is
-never written: that execution phase has no head, and the tick writes `{"missed": [link, direction, execution
-phase]}` in its place, the network certifier's own unsigned note of it, so that every execution phase still has one
-line and one blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution
-phase.
+(`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) as it
+was handed back. The line holds no tick: the tick it left at is the network certifier's own note, in its log alone
+(`warden.json`'s `heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the
+auditor's side, which is not built. A line that is not back by the last tick it could leave at is never written:
+that execution phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its
+place, the network certifier's own unsigned note of it, so that every execution phase still has one line and one
+blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution phase.
 
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
@@ -53,11 +52,11 @@ Under form 2 they are those whose records, the ones before theirs and the ones a
 execution phase of the run has the word that it has no head, which `connection_rows.check_no_head` accepts: an
 execution phase with neither, with both, or with the one where the other is due is a problem. The reading takes each
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
-counting it at an execution phase that isn't complete. In a schedule with a head offset the check reads no line's
-`tick`. An execution phase whose line is `missed` has no head, which is no problem of the run, and the summary
-counts those (`heads`). Reading that unsigned note is safe: it stands where a head or the word would, so it can
-only take one away. What an execution phase with no head is charged is its reader's: each class's whole schedule,
-which no reader here charges yet. The summary's `heads` names those execution phases for it.
+counting it at an execution phase that isn't complete. In a schedule with a head offset an execution phase whose
+line is `missed` has no head, which is no problem of the run, and the summary counts those (`heads`). Reading that
+unsigned note is safe: it stands where a head or the word would, so it can only take one away. What an execution
+phase with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The
+summary's `heads` names those execution phases for it.
 
 **The cost** of a close, for a schedule and its classes:
 
@@ -119,8 +118,8 @@ HAND = "connection-rows"
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
-#: a line's key where its execution phase's line wasn't back by its last tick (`Lines`), and the tick a line left at
-MISSED, TICK = "missed", "tick"
+#: a line's key where its execution phase's line wasn't back by its last tick (`Lines`)
+MISSED = "missed"
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
 CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 
@@ -163,8 +162,8 @@ def head_flags(q: argparse.ArgumentParser) -> None:
     q.add_argument("--head-offset", type=int, default=None, metavar="N",
                    help="with --lengths and --head-wait: each execution phase's line of rows.jsonl leaves at a tick "
                         "of the schedule, N buckets after the close that hands it (warden's \"The head's tick\"), "
-                        "written by the network certifier's tick with the tick it left at, its own note, which "
-                        "no check reads (default: none, the publisher writes it when it has signed)")
+                        "written by the network certifier's tick, which notes the tick it left at in its own log "
+                        "alone (default: none, the publisher writes it when it has signed)")
     q.add_argument("--head-wait", type=int, default=None, metavar="W",
                    help="with --head-offset: a line not back at its tick leaves at the first tick it is back by, "
                         "at most W ticks later, and never after; 0: a late line never leaves (no default)")
@@ -259,16 +258,16 @@ class Keeper:
 class Lines:
     """The network certifier's `leave` in a schedule with a head offset (the module docstring's "The hand"): called
     by its tick with an execution phase, the tick and the line the publisher handed back, it appends the line to
-    `rows.jsonl` with the tick under `tick`; with None for the line, the note that the execution phase's line
-    missed its last tick. The tick is this device's own note of when the line left, which no check reads. The file
-    is opened once, before the run."""
+    `rows.jsonl` as it was handed back; with None for the line, the note that the execution phase's line missed its
+    last tick. It writes nothing of the tick, which the device's own log alone holds (`Warden.heads`). The file is
+    opened once, before the run."""
 
     def __init__(self, out: Path, link: str) -> None:
         self.link, self.file = link, open(out / ROWS, "a")
 
     def __call__(self, window: int, tick: int, line: dict | None) -> None:
         doc = {MISSED: [self.link, Direction.EGRESS.value, window]} if line is None else line
-        self.file.write(json.dumps(doc | {TICK: tick}) + "\n")
+        self.file.write(json.dumps(doc) + "\n")
         self.file.flush()
 
     def close(self) -> None:
@@ -342,13 +341,13 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows. It reads no line's `tick`: that is the network certifier's own note of when the
-    line left, beside the signed registration and not under its signature. No check and no verifier reads it.
-    Nothing holds the head's time yet: that is the auditor's side, which is not built. It does read a `missed`
-    line, unsigned too, in a schedule with a head offset: the execution phase has no head. That is safe: it stands
-    where a head or the word would, so it can only take one away. What an execution phase with no head is charged
-    is its reader's: each class's whole schedule, which no reader here charges yet. The summary's `heads` names
-    those execution phases for it."""
+    schedule without lengths rows. A line holds no tick: the tick it left at is the network certifier's own note,
+    in its log alone (`warden.json`'s `heads`). No check and no verifier reads it. Nothing holds the head's time
+    yet: that is the auditor's side, which is not built. The check does read a `missed` line, unsigned, in a
+    schedule with a head offset: the execution phase has no head. That is safe: it stands where a head or the word
+    would, so it can only take one away. What an execution phase with no head is charged is its reader's: each
+    class's whole schedule, which no reader here charges yet. The summary's `heads` names those execution phases
+    for it."""
     if params.lengths is None:
         return None, []
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]

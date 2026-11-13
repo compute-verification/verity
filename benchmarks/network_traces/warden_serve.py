@@ -122,12 +122,11 @@ The network certifier then admits nothing in the run's last `WardenParams.span` 
 enough for its last request to be admitted before them (`closing_windows`). With `--head-offset N --head-wait W`
 beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands each one back,
 and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets after
-the close that handed its execution phase or up to W ticks later, with that tick. A line not back by then is
-never written, and the tick writes its note that the line missed. The run ticks on past its last window until
-its last line has left or missed, and `warden.json` lists each execution phase's tick (`heads`). A line's tick is
-the network certifier's own note of when it left. No check and no verifier reads it. Nothing holds the head's time
-yet: that is the auditor's side, which is not built. `check` counts the execution phases whose line missed, which
-have no head.
+the close that handed its execution phase or up to W ticks later. A line not back by then is never written, and
+the tick writes its note that the line missed. The run ticks on past its last window until its last line has left
+or missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json` alone
+(`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which
+is not built. `check` counts the execution phases whose line missed, which have no head.
 """
 
 from __future__ import annotations
