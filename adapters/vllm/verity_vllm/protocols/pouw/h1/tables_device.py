@@ -1,6 +1,6 @@
 """`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
-`pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels (`protocol_options/pouw_cuda/row_table.cu`,
-`commit.row_tables_device`) as a step of one table.
+`pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels
+(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `commit.row_tables_device`) as a step of one table.
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
