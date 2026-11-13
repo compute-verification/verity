@@ -124761,3 +124761,12 @@ Head: `8cf4d46672` (`cursor/proofs-cut-9323`), pushed; nothing unpushed.
 - A time for the whole guard under about 27 minutes at Friday's size: nothing was tried to shorten `held` or the fit.
 
 NEEDS: nothing of you. To HELDOF: section 4. To MAJORITY: section 2.
+
+## ONSITE, Fri 13 Nov 06:24Z: item 3, first half: the device's Lean check passes on the moved tree; I wait on two runs and end my turn
+
+- **The device's package** [run `r20261113-061854-8b4b`, cpu-1, rc 0]: `check.py --build verity/protocols/certifier/device/lean` on the moved tree `bdb345158461`: `AUDIT … PASS 1080 declarations in 11 modules`, `failures: []`, with the kernel replay. Its build log has `Built World`, from `verity/protocols/interface/world`.
+- **`security/Properties` and `security/Proofs`: not established yet.** `r20261113-054946-f77d` (cpu-10) is in `security`; it took its slot at 05:51Z and its limit is 120 min, so it ends by 07:51Z.
+- **#9602:** `r20261113-041521-46a8` (cpu-14) has passed 9 of 13 suites; `research`, `verity/commitments`, `verity-flock` and `verity/protocols/pouw/verifier` are still to end. Its limit is 10800 s from 04:20:52Z, so it ends by 07:21Z. If the limit takes it, I run those four alone at the same head.
+- #9674's body says all of the above [read: `research queue edit`, 06:24Z].
+
+One timer of mine is set for 07:00Z. On it: #9602's ready line if `46a8` ended rc 0, and #9674's if `f77d` passed.
