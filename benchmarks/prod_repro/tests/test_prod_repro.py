@@ -1224,7 +1224,11 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
         "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1"}]
+        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
+        "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
+                   "lifetimes an arm"]}]
+    # the first input opens with the entry's mark, which the Metrics tab shows beside the value
+    assert got[1]["inputs"][0].startswith("measured: ")
     assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
     # one lifetime an arm: the benchmark's own cost stands as a value with no interval, and so does the line's
     ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
@@ -1233,6 +1237,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     got = declared(tmp_path, monkeypatch, c)
     assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
     assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
+    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm")
     # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
     assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
     # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line

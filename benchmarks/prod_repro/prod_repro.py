@@ -922,7 +922,7 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
 def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
-    cost (`UNLIKE`). None otherwise."""
+    cost (`UNLIKE`). None otherwise. Its mark is at the head of its first input, ``measured:`` and what was timed."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
@@ -930,7 +930,9 @@ def measurement(r: dict) -> dict | None:
     return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
-            "run": r["run"]}
+            "run": r["run"],
+            "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
+                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm"]}
 
 
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
