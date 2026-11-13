@@ -204,7 +204,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/verifier/connection_rows.py", "verity/protocols/accounting/certifier/verifier/warden_rows.py",
           "verity/protocols/accounting/certifier/verifier/served_rows.py", "verity/protocols/accounting/certifier/verifier/warden.py",
           "verity/protocols/accounting/certifier/verifier/release.py",
-          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments",
           "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py"]
 

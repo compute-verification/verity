@@ -43,7 +43,7 @@ from verity.circuits.silicon.models import (
 from verity.circuits.silicon.term import Term, e2m1_product, e5m2_product
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
-VECTORS = ROOT / "verity" / "definitions" / "silicon" / "captures" / "autoproof-probe-vectors.json"
+VECTORS = ROOT / "verity" / "circuits" / "silicon" / "captures" / "autoproof-probe-vectors.json"
 K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
 SM100_F8_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm100-f8-2026-10-19" / "records.json"
 
