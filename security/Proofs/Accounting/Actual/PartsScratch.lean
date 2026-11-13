@@ -16,9 +16,17 @@ public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 # Scratch: a node's egress and leak limits read off the registered tree
 
 A scratch module, never landing: the statements of the two "limits add over parts" theorems for links, with the
-definitions each needs that the tree does not hold. Bodies marked `sorry` are statements only.
+definitions each needs that the tree does not hold. No body is `sorry`.
 
 * The node: `Site.Child`, `Site.places`, `Site.under`, `Site.proverUnder`, `Site.certifiersOf`.
+* The covered form of (2), where a memory challenger covers its link, two ways. Form (a), `leak_le_sum_K_joined`:
+  the challenger is one of the covering set, and adds its record's `K` and a jitter share. Form (b),
+  `leak_le_sum_K_sinks` and `leak_le_sum_K_sealed`: the challenger is a sink inside the location, and adds
+  nothing while no declared link joins it to the outside (`Sealed`). At a node: `Site.challengersOf`,
+  `Site.auditorsOf`, `Site.uncovered`, `Site.uncertified_registered_eq`, `Site.leak_le_sum_K_auditors`,
+  `Site.leak_le_sum_K_sinks_registered`.
+* The runs: `onsite_node0_covered` (the example site), `oneNode_charged` and `twoNodes_charged` (two hosts with a
+  link between them, under one site and under two).
 * The Site as the hardware model's links: `Site.linkEnds`, `Site.linkβ` over ids; `Site.Place`, `Site.place`,
   `Site.placeEnds`, `Site.loc` over the finite type of places, which `B4` needs.
 * (1) `Site.egress_le_registered`, with `Site.egressLimit_eq` (the limit as the sum over the registered links with
@@ -59,6 +67,21 @@ noncomputable def certifiersOf (i : String) : Finset String :=
   S.places.filter fun y => S.kind? y = some .certifier ∧
     ∃ k ∈ S.links, (k.ends.1 = y ∧ k.ends.2 ∈ S.proverUnder i) ∨ (k.ends.2 = y ∧ k.ends.1 ∈ S.proverUnder i)
 
+open Classical in
+/-- **The memory challengers that cover node `i`**, under the pins `pinned`: the registered memory challengers among
+`pinned` that a registered link joins to one of `i`'s prover places. Three facts, each read here and not in prose:
+the challenger is pinned (`pinned` holds the ids of the challengers whose key and session the auditor's pins hold; a
+parameter until the pins are a definition this can read), it is registered as a challenger (`kind?`), and it is
+registered at that link's end (`links`). An unregistered device at a link's end, or an unpinned challenger, is not
+among them, so it covers nothing. -/
+noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset String :=
+  S.places.filter fun y => S.kind? y = some .challenger ∧ y ∈ pinned ∧
+    ∃ k ∈ S.links, (k.ends.1 = y ∧ k.ends.2 ∈ S.proverUnder i) ∨ (k.ends.2 = y ∧ k.ends.1 ∈ S.proverUnder i)
+
+/-- **The auditor's devices at node `i`**: its certifiers and the memory challengers that cover it. -/
+noncomputable def auditorsOf (pinned : Finset String) (i : String) : Finset String :=
+  S.certifiersOf i ∪ S.challengersOf pinned i
+
 /-- The registered links as the model's, by their position in the Site: link `e`'s two ends. -/
 def linkEnds (e : Fin S.links.length) : String × String := (S.links.get e).ends
 
@@ -71,6 +94,11 @@ noncomputable def egressLimit (i : String) : ℕ := Accounting.linkCapacity S.li
 /-- The registered links with exactly one end in `X`. -/
 def crossing (X : Finset String) : List Link :=
   S.links.filter fun k => decide (k.ends.1 ∈ X ↔ k.ends.2 ∉ X)
+
+/-- **The uncovered links of `X`** under the covering set `cov`: the registered links with exactly one end in `X` and
+neither end in `cov`. The covered form of (2) charges each at its `β`. -/
+def uncovered (cov X : Finset String) : List Link :=
+  (S.crossing X).filter fun k => decide (k.ends.1 ∉ cov ∧ k.ends.2 ∉ cov)
 
 /-- **(1) A node's egress is at most its registered limit**: over any ticks `[a, b)`, what leaves node `i` of the
 registered tree is at most the capacity of the registered links with exactly one end in it, a tick. -/
@@ -342,6 +370,112 @@ theorem leak_le_sum_K_covered {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fint
   rw [show uncertifiedCapacity ends β cert X = 0 from hcov, Nat.zero_mul, Nat.add_zero] at h
   exact h
 
+section Covering
+
+variable {L E : Type*} [Fintype E]
+
+/-- **An uncovered link across the boundary is charged**: a link with exactly one end in `X` and neither end in the
+covering set `cov` is in `β°_X`, whatever the tree above its two ends. -/
+theorem le_uncertifiedCapacity (ends : E → L × L) (β : E → ℕ) (cov X : Finset L) (e : E)
+    (hx : (ends e).1 ∈ X ↔ (ends e).2 ∉ X) (h1 : (ends e).1 ∉ cov) (h2 : (ends e).2 ∉ cov) :
+    β e ≤ uncertifiedCapacity ends β cov X := by
+  classical
+  unfold uncertifiedCapacity
+  refine Finset.single_le_sum (f := β) (fun _ _ => Nat.zero_le _) ?_
+  simp only [boundary, mem_filter, mem_univ, true_and]
+  exact ⟨hx, h1, h2⟩
+
+/-- **The uncovered links of a location with sinks**: an uncovered link across the boundary of `X ∪ Y`, for `X` and
+`Y` apart, is an uncovered link of `X` that ends at no place of `Y`, or one of `Y` that ends at no place of `X`. -/
+theorem uncertifiedCapacity_union_le [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X Y : Finset L)
+    (hXY : Disjoint X Y) :
+    uncertifiedCapacity ends β cert (X ∪ Y) ≤
+      uncertifiedCapacity ends β (cert ∪ Y) X + uncertifiedCapacity ends β (cert ∪ X) Y := by
+  classical
+  have hd : ∀ z, z ∈ X → z ∉ Y := fun z h => Finset.disjoint_left.1 hXY h
+  unfold uncertifiedCapacity
+  refine le_trans ?_ (Nat.le.intro Finset.sum_union_inter)
+  refine Finset.sum_le_sum_of_subset ?_
+  intro e he
+  have ha := hd (ends e).1
+  have hb := hd (ends e).2
+  simp only [boundary, mem_filter, mem_univ, true_and, mem_union] at he ⊢
+  by_cases a1 : (ends e).1 ∈ X <;> by_cases a2 : (ends e).2 ∈ X <;>
+    by_cases b1 : (ends e).1 ∈ Y <;> by_cases b2 : (ends e).2 ∈ Y <;> simp_all
+
+/-- **The sinks are sealed**: every link across the boundary of the sinks ends at a certifier or at a place of the
+location `X`, so with the links as declared (`DeclaredLinks`) nothing a sink is sent leaves it but back into `X` or
+through a certifier. It is `Covered` at the sinks, with the certifiers and `X` as what covers them: a fact of the
+declared links, which names no behaviour of a sink. -/
+def Sealed [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X sink : Finset L) : Prop :=
+  Covered ends β (cert ∪ X) sink
+
+end Covering
+
+/-- **(2), the covered form, (a): a memory challenger that covers a link is one of the covering set.** With the
+certifiers `cert` and the challengers `chal` apart, `B4`'s premises at `cert ∪ chal` and each of their records within
+its `K`: what the outside of `X`, the certifiers and the challengers does during `[a, b)` takes at most
+`2 ^ (∑ K over cert + ∑ K over chal + jitter · buckets · (#cert + #chal) + β° (b − a))` values, `β°` the capacity of
+the links across `X`'s boundary with neither a certifier nor a challenger at an end.
+
+A challenger adds its own record's `K` and one jitter share. `TrustedUnits` at `cert ∪ chal` asks of a challenger what
+it asks of a certifier: its gates are the protocol's, and what it sends outside itself is a function of its own record
+and jitter word. -/
+theorem leak_le_sum_K_joined {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+    (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert chal X : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
+    (K : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link) (hd : Disjoint cert chal)
+    (hT : TrustedUnits S 𝒱 (cert ∪ chal) spec record bucket jitter) (hsec : Secrets S (cert ∪ chal) X a)
+    (hK : RecordsWithin S (cert ∪ chal) record a b K) :
+    (Set.range fun r => (S r).acts (X ∪ (cert ∪ chal))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ cert, K y) + (∑ c ∈ chal, K c) +
+        jitter * ((Finset.Ico a b).image bucket).card * (cert.card + chal.card) +
+        uncertifiedCapacity ends β (cert ∪ chal) X * (b - a)) : ℕ) : ℕ∞) := by
+  have h := leak_le_sum_K S ℓ ends β link 𝒱 (cert ∪ chal) X spec record bucket jitter a b K hcs hdl hT hsec hK
+  rw [Finset.sum_union hd, Finset.card_union_eq_card_add_card.2 hd] at h
+  exact h
+
+/-- **(2), the covered form, (b): a memory challenger that covers a link is a sink inside the location.** With the
+sinks `sink` apart from `X`, `B4`'s premises at the location `X ∪ sink` and each certifier's record within its `K`:
+what the outside of `X`, the sinks and the certifiers does during `[a, b)` takes at most
+`2 ^ (∑ K over cert + jitter · buckets · #cert + (β° + β°ₛ) (b − a))` values, `β°` the capacity of the links across
+`X`'s boundary with neither a certifier nor a sink at an end and `β°ₛ` that of the links from a sink to a place outside
+`X`, the sinks and the certifiers.
+
+A sink adds no `K` and no jitter share, and nothing is asked of what it does: `TrustedUnits` is at the certifiers
+alone. What the sinks do is not on the left side: this says nothing of what a sink, or a place among the sinks, learns.
+-/
+theorem leak_le_sum_K_sinks {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+    (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
+    (K : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
+    (hT : TrustedUnits S 𝒱 cert spec record bucket jitter) (hXs : Disjoint X sink)
+    (hsec : Secrets S cert (X ∪ sink) a) (hK : RecordsWithin S cert record a b K) :
+    (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
+        (uncertifiedCapacity ends β (cert ∪ sink) X + uncertifiedCapacity ends β (cert ∪ X) sink) * (b - a)) : ℕ) :
+          ℕ∞) := by
+  refine (leak_le_sum_K S ℓ ends β link 𝒱 cert (X ∪ sink) spec record bucket jitter a b K hcs hdl hT hsec
+    hK).trans ?_
+  exact Nat.mono_cast (Nat.pow_le_pow_right Nat.two_pos (Nat.add_le_add_left
+    (Nat.mul_le_mul_right _ (uncertifiedCapacity_union_le ends β cert X sink hXs)) _))
+
+/-- **(2), form (b), with the sinks sealed** (`Sealed`): the sinks' own term drops, and what is left of `β°` is the
+capacity of the links across `X`'s boundary with neither a certifier nor a sink at an end. -/
+theorem leak_le_sum_K_sealed {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+    (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
+    (K : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
+    (hT : TrustedUnits S 𝒱 cert spec record bucket jitter) (hXs : Disjoint X sink)
+    (hsec : Secrets S cert (X ∪ sink) a) (hseal : Sealed ends β cert X sink)
+    (hK : RecordsWithin S cert record a b K) :
+    (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
+        uncertifiedCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
+  have h := leak_le_sum_K_sinks S ℓ ends β link 𝒱 cert X sink spec record bucket jitter a b K hcs hdl hT hXs hsec hK
+  rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from hseal, Nat.add_zero] at h
+  exact h
+
 end Accounting
 
 namespace Verity.Site
@@ -398,6 +532,85 @@ theorem leak_le_sum_K_registered {Ω : Type*} (i : String) (R : Ω → Accountin
   exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
     (S.loc (S.proverUnder i)) spec record bucket jitter a b K hcs hdl hT hsec hK
 
+/-- **The uncovered term is read off the registered links**: where every registered link ends at places of the Site
+(a valid registration's `unknownRef` check), the model's `β°` at the registered links, a covering set `cov` and a
+location `X` is the sum of `β` over the registered links with exactly one end in `X` and neither end in `cov`
+(`uncovered`). -/
+theorem uncertified_registered_eq (cov X : Finset String)
+    (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places) :
+    Accounting.uncertifiedCapacity S.placeEnds S.linkβ (S.loc cov) (S.loc X) =
+      ((S.uncovered cov X).map (·.β)).sum := by
+  classical
+  have hl : ∀ (l : List Link) (p : Link → Bool),
+      ((l.filter p).map (·.β)).sum = (l.map fun k => if p k = true then k.β else 0).sum := by
+    intro l p
+    induction l with
+    | nil => rfl
+    | cons k l ih =>
+      rw [List.filter_cons]
+      by_cases hk : p k = true
+      · rw [ite_eq_left hk, List.map_cons, List.sum_cons, List.map_cons, List.sum_cons, ite_eq_left hk, ih]
+      · rw [ite_eq_right hk, List.map_cons, List.sum_cons, ite_eq_right hk, ih, Nat.zero_add]
+  have hp : ∀ (e : Fin S.links.length) (Y : Finset String),
+      ((S.placeEnds e).1 ∈ S.loc Y ↔ (S.links[e.1]).ends.1 ∈ Y) ∧
+        ((S.placeEnds e).2 ∈ S.loc Y ↔ (S.links[e.1]).ends.2 ∈ Y) := by
+    intro e Y
+    have h := hends (S.links[e.1]) (List.getElem_mem e.2)
+    simp [placeEnds, loc, place, h.1, h.2]
+  unfold Accounting.uncertifiedCapacity Accounting.boundary uncovered crossing
+  rw [List.filter_filter, hl, Finset.sum_filter, Finset.sum_filter, ← Fin.sum_univ_fun_getElem]
+  refine Finset.sum_congr rfl fun e _ => ?_
+  have hX := hp e X
+  have hC := hp e cov
+  by_cases h : ((S.links[e.1]).ends.1 ∈ X ↔ (S.links[e.1]).ends.2 ∉ X) <;>
+    by_cases h1 : (S.links[e.1]).ends.1 ∈ cov <;> by_cases h2 : (S.links[e.1]).ends.2 ∈ cov <;>
+    simp [linkβ, hX, hC, h, h1, h2]
+
+/-- **(2), the covered form, (a), at a node of the registered tree**: for node `i`, its prover places as the location
+and the auditor's devices at it (`auditorsOf`: its certifiers and the pinned, registered memory challengers a link
+joins to it) as the covering set, at the registered links. The last term is over the registered links with exactly
+one end among the node's prover places and no auditor's device at either end (`uncertified_registered_eq`). -/
+theorem leak_le_sum_K_auditors {Ω : Type*} (pinned : Finset String) (i : String)
+    (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
+    (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
+    (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
+    (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.auditorsOf pinned i)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.auditorsOf pinned i)) (S.loc (S.proverUnder i)) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.auditorsOf pinned i)) record a b K) :
+    (Set.range fun r =>
+        (R r).acts (S.loc (S.proverUnder i) ∪ S.loc (S.auditorsOf pinned i))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.auditorsOf pinned i), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.auditorsOf pinned i)).card +
+        Accounting.uncertifiedCapacity S.placeEnds S.linkβ (S.loc (S.auditorsOf pinned i))
+          (S.loc (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞) := by
+  exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.auditorsOf pinned i))
+    (S.loc (S.proverUnder i)) spec record bucket jitter a b K hcs hdl hT hsec hK
+
+/-- **(2), the covered form, (b), at a node of the registered tree**: for node `i`, its prover places with the memory
+challengers that cover it (`challengersOf`) as the location, and its certifiers as the certifiers. The last term is
+over the registered links with exactly one end among those places and no certifier at either end: a link from the
+node to a challenger that covers it is inside the location, and a link from such a challenger to any other place is
+across its boundary. -/
+theorem leak_le_sum_K_sinks_registered {Ω : Type*} (pinned : Finset String) (i : String)
+    (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
+    (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
+    (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
+    (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i))
+      (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i)) record a b K) :
+    (Set.range fun r =>
+        (R r).acts (S.loc (S.proverUnder i ∪ S.challengersOf pinned i) ∪ S.loc (S.certifiersOf i))ᶜ
+          (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i)).card +
+        Accounting.uncertifiedCapacity S.placeEnds S.linkβ (S.loc (S.certifiersOf i))
+          (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) * (b - a)) : ℕ) : ℕ∞) := by
+  exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
+    (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) spec record bucket jitter a b K hcs hdl hT hsec hK
+
 end Verity.Site
 
 namespace Verity.Registration.Example
@@ -434,6 +647,98 @@ theorem node0_links_at_auditor :
           k.ends.2 ∉ ["node0", "gpu0", "hbm0", "gpu1", "hbm1", "dram0", "nvme0"]) &&
         !(((Site.ofLog [onsite]).kind? k.ends.1).any Site.Kind.auditor ||
           ((Site.ofLog [onsite]).kind? k.ends.2).any Site.Kind.auditor)).map fun k => k.id) = [] := by
+  decide +kernel
+
+/-- The prover's places at or under `i`, read two levels down the registered tree: on the sites below, the whole of a
+host, and of a site whose hosts hold only memory. -/
+def proverPlaces (S : Site) (i : String) : Finset String :=
+  (((S.locs.filter fun x => x.id == i || x.parent == some i ||
+      (x.parent.bind fun p => (S.loc? p).bind (·.parent)) == some i).map (·.id)).filter fun j =>
+    (S.kind? j).all fun k => !k.auditor).toFinset
+
+/-- **On the example onsite site the challenger's link leaves the sum.** At `node0`: with the certifier and the
+pinned challenger as the covering set, no registered link is uncovered; with the challenger unpinned, so out of the
+covering set, its link is uncovered, at its capacity; and with the challenger a sink inside the location and the
+certifier alone covering, none is. -/
+theorem onsite_node0_covered :
+    ((Site.ofLog [onsite]).uncovered {"cert0", "chal0"} (proverPlaces (Site.ofLog [onsite]) "node0")).map
+        (fun k => (k.id, k.β)) = [] ∧
+      ((Site.ofLog [onsite]).uncovered {"cert0"} (proverPlaces (Site.ofLog [onsite]) "node0")).map
+        (fun k => (k.id, k.β)) = [("chal0-link", 100000)] ∧
+      ((Site.ofLog [onsite]).uncovered {"cert0"} (proverPlaces (Site.ofLog [onsite]) "node0" ∪ {"chal0"})).map
+        (fun k => (k.id, k.β)) = [] := by
+  decide +kernel
+
+/-- The same on the model's term: at `node0` of the example onsite site, `β°` under the certifier and the pinned
+challenger is 0. -/
+theorem onsite_node0_capacity :
+    Accounting.uncertifiedCapacity (Site.ofLog [onsite]).placeEnds (Site.ofLog [onsite]).linkβ
+        ((Site.ofLog [onsite]).loc {"cert0", "chal0"})
+        ((Site.ofLog [onsite]).loc (proverPlaces (Site.ofLog [onsite]) "node0")) = 0 := by
+  have hends : ∀ k ∈ (Site.ofLog [onsite]).links,
+      k.ends.1 ∈ (Site.ofLog [onsite]).places ∧ k.ends.2 ∈ (Site.ofLog [onsite]).places := by
+    decide +kernel
+  rw [Site.uncertified_registered_eq (Site.ofLog [onsite]) _ _ hends]
+  decide +kernel
+
+/-- Two hosts with a link `n01` between them, each with its memory, the second under the site `under1`; the first
+host's uplink split by a certifier; one memory challenger linked to both hosts. -/
+def hosts (under1 : String) (sites : List Site.Loc) : Entry := .site "genesis"
+  { locs := sites ++
+      [{ id := "node0", kind := .host, parent := some "site0" },
+       { id := "node1", kind := .host, parent := some under1 },
+       memory "dram0" "node0" .dram (2 ^ 30), memory "dram1" "node1" .dram (2 ^ 30),
+       { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "key0" },
+       { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor }]
+    links := [⟨"uplink0", ("node0", "cert0"), 100000, 100000⟩, ⟨"uplink0-out", ("cert0", Site.outside), 100000, 0⟩,
+      ⟨"chal0-link", ("chal0", "node0"), 100000, 1000000⟩, ⟨"chal0-link1", ("chal0", "node1"), 100000, 1000000⟩,
+      ⟨"n01", ("node0", "node1"), 7, 1⟩] }
+
+/-- Both hosts under one site. -/
+def oneNode : Entry := hosts "site0" [{ id := "site0", kind := .site }]
+
+/-- The hosts under two sites. -/
+def twoNodes : Entry := hosts "site1" [{ id := "site0", kind := .site }, { id := "site1", kind := .site }]
+
+/-- Registration accepts both for the onsite composite: a link between two hosts is no boundary link of its check, so
+no certifier is asked on it. -/
+theorem hosts_valid :
+    Valid digests auditor .onsite [oneNode] ∧ Valid digests auditor .onsite [twoNodes] := by
+  decide +kernel
+
+/-- **A link between two hosts with no auditor's device at either end is charged, inside one node.** Both hosts under
+one site. At the host `node0`, the link `n01` is the one uncovered link, at its capacity, with the challenger in the
+covering set. With the challenger a sink instead, its link to the other host is uncovered too: a challenger two hosts
+share is sealed at neither. At the site, which holds both hosts, `n01` crosses no boundary and nothing is uncovered.
+-/
+theorem oneNode_charged :
+    ((Site.ofLog [oneNode]).uncovered {"cert0", "chal0"} (proverPlaces (Site.ofLog [oneNode]) "node0")).map
+        (fun k => (k.id, k.β)) = [("n01", 7)] ∧
+      ((Site.ofLog [oneNode]).uncovered {"cert0"} (proverPlaces (Site.ofLog [oneNode]) "node0" ∪ {"chal0"})).map
+        (fun k => (k.id, k.β)) = [("chal0-link1", 100000), ("n01", 7)] ∧
+      ((Site.ofLog [oneNode]).uncovered {"cert0", "chal0"} (proverPlaces (Site.ofLog [oneNode]) "site0")).map
+        (fun k => (k.id, k.β)) = [] := by
+  decide +kernel
+
+/-- **And across two nodes.** The hosts under two sites: at the host `node0` and at its site alike, `n01` is the one
+uncovered link, at its capacity. -/
+theorem twoNodes_charged :
+    ((Site.ofLog [twoNodes]).uncovered {"cert0", "chal0"} (proverPlaces (Site.ofLog [twoNodes]) "node0")).map
+        (fun k => (k.id, k.β)) = [("n01", 7)] ∧
+      ((Site.ofLog [twoNodes]).uncovered {"cert0", "chal0"} (proverPlaces (Site.ofLog [twoNodes]) "site0")).map
+        (fun k => (k.id, k.β)) = [("n01", 7)] := by
+  decide +kernel
+
+/-- The same on the model's term: at the host `node0` with both hosts under one site, `β°` under the certifier and the
+pinned challenger is the link `n01`'s capacity. -/
+theorem oneNode_capacity :
+    Accounting.uncertifiedCapacity (Site.ofLog [oneNode]).placeEnds (Site.ofLog [oneNode]).linkβ
+        ((Site.ofLog [oneNode]).loc {"cert0", "chal0"})
+        ((Site.ofLog [oneNode]).loc (proverPlaces (Site.ofLog [oneNode]) "node0")) = 7 := by
+  have hends : ∀ k ∈ (Site.ofLog [oneNode]).links,
+      k.ends.1 ∈ (Site.ofLog [oneNode]).places ∧ k.ends.2 ∈ (Site.ofLog [oneNode]).places := by
+    decide +kernel
+  rw [Site.uncertified_registered_eq (Site.ofLog [oneNode]) _ _ hends]
   decide +kernel
 
 end Verity.Registration.Example
