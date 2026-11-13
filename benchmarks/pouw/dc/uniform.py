@@ -365,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(map(str, write_table(g))))
         return 0
     fam = a.family or ("sm100" if any(any((o / "sass").glob("sm100_*.sass")) for o in a.out) else "sm90")
-    dev = a.device or Path(__file__).resolve().parents[1] / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
+    dev = a.device or Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
     res = analyze(a.out, fam, dev / "census.csv", dev / "rows.csv")
     if a.json:
         a.json.write_text(json.dumps(res, indent=1) + "\n")
