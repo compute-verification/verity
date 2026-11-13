@@ -9,6 +9,7 @@ challenger's copy of the layout, with or without a stop rule, round 2 opening th
 from __future__ import annotations
 
 import json
+import re
 import stat
 from types import SimpleNamespace as NS
 
@@ -299,3 +300,14 @@ def test_a_serve_of_select_inputs_is_refused_as_it_starts_without_ids_of_the_gre
             "logits": {"private": str(tmp_path / "private")}}
     with pytest.raises(ValueError, match="GreedySelect_v1 inlined"):
         BW.BoundaryWindows.of({**base, **cfg}, tmp_path / "out")
+
+
+@pytest.mark.parametrize("named", [f"GreedySelect_v1{{V={V}}}", f"GreedySelect_v1{{V={V},N=7}}",
+                                   f"GreedySelect_v1{{V={V},N={N},X=1}}"])
+def test_a_serve_of_select_inputs_is_refused_by_the_definition_its_check_names_not_by_how_the_name_starts(tmp_path, named):
+    """A check whose name starts as the greedy select's and names no Definition of it (a static missing, an N that
+    doesn't divide V, a static it doesn't have) is refused as the serve starts, with the text any other check gets."""
+    cfg = {"check": named, "inline": True, "per_prompt": 0, "per_output": 1, "ids": True,
+           "logits": {"private": str(tmp_path / "private")}}
+    with pytest.raises(ValueError, match="GreedySelect_v1 inlined, one instance an output, not " + re.escape(named)):
+        BW.BoundaryWindows.of(cfg, tmp_path / "out")
