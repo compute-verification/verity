@@ -7,6 +7,7 @@
 # cache) or an overlay's DIR lives under one, no network, and a fresh /proc. TMPDIR, TEMP and TMP name a writable
 # directory: TMPDIR if it is under an RW_DIR, else the private /tmp, else a private tmpfs on the first RW_DIR's
 # `.sandbox-tmp` (a tmpfs is gone with the sandbox), so a build writes nothing outside the RW_DIRs that outlives it.
+# An RO_DIR under an RW_DIR (a build's fetched dependencies) is bound read-only over itself.
 # An overlay mounts an overlayfs over DIR whose upper layer is TOP/upper (TOP/work its work directory, TOP writable):
 # CMD sees DIR and may change it, and every change lands in TOP/upper, a deletion as a whiteout, while DIR itself, which
 # other processes read, is never written (the sampled recompile, check.py's `sampled_recompile`).
@@ -16,7 +17,9 @@
 # sandbox's private tmpfs there and gone with it: nothing is made on the host, and two sandboxes at once each have
 # their own. Where /var/tmp got no private tmpfs, or is a link (CMD's physical directory is not under FIXED), --at
 # refuses: a tree bound elsewhere would compile to other bytes.
-# CMD is PID 1, so every process a build starts (compile-time code included) ends with it.
+# CMD is PID 1, so every process a build starts (compile-time code included) ends with it. It runs with no capability
+# and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
+# remount, mount over or unmount anything, here or in a namespace it opens: the mounts above are the ones it gets.
 set -euo pipefail
 rw=()
 ro=()
@@ -51,6 +54,9 @@ seen=" ${rw[*]} ${ro[*]} ${lower[*]} "
 awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do
   case "$keep" in *" $m "*) continue;; esac
   mount -o remount,bind,ro "$m" 2>/dev/null || true
+done
+for d in "${ro[@]}"; do
+  for w in "${rw[@]}"; do case "$d/" in "$w"/*) [ ! -d "$d" ] || { mount --bind "$d" "$d"; mount -o remount,bind,ro "$d"; };; esac; done
 done
 for ((i = 0; i < ${#ovl[@]}; i += 2)); do
   top=$(realpath "${ovl[i+1]}")
@@ -109,4 +115,5 @@ elif [ -z "$tmp" ]; then
   mount -t tmpfs -o mode=1777 tmpfs "$tmp"
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec "$@"
+echo 0 > /proc/sys/user/max_user_namespaces
+exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"
