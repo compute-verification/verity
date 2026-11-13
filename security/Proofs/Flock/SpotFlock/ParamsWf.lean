@@ -268,7 +268,6 @@ theorem paramsParsed_reads {j : Json} {p : Spot.OneStage.Params} (h : Spot.OneSt
     | (have h' := bind_eq_ok.1 hb; clear hb; obtain ⟨_, _, hb⟩ := h')
     | throws hb
     | split at hb
-    | dsimp only at hb
 
 /-- **The parameters list no port twice**, where the tree they were read from is well formed. -/
 theorem ports_nodup {j : Json} {p : Spot.OneStage.Params} (hj : Wf j) (h : Spot.OneStage.paramsParsed j = .ok p) :
