@@ -65,11 +65,7 @@ theorem placedOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : �
               · exact hc
               · simp [hc] at hx
             have hgx : rs.getD (u - f) Json.null = x := by
-              first
-                | simp [Array.getD_eq_getD_getElem?, hx]
-                | simp [Array.getD, hk, hx]
-                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                   simp [Array.getD, hk, hx'])
+              simp [Array.getD_eq_getD_getElem?, hx]
             have h1 := hall (u - f) hk
             rw [hgx, show f + (u - f) = u by omega] at h1
             cases x with
@@ -109,11 +105,7 @@ theorem placedOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : �
                 · exact hc
                 · simp [hc] at hx
               have hgx : rs.getD (u - f) Json.null = x := by
-                first
-                  | simp [Array.getD_eq_getD_getElem?, hx]
-                  | simp [Array.getD, hk, hx]
-                  | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                     simp [Array.getD, hk, hx'])
+                simp [Array.getD_eq_getD_getElem?, hx]
               have h1 := hall (u - f) hk
               rw [hgx, show f + (u - f) = u by omega] at h1
               cases x with
@@ -199,10 +191,13 @@ theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ}
     | obj _ => simp [Spot.nat?, Spot.int?] at hrd
     | null =>
       simp only at hrd hok
+      have hpos : 0 < units := by
+        simp only [Bool.and_eq_true] at hok
+        simpa using hok.1.1
+      refine ⟨hpos, ?_⟩
       generalize (0 : ℕ) = f at hrd hok
       simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
-      obtain ⟨⟨hpu, -⟩, hall⟩ := hok
-      have hpos : 0 < units := by simpa using hpu
+      obtain ⟨-, hall⟩ := hok
       by_cases hfu : f ≤ u
       · simp only [hfu, ↓reduceIte] at hrd
         cases hx : rs[u - f]? with
@@ -214,11 +209,7 @@ theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ}
             · exact hc
             · simp [hc] at hx
           have hgx : rs.getD (u - f) Json.null = x := by
-            first
-              | simp [Array.getD_eq_getD_getElem?, hx]
-              | simp [Array.getD, hk, hx]
-              | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                 simp [Array.getD, hk, hx'])
+            simp [Array.getD_eq_getD_getElem?, hx]
           have h1 := hall (u - f) hk
           rw [hgx, show f + (u - f) = u by omega, hb] at h1
           cases x with
@@ -229,7 +220,7 @@ theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ}
           | obj _ => simp [Spot.nat?, Spot.int?] at hrd
           | num _ =>
             simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
-            exact ⟨hpos, h1.2⟩
+            exact h1.2
       · simp [hfu] at hrd
     | num n =>
       simp only at hrd hok
@@ -252,11 +243,7 @@ theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ}
               · exact hc
               · simp [hc] at hx
             have hgx : rs.getD (u - f) Json.null = x := by
-              first
-                | simp [Array.getD_eq_getD_getElem?, hx]
-                | simp [Array.getD, hk, hx]
-                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                   simp [Array.getD, hk, hx'])
+              simp [Array.getD_eq_getD_getElem?, hx]
             have h1 := hall (u - f) hk
             rw [hgx, show f + (u - f) = u by omega, hb] at h1
             cases x with
