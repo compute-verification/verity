@@ -10,7 +10,7 @@ or on the public file's tail (the statement's Hello is the prover's), which no s
 refusal of the port's condition (only the verifier's own recomputation, named by seed and derivation, is public) on a real
 statement. Each case sets up the statement once (seconds); the cases run in parallel workers.
 
-The set is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
+The set is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
 when it cannot, so a missing set fails this test rather than skipping it."""
 from __future__ import annotations
 
