@@ -29,9 +29,10 @@ an array beside its own view is one array. A batch's members are lanes; a scan r
 distinct contexts, the first of each, and a scan whose contexts repeat before its last iteration leaves its outputs
 unevaluated: a claim that reads them is refused with the scan named. Inside a product, which the reader doesn't
 summarize, every scan runs whole. The pass is about one evaluation of the step, where the reading is in the
-description's size; one pass a Program, memoized by its digest. The walk holds the values a later node still reads
-and, a Definition, its nodes' last readers (`Walk._last`): no array outlives its last reader, and nothing the walk
-keeps grows with the takes it makes.
+description's size; one pass a Program, memoized by its digest. The walk drops a node's value once the last node of
+its body that reads it is done. What it keeps for the whole pass is one entry for each Definition it evaluates, that
+Definition's nodes' last readers and its primitive words (`Walk.last`), so nothing it keeps grows with the takes it
+makes.
 
 Each primitive is computed by a numpy twin (`TWINS`), by the kernel `verity.circuits.evaluation.batch` registers,
 or else by the reference a word at a time (`Tally.reference`), and a `DotRef` or an f32 `LinearRef` without a bias

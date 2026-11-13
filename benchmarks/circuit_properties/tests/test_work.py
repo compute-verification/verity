@@ -8,7 +8,8 @@ row holding a NaN, rows of one value that are inf there, or a specific operand o
 premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
-row; a rank-4 bottleneck between two carried weights; what the point's walk holds after a pass; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
+row; a rank-4 bottleneck between two carried weights; what the point's walk holds after a pass; each operand's β at
+min(16, β(k)); and |C| in Boolean gates."""
 
 from __future__ import annotations
 
