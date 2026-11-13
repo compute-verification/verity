@@ -593,7 +593,7 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
 
 
-#: a reference two bindings bind at two statics (as `verity.definitions.kernels.tc`'s sidecar and the gemm-coordinate template bind
+#: a reference two bindings bind at two statics (as `verity.circuits.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
 #: Definition `WORDMOD` registers as it is imported (as `ops.boolean`'s pieces are), which only SynVTop's body imports

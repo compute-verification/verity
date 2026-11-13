@@ -67,8 +67,8 @@ import numpy as np
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.fp8 import E4M3
