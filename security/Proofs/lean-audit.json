@@ -215,6 +215,7 @@
   "Proofs.Flock.SpotFlock.Honest.Sits",
   "Proofs.Flock.SpotFlock.Honest.Any",
   "Proofs.Flock.SpotFlock.Honest.AtHeldOf",
+  "Proofs.Flock.SpotFlock.Honest.Checked",
   "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",

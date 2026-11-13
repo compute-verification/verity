@@ -17,6 +17,8 @@ them (`held R B desc q c₀`: one template, no wires). Neither conclusion reads 
 * `inScope_of_two`: so some statement is in scope where the design evaluates and a statement decodes;
 * `scope_of_play`, `inScope_of_play`: the statement of a play the verifier accepts is in scope, since its accept
   passed the session statements' check, at which the statement parses and the design evaluates (`refusesTwo`);
+* `honestExists_iff`: so `HonestExists` is two conditions on one registration, its premises and a play its verifier
+  accepts, and its scope clause is no third one;
 * `inScope_of_run`, `accepts_of`: the same of a run with a checked unit and its witness (`Accepts`), and what such a
   run takes, the fields `CheckedRun.Ok` derives left out: the statement check passing, one unit the two stages
   check, and a witness in Flock's relation at that unit's session statement;
@@ -89,6 +91,15 @@ theorem scope_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prove
 theorem inScope_of_play {h : Held} (hA : AcceptsPlay h) : InScope h := by
   obtain ⟨Ω, P, x, ω, r, hacc⟩ := hA
   exact ⟨x, scope_of_play FlockDeploy.sha512 hacc⟩
+
+/-- **`HonestExists` is two conditions on one registration**: its premises and a play its verifier accepts. The
+scope clause is no third condition, since the accepted play's statement is in scope (`inScope_of_play`). -/
+theorem honestExists_iff : HonestExists ↔ ∃ h : Held, Premises h ∧ AcceptsPlay h := by
+  constructor
+  · rintro ⟨h, hP, -, hA⟩
+    exact ⟨h, hP, hA⟩
+  · rintro ⟨h, hP, hA⟩
+    exact ⟨h, hP, inScope_of_play hA, hA⟩
 
 /-- **The statement of a run with a checked unit is in the two-stage scope at the compiled code**, at any auditor's
 copies: the run's design evaluated. -/
