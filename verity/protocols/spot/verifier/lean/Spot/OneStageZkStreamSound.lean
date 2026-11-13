@@ -153,25 +153,25 @@ theorem distinctFrom_ok : ∀ {seen : Std.HashSet String} {l : List ByteArray}, 
     (∀ b ∈ l, seen.contains (Flock.hexOf b) = false) ∧ (l.map Flock.hexOf).Nodup ∧ ∀ b ∈ l, b ∉ pinned
   | _, [], _ => ⟨by simp, List.nodup_nil, by simp⟩
   | seen, b :: bs, h => by
-    unfold distinctFrom at h
-    by_cases hp : pinned.any (fun t => decide (t = b)) = true
-    · rw [if_pos hp] at h
-      cases h
-    rw [if_neg hp] at h
-    by_cases hs : seen.contains (Flock.hexOf b) = true
-    · rw [if_pos hs] at h
-      cases h
-    rw [if_neg hs] at h
+    simp only [distinctFrom] at h
+    split at h
+    · cases h
+    rename_i hp
+    split at h
+    · cases h
+    rename_i hs
     obtain ⟨hseen, hnd, hpin⟩ := distinctFrom_ok h
     have hne : ∀ b' ∈ bs, Flock.hexOf b ≠ Flock.hexOf b' ∧ seen.contains (Flock.hexOf b') = false := by
       intro b' hb'
       have := hseen b' hb'
       rw [Std.HashSet.contains_insert, Bool.or_eq_false_iff] at this
-      exact ⟨fun he => by simp [he] at this, this.2⟩
+      refine ⟨fun he => ?_, this.2⟩
+      rw [he, beq_self_eq_true] at this
+      exact Bool.false_ne_true this.1.symm
     refine ⟨?_, ?_, ?_⟩
     · intro x hx
       rcases List.mem_cons.1 hx with rfl | hx
-      · simpa using hs
+      · exact Bool.eq_false_iff.2 hs
       · exact (hne x hx).2
     · rw [List.map_cons, List.nodup_cons]
       refine ⟨fun hm => ?_, hnd⟩
@@ -180,7 +180,7 @@ theorem distinctFrom_ok : ∀ {seen : Std.HashSet String} {l : List ByteArray}, 
     · intro x hx
       rcases List.mem_cons.1 hx with rfl | hx
       · intro hm
-        exact hp (List.any_eq_true.2 ⟨x, hm, by simp⟩)
+        exact hp (List.any_eq_true.2 ⟨x, hm, decide_eq_true rfl⟩)
       · exact hpin x hx
 
 /-- Digests whose hex is distinct are distinct. -/
