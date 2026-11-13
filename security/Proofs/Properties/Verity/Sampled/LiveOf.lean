@@ -360,6 +360,48 @@ theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (Stri
           rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
           cases hs : Flock.ProvedScope.scopeOkH c <;> simp [hi, hs] at hu ⊢
 
+/-! ## The record's sample -/
+
+/-- **An ascending sample is the sorted print of a sample of `Fin n`**: the units below `n` it holds, sorted. -/
+theorem printed_units {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) :
+    ∃ S : Finset (Fin n), ((S.image Fin.val).sort (· ≤ ·)).toArray = units := by
+  classical
+  obtain ⟨hlt, hp⟩ := unitsAscending_spec h
+  refine ⟨Finset.univ.filter (fun i : Fin n => i.val ∈ units.toList), ?_⟩
+  have himg : (Finset.univ.filter (fun i : Fin n => i.val ∈ units.toList)).image Fin.val = units.toList.toFinset := by
+    ext x
+    simp only [Finset.mem_image, Finset.mem_filter, Finset.mem_univ, true_and, List.mem_toFinset]
+    exact ⟨fun ⟨i, hi, he⟩ => he ▸ hi, fun hx => ⟨⟨x, hlt x hx⟩, hx, rfl⟩⟩
+  rw [himg, (List.toFinset_sort (· ≤ ·) (hp.imp ne_of_lt)).2 (hp.imp le_of_lt)]
+  simp
+
+/-- **The record's subset print decodes to a sample proving its units**: the print is `printedDraw`'s of the sample
+of its units (`printed_units`), which decodes to that sample (`drawFileZK_printedDraw`), with no closure. -/
+theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
+    (h : recordDrawn (.subset m) n units record) {D : Flock.Draw.UnitDraw}
+    (hD : Flock.Draw.UnitDraw.ofJson (Flock.Draw.UnitDraw.toJson ⟨.subset m, n, units, #[]⟩) = .ok D) :
+    D.proved = units := by
+  obtain ⟨S, hS⟩ := printed_units h.1
+  have e : Flock.Draw.UnitDraw.toJson ⟨.subset m, n, units, #[]⟩ = printedDraw (n := n) (.subset m) S := by
+    unfold printedDraw FlockSoundness.Discharge.ZkLink.drawOf
+    rw [hS]
+  rw [e] at hD
+  rw [drawFileZK_printedDraw m S D hD]
+  show (if (#[] : Array ℕ).isEmpty then _ else _) = units
+  simp only [Array.isEmpty_empty, if_true]
+  exact hS
+
+/-- **The design `designAt` reads draws `lawK` of it** wherever the registration's population is the descriptor's
+(`Live.hlaw`'s proof, at any parameters). -/
+theorem lawOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
+    (hpop : Flock.Bridge.PopMatches desc qr n) :
+    Flock.Bridge.LawOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
+      (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) := by
+  rcases Flock.Bridge.designAt_cases desc qr lj tb n with h | h
+  · exact Flock.Bridge.lawOn_drawsUnder hpop h (Flock.Bridge.notBernoulli_drawsUnder h)
+  · rw [h]
+    exact ⟨rfl, Nat.zero_le _⟩
+
 /-! ## An accepted play's session -/
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -384,7 +426,12 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
         p.base.verifier.workTable n) ∧
       ∃ reg, Flock.ProvedScope.check (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own
           (V.circuitFile θ F) pubB (_root_.Core.Blobs.ofArray o.sent.blobs))) true (V.circuitFile θ F) pubB
-        (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)) 1 false reg = .ok () := by
+        (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)) 1 false reg = .ok () ∧
+      ∃ recS units rd x, recordDrawn (.subset units.size) n units recS ∧
+        units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+          p.base.verifier.workTable n) ∧
+        _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
+          (_root_.Core.Blobs.ofArray o.sent.blobs)) rd (Flock.Witness.recordDraw recS) = .ok x := by
   obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
   have hreg : V.Registered θ F := by
     have h1 := hv.1
@@ -397,6 +444,7 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
   obtain ⟨a, b, e, p, cm, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀' (verdict_case hv)
   have hpp : p₀ = p := paramsAt_case hv.2.1 hcase hacc hp₀'
   subst hpp
+  have hacc0 := hacc
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
   obtain ⟨tags0, circuitB, pubB, record, proofs, n, ht0, hc, hpb, -, -, hn, hAc⟩ := checkBlobsAt_event hck
   have hs : o.sent.blobs = F ++ o.blobs := by
@@ -422,9 +470,30 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
   have e2 : circuitB1 = circuitB := Except.ok.inj (hc1.symm.trans hc)
   have e3 : pubB1 = pubB := Except.ok.inj (hp1.symm.trans hpb)
   rw [e1, e2, e3] at hsc
+  obtain ⟨tags2, circuitB2, pubB2, rd, recS, x, ht2, hc2, hp2, hsr2, hsetup⟩ := checkBlobsAt_setup hck
+  have e4 : tags2 = tags0 := Option.some.inj (ht2.symm.trans ht0)
+  have e5 : circuitB2 = circuitB := Except.ok.inj (hc2.symm.trans hc)
+  have e6 : pubB2 = pubB := Except.ok.inj (hp2.symm.trans hpb)
+  rw [e4, e5, e6] at hsetup
+  obtain ⟨-, -, -, -, -, hcs, -, -, -⟩ := sent_verified hv.2.1 hcase hacc0
+  have hrecS : sentRecord o.sent = some recS := by
+    unfold sentRecord
+    rw [hcs]
+    exact hsr2
+  obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
+  have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (drawnUnits ev.base.draw) :=
+    ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
+  have hrd := drawHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
+  have hlawD := lawAt_designAt hdesc hlo hdf
+  have hlawL : lawAt p₀.base.verifier n = .ok (derived.getD fl) := by
+    simp only [lawAt, hlo, hder, hfl, ok_bind]
+    rfl
+  have hLd := Except.ok.inj (hlawL.symm.trans hlawD)
+  rw [hLd] at hdu
+  have hsize := Flock.Bridge.drawUnits_size (lawOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
   subst hcf
-  exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc,
-    lawAt_designAt hdesc hlo hdf, reg, hsc⟩
+  exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, ⟨reg, hsc⟩,
+    recS, drawnUnits ev.base.draw, rd, x, hrd, hsize, hsetup⟩
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
@@ -450,9 +519,21 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
       pubO.n = n ∧ _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
       Flock.Bridge.PopMatches desc p.base.verifier.query n ∧
       lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
-        p.base.verifier.workTable n) := by
-  obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, reg, hsc⟩ :=
-    accepted_parts hD hP hreach hv ht
+        p.base.verifier.workTable n) ∧
+      ∃ recS units st, recordDrawn (.subset units.size) n units recS ∧
+        units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+          p.base.verifier.workTable n) ∧
+        Flock.Stmt.setupHidden (FlockSoundness.Discharge.Composed.inputsJ I 0).tags
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).circuitFile
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).publicFile
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).coins
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).tables
+          (FlockSoundness.Discharge.Exec.recordDraw recS)
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).partition
+          (FlockSoundness.Discharge.Composed.inputsJ I 0).program none = .ok st ∧
+        Flock.Zk.shapeOk st = .ok () := by
+  obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, ⟨reg, hsc⟩,
+    recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hP hreach hv ht
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
   obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
@@ -462,7 +543,10 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
       (_root_.Core.Blobs.ofArray o.sent.blobs)), D, pubO, desc, hp, ht0, rfl, rfl, rfl, rfl, rfl, rfl, htab, rfl, rfl,
     htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
     scopeH_of_form hcD hAc.flat.2 hAc.form, hports, hAc.loads hpubO,
-    hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw⟩
+    hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw, recS, units, ?_⟩
+  obtain ⟨st, hst, hshape⟩ := setupAt_hidden rfl
+    ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs _).trans hAc.flat.1) hsetup
+  exact ⟨st, hrd, hsize, hst, hshape⟩
 
 /-! ## The bound -/
 
