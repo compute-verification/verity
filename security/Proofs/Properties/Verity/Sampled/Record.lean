@@ -15,26 +15,26 @@ The claims' sampling record (`Claims.Sampling.Deploy`) of the session one-stage 
 (`Verity.Sampled.Live`, `A`), with the verifier's own partition object and registered file `o` (`Own`): v2's audit in
 public-coin form (`V`), with what the sampling claims read of it (`code`, `record`).
 
-* **The verifier** (`V`), at the statement `xOf A o` (flock-verify's statement before the draw): `DRAW_ROUNDS` rounds
-  of draw coins, whose bytes (`drawBytes`) are the challenger's `MAX_COINS · COIN_BYTES` bytes v2's draw may read; one
-  round in which the prover sends the session's draw file `d`, which the verifier keeps only when its units are the ones
-  the coins draw (`drawOk`: `provedOf`, as v2 credits a session's units, against `drawn`, as v2's challenger draw reads
+* **The verifier** (`V`), at the statement `xOf A o` (flock-verify's statement before the sample): `DRAW_ROUNDS` rounds
+  of sampling coins, whose bytes (`drawBytes`) are the challenger's `MAX_COINS · COIN_BYTES` bytes v2's sample may read; one
+  round in which the prover sends the session's sample file `d`, which the verifier keeps only when its units are the ones
+  the coins sample (`drawOk`: `provedOf`, as v2 credits a session's units, against `drawn`, as v2's challenger sample reads
   the coins), its session has the statement's numbers (`numsOk`) and its statement fits its length words (`Fits`, as v2
   refuses a length a session's statement can't hold); then the one session, flock-verify `--zk` in
   public-coin form (`FlockDeploy.V true`) at the session's statement `sessStmt A o d`. Every other statement is refused.
 * **The session's numbers are the statement's**: the sampling record fixes each checked unit's session rounds by the
-  statement, so the verifier holds the session's round count and `N₀` to those at a reference draw file (`d₀`, one
-  whose session sets up one table of `A.kd` units: `RefOk`), and refuses a draw file that sets the session up at
+  statement, so the verifier holds the session's round count and `N₀` to those at a reference sample file (`d₀`, one
+  whose session sets up one table of `A.kd` units: `RefOk`), and refuses a sample file that sets the session up at
   others.
 * **What the claims read** (`code`): the statement's audit statement and partition are V5's at `A` (`Flock.Bridge.stmtOf`,
-  `Flock.Bridge.partOf`); the draw precedes the session (`stage2` and every unit's `rounds` are the session's rounds);
-  the checked units are the coins' draw (`checked`); every unit's session is the one session (`sessionOf`, with a
-  refusing view where the draw file was refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one
+  `Flock.Bridge.partOf`); the sample precedes the session (`stage2` and every unit's `rounds` are the session's rounds);
+  the checked units are the coins' sample (`checked`); every unit's session is the one session (`sessionOf`, with a
+  refusing view where the sample file was refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one
   session of one table. What a session's witness reveals and the reference prover's framing are the record's
   parameters (`Ext`).
 * **v2's slots over the lowered program** (`partSlots`, `designSlots`, `stmtSlots`): v2's two classes and two rules
   (`Slots.layout`, `slotDesign`) at the gates of the program the statement reads, the population in the registration's
-  strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program, drawn `all`.
+  strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program, sampled `all`.
   `slotPartition` of the layout itself numbers the descriptor's gates, not the lowered program's, so it covers none of a
   unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each unit has a
   gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
@@ -52,7 +52,7 @@ structure Own where
   partition : ByteArray
   registered : Option ByteArray
 
-/-- **The session's statement before the draw**: v2's statement, the committed circuit and public files and lookup
+/-- **The session's statement before the sample**: v2's statement, the committed circuit and public files and lookup
 tables, `--zk`, one table, the verifier's partition object, program and registered file, and no work, stratified,
 closure or public-input input (`Spot.OneStageZk.inputsOf`). -/
 def baseRaw (A : Live) (o : Own) : FlockDeploy.Raw where
@@ -76,70 +76,70 @@ def baseRaw (A : Live) (o : Own) : FlockDeploy.Raw where
 /-- **The record's statement.** -/
 def xOf (A : Live) (o : Own) : Msg := (baseRaw A o).encode
 
-/-- **The session's statement at the draw file `d`.** -/
+/-- **The session's statement at the sample file `d`.** -/
 def sessStmt (A : Live) (o : Own) (d : Msg) : Msg := { baseRaw A o with draw := some ⟨d.toArray⟩ }.encode
 
-/-- The draw's rounds: `1024` coins of `2^20` bytes, the challenger's `MAX_COINS · COIN_BYTES`. -/
+/-- The sample's rounds: `1024` coins of `2^20` bytes, the challenger's `MAX_COINS · COIN_BYTES`. -/
 def DRAW_ROUNDS : ℕ := 1024
 
-/-- The draw rounds' coins at the coins `r`. -/
+/-- The sample rounds' coins at the coins `r`. -/
 def coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) : List FlockDeploy.Coin := (List.range DRAW_ROUNDS).map (coinSeq r)
 
-/-- **The bytes the draw reads**: the coins' bytes, in order. -/
+/-- **The bytes the sample reads**: the coins' bytes, in order. -/
 def drawBytes (cs : List FlockDeploy.Coin) : ByteArray := ⟨(cs.flatMap FlockDeploy.Coin.bytes).toArray⟩
 
-/-- **The units the coins' bytes `src` draw** under the session's law over its population, as v2's challenger draw
-reads them (`Spot.Draw.drawUnits`); a draw that fails draws every unit (`Live.L`). -/
+/-- **The units the coins' bytes `src` sample** under the session's law over its population, as v2's challenger sample
+reads them (`Spot.Draw.drawUnits`); a sample that fails samples every unit (`Live.L`). -/
 def drawn (A : Live) (src : ByteArray) : List ℕ :=
   match _root_.Spot.Draw.drawUnits A.design A.n src with
   | .ok (d, _) => d.toList
   | .error _ => List.range A.n
 
-/-- **The units a draw file proves**, as v2 credits a session's (`Spot.OneStageZk.provedUnits`): the public
-file's `units.indices` of the instances the draw names, ascending (`Properties.Spot.Units.unitsAt`); the draw
+/-- **The units a sample file proves**, as v2 credits a session's (`Spot.OneStageZk.provedUnits`): the public
+file's `units.indices` of the instances the sample names, ascending (`Properties.Spot.Units.unitsAt`); the sample
 file read as the session's statement reads it (`FlockDeploy.jsonOf`, `Flock.norm`), the public file's header as the
 session reads it (`A.pub`). -/
 def provedOf (A : Live) (d : Msg) : Option (Array ℕ) := do
   let j ← (FlockDeploy.jsonOf "draw" ⟨d.toArray⟩).toOption
   _root_.Properties.Spot.Units.unitsAt A.pub.header (Flock.norm j)
 
-/-- **A reference draw file**: the session's statement at the draw file `d` reads as `baseRaw` with `d`, and sets up one
+/-- **A reference sample file**: the session's statement at the sample file `d` reads as `baseRaw` with `d`, and sets up one
 table, of `A.kd` units. -/
 def RefOk (A : Live) (o : Own) (d : Msg) : Prop :=
   ∃ s t, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s ∧
     FlockDeploy.setupOf true (sessStmt A o d) = some (s, t.spec, #[t]) ∧ t.n = A.kd
 
-/-- The reference draw file: a draw file `RefOk` holds at, where there is one. -/
+/-- The reference sample file: a sample file `RefOk` holds at, where there is one. -/
 noncomputable def d₀ (A : Live) (o : Own) : Msg := Classical.epsilon (RefOk A o)
 
-/-- The session's statement at the reference draw file. -/
+/-- The session's statement at the reference sample file. -/
 noncomputable def xS₀ (A : Live) (o : Own) : Msg := sessStmt A o (d₀ A o)
 
 /-- **A session statement's numbers**: flock-verify's rounds and `N₀` there. -/
 noncomputable def Nums (xS : Msg) : ℕ × ℝ := ((FlockDeploy.V true).k xS, FlockDeploy.N₀ true xS)
 
-/-- **The session has the statement's numbers** at the draw file `d`. -/
+/-- **The session has the statement's numbers** at the sample file `d`. -/
 def numsOk (A : Live) (o : Own) (d : Msg) : Prop := Nums (sessStmt A o d) = Nums (xS₀ A o)
 
 /-- The session's rounds the statement fixes. -/
 noncomputable def kS (A : Live) (o : Own) : ℕ := (FlockDeploy.V true).k (xS₀ A o)
 
-/-- **The session's statement at the draw file `d` fits its length words**: every file's size and the draw file's
+/-- **The session's statement at the sample file `d` fits its length words**: every file's size and the sample file's
 under `2^64`, as `FlockDeploy.Raw.encode`'s 8-byte words hold them. -/
 def Fits (A : Live) (o : Own) (d : Msg) : Prop :=
   Verity.Recursive.Part.RawFits { baseRaw A o with draw := some ⟨d.toArray⟩ }
 
-/-- **The draw file round's check**: the draw file proves exactly the units the draw coins `cs` draw, its session
+/-- **The sample file round's check**: the sample file proves exactly the units the sampling coins `cs` sample, its session
 has the statement's numbers, and its statement fits its length words. -/
 def drawOk (A : Live) (o : Own) (d : Msg) (cs : List FlockDeploy.Coin) : Prop :=
   provedOf A d = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) ∧ numsOk A o d ∧ Fits A o d
 
-/-- **A kept draw file fits its statement's length words.** -/
+/-- **A kept sample file fits its statement's length words.** -/
 theorem fits_of_drawOk {A : Live} {o : Own} {d : Msg} {cs : List FlockDeploy.Coin} (h : drawOk A o d cs) : Fits A o d :=
   h.2.2
 
 open Classical in
-/-- **The verifier's step at the record's statement**: a draw round answers its coin; the draw file round answers `[]`
+/-- **The verifier's step at the record's statement**: a sample round answers its coin; the sample file round answers `[]`
 when `drawOk` holds, else refuses; the session's rounds are flock-verify's at the session's statement. -/
 noncomputable def nextAt (A : Live) (o : Own) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
   if as.length ≤ DRAW_ROUNDS then .ret (.msg (cs.getLast?.getD default).bytes)
@@ -148,21 +148,21 @@ noncomputable def nextAt (A : Live) (o : Own) (as : List Msg) (cs : List FlockDe
   else FlockDeploy.next true (sessStmt A o (as.getD DRAW_ROUNDS [])) (as.drop (DRAW_ROUNDS + 1))
     (cs.drop (DRAW_ROUNDS + 1))
 
-/-- **One-stage v2's audit at the session, in public-coin form**: the draw rounds, the draw file round and the session's
+/-- **One-stage v2's audit at the session, in public-coin form**: the sample rounds, the sample file round and the session's
 rounds at the record's statement; one refusing round elsewhere. -/
 noncomputable def V (A : Live) (o : Own) : Verifier FlockDeploy.Coin where
   k x := if x = xOf A o then DRAW_ROUNDS + 1 + kS A o else 1
   next x as cs := if x = xOf A o then nextAt A o as cs else .ret .rej
 
-/-- **The session's rounds**: those after the draw file round. -/
+/-- **The session's rounds**: those after the sample file round. -/
 def after (k : ℕ) : Finset (Fin k) := Finset.univ.filter fun t => DRAW_ROUNDS + 1 ≤ t.val
 
-/-- A refused draw file's session: the reference statement, and a prover that sends `[2]`, which flock-verify refuses
+/-- A refused sample file's session: the reference statement, and a prover that sends `[2]`, which flock-verify refuses
 at once. -/
 noncomputable def refused (A : Live) (o : Own) : Msg × Seen := (xS₀ A o, ⟨[([2], .rej)], .rej⟩)
 
 open Classical in
-/-- **The session a run shows**: where the draw file round kept the draw file `d`, the session has the statement's
+/-- **The session a run shows**: where the sample file round kept the sample file `d`, the session has the statement's
 numbers and its statement fits its length words, the session's statement and the run from the session's first round on;
 else `refused`. -/
 noncomputable def sessionOf (A : Live) (o : Own) (v : Seen) : Msg × Seen :=
@@ -187,7 +187,7 @@ noncomputable def partSlots (A : Live) : Claims.Sampling.Partition :=
     ⟨[(Flock.Bridge.nsOf A.desc A.qr).splitLengths ((List.finRange A.n).map (Flock.Bridge.unitGates A.P))]⟩
     (Flock.Bridge.progOf A.Cc A.κ)
 
-/-- **v2's design** (`slotDesign`'s two rules): the law's one-stage rule over the population, then every input slot. -/
+/-- **v2's design** (`slotDesign`'s two rules): the sampling design's one-stage rule over the population, then every input slot. -/
 def designSlots (A : Live) : Claims.Sampling.Design :=
   ⟨[_root_.Properties.Spot.oneStageOf A.design, .all]⟩
 
@@ -203,7 +203,7 @@ def PartSlotsTarget : Prop :=
       (partSlots A).Partitions (stmtSlots A).prog
 
 /-- **The statement is in scope at v2's slots** (`ScopeOk` at `partSlots` and `designSlots`): `partSlots` partitions
-the lowered program, and the law's one-stage rule is well formed over the population's strata. The input class's rule,
+the lowered program, and the sampling design's one-stage rule is well formed over the population's strata. The input class's rule,
 `all`, is well formed at every class. -/
 def ScopeSlotsOk (A : Live) : Prop :=
   (partSlots A).Partitions (stmtSlots A).prog ∧
@@ -245,7 +245,7 @@ noncomputable def code (A : Live) (o : Own) (e : Ext) : SamplingDeploy.Code wher
   reads := e.reads
   wit := e.wit
 
-/-- **The record**: the code at the session, its session C-Flock's masked verifier. -/
+/-- **The record**: the code at the session, its session Flock's masked verifier. -/
 noncomputable def record (A : Live) (o : Own) (e : Ext) :
     Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace :=
   SamplingDeploy.deployOf (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
@@ -281,7 +281,7 @@ theorem layoutIsL (h : Flock.Bridge.RowsV2 A.D.unroll) :
 
 end Unfold
 
-/-- **The draw rounds' coins read no session round**: coins that agree off the session's rounds give the same draw
+/-- **The sample rounds' coins read no session round**: coins that agree off the session's rounds give the same sample
 rounds' coins. -/
 theorem coinsAt_congr {k : ℕ} {r r' : Fin k → FlockDeploy.Coin} (h : ∀ t ∉ after k, r t = r' t) :
     coinsAt r = coinsAt r' := by

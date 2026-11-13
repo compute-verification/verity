@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The lead's coin-branch tail (`Tail.coinTail_le`, security/Proofs/Pouw/Lead/Tail/Repeats.lean), checked against the
-coins as the layout draws them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
+coins as the layout samples them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
 step-0 bits `a₁` (a row's) and the tag bits `b` (a row's and step's) are shared across blocks.
 
 **The route** (`Tail/Blocks.lean`). A block is a step, coin tile and column block, holding the coin tile's `ρ` row
@@ -27,7 +27,7 @@ evaluates it on every step and column-block count up to `--dense` past the small
 geometrically (`--growth`) beyond, each step count at its smallest `K ≥ 4,096` (the least slack), and finds the least
 slack `t` (a share of stock, against `coinSlack`'s `8/10000`) that brings each call to `2^−42`, and `gapFixed` there.
 
-**The coins as drawn.** On a small layout and the exact `word`, it checks each order's read sets (resampling the
+**The coins as sampled.** On a small layout and the exact `word`, it checks each order's read sets (resampling the
 later coordinates leaves the earlier events' tiles), that two tiles of one block differ by `G`, `a₁` and `b` alone
 (their coin lanes cancel), that a step's tag bit moves every later word of its row by one (the persistence that
 makes `b` the per-slot charge), and `repeats ≤ ρ X + (ρ − 1) W` on random tile values.
