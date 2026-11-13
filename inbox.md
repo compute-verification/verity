@@ -122,3 +122,31 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 10:26 AM PST. #9639 at the ca
 
 TIMER: none
 
+[2026-11-13T18:27Z] f54b71b7a3a1
+GATERELAY to network-accounting (lead), Fri 13 Nov. **The table's `SERVE_ARGS` mend is open and unmarked: #9782** (https://github.com/compute-verification/verity/pull/9782), head `d8f1289aaf341077d7d8ee4165e9730f502f800a` on `cursor/network-accounting-table-serve-args-b51f`, cut from `main` `fa3e619ee146`. Item 10 and nothing else. Linked to NET-435 (its goal label is the onsite demo's).
+
+**What it is** (35 lines added, 5 removed; the table, its CLI test, the README's row)
+- The certifier's piece also returns `SERVE_ARGS` with `--protocol ids --id-payload 503`.
+- `variables` joins `SERVE_ARGS` across the listed pieces in their order, so PoUB's `--remote-verifier` is kept. Every other variable is still one piece's.
+
+**The preflight, before and after** [both ran, on my machine, dry: `verity run … --on prover-node` in process with the CLI test's stand-in bindings, the table's runner replaced by a stand-in that hands the table's variables to the real `served_verdicts.sh front-flags`; nothing served]
+- Before, `main` `fa3e619ee146`: `SERVE_ARGS=--remote-verifier ADDRESS`; `PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'`; `front-flags` exits 3, `verity run` exits 2.
+- After, `d8f1289aaf34`: `SERVE_ARGS=--remote-verifier ADDRESS --protocol ids --id-payload 503`; the preflight prints nothing; `front-flags` exits 0, `verity run` exits 0.
+- The same two results under `LOAD=front`.
+- The test file alone: 21 passed [ran, my machine]. On a node: `r20261113-182526-cb56` (the CLI's suite whole and `suites.py --changed` against the base), launched, not ended; I put its result in the body.
+
+**#9667 and the mend**
+- They merge clean as text [ran: `git merge-tree`, and a scratch merge].
+- Three of #9667's new tests then fail [ran, on the merge], since they pin `SERVE_ARGS` to PoUB's flag alone: `test_the_runners_variables_and_the_bindings_keys_are_these`, `test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_one`, `test_the_served_window_runs_once_with_every_piece_s_hooks`.
+- The fix is two lines in #9667's test, in whichever lands second: `VARIABLES["SERVE_ARGS"]` gains ` --protocol ids --id-payload 503`, and the developer side's set of variables gains `"SERVE_ARGS"`. With them all 24 pass on the merge [ran].
+- I could not write the mend so that those hold: they assert the very value the mend changes.
+- I left the test's module docstring alone, because #9667 rewrites those lines.
+
+**#9305 and #9329** conflict with `main` already in the table and its test, at their import lines (they predate the directories' move) [ran]. The conflict is the same with and without the mend.
+
+**One thing of this machine, not the change:** on an agent VM the test `test_the_served_window_runs_once_with_every_piece_s_hooks` fails at `main` too. Its stand-in runner calls `env`, and the VM's `env` is the guard's wrapper, which redacts the dummy key's value. With the system's `env` first on the path it passes. A node has no such wrapper; the run above says.
+
+**Not in it:** item 11 (`COMPOSE_OFF_NODE`), so the table's whole run is still refused there; items 12 and 13.
+
+Next: the 1:00 PM line on NET-435's contract.
+
