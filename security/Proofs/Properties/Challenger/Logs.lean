@@ -146,7 +146,7 @@ theorem released_one {c : LiveCommitment} {label : String} {after : ByteArray} {
   have h10 : getD s "after" = .str (Flock.hexOf after) := read_str hss rfl
   exact ⟨a, b, hca, hcb, Steps.releasedRootsOf_one hf hta htb hr hs hkr hks (by rw [h1]; exact jsonStrIs_str _)
     (by rw [h2]; exact jsonStrIs_str _) (by rw [h3]; exact isTime_nat 0) (by rw [h4]; exact isTime_nat 0) h5 h6
-    (Flock.unhex_hexOf after) (by rw [h7]; rfl) (by rw [h8]; rfl) (by rw [h9]; exact jsonStrIs_str _)
+    (Flock.Hex.unhex_hexOf after) (by rw [h7]; rfl) (by rw [h8]; rfl) (by rw [h9]; exact jsonStrIs_str _)
     (by rw [h10]; exact jsonStrIs_str _) hx⟩
 
 end Properties.Challenger.Logs

@@ -70,7 +70,7 @@ theorem zero_len : ZERO.length = 128 := by
 
 theorem zero_plain : PlainStr ZERO := zero_hex ▸ plain_hexOf _
 
-theorem zero_unhex : Flock.unhex ZERO = .ok ⟨Array.replicate 64 0⟩ := zero_hex ▸ Flock.unhex_hexOf _
+theorem zero_unhex : Flock.unhex ZERO = .ok ⟨Array.replicate 64 0⟩ := zero_hex ▸ Flock.Hex.unhex_hexOf _
 
 theorem canon_true : Flock.canon (.bool true) = .ok "true" := by
   rw [Flock.canon]

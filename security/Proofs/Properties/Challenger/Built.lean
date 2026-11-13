@@ -74,7 +74,7 @@ theorem hexOf_len (b : ByteArray) : (Flock.hexOf b).length = 2 * b.size := by
 /-- **A digest's hex is a digest**, of twice its bytes' count in characters. -/
 theorem isDigest_hex {b : ByteArray} {n : Nat} (h : 2 * b.size = n) : isDigest (.str (Flock.hexOf b)) n = true := by
   show ((Flock.hexOf b).length == n && (Flock.unhex (Flock.hexOf b)).toOption.isSome) = true
-  rw [hexOf_len, Flock.unhex_hexOf, h]
+  rw [hexOf_len, Flock.Hex.unhex_hexOf, h]
   simp [Except.toOption]
 
 /-! ## A built object's pairs, keys, reads and text -/

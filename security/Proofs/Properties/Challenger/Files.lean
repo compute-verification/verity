@@ -73,7 +73,7 @@ theorem commitment_ofJson {scheme label : String} (epoch : Nat) {root : ByteArra
     LiveCommitment.ofJson (one scheme label epoch root).toJson = .ok (one scheme label epoch root) := by
   have hroot : hexAt (one scheme label epoch root).toJson "root" = some root := by
     show (Flock.unhex (Flock.hexOf root)).toOption = some root
-    rw [Flock.unhex_hexOf]
+    rw [Flock.Hex.unhex_hexOf]
     rfl
   have hlay : layoutOf (getD (one scheme label epoch root).toJson "scheme")
       (getD (one scheme label epoch root).toJson "epoch") (getD (one scheme label epoch root).toJson "families") =
@@ -101,7 +101,7 @@ theorem record_ofJson {c : LiveCommitment} {host : String} (sig : ByteArray)
     Built.keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
   have hsig : hexOf? (getD (ChallengerRecord.toJson ⟨c, host, sig⟩) "signature") = some sig := by
     show (Flock.unhex (Flock.hexOf sig)).toOption = some sig
-    rw [Flock.unhex_hexOf]
+    rw [Flock.Hex.unhex_hexOf]
     rfl
   have hcm : LiveCommitment.ofJson (getD (ChallengerRecord.toJson ⟨c, host, sig⟩) "commitment") = .ok c := hc
   have hhost : (match getD (ChallengerRecord.toJson ⟨c, host, sig⟩) "host" with | .str s => s | _ => "") = host := rfl
@@ -123,11 +123,11 @@ theorem close_ofJson {session : String} {lines : Nat} {chain : ByteArray} (sig :
     Built.keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
   have hch : hexAt? (getD (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) "chain") = some chain := by
     show (Flock.unhex (Flock.hexOf chain)).toOption = some chain
-    rw [Flock.unhex_hexOf]
+    rw [Flock.Hex.unhex_hexOf]
     rfl
   have hsig : hexAt? (getD (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) "signature") = some sig := by
     show (Flock.unhex (Flock.hexOf sig)).toOption = some sig
-    rw [Flock.unhex_hexOf]
+    rw [Flock.Hex.unhex_hexOf]
     rfl
   have hl : nat? (getD (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) "lines") = some lines :=
     nat?_nat lines
@@ -150,7 +150,7 @@ theorem opening_ofJson (epoch index : Int) (label : String) (after coin salt : B
       some #["after", "coin", "epoch", "index", "label", "path", "salt"] :=
     Built.keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
   have hx : ∀ b : ByteArray, (Flock.unhex (Flock.hexOf b)).toOption = some b := fun b => by
-    rw [Flock.unhex_hexOf]
+    rw [Flock.Hex.unhex_hexOf]
     rfl
   have ha : hexAt (LiveOpening.toJson ⟨epoch, label, index, after, coin, salt, []⟩) "after" = some after := hx after
   have hc : hexAt (LiveOpening.toJson ⟨epoch, label, index, after, coin, salt, []⟩) "coin" = some coin := hx coin

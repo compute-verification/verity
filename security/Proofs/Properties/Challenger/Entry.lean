@@ -241,7 +241,7 @@ theorem ofJson_alike {r : Core.Record} {e' : Json} {mb : Std.TreeMap.Raw String 
       rw [Std.TreeMap.Raw.map_fst_toArray_eq_keysArray, ← Std.TreeMap.Raw.toArray_keys, hL]
       exact qsort_strs (by decide)
     refine ⟨nb, ?_, ?_⟩
-    · exact ofJson_obj_ok hkeys hnb hkind hprev hlen hhex hschema hseq hsession hsig (Flock.unhex_hexOf r.sig)
+    · exact ofJson_obj_ok hkeys hnb hkind hprev hlen hhex hschema hseq hsession hsig (Flock.Hex.unhex_hexOf r.sig)
     · rw [hb, ← hnb]
       exact hbody
 
