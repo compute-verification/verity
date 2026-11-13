@@ -136533,3 +136533,100 @@ roots, and `headerHeld` refuses that file ("public file: not the registration's:
 - **No proof needed mending for B.** The seven theorems that name `secondCheck` compile unchanged.
 
 **Standing.** #9574 at `b7949765a0`; nothing moved at the public boundary; no job cancelled; no lock touched.
+
+## GATHER, Fri 13 Nov 10:51Z: rule A can go by the layout: R1 to R8 (Python and the compiled Lean) and the first stage TAKE one tree at two ports, on two templates and on twenty (`cb47`, exit 0, both plays accepted, no Lean changed); no STOP RULE; the form's own check at the trial's head is running (`9a9e`, ends about 11:10Z)
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, the head I stand
+behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 0. Unchanged. The trial's head is
+`70ca0eda5dfbbe84c88085109100015985d7ffcd` on `cursor/proofs-gather-wired-layout-6a9b` (one commit on TWOLEG's scratch
+`654e34d42b`, without `552354cbe19`); `cb47` ran at it. Your 10:37Z message is read.
+
+**Question 1 (10:19Z): YES**, as my 10:32Z entry has it. One line more, now run: the Python written as the per-member
+form's mirror (`one_stage/members.py`) refuses `3257`'s combining member exactly as Lean does: 19 of 20 public files
+are their slices', and `GreedyCombine_v2{V=2560,N=128}` is "public file: not the registration's: roots", 21 roots in
+its header against 2 in its slice [run, my VM, 10:37Z: `_laid`, `_class`, `_roots`, `population_why` on the play's
+per-member case].
+
+**Question 2 (10:19Z) and item 3 (10:37Z): YES, the layout can name the wired ports under the reader, and R1 to R8 and
+the first stage take one tree at two ports** [run: `r20261113-103102-cb47`, read 10:43Z]
+- The run: vy-nebius-cpu-14 (`--on auto`, waited 24 s), 10:31:26Z to 10:41:15Z, exit 0, at `70ca0eda5df`. Peak
+  21.1 GiB of the 32 GB asked. `two_stage_small.sh` twice: `--inline --units 2 --v 256 --logits`, then
+  `--inline --units 20 --v 2560 --logits`. "two templates, inputs committed, rc=0"; "twenty templates, inputs
+  committed, rc=0".
+- What the record and the parameters' `ports` hold.
+
+  | play | ports in the record | distinct roots | the parameters' `ports` | interior values in the first stage's rule |
+  |---|---|---|---|---|
+  | two templates | 5 | 4 | the same 5 | 5 |
+  | twenty | 59 | 40 | the same 59 | 59 (40 at today's layout) |
+
+  For twenty: the 40 of today, and `GreedyCombine_v2{V=2560,N=128}/r0` to `/r18`. Each of the 19 is at the root, the
+  8 leaves and the domain of one `GreedyChunk_v2{N=128,OFF=…}/o0` (19 of 19). For two: `GreedyCombine_v2{V=256,N=128}/r0`
+  at `GreedyChunk_v2{N=128,OFF=0}/o0`'s.
+- The first stage took the rule with the added names: `first.log` `"error": null` on both.
+- R1 to R8 took the record: `checks_before_draw.registration: true` on both. That check is `V.check`, which runs the
+  Python `registration.check` and the compiled Lean `Spot.Registration.check` on the same record and parameters and
+  fails unless they agree [read: `verifier.py:298–310`].
+- The stream's rule for public items took it: `TWO` `"held": true`, `round_two` `{"ok": true, "codes": []}`.
+- Everything else as at today's layout: `SMALL` all eight true on both; `A5` accepted and complete; `lean-draw`,
+  `lean-verify` and `m0-verifier` 2 of 2 and 20 of 20; each member's checks before the sample true; the negatives all
+  true, among them "wired-row-not-its-writer-s-output" and "registered-read-against-another-root".
+- The per-member form's Python on the trial's plays: 2 of 2 and 20 of 20 public files are their slices' (a slice of
+  3 and of 21 roots for the combining member) [run, my VM, 10:43Z]. So rule A's comparison passes in the mirror.
+- **No STOP RULE.** No rule refused, and no Lean file is changed in the trial.
+
+**What the trial is** [read: the commit]
+- The commitment is unchanged: no tree, root or domain is committed for a wired port. Only names are added.
+- Five places in four files, 18 lines added and 6 removed: the layout (`rows.expected_ports`, with a new `rows.wired_ports`), the record's roots
+  (`rows.registration`), the class's rule (`two_stage.interior_values`), the audit's leaf schemas (`a5.stream_of`),
+  and the interior's fresh salts (`interior_rows`, which skip the added names).
+- It changes the rule the first stage registers. A serve at today's layout and an audit at the new one do not meet,
+  so serve and audit move together. Friday's pinned trees are from before and are not touched.
+- With it the audit's line as `main` has it (`roots[m.port(p)]`, `a5.py:894` at the trial's head) finds a root for
+  every port: `552354cbe19` and
+  HELDOF's one line are not needed.
+
+**Item 2 (10:37Z): the failing test** [read; run where tagged]
+- `test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves`, `verity/commitments/windows/tests/test_interface.py:429`.
+  It came with `ee7d633180b` in pull request
+  [#8318](https://github.com/compute-verification/verity/pull/8318), "Spot round 2 and the two-stage toy: one
+  commitment per value, a wired input reading its writer's output" (branch `cursor/proofs-onevalue-9a52`, merged
+  Mon 9 Nov): the proofs lane's own.
+- What it protects: one commitment per value. Four things: the commitment holds no root and no domain for a wired
+  port; the layout names no port for it; its rows and their `b ‖ c` are its writer's leaves; and three refusals (the
+  value given as rows, a wire of several members' units, a wire out of its writer's order).
+- At the trial only the second fails (line 447's third term). [run, my VM, 10:49Z] In a scratch copy with that one
+  term replaced by "the layout names the port at the leaves and domain of the port that holds it", the test passes
+  whole. The other 86 tests of the file pass unchanged, and `test_a5_wiring.py` passes (6).
+- So it protects nothing the layout breaks: the value is still committed once. The term to rewrite states the old
+  layout.
+
+**Item 1 (10:37Z): the form at the trial's head: running** [run]
+- `r20261113-104757-9a9e`, vy-nebius-cpu-8 (`--on auto`, waited 27 s), launched 10:47:57Z. It is
+  `sampled_two_small.sh` as the tree has it, on two templates and then on twenty; a refused leg does not stop the next.
+  Both form executables built at 10:49Z. Expected end about 11:10Z [guess].
+- I took item 1 as your word to launch this one play with `--interior-trees` (your earlier order held such a play
+  until you said). If that reading is wrong, say so; I launch no other.
+- What I expect [guess, from TWOLEG's what-if of 10:01Z]: `FORM_ON rc=1` at rule B, "the interior's audit: the
+  audit's checks failed: registered", in place of rule A's "proofs: a session's verifier did not accept". The first
+  reason is reached only after every session accepted, so the shipped executables tell A from B and I need none of
+  TWOLEG's.
+- TWOLEG: each leg keeps its case under `out/<leg>/form`, if you want your two executables on it.
+
+**For soundness, one thing the layout leaves open** [read]
+- In the record a wired port's root is now written twice. R3 holds each name's leaves and domain to the layout.
+  Nothing in Lean that I read holds the two roots equal. The Python audit does, before the sample (`a5.py:839–843`
+  at the trial's head).
+- What reads which: a session opens the wired port's rows against the verifier's own file, which names the writer's
+  value and root (`two_stage.verifier_reads`, through `Binding.held`). The root under the reader's name is compared
+  with the member's header (`headerHeld`) and, as far as I read, with nothing else.
+- If the form should hold the two equal, R3 can, once the parameters' `ports` name the port that holds each added
+  name. That is a Lean change, not made, and not mine to rule.
+
+**Not established**
+- That the Lean per-member form and the two-stage form take the plays past rule A: `9a9e` answers it.
+- Rule B: untouched by the layout, since the verifier's file still names the writer's value for a wired read [read].
+- The two-stage toy at this layout: its rule names interior values from `rows.port_leaves` (`benchmarks/two_stage/toy.py:184`),
+  so it needs the same added names; not run.
+- A one-stage audit of a window whose wired ports have no trees: not run. Only the interior's window and the toy
+  build one [read: `interior_rows.py`, `toy.py:242`].
