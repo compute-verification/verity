@@ -84,11 +84,12 @@ verity bench certifier_term --response-ids 1024 --out DIR
 
 A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution phase bounds
 nothing over the world's year. With no `--scan-delta`, each execution phase's scan is at the δ at which the row
-that pools the most execution phases, the world's year, fails with at most 2^-20 over its monitoring period: that
-error divided by the row's execution phases, which the calculator counts from its inputs each time, so the δ is never
-typed in and follows the inputs. It is one δ for every row. The world's year's ε is then 2^-20 and every other row's
-is less, in proportion to its execution phases: a datacenter's rows are stated at a δ stricter than they need, and
-two rows' errors compare.
+that pools the most execution phases, the largest scope's longest period, fails with at most 2^-20 over its
+monitoring period: that error divided by the row's execution phases. The calculator finds that row and counts its
+execution phases from its inputs each time, so neither the row nor the δ is typed in, and both follow the inputs:
+with today's it is the world's year. It is one δ for every row. That row's ε is then 2^-20 and every other row's is
+less, in proportion to its execution phases: a datacenter's rows are stated at a δ stricter than they need, and two
+rows' errors compare.
 
 Every row of the document states the δ and the error it is taken from (`scan_delta`, `eps_target`) beside its `eps`,
 and the document's `scan` says where the δ is from: whether it is given, the error, and the row whose execution

@@ -651,13 +651,13 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     assert (year["compute_audit"]["delta"], year["error"]) == (0.01, 0.01 + 2 ** -20)
     assert dc["eps"] == pytest.approx(2.543e-10, rel=1e-3) and dc["error"] == 0.01 + dc["eps"]
     assert doc["periods"][0]["error"] is None  # a scope no run of record holds has no sum, and so no error of one
-    # the amounts are the calculator's at its own default δ, where every one of these rows' ε is 1 or more
+    # the amounts are the calculator's at its own default δ, where the world's year's ε is 2^-20 and every other row's is less
     default = {(r["scope"], r["period"], r["row"]): r for r in lb.document(lb.inputs(response_ids=E.RESPONSE_IDS))["rows"]}
     for p in doc["periods"]:
         for name, t in p["together"].items():
             r = default[p["compute"], p["period"], name]
-            assert r["eps"] >= 1 and t["certifier_GB"] == r["term"]["2"]["GB"]
-    assert default["world", "year", "scan"]["eps"] == pytest.approx(11_012_646, abs=0.5)
+            assert r["eps"] <= 2 ** -20 and t["certifier_GB"] == r["term"]["2"]["GB"]
+    assert default["world", "year", "scan"]["eps"] == 2 ** -20
 
     text = E.render(doc)
     assert ("- the compute audit's part fails with at most δ = 0.01 over the monitoring period. The network certifier's ε "

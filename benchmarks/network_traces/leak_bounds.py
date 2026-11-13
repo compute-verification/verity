@@ -108,8 +108,9 @@ record read supports, which no row and no sum holds.
 
 **The scans' δ.** A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution
 phase bounds nothing over the world's year. Where a caller gives none, each execution phase's scan is at the δ at
-which the row that pools the most execution phases, the world's year, carries `PERIOD_ERROR` (`period_delta`): that
-error over the row's execution phases, counted from the inputs and never typed in. It is one δ for every row, so
+which the row that pools the most execution phases, the largest scope's longest period, carries `PERIOD_ERROR`
+(`period_delta`): that error over the row's execution phases, the row found and its execution phases counted from
+the inputs, neither typed in. It is one δ for every row, so
 each row's ε is `PERIOD_ERROR` or less and two rows' errors compare. No term reads it, and it is assumed: no scan has
 run at it. A row states its δ and the error it is taken from (``scan_delta``, ``eps_target``). Under a δ a caller
 gives (`--scan-delta`) there is no such error, and a row whose ε is 1 or more bounds nothing.
@@ -1335,8 +1336,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the world's requests a year, in place of either request's count")
     ap.add_argument("--scan-delta", type=Fraction, metavar="D",
                     help="each execution phase's scan's δ (default: the δ at which the row that pools the most "
-                         f"execution phases, the world's year, carries {PERIOD_ERROR} over its monitoring period, "
-                         "counted from the inputs)")
+                         f"execution phases, the largest scope's longest period, carries {PERIOD_ERROR} over its "
+                         "monitoring period, counted from the inputs)")
     ap.add_argument("--target-gb", type=float, default=TARGET_GB, metavar="GB",
                     help=f"the GB the term is read against (default {TARGET_GB})")
     ap.add_argument("--scope", action="append", choices=SCOPES, help="only this scope's rows (repeatable)")
