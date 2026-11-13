@@ -293,11 +293,11 @@ team = [
 # Flock's measurement campaigns (their pod scripts, the bench drivers they run, the run and store tool's declarations)
 # and the tests that read the numerical bench, circuit-check or NCI's difftest vectors
 flock_bench = [
-    "verity/protocols/flock/pod/{20-pure,30-cell,31-replay,33-ir-cell,50-preflight,61-circuit-cell}.sh",
-    "verity/protocols/flock/pod/{74-gemm-hill,76-read-gadget,92-zk-sessions,93-zk-tree-from}.sh",
-    "verity/protocols/flock/pod/{catalog,gemm_hill,read_gadget}.py",
+    "verity/protocols/flock/prover/pod/{20-pure,30-cell,31-replay,33-ir-cell,50-preflight,61-circuit-cell}.sh",
+    "verity/protocols/flock/prover/pod/{74-gemm-hill,76-read-gadget,92-zk-sessions,93-zk-tree-from}.sh",
+    "verity/protocols/flock/prover/pod/{catalog,gemm_hill,read_gadget}.py",
     "verity/protocols/flock/prover/python/verity_flock/{bench,circuit_bench,instances,ir_bench,negatives,register}.py",
-    "{verity/protocols/flock/tool.py,verity/protocols/flock/agreement/tool.py}",
+    "{verity/protocols/flock/prover/tool.py,verity/protocols/flock/prover/agreement/tool.py}",
     "verity/protocols/flock/prover/tests/test_{backend_bench,challengers,class_statement,gemm_hill,ir_lowering_bench}.py",
     "verity/protocols/flock/prover/tests/test_{lean_width_refusals,partition_units}.py",
 ]
