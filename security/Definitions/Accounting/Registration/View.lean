@@ -23,8 +23,8 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   as the bound reads them, figure by figure the larger of those and the auditor's estimate (`DeviceFigures.bounding`),
   the reading `Site.device` builds the device model from.
 * **The registered facts** (`View.Holds`): every registered device names a sheet registration accepted against the
-  auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf's host is
-  reached by a memory challenger (`View.Onsite`); and θ registers each value once and the log declares each day once
+  auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf is in a host
+  a memory challenger reaches (`View.Onsite`); and θ registers each value once and the log declares each day once
   (`View.Once`), so a lookup by name or by day reads the one registered value or circuit.
 * **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Accounting.Registration.Guarantees`): a
   valid log's view holds the registered facts.
@@ -137,10 +137,10 @@ def Devices (D : Digests) (A : Auditor) : Prop :=
       k.figures.Accepted (A.estimate a) ∧ k.bw = a.bw ∧ k.chip = a.chip ∧ k.mem = a.mem
 
 /-- **Onsite, the auditor's devices see the boundary and the memory**: for the composite `c` onsite, every boundary link
-is certified, and the host of every memory leaf is at an end of a memory challenger's link. -/
+is certified, and every memory leaf is in a host that is at an end of a memory challenger's link. -/
 def Onsite (c : Composite) : Prop :=
   c = .onsite → (∀ k ∈ v.site.links, v.site.Boundary k → v.site.Certified k) ∧
-    ∀ x ∈ v.site.locs, x.kind = .memory → ∀ h ∈ v.site.host? x, h ∈ v.site.reached
+    ∀ x ∈ v.site.locs, x.kind = .memory → ∃ h, v.site.host? x = some h ∧ h ∈ v.site.reached
 
 /-- **Each value and each day once**: θ registers no value's name twice, and no day is declared twice, so a lookup by
 name or by day reads the one registered value or circuit. -/

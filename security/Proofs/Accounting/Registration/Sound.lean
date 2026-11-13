@@ -14,7 +14,8 @@ public import Proofs.Core.Site
   against the Site the entry extends, and the Site only grows. So every device's sheet lookup finds an accepted sheet
   (`Registration.Valid.devices`).
 * `Registration.Valid.onsite`: a site entry's `uncertified` and `challengerReach` checks read the whole Site it extends
-  the log's to, and an information entry or a declaration adds nothing to it.
+  the log's to, and an information entry or a declaration adds nothing to it (`Registration.Valid.covered`); and each
+  memory leaf is in a host, its parent or its device's parent (`Registration.Valid.host?_isSome`).
 * `Registration.Valid.theta_nodup`: the last entry's `duplicateInformation` check reads every item the log registers, a
   θ value by its name; and `Registration.Valid.declarations_nodup`: the log declares each day once
   (`Registration.Valid.days_nodup`).
@@ -91,20 +92,60 @@ theorem Valid.devices {l : Registration} (h : Valid D A c l) : (view D c l).Devi
   obtain ⟨k, hk, hmem⟩ := Site.sheet?_of_mem (h.devices_named x hx hd)
   exact ⟨k, hk, h.sheets_accepted k hmem⟩
 
-/-- **Onsite, a valid log's boundary links are certified and its memory reached** (`View.Onsite`). -/
-theorem Valid.onsite {l : Registration} (h : Valid D A c l) : (view D c l).Onsite c := by
-  unfold View.Onsite
+/-- **Onsite, a valid log's boundary links are certified, and each memory leaf's host, if it has one, is reached**: a
+site entry's `uncertified` and `challengerReach` checks read the whole Site it extends the log's to. -/
+theorem Valid.covered {l : Registration} (h : Valid D A c l) : c = .onsite →
+    (∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Boundary k → (Site.ofLog l).Certified k) ∧
+      ∀ x ∈ (Site.ofLog l).locs, x.kind = .memory → ∀ q ∈ (Site.ofLog l).host? x, q ∈ (Site.ofLog l).reached := by
   induction l using List.reverseRecOn with
-  | nil => intro _; simp [view]
+  | nil => intro _; simp
   | append_singleton l e ih =>
     obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     intro hc
     cases e with
     | site _ s =>
-      simp only [view, Site.ofLog_concat, Entry.added]
+      simp only [Site.ofLog_concat, Entry.added]
       exact ⟨he.2.2.2.2.2.2.2.1 hc, he.2.2.2.2.2.2.2.2 hc⟩
-    | information _ _ => simpa [view, Site.ofLog_concat, Entry.added] using ih hl hc
-    | declaration _ _ => simpa [view, Site.ofLog_concat, Entry.added] using ih hl hc
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl hc
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl hc
+
+/-- **Every memory leaf of a valid log's Site is in a host**: its parent is a host, or a device whose parent is a host
+(`Valid.parents`). -/
+theorem Valid.host?_isSome {l : Registration} (h : Valid D A c l) {x : Site.Loc} (hx : x ∈ (Site.ofLog l).locs)
+    (hm : x.kind = .memory) : ∃ q, (Site.ofLog l).host? x = some q := by
+  obtain ⟨-, hp⟩ := h.parents x hx
+  rw [hm] at hp
+  simp only [Site.Kind.parents, List.mem_cons, List.not_mem_nil, or_false] at hp
+  cases hpar : x.parent with
+  | none => simp [hpar] at hp
+  | some p =>
+    rw [hpar, Option.bind_some] at hp
+    rcases hp with hpk | hpk
+    · have hpo : p ≠ Site.outside := by
+        rintro rfl
+        simp [Site.kind?] at hpk
+      have hpk' := hpk
+      unfold Site.kind? at hpk'
+      rw [if_neg hpo] at hpk'
+      obtain ⟨y, hy, hyk⟩ := Option.map_eq_some_iff.mp hpk'
+      have hyl : y ∈ (Site.ofLog l).locs :=
+        List.mem_of_find?_eq_some (show (Site.ofLog l).locs.find? (·.id == p) = some y from hy)
+      obtain ⟨-, hyp⟩ := h.parents y hyl
+      rw [hyk] at hyp
+      simp only [Site.Kind.parents, List.mem_singleton] at hyp
+      cases hq : y.parent with
+      | none => simp [hq] at hyp
+      | some q => exact ⟨q, by simp [Site.host?, hpar, hpk, hy, hq]⟩
+    · exact ⟨p, by simp [Site.host?, hpar, hpk]⟩
+
+/-- **Onsite, a valid log's boundary links are certified and its memory reached** (`View.Onsite`): each memory leaf is
+in a host (`Valid.host?_isSome`), which the `challengerReach` check holds reached (`Valid.covered`). -/
+theorem Valid.onsite {l : Registration} (h : Valid D A c l) : (view D c l).Onsite c := by
+  intro hc
+  obtain ⟨hk, hm⟩ := h.covered hc
+  refine ⟨hk, fun x hx hxm => ?_⟩
+  obtain ⟨q, hq⟩ := h.host?_isSome hx hxm
+  exact ⟨q, hq, hm x hx hxm q hq⟩
 
 /-- θ's values, each under its item's key, are among the keys of the log's items. -/
 theorem theta_keys_sublist (log : Registration) :
