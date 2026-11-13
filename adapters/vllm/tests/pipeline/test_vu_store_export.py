@@ -1,6 +1,6 @@
 """What an export writes (`verity_vllm.pipeline.vu_store.export_vus`) on the replay's honest test world, with the export's clock the
-test's own: each sampled unit's line in its Program's units and in the list, the Program's file, the store's run file, the values and
-the summary; and what it writes of a unit it does not store."""
+test's own: the line of each unit of the sample in its Program's units and in the list, the Program's file, the store's run file, the
+values and the summary; and what it writes of a unit it does not store."""
 from __future__ import annotations
 
 import dataclasses
@@ -89,10 +89,9 @@ def _json(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
-def test_an_export_writes_each_sampled_unit_once_in_its_programs_units_and_once_in_the_list(world, tmp_path, monkeypatch, capsys):
+def test_an_export_writes_each_unit_of_its_sample_once_in_its_programs_units_and_once_in_the_list(world, tmp_path, monkeypatch, capsys):
     limits = VX.Limits(per_family=2, workers=1, gemm_coords_per_row=3)
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"}, program_dirs={"r0": "/builds/r0"},
-                executed_prefix={"r1": {"n_exec": 1, "cap": 3}})
+    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"}, program_dirs={"r0": "/builds/r0"})
     n, digest = len(e.picked), world.inst["digest"]
     assert n == 14 and e.printed == [f"[vu-export] population: 2/2 request Programs, {e.summary['population']['vus']} VUs, 14 sampled, 8 s",
                                      "[vu-export] 0/14 VUs, 0 s"]
@@ -107,7 +106,6 @@ def test_an_export_writes_each_sampled_unit_once_in_its_programs_units_and_once_
         assert {x: unit[x] for x in REPLAYED} == _json({x: rec.get(x) for x in REPLAYED})
         assert listed == {x: unit[x] for x in LISTED}
         assert unit["evaluations"] and all(list(ev) == ["family", "statics", "args", "outs"] for ev in unit["evaluations"])
-    assert all(u["step"] == 0 for u in e.units if u["request"] == "r1") and any(u["step"] > 0 for u in e.units)
     key, sampled_weights = VX.selection_key(ROOT), 0
     for unit in e.units:
         for j, ev in enumerate(unit["evaluations"]):
@@ -125,7 +123,7 @@ def test_an_export_writes_each_sampled_unit_once_in_its_programs_units_and_once_
 
 def test_an_exports_summary_counts_its_population_its_units_by_family_its_store_and_its_seconds(world, tmp_path, monkeypatch, capsys):
     limits = VX.Limits(per_family=2, workers=1)
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"}, executed_prefix={"r1": {"n_exec": 1, "cap": 3}})
+    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"})
     s, n = e.summary, len(e.picked)
     assert list(s) == ["schema", "provenance", "limits", "population", "by_family", "store", "sets", "wall_s", "timing"]
     assert json.loads((tmp_path / "export.json").read_text()) == _json(s)
@@ -135,9 +133,7 @@ def test_an_exports_summary_counts_its_population_its_units_by_family_its_store_
     selection = s["provenance"].pop("selection")
     assert repr(VX.SELECTION_DOMAIN) in selection and s["provenance"] == {
         "row": "test", "run_root": ROOT.hex(), "weights": {"sample": VS.WEIGHT_SAMPLE_RULE, "rows_per_gemm": limits.gemm_coords_per_row}}
-    left_out = s["population"]["not_executed"]
-    assert left_out > 0 and all(v["request_id"] != "r1" or v["step"] == 0 for v in e.pool)
-    assert s["population"] == {"vus": len(e.pool) + left_out, "pool": len(e.pool), "not_executed": left_out, "programs": 2, "programs_built": 2,
+    assert s["population"] == {"vus": len(e.pool), "pool": len(e.pool), "not_executed": 0, "programs": 2, "programs_built": 2,
                                "programs_past_budget": [], "source": "built here",
                                "pool_by_family": dict(Counter(v["family"] for v in e.pool)), "not_exported_families": VX.NOT_EXPORTED}
     sets, instances = VS.extract(tmp_path / "store", tmp_path / "again")
