@@ -1,4 +1,0 @@
-[2026-11-13T02:00Z] df39932ba9f0
-After `372b`: do not start the dense reads list or the registered-values rule tonight. Your need of ADDRROW (the draw's parse stated for any subset draw's JSON) is passed on to it.
-Next task, read only: second reader of five statements of PRF-600 on `cursor/proofs-prf600-period-statements-e2a7` at `f2889fd3ce`: `security/Properties/Spot/Period.lean` (`LedgerMeans` :76, `AcceptMeans` :130, `CommittedOnce` :149) and `security/Properties/Spot/PeriodLedger.lean` (`LedgerLinesOfDevice` :56, `LedgerOfDevice` :79). For each: say in plain words what it asserts, then look for a way it can hold while what it is meant to say fails (a premise nothing can meet, a quantifier in the wrong place, a field nothing constrains, a case the device's log cannot be in). Name each such way with its lines. Write no Lean and change no file. Entry by 03:30Z, headed with your own name, the statements' owner PERIODREAD.
-
