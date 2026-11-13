@@ -2196,6 +2196,38 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
         "a share that holds no worker of a suite's worker_gb keeps one lane"
 
 
+def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
+    """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
+    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
+    processes and half the GB at its worker_gb, and the others split the rest as before."""
+    S = _suites(monkeypatch, tmp_path)
+    cc = S.Suite("cc", "cc", (), (), parallel=True, worker_gb=8, workers=14)
+    defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
+    seconds = [300.0, 900.0, 200.0, 100.0]
+    [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
+    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    longest = [3000.0, *seconds[1:]]
+    assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
+        "a share that gives it as many already is as it was"
+    assert S.wide_lanes([cc, defs], seconds[:2], 20, 260.0)[0] == S.Lane([cc], 10, 80.0), "at most half the processes"
+    assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
+    assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
+    assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
+    pyproject.write_text(head + "parallel = true\nworkers = 14\n")
+    _git(tmp_path, "init", "-q")
+    assert [s.workers for s in S.discover()] == [14]
+    for bad in ("parallel = true\nworkers = 1\n", "parallel = true\nworkers = 2.5\n", "workers = 14\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="workers"):
+            S.discover()
+
+
 def _line_end(S, lanes, cost) -> float:
     """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
     ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""
