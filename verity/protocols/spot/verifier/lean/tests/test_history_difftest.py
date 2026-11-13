@@ -491,7 +491,7 @@ def _window(table: H.HistoryTable, seed: int = 0, n: int = 4) -> tuple:
 
 
 def _window_roots(window: tuple, root: str, held: dict | None = None) -> dict:
-    """The piece's input for a window's history table as the served audit hands it to the verifier of record
+    """The piece's input for a window's history table as the served audit hands it to the verifier
     (`ml.windows.history.params`), under the window's leaf layer, the window registering ``root``."""
     from verity.commitments.windows import history as HW, rows as CS
     doc, mine, publics = window

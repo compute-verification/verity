@@ -37,7 +37,7 @@ factor that rescales the O before it.  Values unit (row, h, j, c) reads ``in0`` 
 columns [cG, (c + 1)G) of block j's ``kv`` rows and, past the first, ``in2`` = that factor and ``in3`` = the O of column block
 c before it, and returns ``o0`` = its own.  An end on a column block reads the last scores unit's lanes (a split's end its
 running max too) and the last values unit of its column block's O.  The window wires each of those
-rows to the output row of the unit that wrote it (`wire`, `commit.wiring`), so a sampled unit's inputs are the committed
+rows to the output row of the unit that wrote it (`wire`, `commit.wiring`), so a sampled proof block's inputs are the committed
 outputs of the units before it: a wire reads its writer's row whole, which is why a split ends in column blocks."""
 from __future__ import annotations
 
