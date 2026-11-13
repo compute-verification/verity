@@ -23,7 +23,7 @@ No number here prices a PRF's advantage, and none assumes it away. The table say
 by it, in the same closing words (`UNPRICED`).
 
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
-(`verity.protocols.reporting`), and T is the core's `block_count` (`verity.periods`).
+(`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
 record (`REFUSED`), because the memory challenger signs its session's times on its raw monotonic clock and a record's
@@ -45,8 +45,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NoReturn
 
-from verity.periods import block_count
-from verity.protocols.reporting import DELTAS, PERIODS
+from verity.protocol import DELTAS, MONITORING_PERIODS, block_count
 
 from . import wipe_period
 
@@ -146,7 +145,7 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         return head | {"periods": None, "why": f"the wipe's bound is vacuous (foreign_bits = memory_bits): {gaps}"}
     eps = Fraction(answer["public"]["eps"])
     periods = {}
-    for name, seconds in PERIODS:
+    for name, seconds in MONITORING_PERIODS:
         per_machine, t = block_count(seconds, cadence_s), block_count(seconds, cadence_s, machines)
         row: dict[str, Any] = {"seconds": seconds, "wipes": t, "wipes_per_machine": per_machine}
         if t == 0:
