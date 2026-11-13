@@ -17,4 +17,4 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_catalog.py"]
-paths = ["verity/definitions/ops/kv_cache.py"]
+paths = ["verity/circuits/ops/kv_cache.py"]

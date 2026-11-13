@@ -1,6 +1,6 @@
 """circuit-check's bindings of `verity.circuits.population`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`). Populations of other units' templates are bound beside them: the GEMMs' in
-`../definitions/ops/boolean/gemm.circuit-check.py`, a coin-taking tile's (PoUW's H1) in `pouw/circuit/h1tile.circuit-check.py`. The v0
+`ops/boolean/gemm.circuit-check.py`, a coin-taking tile's (PoUW's H1) in `pouw/circuit/h1tile.circuit-check.py`. The v0
 programs are not bound: their ids name the counts alone, so one pin key would stand for every template's
 (`tests/test_population_recorded.py` holds them)."""
 from __future__ import annotations
