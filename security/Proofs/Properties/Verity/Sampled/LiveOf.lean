@@ -142,6 +142,139 @@ theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray}
       rw [dif_pos hx]
     rw [hpf, ht t htm a hx.choose hf hpf]
 
+/-! ## v2's statement check -/
+
+/-- **v2's statement check at the session's inputs `I`, public file `pubB` and registered reads `rd`**: `verify
+--zk`'s `ProvedScope.check` on the circuit v2's checks read, then its template rule, the `scope` v2's run hands each
+session's verdict (`Spot.OneStageZk.run`). -/
+def scopeOf (I : Flock.Witness.Inputs) (pubB : ByteArray) (rd : _root_.Spot.OneStageZk.Reads) : Flock.V Unit := do
+  Flock.ProvedScope.checkOf
+    (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables) (Flock.Witness.zkTags I) true pubB
+    I.count false rd.registered.isSome
+  _root_.Spot.OneStageZk.templateOk
+    (← Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
+
+/-- A session's verdict accepts only where its statement check (`scope`) passes. -/
+theorem verdictOf_scope {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
+    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
+    {files : Flock.V (Array ByteArray)} {coinKey : Option String}
+    (h : _root_.Spot.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+      = .ok ()) : scope = .ok () := by
+  unfold _root_.Spot.OneStageZk.verdictOf at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨⟨_, _, _⟩, -, h⟩ := ebind_ok h
+  dsimp only at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, hs, -⟩ := ebind_ok h
+  exact hs
+
+/-- **One session's `step` after a run that accepted so far, where every session accepted, passes its statement
+check** (`verdictOf_scope`). -/
+theorem step_scope {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
+    {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
+    {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+      = .ok r)
+    (hall : r.all = true) : scope = .ok () := by
+  unfold _root_.Spot.OneStageZk.step at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, -, h⟩ := ebind_ok h
+    exact verdictOf_scope (push_ok h hall)
+  · cases h
+
+/-- **v2's run on one session hands its verdict the statement check `scopeOf`** at the session's inputs, public file
+and registered reads, as `run_event` with the check named. -/
+theorem run_scope {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
+    {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
+    ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      ∃ ksFiles population programSha want,
+        _root_.Spot.OneStageZk.step (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
+          (scopeOf (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) pubB rd) ksFiles population
+          programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
+  unfold _root_.Spot.OneStageZk.run at h
+  dsimp only at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  split at h
+  · rename_i tags0 htags
+    obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨circuitB, hc, h⟩ := ebind_ok h
+    obtain ⟨pubB, hp, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨rd, -, h⟩ := ebind_ok h
+    obtain ⟨r', hr', h⟩ := ebind_ok h
+    have e : r' = r := by
+      cases pu with
+      | none => simpa only [pure, Except.pure, Except.ok.injEq] using h
+      | some want =>
+        repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+        all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
+    subst e
+    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, _, _, _, _, foldlM_single hr'⟩
+  · cases h
+
+/-- **Where v2's check accepts at the coins `ξ`, its session passes `verify --zk`'s statement check**
+(`ProvedScope.check`) at the statement's tags under `--zk` (`zkTags`), on the circuit and public files the parameters
+name, with no public input words of the verifier's own. -/
+theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ tags0 circuitB pubB reg, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      Flock.ProvedScope.check
+        (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) true circuitB pubB
+        (_root_.Spot.OneStageZk.tablesOf bs) 1 false reg = .ok () := by
+  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  rw [eq_single hsz] at hrun
+  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, _, _, _, _, hstep⟩ := run_scope hrun
+  have hs := step_scope hstep hall
+  unfold scopeOf at hs
+  obtain ⟨⟨⟩, hck, -⟩ := ebind_ok hs
+  exact ⟨tags0, circuitB, pubB, rd.registered.isSome, ht, hc, hp, hck⟩
+
+/-! ## The session's descriptor -/
+
+/-- **Where `verify --zk`'s ports check passes at a flat untyped statement, the circuit file reads as a descriptor whose
+unit is `Built`** and the public file loads on its circuit: the check parses the circuit (`HmOut.parse`, the one
+`ProvedScope.circuitOf` reads there, `circuitOf_parse`) and loads the public file before it checks anything else
+(`PortRoots.checkWith`), and `Desc.parseStmt` of an untemplated statement is `Desc.parse` (`built_of_parseStmt`). -/
+theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
+    (hflat : (FlockSoundness.Discharge.ZkExec.zkTags I).hiddenOutputs = true ∧
+      (FlockSoundness.Discharge.ZkExec.zkTags I).isTmpl = false)
+    (ht : (FlockSoundness.Discharge.ZkExec.zkTags I).typed = false)
+    (h : Flock.PortRoots.checkOf
+      (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables)
+      (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok ()) :
+    ∃ D pubO, Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
+      FlockSoundness.Built D.unroll.unit ∧
+      Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO := by
+  rw [circuitOf_parse hflat.1 hflat.2] at h
+  unfold Flock.PortRoots.checkOf Flock.PortRoots.checkWith at h
+  split at h
+  · cases h
+  rename_i c hp
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i pubO hl
+  have hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok (.single c) := by
+    unfold Flock.Desc.parse
+    rw [hp]
+  refine ⟨.single c, pubO, hD, ?_, hl⟩
+  refine FlockSoundness.Discharge.Hidden.built_of_parseStmt (D := .single c) ?_ ht
+  unfold Flock.Desc.parseStmt
+  rw [if_neg (by simp [hflat.2])]
+  exact hD
+
 /-! ## An accepted play's session -/
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
