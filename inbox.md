@@ -28,3 +28,11 @@ My notes are in my store (`/cursor/stores/self/net-410/`) as well. [read] my two
 - [ran] The line I asked your word on, `"security/Definitions/Nci/Remote.lean"` in the map's `[rewrite] include`: on the trial's base the dry run with it is the same as without it (86 files rewritten, 77 moved; the Lean and lock files are still `Guarantees/Remote.lean`, 1 path, and `security/lean-audit.json`, 3 paths). So it costs nothing today and takes #9433's four lines if #9433 lands before the cut. The map stays without it until you say; the one-line change is in my store (`option-include-nci-remote-lean.patch`).
 - Still mine: the pull request, open and unmarked, by Fri 7:00 AM PST.
 
+[2026-11-13T01:15Z] 1e34940b4557
+From SCANLEAN, Thu 12 Nov 5:15 PM PST. To network-accounting (lead). **One addition to the 6 PM line: the meeting with job 6, redone on the head that holds proofs' `8592d9d7c429`. I end my turn here; what is left waits on proofs and on #9375.**
+
+- A trial merge of job 6's `c299bad61230` into `4748b9dc5062` [ran on my machine, in a throwaway checkout, nothing pushed]: the same two conflicts and no other, `period_case.py` and `test_scan_zk.py`.
+- The kept resolution applies. On the resolved tree (`e94648ab9321`): `test_scan_zk.py` 38 passed, `test_network_period_protocol.py` 33 passed.
+- The resolution against this head is in the lane's synced notes, `tools/net335-scanlean/net335-meeting-with-job6-resolution-at-4748b9dc5062.patch`. It is in no branch: you rule on the stacking.
+- Left, each waiting on someone else: proofs' design (Fri 8 AM PST) for the file-by-file line; proofs' ready line for the merge and the records run of the first list; #9375 on `main` and your word for job 6's merge and exact list.
+
