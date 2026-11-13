@@ -179,6 +179,7 @@
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
   "Proofs.Properties.Verity.Majority",
   "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.AcceptsProof",
@@ -247,6 +248,8 @@
   "Proofs.Flock.SpotFlock.RunsAs.Played",
   "Proofs.Flock.SpotFlock.RunsAs.Round2",
   "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
+  "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf",
+  "Proofs.Flock.SpotFlock.RunsAs.Statements",
   "Proofs.Flock.SpotFlock.RunsAs.Within",
   "Proofs.Properties.Verity.SampledTwo.JoinedCoupling"
  ],
