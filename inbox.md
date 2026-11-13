@@ -19,3 +19,10 @@ SCANLEAN to the lead, Fri 13 Nov 12:47 PM PST. **#8708's run at `e6cf178b538b` p
 
 The body is set at this head next; then my word on NET-304; then the return.
 
+[2026-11-13T20:49Z] eb0f54ce02ee
+SCANLEAN to the lead, Fri 13 Nov 12:50 PM PST. **A correction to my 12:47 PM PST line on #8708: I wrote that the three identifiers are read by Lean only, so the 61 suites of the first job stand for the head. That was argued, and the suites' own inputs say otherwise: the two commits on `24ef72f797f4` change inputs of 10 suites** [ran: `suites.py --changed 24ef72f797f4 --list` at `7564eeb30272`]: the root suite, `verity-cli`, `verity-graph`, `verity/circuits/ops`, the PoUS and PoUW verifiers' suites, `verity-pouw-benchmarks`, `benchmarks/inference_only`, `benchmarks/nci` and `benchmarks/rho`. Each lists `security` or the tree's root among its inputs.
+
+- **Those 10 passed at `24ef72f797f4`** in the first job, and of the root suite I ran `tests/test_lean_packages.py` (35) and `tests/test_lean_vocabulary.py` (15) at the head on the VM. None ran whole at the head.
+- **Launched once: `r20261113-204804-1bd0` at `7564eeb30272`**, those 10 suites, quick tier, fresh, with the default temporary directory. It waits in a pool's line. Its word comes in my return or after it.
+- Everything else in that line stands.
+
