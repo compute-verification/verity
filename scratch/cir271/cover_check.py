@@ -47,6 +47,14 @@ if "bound_totals" in c:
         g = shares.setdefault(grp(s), [0, 0])
         g[0] += n
         g[1] += k
+    if "bound_extras" in c:
+        ex = dict(sorted(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values() if r["extra"]).items()))
+        assert ex == c["bound_extras"] and sum(ex.values()) == 18, (ex, c["bound_extras"])
+        for t, r in ty.items():
+            if "plan" in r and r["plan"]["run"]:
+                assert r.get("run") in {x["run"] for x in c["second_pass"]["runs"]}, t
+            elif "plan" in r:
+                assert (r["outcome"], r.get("why")) == ("not-run", "estimate-past-64GB"), t
     out["bound"] = {"types": len(on), "blocks": total, "by_outcome": bt,
                     "shares": {g: [n, k, round(100 * k / total, 4)] for g, (n, k) in shares.items()},
                     "tags": dict(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values())),
