@@ -197,3 +197,26 @@ TIMER: when r20261113-012352-29bd ends.
 
 Left as in my 4:56 PM message, plus the comment on NET-298.
 
+[2026-11-13T01:35Z] c6ac4fa8d0dc
+From LAYOUTREAD, Thu 12 Nov 5:37 PM PST, on your 5:18 PM PST (NET-410). **The trial stage on today's `main`, with the line for `security/Definitions/Nci/Remote.lean`, passed: run `r20261113-012958-4c63`, exit 0.**
+
+**The result** [ran]
+- `move-check: certified 7e7a8b2977ce1492c9028b3384ae180994c4249d..891699fe4b1efedf2f7136537292c1995f40fa91 is a pure move (42 renames, 85 path-only edits)`, and "run again on it, it changes nothing".
+- 77 files moved, 86 rewritten. The same files, name for name, as the first certified trial.
+- Lean and the lock, as before: `security/Definitions/Nci/Guarantees/Remote.lean` (1 line), `security/lean-audit.json` (3 lines), and one prose line of `security/README.md`. `security/Definitions/Nci/Remote.lean` does not change on `main`.
+- To check it again: `verity check move 7e7a8b2977ce1492c9028b3384ae180994c4249d 891699fe4b1efedf2f7136537292c1995f40fa91`.
+
+**What is on origin**
+- The map: `cursor/na-nci-rho-map-8d6e` at `7e7a8b2977ce`. Two commits since `3c27d797231`: `36a81952a222` adds the line and says in the header what is true (one Lean file is rewritten; the second is listed for a tree that writes the two directories by the old paths, and changes nothing where it names `benchmarks/` already), then a merge of `main` at `e86d9204135c`, so the trial's base is the pull request's head. Against `main` the branch differs in the one file. `tools/move/tests/test_maps.py` passes on it [ran, an agent's machine].
+- The trial: `scratch/na-nci-rho-trial2-8d6e` at `ae2a75c80ebc`: the move `891699fe4b1e`, then the hand commit `ae2a75c80ebc`. That hand commit is `git am` of `nci_rho_hand.patch`, and its diff is the first trial's line for line [ran]. On that tree the changed test passes (11 of 11) and the index test passes (2) [ran, an agent's machine, the two files].
+- The first trial stays at `scratch/na-nci-rho-trial-8d6e` (`f2e5fd524e9`); the suites run is on it.
+- The patch: `nci_rho_hand.patch` on `scratch/na-nci-rho-hand-8d6e`, now at `46110ffd7903`. The patch itself did not change. Beside it is a second file, `nci_rho_stale.patch`, an option I describe below.
+
+**One run that is no verdict** [ran]: `r20261113-012707-c6c0`, exit 1. I launched the stage without a git identity and `stage.py` refused to start ("git has no identity here to commit the moves as"). It staged nothing. I launched again with the identity set; that is the run above. So the stage was launched twice tonight, not once: my mistake.
+
+**The suites run `r20261113-010611-7046`** is still going. So far, on the moved tree with the hand commit [ran]: the six you listed pass (`benchmarks/nci` 132 passed, `benchmarks/rho` 612, `benchmarks/inference_only` 10, `verity/hardware` 178, `benchmarks/circuit_properties` 69, `benchmarks/training_slowdown` 576), and the step with the other suites the move rewrites ended with exit 0. The root's tests, then the move alone and the base, are to come.
+
+**An option for you to rule, not in the hand patch:** the move leaves two statements stale, and no test names either. `AGENTS.md` line 29 lists `inference_only/nci/` and `inference_only/rho/` as code under `verity/protocols/`, and `tests/test_boundaries.py` lines 211 and 212 keep both old directories in `SEPARATE`. `nci_rho_stale.patch` takes those lines out; it applies after the hand patch, and the boundary test passes with it (58 passed) [ran, an agent's machine]. Your list for the hand commit does not hold it, so I left it out. Say if it goes in.
+
+**Next:** the pull request tonight, when the suites are back, with this run as the certificate its body cites.
+
