@@ -71,6 +71,8 @@
 #     come from `onsite_piece_commands` in the file ONSITE_PIECES names (a path from TREE, or absolute), sourced before
 #     the preflight, each kept where its variable is set; with ONSITE_PIECES unset there are none, and a file that isn't
 #     there is refused. The file also gives `served_composite.sh` onsite's own cases. Set empty, a command is MISSING.
+#     Where POUS_CMD is the tree's piece, the preflight asks the piece itself (the file's `onsite_pous_pins`) whether it
+#     pins REPO at REV, and refuses a checkpoint it doesn't pin, which the piece would refuse only after the serve.
 #     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's
 #     further arguments, and its piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with
 #     WIPE_CMD set (empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
@@ -334,7 +336,7 @@
 # publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
 # command names only its path.
 # PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the free inodes under
-# PEARLPLUS_TIE, the front's flags, H1_TIE's and a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
+# PEARLPLUS_TIE, the front's flags, the checkpoint's pin in PoUS's piece, H1_TIE's and a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
 # serve dir is made, kept or anything built.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh inference-policy`, in TREE with D and OUT, writes the inference-only policy at IO_CLASS alone, to
@@ -1096,6 +1098,20 @@ inference_only() {  # in TREE, once step 3 counted window K's circuit at the cla
   say "${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
   return "$rc"
 }
+pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the run serves, asked of the piece itself
+  # (ONSITE_PIECES' onsite_pous_pins), which else refuses once the window is served, tied and its Leans built
+  case ${POUS_CMD:-} in *benchmarks/pous/served_piece.sh*) ;; *) return 0 ;; esac
+  declare -F onsite_pous_pins > /dev/null || return 0
+  local why rc
+  why=$(cd "$TREE" && onsite_pous_pins "$REPO" "$REV" 2>&1)
+  rc=$?
+  case $rc in
+    0) return 0 ;;
+    3) say "PREFLIGHT: PoUS's piece answers no period of $REPO@$REV, the checkpoint this run serves: $(tail -n 1 <<< "$why" | cut -c1-300). Serve a row whose checkpoint the piece pins (ROW, REPO and REV), run a tree whose piece pins this one, or set POUS_CMD empty, which runs no PoUS piece and leaves its row missing" ;;
+    *) say "PREFLIGHT: PoUS's piece can't be asked whether it pins $REPO@$REV, the checkpoint this run serves (onsite_pous_pins exit $rc: $(tail -n 1 <<< "$why" | cut -c1-300)): the piece would not start on this node either. Mend what it names, or set POUS_CMD empty, which runs no PoUS piece and leaves its row missing" ;;
+  esac
+  return 3
+}
 front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT passes to the tree's front, it takes
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
@@ -1440,6 +1456,7 @@ if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit
 if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
 if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
+if [ "${1:-}" = pous-pins ]; then pous_pins_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
 if [ "${1:-}" = served-compare ]; then K=${2:?served_verdicts.sh served-compare WINDOW}; served_compare; exit $?; fi
@@ -1517,6 +1534,7 @@ else
     || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
 fi
 front_ok || exit 3
+pous_pins_ok || exit 3
 SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }

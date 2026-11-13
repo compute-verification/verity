@@ -4982,6 +4982,45 @@ def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, produc
     assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
 
 
+NO_PIECE = "set POUS_CMD empty, which runs no PoUS piece and leaves its row missing"
+POUS_PIECE = 'bash benchmarks/pous/served_piece.sh "$@"'
+
+
+@pytest.mark.parametrize("pous_cmd, asked, line", [
+    (POUS_PIECE, 'exit 0', None),
+    (POUS_PIECE, 'echo "checkpoints-int8.json pins no $1@$2"; exit 3',
+     "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: checkpoints-int8.json "
+     "pins no some/model@abc. Serve a row whose checkpoint the piece pins (ROW, REPO and REV), run a tree whose piece "
+     f"pins this one, or {NO_PIECE}"),
+    (POUS_PIECE, 'echo "ModuleNotFoundError: No module named torch" >&2; exit 1',
+     "PREFLIGHT: PoUS's piece can't be asked whether it pins some/model@abc, the checkpoint this run serves "
+     "(onsite_pous_pins exit 1: ModuleNotFoundError: No module named torch): the piece would not start on this node "
+     f"either. Mend what it names, or {NO_PIECE}"),
+    ("", 'exit 3', None),
+    ("another-piece", 'exit 3', None),
+    (POUS_PIECE, None, None),
+])
+def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tmp_path, pous_cmd, asked, line):
+    """PoUS's piece answers only a checkpoint its own manifests pin, and says so only once the window is served and tied.
+    So where POUS_CMD is the tree's piece, the preflight asks the piece (ONSITE_PIECES' `onsite_pous_pins REPO REV`, here
+    a stand-in that exits as the piece's lookup does) and refuses a checkpoint it doesn't pin with the piece's own
+    words and the ways out; a lookup that doesn't run is refused too, since the piece would not start either. With no
+    PoUS piece, another command, or an ONSITE_PIECES file with no such question, nothing is asked."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    (tree / "pieces.sh").write_text("onsite_piece_commands() { :; }\n"
+                                    + (f'onsite_pous_pins() {{ echo "$PWD" > {tmp_path}/asked; {asked}; }}\n' if asked else ""))
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "ONSITE_PIECES": "pieces.sh", "POUS_CMD": pous_cmd, "REPO": "some/model", "REV": "abc"}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+    was_asked = (tmp_path / "asked").read_text().split() if (tmp_path / "asked").exists() else []
+    assert was_asked == ([str(tree)] if asked and pous_cmd == POUS_PIECE else [])
+
+
 def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()
