@@ -253,7 +253,9 @@
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf",
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
   "Proofs.Flock.SpotFlock.RunsAs.Within",
-  "Proofs.Properties.Verity.SampledTwo.JoinedCoupling"
+  "Proofs.Properties.Verity.SampledTwo.JoinedCoupling",
+  "Proofs.Flock.SpotFlock.HeldOfReads",
+  "Proofs.Flock.SpotFlock.ReadsCheck"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
