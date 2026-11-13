@@ -121937,3 +121937,57 @@ NEEDS: nothing.
 To post: nothing.
 
 Not mine, acted on none: none since 05:12Z.
+
+## ACCOUNTS, Fri 13 Nov 05:16Z: READY LINE: #9593 at `9eec48aab933`. It holds `main` with #9375, its records run and its 16 suites passed (each exit 0), and its body is up to date. It is unmarked: the mark is yours
+
+**READY LINE.** #9593, "The Site's second form: registered figures for hosts, memory and clocks, and a complete inventory", head `9eec48aab933` on `cursor/proofs-site-v2-1dc6`, base `main`, open, no label. [run] `gh pr view 9593` at 05:15Z.
+
+**To act on:** mark it when you choose. Two things to weigh first:
+
+1. It changes five listed texts (below). Four are the ones Daniel approved on Thu 4:04 PM PST; the fifth is the witness you ruled on at 01:44Z. Nothing else in a lock's statements moves.
+2. `main` moves under it. At 05:16Z it merges with `main` (`9c4cecc797f0`) without a conflict and no path move is on `main`. If that changes before the mark, tell me or resume me: a merge that changes no Lean input needs only the suites again (15 min in a slot).
+
+**The five changed texts** (before and after, word for word, are in the body)
+
+| Text | In | What changed | Approved by |
+|---|---|---|---|
+| `Properties.Site.Checks` | `security/Properties/Core/Site.lean` | the check accepts exactly when every entry is valid "and its Site is complete" | Daniel, Thu 4:04 PM PST [relayed, your 01:16Z order] |
+| `Properties.Site.RefusedAt` | same | the entry-or-end form: refused at an entry, or at the end for an incomplete inventory; no opening `∃` | Daniel, same |
+| `Properties.Site.checks_honest` | `security/Proofs/Properties/Core/Site.lean` | `Checks`' honest witness, at the new text | Daniel, same |
+| `Properties.Site.checks_nontrivial` | same | `Checks`' nontrivial witness, at the new text | Daniel, same |
+| `Properties.Site.refusedAt_nontrivial` | same | a witness, not a guarantee about the Site: the negation of `RefusedAt`'s own conclusion at index 0 and refusal `previous` | you, 01:44Z [read, mailbox lines 337 to 345] |
+
+**Lock records that move against `main`** [run] a JSON compare, section by section, of the head's three `security` locks with `main`'s at `9c4cecc797f0`:
+
+- `security/Properties/lean-audit.json`: the own records of those five. `reads` of `CoreProtocol.Site` (19 definitions changed, 36 new) and `Properties.Core.Site` (12, 4), each read by the thirteen `Properties.Site.*`; `reads` of `Definitions.Core.Site` (18, 36), read by 54 guarantees (12 of the thirteen, 14 `NciCheck`, 1 `Properties.Pouw`, 4 `Properties.Remote`, 23 `Verity`). [run] the readers are from the audit's report.
+- `security/lean-audit.json`: `reads` of `Definitions.Core.Site` (`Verity.Site.Link`, `Verity.Site.Loc` changed; `Verity.Site.Kind.auditorHost` new), read by 136 guarantees (99 `Nci`, 18 `Accounting`, 18 `Verity`, 1 `Flock`). No guarantee's own record.
+- `security/Proofs/lean-audit.json`: nothing.
+- No premise is added or removed. These are the records the body listed before #9375; the merge moved none.
+- Order only: three lists (`shape.premises` in the main lock; `meaning` and `roots` in the properties lock) and several hand-ordered sections hold `main`'s items in the branch's order, as the merge driver leaves them. Same items. As text the main lock differs from `main`'s by about 175 lines for that reason.
+
+**Runs**
+
+| Run | What | At | Verdict | Tag |
+|---|---|---|---|---|
+| `r20261113-032506-d8fc` | records: `lean_changed.py --records security --update` | `eeef8331792a` | exit 0 at 05:12Z. `security` PASS (27,883 declarations, 730 modules, 1137 guarantees). `security/Proofs` PASS (204,340 declarations, 4051 modules). `security/Properties` PASS against the committed lock (3,485 declarations, 107 modules, 536 guarantees); no `witnesses:` line. Axioms: the three | [run] |
+| `r20261113-045754-3d19` | the 16 suites, `--quick` | `404624bc1b22` | exit 0 at 05:12Z. 16 passed, 0 failed; 12 ran, 4 taken from their pass at `eeef8331792a` because nothing they read changed. `benchmarks/certifier_term`, which holds the file the merge conflicted in: 15 passed | [run] |
+| `r20261113-032506-f3bd` | the 16 suites | `eeef8331792a` | exit 0, 16 of 16, none from the cache | [run] |
+| `r20261113-032911-eac0` | `lake build` of the eleven changed Lean files | `eeef8331792a` | exit 0 in each of six packages | [run] |
+
+**From the heads the runs read to the pull request's head** [run]
+
+- `eeef8331792a` to `404624bc1b22`: the second merge of `main` (my 04:59Z entry). It changes no `.lean` file, lakefile, manifest, toolchain file or lock.
+- `404624bc1b22` to `9eec48aab933`: the commit of the main lock's regenerated record. The records run wrote one record, `security`'s; it is equal to the lock as JSON and differs in the order of three keys of one entry. `security/Proofs` and `security/Properties` passed against the committed locks, so the run wrote no record for them.
+- [derived] So every Lean input at `9eec48aab933` is one the records run read, and every file a suite reads at `9eec48aab933` is one the suites read, but for the order of three keys in `security/lean-audit.json`.
+
+**The body** [run]: its "Checked" section replaced with these runs, heads and counts (`research queue edit 9593`, 15,373 bytes; `Lane proofs` and `Refs MEM-279` kept). Nothing above that section changed: the lock records that move and the readers' counts are as it said.
+
+**One warning, left in:** the linter says an `exact Iff.rfl` at line 319 of `security/Proofs/Properties/Core/Site.lean` does nothing. It is older than both merges and fails nothing. Say if you want it out before the mark; it costs one try and moves the head.
+
+**Not established**
+
+- The whole `check` and the kernel replay: never run on this branch. The records run is the fast path, a result no merge accepts; the candidate's check is the verdict.
+- `lean-agreement` and `circuit-check`: not run; neither Flock nor a circuit is changed.
+- That `main` will still merge cleanly when the queue builds its candidate.
+
+**Else:** the two lists stay at `1b478b7fdf27`, waiting on #9268 (open at 03:31Z). #9312 `b034e9d200b5` and #9313 `19474e53e4f7` stay unmarked. Mailbox read at 05:16Z: 355 lines, nothing since your 03:02Z.
