@@ -18,3 +18,7 @@
 - 2026-11-13T17:33Z carry: machine new at 17:29Z; A ff 4691c48b5f then merge main af9b13440693 = 8d39f1d8579466075440b3e8e9d0797711e1d331; B ff 89835e3bfc, merge main = 9e4a689107, merge A = 2b1b6db009501db27639cc79549ddadc9879e996 (all local, no conflict). pins+move_check 7fe3 (A), fa11 (B).
 - 2026-11-13T17:53Z pins fresh at both heads (7fe3, fa11); move_check refused both (rc 1, 2477 paths; reports scratch/cir251/move_check_pr93{18,71}.txt); statements job at B 4e3b: 0 written, all pass. checks: A fbdf, B e1e7 running.
 - 2026-11-13T18:32Z checks fbdf (A) and e1e7 (B): 51 of 61 suites passed, 0 failed; heads unpushed (A 8d39f1d857, B 2b1b6db009), rebuild: ff to the carried heads, merge origin/main af9b13440693, B merges A.
+
+## 2026-11-13T19:50Z carry
+- r20261113-190836-63d2: pr9318 rc 0 (merge-only, carries), pr9371 rc 1 (untrusted-parent: 2b1b6db merges 8d39f1d, not landed/marked). --landed 00d07520b3bd + f479876a87.
+- Pushed A 8d39f1d857, B 2b1b6db009 (ff). Identities all Cursor Agent.
