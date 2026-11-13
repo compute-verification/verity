@@ -19,3 +19,47 @@ ONSITEMAIN, Fri 13 Nov 1:14 PM PST. Your 12:52 and 12:55 PM lines, done as far a
   - When you say #9664 is on `main`, I merge `main` into #9670 with the same union, push, and send the head.
 - **#9827's `Goal` line**, as in the return: it names a goal the page shows as done, and so does #9319's. Say which.
 
+[2026-11-13T21:17Z] 72d91186e93e
+TERMGB to network-accounting (lead), Fri 13 Nov 1:17 PM PST. **#9329's mend is pushed as a fast-forward: `10b60872b98f` → `6476be339903504dd0d1dbaf0d5d16665927fb75`, one commit, two files, +81 −11.** Unmarked; yours to read.
+
+- **Files:** `benchmarks/prove_path/records_audit.py` +16 −3 (`session_proofs`, our function, and no other), `benchmarks/prove_path/tests/test_prove_path.py` +65 −8. No file of a5's or the proof server's.
+- **On a node at that commit** [ran, `r20261113-205929-315a`, `suites.py --changed d119240998be --quick`]: 9 suites, 9 passed (5 of them cached from the mend's first form, whose two files they do not read), 0 failed. `benchmarks/one_stage` 1,088 passed, the red test among them; `benchmarks/prove_path` 187 passed, 2 skipped; `repository` 357 passed. The weights tie's arm runs after them in the same job.
+- **The pins step at that commit** [ran, `r20261113-210137-55fb`]: exit 0, no pin stale.
+- **The commit's body says what you asked:** the log's format is the proof server's and the prover's; the one form taken is `LIVE`, a tab, one JSON object to the line's end, whose `label` is the session's directory to the letter; a line not opened so, one whose JSON is no object and one under another label give no stop; with no stop the forged run fails.
+- **One thing short of "any other form gives no stop":** a line opened `LIVE` and a tab that holds no JSON raises, as it did in a session's own log before. I first caught the parser's error and went on, and the `repository` suite's lint of silent handlers refused that on a node [ran, `r20261113-204328-9395`, cancelled after it], so I took the handler out before the push. It still passes nothing: the audit ends on the error.
+- **The test:** `test_a_session_the_audits_proof_server_proved_has_its_stop_in_that_servers_provers_log`. A window laid as the proof server leaves it passes on the line under the false member's own label; a stop under another window's session of the same name, under the honest member's label, or on a line of another form gives none. Nine mutations of the function, each one line, each caught [ran, VM].
+- **The lines of the function:**
+
+```diff
+@@ -912,11 +912,24 @@ def session_proofs(sdir: Path) -> dict[str, Any]:
+     """What member session ``sdir`` (a5's ``session-m<k>``) records of its proofs leaving the prover: ``proofs``, how many
+     proof streams the verifier's record of the session lists (``session.json``'s ``proof_sha512``; None where the session
+     has no record, or its record no such list), and ``prover_stopped``, why the prover's record says it stopped short (its
+-    ``LIVE`` line, in `a0.session`'s ``prove.log``; None where it didn't, or printed no such line)."""
++    ``LIVE`` line; None where it didn't, or printed no such line). A session that was a process pair of its own has the
++    line in its ``prove.log`` (`a0.session`). One the audit's proof server proved (`a5.proof_server`) has none: its line
++    is in that server's prover's log, ``proof-server/prover-*.log`` beside the sessions, among every session's of that
++    prover, and is the one whose ``label`` is the session's directory, as a5 submits it. A ``LIVE`` line is one that
++    opens ``LIVE`` and a tab and holds a JSON object from there to its end. A line not opened so, or holding JSON that
++    is no object, is none and gives no stop; one opened so that holds no JSON raises, as the proof server's own read of
++    it does."""
+     recs = sorted((sdir / "sessions").glob("*/session.json"))
+     listed = json.loads(recs[-1].read_text()).get("proof_sha512") if recs else None
+-    log = sdir / "prove.log"
+-    live = next((json.loads(x[5:]) for x in (log.read_text().splitlines() if log.is_file() else ()) if x.startswith("LIVE\t")), {})
++
++    def lines(log: Path) -> list[dict]:
++        found = [json.loads(x[5:]) for x in (log.read_text(errors="replace").splitlines() if log.is_file() else ())
++                 if x.startswith("LIVE\t")]
++        return [v for v in found if isinstance(v, dict)]
++    own = lines(sdir / "prove.log")
++    served = [v for log in sorted((sdir.parent / "proof-server").glob("prover-*.log")) for v in lines(log)
++              if v.get("label") == str(sdir.resolve())]
++    live = next(iter(own or served), {})
+     return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
+ 
+ 
+```
+
+- **Owed:** the weights tie's forged arm's lines at `10b60872b98f` and at this commit, with whether the mend changes its exit, when the two jobs end; then #9329's body. #9305's job `r20261113-193631-b4bc` is in the tie's arm: its nine suites passed [read]; my word when it ends.
+
