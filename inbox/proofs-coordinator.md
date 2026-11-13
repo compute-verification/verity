@@ -124912,3 +124912,15 @@ Clock: `date -u` read 06:26Z. Branch `cursor/proofs-addrrow-d318` at `5cc811a8c9
 **To post.** Nothing.
 
 **Not established.** That `RowOf.lean` compiles, or the changed `RowRead.lean`, or the two mends (`RowKind`, `RowDraw`): all four are in `9095`. Each of the four premises, and that `Sits` can hold at all where an inner block is always checked. That `security/Proofs` builds whole or passes its records audit at `5cc811a8c9`.
+
+## ADDRWC, Fri 13 Nov 06:32Z: COMPILED HEAD `f4fa2fbb2b` of `cursor/proofs-addrwc-60f3` on the new base `e033bfc14b` (r20261113-060012-22d2: `PortsOnceOf.lean` and all ten `AddressFacts` files build, probe clean); HONEST2, follow this head and drop your copy of the `Copy.lean` line
+
+Run `r20261113-060012-22d2` (vy-nebius-2, `--tree-sha f4fa2fbb2bc11c506b18971203ffff4971d72afd`, done rc 0): "lean exit 0 in 471 s" and "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [read: its fetched `stdout.log`].
+
+- **Built there, as its dependencies** [read: the log's `Built` lines]: `Width`, `Copy` (with HONEST2's line `05c2c4cf0c27`, cherry-picked as `894330e7ec`), `WidthOf`, `CopyOf`, `BitsIn`, `BitsOwn`, `WrittenOf`, `CopySrc`, `CopyOut`, then `PortsOnceOf`. No error line. One warning on my files: `Copy.lean:306:16`, "`dif_pos` has been deprecated", the same line as on the old base and one of 739 such warnings in the run's log; I leave it.
+- **What is proved, on the new base** [compiled]: `portsOnce_of_rows`, `widthFact_of_design` and `copyFact_of_design`: `PortsOnce h` where the design evaluates (`two h s = some d`); the width at `addressOf h` from that and `Wiring h`; the copy from those and `RowFact`. The probe ran over `PortsOnceOf.lean`'s nine theorems. `CopyOut.lean`'s twelve were probed on the old base (`r20261113-051652-626b`) and only built here.
+- **The roots rule, both halves, your 06:09Z** [run: a script over the two files at `f4fa2fbb2b`]: each of my ten modules is in `roots` of `security/Proofs/lean-audit.json` and is itself a quoted root of `security/Proofs/lakefile.toml`. Every one of the lock's 188 roots is under a lakefile root by name prefix. Not mine: the lakefile names `Proofs.Properties.Pouw.LiveSalt.Ledger` twice, as the base does.
+- **The base moved to `3b05c3a3b1`** (FRAME, 06:21Z: `security/lean-audit.json` alone). Not merged at `f4fa2fbb2b`; it comes in with my next commit.
+- **No `GAP`.** Neither fact is false of what the verifier accepts, as far as these proofs read it.
+- **Not done:** no records run of `security/Proofs` at my head, so I write no ready line.
+- **Next, one try:** the two facts still take `two h s = some d` as a hypothesis, while `WidthFact` and `CopyFact` are stated over accepted runs, and an accepted run's `Ok` holds exactly that equation. So a new file `AddressFacts/OfRuns.lean` states them of every accepted run with no design hypothesis, and `addressesConnected_of_runs` without its `hW` and `hC`. Not written yet.
