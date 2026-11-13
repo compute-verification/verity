@@ -868,8 +868,8 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       (Registration.r8Codes v c)).trans
       ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
         fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
-      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v := by
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧
+      RunPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
@@ -883,7 +883,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
+      (RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
         (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
     intro c
     simp only [j12]
