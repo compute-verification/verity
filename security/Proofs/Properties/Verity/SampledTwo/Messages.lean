@@ -756,13 +756,12 @@ theorem classOf_clsOf (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) 
     have h1 : ω' = s.1 := congrArg Prod.fst h
     have h2 : histAt V θ F c σ place Rd Dg i ω' r' = histAt V θ F c σ place Rd Dg i s.1 s.2 := congrArg Prod.snd h
     subst h1
-    exact ⟨r', Finset.mem_filter.2 ⟨Finset.mem_univ _,
-      (hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 r' i).1 h2⟩, rfl⟩
+    exact ⟨r', ⟨Finset.mem_univ _, (hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 r' i).1 h2⟩, rfl⟩
   · rintro ⟨a, ha, he⟩
     have he' : (s.1, a) = (ω', r') := he
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj he'
     exact ⟨Finset.mem_univ _, Prod.ext rfl
-      ((hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 _ i).2 (Finset.mem_filter.1 ha).2)⟩
+      ((hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 _ i).2 ha.2)⟩
 
 end Round
 
