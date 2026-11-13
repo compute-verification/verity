@@ -36,7 +36,7 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     monkeypatch.setattr(FC, "K_MAX", b["k_log"] - 1)
     (f,) = [f for f in CK.check_definition(fn, OPTS, as_call=False)["failures"] if f["check"] == "block"]
     assert f["name"].startswith(f"block/past-range CircuitCheckBlock_v1 the unit needs a block of 2^{b['k_log']} bits")
-    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/pouw/verifier/leaf_lanes.py), or extend "
+    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/accounting/pouw/verifier/leaf_lanes.py), or extend "
                               "the proved range (proofs)")
     assert (f["ands"], f["k_log"], f["sha512x3"]) == (b["ands"], b["k_log"], b["sha512x3"])
     F = CK.Findings()
