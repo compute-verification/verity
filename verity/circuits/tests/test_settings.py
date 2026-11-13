@@ -1,4 +1,4 @@
-"""`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
+"""`verity_config.verity_settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
 a run of record, a program's startup check (`Registry.check`), the run's record of the value settings, and `direct_uses`,
 which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings as S
+from verity_config import verity_settings as S
 
 REGISTRY = Path(S.__file__)
 AREA = Path(__file__).resolve().parents[1]
@@ -159,7 +159,7 @@ def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
             if (isinstance(n, ast.Attribute) and n.attr in OS_ENV
                     or isinstance(n, ast.ImportFrom) and n.module == "os" and any(a.name in OS_ENV for a in n.names)):
                 found.append(f"  {rel}:{n.lineno}")
-    assert not found, ("the circuits area reads the environment through verity.settings alone: declare the variable there "
+    assert not found, ("the circuits area reads the environment through verity_config.verity_settings alone: declare the variable there "
                        "(a type, a default, a role and a doc) and read it as settings.NAME\n" + "\n".join(found))
 
 
