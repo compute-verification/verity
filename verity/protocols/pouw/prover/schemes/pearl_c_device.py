@@ -101,10 +101,10 @@ H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 
 SM120 = Device(
     "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, SM120_PRICES, 1 << 16,
     standins=(
-        "peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "
-        "vLLM lanes' RTX PRO 6000 cuBLASLt and MoE correspondences; mma.sync m16n8k16 not probed on the RTX PRO 6000 itself",
-        "g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the debit not yet re-derived "
-        "for the 26-bit atom",
+        ("peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "
+         "vLLM lanes' RTX PRO 6000 cuBLASLt and MoE correspondences; mma.sync m16n8k16 not probed on the RTX PRO 6000 itself"),
+        ("g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the debit not yet re-derived "
+         "for the 26-bit atom"),
         "k_max: 2^16, the H100's pure-chain freezing bound, until re-derived on the captured atom",
     ),
     cap=Fraction(1, 1000),
@@ -113,8 +113,11 @@ SM120 = Device(
 SM120_UNPROMOTED = replace(
     SM120, name="sm120-unpromoted", g=None,
     standins=tuple(s for s in SM120.standins if not s.startswith("g:")) + (
-        "g: none, the panel's pearl-c-sm120 v2; Pearl-C's statement (P1, the debit, TT_OUT) is not restated without "
-        "promotion",),
+        ("g: none, the panel's pearl-c-sm120 v2; Pearl-C's statement (P1, the debit, TT_OUT) is not restated without "
+         "promotion"),),
 )
 
 DEVICES = {d.name: d for d in (H100, SM120, SM120_UNPROMOTED)}
+
+
+__all__ = ["DEVICES", "Device", "H100", "H100_PRICES", "PRICES", "Prices", "SM120", "SM120_PRICES", "SM120_UNPROMOTED"]

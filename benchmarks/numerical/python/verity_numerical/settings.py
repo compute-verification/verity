@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.settings import VALUE, WHERE, Registry, Setting, present
+from verity.settings import VALUE, WHERE, EnvSettings, Setting, present
 
 __all__ = ["REGISTRY", "STANDALONE", "get"]
 
@@ -22,7 +22,7 @@ RECORD_SCHEMA = "verity-numerical/settings/v1"
 STANDALONE = ("bench/placement.py",)
 
 S = Setting
-REGISTRY = Registry(
+REGISTRY = EnvSettings(
     __file__, (),
     # ---- research's runner sets these for a run
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run's id: a result and a generated set's provenance name it; unset, "
