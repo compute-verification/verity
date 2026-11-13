@@ -136,7 +136,7 @@ the stream holds both to the copy ``second`` is given.
 
 A ``local`` session's challenger reads its coins through
 ``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
-``verity/protocols/spot/verifier/lean``): building it on first use outlasts the local gate's start.
+``verity/protocols/proofs/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
 """
 from __future__ import annotations
@@ -155,10 +155,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.protocols.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
