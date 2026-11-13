@@ -132395,3 +132395,66 @@ For your 08:37Z item 1 ("if you run the root suite on the join before then, say 
 - Whether FRAME's run of the two tests at the tip agrees: I have not read one.
 
 Runs: none out. No timer held. The join is at `82ad1c6cb5`, as in my 09:10Z entry.
+
+## FIRSTACCEPT, Fri 09:17Z: correction to 08:57Z's memory figure: the check's peak follows all the files at about 1.3 to 1.5 bytes a byte plus the largest circuit at about 3 to 4, so Thursday's 17 largest circuits need about 0.2 to 0.9 TB, not 0.5 to 2.1 TB; the switch alone also refuses windows of six and seven members
+
+**FIRSTACCEPT: the stand-in run, second part; it corrects 08:57Z's memory figure.**
+
+**What it changes.** My 08:57Z entry scaled the check's memory by the bytes it reads, at 3.6 to 3.9 bytes a byte. A second run, on windows of six and seven members, shows that is wrong for a window of many members. The peak is about 1.3 to 1.5 bytes per byte of all the files read, plus about 3.2 to 3.8 bytes per byte of the largest circuit alone. So the figure for Thursday's 17 largest circuits falls from "0.5 to 2.1 TB" to "0.2 to 0.9 TB". "More than a node has" is withdrawn: the low end fits a node and the high end does not. The 08:57Z entry came from an earlier turn of mine that held run `587b` alone; this turn held the second run.
+
+**Your 09:14Z message** [read, 09:17Z] says 08:57Z's "For TOP-415" paragraph goes on the issue as written, and quotes "0.5 to 2.1 TB". That is the figure this entry withdraws. Please post this entry's "For TOP-415" section in its place, with this entry's table. Its figure for one member at a time also moves: by these slopes a 32 GB circuit read alone peaks at about 150 to 160 GB, not 125 GB [derived: (1.26 + 3.78) × 32 + 0.4 ≈ 162; (1.53 + 3.19) × 32 + 0.4 ≈ 151]. I take up its four items next, for 12:00Z.
+
+**The run.** [run: `r20261113-084751-efc6`]
+- Node `vy-nebius-cpu-8`. Its windows ran 08:51Z to 09:09Z; exit 0, preserved.
+- Commit `e08e751243` on `cursor/proofs-scratch-firstaccept-standin-7e41`: 08:57Z's commit plus one change to the scratch driver. The driver now takes a window of any number of members, gives the audit one port a member, and lists each circuit file's size. #9594's branch is untouched, and nothing merged `main`.
+- The command is 08:57Z's: the served harness's audit step with `FLOCK_CHALLENGER=1`, `--challenger local` and `--deployed-key`, with no `--registered`, then `sampled-proofs-one-stage-zk refusal` on the case it wrote.
+- Two windows. Each member is one `ScaledMmS8Coordinate` proof block, under `stratified:1`, so the draw holds every member. One has six members (K = 128, 256, 512, 1024, 2048, 4096) and one has seven (the same and K = 8192).
+
+**Result 1: the switch alone refuses at six and seven members.** [run]
+- Six members: the audit exited 0 and accepted, with draw [0, 1, 2, 3, 4, 5] and 24 session verdicts all true, in 303.7 s at a peak of 3.68 GB. It wrote `case-v2-members.json`. `refusal` read 30 files, exited 1 with `decided: true` and an empty stderr, and printed 08:57Z's line word for word.
+- Seven members: the same, with draw [0, 1, 2, 3, 4, 5, 6] and 28 verdicts all true, in 372.3 s at 3.96 GB; `refusal` read 35 files.
+- With 08:57Z's three windows, that is five windows of two to seven members that end at `ALL_PASSED`: every check before the per-member form's switch passed, and only `MULTI_REFUSED` refused.
+
+**Result 2: the check's peak memory.** [run: `r20261113-082057-587b` for the first three rows, `r20261113-084751-efc6` for the last two]
+- GB is 10⁹ bytes. The peak is the larger of the probe's reading and `/usr/bin/time -v`'s. The first three rows are 08:57Z's.
+
+| window K | members | all files read | largest circuit | peak RSS | peak per byte read | seconds |
+|---|---|---|---|---|---|---|
+| 128, 256 | 2 | 0.135 GB | 0.067 GB | 0.726 GB | 5.39 | 20.6 |
+| 2048, 4096 | 2 | 0.419 GB | 0.258 GB | 1.941 GB | 4.63 | 43.4 |
+| 8192, 16384 | 2 | 1.435 GB | 0.952 GB | 5.588 GB | 3.89 | 132.5 |
+| 128 to 4096 | 6 | 0.740 GB | 0.258 GB | 2.332 GB | 3.15 | 75.9 |
+| 128 to 8192 | 7 | 1.221 GB | 0.478 GB | 3.772 GB | 3.09 | 119.2 |
+
+- The circuit files are 61.7, 67.4, 78.3, 103.7, 155.8, 258.3 and 478.0 MB for K = 128 to 8192 [run], and 951.7 MB for K = 16384 [derived: 1,429.8 − 478.0].
+- **Peak per byte read is not one number.** It is 4.63 for 0.42 GB in two members and 3.15 for 0.74 GB in six. [run]
+- **Same largest circuit, more members.** The second and fourth rows share their largest circuit. The fourth reads 321 MB more and peaks 389 to 406 MB higher. That is about 1.2 to 1.3 bytes per extra byte read. [derived: by the probe, (2,332 − 1,927) / 320.9 = 1.26; by `time -v`, (2,330 − 1,941) / 320.9 = 1.21]
+- **One more member with a larger circuit.** The fifth row adds the K = 8192 member to the fourth. It reads 480 MB more, its largest circuit is 220 MB larger, and it peaks 1,438 MB higher. At 1.26 bytes per byte read, the rest is 3.8 bytes per byte of growth in the largest circuit. [derived: (1,438 − 1.26 × 480.4) / 219.7 = 3.78]
+- **A fit over all five rows:** peak ≈ 1.53 × all files + 3.19 × largest circuit + 0.38 GB. It is within 0.4% on the three largest rows, 5% low on the second row and 10% high on the first. Five rows for three numbers is a thin fit. [derived: least squares]
+- **Why the peak has that shape.** `refusal` reads every file named on its command line into memory before it checks anything, and then checks one member at a time. So all files are held at once, and only the member being checked is held in its parsed form. [read: `refusalMain`, `Spot/MembersRefusal.lean`] The accepting check reads its files the same way, so I expect the same shape of it. [read: `BlobProtocol.main`'s `check`, `CoreProtocol/Blobs.lean:92-97`; not measured]
+
+**What it gives for Thursday's window.** [derived; the sizes are relayed from the vllm worker's comments on VLLM-269: 17 circuits of 8 to 32 GB of text each]
+- Those 17 alone are 136 to 544 GB of text, and the largest is 8 to 32 GB.
+- By the two differences: 1.26 × 136 + 3.78 × 8 + 0.4 ≈ 202 GB, to 1.26 × 544 + 3.78 × 32 + 0.4 ≈ 807 GB.
+- By the fit: 1.53 × 136 + 3.19 × 8 + 0.4 ≈ 234 GB, to 1.53 × 544 + 3.19 × 32 + 0.4 ≈ 935 GB.
+- So **about 0.2 TB to 0.9 TB for those 17 alone**, before the other 281 sampled members' files, all in one process. 08:57Z said 0.5 to 2.1 TB; that is withdrawn.
+- A floor that needs no fit: every file is in memory at once, so the peak is at least the bytes read, 136 GB or more. [read, with the relayed sizes]
+- Thursday's audit node reserved 540 GB [relayed]. 08:57Z read a CPU node's job cap as 604.7 GiB; cpu-8's read 402.9 GiB [run: `research status`, 09:08Z]. The low end fits such a node, and the high end does not.
+- A listing of the kept circuit files' sizes on cpu-6, sizes only, would decide it. That directory is vllm's to read. I did not read it and did not ask.
+- This scales the measurement 8 to 34 times past the largest circuit I measured, and 95 to 380 times past the largest total.
+
+**No second audit.** I ran and asked for no audit of Thursday's window. Both runs are stand-in windows with no served values.
+
+**For TOP-415.** On stand-in windows of two to seven members with no served values, the audit step that serving runs makes a case that the compiled check refuses for its per-member form alone, with every check before that switch passed. For a first real served run to reach the same, serving's harness must start the audit with two settings it lacks today. Each member's proof sessions must run on the window's challenger session, and with a local challenger the challenger's key must be made at the deployed parameters (one-bit signature digits, height 20). The auditor's challenger already signs with a key at those parameters. Our driver, already on `main`, writes the case's fields: every member's circuit and public file digests, the challenger's key, the window's root and its challenges. The check reads every sampled member's files into memory at once and then checks one member at a time. Its peak memory is about 1.3 to 1.5 bytes per byte of all the files, plus about 3 to 4 bytes per byte of the largest circuit. On Thursday's served window that is about 0.2 to 0.9 TB for the 17 largest circuits alone, so it may or may not fit one node; the sizes of the kept circuit files would decide.
+
+**One routing note.** Between 08:31Z and 09:03Z about 40 of your events reached my run: about 25 of your timers, the oldest named `proofs-1552Z-prf589-opened`; six Slack thread events; and six worker-completion notices, which came twice. I acted on none: no resume, no mark, no post. [read: the events as they reached this run]
+
+**Not established.**
+- That a served window's case also reaches only the switch. It has registered weight reads and a tie to PoUW's earlier registration, and these stand-ins have neither.
+- That the two slopes hold at tens of GB. Peak per byte of the largest circuit fell from 10.8 to 5.9 over the two-member windows, so the slope for the largest circuit may be lower at 8 to 32 GB.
+- The sizes of Thursday's sampled members' circuit files, and whether members share a circuit file. I relay "17 circuits of 8 to 32 GB" and read no listing.
+- The accepting check's peak. I read that it reads its files as `refusal` does; the form is refused, so there is nothing to measure.
+- Windows of more than seven members, a member of more than one proof block, and a member whose proof block is not sampled.
+- That `served_verdicts.sh` itself runs with the two settings: I ran its audit step's command by hand.
+
+Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `e08e751243`, pushed, no pull request (scratch, not for landing). `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Runs: `r20261113-084751-efc6` and `r20261113-082057-587b` done, exit 0, preserved. None out. No timer held. Next entry: your 09:14Z items, by 12:00Z.
