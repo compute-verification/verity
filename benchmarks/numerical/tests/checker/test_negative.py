@@ -9,8 +9,8 @@ from collections.abc import Callable
 import pytest
 from conftest import bf16, f32
 
-from verity.definitions.silicon.cast import f32_to_bf16_word
-from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
+from verity.circuits.silicon.cast import f32_to_bf16_word
+from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu
 from verity_numerical.checker.gadgets import (
     AlignProduct, AlignState, Bf16Decode, Epilogue, Fp32Decode, GroupMax, LeadingBit, Normalise, Pack, Product,
