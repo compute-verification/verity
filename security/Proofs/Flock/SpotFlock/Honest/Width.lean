@@ -8,8 +8,7 @@ public import Proofs.Flock.SpotFlock.AddressFacts.WidthOf
 
 The wiring map is the identity (`wireMap_held`), so it is idempotent, and every row has one width
 (`rowWidths_held`, from `RefWidths R`); the address facts' width at the address map (`widthFact_addressOf`) then
-gives `WidthFact`. The hypotheses are `NeededBits` and `RefWidths R`. `PortsMember`, which the roots and the entry
-take, holds of every registration (`portsMember`).
+gives `WidthFact`. The hypotheses are `NeededBits` and `RefWidths R`.
 -/
 
 @[expose] public section
@@ -17,10 +16,6 @@ take, holds of every registration (`portsMember`).
 namespace SpotFlock.Honest
 
 open Claims Claims.Sampling SamplingDeploy
-
-/-- **Every held registration's checked units read their template's member's ports** (`CheckedRun.ports_member`),
-so `PortsMember`, which the roots and the entry at the instance take, holds of every registration. -/
-theorem portsMember (h : Held) : PortsMember h := fun _ hr => CheckedRun.ports_member hr
 
 variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 

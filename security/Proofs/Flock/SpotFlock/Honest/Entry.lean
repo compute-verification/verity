@@ -11,13 +11,13 @@ public import Proofs.Flock.Verifier.Registered
 At every gate an accepted run's checked unit needs, a registered read is named like the gate's port
 (`rootsHold_held`'s reading: `bit_held`, `regNamed_name`), so only `EntryHolds`' registered arm is ever met, and there:
 
-* the port is the session's first of the read's name: the member's first port of the gate's row (`PortsMember`);
+* the port is the session's first of the read's name: the member's first port of the gate's row (`portsMember`);
 * the slot names the entry round 2 reads the value off: both are the boundary port the gate's link names, since the
   interior registration registers no value (`reads_held`), so `readKey` takes the link's port;
 * the slot's schema is the read's: the slot has the member's port's row schema (`PortRoots.schemaOf`), and Flock's
   setup checks every registered read against the first port of its name (`Registered.checkPort`, `schema_of_setup`).
 
-The hypotheses are `rootsHold_held`'s: `RefPorts R`, `NeededBits` and `PortsMember`.
+The hypotheses are `rootsHold_held`'s: `RefPorts R` and `NeededBits`.
 -/
 
 @[expose] public section
@@ -29,16 +29,15 @@ open Claims Claims.Sampling SamplingDeploy
 variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 
 /-- **`EntryFact` at the instance.** -/
-theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀))
-    (hM : PortsMember (held R B desc q c₀)) :
+theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)) :
     EntryFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)) := by
   intro r hr i hi
   rw [wireMap_held]
   show r.EntryHolds (held R B desc q c₀) id (returned (held R B desc q c₀)) (addressOf (held R B desc q c₀) i) i
   obtain ⟨rp, hb⟩ := hN r hr i hi
-  obtain ⟨ht0, hports⟩ := templateOf_held R B desc q c₀ hM hr
-  obtain ⟨hrowP, p, hp, hpn, own, reg₀, hown, hregm, hrn⟩ := bit_held R B desc q c₀ hR hM hr hb
+  obtain ⟨ht0, hports⟩ := templateOf_held R B desc q c₀ hr
+  obtain ⟨hrowP, p, hp, hpn, own, reg₀, hown, hregm, hrn⟩ := bit_held R B desc q c₀ hR hr hb
   have haddr := address_held R B desc q c₀ (bitAtGate_of_bitOf hb)
   have hport : (addressOf (held R B desc q c₀) i).port r.u = p := by rw [haddr, hpn]
   obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 (heldLink_held R B desc q c₀ rp.row hrowP)
@@ -57,7 +56,7 @@ theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
   obtain ⟨Pt, d, spec, hx, -, -, -, hok, -, -, -, -, -, hset⟩ := hr'
   refine ⟨fun reg hreg => ?_, fun hnone => ?_⟩
   · rw [hport] at hreg
-    have hname := regNamed_name R B desc q c₀ hM hr hp hreg
+    have hname := regNamed_name R B desc q c₀ hr hp hreg
     have hmem : reg ∈ own := by
       unfold regNamed at hreg
       rw [hown, Option.bind_some] at hreg
