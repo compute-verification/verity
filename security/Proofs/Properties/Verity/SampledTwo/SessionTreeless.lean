@@ -42,19 +42,13 @@ theorem formLines_of {e : VStar.Recursive.SampledTwo.Evidence} {l : List String}
       rw [← hs]
       exact hls
     have hl : ls.toList = l.map Json.str :=
-      mapM_str_inv (fun j x hj => by cases j <;> cases hj <;> rfl) _ _ h
-    first
-      | (unfold VStar.Recursive.SampledTwo.firstLines
-         rw [hls']
-         show ls.toList.mapM _ = _
-         rw [hl]
-         exact Verity.Sampled.Binding.mapM_map_str (fun _ => rfl) l)
-      | (simp only [VStar.Recursive.SampledTwo.firstLines, hls']
-         rw [hl]
-         exact Verity.Sampled.Binding.mapM_map_str (fun _ => rfl) l)
-  · first
-      | cases h
-      | simp [throw, throwThe, MonadExceptOf.throw] at h
+      mapM_str_inv (fun j x hj => by cases j <;> cases hj; rfl) _ _ h
+    unfold VStar.Recursive.SampledTwo.firstLines
+    rw [hls']
+    show ls.toList.mapM _ = _
+    rw [hl]
+    exact Verity.Sampled.Binding.mapM_map_str (fun _ => rfl) l
+  · cases h
 
 /-- **`FirstTreeless`, from the form's check**: the check refuses, on two windows, a first session's log that holds a
 tree's line (`VStar.Recursive.SampledTwo.firstTreeless`), so on an accepted play no line the cut reads of that log is
@@ -79,12 +73,7 @@ theorem firstTreeless_of_check (C : CaseOf)
   obtain ⟨rfl, hce⟩ := Prod.mk.inj hpce
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj hce
   obtain ⟨bp, hb, hw₁, -⟩ := firstDraws_window h3
-  have hbp : bp = p.boundary := by
-    first
-      | exact (Except.ok.inj hb).symm
-      | (unfold boundaryOf at hb; exact (Except.ok.inj hb).symm)
-      | (unfold boundaryOf at hb; cases hb; rfl)
-      | (simp only [boundaryOf, pure, Except.pure, Except.ok.injEq] at hb; exact hb.symm)
+  have hbp : bp = p.boundary := (Except.ok.inj hb).symm
   rw [hbp] at hw₁
   have hw₂ := source_window (secondDraws_eq h5 h6)
   exact VStar.Recursive.SampledTwo.firstTreeless_lines (VStar.Recursive.SampledTwo.accepted_treeless hchk) hw₁ hw₂ hw
