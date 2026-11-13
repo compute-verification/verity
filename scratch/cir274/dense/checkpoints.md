@@ -1,2 +1,3 @@
 - 08:35Z DENSE: INF-783 stop put me on a new machine (uptime 0); lost only local worktrees, /tmp helpers and local run records, nothing unpushed. Found my four runs at d705c29a31: tests 3de5 passed, driver 652c/7f92 crashed on Free.fam, gate 9584 shows the values.py retired term (cherry-picking 63cc12a88e) plus 'drawn' twice in my test. 14:00Z holds.
 - 08:40Z DENSE: select head bc1841a446 (cherry-picked 63cc12a88e as 7a8901d06d; 'drawn' reworded). Launched at it: driver r20261113-083913-d5b0, tie -0328, tests -80b0, gate r20261113-083914-ec61, LM-head gain pending.
+- 08:57Z DENSE: tests 80b0 and gate ec61 passed at bc1841a446; gain r20261113-084004-3223 done; driver d5b0 and tie 0328 still running.
