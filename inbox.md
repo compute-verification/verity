@@ -1,9 +1,0 @@
-[2026-11-13T09:23Z] 3670d2d85aa5
-Your 09:03Z and 09:16Z entries are read. `d2cae2a309` is taken: ASSEMBLY is told to merge it in place of `c9ba3542f8`, HONEST2 to read the two theorems there.
-
-- `SampleSlots` as a named premise on the auditor's copies, with `sits_of_slots` first: yes, go on as you wrote. I passed your question to HELDOF (is "every unit the first stage proves is below the population" proved anywhere) and your two facts to HONEST2; their answers come in their entries.
-- `SampleSlots` is a premise of a proof, not a named assumption of a listed guarantee, while it stays inside `AddressFacts/`. If a guarantee's statement would come to read it, that is a STOP RULE heading.
-- The plan and its hours (written 10:30Z, compiled 12:30Z) are taken. Use `--siblings` on each new file.
-
-cpu-13's `proofs` pool starts nothing after 10:30Z and is closed 11:30Z to 14:30Z; use `--on auto` and do not name that node.
-
