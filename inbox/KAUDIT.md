@@ -124,3 +124,45 @@ worked out before I asked which card: that is a launch I can give a go to.
   1), and the cross-check's one line** against KHSHARE's walk-off rows of Thursday (its final
   table on HASH-112 has the arts).
 - Nothing before the go.
+
+## Fri 13 Nov 07:09Z: `main` moves under Friday's runs TONIGHT. Before your go: what in your job reads `main`'s head at run time, and the least change that keeps it working. By reading; change no job file without my word. Return by 10:30Z
+
+**What happened.** Daniel agreed the architecture page at 10:40 PM PST and asked for the
+repository in its structure when he wakes. top's plan (TOP-415, 07:05Z): **every move that
+only changes paths is on `main` by Fri 13 Nov 7:00 AM PST (15:00Z), 45 minutes before node A's
+window opens.** Two chains, marked by 13:00Z:
+- chain 1, tonight's layout chain;
+- chain 2: **each protocol under a group directory** (`verity/protocols/flock`, `spot`,
+  `recursion` go under `verity/protocols/proofs/`; `pouw`, `pous`, `poub`, `certifier` under
+  `verity/protocols/accounting/`; `inference_only` under `verity/protocols/policy/`);
+  `verity/definitions/` split (`definitions/kernels` to `verity/circuits/kernels`, the served
+  kernels' circuits to the adapter); the difftest to `tools/`; the Lake packages' paths; and
+  lean's renames inside the Lean files.
+
+**Your timed run is launched from a pinned tree, so the moves do not reach it.** What they can
+reach is any step that takes `main`'s head, or a path of the tree, when it runs. One is
+known: the Lean verifier that checks the witness run's kept proofs is built from `main`'s head
+at each put, by `verity/protocols/flock/verifier` and `verity/protocols/flock/pod/lake_closure.py`
+(`leanframe.sh`, `fri-stage.sh`, `control.sh`), and chain 2 moves both.
+
+**Do, by reading only (no launch, nothing on node A, no job file changed):**
+1. **Every place** your Friday job, its launcher, its reader and its helper scripts take
+   `main`'s head or name a path of the tree outside the pinned worktree: a `git fetch` or
+   `rev-parse` of `main`, a `--source` that follows `main`, a `research` command run from a
+   checkout that follows `main`, a script on a node. File and line.
+2. **For each: what happens if `main` is in the new layout at 15:00Z.** Does it stop the job,
+   skip a step, fail a verdict in silence, or leave the timed rows as they are?
+3. **The least change that keeps Friday's run and its verdicts:** a variable the job already
+   takes (a commit for that step: I give you the last commit of `main` before chain 1 in the
+   go); or the step done after the run from a pinned tree; or one changed line, and then
+   what must be rehearsed again and how many minutes that takes.
+4. Your proposal, in three lines. **Tell me; I decide and say it in your go.**
+
+**Also, for everything you write from now:**
+- Daniel's words in prose (pull request bodies, comments, notes' summaries): **"challenges"**
+  for what the challenger sends, not "coins"; **"accounting protocol"**, not "resource
+  protocol"; **"the auditor's devices"**, never "host" for the auditor's hardware. The code's
+  names stay.
+- **A branch or pull request of yours that crosses a move waits until the chains are on
+  `main`; then `tools/move/restack.py` carries it across. Do not rebase it by hand and do not
+  merge `main` into it tonight.**
