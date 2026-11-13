@@ -259,7 +259,7 @@
    "digest": "49cb6e0e891bd68f8179e5b3431afccbd9ddf46587024651f7e1141c7f6e3ac2"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
-   "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "why": "walk_step, ret_walk and ret_walk_aux, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness; ret_walk_aux, Sampled/ParamsProgram.lean's, proves each join point's body as an auxiliary theorem), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "68161b2e468dd0509c8ee6c345e27b5930837246b884fc4999cb26da93f04881"
   }
  },
