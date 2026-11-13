@@ -85,7 +85,7 @@ NUMPY_USERS += ("verity/definitions/cross_call.py", "verity/definitions/kernels"
                 "verity/definitions/word.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
-NO_DATE_OR_REASON = ("verity/protocols/inference_only/nci", "verity/composite/device/live_challenger",
+NO_DATE_OR_REASON = ("benchmarks/nci", "verity/composite/device/live_challenger",
                      "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
                      "verity/protocols/pouw/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
