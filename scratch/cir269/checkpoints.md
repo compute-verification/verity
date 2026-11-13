@@ -11,3 +11,4 @@
 - 10:02Z (02:02 PST): enum2 done: 8854b824 and 1333bd53 lists byte-identical, = coordinator's 2e99 listing (288 bindings, 24872 targets, sha fff790b5). Pass 5.
 - 10:04Z (02:04 PST): body drafts in bodies/; ffde (verity-flock) and 667c (lock wait) left. Pass 6.
 - 10:25Z (02:25 PST): ffde in verity-flock (scope 27.8 GiB); 667c still waiting. Pass 7.
+- 10:45Z (02:45 PST): ffde in verity-flock (scope 33.2 GiB); 667c still waiting. Pass 8.
