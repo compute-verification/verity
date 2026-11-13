@@ -1,5 +1,5 @@
 [Unit]
-Description=the verifier's run %i put in the evidence store, as auditor from the pinned tree (verity/protocols/poub/device/live_verifier/host.py publish)
+Description=the verifier's run %i put in the evidence store, as auditor from the pinned tree (verity/protocols/accounting/poub/device/live_verifier/host.py publish)
 
 [Service]
 Type=oneshot
@@ -11,7 +11,7 @@ WorkingDirectory=/opt/vy-verifier/current
 # empty, the put fails here, visibly, and the run stays on the host
 EnvironmentFile=/etc/vy/verifier-store.env
 Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-verifier PATH=/usr/bin:/bin
-ExecStart=/usr/bin/python3 -I /opt/vy-verifier/current/verity/protocols/poub/device/live_verifier/host.py publish %i
+ExecStart=/usr/bin/python3 -I /opt/vy-verifier/current/verity/protocols/accounting/poub/device/live_verifier/host.py publish %i
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
