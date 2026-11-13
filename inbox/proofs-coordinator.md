@@ -116094,3 +116094,62 @@ In plain words: more of your mail reached me, this time from Slack, and some of 
 Not established: whether these reached you too. NEEDS: nothing for my work. To post: nothing. STOP RULE: not reached.
 
 **Pushed.** Unchanged since 02:50Z: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`.
+
+## GATHER, Fri 13 Nov 02:57Z: the launch names `logits` wherever the tree's arm does and only the test lacked the key: fixed, new head `671dd73cce`; at 8 of 8 the first stage's coin evidence is not `null` (208 bytes); `b025` has proved its 20 sessions of 32 at a peak of 61 GiB and is in the statements' check
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `671dd73cce63074b543d8a77239f250d9e73edf0`, the head I stand behind. It is `5ad83c84ef5e` plus one test file (11 lines of `benchmarks/serve_tax/tests/test_replay.py`); no code a rehearsal runs moved, so `7b90` and `b025`, which ran at `5ad83c84ef5e`, are its rehearsals. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed at it by `c6bd` (my 02:38Z entry). Both pushed. [run: `git push`, `git ls-remote`, `git diff --stat 5ad83c84ef HEAD`, 02:52Z]
+
+**In plain words.** Three answers to your 02:49Z messages. First, the serve's launch does name the logits: serving's launch file builds the object it hands from the tree's own two-stage arm, and at the second try's tree that arm names them, so a served second try commits the select's inputs. Only the test was stale, and it is fixed on my branch. One launch file of serving's would not name them, the older one that types its object by hand; Friday's second try must not serve with that one. Second, a first stage that takes every outer block still reads coins: 208 bytes at 8 of 8, so its coin evidence is not `null`. Third, the second try's design at Friday's size has passed its proofs: 20 sessions of 32 inner blocks each, all accepted by Lean, at a peak of 61 GiB, inside the 96 GB asked. Its last step, the check on the statements, is still running, so this is not yet my word on the design.
+
+### 1. Does the launch hand `logits`?
+
+- **Serving's launch file for the 20-unit select** builds `BOUNDARY_ROWS` from the tree it ships: under the stop rule, `S.TWO_STAGE_ROWS` less its `tables`, plus `stop`; without a rule it leaves `BOUNDARY_ROWS` unset and the arm's own object is used. So it names `logits` exactly where the tree's arm does. [read: serving's notes, `tools/select20_serve.sh:117–131` and `:150`, as the notes held it at 02:13Z]
+- **Which trees name it** [run: `git show TREE:benchmarks/serve_tax/serve_tax.py`, 02:51Z]:
+
+| Tree | `TWO_STAGE_ROWS` | Used by |
+|---|---|---|
+| `1536ba03d3` | `ids`, `tables`; no `logits` | tonight's serve on cards (job 1) and the first try, by design |
+| `496aa18354` | the same; no `logits` | my first try's head |
+| `8b1835d85f` | `ids`, `logits`, `tables` | tonight's job 2, if it runs; an ancestor of the second try's head |
+| `5ad83c84ef`, `671dd73cce` | `ids`, `logits`, `tables` | the second try |
+
+- **Tonight's serve** (job 1, due to launch between 02:40Z and 02:50Z at `1536ba03d3`; I have read no line of it yet) hands no `logits`, and should not: it is the first try's tree, where the serve commits none. Serving's rehearsal at `8b1835d85f` reports the object with its `logits` key passing the plugin's own start check and a class committed. [read: Linear VLLM-412, comments of 00:46Z and 01:53Z, read 02:51Z; relayed for the rehearsal]
+- **The hazard that remains.** Serving's older launch file types its object by hand, with `TokenSelect_v4` as the check and neither `ids` nor `logits`. A second try served with it would commit no logits. [read: serving's notes, `tools/twostage_serve.sh:217`]
+- **Not established:** which launch file and tree Friday's 20:00Z serve uses. I have read the files, not a launch.
+
+**The test.** `test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say` spelled the handed object without `logits`, while the arm's object gained them in `b798f05f05`; serving's own tree `8b1835d85f` has the same stale test. It now spells them, and it also holds the hazard itself: an object handed without `logits` gives the plugin none, because a handed object replaces the arm's whole. [run: on my VM at `671dd73cce`, `pytest benchmarks/serve_tax/tests/test_replay.py`, 19 passed, 02:52Z; `ruff check` clean; the failure before the change is STOPDRIVER's, relayed]
+
+To post on VLLM-300, if you want it unchanged:
+
+> proofs: your launch file `select20_serve.sh` builds `BOUNDARY_ROWS` from the tree's `TWO_STAGE_ROWS`, so at the second try's tree it names `logits` and nothing is missing there. Only the test was stale; it is fixed at `671dd73cce63074b543d8a77239f250d9e73edf0` on `cursor/proofs-gather-second-try-5a28`, which is `5ad83c84ef5e` plus that one test file. Two things to hold on Friday's 12 PM PST serve: it ships a tree with the logits port (`8b1835d85f` or later), and it is launched by `select20_serve.sh`, not by `twostage_serve.sh`, whose hand-typed object has no `ids` and no `logits`. The serve's `select20.json` then has a `logits` entry.
+
+### 2. The first stage's coin evidence at 8 of 8
+
+Not `null`. A first stage at `rate:1/1` reads the challenger's coins like any other. [run: `second/coins.json` of each, `evidence[0]` and `read[0]`, read 02:53Z]
+
+| Run | First stage | Its evidence | Bytes it read | Second stage | Bytes it read |
+|---|---|---|---|---|---|
+| `240a` | 8 of 8 | a segment `draw/0`, 4 openings | 208 | 32 of 64 in 160 cells | 102,400 (1,600 openings) |
+| `7b90` part 1 | 6 of 6 | a segment `draw/0`, 3 openings | 172 | 1 of 4 in 120 cells | 9,840 (154 openings) |
+| `c6bd` | 4 of 8 | a segment `draw/0`, 3 openings | 136 | 1 of 64 in 80 cells | 6,560 (103 openings) |
+
+- So at 8 of 8 the cut reads a first log, and the case "the first stage read no byte" is not Friday's second try as the tree runs it today. Each opening is one coin of 64 bytes. [derived]
+- **Against `L`.** If `L` is `SpotFlock.L`, a coin's 2^20 bytes (1,048,576), every read above is far inside it: the largest second-stage read is 102,400 bytes, under one `L`. `b025`'s own counts come when it ends. [read: `security/Proofs/Flock/SpotFlock/Code.lean:418–419` at the second try's head; I have not read the form's own `L` on its branch]
+
+### 3. `b025` at 02:55Z: proved, not ended
+
+- All 8 outer blocks sampled, the stop class's order held. [run: `out/first.log`]
+- The prover ran from 02:40:31Z to 02:44:03Z, 43 minutes into the second command. Peak memory 61.2 GiB at 02:41:59Z, against 96 GB asked: it did not pass it. [run: process names by the minute and `job-memory.py` on its `resources.jsonl`, 02:54Z]
+- The sessions' line is printed: accepted, complete, all 60 verdicts true (`m0-verifier`, `lean-draw`, `lean-verify` for each of 20 sessions), 32 inner blocks proved a template, all 18 negatives refused. [run: `out/second.log`, the `A5` line, 02:55Z]
+- Still running: the second stage's check on the statements and the outcome. So its exit, its `statements.json` size and each stage's bytes read are not known yet. I say them the moment it ends.
+
+### 4. Also
+
+- The rerun over `c6bd`'s kept files (`r20261113-023437-3243`, vy-nebius-2) waited 6 minutes for a place and has run since 02:40:53Z with no error printed; not ended at 02:54Z.
+- Your 02:43Z, point 2 (print the class's figure from the kept files, labelled as not established): taken; it goes into the rerun script next, no tree change.
+
+### 5. Not established
+
+- `b025`'s exit and outcome, and so my word on the second try's design.
+- Which launch file and tree Friday's second serve uses.
+- Anything on the engine or on cards in my runs.
