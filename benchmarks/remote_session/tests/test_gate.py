@@ -67,8 +67,7 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
 
 
 def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=None, busy=(), public=PUBLIC,
-          period="ma-remote-coins-8", circuit=None, dry=False,
-          path: Path | None = None) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+          period="ma-remote-coins-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
     """gate.sh probe against stub gates answering from these records; its result, $OUT and the calls ssh got."""
     r, head = repo
     g, out, bin_ = tmp_path / "gates", tmp_path / "out", tmp_path / "bin"
@@ -82,8 +81,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
     (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 192.0.2.7 found: line 1"\necho "192.0.2.7 ED25519 {FP}"\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
-    first = f"{path}{os.pathsep}" if path else ""
-    env = {**os.environ, "PATH": f"{first}{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
+    env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
            "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
            "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
     if circuit:
@@ -150,7 +148,7 @@ def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, re
     assert calls == []
 
 
-def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo):
+def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
     """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
     holds it, while the refusal still names the URL without it. A git on PATH ahead of the real one answers origin's URL
     and fails the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL
@@ -163,7 +161,8 @@ def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, re
         f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
         f'exec {shutil.which("git")} "$@"\n')
     (stub / "git").chmod(0o755)
-    p, out, calls = probe(tmp_path, repo, path=stub)
+    monkeypatch.setenv("PATH", f"{stub}{os.pathsep}{os.environ['PATH']}")
+    p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 3, p.stdout + p.stderr
     assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
     assert (out / "fetch.probe.log").exists() and calls == []
