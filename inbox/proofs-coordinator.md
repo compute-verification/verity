@@ -123592,3 +123592,44 @@ NEEDS: nothing of you.
 Not established: anything on the new base. `Wiring h` and `RowFact` stay inputs, which FRAME's and ADDRROW's files give. Every theorem takes `two h s = some d`; one honest play has now been accepted by the compiled check with the switch on (TWOLEG's `2556`), and I have not read whether its design is one these theorems speak of.
 
 To post: nothing.
+
+
+## OWNREADS, Fri 13 Nov 05:55Z: `HeldOfReads.lean` compiles on the moved base (`r20261113-053704-77c4`, at `cd6eb12e46`, six theorems, only the three permitted axioms); all four files of mine have now compiled on their final heads; ASSEMBLY may merge `cursor/proofs-refreadswf-a64c` at `cd6eb12e46`; nothing of mine is left to write
+
+In plain words. The last compile I owed is done. The file that shows the held copy's reference reads are well-formed trees, whenever the parameters' are, now builds over the moved base with HELDOF's mended file under it. Every file of mine has a passing run at the head I offer, and merging that head into the join as it stands brings my three files and their roots and nothing else. No statement of mine changed in this.
+
+**1. The run** [run]
+- `r20261113-053704-77c4`, sent with `--on auto` at 05:37:04Z, went to **vy-nebius-cpu-14**. It took place `r11` at 05:37:46Z, then waited 821 s for one of that node's two Lean build places, and ended rc 0 at 05:52:38Z.
+- "lean exit 0 in 60 s"; "axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings clean over the 3909 modules built there.
+- It built HELDOF's `HeldOf.lean` at `488e6131f4` on the way, so that file builds on the moved base too.
+- It asked 12 GB and its process group peaked at about 3.7 GB; the siblings step reports a peak of 5340 MB. I launch neither `walk_ab.sh` nor `walk_cut.sh`.
+
+**2. Every file of mine, with the run that compiled it at the head I offer** [run]
+
+| file | head | run | theorems |
+|---|---|---|---|
+| `SpotFlock/OwnReads.lean` | `ba8cc8ab0c`, same text at `cd6eb12e46` | `r20261113-043114-0733` | 35 |
+| `SpotFlock/ReadsCheck.lean` | `ba8cc8ab0c`, same text at `cd6eb12e46` | `r20261113-043114-0733` | 6 |
+| `SpotFlock/HeldOfReads.lean` | `cd6eb12e46` | `r20261113-053704-77c4` | 6 |
+| `SampledTwo/Apart.lean` | `9179aaea5a` | `r20261113-030222-643a` | 3 |
+
+Each uses only propext, Classical.choice and Quot.sound. `OwnReads.lean` also built inside `77c4` as a dependency.
+
+**3. For ASSEMBLY** [run: `git merge-tree` against the join at `72c589ad29`]
+- The join already holds `cursor/proofs-apart-a64c` (`9179aaea5a`), the moved base and HELDOF's `488e6131f4`.
+- Merge `cursor/proofs-refreadswf-a64c` at `cd6eb12e46`. It merges with no conflict and drops no root. Against the join it brings exactly: `OwnReads.lean`, `HeldOfReads.lean`, `ReadsCheck.lean`, the line `public import Proofs.Flock.SpotFlock.OwnReads` in `security/Proofs/Flock.lean`, and the lakefile roots `HeldOfReads` and `ReadsCheck`. The lock's roots for these are yours to add; I edit no lock.
+- `cursor/proofs-ownreads-9a1c` (`aef755c9e3`) is inside `cd6eb12e46`; no need to take it apart.
+- HELDOF's newer `02e64d44d7` only adds `namesHeld_of` and a docstring line to `HeldOf.lean` [read: the diff]. It merges cleanly with my head and changes nothing my file reads, so I send no further try for it.
+
+**4. What the join takes as premises from my theorems, and whose each is** (unchanged since 04:32Z)
+- `ReadsWf p.circuits` in `refReadsWf_form` and `ownReads_form`: the named premise you ruled for Friday. `ReadsJson.wf_of_checked` discharges it once `readsChecked` is checked, in `heldOf`'s `decided` (HELDOF) or in the form (TWOLEG, a new refusal).
+- `OpensOwn` at each session and distinct run ids, in `binds_of_own`: facts of the two-session device. HISTORY's model, and soundness's device on PRF-490.
+- `binds_of_own` is the one theorem of mine stated at the form's accept. By your 05:49Z message a first honest play is now accepted with the switch on (`r20261113-053625-2556`) [relayed], so it is no longer about nothing; I still list it nowhere.
+
+### NEEDS
+None open. HELDOF's line is in; thank you.
+
+### To post
+Nothing.
+
+Not established: `ReadsWf` at any real parameters; `OpensOwn` at any device; that my files still compile after TWOLEG's two further changes to the form (none of the three SpotFlock files names the form's check, and `Apart.lean` reads it only through `Binds`). The package's Lean check with its lock, and a records run of `security/Proofs`, have run on none of my heads, so none of this is a ready line.
