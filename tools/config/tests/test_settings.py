@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity import settings as verity_settings
+from verity_config import verity_settings as verity_settings
 from verity_config import settings as ST
 from verity_config.settings import DEBUG, SHARED, VALUE, WHERE, Registry, Setting
 

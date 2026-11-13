@@ -39,7 +39,7 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           # served_piece.py holds the served weights as C* through the vLLM adapter, which imports these
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
-          "adapters/vllm/verity_vllm/settings.py", "verity/settings.py", "adapters/vllm/verity_vllm/records/__init__.py",
+          "adapters/vllm/verity_vllm/settings.py", "tools/config/verity_config/verity_settings.py", "adapters/vllm/verity_vllm/records/__init__.py",
           "adapters/vllm/verity_vllm/records/fields.py", "adapters/vllm/verity_vllm/records/workload.py",
           "adapters/vllm/verity_vllm/protocols/__init__.py", "adapters/vllm/verity_vllm/protocols/interface.py",
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
