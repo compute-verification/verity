@@ -715,7 +715,7 @@ def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[st
 
 def renamed(lo: str, hi: str) -> dict[str, str]:
     """Each file ``lo..hi`` renames (``git diff -M``), its new path to its old one."""
-    return {f: o for f, o, *_ in changed_sources(lo, hi, (), lambda _: True) if o not in (None, f)}
+    return {f: o for f, o, *_ in changed_sources(lo, hi, (), lambda _: True) if o is not None and o != f}
 
 
 def carried(before: dict[str, list], moved: dict[str, str]) -> dict[str, list]:
@@ -908,7 +908,8 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
         if not exempt(f, marked_before):
             before, after = (data[b].decode("utf-8", errors="replace") if b else "" for b in (lo, hi))
             read.append((f, o, before, after, count(before, o) if lo else [], count(after, f)))
-    lost, room = Counter(), 0
+    lost: Counter = Counter()
+    room = 0
     for _, _, before, after, was, now in read:
         if len(now) < len(was):
             lost += rows(before, was) - rows(after, now)
@@ -916,7 +917,8 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     new = []
     for f, o, before, after, was, now in read:
         allows = math.inf if exempt(f, marked) else listed[f]
-        over, came, note = len(now) - len(was), Counter(), ""
+        came: Counter = Counter()
+        over, note = len(now) - len(was), ""
         if over > 0:
             gained = rows(after, now) - rows(before, was)
             came = Counter(sorted((gained & lost).elements())[:min(over, room)])
