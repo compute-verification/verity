@@ -29303,8 +29303,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (instHMul.hMul r (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.DIdeal": {
     "Real.instLT.lt 0 H.CH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29385,8 +29385,8 @@
     "Real.instLT.lt 0 H.fH": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.exp (-1)) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt 0 (instHSub.hSub δ (instHMul.hMul S.cast (instHAdd.hAdd δbind (instHMul.hMul nπ.cast δzk))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq P.game (Accounting.TS.StageExecutionPhase.game stg tk w W)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : V), Real.instLE.le (w u) (Pouw.RelativeSecurity.prob fun t => Eq (tk t) u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TS.TensorSlotCount": {
     "Function.Injective slot": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion"
