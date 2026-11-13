@@ -427,12 +427,19 @@ def test_the_tiny_steps_work_word_by_word_keeps_its_reading():
     assert tiny_work(structure=False) == json.loads(TINY_WORK.read_text())
 
 
+#: the products of the tiny step whose operand `WK.Reader` reads as a softmax's columns, word by word by design
+TINY_COLUMNS = 16
+
+
 def test_the_tiny_step_reads_every_softmax_and_select_from_its_runs():
     """Each softmax and each select over one in the lf step is in the form `WK.Reader` reads from runs, so a builder
-    change that leaves the form fails here rather than reading word by word at every size."""
+    change that leaves the form fails here rather than reading word by word at every size; only the columns are read
+    word by word, `TINY_COLUMNS` products of them."""
     R = WK.Reader(tiny_loop(), K0)
     R.root()
-    assert {how for (_n, how) in R.read_by} == {"runs"} and {n for (n, _how) in R.read_by} == {"softmax", "select"}
+    assert {key for key in R.read_by if key[1] == "words"} == {("columns", "words")}
+    assert {n for (n, how) in R.read_by if how == "runs"} == {"softmax", "select"}
+    assert R.read_by["columns", "words"] == TINY_COLUMNS
 
 
 if __name__ == "__main__":

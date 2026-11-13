@@ -765,11 +765,15 @@ def _unit(t) -> int:
 
 
 class Reader:
-    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool = True) -> None:
+    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool = True,
+                 clock=None) -> None:
         self.program, self.k, self.products, self.lookups = program, k, products, lookups
-        self.structure = structure
-        #: (softmax | select, "runs" | "words"): the softmax and select nodes read from their runs and word by word
+        self.structure, self.clock = structure, clock
+        #: (softmax | select, "runs" | "words"): the softmax and select nodes read from their runs and word by word;
+        #: ("columns", "words"): the products whose operand `softmax_rows` reads as columns, word by word by design
         self.read_by: Counter = Counter()
+        #: the seconds by ``clock`` spent in those columns
+        self.column_s = 0.0
         self.memo: dict = {}
         self.logs: dict = {}
         self._match: dict = {}
@@ -1180,6 +1184,17 @@ class Reader:
             if all(len({r for r, _c in sl}) == 1 and [c for _r, c in sl] == list(range(K)) for sl in slices):
                 rows = {sl[0][0] for sl in slices}
                 return len(rows) == n and rows <= ok
+            self.read_by["columns", "words"] += 1
+            t0 = self.clock() if self.clock else 0.0
+            try:
+                return by_columns(slices, info, n, K)
+            finally:
+                if self.clock:
+                    self.column_s += self.clock() - t0
+
+        def by_columns(slices, info, n: int, K: int) -> bool:
+            """`softmax_rows`' columns, word by word: each slice one column of one sequence of rows, every slice another
+            column and the mask's columns there pairwise different, each with a finite word."""
             seq = [r for r, _c in slices[0]]
             if len(set(seq)) != K or any(r not in info for r in seq) or len({info[r][0] for r in seq}) != 1:
                 return False
@@ -1614,9 +1629,9 @@ def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool
     yield from walk(root, circ.root_scope)
 
 
-def _read(program, k: float, products, lookups, structure: bool = True):
+def _read(program, k: float, products, lookups, structure: bool = True, clock=None):
     gates = boolean_gates(program)
-    R = Reader(program, k, products, lookups, structure)
+    R = Reader(program, k, products, lookups, structure, clock)
     root = R.root()
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
