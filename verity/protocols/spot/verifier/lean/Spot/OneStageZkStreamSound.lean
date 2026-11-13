@@ -352,16 +352,18 @@ theorem statementAt_of {slice : Member → Json} {bs : Core.Blobs} :
         simp only [ok_bind, hr] at h
         cases h
         rw [List.find?_cons] at hf
-        by_cases hn : (m'.name == m.name) = true
-        · rw [if_pos hn] at hf
+        cases hn : (m'.name == m.name) with
+        | true =>
+          simp only [hn] at hf
           cases hf
           exact ⟨a, ha, by simp [statementAt, List.lookup]⟩
-        · rw [if_neg hn] at hf
+        | false =>
+          simp only [hn] at hf
           obtain ⟨b, hb, hs⟩ := statementAt_of hr hf
           refine ⟨b, hb, ?_⟩
+          have hn' : (m.name == m'.name) = false :=
+            beq_eq_false_iff_ne.2 fun he => beq_eq_false_iff_ne.1 hn he.symm
           unfold statementAt at hs ⊢
-          have hn' : (m.name == m'.name) = false := by
-            simpa [eq_comm] using hn
           simp only [List.lookup, hn'] at hs ⊢
           exact hs
 
