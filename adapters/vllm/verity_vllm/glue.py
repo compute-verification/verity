@@ -187,9 +187,10 @@ def _rules(path: Path) -> list[str]:
         if not (isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args):
             continue
         name, version = n.args[0], n.args[1] if len(n.args) > 1 else None
-        if isinstance(name, ast.Constant) and isinstance(name.value, str):
-            v = version.value if isinstance(version, ast.Constant) and isinstance(version.value, (int, str)) else None
-            out.append(f"{name.value}_v{v}" if v is not None else name.value)
+        if isinstance(name, ast.Constant):
+            rule: Any = name.value
+            v: Any = version.value if isinstance(version, ast.Constant) else None
+            out.append(f"{rule}_v{v}" if v is not None else rule)
     return out
 
 
