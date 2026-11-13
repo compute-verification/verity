@@ -33,8 +33,12 @@ from typing import Any
 from verity_vllm.config import row_world
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.profiles import transport
+from verity_vllm.records.schema_ids import SERVED_SWITCHES_SCHEMA
 
-SCHEMA = "verity-vllm/served-switches/v1"
+__all__ = ["DEFAULTS", "ENFORCE_EAGER", "apply", "declared", "execution", "execution_env", "of_summary", "read_rank",
+           "record", "require"]
+
+SCHEMA = SERVED_SWITCHES_SCHEMA
 #: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own.
 RESOLVED = "resolved by vLLM"
 #: Each switch as vLLM leaves it when nothing sets it (vllm/envs.py, vllm/config/).
@@ -90,9 +94,9 @@ _COMPILED = "a compiled row runs TargetProfile.COMPILATIONS' piecewise CUDA grap
 EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
     None: ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, "a workload without a row id runs the harness's batch-invariant eager engine"),
     "eager": ({"enforce_eager": True}, "an eager row: its Programs are of the eager forward"),
-    "compiled": ({"enforce_eager": False}, "a compiled row at vLLM's serving defaults: torch.compile with vLLM's own CUDA-graph mode, "
-                                           "or, for an architecture vLLM serves with breakable CUDA graphs (VLLM_USE_BREAKABLE_CUDAGRAPH), "
-                                           "those graphs over the eager kernels; no batch invariance; its Program is of that execution"),
+    "compiled": ({"enforce_eager": False}, ("a compiled row at vLLM's serving defaults: torch.compile with vLLM's own CUDA-graph mode, "
+                                            "or, for an architecture vLLM serves with breakable CUDA graphs (VLLM_USE_BREAKABLE_CUDAGRAPH), "
+                                            "those graphs over the eager kernels; no batch invariance; its Program is of that execution")),
     "bi-eager": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, _BI),
     "bi-eager-fa2": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True, "flash_attn_version": 2}, f"{_BI}, with attention_config.flash_attn_version 2"),
     "bi-compiled": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": False, "cudagraph_mode": "PIECEWISE"}, f"{_BI}; {_COMPILED}"),
@@ -105,8 +109,8 @@ ENFORCE_EAGER = {k: v[0]["enforce_eager"] for k, v in EXECUTIONS.items() if k is
 BATCH_INVARIANT: tuple[dict[str, Any], str] = (
     {"disable_custom_all_reduce": True, "VLLM_ALLREDUCE_USE_SYMM_MEM": False, "NCCL_COLLNET_ENABLE": "0", "NCCL_NVLS_ENABLE": "0",
      "NCCL_MIN_NCHANNELS": "1", "NCCL_MAX_NCHANNELS": "1", "NCCL_PROTO": "Simple", "NCCL_ALGO": "allreduce:tree", "NCCL_NTHREADS": "1"},
-    "vLLM's batch invariance turns its custom all-reduce and torch's symmetric memory off and pins NCCL to one channel of its tree "
-    "(ParallelConfig._verify_args, override_envs_for_invariance)")
+    ("vLLM's batch invariance turns its custom all-reduce and torch's symmetric memory off and pins NCCL to one channel of its tree "
+     "(ParallelConfig._verify_args, override_envs_for_invariance)"))
 _MISSING = object()
 
 
@@ -169,12 +173,18 @@ def settings(env: Mapping[str, str], args: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _block(doc: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    """The block a document holds under ``key``; an empty one where it leaves the block out or holds none (null, empty)."""
+    held = doc.get(key)
+    return held if held else {}
+
+
 def declared(wl: Mapping[str, Any], target: Any = None) -> dict[str, dict[str, Any]]:
     """What sets each switch of a workload (`vllm_adapter.load_workload`'s) whose engine is built for ``target`` (its `TargetProfile`,
     or None): ``{switch: {"value", "source", "reason"}}`` for every switch a layer sets."""
     out: dict[str, dict[str, Any]] = {}
 
-    def put(source: str, values: Mapping[str, Any], reasons: Mapping[str, str]) -> None:
+    def put(source: str, values: Mapping[str, Any], reasons: Mapping[str, str | None]) -> None:
         if values.get("enforce_eager") is True:
             values, reasons = {**EAGER, **values}, {**dict.fromkeys(EAGER, reasons.get("enforce_eager")), **reasons}
         for k, v in values.items():
@@ -190,11 +200,11 @@ def declared(wl: Mapping[str, Any], target: Any = None) -> dict[str, dict[str, A
     if row and row_world(row) > 1:
         values = settings(transport.row_p2p_env(row), {"disable_custom_all_reduce": transport.row_custom_all_reduce_off(row)})
         put("engine.profiles.transport", values, dict.fromkeys(values, transport.REASON))
-    eng = wl.get("engine") or {}
-    env = {**(eng.get("env") or {}), **(target.env() if target is not None else {})}
-    args = {**(target.engine_args() if target is not None else {}), **(eng.get("args") or {})}
-    put("row file", settings(env, args), eng.get("reasons") or {})
-    if (out.get("VLLM_BATCH_INVARIANT") or {}).get("value") is True:
+    eng = _block(wl, "engine")
+    env = {**_block(eng, "env"), **(target.env() if target is not None else {})}
+    args = {**(target.engine_args() if target is not None else {}), **_block(eng, "args")}
+    put("row file", settings(env, args), _block(eng, "reasons"))
+    if "VLLM_BATCH_INVARIANT" in out and out["VLLM_BATCH_INVARIANT"]["value"] is True:
         values, why = BATCH_INVARIANT
         put("vLLM ParallelConfig", values, dict.fromkeys(values, why))
     return out
@@ -304,5 +314,6 @@ def require(llm: Any, wl: Mapping[str, Any], target: Any, out: str | Path, timeo
 
 def of_summary(sm: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """The served record a Commit's summary.json carries (a TP Commit's at the top, a single-GPU Commit's in ``versions``)."""
-    sm = sm or {}
-    return sm.get("served") or (sm.get("versions") or {}).get("served")
+    if not sm:
+        return None
+    return sm.get("served") or _block(sm, "versions").get("served")

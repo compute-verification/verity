@@ -1,5 +1,4 @@
-"""Grouped resolutions and the resolution helpers every pattern shares (`unsupported`, `hint_of`, `attribution_for`, report
-labels).
+"""Grouped resolutions and the resolution helpers every pattern shares (`unsupported`, `hint_of`, `attribution_for`).
 
 Grouped resolutions
 -------------------
@@ -19,7 +18,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.resolver import Compute, Group, Resolution, StepContext, Transparent, Unsupported, parts_of
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Resolution,
+    StepContext,
+    Transparent,
+    Unsupported,
+    parts_of,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -95,11 +101,3 @@ def _group_compute(c: Compute, before: tuple = (), also: tuple = ()) -> ComputeG
 
 def _group_transparent(t: Transparent, before: tuple = (), also: tuple = ()) -> TransparentGroup:
     return TransparentGroup(t.effect, t.consumed, t.src, t.dst, t.rows, t.hint, t.kernels, t.pattern, before=before, also=also)
-
-
-def label(r: Resolution) -> str:
-    if isinstance(r, Compute):
-        return f"Compute {r.spec.id} x{r.rows}"
-    if isinstance(r, Transparent):
-        return f"Transparent {r.effect}"
-    return f"Unsupported: {r.reason}"

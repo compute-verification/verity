@@ -1,8 +1,10 @@
 """`store_io`'s environment for the store CLI inside a `research run --custody-r2` job: the run's custody key reaches the remote when the
-machine has no store config of its own (a pod), and nothing else changes (laptop-safe, no store)."""
+machine has no store config of its own (a pod), and nothing else changes (laptop-safe, no store).  And the command line `fetch`
+hands the CLI."""
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -86,3 +88,20 @@ def test_no_remote_is_unreachable_outside_the_gate(tmp_path: Path, monkeypatch: 
     assert not store_io.reachable()
     monkeypatch.setenv("VERITY_STORE_REQUIRED", "1")
     assert store_io.reachable(), "a recorded check never skips the store-backed tests"
+
+
+def test_fetch_hands_each_glob_of_paths_to_the_cli_and_returns_the_path_it_prints(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`paths` is the CLI's repeatable `--path`, after `--to`; without it the command line is what it was."""
+    seen: list[tuple[str, ...]] = []
+
+    def cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+        seen.append(args)
+        return subprocess.CompletedProcess(list(args), 0, stdout=f"fetching\n{tmp_path}\n", stderr="")
+
+    monkeypatch.setattr(store_io, "_cli", cli)
+    art = "art:" + "ab" * 32
+    assert store_io.fetch(art, to=tmp_path, paths=("build_request/*", "*.json")) == tmp_path
+    assert store_io.fetch(art) == tmp_path
+    assert seen == [("fetch", art, "--to", str(tmp_path), "--path", "build_request/*", "--path", "*.json"), ("fetch", art)]
+    with pytest.raises(ValueError, match="not an artifact id"):
+        store_io.fetch(art[:12], paths=("*.json",))

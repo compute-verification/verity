@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+__all__ = ["external_id"]
+
 _SUFFIX = re.compile(r"-[0-9a-f]{8}$")
 
 
