@@ -158531,3 +158531,31 @@ Card run: r20261113-192855-3fea, record `art:ce93249614d7e32d47519d6a7538681d265
 ## TWOLEG, Fri 13 Nov 19:57Z: a fifth timer of yours reached me, 24 hours late; acted on in no way
 
 - [read: the notification] `proofs-2015z-posts`, `firedAt` 2026-11-12T20:15:38Z, delivered to me at 19:53Z Fri: your list of what a dozen workers owed by Thursday evening, with the issues to post on and four goals to restate. I marked nothing, posted on no issue, restated no goal and read no `due.md`.
+
+## MEMBERS, Fri 13 Nov 19:54Z: the import's suites will not end green by their cut at 20:06Z: 54 suites have passed at its head and two heavy ones are left; one question for you
+
+### What is read [run `r20261113-192557-03a9`, cpu-9, a read-only listing of the suites' kept passes, taken at 19:44Z]
+
+- **At the import's head `fb3e260c42d1`: 54 suites have a pass kept, 13,941 tests passed, none failed, none in error, 122 skipped** [the passes of run `r20261113-170545-ec7a`, in its slot's cache]. Among them the ones nearest the change: SPOT's verifier (936 passed), `verity-core-sampled-proofs` (324), `benchmarks/one_stage` (1,088), `benchmarks/verifier_cost` (9), `repository` (361), `verity-graph` (246), `vstar_cli` (51), `verity-core-composition` (29).
+- **Left: `adapters/vllm`, running since about 18:36Z, and flock's prover suite (`verity-flock`), not started.** Each declares a bound of four hours for itself whole (`timeout_s = 14400` in its `pyproject.toml`), and `--changed` runs the test files the change reaches whole, slow tests too. So the run cannot end by its 180 minutes: my timeout was too short for what this change reaches. I do not know yet whether a third suite is left: the list of suites the change reaches was printed at the run's start and lost with the rest.
+- The same suites at the import-only head `7ed31bd0e46e` were cut at 19:48Z [run `r20261113-164751-d3cc`, exit 143]: 52 passes kept, 10,846 tests, none failed, flock's prover suite 88 minutes in and not ended.
+- The twin's run [`r20261113-174635-438e`, cut at 20:51Z] is 45 minutes behind the import's and will meet the same end.
+
+### What I have done
+
+- Launched flock's prover suite alone at the import's head, 300 minutes, its output written as it goes, and the list of reached suites printed at its start [launched 19:53Z on cpu-14; the run id in my next line].
+- After the import's cut I read the kept passes once more (whether `adapters/vllm` ended) and launch what is left in a run of its own, the same way.
+
+### The question
+
+The order is "open it the minute `ec7a` ends green". It will not end. Which do you want:
+
+- **(a)** I open the import's pull request now, unmarked, its body saying exactly this: 54 suites passed at the head, the two heavy suites not ended and running in runs I name. You mark it when you judge; the candidate's check runs them in any case.
+- **(b)** I wait for the two heavy suites, which may be two to four hours.
+
+Without your word I do (b). The twin's and the row's follow the same rule.
+
+### Not established
+
+- Whether `adapters/vllm` and flock's prover suite pass at the import's head.
+- The full list of suites the change reaches.
