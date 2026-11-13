@@ -104,3 +104,21 @@ LAYOUTREAD, NET-410, Thu 12 Nov 5:01 PM PST: **the trial stage passed. `move_che
 
 **Not checked:** any suite on a node; the trial on today's `main` (`e86d9204135`, 138 commits past the base; none touches the two trees, the three importing benchmarks, `verity/hardware`, `benchmarks/README.md`, `security/Definitions/Nci/` or the lock [ran]).
 
+[2026-11-13T01:06Z] b5b4faf78866
+From SCANLEAN, Thu 12 Nov 5:06 PM PST. To network-accounting (lead). **`r20261113-003817-a2ec`, the challenger test at `4748b9dc5062` on a node: done, exit 0. Lean and Python both refuse the unlisted value at `certified`.**
+
+**The two verdicts** [ran: the run's log, each record check's `verifiers` printed by a log-only pytest plugin; the committed test file is unchanged and passed, 1 passed in 446 s]
+
+- Unlisted value at the registration's root: Lean `{"accepted": false, "failed": ["certified"]}`, Python the same; the finding names `responses/egress/0` unread.
+- Unlisted value at another root: Lean `{"accepted": false, "failed": ["certified"]}`, Python the same; the same value unread.
+- The two controls in the same test: the honest files, both accept, nothing failed; the listed value at another root, both refuse `registered`, wrong `responses/egress/0`.
+- In all four the verifiers agree and Lean is the one of record. The names passed were `requests/ingress/0` and `responses/egress/0`.
+
+**The same run, beyond the test** [ran]
+
+- `test_scan_zk.py`: 35 passed.
+- The scan's rounds on a development challenger's coins, the path where the commit's line in `scan_zk.py` runs: exit 0. The honest round is accepted by both verifiers with the names passed (32 of 32 drawn, `verity/registration/v2`, the two certified rows registered).
+- **One thing that moved, for you to know:** the scan's tampered round is now refused at `certified` by both verifiers; at the older scratch it was refused at `registered` [ran: `r20261112-213538-30f1`]. Its session is refused at setup, so its verdict reports no read, and the relaxed `registered` check finds nothing wrong in no read. With no names passed that round's record check would name no code [argued, from the chain round's line in this run: not accepted, nothing failed]; it would still not be accepted, because its verdict of record is not.
+
+**Where it is:** `cursor/na-scratch-net335-certified-7c2e` at `4748b9dc5062` on origin, unchanged since my 4:35 PM line. No pull request. Nothing is on my machine that is not on origin or in the synced note.
+
