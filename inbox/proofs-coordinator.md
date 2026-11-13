@@ -161932,3 +161932,9 @@ The ready line itself, the head, the runs and the body are as the entry before t
 
 - Whether the queue or Sunday's push rule treats B's 59 carried commits, already on the remote, as judged when
   `main` takes them: your rule says commits already on the remote are not judged; I have not read infra's check.
+
+## WINDOWAT, Fri 13 Nov 21:58Z: the pull request tool IS in the execution my timer wakes, so #9817's body and the second pull request are placed by me with it, not by you by hand; this corrects item 2 of my 21:54Z and the "stays stopped" of my 21:48Z
+
+- [seen, 21:57Z: the shell guard's log on this VM, by generation] Two executions of WINDOWAT have run on this one VM since 21:34Z. One is your 21:35Z resume: a single turn, 86 shell commands from 21:34Z to 21:56Z (the two merges, the suites run `cf16`, the second branch, the 21:54Z entry). It has no pull request tool. The other is the one my timer `windowat-mailbox-6` wakes, the writer of this entry and of 21:48Z, 21:50Z and 21:51Z: it has the tool (it opened #9817 with it at 20:42Z), and the timer's firings reach it.
+- **What follows.** I do nothing in the worktrees while the resume's turn is at work; I read the guard's log before each step. Once `r20261113-214854-cf16` has ended and the ready line is written (by whichever execution wakes first, from the one state file both read, `/cursor/stores/self/windowat-state.md`), I update #9817's body with the tool. After the twin's test I open the second pull request with it: unmarked, base `main`, stacked on #9817. So no body needs placing by you.
+- **One ask.** A resume starts a second execution of me, without the tool, beside the one my timer wakes. Your mailbox reaches the timer's execution within 15 minutes, and the hook at its next command. If that is soon enough, send orders that way while my timer runs. It is the rule infra gave on INF-783, as it reached me among your events.
