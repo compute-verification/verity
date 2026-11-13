@@ -9,21 +9,22 @@ public import Definitions.Core.Site
 Registration is checked before any challenge: the developer's log (`Verity.Registration`, `Definitions.Core.Site`) is
 valid when each entry passes its checks against the log before it (`Registration.Valid`). This file states what the
 theorems read of an accepted log and what its acceptance gives them, and the condition that every part of the registered
-hardware is accounted for by some protocol of the composite. It defines no second log, Site, sheet, builder or θ: each is
-the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
+hardware is accounted for by some protocol of the composite. It defines no second log, Site, sheet, builder or θ: each
+is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
 
 * **The view** (`Registration.View`, `Registration.view`): what the theorems read of a log at its head, the Site, θ's
   values by their committed roots, the registered compiler `B` by its builder, and each day's circuit by its program's
-  digest. It is the spec's copy of the code's view (`Core.Registration.View`), which a protocol reads of an accepted log.
+  digest. It is the spec's copy of the code's view (`Core.Registration.View`), which a protocol reads of an accepted
+  log.
 * **The readings** (`Registration.Reading`, `View.figures`): a registered device's figures as its sheet states them, or
   as the bound reads them, figure by figure the larger of those and the auditor's estimate (`DeviceFigures.bounding`),
   the reading `Site.device` builds the device model from.
 * **The registered facts** (`View.Holds`): every registered device names a sheet registration accepted against the
-  auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf's host is reached
-  by a memory challenger (`View.Onsite`); and θ registers each value once and the log declares each day once
+  auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf's host is
+  reached by a memory challenger (`View.Onsite`); and θ registers each value once and the log declares each day once
   (`View.Once`), so a lookup by name or by day reads the one registered value or circuit.
-* **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Core.Guarantees.Registration`): a valid log's
-  view holds the registered facts.
+* **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Core.Guarantees.Registration`): a valid
+  log's view holds the registered facts.
 * **The parts of the registered hardware** (`Site.Accountable`, `Site.parts`): each device's compute, each memory leaf's
   memory held and memory read, the device model's resources (`Accounting.Resource`) at the leaf's tier, and each
   boundary link's egress, by the id that holds it.
@@ -34,13 +35,13 @@ the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
 * **The parameters' circuit** (`Registration.DeclaredIsParams`): the circuit the parameters name is the one the log
   declares for the day. It is stated and read by no guarantee: no code checks it yet.
 
-**Not covered.** `RegistrationSound` reads the spec's check (`Registration.Valid`); that the code's check decides it is a
-property of the code (`Properties.Site.Checks` for a log of site entries; none yet for information entries and
+**Not covered.** `RegistrationSound` reads the spec's check (`Registration.Valid`); that the code's check decides it is
+a property of the code (`Properties.Site.Checks` for a log of site entries; none yet for information entries and
 declarations). Nothing here ties a builder's digest to the compiler it holds: the spec's builder holds its compiler
-(`Registration.Builder.B`), while the code's holds a digest and a cap. That the parameters' circuit is the day's declared
-one is stated (`Registration.DeclaredIsParams`) and nothing proves it.
-`Registration.Valid` doesn't check `AccountedFor`, so no guarantee here concludes it. Hardware outside the Site
-(unregistered hardware) and a host's own compute, which the Site registers no rate for, are parts of no Site.
+(`Registration.Builder.B`), while the code's holds a digest and a cap. That the parameters' circuit is the day's
+declared one is stated (`Registration.DeclaredIsParams`) and nothing proves it. `Registration.Valid` doesn't check
+`AccountedFor`, so no guarantee here concludes it. Hardware outside the Site (unregistered hardware) and a host's own
+compute, which the Site registers no rate for, are parts of no Site.
 -/
 
 @[expose] public section
@@ -50,17 +51,18 @@ namespace Verity
 namespace Site
 
 /-- **What a part of the registered hardware is of**, at one registered id: one of the device model's resources
-(`Accounting.Resource`), a device's compute or a memory leaf's bits read (`bandwidth`) or memory held (`capacity`) at the
-leaf's tier, or a boundary link's egress. Egress is no resource of the device model: a resource there is what a joint
-audit certifies by an audit of its own, and a joint run (`Accounting.Run`) carries an account, a window and a verdict for
-each. The code's `Core.Account.Part` is the same parts, its memory and read parts by tier. -/
+(`Accounting.Resource`), a device's compute or a memory leaf's bits read (`bandwidth`) or memory held (`capacity`) at
+the leaf's tier, or a boundary link's egress. Egress is no resource of the device model: a resource there is what a
+joint audit certifies by an audit of its own, and a joint run (`Accounting.Run`) carries an account, a window and a
+verdict for each. The code's `Core.Account.Part` is the same parts, its memory and read parts by tier. -/
 inductive Accountable
   | resource (r : Accounting.Resource)
   | egress
 
-/-- **The parts the Site holds to account for**, by the id of the location or link that holds each: each device's compute,
-each memory leaf's memory held and memory read, and each boundary link's egress (`Site.Boundary`). The site, a host and
-the auditor's devices hold none of their own: a host has no compute rate, and its memory is its memory leaves'. -/
+/-- **The parts the Site holds to account for**, by the id of the location or link that holds each: each device's
+compute, each memory leaf's memory held and memory read, and each boundary link's egress (`Site.Boundary`). The site, a
+host and the auditor's devices hold none of their own: a host has no compute rate, and its memory is its memory leaves'.
+-/
 def parts (S : Site) : Set (String × Accountable) :=
   {xr | (∃ x ∈ S.locs, x.kind = .device ∧ xr = (x.id, .resource .compute)) ∨
     (∃ x ∈ S.locs, x.kind = .memory ∧ (xr = (x.id, .resource .capacity) ∨ xr = (x.id, .resource .bandwidth))) ∨

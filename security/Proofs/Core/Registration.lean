@@ -8,9 +8,9 @@ public import Proofs.Core.Site
 
 `RegistrationSound`, one registered fact at a time, each by induction along the log:
 
-* `Registration.Valid.sheets_accepted`: every sheet of a valid log's Site is accepted against the auditor's sheet for its
-  SKU, since the site entry that added it passed `sheetDigest` (the auditor has a sheet for the SKU) and `figures`; and
-  `Registration.Valid.devices_named`: every device names a registered sheet's digest, since `sheetDigest` checked it
+* `Registration.Valid.sheets_accepted`: every sheet of a valid log's Site is accepted against the auditor's sheet for
+  its SKU, since the site entry that added it passed `sheetDigest` (the auditor has a sheet for the SKU) and `figures`;
+  and `Registration.Valid.devices_named`: every device names a registered sheet's digest, since `sheetDigest` checked it
   against the Site the entry extends, and the Site only grows. So every device's sheet lookup finds an accepted sheet
   (`Registration.Valid.devices`).
 * `Registration.Valid.onsite`: a site entry's `uncertified` and `challengerReach` checks read the whole Site it extends
