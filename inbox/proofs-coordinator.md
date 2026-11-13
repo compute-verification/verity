@@ -160159,3 +160159,25 @@ Your 20:19Z is read, by the hook and in the mailbox.
 **STOP RULE.** No mark, no merge of another line, no lock edit, no change to #9576.
 
 **Next.** I wait for your word naming the commit that holds the split. Then: merge it at your word, the four quick suites again on a node I name, the records run if the merge changes a Lean file of mine or what my files import, and my ready line.
+## ONSITE, Fri 13 Nov 20:42Z: the docstring pull request is open, #9819 at `d0f2fa1e25eb`, unmarked; the quick suites are in cpu-9's line
+
+Your order of 20:31Z (the mailbox's 20:19Z section), steps 1 to 4; step 5 is running. Mailbox read at 20:42Z: 284 lines, nothing after your 20:19Z section. `origin/main`'s AGENTS.md reread [read].
+
+- **The pull request:** [#9819](https://github.com/compute-verification/verity/pull/9819), "security: the recursive fixtures' docstrings say how the witness is reproduced", branch `cursor/proofs-onsite-fixture-docs-dde5`, head `d0f2fa1e25eb76f6cb5f06f2511b443dd8b2fd51`. Open, not a draft, no label, mergeable, six files, +79 −77 [run: `research queue open`, 20:41Z; read: `gh pr view`]. `Lane proofs` is the body's first line and `Refs PRF-615` its last. I did not mark it.
+- **The carry:** a merge of `origin/main` `f479876a8758` into the branch, no conflict, pushed as a fast-forward of the branch [run]. Between the old base `fa3e619ee146` and that `main`, 50 files changed, and none is a `.lean` file, a lock, a lakefile or a toolchain file [run: `git diff --stat`].
+- **The lint and the gate, at the merged head, on the VM** [run]: the retired-terms lint, 17 passed, its one warning the tree's own and naming none of the five files; the ratchet gate `f479876a8758..d0f2fa1e25eb`, passed, 9812 to 9810 exceptions. `tests/test_doc_paths.py`: 4 passed, its warning naming none of the five files.
+- **The body, in your order:** (1) no statement, definition or proof line changes and no lock record moves, with `r20261113-183536-a7da` labelled a fast-path result at the base, before the merge; (2) the whole-session tests reproduce `HonestRunAccepted`, and `HonestWitSatisfies`, `NoCollAt` and `TopsAt` have no test in the tree; (3) the fixture's challenge tree is sampled by the node's operating system; (4) the old docstring named tests and modes that were never on `main`. Then: the lock's two entries are not in it; what ran; not established.
+- **Two things in the body are new since my 19:23Z entry**, both checked for it:
+  - With block and line comments stripped, each of the five Lean files is equal to `main`'s [run on the VM: a script over `git show origin/main:FILE` and the worktree].
+  - The two commits the old docstring cited for the tests, `547915a62c` and `93dac12374`, are not ancestors of `main` [run: `git merge-base --is-ancestor`]. `--nocoll` and the two `test_the_deployed_runs_*` tests are in neither; the later one holds the two `--sat` tests and the `--sat` mode [run: `git grep` at both]. So my 19:23Z "on no branch" should read "at no branch's head and not on `main`": I did not check every branch's history [read: GitHub's `branches-where-head`, 0 for both; pulls, 0 for both].
+- **No `Goal` line.** `research queue open` warned as it did for #9759: "no label of it names a live goal of the Goals page (its labels: from:proofs)". PRF-615 still carries no goal's label, so the body has `Refs PRF-615` and neither a `Goal` line nor `Issue: none`. The tool's fix is a goal's label on PRF-615, which is yours; then `research queue edit 9819 --body-file F` adds the line, and I do that on your word. [run: the open's stderr; read: PRF-615's labels]
+- **The quick suites:** `r20261113-203715-0d1d` on vy-nebius-cpu-9, research pool, launched 20:37Z at `d0f2fa1e25eb`: `suites.py --changed f479876a8758 --quick` (`origin/main`'s commit, by its id, so that the base is the same on the node). In the pool's line at 20:41Z: every slot taken [read on the node]. A one-off timer is set for it. The body's row for it says so and is rewritten when the run is back.
+- **This machine is new.** The pen `~/wt/.pen` is made again (20:32Z); the worktree is `/home/ubuntu/wt/fixture-docs`.
+
+### Not established
+
+- That the quick suites pass at `d0f2fa1e25eb`. Running.
+- That the whole Lean check, with the kernel replay, passes at this head. Not run. The fast path ran before the merge; the merge brought no Lean or lock change.
+- That the two cited commits are on no branch at all. Only: not on `main`, at no branch's head, in no pull request.
+
+**Next.** The entry headed "ready to mark" when the suites pass, or the failures by name if they do not.
