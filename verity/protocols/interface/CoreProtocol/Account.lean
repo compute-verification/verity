@@ -50,6 +50,8 @@ capacity, the certified amount with its error, and the other, which follows.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
+* An answer certifies a link only where the link joins a network certifier and a node of the prover's
+  (`Part.certifiable`). A boundary link no certifier is on is covered by no answer, whatever answer names it.
 
 The comparison of the rows with what an auditor states it accepts is not here.
 -/
@@ -165,6 +167,15 @@ def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
   | none, _ => p.leaves S
   | some i, .egress => (p.leaves S).filter (· == i)
   | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
+
+/-- The part's leaves at `place` that an answer can certify: its leaves there (`leavesAt`), and of the links only one
+that joins a network certifier and a node of the prover's (`Site.Joins` at `.certifier` and `.host`), the prover's
+half of an uplink the certifier splits. No answer certifies a boundary link that no certifier is on: it stays among
+the leaves no answer covers, charged at capacity (`unaudited`). -/
+def certifiable (p : Part) (S : Site) (place : Option String) : List String :=
+  match p with
+  | .egress => (p.leavesAt S place).filter fun i => S.links.any fun k => k.id == i && decide (S.Joins k .certifier .host)
+  | _ => p.leavesAt S place
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
 def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (d : String) : Option Nat :=
@@ -599,7 +610,7 @@ answers' as the amount's `pool` says, for a flow and for a moment alike. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (origin : String → Option Origin) (clock : String → Option Figure) (place : Option String)
     (rs : List Reading) : List Row :=
-  let xs := m.part.leavesAt S place
+  let xs := m.part.certifiable S place
   let totals : List (String × Option Nat) :=
     match m.part.capacity S digest A ticks xs with
     | [] => [("", none)]
@@ -677,7 +688,7 @@ over the period. Their capacity is none where the registration holds none. -/
 def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (ticks : Nat)
     (cs : List (Amount × Reading)) : List Row :=
   Part.all.flatMap fun p =>
-    let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.leavesAt S x.2.place
+    let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.certifiable S x.2.place
     let rest : List String := (p.leaves S).filter fun x => !covered.contains x
     let totals : List (String × Option Nat) :=
       match p.capacity S digest A ticks rest with
@@ -704,6 +715,8 @@ only adds, so what an answer read at an earlier head of the period is in `S` unc
 registration's: the sheets' digest and the auditor, whose estimate compute's `bound` reading reads. No row where the
 Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
+An answer that names a boundary link no network certifier is on certifies nothing (`Part.certifiable`): it gives no
+row, and the link is charged at capacity with what no answer covers.
 
 A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's host it is in states
 (`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
@@ -1205,6 +1218,30 @@ private def unrated : Site :=
   (egress site).2.map (fun r => (r.place, r.status, r.free))
 #guard (egress standin).2.map (fun r => (r.place, r.status, r.free)) ==
   (egress site).2.map (fun r => (r.place, r.status, r.free))
+-- an answer certifies a link only where a network certifier is on it. A Site with a bare uplink that gives no reason,
+-- as a Site whose registration asks none of its boundary links may hold: an answer that names the uplink gives no
+-- row, and both links are charged at capacity as what no answer covers; an answer that names the certifier's link
+-- certifies that link, and the uplink stays charged; an amount about every link certifies the certifier's alone
+private def uplinked : Site :=
+  ⟨[sheet], locs, links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := some 400000000000, latency := 0 }]⟩
+private def onLink (link : String) : Answer :=
+  accept "toy/sent" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
+    ("start_ns", Lean.toJson (0 : Nat))] [("link", .str link)]
+private def linkRows (accounts : List Account) (answers : List Answer) :
+    List (String × String × Status × Option Nat × Option Nat × Option Nat) :=
+  ((rowsOf uplinked digest auditor period accounts answers).filter fun r => r.part = .egress).map
+    fun r => (r.metric, r.place, r.status, r.capacity, r.verified, r.free)
+#guard uplinked.mediated ∧ Part.leaves .egress uplinked == ["up0", "eth0"]
+#guard Part.certifiable .egress uplinked none == ["up0"] ∧ Part.certifiable .egress uplinked (some "eth0") == []
+#guard linkRows [] [] == [("not audited", "up0, eth0", .notAudited, some 500000, some 0, some 500000)]
+#guard linkRows [sent] [onLink "eth0"] == linkRows [] []
+#guard linkRows [sent] [onLink "up0"] ==
+  [("sent", "up0", .certified, some 100000, some 37000, some 63000),
+   ("not audited", "eth0", .notAudited, some 400000, some 0, some 400000)]
+private def everywhere : Account := { sent with amounts := sent.amounts.map fun m => { m with place := none } }
+#guard linkRows [everywhere] [onLink "up0"] ==
+  [("sent", "", .certified, some 100000, some 37000, some 63000),
+   ("not audited", "eth0", .notAudited, some 400000, some 0, some 400000)]
 -- a drift taken on a premise. The example's certifier's host states no drift, so its row on no premise covers nothing:
 -- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
 -- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is

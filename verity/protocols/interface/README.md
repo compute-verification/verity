@@ -158,7 +158,9 @@ above it is printed as it is, with nothing verified. An amount at a moment has o
 for the period, and its free amount is at most the capacity. The period's error, of a flow and of a moment alike, is
 its answers' errors summed, or the one answer's where the amount's error is stated once for the period, which two
 answers cannot both do. An error of 1 or more prints "no bound at this period", and what no accepted answer covers is
-"not audited: charged at capacity", as is the memory of a device's sheet that none of its leaves holds.
+"not audited: charged at capacity", as is the memory of a device's sheet that none of its leaves holds. An answer
+certifies a link only where the link joins a network certifier and a node of the prover's
+(`Account.Part.certifiable`): a boundary link no certifier is on stays charged at capacity, whatever answer names it.
 `Account.Example.account` is the example protocol's value; every other protocol's is written with that
 protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
 `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
