@@ -468,16 +468,19 @@ def as_cuda(struct: dict, rows: int) -> dict:
     return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
-def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None):
+def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None,
+            alone=()):
     """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it, the
-    gradients `partial` says its attention backward asked for, the lines `record_only` of its program and the step
-    `step` says is compared."""
+    gradients `partial` says its attention backward asked for, the lines `record_only` of its program, its steps
+    `alone` of its program and the step `step` says is compared."""
     run, path = "r-made-up", "out/run/run.json"
     (root / "records" / run / "out" / "run").mkdir(parents=True)
     raw = json.dumps(rec).encode()
     (root / "records" / run / path).write_bytes(raw)
     lines = "".join(f'[[held."{entry}".record_only]]\n' + "".join(f"{k} = {json.dumps(v)}\n" for k, v in line.items())
                     for line in record_only)
+    lines += "".join(f'[[held."{entry}".record_only_steps]]\nnumber = {a["number"]}\nwhy = {json.dumps(a["why"])}\n'
+                     for a in alone)
     (root / "held.toml").write_text(f'[held."{entry}"]\nrun = "{run}"\nart = "art:{"0" * 64}"\npath = "{path}"\n'
                                     f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n'
                                     + (f'partial = "{partial}"\n' if partial else "")
@@ -644,3 +647,51 @@ def test_a_record_that_is_missing_or_another_file_is_refused_with_its_fetch_line
         of_record.main([*argv, str(records)])
     with pytest.raises(SystemExit, match="held.toml holds b to no run"):
         of_record.main([str(write_config(tmp_path / "b.toml")), *argv[1:], str(records)])
+
+
+def test_the_steps_of_the_records_program_alone_are_named_by_its_entry_and_left_out_of_its_steps(tmp_path, capsys,
+                                                                                                  monkeypatch):
+    """A record whose program took a forward-only step before training and one after (a probe of the model): with both
+    named, the record's steps less them are the config's and the entry is equal, its verdict saying how many are named
+    and their tokens. A forward-only step the entry doesn't name is a difference, and so is a named step that trains."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    mine = count()
+    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    n, why = cfg.budget["steps"], "a probe of the model's loss, forward only"
+    probe = {"updated": [], "log": [["fwd", "theta", "matmul", json.dumps([[CTX, D], [D, D]]), 1, CTX * D * D]]}
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest},
+           "structures": dict(mine["structures"]) | {"probe": probe},
+           "steps": [{"struct": "probe", "tokens": 4 * CTX}, *[{"struct": "s"}] * n, {"struct": "probe", "tokens": CTX}],
+           "checkpoints": [{"format": "full", "e_bytes": 20}]}
+
+    def compare(root, alone) -> tuple[int, str]:
+        records, held = held_to(root, "a", rec, alone=[{"number": k, "why": why} for k in alone])
+        code = of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)])
+        return code, capsys.readouterr().out
+
+    code, out = compare(tmp_path / "both", [1, n + 2])
+    assert code == 0 and "DIFFERS" not in out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 2 named steps of the record's program "
+                          "alone, 5,120 tokens\n")
+    assert (f"  steps     {n}; the record's {n + 2} less 2 steps of its program's alone, 5,120 tokens, that "
+            f"of_record.toml names: step 1, {why}; step {n + 2}, {why}\n") in out
+    assert f"which {n} of its {n} steps have" in out and f"the record's full, 20 B after {n}\n" in out
+
+    code, out = compare(tmp_path / "unsaid", [1])
+    assert code == 1 and out.startswith("a, held to r-made-up (out/run/run.json): differs, 2 differences, 1 named "
+                                        "step of the record's program alone, 4,096 tokens\n")
+    assert (f"  DIFFERS   the record's 1 step {n + 2} with no backward, which of_record.toml doesn't name: name each in "
+            "the entry's `record_only_steps` with a `why`, or find why the record's program takes it\n") in out
+    assert f"  DIFFERS   the steps: the config's {n}, the record's {n + 1}, its {n + 2} less the 1 named\n" in out
+
+    code, out = compare(tmp_path / "trains", [1, 2, n + 2])
+    assert code == 1 and out.startswith("a, held to r-made-up (out/run/run.json): differs, 1 difference, 2 named "
+                                        "steps of the record's program alone, 5,120 tokens\n")
+    assert ("  DIFFERS   of_record.toml names the record's step 2 as its program's alone, and it has a backward: a step "
+            "that trains is the run's\n") in out
+
+    code, out = compare(tmp_path / "beyond", [1, n + 2, n + 3])
+    assert code == 1 and (f"  DIFFERS   of_record.toml names the record's step {n + 3} as its program's alone, and the "
+                          f"record has {n + 2} steps\n") in out

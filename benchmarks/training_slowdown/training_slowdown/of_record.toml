@@ -18,6 +18,12 @@
 #
 # `step`, where an entry has it, is the step of the config's that is compared, `counted`, where its trained weights
 # leave θ after the second step, and `why`.
+#
+# `record_only_steps`, where an entry has it, lists the steps of the record that are its program's alone and the
+# route does not take, each a table `[[held."ENTRY".record_only_steps]]`: the step's `number` in the record, from 1,
+# and `why` the route does not take it. Each must be a step with no backward; the config's steps are the record's
+# less these, and the command prints how many are named and their tokens. A named step with a backward is a
+# difference, and so is a record's step with no backward that the entry does not name.
 
 [held."s-t20-1.1x-ref-optim-fullmuon-758"]
 run = "r20261103-151852-c62c"
