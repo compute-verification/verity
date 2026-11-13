@@ -11,7 +11,7 @@ map rest on the design and the wiring alone (`widthFact_of_design`, `copyFact_of
 
 A member's circuit is a committed circuit unrolled (`member_commit`), whose parse ends in `HmOut.checkRows`, flat or
 templated. `checkRows` sorts the input rows' names with the output ports' names and refuses two equal neighbours, so
-those names are distinct (`nodup_of_qsort`, on `Array.qsort`'s sort and permutation of strings). Its rows are the input
+those names are distinct (`nodup_of_sort`, on `Array.qsort`'s sort and permutation of strings). Its rows are the input
 rows, then one row per run of output ports named after the run's first port; with each run one port (`OutRowsS`,
 from `scopeOkH`), the rows' names are those names in order (`ports_names`). Unrolling keeps the rows.
 -/
@@ -24,28 +24,31 @@ open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Dischar
 
 /-! ## Distinct names from a sort -/
 
-/-- A list of strings sorted by `≤` whose neighbours differ has no repeats. -/
-theorem nodup_of_sorted {l : List String} (hs : l.Pairwise (· ≤ ·))
-    (hn : ∀ i (hi : i + 1 < l.length), l[i] ≠ l[i + 1]) : l.Nodup := by
+/-- A list sorted by a reflexive, antisymmetric relation whose neighbours differ has no repeats. -/
+theorem nodup_of_sorted {α : Type} {R : α → α → Prop} {l : List α} (hs : l.Pairwise R) (hrefl : ∀ a, R a a)
+    (hanti : ∀ a b, R a b → R b a → a = b) (hn : ∀ i (hi : i + 1 < l.length), l[i] ≠ l[i + 1]) : l.Nodup := by
   rw [List.Nodup, List.pairwise_iff_getElem]
-  intro i j hi hj hij
-  have h1 : l[i] < l[i + 1] :=
-    lt_of_le_of_ne (List.pairwise_iff_getElem.1 hs i (i + 1) hi (by omega) (by omega)) (hn i (by omega))
-  rcases Nat.lt_or_ge (i + 1) j with h | h
-  · exact ne_of_lt (lt_of_lt_of_le h1 (List.pairwise_iff_getElem.1 hs (i + 1) j (by omega) hj h))
-  · have e : j = i + 1 := by omega
-    subst e
-    exact ne_of_lt h1
+  intro i j hi hj hij e
+  have hs' := List.pairwise_iff_getElem.1 hs
+  have h1 : R l[i] l[i + 1] := hs' i (i + 1) hi (by omega) (by omega)
+  have h2 : R l[i + 1] l[i] := by
+    rw [e]
+    rcases Nat.lt_or_ge (i + 1) j with h | h
+    · exact hs' (i + 1) j (by omega) hj h
+    · have e' : j = i + 1 := by omega
+      subst e'
+      exact hrefl _
+  exact hn i (by omega) (hanti _ _ h1 h2)
 
-/-- **Strings whose sort has no two equal neighbours are distinct.** -/
-theorem nodup_of_qsort {A : Array String}
-    (h : ∀ x, x < (A.qsort (· < ·)).size - 1 → ¬(A.qsort (· < ·))[x]! = (A.qsort (· < ·))[x + 1]!) :
-    A.toList.Nodup := by
-  refine (Properties.RemoteAudit.qsort_toList_perm A (· < ·)).nodup_iff.1
-    (nodup_of_sorted (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted A) fun i hi => ?_)
-  have hi' : i + 1 < (A.qsort (· < ·)).size := by simpa using hi
+/-- **Strings whose sort has no two equal neighbours are distinct**: `S` the sort of `A`, a permutation of it sorted
+by a reflexive, antisymmetric relation. -/
+theorem nodup_of_sort {R : String → String → Prop} {A S : Array String} (hp : S.toList.Perm A.toList)
+    (hs : S.toList.Pairwise R) (hrefl : ∀ a, R a a) (hanti : ∀ a b, R a b → R b a → a = b)
+    (h : ∀ x, x < S.size - 1 → ¬S[x]! = S[x + 1]!) : A.toList.Nodup := by
+  refine hp.nodup_iff.1 (nodup_of_sorted hs hrefl hanti fun i hi => ?_)
+  have hi' : i + 1 < S.size := by simpa using hi
   have hne := h i (by omega)
-  rw [getElem!_pos (A.qsort (· < ·)) i (by omega), getElem!_pos (A.qsort (· < ·)) (i + 1) hi'] at hne
+  rw [getElem!_pos S i (by omega), getElem!_pos S (i + 1) hi'] at hne
   simpa only [Array.getElem_toList] using hne
 
 /-! ## What `HmOut.checkRows` checks of the names -/
@@ -62,13 +65,15 @@ theorem checkRows_names {c : _root_.Flock.Circuit} (h : _root_.Flock.HmOut.check
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) names jp at h
   obtain ⟨hbad, -⟩ := FlockSoundness.ite_throw_ok' h
   simp only [names, Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, List.any_eq_true, List.mem_range, not_exists,
-    not_and, beq_iff_eq, not_not] at hbad
+    not_and, beq_iff_eq, Classical.not_not] at hbad
   obtain ⟨⟨hk, hnm⟩, hrow⟩ := hbad
   have hk' : _root_.Flock.HmOut.nIn c = k := by
     unfold _root_.Flock.HmOut.nIn
     omega
   subst hk'
-  exact ⟨by omega, fun j hj => (hrow j hj).1, nodup_of_qsort hnm⟩
+  exact ⟨by omega, fun j hj => (hrow j hj).1,
+    nodup_of_sort (Properties.RemoteAudit.qsort_toList_perm _ _)
+      (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted _) String.le_refl (fun _ _ => String.le_antisymm) hnm⟩
 
 /-- **The rows' names are the input rows' then the output ports'**, where each output row holds one output port. -/
 theorem ports_names {c : _root_.Flock.Circuit}
@@ -79,23 +84,21 @@ theorem ports_names {c : _root_.Flock.Circuit}
     c.ports.toList.map (·.name) =
       ((c.ports.extract 0 (_root_.Flock.HmOut.nIn c)).map (·.name) ++ c.outPorts.map (·.1)).toList := by
   have hs : c.outRowPorts.size = c.outPorts.size := by rw [hrep, Array.size_replicate]
-  rw [Array.toList_append, Array.toList_map, Array.toList_map, Array.toList_extract]
-  conv_lhs => rw [← List.take_append_drop (_root_.Flock.HmOut.nIn c) c.ports.toList]
+  rw [Array.toList_append, Array.toList_map, Array.toList_map, Array.toList_extract, List.extract_eq_take_drop,
+    List.drop_zero, Nat.sub_zero]
+  conv => lhs; rw [← List.take_append_drop (_root_.Flock.HmOut.nIn c) c.ports.toList]
   rw [List.map_append]
-  congr 1
-  · simp [List.extract_eq_take_drop]
-  · apply List.ext_getElem
-    · simp only [List.length_map, List.length_drop, Array.length_toList]
-      omega
-    · intro j h1 h2
-      simp only [List.getElem_map, List.getElem_drop, Array.getElem_toList]
-      have hj : j < c.outPorts.size := by simpa using h2
-      have hn := hname j (by omega)
-      rw [FlockSoundness.Discharge.Hidden.outGroup_single hrep hj] at hn
-      simp only [Array.getElem?_eq_getElem hj, Option.map_some, Option.some.injEq] at hn
-      rw [hn]
-      have hq : _root_.Flock.HmOut.nIn c + j < c.ports.size := by omega
-      simp [Array.getD, hq]
+  refine (List.append_right_inj _).2 (List.ext_getElem ?_ fun j h1 h2 => ?_)
+  · simp only [List.length_map, List.length_drop, Array.length_toList]
+    omega
+  · simp only [List.getElem_map, List.getElem_drop, Array.getElem_toList]
+    have hj : j < c.outPorts.size := by simpa using h2
+    have hn := hname j (by omega)
+    rw [FlockSoundness.Discharge.Hidden.outGroup_single hrep hj] at hn
+    simp only [Array.getElem?_eq_getElem hj, Option.map_some, Option.some.injEq] at hn
+    rw [hn]
+    have hq : _root_.Flock.HmOut.nIn c + j < c.ports.size := by omega
+    simp [Array.getD, hq]
 
 /-- **A circuit `HmOut.checkRows` passes names each row once**, where each output row holds one output port. -/
 theorem nodup_of_checkRows {c : _root_.Flock.Circuit} (hc : _root_.Flock.HmOut.checkRows c = .ok ())

@@ -15,12 +15,12 @@ once. At a written bit of member `t`'s unit `u`, the column `pickAny` chooses is
 (`OutRef`, the output case of `CopiesRef`), and the bit's port bit is the output word's.
 
 A written bit is Bits' commitment position of the key program's gate on bit `b` of returned output leaf `j` of unit
-`u`'s instance `k` (`Spot.Bits.outGate`). `uniform` puts a unit's computed column on its own gate past the earlier
-units' (`wire_comp_uniform`), so that gate is the unit's column `OutColAt` names (`outGate_wire`), and no other
-column of the unit is on it (`RowsWire.shared`). The design evaluates only where every member's circuit is in
-`scopeOkH`'s scope (`membersScoped`): its outputs come from the unit net, and each output row holds one output port
-(`OutRowsS`), so Bits' output row of the leaf's word is the word's output port and its bit the word's bit
-(`outRowBit_ref`).
+`u`'s instance `k` (`Spot.Bits.outGate`). The circuit's program puts a unit's computed column on its own gate past the
+earlier units' (`Flock.Bridge.rowsWireC_keyProg_comp`), so that gate is the unit's column `OutColAt` names
+(`outGate_wire`), and no other column of the unit is on it (`RowsWire.shared`). The design evaluates only where every
+member's circuit is in `scopeOkH`'s scope (`membersScoped`): its outputs come from the unit net, and each output row
+holds one output port (`OutRowsS`), so Bits' output row of the leaf's word is the word's output port and its bit the
+word's bit (`outRowBit_ref`).
 -/
 
 @[expose] public section
@@ -28,64 +28,6 @@ column of the unit is on it (`RowsWire.shared`). The design evaluates only where
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge
-
-/-! ## A unit's computed columns -/
-
-theorem gates_eq (k : ℕ) (R : FlockSoundness.Rows) : ∀ n, Placed.gates k R n = k + n * R.nComp
-  | 0 => by simp [Placed.gates]
-  | n + 1 => by
-    rw [Placed.gates, gates_eq k R n]
-    ring
-
-section uniform
-
-variable {k : ℕ} {R : FlockSoundness.Rows} {ins : ℕ → Fin R.nIn → Fin k} {one : Fin k} {hone : ∀ u c, ins u c ≠ one}
-
-/-- **`uniform` puts unit `u`'s computed column `x` on its own gate**: the `(x − nIn)`th past the earlier units'. -/
-theorem wire_comp_uniform : ∀ (n : ℕ) (u : Fin n) (x : Fin ((Placed.uniform k R ins one hone n).rows u).w),
-    R.nIn ≤ x.val → x.val < R.nIn + R.nComp →
-    ((Const.Prog.rowsWireC (Placed.uniform k R ins one hone n) u).wire x).val =
-      Placed.gates k R u.val + (x.val - R.nIn)
-  | 0, u, _, _, _ => u.elim0
-  | n + 1, u, x, h1, h2 => by
-    induction u using Fin.lastCases with
-    | last =>
-      change ((Const.Prog.rowsWireC (FlockSoundness.Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _)
-        (Fin.last n)).wire x).val = _
-      rw [Const.Prog.rowsWireC_last, Const.Prog.castW_wire]
-      change (FlockSoundness.Prog.colWire R _ _ _).val = _
-      rw [FlockSoundness.Prog.colWire_val]
-      split_ifs with ha hb
-      · exact absurd ha (by simp; omega)
-      · simp
-      · exact absurd hb (by simp; omega)
-    | cast v =>
-      change ((Const.Prog.rowsWireC (FlockSoundness.Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _)
-        v.castSucc).wire x).val = _
-      rw [Const.Prog.rowsWireC_castSucc, Const.Prog.castW_wire]
-      change (Fin.castAdd R.nComp ((Const.Prog.rowsWireC (Placed.uniform k R ins one hone n) v).wire _)).val = _
-      rw [Fin.val_castAdd]
-      refine (wire_comp_uniform n v _ ?_ ?_).trans ?_
-      · simpa using h1
-      · simpa using h2
-      · simp
-
-end uniform
-
-/-- **Unit `u`'s computed column `x` of the circuit's program is on gate `2 + n·B + u·C + (x − B)`**, `B` and `C` the
-template instance rows' inputs and computed rows. -/
-theorem keyProg_wire_comp {c : _root_.Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : ℕ}
-    (outs : Finset (Fin (Layout.keyN c hU n))) (u : Fin n) (x : ℕ) (hx : x < ((Placed.keyProg c hU n).rows u).w)
-    (h1 : (Placed.circuitRows c hU).nIn ≤ x)
-    (h2 : x < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp) :
-    ((Const.Prog.instC (Placed.keyProg c hU n) outs u).wire ⟨x, hx⟩).val =
-      2 + n * Layout.keyB c hU + u.val * (Placed.circuitRows c hU).nComp + (x - (Placed.circuitRows c hU).nIn) := by
-  have e := wire_comp_uniform (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
-    (ins := Placed.insOf n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
-    (one := Placed.oneGate n (Layout.keyB c hU))
-    (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) n u ⟨x, hx⟩ h1 h2
-  rw [gates_eq] at e
-  exact e
 
 /-! ## A returned output's gate -/
 
@@ -113,35 +55,38 @@ theorem outGate_wire {c : _root_.Flock.Circuit} (hU : FlockSoundness.Built c.uni
     ∃ hun : u < n, ∃ x : Fin ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w,
       Layout.OutColAt c hU x.val k j b ∧ ((Placed.keyProg c hU n).rows ⟨u, hun⟩).nIn ≤ x.val ∧
       ((Const.Prog.instC (Placed.keyProg c hU n) outs ⟨u, hun⟩).wire x).val = g := by
-  obtain ⟨hun, hk, hj, hb, hlo, hhi, rfl⟩ := outGate_spec hg
+  obtain ⟨hun, hk, hj, hb, h1, h2, rfl⟩ := outGate_spec hg
   have hR := _root_.Flock.Bridge.rowsAgree_circuitRows c hU hu
-  have eIn := congrArg FlockSoundness.Rows.nIn
-    (Placed.rows_circuitProg c hU n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)) ⟨u, hun⟩)
-  have eComp := congrArg FlockSoundness.Rows.nComp
-    (Placed.rows_circuitProg c hU n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)) ⟨u, hun⟩)
-  have cIn : (Placed.circuitRows c hU).nIn = c.upv * (FlockSoundness.Rows.ofNet hU).nIn := rfl
-  have cComp : (Placed.circuitRows c hU).nComp = c.upv * ((FlockSoundness.Rows.ofNet hU).nComp + 1) := rfl
-  have sIn : (Spot.Bits.Rows.ofNet c.unit).nIn = (FlockSoundness.Rows.ofNet hU).nIn := rfl
-  have sComp : (Spot.Bits.Rows.ofNet c.unit).nComp = (FlockSoundness.Rows.ofNet hU).nComp := rfl
-  have hB : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn = Layout.keyB c hU := hR.1
+  have hB : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn = (Placed.circuitRows c hU).nIn := hR.1
   have hC : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nComp = (Placed.circuitRows c hU).nComp := hR.2.1
-  rw [sIn, sComp] at hlo hhi
-  have hmul := Nat.mul_le_mul_right ((FlockSoundness.Rows.ofNet hU).nComp + 1) (show k + 1 ≤ c.upv by omega)
-  have e1 : (k + 1) * ((FlockSoundness.Rows.ofNet hU).nComp + 1) =
-      k * ((FlockSoundness.Rows.ofNet hU).nComp + 1) + ((FlockSoundness.Rows.ofNet hU).nComp + 1) := by ring
-  obtain ⟨X, hX⟩ : ∃ X, X = c.upv * (FlockSoundness.Rows.ofNet hU).nIn +
-      (k * ((FlockSoundness.Rows.ofNet hU).nComp + 1) +
-        (1 + (Spot.Bits.outCol c j b - (FlockSoundness.Rows.ofNet hU).nIn))) := ⟨_, rfl⟩
-  have hX1 : (Placed.circuitRows c hU).nIn ≤ X := by omega
-  have hX2 : X < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp := by omega
-  have hXw : X < ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w := by
-    show X < ((Placed.keyProg c hU n).rows ⟨u, hun⟩).nIn + ((Placed.keyProg c hU n).rows ⟨u, hun⟩).nComp + 1
-    rw [eIn, eComp]
+  have bI : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn = c.upv * (Spot.Bits.Rows.ofNet c.unit).nIn := rfl
+  have bM : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nComp =
+      c.upv * ((Spot.Bits.Rows.ofNet c.unit).nComp + 1) := rfl
+  have hkM := Nat.mul_le_mul_right ((Spot.Bits.Rows.ofNet c.unit).nComp + 1) (show k + 1 ≤ c.upv from hk)
+  rw [Nat.succ_mul] at hkM
+  obtain ⟨xv, hxv⟩ : ∃ xv, xv = c.upv * (Spot.Bits.Rows.ofNet c.unit).nIn +
+      (k * ((Spot.Bits.Rows.ofNet c.unit).nComp + 1) +
+        (1 + (Spot.Bits.outCol c j b - (Spot.Bits.Rows.ofNet c.unit).nIn))) := ⟨_, rfl⟩
+  have hx1 : (Placed.circuitRows c hU).nIn ≤ xv := by omega
+  have hx2 : xv < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp := by omega
+  have eR : (Placed.keyProg c hU n).rows ⟨u, hun⟩ = Placed.circuitRows c hU :=
+    Placed.rows_circuitProg c hU n _ _ ⟨u, hun⟩
+  have hxw : xv < ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w := by
+    rw [congrArg FlockSoundness.Rows.w eR]
+    simp only [FlockSoundness.Rows.w]
     omega
-  refine ⟨hun, ⟨X, hXw⟩, ⟨hk, hj, hb, hlo, hhi, hX⟩, by rw [eIn]; exact hX1, ?_⟩
-  rw [keyProg_wire_comp outs ⟨u, hun⟩ X hXw hX1 hX2]
-  unfold Spot.Bits.rowGate
-  rw [hB, hC, sIn, sComp]
+  have e1 : n * ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn = n * (Placed.circuitRows c hU).nIn := by rw [hB]
+  have e2 : u * ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nComp = u * (Placed.circuitRows c hU).nComp := by
+    rw [hC]
+  refine ⟨hun, ⟨xv, hxw⟩, ⟨hk, hj, hb, h1, h2, hxv⟩,
+    Nat.le_trans (Nat.le_of_eq (congrArg FlockSoundness.Rows.nIn eR)) hx1, ?_⟩
+  have hw := _root_.Flock.Bridge.rowsWireC_keyProg_comp (c := c) (n := n) (hU := hU) ⟨u, hun⟩ ⟨xv, hxw⟩ hx1 hx2
+  refine hw.trans ?_
+  show 2 + n * (Placed.circuitRows c hU).nIn + u * (Placed.circuitRows c hU).nComp +
+      (xv - (Placed.circuitRows c hU).nIn) =
+    2 + n * ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn + u * ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nComp +
+      (k * ((Spot.Bits.Rows.ofNet c.unit).nComp + 1) +
+        (1 + (Spot.Bits.outCol c j b - (Spot.Bits.Rows.ofNet c.unit).nIn)))
   omega
 
 /-! ## A returned output's port -/
