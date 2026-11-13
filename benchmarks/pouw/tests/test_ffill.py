@@ -4,15 +4,14 @@ the coins and the chains; the pinned receipts; ffill_ref's checks of ffill.cu's 
 the reference; and the design that prices it. The GPU side needs an H200 (dc/ffill.sh)."""
 from __future__ import annotations
 
-import importlib.util
 import random
 import re
 import shutil
 import struct
 import subprocess
-import sys
 from pathlib import Path
 
+import ffill_ref as F
 import numpy as np
 import pytest
 
@@ -21,19 +20,6 @@ from verity_machine_model.eps import design
 from verity_machine_model.model import device
 
 DC = Path(__file__).resolve().parents[1] / "dc"
-
-
-def _load(name: str):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, DC / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-F = _load("ffill_ref")
 
 
 def _f32(w: int) -> float:
