@@ -114812,3 +114812,35 @@ Not established: that the three files compile at the merged head `a079b6304c`, w
 - **Which copy of me:** my own timer has now fired in this conversation, and the second copy has run no command since 02:16:05Z and pushed nothing [run: the guard's event log; `git ls-remote`]. So this copy holds the pen from here.
 
 Not established: the regenerated properties lock, entry by entry; that the second pass ends with exit 0. A one-off timer wakes me at about 02:45Z.
+
+## HISTORY, Fri 13 Nov 02:28Z: ON MY BRANCH `Device.lean` COMPILES WHOLE WITH THE SPLIT IN: `r20261113-015256-6d55` at `f54420243d`, "lean exit 0 in 95 s", "none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The branch now also holds TWOLEG's and CUT's new heads (`8b5549bfb6`), which change no file mine imports.
+
+**In plain words.** The auditor's device runs two challenger sessions in a two-stage audit, one for each stage. My file is the device's record of both, with the proofs that it printed the play's log and signed what the play's signatures are on. It compiled again, this time with COINMAP's rule for where the first stage's session ends, and with a weaker condition on which window each session is opened on. Nothing of mine is left to write or compile. The open question from my last entry stands: the live device lets the prover's request pick each session's window, so a swap has to be ruled out by the device or by the check.
+
+Clock: `date -u` read 02:27Z. Mailbox read at 02:25Z (your 02:14Z: machines, and `DevAgrees.lean`). I was moved to a new machine again at about 02:24Z; nothing was lost.
+
+**1. Runs** [run].
+- `r20261113-015256-6d55`, vy-nebius-cpu-12, my head `f54420243d`: **done, rc 0.** It waited for a slot from 01:53Z to 02:18Z (25 min), then took 5 min and ended at 02:23Z.
+  - "`Device.lean`: lean exit 0 in 95 s".
+  - "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The four new ones are `take_takeWhile`, `of_mem_takeWhile`, `noHello_firstLen` and `holdsTwo_first`.
+  - Siblings: no name clash. Warnings: the same six deprecated `if_pos`/`if_neg`.
+- `r20261113-022632-9f3b`, vy-nebius-2 (your 02:14Z), the same try at the merged head `8b5549bfb6`: launched 02:26Z, waiting at 02:27Z. It is a confirmation only. [guess] It ends by 02:45Z.
+
+**2. Pushed** [run]. `cursor/proofs-history-d2e7` at `8b5549bfb6`. On top of `f54420243d` it merges TWOLEG's `e0a4052b5f` and CUT's `bb96dbb00a`, both clean. Nothing unpushed.
+- [run: `git diff --stat`] Between `f54420243d` and the merged head, `Cut.lean`, `CutPrints.lean`, `CutHeld.lean` and `Steps.lean` are unchanged. The merges add TWOLEG's `ClaimInner.lean`, its `DevAgrees.lean` fix and their lakefile lines.
+- [read] `Device.lean` imports `CutHeld` and the one-stage `Sampled/Device` only. It never imported `DevAgrees.lean`, so your 02:14Z warning doesn't touch it.
+
+**3. Others' entries that read mine** [read].
+- CUT 02:23Z: all three of its files compile at `bb96dbb00a`, and `PrintsOn`, `PrintsTwo` and `SignsPlay` stay as they are. CUT has not answered section 4 of my 01:56Z entry (the window swap) yet.
+- OWNREADS 02:20Z: its reduction `apart_of_own` is written on `cursor/proofs-apart-a64c`, from my `f54420243d`. It takes `Apart` as I now state it. Not compiled.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS: unchanged from 01:56Z.
+1. CUT: a word on the window swap (01:56Z, section 4).
+2. Whoever builds the two-session live device: open the parameters' windows in order or refuse the swap, and the ledger line round trip.
+3. ASSEMBLY: `cut := firstLen (ℓ₁ θ)`, with `ℓ₁` the family `firstDraw` reads.
+
+To post: nothing.
+
+Not established: that the merged head `8b5549bfb6` compiles in a run of its own (`9f3b`; the files `Device.lean` imports are the ones `6d55` built). That `Apart` holds at any live deployment. The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
