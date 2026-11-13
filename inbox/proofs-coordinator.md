@@ -119267,3 +119267,68 @@ Size: 9 files, 1797 lines. Theorems not yet compiled: the 14 in `CopyOut`. I exp
 Not established: `CopyOut` has not compiled. `PortsOnce h` is still a hypothesis: either FRAME's decided check or a sort lemma for strings over `HmOut.checkRows`, about 300 lines. `Wiring h` and `RowFact` are inputs I don't prove. I have not merged the base that moved at 03:51Z (`e033bfc14be4`); my files don't need it yet.
 
 To post: nothing.
+
+## ASSEMBLY, Fri 04:08Z: the messages' change compiles (`r20261113-032633-3e3a`: `ProjectionOf.lean` and `CouplingOf.lean` at `8af933566b`, three axioms only); the join's first two files are written and pushed (`30199c131c`), and their try waits in vy-nebius-2's line (`r20261113-040020-7bc4`, 11 ahead at 04:03Z)
+
+In plain words: my piece's change of 03:20Z, which lets the messages' worker prove its bound only where the coins the check read agree with the run's, is now checked by the kernel. On the join's branch I wrote the two files that do not read the form: the hundred lines from the coin map's agreement to the two stages' statements, and one theorem that gives the projection's bound from each remaining piece in its owner's own words, for any acceptance. Neither has compiled; their try is in line. The last file, the one place the form comes in, is not written yet. My VM was replaced at 04:01Z, one minute after the push and the launch, so nothing was lost.
+
+**1. Compiled** [run `r20261113-032633-3e3a`, vy-nebius-cpu-12, at `8af933566b`; it waited from 03:26Z to 03:46Z for a Lean slot]
+
+- "`ProjectionOf.lean`: lean exit 0 in 618 s", "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The nine: `play_params`, `messagesFixedAgreed_of_fixed`, `messagesFixedAgreed_of_reached`, `devAgrees_mono`, `coinsAgree_mono`, `messagesFixedAgreed_mono`, `projection_core`, `projection_agreed`, `projection_of`.
+- "`CouplingOf.lean`: lean exit 0 in 29 s", probe clean (`coupling_of`).
+- Not in that run: `cutBound_and` (`1a80621ef6`, written after its launch). It is the last step of `7bc4`.
+- The run's state still read "running" at 04:03Z though both steps had printed their last lines.
+
+**2. The join's two files** [read: my files; not compiled], on `cursor/proofs-join-42b8` at `30199c131c`, both lakefile roots
+
+- `SampledTwo/JoinElems.lean` (106 lines; imports `DevAgrees` and `CoinMap` only):
+  - `FirstFits C L Acc Good`: on an accepted play whose log is the device's, the run of record has an input and its first stage's bytes are at most 16 bytes an element of round 0's releases that fit (`CoinMap.fitOf L 0 [] o.log`). `SecondFits A C L Acc Good`: the same for each second stage's slice (`stageWidth`) at round `j + 1`, with the interior.
+  - `firstElems_of`, `secondElems_of`: TWOLEG's `FirstElems` and `SecondElems` at `dev := CoinMap.dev L` and `Ag := CoinMap.ElemAgrees L A x reads`, from the two. The `u` is `fitOf`, and the elements below it are the agreement's.
+  - `readsAt_of_le`: `readsAt h n` for `n ≤ h.stage` (`SpotFlock.stage_le_off`).
+  - `usedOf_congr`, `fitOf_congr`: two locators that put the same releases on a round count the same there. SESSIONCOINS's 03:59Z entry says it has written the same two in `SessionDev.lean` (`68faced794`), with `fitOf_run_stage`. One copy is enough: I delete mine when I merge that head, and use `fitOf_run_stage`. If mine compile in `7bc4`, the same text should for SESSIONCOINS.
+- `SampledTwo/Joined.lean` (153 lines; imports `ProjectionOf`, `JoinElems`, `MessagesShown`):
+  - `joinReading A C S L := formReading A C S (CoinMap.dev L)`; `joinFrame`: `Messages.frame` at the coin map `fun ω r => CoinMap.place V θ F c σ L r ω`, which is `CoinMap.frame … L` at `Messages.prover` (`joinFrame_eq`, by `rfl`); `joinMiss`: the sum over the rounds of the square roots of MESSAGES's finders' successes.
+  - `joined`: `ProjectionBound` at `joinFrame`, at `CoinMap.gapOf … + joinMiss … + terms`, for any `Acc`, `Good`, locator `L`, digests `Dg` and `q`. What it takes, each in its owner's words: the wiring; `CoinMapLaw` at COINMAP's frame, `ElemAgrees L A x (readsAt A.h)` and `gapOf`; `FirstFits`, `SecondFits`; TWOLEG's `SessionsAgree` at `CoinMap.dev L`; the three `CoinsAgree`; `StmtReadsNone`; MESSAGES's `MsgOpens` and `DigestBefore` at each round; `CutBound … Good terms`; ACCEPTS's `ReachedAccepts` (written out, so the file imports nothing over the form's check); `StmtAt`.
+  - What it discharges itself: `DevAgrees` (by `devAgrees_formReading`); `RunShown` (MESSAGES's `runShown`); `MessagesFixedAgreed` (by `missBound`, `reachedOfRounds` and my `messagesFixedAgreed_of_reached`, the run reaching every round from `ReachedAccepts` and `StmtAt`); `AcceptsRun` (from `ReachedAccepts`, a run having at most `k` messages).
+  - So ACCEPTS's `ReachedAccepts` serves twice, and `AcceptsRun` is not a separate premise of the join. MESSAGES's `RunsThrough` is not used: the join needs the run to reach every round only where the coins read agree, which is what `ReachedAccepts` gives.
+
+**3. Your 03:58Z** [read; mailbox read 04:02Z]
+
+1. The witness: the last theorem will take ONE structure of premises (working name `JoinsAt`, its fields the pieces' premises at the form's accept, the cut's `Good` and the run's locator), and conclude `ProjectionBound`. Its `_honest` witness is then one term of that structure at TWOLEG's fixture play. I do not list it as a guarantee, and I add no lock entry.
+2. The base: not merged into the join. It comes through RUNCOINS, then ACCEPTS.
+3. `3e3a` had taken its slot at 03:46Z, so I did not cancel it (a started run with no verdict). I sent the join's try at 04:00Z to vy-nebius-2 beside it. For some minutes two runs of mine were out, on two machines; `3e3a`'s two steps have both printed their verdicts.
+
+**4. What the others' entries since 03:46Z mean for the join** [read: the entries; derived]
+
+- TWOLEG 03:59Z and 04:05Z: the form refuses every honest play for two reasons (the interior audit's law; the driver's second-stage sessions on no challenger session). Every premise of the last theorem that is stated at `FormAccepts C` is then empty, and so is the theorem. The two files above do not read the form, so they are not touched by the mend. The last file is.
+- TWOLEG's point on the families: COINMAP's `stageWidth_le_fit_second` and `devSecond_stage` take `ℓ₁ ≠ ℓ₂`, and `StageDraws … ℓ` asks `OneRoot ℓ after o.log` over the whole play's log. If an honest two-window play names both stages' family `draw/0`, then `stageLocate ℓ₁ ℓ₂` puts every fresh coin of both stages on round 0, `OneRoot` is false, and `SecondFits` at that locator is false. So the join needs the two families distinct on every accepted play: by a refusal of equal labels in the form (TWOLEG offers it with (d)), or by a locator that tells the stages apart by their root and not their label (COINMAP's). I take `ℓ₁ ≠ ℓ₂` and `StageDraws` as premises of the last theorem until one of the two is done.
+- HISTORY 03:53Z: `PrintsInOrder` at `dev₂` holds only under `LedgerInOrder`, a stated condition on the ledger's lines. Until soundness rules, the cut reaches the join with that condition, so I keep the cut as `CutBound … Good terms`, a hypothesis of the last theorem's structure, and not as a discharged piece.
+- SESSIONCOINS 03:59Z: `fitOf_run_stage` and `elemAgrees_run_stage` taken (above).
+
+**5. Runs** [run]
+
+| Run | Node | State |
+|---|---|---|
+| `r20261113-032633-3e3a` | vy-nebius-cpu-12 | both steps exit 0 with clean probes; state "running" at 04:03Z |
+| `r20261113-040020-7bc4` | vy-nebius-2 | launched 04:00Z at `30199c131c`; waiting, 11 ahead at 04:03Z. Steps: `JoinElems.lean`, `Joined.lean`, `Steps.lean` (this decides `accepted_fits` and `stagesFit` on the join's tree), `ProjectionOf.lean` (for `cutBound_and`'s probe). `--timeout 7200`. |
+
+Heads: `cursor/proofs-join-42b8` at `30199c131c`; `cursor/proofs-assembly-992e` at `1a80621ef6`. Both pushed; nothing unpushed.
+
+**STOP RULE.** Nothing. No lock, no `Sampled.lean`, no switch, no file of another worker's edited. The join's files are new, and none is a guarantee.
+
+**NEEDS.**
+
+1. TWOLEG or COINMAP (coordinator to say which): the two stages' families distinct on every accepted play (section 4, second point). Until then `ℓ₁ ≠ ℓ₂` is a premise of the join's last theorem.
+2. SESSIONCOINS: say when `68faced794` or later compiles `SessionDev.lean`; I merge that head then.
+3. STAGECOINS, as at 03:46Z: `DevSecond` reading `Good o`, or the join carries `CoinsAgree … .second` at its own `Good` as a premise.
+
+**To post.** Nothing.
+
+**Not established.**
+
+- `JoinElems.lean` and `Joined.lean`: not compiled. `cutBound_and`: not compiled.
+- `accepted_fits` and `stagesFit` on the join's tree: `7bc4`'s third step.
+- The last theorem: not written. `StageDraws`, `ℓ₁ ≠ ℓ₂`, `MsgOpens`, `DigestBefore`, `PrintsInOrder` (or `LedgerInOrder`) and `CoinsAgree … .second` at the join's `Good` will be its premises as things stand.
+- What I take from `CoinMapAgree.lean` and `CoinStages.lean` (`coinMapHolds`, `freshWide_play`, `size_le_fit_first`, `stageWidth_le_fit_second`) is unproved: neither file has compiled.
+- That the form accepts any play (TWOLEG's two findings).
+- The earlier-period signature hole in `CutBound`: open; the join takes `terms` as given.
