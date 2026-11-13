@@ -25,7 +25,7 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 | ram | y ← (rotl(y, 7) + d0)·a0 + d1, then (rotl(y, 19) + d2)·a1 + d3 | key_ok | binds pairs only, through Q = a0·d0 + d1 |
 | xin7 | xin13 with rotations (7, 19) | key_ok | retired: ±128 is an int8 ratio at its step boundary |
 
-`FOLDS` in `receipt_folds.py` carries each status with its source:
+`FOLDS` in `receipt_folds.py` carries each fold's status with what is proved and what is open:
 
 - **(D), duo's premise.** Two different runs of a chain's words leave different final states on some start state
   (pfill commits the whole state; a served chain's receipt y ^ rotl(z, 16) needs the same up to one constant). It is

@@ -559,6 +559,31 @@ def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_no
             assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
 
 
+@pytest.mark.parametrize("place", ["sampling", "tp2"])
+def test_a_header_copies_its_sampling_and_its_tensor_parallel_note_as_dict_reads_them(memory, place):
+    """A workload's `sampling` and the notes' `tp2` that are not empty are copied with `dict`: pairs read as the mapping they spell,
+    and `dict` itself refuses what is neither."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+
+    def folded(value):
+        more, notes = ({"sampling": value}, None) if place == "sampling" else ({}, {"tp2": value})
+        evs = toy_log()
+        evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+        return fold(evs, toy_profile(), strict=True, with_program=False)
+
+    pairs: list | tuple
+    for pairs in ([("world_size", 1)], (("world_size", 1),)):
+        r = folded(pairs)
+        assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, pairs
+    refused: tuple = ((7, TypeError, "'int' object is not iterable"), ("no", ValueError, "dictionary update sequence element #0 has length 1"))
+    for value, error, text in refused:
+        with pytest.raises(error, match=text):
+            folded(value)
+
+
 def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""

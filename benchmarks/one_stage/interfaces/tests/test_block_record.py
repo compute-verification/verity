@@ -1,11 +1,13 @@
 """The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
 and check clean, every derived field is refused when it is not its legs' or its answer's, the verdict is the Lean
-onsite or remote check's answer, undecided when none ran, whatever the legs say, and remote's product composes sampled
-proofs and PoUW alone."""
+onsite or remote check's answer, undecided when none ran, whatever the legs say, remote's product composes sampled
+proofs and PoUW alone, and bandwidth's error names the term it leaves out, beside it and beside the block's sum."""
 from __future__ import annotations
 
 import copy
+import functools
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -13,6 +15,7 @@ import jsonschema
 import pytest
 
 from verity_e2e_demo import block_record as R
+from verity.protocols.poub.verifier import ledger
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
@@ -147,16 +150,18 @@ def test_a_changed_monitoring_period_is_refused() -> None:
 
 
 def _accepting_report() -> tuple[dict, dict]:
-    """r2's period 0 with its wipe on its own server: every leg accepts there."""
+    """r2's period 0 with its wipe on its own server: every subprotocol accepts there, each row's profile naming the
+    terms its error leaves out where the record's entry does."""
     p0 = _load("block-record-r2-period0")
     profile = {"levels": [{"name": "unit", "size": 1024}], "drawn": {"unit": 2}}
     rows = {}
-    for leg, key in R.RUNNER_KEYS.items():
-        lg = p0["legs"][leg]
+    for name, key in R.RUNNER_KEYS.items():
+        lg = p0["legs"][name]
         q = {"integrity": {"bound": 299}, "pouw": {"work": {"credited": 262144, "credited_tiles": 128}},
              "pous": {"s_bits": 0, "certified": False, "eps": "0"}, "bandwidth": {"q_bytes": 6963200, "eps": lg["error"]},
-             "certifier": {"K": 15764, "windows": 1, "eps": "1/100"}}[leg]
-        rows[key] = {"answer": {**lg["answer"], "protocol": lg["protocol"], "profile": profile}, "quantity": q,
+             "certifier": {"K": 15764, "windows": 1, "eps": "1/100"}}[name]
+        named = {k: lg[k] for k in ("named_terms",) if k in lg}
+        rows[key] = {"answer": {**lg["answer"], "protocol": lg["protocol"], "profile": profile | named}, "quantity": q,
                      "delta": lg["error"], "owner": lg["owner"], "runs": lg["runs"], "verdict": "accept"}
     report = {"format": "verity/all-protocols-period/v1", "run": p0["run"], "period": 0, "node": p0["server"],
               "protocols": rows, "composed": None}
@@ -266,6 +271,80 @@ def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:
     assert R.check(rec) == {}
     assert rec["legs"]["certifier"]["answer"]["profile"] == {"placement": placement}
     assert all("profile" not in lg["answer"] for k, lg in rec["legs"].items() if k != "certifier")
+
+
+def test_bandwidth_names_the_term_its_error_leaves_out_beside_it_and_beside_the_blocks_sum() -> None:
+    """Bandwidth's error leaves out a term with no number, the PRF advantage PoUB's ledger names (`ledger.NAMED_TERMS`).
+    Its entry carries the ledger's object as its row's profile names it, the block's error sum says whose errors leave
+    terms out, and an error reads with them in the ledger's own words (`ledger.DELTA_FORM`). The terms move no number: an
+    entry with them is the entry without them and the terms, and the fixtures' sums are the ones the tests above hold.
+    A bandwidth row that names none is refused, and so is a record whose bandwidth entry or whose sum doesn't carry them,
+    by `check` and by the schema, the refusal saying what puts it right; a term with a value, in a total or of another
+    shape is no named term."""
+    report, wipe = _accepting_report()
+    rows = report["protocols"]
+    row, other = rows[R.RUNNER_KEYS["bandwidth"]], rows[R.RUNNER_KEYS["pous"]]
+    assert row["answer"]["profile"]["named_terms"] == ledger.NAMED_TERMS
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    validator.validate(rec)
+    assert R.check(rec) == {}
+    entries, sums = rec["legs"], rec["composed"]["joint_horizon"]
+    assert {k: v["named_terms"] for k, v in entries.items() if "named_terms" in v} == {"bandwidth": ledger.NAMED_TERMS}
+    assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS} and set(sums["named_terms"]) <= set(sums["terms"])
+    for fixture, whose in (("block-record-r2-period0", ["bandwidth"]), ("block-record-b71a-w30", ["bandwidth"]),
+                           ("block-record-r1-window10", [])):
+        assert _load(fixture)["composed"]["joint_horizon"]["named_terms"] == {k: ledger.NAMED_TERMS for k in whose}
+
+    assert R.error_form("δ", ledger.NAMED_TERMS) == ledger.DELTA_FORM
+    error = entries["bandwidth"]["error"]
+    assert R.error_form(error, entries["bandwidth"]["named_terms"]) == f"{error}{ledger.DELTA_FORM.removeprefix('δ')}"
+    assert R.error_form(error, None) == R.error_form(error, {}) == error
+
+    def named(r: dict, terms: object) -> dict:
+        return {**r, "answer": {**r["answer"], "profile": {**r["answer"]["profile"], "named_terms": terms}}}
+
+    entry = functools.partial(R.leg, server="n0", runs=["r"])
+    plain = entry("pous", other)
+    assert "named_terms" not in plain
+    assert entry("pous", named(other, ledger.NAMED_TERMS)) == plain | {"named_terms": ledger.NAMED_TERMS}
+    silent = {**row, "answer": {**row["answer"], "profile": {}}}
+    fix = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
+    with pytest.raises(ValueError, match=re.escape(f"bandwidth: its answer's profile names no term its error leaves out; {fix}")):
+        entry("bandwidth", silent)
+    with pytest.raises(ValueError, match="bandwidth: its answer's profile names no term"):
+        R.from_period({**report, "protocols": {**rows, R.RUNNER_KEYS["bandwidth"]: silent}}, steps=(4, 6), deployment=R.REFERENCE)
+
+    term = ledger.NAMED_TERMS["prf_advantage"]
+    wrong = [({}, "not an object of at least one term"),
+             ("Σ_t adv_t", "not an object of at least one term"),
+             ({"prf_advantage": {**term, "value": "1/1000000"}}, "prf_advantage: it has a value or is in a total, so it is "
+                                                                 "part of the error and not a term beside it"),
+             ({"prf_advantage": {**term, "in_total": True}}, "prf_advantage: it has a value or is in a total, so it is part "
+                                                             "of the error and not a term beside it"),
+             ({"prf_advantage": {k: v for k, v in term.items() if k != "status"}},
+              "prf_advantage: not {claim, term, value, in_total, status}"),
+             ({"prf_advantage": {**term, "bound": "2^-64"}}, "prf_advantage: not {claim, term, value, in_total, status}"),
+             ({"prf_advantage": {**term, "term": ""}}, "prf_advantage: its claim, term and status are not each a nonempty string")]
+    def with_bandwidth(mine: dict) -> dict:
+        return rec | {"legs": entries | {"bandwidth": mine}}
+
+    assert R.named_terms_bad(ledger.NAMED_TERMS) is None
+    for terms, why in wrong:
+        assert R.named_terms_bad(terms) == why
+        with pytest.raises(ValueError, match="bandwidth: its answer's profile's named_terms: "):
+            entry("bandwidth", named(row, terms))
+        mine = with_bandwidth(entries["bandwidth"] | {"named_terms": terms})
+        assert f"its named_terms: {why}" in R.check(mine).values() and not validator.is_valid(mine)
+    mine = with_bandwidth({k: v for k, v in entries["bandwidth"].items() if k != "named_terms"})
+    assert f"it names no term its error leaves out; {fix}, and the record is built from that" in R.check(mine).values()
+    assert not validator.is_valid(mine)
+    for forged in ({}, {"bandwidth": ledger.NAMED_TERMS, "pous": ledger.NAMED_TERMS}):
+        mine = copy.deepcopy(rec)
+        mine["composed"]["joint_horizon"]["named_terms"] = forged
+        assert list(R.check(mine)) == ["composed:joint_horizon"] and validator.is_valid(mine)
+    del mine["composed"]["joint_horizon"]["named_terms"]
+    assert list(R.check(mine)) == ["composed:joint_horizon"] and not validator.is_valid(mine)
 
 
 def test_a_report_of_another_format_is_refused() -> None:
