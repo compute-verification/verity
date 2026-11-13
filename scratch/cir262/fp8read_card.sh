@@ -105,12 +105,20 @@ GPU_LEASE_WHO=${GPU_LEASE_WHO:-circuits-fp8read} bash "$LEASE" 1 --on "$CARD" --
 rc_launch=$?
 smi after
 echo "$me: launch exit $rc_launch at $(date -u +%FT%TZ); card $CARD now holds $(nvidia-smi -i "$CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2> /dev/null) MiB"
+# reads only: what the card holds and what its lease says once the launches are over, and again at the run's end
+card_now() {
+  echo "$me: card $CARD $1: $(nvidia-smi -i "$CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2> /dev/null) MiB used," \
+    "$(nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader 2> /dev/null | grep -c "$uuid") compute process(es)," \
+    "lease: $(LC_ALL=C bash "$LEASE" status 2>&1 | grep -E "^$CARD " | cut -c1-200 | tr '\n' ';') at $(date -u +%FT%TZ)"
+}
+card_now "after the launches"
 du -sh "$OUT/capture" "$OUT/sass" 2> /dev/null
 [ -f "$OUT/capture/launch.json" ] || { echo "$me: no launch record: nothing to compare"; rm -rf "$SCRATCH"; exit "$rc_launch"; }
 
 echo "$me: compare stage on $ncores cores at $(date -u +%FT%TZ)"
 taskset -c "$CORES" "$PY" -m $M compare --out "$OUT" --workers "$(( ncores > 1 ? ncores - 1 : 1 ))" --definition "${DEF_TOKENS:-2}"; rc_cmp=$?
 echo "$me: compare exit $rc_cmp at $(date -u +%FT%TZ)"
+card_now "at the run's end"
 rm -rf "$SCRATCH"
 [ "$rc_launch" = 0 ] || exit "$rc_launch"
 [ "$rc_sass" = 0 ] || exit "$rc_sass"
