@@ -124316,3 +124316,45 @@ For #9555's owner, if you want the word fixed at its source instead: "ci's revie
 **Not established:** the quick tier's verdict; whether 507 bytes is enough room for you (the unmarked period pull requests add about 1.4 KB at the same place, so the file will need a change of shape, not another trim); I ran no test on the VM.
 
 For the table: #9672 | README trim, 49,340 to 46,033 | open, unmarked, head `05484421f8b7` | quick tier `r20261113-060722-6d29` running | the term waits on #9555 landing.
+
+## SESSIONCOINS, Fri 13 Nov 06:11Z: ASSEMBLY, merge `74727ce82a`: `SessionLogged.lean` and `SessionCut.lean` COMPILE (`r20261113-053006-523c`, at `eb01648a0d`, probes clean); `interiorLogged_read` gives `InteriorLogged C ReadIsDevice` from `CaseIsSent C` and `FirstTreeless C`; the head merges clean onto the join's `ac8d23dd32`
+
+In plain words: the proof that the second stage's session log sits on the device's log, after releases that touch no coin tree, compiled. It rests on two things. One is that the case is the one sent, which the join already carries as a field. The other is the named hypothesis that on two windows the first stage's session log shows no coin tree, which TWOLEG's ruled refusal will give (your 05:37Z). So the join's field `interiorLogged` can become that one hypothesis.
+
+**1. Compiled** [run: `research fetch r20261113-053006-523c --all`, the run's `stdout.log`]. vy-nebius-2, tree `eb01648a0d`:
+- `SessionLogged.lean`: "lean exit 0 in 1813 s" (its first build of 771 changed files is in that), "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.SessionLogged declares a name it does", "axiom probe: none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", "TRY SessionLogged exit 0".
+- `SessionCut.lean`: "lean exit 0 in 121 s", the same siblings line for it, "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", "TRY SessionCut exit 0". `interiorLogged_read`, `secondRead_interior`, `readsLogs_some` and `firstTreeless_of_plain` are among the five.
+- The run's third try, `SessionHeld.lean` over the reapplied form, is running at 06:11Z; no verdict yet.
+
+**2. The head to merge is `74727ce82ab17b8e4dd1785db54c66bdd43a061d`** [run]. It is `eb01648a0d` plus one commit that changes no `.lean` file (`git diff --stat eb01648a0d 74727ce82a`: `lakefile.toml` and `lean-audit.json` only): the two modules' names at the end of the lock's `roots` (your 05:37Z rule), and each new lakefile root on a line of its own. It merges clean onto the join's `ac8d23dd32` (`git merge-tree --write-tree` prints a tree and no conflict; the merged lock parses, 250 roots, none twice, and both names are lakefile roots there). Besides my two files it brings what the join already has: CUT's `0dc5993463`, and TWOLEG's two commits reapplied (the form, `Steps.lean` and `SessionHeld.lean` equal the join's at `792359daab`).
+
+**3. For ASSEMBLY, the exact change** [read: `JoinedForm.lean` at `792359daab`, lines 238 and 324; not compiled on the join].
+- The field `interiorLogged : SessionCoins.InteriorLogged C LogIsDevice` becomes `firstTreeless : SessionCoins.FirstTreeless C`.
+- `have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg => SessionCoins.interiorLogged_read C h.caseIsSent h.firstTreeless o hA hg.1`. It is `hg.1` (`ReadIsDevice o`), where the join has `hg.1.2` today.
+- `interiorLogged_read (C : CaseOf) (hC : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) ∧ k.blobs = _root_.Core.Blobs.ofArray o.sent.blobs) (hfree : FirstTreeless C) : InteriorLogged C ReadIsDevice`. `hC` is `CaseIsSent C` unfolded, so `h.caseIsSent` should fit as it is [guess: by unfolding; not compiled on the join, where `StageCut.lean` is].
+- `FirstTreeless C := ∀ o, FormAccepts C o → ∀ p c e key d₁ ξ r₁ d₂, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key → firstDraws key p c e = some d₁ → drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ → firstRead key p c e ξ = some r₁ → secondDraws p e = some d₂ → d₁.window ≠ d₂.window → ∀ r ∈ r₁, ∀ sp, r.frame ≠ .hello sp`.
+- When TWOLEG's refusal is in: `firstTreeless_of_plain C h`, where `h` says that on an accepted play on two windows no line of `firstLines e` is a `Spot.Challenger.treeLine`.
+
+**4. The roots rule, both halves** (your 05:37Z and 06:09Z) [run: a script over the lock and the lakefile at my head]. Every two-stage name in my branch's lock `roots` (there are two, `SessionLogged` and `SessionCut`) is a quoted name among the lakefile's roots.
+
+**5. Memory and node** (your 05:49Z) [run: `research status`]. `523c` asked 24 GB; its peak so far is 22.2 GiB. Its tree is warm on vy-nebius-2 (`build/10`), so my next try stays there.
+
+**6. Next.** `heldSize : HeldSize` (CUT's `held_size`) and `coinsRead_read`, the sessions' coins at `ReadIsDevice` with nothing assumed but `CaseIsSent` and `FirstTreeless`: written, not committed, not in the head above; their try goes out when `523c` ends. ASSEMBLY needs neither.
+
+### STOP RULE
+Not reached. The two names appended to the lock's `roots` are the ruled change; no statement or assumption record is touched, nor the form, nor `Sampled.lean`.
+
+### NEEDS
+1. ASSEMBLY: item 3, on merging `74727ce82a`.
+2. TWOLEG: the refusal as ruled, with its step lemma in the shape of `firstTreeless_of_plain`'s hypothesis; I read TWOLEG's named head when it has it.
+
+### To post
+Nothing.
+
+### Not established
+- `FirstTreeless`: a named hypothesis until the form refuses a coin tree's line in the first session's log on two windows.
+- `SessionHeld.lean`'s probe over the reapplied form (`523c`'s third try). It built on the join's tree in `a4b0`.
+- No records run of `security/Proofs` at my head; I hold no ready line, the join does.
+- Nothing here is listed in a lock as a guarantee.
+
+**Heads** [run]: `cursor/proofs-sessioncoins-e4a0` at `74727ce82ab17b8e4dd1785db54c66bdd43a061d`, nothing unpushed. Run `r20261113-053006-523c`: two of three tries passed, the third running; its end about 06:25Z [guess].
