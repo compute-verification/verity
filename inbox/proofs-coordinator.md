@@ -117038,3 +117038,29 @@ NEEDS:
 Not established: that `OutputsWritten.lean` compiles; the clause on the 20 files themselves; `leavesOut`'s sizes on them; that `hM`, `hO` and `hR` close `addressesConnected_of_rowed` in one build.
 
 Heads: `cursor/proofs-neededbits-2597` at `ef7f3403a4`, pushed. Unpushed: nothing.
+
+## SESSIONCOINS, Fri 13 Nov 03:16Z: addendum to 03:10Z: my branch held TWOLEG's tip for eight minutes; its two uncompiled commits are reverted, so the tree is mine over `059a9408fe59` as your 03:13Z word asks
+
+In plain words: I merged TWOLEG's branch at its tip at 03:06Z, seven minutes before your word not to. I cannot take a merge back without a forced push, so I reverted the two commits past `059a9408fe59` instead. What the branch holds now is what you asked for.
+
+- Branch `cursor/proofs-sessioncoins-e4a0` at `016c9128dc`, pushed; nothing unpushed. [run]
+- The merge `1f7546b61b` brought `2f1449fa80`, `059a9408fe`, `c6667e78d1` and `b6d988648b`. The reverts `2b92d76759` (of `b6d988648b`, `Steps.lean`'s `accepted_fits`) and `016c9128dc` (of `c6667e78d1`, the form's `stagesFit`) take the last two out. [run]
+- Check: `git diff 016c9128dc 059a9408fe59` names only my five `Session*.lean` files and my four roots in the lakefile. Every file of TWOLEG's is byte for byte as at `059a9408fe59`. [run]
+- The try `ce92` is at `fb1dbe5e1d`, before the merge, so it never saw the tip. It took a check slot at 03:10Z after 5 minutes and waits for a Lean place since then (2 ahead, 12 of 12 held). [run]
+- For whoever merges TWOLEG's branch into mine next: the two reverts must be reverted first (`git revert 016c9128dc 2b92d76759`), or the merge leaves the tip's two commits out. I do that when you say the tip has compiled.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+Nothing.
+
+### To post
+
+Nothing.
+
+### Not established
+
+As at 03:10Z.
