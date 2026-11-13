@@ -102,6 +102,7 @@ theorem reason_none {α : Type} {o x : Option α} (hx : o = x) (h : ∀ a, x = s
   | none => rfl
   | some a => exact (h a rfl).elim
 
+-- `mvcgen` walks `membersTreesHeld`'s two loops, past the default heartbeats
 set_option maxHeartbeats 1000000 in
 /-- **What `membersTreesHeld` named and held**: an entry for each statement's session, in the statements' order, each
 the session's record and its evidence's SHA-512 (`Named`), which `Spot.Challenger.membersTreeReason` accepted against
@@ -298,21 +299,37 @@ theorem membersAccepted {C : CaseOf} (h : MembersNamed C) : MembersAccepted C :=
 
 /-! ## The read -/
 
-/-- **The form's acceptance reads the interior's log** (`InteriorReads`), as one-stage v2's acceptance reads its log
-(`Verity.Sampled.logRead_isSome`): the sample's source is the parameters' challenger and window (`source_some`); the
-sample's read went through the challenger session's log, a list of lines whose pairs are in order
-(`Verity.Sampled.sessionOf_ok`, `releasedRootsOf_pairsOk`); `treesOf` read the same lines as coin trees
-(`trustedTreesOf_ok`, `coinTreesOf_fold`); and a blob holds each statement's session's record (`named_exact`). -/
-theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
-  intro o hacc
+/-- **What the accepted form ran on its case** (`VStar.Recursive.SampledTwo.accepted_steps`, `inputAt_ok`): the case
+decodes, the interior's registration is the commitment of the evidence's record, the interior's sample read its coins,
+and `membersRun` ran on the interior's audit with the statements. -/
+theorem accepted_ran {C : CaseOf} {o : Exchange} (hacc : FormAccepts C o) :
+    ∃ (k : Case) (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) (s : String)
+      (c₂ : Spot.OneStage.Commitment) (ξ₂ : ByteArray) (r : Spot.OneStageZk.Run),
+      C o = some k ∧ (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson) = .ok p ∧
+      VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e ∧ Flock.canon e.record = .ok s ∧
+      Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂ ∧ Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧
+      Spot.OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements k.blobs = .ok r := by
   obtain ⟨k, hk, p, c, e, pub, prof, ⟨hp, -, he⟩, hck⟩ := hacc
   obtain ⟨-, c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨⟨s, hs, hc₂⟩, hξ, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
-  obtain ⟨held, ts, L, hheld, hts, -, hM⟩ := membersRun_held hrun
-  obtain ⟨named, -, hN⟩ := named_exact hM
-  rw [zip_sessions (hsz _ _ _ hheld)] at hN
+  exact ⟨k, p, e, s, c₂, ξ₂, r, hk, hp, he, hs, hc₂, hξ, hrun⟩
+
+-- headroom: the read's lemmas below unify long statements, and one proof of this chain together with the form's
+-- steps ran past the default heartbeats
+set_option maxHeartbeats 1000000 in
+/-- **One-stage v2's sample and its trees read one log's lines, and the read reads them**, as
+`Verity.Sampled.logRead_isSome` shows of v2's own acceptance: the sample's source is the parameters' challenger and
+window (`source_some`); the sample's read went through the challenger session's log, a list of lines whose pairs are
+in order (`Verity.Sampled.sessionOf_ok`, `releasedRootsOf_pairsOk`); `treesOf` read the same lines as coin trees
+(`trustedTreesOf_ok`, `coinTreesOf_fold`); so `Verity.Sampled.readLog` reads them, at any records. -/
+theorem lines_read {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence}
+    {ξ : ByteArray} {ts : Array Spot.Challenger.LoggedTree} (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ)
+    (hts : Spot.OneStageZk.treesOf p.base e.base = .ok ts) :
+    ∃ d lines, Properties.Challenger.oneStageZkSource p c = some d ∧ Verity.Sampled.linesOf e = .ok lines ∧
+      Spot.Challenger.coinTreesOf lines = .ok ts ∧
+      ∀ records : List Json, (Verity.Sampled.readLog d.label d.after records ξ lines).isSome := by
   obtain ⟨d, hd⟩ := source_some hξ
-  obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p.audit c₂ d hd e.interior ξ₂ hξ
+  obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c d hd e ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := Verity.Sampled.drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok htsn
@@ -324,12 +341,24 @@ theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
   have hl' := Verity.Sampled.linesOf_of hlog' hls'
   rw [hlines] at hl'
   obtain rfl : lines = lines' := Except.ok.inj hl'
-  have hsome : (Verity.Sampled.readLog d.label d.after (named.toList.map (·.2.2.1)) ξ₂ lines).isSome :=
-    Verity.Sampled.readLog_isSome d.label d.after (named.toList.map (·.2.2.1)) ξ₂
-      (by rw [Verity.Sampled.coinTreesOf_fold (named.toList.map (·.2.2.1)) hct]; rfl)
-      (Verity.Sampled.releasedRootsOf_pairsOk hrr)
-  obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 hsome
-  exact ⟨l, interiorRead_of hk hp he hs hc₂ hd hξ (named_records hN) hlines hl⟩
+  refine ⟨d, lines, hd, hlines, hct, fun records => ?_⟩
+  refine Verity.Sampled.readLog_isSome d.label d.after records ξ ?_ (Verity.Sampled.releasedRootsOf_pairsOk hrr)
+  rw [Verity.Sampled.coinTreesOf_fold records hct]
+  rfl
+
+/-- **The form's acceptance reads the interior's log** (`InteriorReads`), as one-stage v2's acceptance reads its log:
+the accepted check read the interior's coins and ran `membersRun` on its audit (`accepted_ran`), whose trees are of
+the lines the sample read (`lines_read`), and a blob holds each statement's session's record (`named_exact`). -/
+theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
+  intro o hacc
+  obtain ⟨k, p, e, s, c₂, ξ₂, r, hk, hp, he, hs, hc₂, hξ, hrun⟩ := accepted_ran hacc
+  obtain ⟨held, ts, L, hheld, hts, -, hM⟩ := membersRun_held hrun
+  obtain ⟨named, -, hN⟩ := named_exact hM
+  rw [zip_sessions (hsz _ _ _ hheld)] at hN
+  obtain ⟨d, lines, hd, hlines, -, hsome⟩ := lines_read hξ hts
+  obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 (hsome (named.toList.map (·.2.2.1)))
+  exact ⟨l, interiorRead_of (k := k) (p := p) (e := e) (s := s) (c₂ := c₂) (d := d) (ξ₂ := ξ₂) (lines := lines)
+    hk hp he hs hc₂ hd hξ (named_records hN) hlines hl⟩
 
 /-! ## Each session's tree closes after its evidence's SHA-512, and the trees open in the sessions' order -/
 
