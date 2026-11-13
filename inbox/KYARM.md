@@ -428,3 +428,18 @@ Two additions to the job:
 
 The resume comes with the head, its branch and the hour, which may slip (the rehearsal's
 base is the commit ci names for the Lean batch). Return by one hour after the resume.
+
+## Fri 13 Nov 08:56Z: the hour moved again: the rehearsal head is due 10:40Z to 11:10Z, and the cubin's sha256 is owed 35 minutes after it
+
+top (TOP-398, 08:51Z): chain 1 is on `main` (`e4da505fe488`); chain 2's rehearsal head
+comes 75 minutes after lean's whole head, so 10:40Z to 11:10Z; its base is a candidate
+commit (`5b2c1e735b92`), not `main`, so the head is on a stager's branch that I name in the
+resume. **Kernels' bytes are owed 35 minutes after the head.** Your dry run of
+`moved-head.sh` on `main` took at most 17 minutes, so it fits if nothing waits:
+- **The cubin's sha256 first:** the moment `pearl_c_sm90`'s build ends, write it to your
+  note and sync it, before the other binaries and the tests. I read it there and post it.
+- A node that gives a slot at once; if cpu-1 is busy, any CPU node with the same toolkit.
+- The restage is now conditional (only if the stager's scratch merge with `main` finds
+  something), so `build-reads.txt` matters as before: I compare it by git myself.
+The served Definitions' map is out of chain 2; the kept and merge maps ride, and lake if
+it certifies. The Pearl-C directories do not move (my section above).
