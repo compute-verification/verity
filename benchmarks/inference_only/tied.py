@@ -27,7 +27,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import policy as P
-from rho import min_cut
+from slowdown import min_cut
 
 #: the fourth reading's name: `Charged.reading` at the `k` that holds the uncredited words, and this
 IN_K = "the uncredited words as fresh input"

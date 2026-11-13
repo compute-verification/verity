@@ -65,7 +65,7 @@ owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
-directory = "benchmarks/rho"
+directory = "benchmarks/slowdown"
 owner = "training"
 date = "2026-11-16"
 
@@ -652,9 +652,9 @@ paths = [
 ]
 trusted = true
 loaded_by = [
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_operating.py",
-    "benchmarks/rho/tests/test_params.py",
+    "benchmarks/slowdown/slowdown/params.py",
+    "benchmarks/slowdown/tests/test_operating.py",
+    "benchmarks/slowdown/tests/test_params.py",
 ]
 
 [[place]]
@@ -754,10 +754,10 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/flock/prover/tests/test_audit_profile.py",
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_envelopes.py",
-    "benchmarks/rho/tests/test_held_to_core.py",
-    "benchmarks/rho/tests/test_params.py",
+    "benchmarks/slowdown/slowdown/params.py",
+    "benchmarks/slowdown/tests/test_envelopes.py",
+    "benchmarks/slowdown/tests/test_held_to_core.py",
+    "benchmarks/slowdown/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
 ]
 
