@@ -121,11 +121,14 @@ or touches a GPU: the `.sh` jobs do, and the Python reads what a run wrote and w
 The results of `run.sh`, `pipe.sh` and `uni.sh` are not kept here: the analyses print them from a run's `out/`.
 `analyze.py` gives a family's pass line (M3 on sm_90, M4 on sm_100), and its `agree` holds a repeat to 2%; `census.py`
 the tensor, load and scalar tables, T1 and ε_tensor at L = 32, the joint rows, q* and L_bal; `pipe.py` the pipelined
-GEMM's gates, its rate in each arm and ε_tensor at L = 32; `uniform.py census` UP, a uniform instruction's issue price
-and the IMAD forms; and `a2u.py` A2u's test. A run's own `analysis.json`, `pipe.txt`, `uniform.txt` and `a2u.txt` are
-the analysis as the run's commit had it. Each device directory's `census.csv` and `rows.csv` name the runs a line was
-written from, and `uv run machine-model eps --device sm_100 --credit floor --operands floor --q Q --table` (or `sm_90`)
-prints each design's ε on those lines, with a column at q* = Q.
+GEMM's gates, its rate in each arm and ε_tensor at L = 32; `uniform.py census`, on a card's `uni.sh` runs together, UP,
+a uniform instruction's issue price and the IMAD forms; and `a2u.py` A2u's test. A run's own `analysis.json`,
+`pipe.txt`, `uniform.txt` and `a2u.txt` are the analysis as the run's commit had it. `uniform.py` reads the default
+tables' alone points (`uz_`), so a run of `issue`, `sat`, `async` or `a2u` alone writes an error to its `uniform.txt`.
+No analysis reads the `async` tables: their K-sweep is the rates in `probes/rows.jsonl`. Each device directory's
+`census.csv` and `rows.csv` name the runs a line was written from, and
+`uv run machine-model eps --device sm_100 --credit floor --operands floor --q Q --table` (or `sm_90`) prints each
+design's ε on those lines, with a column at q* = Q.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
