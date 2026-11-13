@@ -11,7 +11,7 @@ import types
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
@@ -58,9 +58,9 @@ class _Pass:
 
     @property
     def first(self) -> int:
-        """The index of the pass's first call: ``base``, which a pass has from its first call on."""
-        assert self.base is not None
-        return self.base
+        """The index of the pass's first call: ``base`` as it is, which a pass has from its first call on.  Before that it
+        is None, unchecked here: what reads it then fails on its own arithmetic."""
+        return cast(int, self.base)
 
 
 class _RunState:

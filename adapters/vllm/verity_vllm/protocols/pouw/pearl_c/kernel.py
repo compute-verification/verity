@@ -8,7 +8,11 @@ import importlib.util
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from importlib.abc import Loader
+    from importlib.machinery import ModuleSpec
 
 
 def _load(name: str, path: Path) -> tuple[Any, str]:
@@ -17,10 +21,9 @@ def _load(name: str, path: Path) -> tuple[Any, str]:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     key = f"{name}_{digest[:16]}"
     if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, path)
-        assert spec is not None and spec.loader is not None
+        spec = cast("ModuleSpec", importlib.util.spec_from_file_location(key, path))   # None for a path that is no module's
         mod = sys.modules[key] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        cast("Loader", spec.loader).exec_module(mod)
     return sys.modules[key], digest
 
 
