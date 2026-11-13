@@ -126110,3 +126110,92 @@ The README's trim passed its quick tier, all ten suites, and nothing about it mo
 **Not established:** the whole check (this is the quick tier of the ten suites the change touches); the 48,645 is from merges of the file alone, not from a candidate the queue built; when #9555 lands.
 
 For the table: #9672 | README trim, 49,340 to 46,033 | ready to mark at `05484421f8b7` | quick tier `r20261113-060722-6d29` 10 of 10 | the word waits on #9555 landing.
+
+## COINMAP, Fri 13 Nov 06:58Z: MY COMPILED HEAD IS `44609dc158` IN THREE FILES OF FOUR (`CoinStages.lean` compiled at `860f3a7969`, one import line below it); `lawAt` IS CLEAN (try20 `r20261113-064200-0c47`); THE `DevSecond` INSTANTIATION IS ALREADY ON THE JOIN (`hDev₂` in `joinedOfLaw`), not compiled there; THE PREFIX LEMMA IS WRITTEN (`CoinPrefix.lean`, `41ff648dbd`), in try21 `r20261113-065456-93b6`, NOT COMPILED IN THE TREE
+
+**Plain words.** Your 06:26Z list, in its order. The lemma you asked me to write for the second stage already
+exists: ASSEMBLY wrote it inline at the join, so I wrote no second copy. The prefix lemma MESSAGES asked for can be
+written and I wrote it, but in the log's order, not in round order: by round numbers alone it is false, and the play
+that shows it is MESSAGES's own. `lawAt` uses the three axioms. None of my files reads SESSIONCOINS's layout.
+
+**0. The head.** `cursor/proofs-coinmap-8b0c` is at `41ff648dbd` now; ASSEMBLY holds `44609dc158`, which is right.
+- `CoinMap.lean`, `CoinMapLaw.lean`: compiled at `44609dc158` itself (try20, below; `CoinMapLaw` imports `CoinMap`).
+- `CoinMapAgree.lean`: compiled at `76b8cca332` (try18); unchanged since [run: `git diff --stat`, before the VM
+  was replaced; relayed from my earlier loop].
+- `CoinStages.lean`: compiled at `860f3a7969` [run: try19 `r20261113-055351-56b7`, its `stdout.log`: "lean exit 0 in
+  1179 s", "none of its 42 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"]. At `44609dc158`
+  its import line is `CoinMapLaw` in place of `CoinMapAgree`. I have not compiled it with that line. ASSEMBLY's
+  `6e8c` compiles it so, on the join.
+
+**1. The `DevSecond` instantiation: already written, at the join** [read: `JoinsAt.lean` at `3f6a3839cb`; not
+compiled]. STAGECOINS's "written nowhere" is out of date. In `joinedOfLaw`, since ASSEMBLY's `4970a223e9`:
+
+    have hDev₂ : DevSecond A (goodCase C JoinGood) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) := by
+      intro o hA label after b hd hb hsz j hj hpos
+      obtain ⟨e, he, hsrc⟩ := CoinMap.devSecond_stage ℓ₁ ℓ₂ h.distinctFamilies hDraw₂ A.h.stage o hA
+        (formAccepts_goodCase.1 hA).2.2 label after b hd hb hsz j hj hpos
+      exact ⟨e, (SessionCoins.dev_run_stage A (CoinMap.stageLocate ℓ₁ ℓ₂) tab hLs (n := j + 1) hj o.log).trans he,
+        hsrc⟩
+
+with `hDraw₂ := stageDraws_goodCase h.draws₂`, and `hDev₁` the same from `devFirst_stage`. Argument by argument it
+is `devSecond_stage`'s signature (`CoinStages.lean:660`): `Acc := FormAccepts (goodCase C JoinGood)`, the draw
+`(goodCase C JoinGood o).bind secondDraw`, and `FreshWide o.log` from the good case's second conjunct. A file of
+mine with the same lines could not compile on my branch, which has none of `GoodCase.lean`, `SecondCoins.lean` or
+`JoinsAt.lean`, so I added none. Its first compile is `6e8c`. If it fails at this `have`, the fix is mine: send me
+the error.
+
+**2. MESSAGES's NEEDS 2, the prefix lemma: it can be written, by me, and is** (`CoinPrefix.lean`, `41ff648dbd`).
+- **What is true.** `place` writes the run's coins one release at a time. A release the locator puts on round `j`
+  is written from the next elements of `r j`, and nothing else of the run's coins is read before it. So the log
+  before a release, and that release's frame and bytes, depend on the run's coins only at the elements the earlier
+  releases were written from.
+- **The statement** (`place_prefix_used`): if the log at `r` is `q ++ rl :: rest`, and `r' j = r j` at every round
+  `j` that some release of `q` continues (`usedOf L j [] q ≠ 0`), then the log at `r'` is `q ++ rl' :: rest'` with
+  `rl'` of `rl`'s frame and bytes. Nothing is asked of the round `rl` is put on, nor of a round only later
+  releases are put on. `place_prefix` is the same by elements (`LogAgree`). `place_whole`: where the coins agree at
+  what every release is written from, the output is the same output. All three are `same_place`, which is
+  `same_placeK` along `relK`, by the recursion `placeK_congr` and `law_placeKA` take.
+- **What is false, and the play that shows it.** "The log before round `n`'s release does not depend on the coins
+  of rounds `≥ n`" is false as a statement about round numbers. A strategy may ask for round `n + 1`'s release
+  first; then `r (n + 1)` is in the log before round `n`'s release. This is MESSAGES's point about the two reps.
+  So `FixedBefore` needs, beside my lemma, that every release before round `i`'s is put on a round the history
+  shows. That is a fact about the locator and the accepted form (`roundOf`, `membersOrder`), not about `place`,
+  and it is not mine. With it, `Shows hist r'` gives `place_prefix_used`'s premise directly.
+- **Its state.** Compiled locally only against copies of the definitions (my scratch stub of `Game`, `relK` and
+  the coin map; 2 s; `same_placeK` clean there apart from the stub's own stand-ins). Not compiled in the tree:
+  try21 `r20261113-065456-93b6` (vy-nebius-2, pool proofs), launched 06:54:56Z. Its dependencies are built there,
+  so I expect it by about 07:10Z [guess]. Roots: `Proofs.Properties.Verity.SampledTwo.CoinPrefix` is a lakefile
+  root and the last name of the lock's `roots`, in the commit that adds the file.
+
+**3. `lawAt`'s axioms** [run: try20 `r20261113-064200-0c47`, vy-nebius-2, tree `44609dc158`; I read its
+`stdout.log`]: "'Verity.SampledTwo.CoinMap.lawAt' depends on axioms: [propext, Classical.choice, Quot.sound]";
+"CoinMapLaw.lean: lean exit 0 in 446 s"; "none of its 55 theorems uses an axiom beyond propext, Classical.choice
+and Quot.sound".
+
+**4. The layout: nothing of mine reads it** [run: `rg "slotStream|roundOf|locOf"` over my five files, no match].
+`place`, `frame`, `dev`, `fitOf` and `CoinMapHolds` take any `Locate`; `stageLocate` locates fresh coins only. If
+SESSIONCOINS changes the layout, nothing of mine is restated.
+
+**The roots rule** (your 06:09Z) [run: the lock's `roots` and the lakefile, read by script]: before `41ff648dbd` my
+branch's lock had no two-stage root and my four files were lakefile roots. Now it has one, `CoinPrefix`, and it is
+under a lakefile root.
+
+**The machine** was replaced at about 06:32Z. I rebuilt the worktrees from the remote and retook the pen; nothing
+was lost. `vy-nebius-2` refuses a try without `--pool` (`r20261113-064131-7b59`, exit 3, nothing ran).
+
+### STOP RULE
+Kept. No statement of `CoinMap.lean`, `CoinMapLaw.lean`, `CoinMapAgree.lean` or `CoinStages.lean` changed; one new
+file; the lock's only edit is one name in `roots`; nothing listed.
+
+### NEEDS
+1. MESSAGES: say whether `place_prefix_used`'s shape is what `FixedBefore` takes, or name the shape you want
+   (for instance the prefix up to the `m`-th release, or `Fx` read from a log's first releases).
+2. ASSEMBLY: nothing now. `41ff648dbd` adds one file and one root over `44609dc158`; take it once try21 passes.
+
+### Not established
+- `CoinPrefix.lean` compiled in the tree, and its axioms (try21).
+- `CoinStages.lean` compiled with the `CoinMapLaw` import, other than by the join's `6e8c`.
+- That the releases before round `n`'s are on shown rounds: not mine, and not proved anywhere I have read.
+- `hDev₁`, `hDev₂` compiled (the join's `6e8c`).
+
+Branch `cursor/proofs-coinmap-8b0c` at `41ff648dbd`, pushed; nothing unpushed.
