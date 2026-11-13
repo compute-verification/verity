@@ -130931,3 +130931,52 @@ Clock: `date -u` read 08:45Z. Mailbox read at 08:45Z: nothing after your 08:30Z 
 - `cursor/proofs-loosemap-0917-on-chain2` `546575e05f79` (the order on chain 2's base).
 - `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7` (the order on chain 1's head).
 - `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded: `main`'s tree, with `sigma/` moved).
+
+## ASSEMBLY, Fri 13 Nov 08:45Z: THE JOIN COMPILES WHOLE at `401d7ef808` on the verifier of `870cc9da1b` (`22d3`, rc 0: `DrawRoots`, `JoinsAt`, `JoinedCoupling`, `JoinedForm` each "lean exit 0", probes clean); the tip is now `03273f219d` = that + ACCEPTS `7e7f0609ad` (TWOLEG's NAMED `1e20910586`, RUNCOINS's `ad1c6637c1`) + CUT `4c18473270` + FRAME's lock `954d2f26a6fb` + SESSIONOF2 `d45f63a86c` + ADDRWC `cfa7443a49`, NOT compiled: STAGECOINS, two lines of yours (`FirstCoins.lean:262`, `StageCut.lean:209`) still read `inputAt_ok`'s old shape there, name your head and I compile
+
+**In plain words.** The join's own theorem compiled for the first time. `joinedForm` and `joinedCoupling` elaborate with no error and use only the three standard axioms, on the form's verifier as it stood at `870cc9da1b`. Then I merged every head named compiled over TWOLEG's new verifier, the one that compares the read-back boundary record's digest with the commitment's. On that tree two lines of STAGECOINS's still take `inputAt_ok` apart the old way, so a whole compile would fail there and I launch none until STAGECOINS names its head. `JoinsAt` still has 25 fields: two went, because ACCEPTS proved them, and the two they follow from came in their place.
+
+Clock: `date -u` read 08:45Z. Pen: the machine was replaced again (booted 08:20:19Z, no `~/wt`). I made `~/wt/.pen` at 08:21:51Z and rebuilt the worktrees from the remote. Every push to `cursor/proofs-join-42b8` after 07:09Z is mine; nothing was unpushed. Mail read: your 07:54Z and 08:18Z, and your 08:37Z by the hook.
+
+**1. `r20261113-082926-22d3`** (`--on auto`, vy-nebius-cpu-7, at `401d7ef808dd66fc…`, worktree clean and pushed, no `ulimit`): **rc 0** [run: its `stdout.log` and `job.json`].
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/DrawRoots.lean: lean exit 0 in 365 s"; "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "…/JoinsAt.lean: lean exit 0 in 166 s"; the same probe line over its 12 theorems, `joinedOfLaw` among them.
+- "…/JoinedCoupling.lean: lean exit 0 in 105 s"; the same over its 1 theorem.
+- "…/JoinedForm.lean: lean exit 0 in 67 s"; the same over its 2 theorems, `joinedForm` and `joinedCoupling`.
+- Each try's dependency build ended "Build completed successfully". So RUNCOINS's `3388c089b9`, CUT's `4d24802945` and STAGECOINS's `244bca0793` build together on the join, and `stageDraws_first` holds through CUT's `oneRoot_draws` and STAGECOINS's `firstDraw_of` at the parameters' family. Nothing on the join reads CUT's `oneRoot_first` now.
+- This is `JoinsAt`'s first elaboration. It says the pieces fit. It does not say any field holds of a real play.
+
+**2. Why `r20261113-073738-02c0` failed rc 1** [run: its log]. Its last try, `JoinedForm.lean`, ended "deps exit 1": two owners' modules under it did not build, `RunsAs/Statement.lean` (RUNCOINS) and `SampledTwo/StageCut.lean` (STAGECOINS). The rc is that try's. My own file compiled in it ("`DrawRoots.lean`: lean exit 0 in 346 s"). Both owners' mended heads are on the join since `9f7c44667c`, and `22d3` is the same four tries passing.
+
+**3. Step two, pushed, NOT compiled: `03273f219d`** [run: each merge on this VM; blob ids compared with `git rev-parse`].
+- `0c7a84c235` merges ACCEPTS's `7e7f0609ad`, once. It brings TWOLEG's named `1e20910586` and RUNCOINS's `ad1c6637c1`. From `401d7ef808` git reported no conflict. I checked what your 07:54Z mail warned of: `SampledTwo/Accepts.lean` is ACCEPTS's file, `AcceptsOfSteps.lean`, `Steps.lean`, `InputMap.lean`, `FirstSample.lean` and the form's `VStarRecursive/SampledTwo.lean` are TWOLEG's blobs at `1e20910586`, `RunsAs/OfCheck.lean` is RUNCOINS's at `6e1696929a`, and `Spot/Run.lean` stays the join's own blob. The lakefile's and the lock's roots are the two sides' union, with both of `Accepts`'s root lines there once.
+- `698a311036` mends `JoinsAt.lean` as ACCEPTS's 08:25Z entry says: the fields `recordsHeldAt` and `recordsRead` go, `heldOfAt : HeldOfAt A C` and `portsDistinctAt : PortsDistinctAt C` come, and `playAccepts_form` is called with them. The docstring says the two that went are ACCEPTS's theorems (`recordsHeldAt_of`, `recordsRead`).
+- `d451e83eb5` merges FRAME's `954d2f26a6fb`, the regenerated record of `Proofs.Flock.SpotFlock.Code` in `security/lean-audit.json`. One file, no conflict.
+- `56ec905f82` merges CUT's `4c18473270`. Only `CutFirst.lean` changes; all eight cut files equal CUT's by blob id. Nothing on the join names the deleted `commitment_of_caseOf`.
+- `d7c37881e5` merges SESSIONOF2's `d45f63a86c` (over `ea29e4e1d1`, which I had merged before its newer title): `OneTable.lean` and `TableName.lean` with their two root lines. Nothing on the join reads them yet.
+- `03273f219d` merges ADDRWC's `cfa7443a49`: `AddressFacts/Connected.lean` with its two root lines.
+- After the last merge: `lock_roots.py` adds no name and finds nothing wrong; `dup_names.py` reports the same 17 names as before, none in the join's leg; `pytest tests/test_lean_packages.py` gives "35 passed, 3 warnings", the `import_all` test among them.
+- No head here merges `main`: each one's merge base with `origin/main` is `8ef93f0196` or older (`4a7291116e` for FRAME's and ADDRWC's).
+
+**4. What holds the next whole compile** [read: `git grep inputAt_ok` at `03273f219d`]. Every proof on the join that takes `inputAt_ok` apart reads its new shape, except two of STAGECOINS's: `FirstCoins.lean:262` (`⟨-, -, -, -, vs, received₂, -, rfl⟩`) and `StageCut.lean:209` (`…, vs, received₂, -, hieq⟩`). At `1e20910586` the place after `received₂` is `∃ j₁ j₂, …`, so the `rfl` and the `hieq` land on an existential [derived, not tried]. `DrawRoots` imports both files, and `JoinsAt` imports `DrawRoots`. STAGECOINS's `07319646f7` is exactly those two lines over `244bca0793` and `1e20910586` [read: its diff], not named compiled; its tip `d9016b6fd8` adds `firstDrawn_of`, not compiled either. I merge the head STAGECOINS names and launch the whole compile then, with `--mem-gb 72` as your 08:37Z says.
+
+**5. Not merged, and why** [read].
+- STAGECOINS: item 4.
+- SESSIONCOINS's `1d1352eb2d`: its 08:18Z title asks me to take no head of its before `3606` names it compiled. When it is in, the field `firstTreeless` becomes `SessionCoins.firstTreeless_of_check C h.caseIsSent …` and leaves `JoinsAt`.
+- ACCEPTS's tip `82c77292dd` (`TwoHolds` from `HeldOfAt`, `HeldAt` in one clause): not named.
+- TWOLEG's `744ded04cb` (the recursive package's root imports the form): not named compiled. Until it is in, a records run of the join fails on that orphan line, so I launch none, though FRAME's word has come.
+- TWOLEG's scratch merge that carries GATHER's `984cb027efa3` (`cursor/proofs-scratch-twoleg-join-gather-ad71`, at `e7fd09e4ae` now): no entry names its head and tree hash yet. **It was cut from the join at `42bba26494`.** The join is nine merges past that, so after I merge the named head the join's whole tree cannot equal the scratch's hash. What can be compared is the tree of each path the plays read. TWOLEG, say which paths the hash covers, or make the scratch again on `03273f219d`.
+- FRAME's head that cuts `OwnReads.lean`'s import of the network certifier's Lean (`6e7ac16f9a`, not compiled): when named. The other red, the edge `OwnReads.lean -> CanonLine.lean`, stays by your ruling, and I name it as the known red in the entry that reports a suite. I have run no root suite on the join yet.
+
+**6. `JoinsAt`'s 25 fields at `03273f219d`.** `ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `firstDrawn`, `sessionMatches`, `firstTreeless`, `msgOpens`, `digestBefore`, `heldAt`, `twoHolds`, `heldOfAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`. Against 07:39Z: `recordsHeldAt` and `recordsRead` are out (ACCEPTS's theorems), `heldOfAt` and `portsDistinctAt` are in. Three more are on their way out, none merged: `firstTreeless` (SESSIONCOINS), `firstDrawn` (STAGECOINS's `firstDrawn_of`), `twoHolds` (ACCEPTS's `twoHolds_at`). **The table for soundness, each field per-play or universal, is of these 25 and comes in its own entry before 11:00Z.**
+
+**STOP RULE.** Not reached. The lock's only edits by my hand are `roots`; the merges brought their owners' roots, ACCEPTS's `compile_time` entry for `JpWalk` and FRAME's one regenerated record. I listed nothing and added no `unwitnessed` entry. No merge of `main`. No records run.
+
+**NEEDS.**
+- **STAGECOINS:** name a compiled head with the two pattern lines (item 4). It is the one thing between the join and its compile over `1e20910586`.
+- **TWOLEG:** item 5's question on the scratch's hash; and name `744ded04cb` when it compiles.
+- **You:** nothing to decide.
+
+**Not established.** That `03273f219d` compiles: no try ran on it, and by reading it does not until STAGECOINS's two lines are in. That SESSIONOF2's and ADDRWC's files compile on the join's tree: each compiled on its own branch. That any field of `JoinsAt` holds of a real play. Any suite or records run of the join. The carry.
+
+Branch `cursor/proofs-join-42b8` at `03273f219d`, pushed; nothing unpushed. Runs: none out. Timer: none.
