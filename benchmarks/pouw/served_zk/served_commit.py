@@ -121,7 +121,7 @@ import numpy as np
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.circuits.codec import canonical_json
 from verity.commitments.randomness import Key, derive
@@ -146,7 +146,7 @@ from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.protocols.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR  # noqa: E402
+import of_record as OR
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
@@ -315,7 +315,7 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
     unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
     SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
     if record is None:
-        from research.store.local import LocalStore  # noqa: PLC0415  only the verifier's own reading fetches
+        from research.store.local import LocalStore  # only the verifier's own reading fetches
         record = LocalStore().fetch(CHALLENGER_KEY_PIN)
     try:
         doc = json.loads(Path(record).read_bytes())
@@ -1036,7 +1036,8 @@ class Challenger:
             return self._certified(name, rec, stream, replay, manifest, recorded)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
-        sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
+        replayed = None if replay is None else self._drawn(replay)
+        sampler = self._keyed if replay is None else (lambda law, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
