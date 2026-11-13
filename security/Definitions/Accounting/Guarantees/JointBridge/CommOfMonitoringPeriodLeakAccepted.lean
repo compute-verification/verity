@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,9 +36,9 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The network certifier's per-period guarantee, on a run that realizes its period of sampled audits (trusted)
 
-`CommOfPeriodLeakAccepted` is the network audit's `PeriodRun.Sound`, the coins model's per-period guarantee,
+`CommOfMonitoringPeriodLeakAccepted` is the network audit's `PeriodRun.Sound`, the coins model's per-period guarantee,
 for a run whose communication audit is the network certifier's period of sampled audits
-(`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), at the error of
+(`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), at the error of
 `NetTiming.Guarantees.PeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
 -/
 
@@ -59,13 +59,13 @@ trace's commitment binds (`CommitmentScheme.Binds`), at `δ ≥ 0`,
 where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks`, `Pr[B_ext] ≤ ε_bind` and `Pr[B_tap] ≤ ε_tap` (`ε_ks` and
 `ε_bind` as in `Compiled.KS`'s errors, `B_tap` the collisions against the network certifier's openings), the
 network audit's `PeriodRun.Sound` holds at `n · (δ + ε_ks + ε_bind + ε_tap)`. -/
-def CommOfPeriodLeakAccepted : Prop :=
+def CommOfMonitoringPeriodLeakAccepted : Prop :=
   ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
     [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Arg Coin} {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg}
     {D : Compiled Coin A} {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ}
     {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
-    (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ reg Dj n) (hks : D.KS H)
+    (R : RealizesCommOfMonitoringPeriodLeakAccepted r c.K H D L Kₒ S lay k δ reg Dj n) (hks : D.KS H)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (εks εbind εtap : ℝ)
     (herr : ∀ ξ i, D.κ δ (R.stmt ξ i) - δ +
       Real.sqrt (D.γ (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)

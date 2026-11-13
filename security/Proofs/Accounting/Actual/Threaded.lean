@@ -1,15 +1,15 @@
 module
 
 public import Definitions.Accounting.Guarantees.Actual.Threaded
-public import Proofs.Accounting.Actual.Windows
+public import Proofs.Accounting.Actual.ServerBlocks
 public import Proofs.Nci.Threads
 
 /-!
 # The memory cap over threads
 
-`ThreadedThrottled`'s proof with the declared division replaced by the windows. `WindowsAt`, at the cuts `min(kω, t)`,
+`ThreadedThrottled`'s proof with the declared division replaced by the windows. `ServerBlocksAt`, at the cuts `min(kω, t)`,
 divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates, each reading in the
-containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back
+containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`serverBlocks_small`). Pulled back
 through the containment (`Nci.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
 novel reads are at most their windows' reads in the image (`Nci.SecurityProofs.novelReads_pull_le_readsIn`, which needs
 no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Nci.SecurityProofs.ThreadedReads`) bounds each
@@ -51,10 +51,10 @@ theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : P
   · rintro ⟨_, hg, _⟩
     exact hg
 
-/-- **The windows are small**: `WindowsAt`'s division of the developer's declaration over `[0, t)` at the cuts
+/-- **The windows are small**: `ServerBlocksAt`'s division of the developer's declaration over `[0, t)` at the cuts
 `min(kω, t)` into `n ⌈t/ω⌉` windows, each of at most `Γ` gates and reading in `G` at most `R + r ω`, its starting state
 and what its links carry. -/
-theorem windows_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+theorem serverBlocks_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r : ℝ) (G : Finset (Fin A.N))
     (hω : 0 < ω) (hX : ∀ i j, i ≠ j → Disjoint (X i) (X j)) (hC : A.Causal ℓ)
@@ -63,7 +63,7 @@ theorem windows_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (
     ∃ P : Partition (A.declaration (univ.biUnion X) t θ hθ).D (n * ((t + ω - 1) / ω)), ∀ u,
       (A.declaration (univ.biUnion X) t θ hθ).D.size (P.gates u) ≤ Γ ∧
         (readsIn (A.declaration (univ.biUnion X) t θ hθ) (P.gates u) G : ℝ) ≤ R + r * ω := by
-  obtain ⟨P, hP⟩ := WindowsAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) G hX hC hΦ hL
+  obtain ⟨P, hP⟩ := ServerBlocksAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) G hX hC hΦ hL
   refine ⟨P, fun u => ?_⟩
   obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
   obtain ⟨-, hsize, hreads⟩ := hP i k
@@ -101,7 +101,7 @@ theorem runtime_of_count {n t ω : ℕ} {b_a x KΛ : ℝ} (hx : 0 ≤ b_a * x)
 theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T σ d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
   obtain ⟨M⟩ := hcont
-  obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r (univ.map ⟨M.emb, M.emb_inj⟩) hω hX hC hΦ
+  obtain ⟨P, hP⟩ := serverBlocks_small A ℓ Φ ends β link n X θ hθ t ω Γ R r (univ.map ⟨M.emb, M.emb_inj⟩) hω hX hC hΦ
     hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
   have hpiece : ∀ u, Small c Γ (R + r * ω) ((Nci.SecurityProofs.pull M P).gates u) := fun u =>
@@ -182,7 +182,7 @@ theorem ThreadedRate : Guarantees.Actual.ThreadedRate := by
 
 theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T σ d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
-  obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r ((M.S ∪ c.D.into M.S).image M.emb) hω hX hC
+  obtain ⟨P, hP⟩ := serverBlocks_small A ℓ Φ ends β link n X θ hθ t ω Γ R r ((M.S ∪ c.D.into M.S).image M.emb) hω hX hC
     hΦ hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
   have hpiece : ∀ u, Small c Γ (R + r * ω) (Nci.SecurityProofs.piece M P u) := fun u =>
