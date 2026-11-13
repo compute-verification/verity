@@ -16,24 +16,72 @@ import functools
 import gzip
 import itertools
 import json
+from pathlib import Path
 
 import pytest
-
-from verity_vllm.pipeline.match import persist_program
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
-                                   TritonLaunch, ViewDesc)
-from verity_vllm.check.match import batch_decomp as bd
-from verity_vllm.check.match.program_compare import compare_steps, load_oracle
-from verity_vllm.observe.log import dumps as log_dumps
-from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, WitnessParam
-from tests.observe import test_fold_synthetic as toy
-from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
-                                                      W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _as3, _kv_flat,
-                                                      _slot, memory)  # noqa: F401 - `memory` is the fixture
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
+
+from tests.observe import test_fold_synthetic as toy
+from tests.observe.test_fold_synthetic import (
+    A_COS,
+    A_DOWN_W,
+    A_EMBED,
+    A_GU_W,
+    A_LN1,
+    A_LN2,
+    A_NORM,
+    A_O_W,
+    A_QKV_W,
+    BF,
+    BN,
+    I32D,
+    I64D,
+    W_COS,
+    W_DOWN,
+    W_EMBED,
+    W_GU,
+    W_LN1,
+    W_LN2,
+    W_NORM,
+    W_O,
+    W_QKV,
+    C,
+    Ids,
+    V,
+    _kv_flat,
+    _slot,
+    memory,  # noqa: F401 - the fixture
+)
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match.program_compare import compare_steps, load_oracle
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    PerRow,
+    Profile,
+    Shared,
+    WitnessParam,
+)
+from verity_vllm.observe.log import dumps as log_dumps
+from verity_vllm.pipeline.match import persist_program
 
 BS = 4
 A_IDS, A_POS, A_KC, A_VC = 10, 11, 12, 13
@@ -72,6 +120,7 @@ def _tok(r, p):
 
 def step_events(step, reqs, active, ids, base_alloc):
     """One engine step: every active request contributes its rows (step 0: the whole prompt; later: one decode row)."""
+    rows: list[tuple]
     rows, toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], [], {}, {}, {}, []
     for ri, r in enumerate(reqs):
         if ri not in active:
@@ -237,7 +286,7 @@ def fold_alone(req, d, leak=False, witness=None):
     evs = batched_log([req])
     r = fold(evs, profile(leak, witness), strict=True)
     p = persist(r, evs, d)
-    json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": len(req["sampled"]) - 1}}, open(f"{p}/construction_manifest.json", "w"))
+    Path(f"{p}/construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": len(req["prompt"]), "T": len(req["sampled"]) - 1}}))
     return p
 
 
@@ -263,7 +312,7 @@ def _req(res, rid):
 
 def test_record_carries_request_attribution(memory, tmp_path):
     d, r = fold_batched([R0, R1], tmp_path / "b2")
-    lines = [json.loads(x) for x in open(f"{d}/instances.jsonl")]
+    lines = [json.loads(x) for x in Path(f"{d}/instances.jsonl").read_text().splitlines()]
     hdr, inst = lines[0], lines[1:]
     assert [(q["request_id"], q["prompt_len"], q["served_samples"]) for q in hdr["requests"]] == [("r0", 3, 3), ("r1", 2, 2)]
     assert all(m["request"] in ("r0", "r1") for m in inst)
@@ -305,7 +354,7 @@ def test_request_finishing_early_has_no_rows_in_later_steps(memory, tmp_path, de
 def test_single_request_fold_is_its_own_projection(memory, tmp_path, derived_is_a_fold):
     """B = 1: the decomposition is the identity (the whole-fold `cb_a.compare` path and X-09 agree)."""
     d, _ = fold_batched([R0], tmp_path / "b1")
-    json.dump({"structural_inputs": {"LP": 3, "T": 2}}, open(f"{d}/construction_manifest.json", "w"))
+    Path(f"{d}/construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": 3, "T": 2}}))
     res = bd.decompose(d, [d])
     assert res["verdict"] == "PASS" and res["requests"][0]["n_instances"] == res["oracle"]["instances"]
     A = load_oracle(d, "same")
@@ -317,14 +366,14 @@ def test_pre_x09_record_without_meta_is_attributed_by_data_flow(memory, tmp_path
     SAME partition and the same verdict."""
     d, _ = fold_batched([R0, R1], tmp_path / "b2")
     p = f"{tmp_path}/b2/instances.jsonl"
-    lines = open(p).read().splitlines()
+    lines = Path(p).read_text().splitlines()
     out = []
     for ln in lines:
         m = json.loads(ln)
         m.pop("request", None)
         m.pop("position", None)
         out.append(json.dumps(m, separators=(",", ":")))
-    open(p, "w").write("\n".join(out) + "\n")
+    Path(p).write_text("\n".join(out) + "\n")
     res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2"), fold_alone(R1, tmp_path / "LP2_T1")])
     assert res["verdict"] == "PASS", res["reasons"]
     assert "meta" not in res["attribution"]["how"] and res["attribution"]["row_rule_disagreements"] == 0
@@ -340,7 +389,7 @@ def test_negative_misattributed_row_is_not_equal(memory, tmp_path, derived_is_a_
     d, _ = fold_batched([R0, R1], tmp_path / "b2")
     # perturb the record: one of r1's decode-step rows is attributed to r0
     p = f"{tmp_path}/b2/instances.jsonl"
-    lines = open(p).read().splitlines()
+    lines = Path(p).read_text().splitlines()
     for i, ln in enumerate(lines[1:], 1):
         m = json.loads(ln)
         if m["request"] == "r1" and m["step"] == 1 and m["spec"].startswith("SiluMul"):
@@ -349,7 +398,7 @@ def test_negative_misattributed_row_is_not_equal(memory, tmp_path, derived_is_a_
             break
     else:
         pytest.fail("no r1 SiluMul row at step 1")
-    open(p, "w").write("\n".join(lines) + "\n")
+    Path(p).write_text("\n".join(lines) + "\n")
     res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2"), fold_alone(R1, tmp_path / "LP2_T1")])
     assert res["verdict"] == "FAIL"
     r0, r1 = _req(res, "r0"), _req(res, "r1")

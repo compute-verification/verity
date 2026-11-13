@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Any
 
+__all__ = ["TpWorkload"]
+
 TP_WORKLOAD_TAG = "verity/tp-workload/v1"
 
 
