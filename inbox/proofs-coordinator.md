@@ -128951,3 +128951,72 @@ Everything below the first rule is written so that you can post it as it is. [ru
 - The import listing's `[[against]]` entries name Flock's `pod/` and `agreement/` files by path. A move of them needs the listing edited and the generator run after it.
 
 **My machine was replaced again** at 07:35Z. Nothing was unpushed. I took `~/wt/.pen` again at 07:36Z; no other loop held it.
+
+## SESSIONOF2, Fri 13 Nov 08:00Z: the two statements are written and pushed at `ea29e4e1d1`, NOT compiled: a member session sets up one table (`oneTable_of_scope`) and that table is named `refTable h t` (`tables_of_pin`); neither file imports the two modules that fail in the join today, so try `r20261113-075819-cfb5` can decide them now
+
+**In plain words.** The join assumes each member session ran on one table with a known name and a fixed number of rounds for each of its two repetitions. I wrote two new files that derive all three from premises the join already has. They are written with their proofs, but nothing has compiled yet: one run is deciding both. The table's name is a new definition, read from the auditor's held copy of each template's statement, so it is fixed before any play. SESSIONCOINS can state against these signatures now.
+
+Clock: `date -u` read 08:00Z. Mailbox at `cursor/proofs-inbox` (fetched 07:59Z): no file for me yet [read].
+
+**1. The signatures** [read: my own files at `ea29e4e1d1`; not compiled]. Namespace `Verity.SampledTwo`; `TwoHolds`, `RoundsHeld`, `ScopeHeld`, `PinHeld` are `SpotFlock.RunsAs.Round2`'s.
+
+`security/Proofs/Properties/Verity/SampledTwo/OneTable.lean` (83 lines):
+
+```lean
+theorem oneTable_of_scope {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHolds h) (hS : ScopeHeld h m₂) {t : ℕ}
+    (ht : t < h.ms.length) :
+    ∃ s spec st, FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st])
+
+theorem rounds_of_oneTable {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
+    (hset : FlockDeploy.setupOf true x = some (s, spec, #[st])) :
+    (FlockDeploy.V true).k x = 2 + 2 * FlockDeploy.repRounds true spec st ∧
+      SessionCoins.repsOf ((FlockDeploy.V true).k x) = FlockDeploy.repRounds true spec st
+
+theorem reps_of_scope {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHolds h) (hR : RoundsHeld h m₂)
+    (hS : ScopeHeld h m₂) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ s spec st, FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st]) ∧
+      SpotFlock.k₀ h t = 2 + 2 * FlockDeploy.repRounds true spec st ∧
+      SessionCoins.repsOf (SpotFlock.k₀ h t) = FlockDeploy.repRounds true spec st
+```
+
+`security/Proofs/Properties/Verity/SampledTwo/TableName.lean` (97 lines):
+
+```lean
+def refTable (h : SpotFlock.Held) (t : ℕ) : String :=
+  (((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => Flock.Tags.byName? w₀.statement).map fun tags => tags.table).getD ""
+
+theorem tables_of_pin {h : SpotFlock.Held} {m₂ : Claims.Msg} (hS : ScopeHeld h m₂) (hP : PinHeld h m₂) {t : ℕ}
+    (ht : t < h.ms.length) {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {st : Flock.Stmt}
+    (hset : FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st])) :
+    spec.tables = #[refTable h t]
+
+theorem session_of_held {h : SpotFlock.Held} {m₂ : Claims.Msg} (hT : TwoHolds h) (hR : RoundsHeld h m₂)
+    (hS : ScopeHeld h m₂) (hP : PinHeld h m₂) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ s spec st, FlockDeploy.setupOf true (SpotFlock.stmtAt h m₂ t) = some (s, spec, #[st]) ∧
+      spec.tables = #[refTable h t] ∧
+      SpotFlock.k₀ h t = 2 + 2 * FlockDeploy.repRounds true spec st ∧
+      SessionCoins.repsOf (SpotFlock.k₀ h t) = FlockDeploy.repRounds true spec st
+```
+
+Two helpers beside them: `oneTable_of_shape` (a statement in the masked scope whose list of table sizes has one entry sets up one table) and `refTable_eq`.
+
+**2. How the join reads them** [derived from `JoinsAt.lean:262-274` and `OfRun.lean:83-93` at `42bba26494`]. At an accepted play `o` with `(joinSessions A C Ms tab ℓ₁ ℓ₂).stmts o = some m₂`, the four premises are `hJ.twoHolds`, `hJ.roundsHeldAt o m₂ ho hm`, `hJ.scopeHeldAt o m₂ ho hm` and `hJ.pinHeldAt o m₂ ho hm`. So `session_of_held` gives, for each template `t`, the shape SESSIONCOINS's 07:15Z entry asked for: one table, `spec.tables = #[tab t]` at `tab := refTable A.h`, and `repsOf (k₀ A.h t) = repRounds true spec st`. The join's `tab` is a free parameter of `JoinsAt` today; this fixes what it must be.
+
+**3. Why they are stated over `Held` and `m₂`, not over `JoinsAt`** [derived: import closures computed from the files' headers at `42bba26494`]. `OfRun.lean` (which defines `ScopeHeldAt`, `PinHeldAt`) imports `RunsAs/Statement.lean`, and `JoinsAt.lean` imports that, `StageCut.lean` and `DrawRoots.lean`: the three that ASSEMBLY's 07:39Z entry reports failing. A file that names `ScopeHeldAt` cannot compile until their owners mend them. Mine import `SpotFlock/Accepting`, `RunsAs/SecondStageOf`, `SessionCoins`, `SpotFlock/Placement`, `Sampled/Layout` and `HiddenExec/SetupP`, none of which reaches a failing module. The one-line corollaries over `JoinsAt` wait for whoever discharges `sessionsRun`; I'll write them when `JoinsAt` compiles, if you want them as theorems.
+
+**4. `PinHeld` is used for one field only** [read: `TableName.lean` at `ea29e4e1d1`]. The proof reads from the pin only that the session statement's `statement` name is the reference statement's. `ScopeHeld` gives the hidden-outputs tag, under which the masked verifier sets one table up under its own tags, and those name the statement's table.
+
+**5. Roots** [read]. Both modules are on lines of their own in `security/Proofs/lakefile.toml` and in the lock's `roots`, each pair inserted after the `SessionCoins` line rather than at the end, so the last line of neither list changes and a merge with another worker's appended root is clean. The lock's only change is those two lines of `roots`.
+
+**6. The try** [run]. `r20261113-075819-cfb5`, `research run --on auto --as proofs --project verity --source . --cwd clone --mem-gb 24`, placed on vy-nebius-cpu-1, at `ea29e4e1d1`, no `ulimit`: `lean_changed.py --try …/OneTable.lean --siblings`, then the same for `TableName.lean`. Launched 07:58Z. I'll say what memory it held when it ends.
+
+**STOP RULE.** Nothing: no listed guarantee's statement, no named assumption, no verifier. `refTable` is a new definition no guarantee reads.
+
+**NEEDS.**
+- **ASSEMBLY** (the join's `security/Proofs/lakefile.toml`, not my file): `Proofs.Properties.Verity.SampledTwo.DeviceOrder` is in `roots` twice at `42bba26494` (lines 164 and 182) [read]. `main` has it once. The exact change: drop the second, on line 182. (`Proofs.Properties.Pouw.LiveSalt.Ledger` is also there twice, but `main` has that too.)
+
+**To post.** Nothing.
+
+**Not established.** That either file compiles (`cfb5` decides). That `--siblings` finds no clash for the eight new names. The corollaries over `JoinsAt`.
+
+Branches: `cursor/proofs-sessionof2-7c3a` at `ea29e4e1d1`, pushed. `cursor/proofs-sessionof-5c1e` at `521933e143` and `cursor/proofs-sessionof-9b17` at `b611ff18e0`, untouched. Runs: `r20261113-075819-cfb5` running on vy-nebius-cpu-1.
