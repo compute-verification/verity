@@ -5,8 +5,9 @@ honest arm's outcome (the answer `served_integrity.answer` gives on it, whether 
 each check's verdict), its stages' seconds, the negatives' workers' record, the memo's counts, each negative's refusal
 beside the kept audit's by name with its codes, and the most disk the job's directory held. A negative is listed as
 refused only where a verdict said so: one whose code is ``disagree``, or that Lean gave no verdict line for, is listed as
-not answered. For the memory: each sampled member's circuit, program and partition files' bytes, each Lean command's exit
-and seconds from its log, the job's cgroup's limit, kills and peak as the job read them, the node's MemAvailable at the
+not answered. For the memory: each sampled member's circuit, program and partition files' bytes, each command its session
+logged with its exit and seconds, the line it owes by its verb and whether it gave one (of the sample's check, each
+case's ``ok``), the job's cgroup's limit, kills and peak as the job read them, the node's MemAvailable at the
 job's start and at its lowest with the stage that was seen in, and what the audit's stderr says of a fork with more than
 one thread alive. Of a job that stopped itself: the stage it stopped in, why, and the sampled member's circuit file's
 bytes. No count or index of the window is written, and no size but those files': of
@@ -95,10 +96,17 @@ def size(p: Path) -> int | None:
         return None
 
 
+#: the line each command a session's directory logs owes in its output, by the command's verb (`a0.run`'s first line):
+#: Lean's check of a proof a verdict, the prover its session's outcome, Lean's check of the sample one line a case.
+#: A command of another verb (a put into the archive) owes none
+OWES = {"verify": "VERDICT ", "prove": "LIVE\t", "draw-test": "DRAWCHECK "}
+
+
 def members(audit: Path) -> list[dict]:
     """Each sampled member (one with a session directory), in the directories' order and without its index: the bytes of
-    the files its Lean check reads, and each Lean command its session directory logged (`a0.run`'s line: its exit and
-    seconds; whether its output held a verdict line)."""
+    the files its Lean check reads, and each command its session directory logged (`a0.run`'s lines: its verb, its exit
+    and seconds; the line it owes by its verb (`OWES`) and whether its output held one; of the sample's check, each
+    case's ``ok``)."""
     out = []
     for sdir in sorted((audit / "window").glob("session-m*")):
         w, logs = sdir.parent, []
@@ -109,14 +117,43 @@ def members(audit: Path) -> list[dict]:
                 continue
             m = re.search(r"^# rc (\S+) in ([0-9.]+) s$", text, re.M)
             if m:
-                put = log.name.endswith("archive-put.log")  # a put gives no verdict
-                logs.append({"log": log.name, "exit": m.group(1), "seconds": float(m.group(2)),
-                             "verdict_line": None if put else "\nVERDICT " in text, "ended_at": round(log.stat().st_mtime, 1)})
+                verb = re.match(r"\$ \S+ ([a-z][a-z-]*)(?: |$)", text.split("\n", 1)[0])
+                verb = verb.group(1) if verb else None
+                owes = OWES.get(verb)
+                said = [x for x in text.split("--- stderr", 1)[0].splitlines() if owes and x.startswith(owes)]
+                entry = {"log": log.name, "command": verb, "exit": m.group(1), "seconds": float(m.group(2)),
+                         "owes": owes.strip() if owes else None, "owed_line": bool(said) if owes else None,
+                         "ended_at": round(log.stat().st_mtime, 1)}
+                if verb == "draw-test":
+                    entry["drawcheck_ok"] = [drawcheck_ok(x) for x in said]
+                logs.append(entry)
         out.append({"circuit_bytes": size(w / sdir.name.removeprefix("session-") / "circuit.txt"),
                     "program_bytes": size(w / "program.json"), "partition_bytes": size(w / "partition.json"),
                     "registered_bytes": size(w / sdir.name.removeprefix("session-") / "registered.json"),
                     "lean_commands": logs})
     return out
+
+
+def drawcheck_ok(line: str) -> bool | None:
+    """A ``DRAWCHECK`` line's ``ok``, and nothing else of it; None where the line is not Lean's JSON."""
+    try:
+        ok = json.loads(line.split(" ", 1)[1]).get("ok")
+    except (IndexError, ValueError, AttributeError):
+        return None
+    return ok if isinstance(ok, bool) else None
+
+
+def owed(c: dict) -> str:
+    """What a logged command's entry (`members`) says of the line it owes, for the output."""
+    if c["owes"] is None:
+        return "owes no line"
+    if not c["owed_line"]:
+        return f"NO {c['owes']} LINE"
+    if "drawcheck_ok" not in c:
+        return f"its {c['owes']} line"
+    oks = c["drawcheck_ok"]
+    return (f"{len(oks)} DRAWCHECK line(s), " + ("every ok true" if all(x is True for x in oks) else
+                                                 "NOT EVERY OK TRUE: " + ", ".join(str(x).lower() for x in oks)))
 
 
 def fork_lines(err: Path | None) -> dict | None:
@@ -317,8 +354,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"REHEARSAL member {i} of {len(doc['members'])}: circuit file {m['circuit_bytes']} bytes, program file "
               f"{m['program_bytes']} bytes, partition file {m['partition_bytes']} bytes")
         for c in m["lean_commands"]:
-            line = {None: "a put", True: "a verdict line", False: "NO VERDICT LINE"}[c["verdict_line"]]
-            print(f"REHEARSAL member {i} logged command {c['log']}: exit {c['exit']}, {c['seconds']} s, {line}")
+            print(f"REHEARSAL member {i} logged command {c['log']} ({c['command'] or 'verb not read'}): exit {c['exit']}, "
+                  f"{c['seconds']} s, {owed(c)}")
     print(workers_line(doc["negative_workers"]))
     if memory is not None:
         print(f"REHEARSAL memory: {json.dumps(memory, sort_keys=True)}")
