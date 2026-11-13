@@ -62,7 +62,7 @@ def test_each_composite_names_a_lake_package_this_tree_has():
 
 
 def test_a_composite_is_known_wherever_its_package_is(tmp_path, monkeypatch):
-    for d in ("verity/protocols/flock", "adapters", "elsewhere/remote"):
+    for d in ("verity/protocols/proofs/flock", "adapters", "elsewhere/remote"):
         (tmp_path / d).mkdir(parents=True)
     (tmp_path / "elsewhere" / "remote" / "lakefile.toml").write_text("")
     monkeypatch.setattr(E, "COMPOSITES", {"onsite": "elsewhere/onsite", "remote": "elsewhere/remote"})

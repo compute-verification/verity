@@ -410,7 +410,7 @@ def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_pa
     key's end and ten zeros, and the guard holds it though nothing of the witness is in it. The verifier's
     registered-reads files are written without spaces (`warden_rows.reads_text`), and the same reads are then no piece
     of the witness. The counts as the witness writes them are a find wherever they are written."""
-    from verity.protocols.certifier.verifier import warden_rows as WR
+    from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 
     g = _gate(tmp_path / "G" / "g1")
     line = json.dumps({"salt_c": "ab" * 24, "head": {"window": 0, "counts": [0] * 16, "root": "ef" * 64}})
