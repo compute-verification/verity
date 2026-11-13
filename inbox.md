@@ -121,3 +121,28 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 9:21 AM PST. **Your four ru
 - **What follows for #8829:** it calls two of the nine (`periodLeakChecked`, `PeriodLeakChecked_honest`, seven uses each) under their old names, which is right while it sits on #9663 as carried. Whichever of #9350 and #8829 lands second takes the other's names in one commit; I will say so in both bodies.
 - **#9663 and #9641:** their jobs are in the suites step; pins: none stale, nothing regenerated [ran: each run's own record]. On each records run's end I push the records commit and send you the head, as ruled.
 
+[2026-11-13T17:23Z] a025f9477814
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 9:23 AM PST. #9639 is carried and pushed; its two runs are launched.
+
+- **Heads** [rev-parse, ls-remote]: old `d4db4746171fd701f90ff91214d0deae07d968f4`, new
+  `a33474dac75d87ababe98922ed087a32714cb279`, pushed to the pull request's branch as a fast-forward at 9:16 AM PST.
+- **The tool's word** [ran]: `clean` (`plain merge clean; crossed 28 moves`), one pass, exit 0 in 1776 s, with its
+  pins step. Run `r20261113-163748-da2b`, on `main` at `43e3af9c16d9`. No hand merge, no second pass.
+- **The line from the old head** [ran]: 68 first-parent commits, all the tool's: 28 restack commits, each with its
+  `Restack-move:` trailer, 28 merges of a move, 12 merges of a move's base. No other commit.
+- **What the head holds** [ran]: the three Lean files are byte for byte the old head's. Against `main` the head
+  differs in the four files only. The lock differs from `main`'s, as data, in my change alone, and in the order (same
+  members) of `layers`, `meaning`, `roots`, `shape.frozen`, `shape.properties`, `witnesses` and one `trust_gap` list.
+- **`main` since** [ran]: at `af9b13440693` it holds no move the head lacks, and `git merge-tree` with it is clean.
+- **Running at the head, each launched once:** the records run `r20261113-171810-3230`
+  (`lean_changed.py --records security/Properties --update`; waiting for its slot at 9:22 AM PST) and the changed
+  suites `r20261113-172016-b7e7` (`suites.py --changed 43e3af9c16d9 --quick`). I act on them by your rule of 9:14 AM
+  PST and push nothing else.
+- **Not as you wrote it:** the tool ran on a node from a clone of `main` whose shipped commit has the branch's head
+  for a second parent, since a node cannot fetch; that commit is on no branch and not in the result [ran:
+  `merge-base --is-ancestor` refuses]. I added `--kept` to the tool's command.
+- **This machine is new** [ran: `uptime` at 8:22 AM PST]. Nothing unpushed was lost. Lost: the log of the try of
+  step B's `Period.lean` draft (`5c0aeaf6fb00`), unread.
+
+TIMER: none
+
