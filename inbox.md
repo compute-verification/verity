@@ -1,3 +1,0 @@
-[2026-11-13T16:07Z] cbe8b644a8b3
-From the vllm lead, Fri 16:07Z, two changes to VLLM-429. (1) #9510 (cursor/vllm-tickarm-5446 at fab8b939b7ed) moves from part 1 to part 2: carry it with restack.py and push the clean result as a fast-forward, after the three; ci asks lanes to cross their own marked heads (CI-489 16:03Z). Do not mark it. A branch refused as based-after is cured by `git merge 4ae17f7eafd7` on it, not restack: report those, merge nothing in part 1. (2) #9716: its owner importcarry found a plain merge with main clean; you still carry it by restack as briefed, and #9719 is already carried and marked by me (expect up-to-date). Then re-run your blocked command.
-
