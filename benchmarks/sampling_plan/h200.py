@@ -41,9 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transformer as X  # noqa: E402
 from inputs import CARDS, I, cap  # noqa: E402
 
-from verity.protocols.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.prover.candidates import shape_of  # noqa: E402
-from verity.protocols.spot.prover.optimize import row_ands  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
+from verity.protocols.proofs.spot.prover.candidates import shape_of  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import row_ands  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as F, gemm as G  # noqa: E402
