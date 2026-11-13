@@ -10,17 +10,18 @@ public import Proofs.Properties.Spot.Tables
 
 The per-member form reads one statement for each member of the parameters, off the blobs and before any session
 (`Spot.OneStageZk.Member.statement`), and judges the member's session at it. A window's member is that member on
-the committed files (`MemberOn`). This module ties the two, so that a session's verdict at the statement the form
+the registered files (`MemberOn`). This module ties the two, so that a session's verdict at the statement the form
 read is flock-verify `--zk`'s at the window's member (`SessionVerdict.accepts_member`):
 
 * **What the statement read** (`statementOf_reads`, `statement_reads`): the statement's tags, the blobs' circuit and
   public files under the member's two digests, the circuit file's lookups the pinned tables the blobs hold, and the
   inputs `--zk` is handed at them (`Spot.OneStageZk.inputsOf`).
-* **The committed files hold the members' files** (`HoldsFiles`): each member's two digests name a committed file.
-* **The statement is the window's member's** (`statesMember`): on blobs that are the committed files, then the
-  evidence's, where the committed files hold the member's two files and each pinned table the blobs hold is its
-  registered file (`TablesSent`), the statement the form read for a member is `StatesMember` of the window's member
-  on those files.
+* **The blobs hold a member's files** (`HoldsFiles`, `ReadsFiles`, `readsFiles_of_holds`): what v2 reads on the
+  blobs under the member's two digests are the files those digests name among some files; so it is on blobs that
+  start with files holding the member's two.
+* **The statement is the window's member's** (`statesMember`): on blobs where v2 reads the member's files among
+  the files the window's member is on, and each pinned table the blobs hold is its registered file (`TablesSent`),
+  the statement the form read for a member is `StatesMember` of the window's member.
 -/
 
 @[expose] public section
@@ -88,25 +89,35 @@ def HoldsFiles (ms : Array _root_.Spot.OneStageZk.Member) (F : Array ByteArray) 
   ∀ vm ∈ ms.toList, (∃ f ∈ F, digestOf vm.own.circuit = some (Verity.sha512 f.data.toList)) ∧
     ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)
 
-/-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, the
-committed files `F` then the evidence's `B`, where `F` holds the member's two files and each pinned table the blobs
-hold is its registered file, the statement read for the parameters' member `vm` is `StatesMember` of the window's
-member `m` that is `vm` on `F`. -/
-theorem statesMember {F B : Array ByteArray} {s : Verity.Sent} (hs : s.blobs = F ++ B) (ht : TablesSent s)
-    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn F vm m)
+/-- **v2 reads the member `vm`'s files among `R` on the blobs `bs`**: the circuit file and the public file it reads
+there under the member's two digests are the files those digests name among `R` (`Verity.namedFile`). -/
+def ReadsFiles (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (bs : _root_.Core.Blobs) : Prop :=
+  (∀ b, bs.get vm.own.circuit "circuit" = .ok b → b = Verity.namedFile (digestOf vm.own.circuit) R) ∧
+    ∀ b, bs.get vm.own.pub "public file" = .ok b → b = Verity.namedFile (digestOf vm.own.pub) R
+
+/-- **On blobs that start with files holding a member's two, v2 reads the member's files among those.** -/
+theorem readsFiles_of_holds {F B : Array ByteArray} {vm : _root_.Spot.OneStageZk.Member}
     (hc : ∃ f ∈ F, digestOf vm.own.circuit = some (Verity.sha512 f.data.toList))
-    (hp : ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)) {slice : Json}
+    (hp : ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)) :
+    ReadsFiles F vm (_root_.Core.Blobs.ofArray (F ++ B)) :=
+  ⟨fun _ hg => get_named (digestOf_unhex vm.own.circuit) hc hg,
+    fun _ hg => get_named (digestOf_unhex vm.own.pub) hp hg⟩
+
+/-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, where
+v2 reads the member's files among the files `R` and each pinned table the blobs hold is its registered file, the
+statement read for the parameters' member `vm` is `StatesMember` of the window's member `m` that is `vm` on `R`. -/
+theorem statesMember {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent s)
+    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn R vm m)
+    (hr : ReadsFiles R vm (_root_.Core.Blobs.ofArray s.blobs)) {slice : Json}
     {a : _root_.Spot.OneStageZk.StepAt}
     (ha : vm.statement slice (_root_.Core.Blobs.ofArray s.blobs) = .ok a) : StatesMember (stepAt a) m := by
   obtain ⟨tags0, circuitB, pubB, htags, hgc, hgp, hl, hI⟩ := statement_reads ha
   have hcf : circuitB = m.I.circuitFile := by
-    rw [hs] at hgc
     rw [hon.circuit]
-    exact get_named (digestOf_unhex vm.own.circuit) hc hgc
+    exact hr.1 _ hgc
   have hpf : pubB = m.I.publicFile := by
-    rw [hs] at hgp
     rw [hon.publicFile]
-    exact get_named (digestOf_unhex vm.own.pub) hp hgp
+    exact hr.2 _ hgp
   have hI' : (stepAt a).I = _root_.Spot.OneStageZk.inputsOf tags0 vm.own circuitB pubB
       (_root_.Core.Blobs.ofArray s.blobs) := hI
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, hon.work, hon.stratified, hon.closure, hon.own, ?_⟩

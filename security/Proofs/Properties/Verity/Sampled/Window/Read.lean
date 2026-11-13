@@ -172,9 +172,9 @@ coins, with `S` covering the one-stage form, meets SPOT's target at composite `k
 the device printed each play's log after the parameters (`hP`); its history at each play signed what the play's
 signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); its members each have the one table `tb W`
 with hm96-sha512 rows (`hMA`); and `WindowRead` holds of each play the sampled verdict accepts, whose log v2 read is
-the device's, whose blobs sent hold each pinned table at its registered file and whose sample answers the strategy's
-`afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant `StepInv`, and each round's
-reading picks only openings (`windowReadingAt_picks`). -/
+the device's, whose blobs sent hold each pinned table and each member's files at their registered files and whose
+sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant
+`StepInv`, and each round's reading picks only openings (`windowReadingAt_picks`). -/
 theorem windowSpotSound_sessions (K : WindowConstructions V) (dev : Exchange → Properties.Challenger.History)
     (reg : Option Claims.Msg → ByteArray) (tb : Window → String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
@@ -194,7 +194,7 @@ theorem windowSpotSound_sessions (K : WindowConstructions V) (dev : Exchange →
     (hWR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c))
       (z : CoinTape (V.game θ F c) σ), V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ z) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ z) →
-      TablesSent (CoinTape.run (V.game θ F c) σ z).sent →
+      TablesSent (CoinTape.run (V.game θ F c) σ z).sent → FilesSent V (CoinTape.run (V.game θ F c) σ z) →
       SampledDigest k (CoinTape.run (V.game θ F c) σ z).sent (afterAt V k θ F c σ) →
       WindowRead W (tb W) ev filesDec (label θ F c σ) (afterAt V k θ F c σ) nc
         (CoinTape.run (V.game θ F c) σ z)) :
@@ -209,10 +209,10 @@ theorem windowSpotSound_sessions (K : WindowConstructions V) (dev : Exchange →
       windowReadingAt_picks #[tb W] 1026 (sessionReveal #[tb W] ev) (record₀ W θ F c) (recordDigest W θ F c))
     (fun θ F W hW c σ =>
       memberSteps_sampleMap V θ F c k
-        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
+        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o) ∧
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) reg (tb W) ev filesDec (record₀ W θ F c) (recordDigest W θ F c) σ (label θ F c σ)
         (afterAt V k θ F c σ) (hL θ F W hW) (hMA θ F W hW)
-        fun z hv hp => hWR θ F W hW c σ z hv hp.1.1 hp.1.2 hp.2)
+        fun z hv hp => hWR θ F W hW c σ z hv hp.1.1 hp.1.2.1 hp.1.2.2 hp.2)
 
 end Verity.Sampled

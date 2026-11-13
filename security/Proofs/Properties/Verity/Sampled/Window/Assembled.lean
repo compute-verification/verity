@@ -2,19 +2,21 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Leg
 public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.Sampled.Window.FilesSent
 public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
 # Sampled proofs' leg over a window, assembled from its pieces
 
 `windowSpotSound_of_sample` at the cut the one-session leg uses (`couplingTarget_assembled`): the log v2's check read
-is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`),
-and v2 samples at the strategy's `afterAt` (`SampledDigest`). The binding, the digest and the sample's coins are stated
-of the period's game and not of a session, so they hold at a window as they do at one session:
+is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`)
+and each member's files at its registered files (`FilesSent`), and v2 samples at the strategy's `afterAt`
+(`SampledDigest`). The binding, the digest and the sample's coins are stated of the period's game and not of a
+session, so they hold at a window as they do at one session:
 
-* **(a), the binding** (`Binding.logged_tables_le`): at the read finder and forger at the device's history `dev`,
-  wherever the device printed each play's log (`Binding.binds_of_prints`) and its history at each play signed what the
-  play's signatures are on (`Binding.SignsPlay`).
+* **(a), the binding** (`logged_files_le`): at the window's read finder (`windowReadFinder`) and the forger at the
+  device's history `dev`, wherever the device printed each play's log (`Binding.binds_of_prints`) and its history at
+  each play signed what the play's signatures are on (`Binding.SignsPlay`).
 * **(a'), the digest** (`prob_not_sampledDigest_le`): at the bound digests' two-continuation finder at the window's
   budget (`windowBindFinder`).
 * **The sample's coins** (`Window.srcCoinsAt`, `Window.avg_srcCoinsAt`): the window's bytes as `m` fresh frames' coins,
@@ -65,13 +67,13 @@ theorem windowBindFinder_calls : ∀ (W : Window) (θ : ByteArray) (F : Array By
   show ((2 * V.cost θ F c σ + 2 * W.h : ℕ) : ℝ) ≤ W.qM (V.cost θ F c σ)
   simp [Window.qM]
 
-/-- **The window's constructions with the binding's finders**: `K`'s with the read finder and forger at the device's
-history `dev` (`Binding.readFinder`, `Binding.forger`) and the bound digests' finder at composite `k`
+/-- **The window's constructions with the binding's finders**: `K`'s with the window's read finder and the forger at
+the device's history `dev` (`windowReadFinder`, `Binding.forger`) and the bound digests' finder at composite `k`
 (`windowBindFinder`). -/
 noncomputable def WindowConstructions.withBinding {V : Vocab d α} (K : WindowConstructions V)
     (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) : WindowConstructions V :=
   { K with
-    readFinder := Binding.readFinder V dev
+    readFinder := windowReadFinder V dev
     forger := Binding.forger V dev
     bindFinder := windowBindFinder V k
     bind_calls := windowBindFinder_calls V k }
@@ -84,8 +86,8 @@ window's bytes as `nc` frames' coins, with `S` covering the one-stage form, meet
 wherever, at each window of `S`: the device printed each play's log after the parameters (`hP`); its history at each
 play signed what the play's signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); each round's reading
 picks only openings (`hR`); and the members' steps hold off the openings' empty classes at their counts (`hm`,
-`MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table at its
-registered file and whose sample answers the strategy's `afterAt`. -/
+`MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table and each
+member's files at their registered files and whose sample answers the strategy's `afterAt`. -/
 theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
     (dev : Exchange → Properties.Challenger.History)
     (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
@@ -105,7 +107,7 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
       ∃ i s n, fr = .opening i s n)
     (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       MemberSteps V θ F c k
-        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
+        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o) ∧
           SampledDigest k o.sent (afterAt V k θ F c σ))
         W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
         (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
@@ -113,10 +115,10 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
         (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
   windowSpotSound_of_sample V k e rd (K.withBinding dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
-    (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent)
+    (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o)
     (fun θ F c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) I
     (fun θ F W hW H => Window.avg_srcCoinsAt (hL θ F W hW) H)
-    (fun θ F W hW c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ
+    (fun θ F W hW c σ => logged_files_le V k dev θ F c σ
       (Binding.binds_of_prints V k dev θ (hP θ F W hW)) (hS θ F W hW c))
     (fun θ F W _ c σ => prob_not_sampledDigest_le V k θ F c σ (2 * V.cost θ F c σ + 2 * W.h))
     hR hm

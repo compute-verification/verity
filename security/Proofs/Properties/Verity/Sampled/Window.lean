@@ -472,11 +472,12 @@ def WindowCouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K
 
 /-- **The deployment's windows `S` cover the sampled verdict's one-stage form at composite `k`** (`Covers`, at
 windows): where `S` holds no window and the parameters name the one-stage form, each strategy that meets the further
-finders' premises makes the sampled verdict accept with probability at most the published `δ` at its calls. -/
+finders' premises and the read finder's (`Vocab.FinderCR`) makes the sampled verdict accept with probability at most
+the published `δ` at its calls. -/
 def WindowCovers (V : Vocab d α) (k : Verity.Registration.Composite)
     (S : ByteArray → Array ByteArray → Option Window) : Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ →
+    V.finderCR .sampled θ F c σ → V.FinderCR .sampled θ F c σ →
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's windows `S`** (`Deployed`,
@@ -533,7 +534,7 @@ theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ :=
     Verity.Game.prob_mono (fun o ho => ho.1) _ σ
   cases hS : S θ F with
-  | none => exact hver.trans ((hCov θ F hS hP c σ hfs).trans (le_add_right (le_add_right le_rfl)))
+  | none => exact hver.trans ((hCov θ F hS hP c σ hfs hFC).trans (le_add_right (le_add_right le_rfl)))
   | some W =>
     have hFin := hD.finderCR θ F W hS c σ hfs hpr
     have hks := (K.live W θ F c σ).ks (V.cost θ F c σ) (K.project W θ F c σ) hFin.session

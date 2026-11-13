@@ -12,7 +12,7 @@ The per-member form's run holds every member of the parameters' files before any
 the sample or not (`Spot.OneStageZk.Member.FilesHeld`, `Spot.OneStageZk.membersRun_files`): the member's statement
 reads off the blobs, and at it the scope check, the files' ports and roots and the population check pass. A window's
 setup asks, of each of its members, that its files pass the files check (`FilesPass`). This module carries the first
-to the second, at the window's member that is the parameters' member on the committed files (`MemberOn`):
+to the second, at the window's member that is the parameters' member on the registered files (`MemberOn`):
 
 * **The circuit the checks read** (`circuitOf_flat`, `circuitOf_back`): an untyped statement's circuit file that
   parses with some lookup tables is the circuit `Flock.ProvedScope.circuitOf` reads with them, and with tables that
@@ -23,10 +23,10 @@ to the second, at the window's member that is the parameters' member on the comm
 * **The public file's count** (`population_header`, `headerHeld_instances`, `slice_population`, `load_count`): the
   member's population check holds its public file's header to the member's slice of the registration, whose
   population is the member's units' count, so a load of the file has as many proof blocks as the member has units.
-* **The member's files pass** (`filesPass_of_held`): on blobs that are the committed files, then the evidence's,
-  where the committed files hold the member's two files and each pinned table the blobs hold is its registered file
-  (`TablesSent`), a member whose files the run held has `FilesPass` at the window's member on those files; so has
-  every member of a window on the files (`WindowOn.passes`).
+* **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
+  the window's member is on (`ReadsFiles`) and each pinned table the blobs hold is its registered file
+  (`TablesSent`), a member whose files the run held has `FilesPass` at the window's member; so has every member of
+  a window (`WindowOn.passes`).
 * **Files that pass fix their roots' domains** (`FilesPass.rootsFix`, `FilesPass.checked_all`,
   `MembersSetUp.rootsFix`): the ports check refuses two ports of one root and different published domains, so a
   member whose files pass has `Member.RootsFix`, and is `Checked` as Flock's member at every cost.
@@ -182,18 +182,16 @@ theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : St
 /-! ## The member's files pass -/
 
 /-- **A member whose files the per-member form's run held has its files pass, at the window's member**: on the
-blobs sent `s`, the committed files `F` then the evidence's `B`, where `F` holds the member's two files and each
-pinned table the blobs hold is its registered file, the parameters' member `vm` whose files the run held at its
-slice of the registration (`Spot.OneStageZk.Member.FilesHeld`) has `FilesPass` at the window's member `m` that is
-`vm` on `F`. -/
-theorem filesPass_of_held {F B : Array ByteArray} {s : Verity.Sent} (hs : s.blobs = F ++ B) (ht : TablesSent s)
-    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn F vm m)
-    (hc : ∃ f ∈ F, digestOf vm.own.circuit = some (Verity.sha512 f.data.toList))
-    (hp : ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)) {rec : Json}
+blobs sent `s`, where v2 reads the member's files among the files `R` and each pinned table the blobs hold is its
+registered file, the parameters' member `vm` whose files the run held at its slice of the registration
+(`Spot.OneStageZk.Member.FilesHeld`) has `FilesPass` at the window's member `m` that is `vm` on `R`. -/
+theorem filesPass_of_held {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent s)
+    {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn R vm m)
+    (hr : ReadsFiles R vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}
     {roots : Std.HashMap String (Array Json)}
     (h : vm.FilesHeld (vm.slice rec roots) (_root_.Core.Blobs.ofArray s.blobs)) : FilesPass m := by
   obtain ⟨a, ha, -, hks, -, hpop⟩ := h
-  have hsm := statesMember hs ht hon hc hp ha
+  have hsm := statesMember ht hon hr ha
   obtain ⟨eks, epop⟩ := statement_checks ha
   have htags : a.I.tags = m.I.tags := hsm.tags
   have hcf : a.I.circuitFile = m.I.circuitFile := hsm.circuit
@@ -218,14 +216,16 @@ theorem filesPass_of_held {F B : Array ByteArray} {s : Verity.Sent} (hs : s.blob
   rw [circuitOf_flat hty hflat]
   exact hports
 
-/-- **Every member of a window on the files has its files pass, where the run held every member's**: at a window
-that is the parameters' members on the committed files `F`, on blobs sent that are `F` then the evidence's, where
-`F` holds the members' files, each pinned table the blobs hold is its registered file and the run held each
-member's files at its slice of the registration. -/
-theorem WindowOn.passes {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) {s : Verity.Sent} (hs : s.blobs = F ++ B) (ht : TablesSent s)
+/-- **Every member of a window has its files pass, where the run held every member's**: at a window that is the
+parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
+files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
+of the registration. -/
+theorem WindowOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+    (h : WindowOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
-    (hms : p.members = some ms) (hF : HoldsFiles ms F) {rec : Json} {roots : Std.HashMap String (Array Json)}
+    (hms : p.members = some ms)
+    (hF : ∀ vm ∈ ms, ReadsFiles (V.registered θ) vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}
+    {roots : Std.HashMap String (Array Json)}
     (hheld : ∀ vm ∈ ms, vm.FilesHeld (vm.slice rec roots) (_root_.Core.Blobs.ofArray s.blobs)) :
     ∀ m ∈ W.ms, FilesPass m := by
   obtain ⟨p', ms', vms, hp', hms', hperm, -, hall, -⟩ := h.members
@@ -235,9 +235,8 @@ theorem WindowOn.passes {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray
   subst hmm
   intro m hm
   obtain ⟨vm, hvm, hon⟩ := forall₂_right hall m hm
-  have hvm' : vm ∈ ms.toList := hperm.mem_iff.1 hvm
-  obtain ⟨hc, hpb⟩ := hF vm hvm'
-  exact filesPass_of_held hs ht hon hc hpb (hheld vm (Array.mem_toList_iff.1 hvm'))
+  have hvm' : vm ∈ ms := Array.mem_toList_iff.1 (hperm.mem_iff.1 hvm)
+  exact filesPass_of_held ht hon (hF vm hvm') (hheld vm hvm')
 
 /-! ## Files that pass fix their roots' domains -/
 

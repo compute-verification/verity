@@ -41,9 +41,9 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   hold it (`FormAccepts`, of the check as it is by `formAccepts_refused`).
 * `MemberForm.Run`: the form's run where every session accepted (`membersRun_ok`): the statements members' in order,
   one session each, at the statement read for its member (`statementAt_files`), the sessions' verdicts in order.
-* `MemberForm.SetsUp`: what a window's instance sets up at the form's parameters (`MembersSetUp`: the window on
-  the parameters' members and the files sent, `WindowOn`, laid out, each member's files passing, `FilesPass`), and
-  the window's instance's setup at every accepted play from it (`windowAt_members`).
+* `MemberForm.SetsUp`: what a window's instance sets up at the form's parameters (`MembersSetUp`: the window the
+  parameters' members on the registered files, `WindowOn`, laid out, each member's files passing, `FilesPass`),
+  and how v2 reads the members' files (`membersRead`).
 * `MemberForm.States`: the statement the form read for a member is its window's member's (`statesMember`), so a
   session's verdict at it is flock-verify `--zk`'s at the window's member.
 * `MemberForm.Passes`: a member whose files the form's run held has its files pass at the window's member

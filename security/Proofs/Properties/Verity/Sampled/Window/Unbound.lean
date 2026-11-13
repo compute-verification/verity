@@ -30,6 +30,8 @@ This file holds the statements, each a `Prop`, and the names they read; it prove
 * **One member** (`MemberV5.UnboundFaulty`, `MemberV5.FaultyWrong`): the units its trace doesn't bind are faulty in its
   sampling statement (`MemberV5.faulty`), and its faulty units are incorrect at every registration
   (`MemberV5.wrongAt`).
+* **The seats' traces** (`Seat.trace`, `tracesWith`): each member's transcript at its seat's trace, at its files'
+  circuit, side by side in the members' order: the trace a window's extractor gives.
 * **The window** (`ReadsWith`, `JointAuditV5.ReadsAt`, `JointAuditV5.UnboundWrong`): with the members laid out in unit
   order (`JointAuditV5.Laid`) and each member read at its own gates of the window's circuit, at its own part of the
   trace and of the openings, the units the window's trace doesn't bind are within the window's incorrect proof
@@ -187,6 +189,22 @@ def ReadsWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Ver
         (fun j v => op (Fin.natAdd r.circuit.N j)
           (v.cast (Fin.append_right r.circuit.w (Verity.FileRead.circuitWith r' rs).w j).symm))
         (Verity.Circuit.traceRight tr) ss'
+
+open Classical in
+/-- **A seat's trace at the committed files `r`**: the member's transcript at the seat's trace, where `r`'s circuit
+is the member's parsed circuit file's; else the zero trace. -/
+noncomputable def Seat.trace {Reg : Type} {nJ : ℕ} (s : Seat Reg nJ) (r : Verity.FileRead) : r.circuit.Trace :=
+  if h : r.circuit = Flock.Bridge.circuitOf s.m.D s.m.hU s.m.n then
+    cast (congrArg Verity.Circuit.Trace h.symm) (s.m.transcript s.Xv)
+  else fun _ => 0
+
+/-- **The seats' traces side by side**, a first member's files and the rest's: the first seat's trace at the first
+files, beside the rest's at the rest's files (`Verity.Circuit.traceBeside`); the zero trace where the seats run out. -/
+noncomputable def tracesWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
+    List (Seat Reg nJ) → (Verity.FileRead.circuitWith r rs).Trace
+  | r, [], ss => (ss.head?.map (·.trace r)).getD fun _ => 0
+  | r, r' :: rs, ss =>
+    Verity.Circuit.traceBeside ((ss.head?.map (·.trace r)).getD fun _ => 0) (tracesWith r' rs ss.tail)
 
 namespace JointAuditV5
 
