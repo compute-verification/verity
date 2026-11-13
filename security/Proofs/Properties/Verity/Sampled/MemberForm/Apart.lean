@@ -16,10 +16,12 @@ no unit is in two members' ranges (`Apart`).
 * **Sorted ranges that each end by the next one's start share no unit** (`apart_of_adjacent`): the sorted ranges
   are a permutation of the members' (`Verity.QSort.qsort_perm`), in the order of their starts
   (`Verity.QSort.ByKey.qsort_sorted`), so a range ends by the start of every later one.
-* **The parse's members share no unit** (`membersOf_apart`, `membersParamsOfJson_apart`).
+* **The parse's members share no unit** (`membersOf_apart`, `membersParamsOfJson_apart`,
+  `paramsEitherOfJson_apart`: in either form, as the one statement's parse names no members).
 * **The form's accepts' members share no unit** (`FormApart`): of everything v2 accepts at the coins it read
   (`V2Accepts`) on parameters that name members. It holds of the check as it is, which accepts no such parameters
-  (`formApart_refused`); a check that accepts the form reads them by `membersParamsOfJson`.
+  (`formApart_refused`); a check that accepts the form reads them by `paramsEitherOfJson`, and its accept carries
+  that parse.
 -/
 
 @[expose] public section
@@ -139,8 +141,22 @@ theorem membersParamsOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     exact membersOf_apart hms'
   · cases h
 
+/-- **Parameters parsed in either form name members that share no unit**: the per-member form's parse reads them by
+`membersOf` (`membersParamsOfJson_apart`), and the one statement's parse names none
+(`Spot.OneStageZk.paramsOfJson_members`). -/
+theorem paramsEitherOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
+    (h : _root_.Spot.OneStageZk.paramsEitherOfJson j = .ok p) {ms : Array _root_.Spot.OneStageZk.Member}
+    (hm : p.members = some ms) : Apart ms.toList := by
+  unfold _root_.Spot.OneStageZk.paramsEitherOfJson at h
+  split at h
+  · exact membersParamsOfJson_apart h hm
+  · cases hm.symm.trans (_root_.Spot.OneStageZk.paramsOfJson_members h)
+
 /-- **The per-member form's accepts' members share no unit**: wherever v2 accepts at the coins it read
-(`V2Accepts`) on parameters that name members, no unit is in two of their ranges. -/
+(`V2Accepts`) on parameters that name members, no unit is in two of their ranges. An accept carries the parse of
+its parameters' bytes (`V2Accepts`' first clause), so a check that reads them by `paramsEitherOfJson` has it of
+that parse (`paramsEitherOfJson_apart`); the form's run does not give it, which holds each member to one range and
+the counts to the population and passes two ranges that share a unit. -/
 def FormApart : Prop :=
   ∀ (bs : _root_.Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.Params)
     (c : _root_.Spot.OneStage.Commitment) (ev : _root_.Spot.OneStageZk.Evidence) (ξ : ByteArray) (dr : Draws)
