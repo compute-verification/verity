@@ -6,7 +6,7 @@ imports it with no `sys.path` entry.
 
 The kit holds no theory and no fold semantics. A referee and the author it checks may both use it, and neither re-runs
 the other's argument. Fold semantics belong to the receipt-fold module. MMA semantics come from
-`verity.definitions.silicon` and are never re-derived here.
+`verity.circuits.silicon` and are never re-derived here.
 
 **What a caller may import** is each module's `__all__` (`exact_kit.checks`, `exact_kit.f2`, `exact_kit.wrap`,
 `exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../theory/`'s scripts and

@@ -10,8 +10,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     whole window on sm_120's, each reaching its cell and chain; the unscale at 2 x 2 with and without the bias; each word
     Definition and its σ."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
     from verity.definitions.registry import pearl_c_tile as PT
 
     return [

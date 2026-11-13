@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import HOPPER_E4M3_K32
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import HOPPER_E4M3_K32
 from verity.protocols.pouw.prover.circuit import words as W
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import pearl_c as C
