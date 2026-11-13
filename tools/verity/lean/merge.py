@@ -73,10 +73,11 @@ a conflict is seen and resolved, while a silent loss lands.
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`),
-written sorted where `check.py --update` writes it sorted (`SORTED_NAMES`: each `trust_gap` entry's premises). A move is a change, and the side that made it applies: a map's keys outside `SORTED` stand in ours' order with theirs' new
-ones after them, and a list of names in ours' order with each of theirs' new items after the item theirs has before it,
-unless ours holds the members it shares with the base in the base's order and theirs doesn't (`reordered`): then the roles
-swap, theirs' order with ours' new members placed so (`keys`, `ordered`). Where both sides moved, ours' order stands, named
+written sorted where `check.py --update` writes it sorted (`SORTED_NAMES`: each `trust_gap` entry's premises). A move is
+a change, and the side that made it applies: a map's keys outside `SORTED` stand in ours' order with theirs' new ones
+after them, and a list of names in ours' order with each of theirs' new items after the item theirs has before it, unless
+ours holds the members it shares with the base in the base's order and theirs doesn't (`reordered`): then the roles swap,
+theirs' order with ours' new members placed so (`keys`, `ordered`). Where both sides moved, ours' order stands, named
 nowhere, as an order states nothing; with no base, or an empty one, neither side moved. For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
 `headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
