@@ -34,9 +34,10 @@ INJECTED_UNSET = [n for n in INJECTED if not os.environ.get(n)]
 
 def record_event(hook: str, event: object) -> None:
     """Append what `hook` was handed to EVENT_LOG, keeping the last EVENT_LOG_MAX_BYTES or so; `inbox.py check` reads it to
-    say whether this VM's shell hook runs for an agent, and its key names show which event shape Cursor sent. Of the
-    payload's other values a line keeps EVENT_VALUES alone: never the command, a path or an address, nor anything of
-    `tool_input` (a Task call's `model` argument is the worker's, which `task_hook.py` logs)."""
+    say whether this VM's shell hook runs for an agent, its key names show which event shape Cursor sent, and `inbox.py
+    turns` reads from it the model each turn's payloads name. Of the payload's other values a line keeps EVENT_VALUES
+    alone: never the command, a path or an address, nor anything of `tool_input` (a Task call's `model` argument is the
+    worker's, which `task_hook.py` logs)."""
     e = event if isinstance(event, dict) else {}
     tool_input = e.get("tool_input")
     values = {k: e[k][:EVENT_VALUE_MAX] for k in EVENT_VALUES if isinstance(e.get(k), str) and e[k]}

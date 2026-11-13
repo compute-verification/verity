@@ -73,7 +73,8 @@ def test_the_shell_hook_judges_a_pretooluse_shell_event_like_a_beforeshellexecut
 
 def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model_and_the_turns_id(tmp_path, event_log):
     """Cursor's payload names a model and a turn (`generation_id`) beside the command, the account and paths. Each hook's
-    line keeps those two where the payload has them as strings, cut at 64 characters, and no other value."""
+    line keeps those two where the payload has them as strings, cut at 64 characters, and no other value, so which model a
+    turn's events name is read on the agent's own VM (`inbox.py turns`)."""
     W, turn = "bc-44444444-4444-4444-8444-444444444444", "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f"
     registry = tmp_path / "registry.json"
     registry.write_text(json.dumps({"handles": []}))
@@ -112,6 +113,8 @@ def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model
     assert (cut["model"], cut["generation_id"]) == ("m" * 64, "g" * 64)
     assert not {"model", "generation_id"} & (set(typed) | set(without) | set(unread)), "kept only where the payload has a string"
     assert typed["keys"] == sorted(shell) and unread["keys"] == "str" and unread["conversation_id"] is None
+    listed = subprocess.run([sys.executable, INBOX_TOOL, "turns", W], capture_output=True, text=True, check=True, env=env).stdout
+    assert re.search(rf"^{turn}  \S+  \S+ +3  a-model-name$", listed, re.M), listed
 
 
 @pytest.fixture(scope="module")
@@ -756,6 +759,46 @@ def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
     stamp = (tmp_path / "bc-11111111-1111-4111-8111-111111111111.md").read_text().splitlines()[0].strip("[]")
     assert any(x.startswith("pending   bc-11111111-1111-4111-8111-111111111111 ") and x.endswith(f"bytes  since {stamp}") for x in listed)
     assert any(x.startswith("delivered bc-33333333-3333-4333-8333-333333333333 ") and "since" not in x for x in listed)
+
+
+def test_turns_prints_the_model_each_turn_of_an_agent_names_from_both_files_of_the_event_log(event_log):
+    """`turns` reads this VM's event log, the file it rotated to first: a line per generation id of the agent, oldest first,
+    with when its first and last event were recorded, how many it has and the model they name, so a rule about models can
+    be checked by turn. `-` stands for what an event doesn't name, a generation id whose events name two models is a line
+    for each, and only printable characters of the log are printed."""
+    A, other = "bc-12121212-1212-4212-8212-121212121212", "bc-34343434-3434-4434-8434-343434343434"
+    one, two, three = (f"{n * 8}-0000-4000-8000-000000000000" for n in "123")
+
+    def line(t, agent=A, hook="shell_hook.py", **kept):
+        return json.dumps({"t": t, "hook": hook, "event": "beforeShellExecution", "conversation_id": agent, **kept}) + "\n"
+
+    def turns(*args, **env):
+        return subprocess.run([sys.executable, INBOX_TOOL, "turns", *args], capture_output=True, text=True,
+                              env={**os.environ, **env})
+
+    Path(f"{event_log}.1").write_text(
+        line(1_000_000_000) + line(1_000_000_060, generation_id=one, model="model-a")
+        + line(1_000_000_090, other, generation_id=three, model="model-c"))
+    event_log.write_text(
+        line(1_000_000_120, hook="task_hook.py", generation_id=one, model="model-a") + "not json\n"
+        + line(1_000_003_600, generation_id=two, model="model-b")
+        + line(1_000_003_660, hook="stop_hook.py", generation_id=two, model="model-b")
+        + line(1_000_003_720, generation_id=two, model="model-c\x1b[2J") + line(1_000_007_200, generation_id=three))
+    listed = turns(A)
+    assert listed.returncode == 0 and listed.stdout.splitlines() == [
+        "generation_id                         first_event           last_event            events  model",
+        "-                                     2001-09-09T01:46:40Z  2001-09-09T01:46:40Z       1  -",
+        f"{one}  2001-09-09T01:47:40Z  2001-09-09T01:48:40Z       2  model-a",
+        f"{two}  2001-09-09T02:46:40Z  2001-09-09T02:47:40Z       2  model-b",
+        f"{two}  2001-09-09T02:48:40Z  2001-09-09T02:48:40Z       1  model-c?[2J",
+        f"{three}  2001-09-09T03:46:40Z  2001-09-09T03:46:40Z       1  -"], listed.stdout
+    assert listed.stderr.startswith("inbox: `-` stands for what a turn's events don't name")
+    mine = turns(CURSOR_CONVERSATION_ID=other)
+    assert (mine.returncode, mine.stdout.splitlines()[1:], mine.stderr) == (
+        0, [f"{three}  2001-09-09T01:48:10Z  2001-09-09T01:48:10Z       1  model-c"], ""), "this shell's agent by default"
+    nobody = turns("bc-nobody")
+    assert nobody.returncode == 1 and nobody.stdout == (
+        f"inbox: {event_log} holds no event of bc-nobody: no hook has run for it on this VM, or its events have rotated out\n")
 
 
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
