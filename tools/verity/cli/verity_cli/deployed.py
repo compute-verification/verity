@@ -23,7 +23,8 @@ The object, its keys in this order and every list sorted by name:
   `gap_premises`, `open` and `overdue`}, a premise counted under each owner its locks name; what names no owner is under
   none).
 
-A field a lock leaves out is null. A lock that is not a JSON object, whose `deployed` is not a list of names, or whose
+Every owner is printed bare, as the lock writes it less one leading `@`, and held to no registry. A field a lock leaves out
+is null. A lock that is not a JSON object, whose `deployed` is not a list of names, or whose
 `deployed` names a guarantee it has no record of, ends the command with exit 1 and one line naming the lock and what is
 wrong.
 """
@@ -63,6 +64,11 @@ def _str(v) -> str | None:
     return v if isinstance(v, str) else None
 
 
+def _owner(v) -> str | None:
+    """An owner as the metrics and the handle registry write it: the lock's, one leading `@` dropped."""
+    return v.removeprefix("@") if isinstance(v, str) else None
+
+
 def _day(v) -> datetime.date | None:
     try:
         return datetime.date.fromisoformat(v) if isinstance(v, str) else None
@@ -99,13 +105,13 @@ def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -
             rec, kept = lock["guarantees"][g], set(check.name_list(held.get(g)))
             differs = None if kept == set(gap) else {"only_held": sorted(kept - set(gap)),
                                                      "only_computed": sorted(set(gap) - kept)}
-            guarantees.append({"name": g, "lock": path, "owner": _str(rec.get("owner")), "type_hash": _str(rec.get("type_hash")),
+            guarantees.append({"name": g, "lock": path, "owner": _owner(rec.get("owner")), "type_hash": _str(rec.get("type_hash")),
                                "unfolded_hash": _str(rec.get("unfolded_hash")), "gap": gap, "held_differs": differs})
         for section in KINDS:
             for name, entry in (lock.get(section) if isinstance(lock.get(section), dict) else {}).items():
                 entry = entry if isinstance(entry, dict) else {}
-                listings.setdefault(name, []).append((section, {"lock": path, **{f: _str(entry.get(f))
-                                                                                  for f in ("owner", "issue", "due")}}))
+                listings.setdefault(name, []).append((section, {"lock": path, "owner": _owner(entry.get("owner")),
+                                                                "issue": _str(entry.get("issue")), "due": _str(entry.get("due"))}))
     guarantees.sort(key=lambda r: (r["name"], r["lock"]))
     in_gap: dict[str, set[str]] = {}
     for r in guarantees:

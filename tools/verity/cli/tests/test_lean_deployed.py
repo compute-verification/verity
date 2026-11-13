@@ -55,16 +55,16 @@ def test_a_guarantee_at_gap_zero_and_one_with_a_gap():
     assert list(out) == ["format", "commit", "today", "locks", "guarantees", "premises", "totals"]
     assert (out["format"], out["commit"], out["today"], out["locks"]) == (1, "c" * 40, "2030-06-15", ["pkg/lean-audit.json"])
     assert out["guarantees"] == [
-        {"name": "P.Gapped", "lock": "pkg/lean-audit.json", "owner": "@g", "type_hash": "t-P.Gapped",
+        {"name": "P.Gapped", "lock": "pkg/lean-audit.json", "owner": "g", "type_hash": "t-P.Gapped",
          "unfolded_hash": "u-P.Gapped", "gap": ["P.Assumed", "P.Open"], "held_differs": None},
-        {"name": "P.Zero", "lock": "pkg/lean-audit.json", "owner": "@g", "type_hash": "t-P.Zero", "unfolded_hash": "u-P.Zero",
+        {"name": "P.Zero", "lock": "pkg/lean-audit.json", "owner": "g", "type_hash": "t-P.Zero", "unfolded_hash": "u-P.Zero",
          "gap": [], "held_differs": None}]
     assert [(p["name"], p["kind"], p["in_gap_of"]) for p in out["premises"]] == [
         ("P.Assumed", "assumption", ["P.Gapped"]), ("P.Elsewhere", "open", []), ("P.Open", "open", ["P.Gapped"])]
     assert list(premise(out, "P.Open")) == ["name", "kind", "owner", "issue", "due", "listed", "overdue", "in_gap_of"]
     assert out["totals"] == {"deployed": 2, "gap_zero": 1, "gap_premises": 2, "open": 2, "overdue": 0, "owners_differ": 0,
-                             "by_owner": {"@g": {"deployed": 2, "gap_premises": 0, "open": 0, "overdue": 0},
-                                          "@o": {"deployed": 0, "gap_premises": 1, "open": 2, "overdue": 0}}}
+                             "by_owner": {"g": {"deployed": 2, "gap_premises": 0, "open": 0, "overdue": 0},
+                                          "o": {"deployed": 0, "gap_premises": 1, "open": 2, "overdue": 0}}}
 
 
 def test_a_gap_reaches_the_premises_of_a_guarantee_a_domain_hypothesis_cites():
@@ -76,26 +76,27 @@ def test_a_gap_reaches_the_premises_of_a_guarantee_a_domain_hypothesis_cites():
 
 
 def test_a_premise_two_locks_list_is_counted_once_with_equal_fields_and_with_two_owners():
+    """An owner prints bare: `@x` and `x` are one owner."""
     a = lock({"A.G": {"open": ["S.Same", "S.Split"]}}, ["A.G"], {"A.G": ["S.Same", "S.Split"]},
              open={"S.Same": entry("@x"), "S.Split": entry("@x", due="2030-06-01")})
     b = lock({"B.G": {"open": ["S.Split"]}}, ["B.G"], {"B.G": ["S.Split"]},
-             open={"S.Same": entry("@x"), "S.Split": entry("@y", due="2030-07-01")})
+             open={"S.Same": entry("x"), "S.Split": entry("@y", due="2030-07-01")})
     out = run({"b/lean-audit.json": b, "a/lean-audit.json": a})
     assert out["locks"] == ["a/lean-audit.json", "b/lean-audit.json"]
     assert premise(out, "S.Same") == {
-        "name": "S.Same", "kind": "open", "owner": "@x", "issue": "X-1", "due": "2030-12-31",
-        "listed": [{"lock": "a/lean-audit.json", "owner": "@x", "issue": "X-1", "due": "2030-12-31"},
-                   {"lock": "b/lean-audit.json", "owner": "@x", "issue": "X-1", "due": "2030-12-31"}],
+        "name": "S.Same", "kind": "open", "owner": "x", "issue": "X-1", "due": "2030-12-31",
+        "listed": [{"lock": "a/lean-audit.json", "owner": "x", "issue": "X-1", "due": "2030-12-31"},
+                   {"lock": "b/lean-audit.json", "owner": "x", "issue": "X-1", "due": "2030-12-31"}],
         "overdue": False, "in_gap_of": ["A.G"]}
     split = premise(out, "S.Split")
     assert (split["owner"], split["issue"], split["due"]) == (None, "X-1", None)
-    assert [e["owner"] for e in split["listed"]] == ["@x", "@y"]
+    assert [e["owner"] for e in split["listed"]] == ["x", "y"]
     assert split["overdue"] is True, "the earliest of the locks' dates is before today"
     assert split["in_gap_of"] == ["A.G", "B.G"]
     t = out["totals"]
     assert (t["deployed"], t["gap_premises"], t["open"], t["overdue"], t["owners_differ"]) == (2, 2, 2, 1, 1)
-    assert t["by_owner"]["@x"] == {"deployed": 0, "gap_premises": 2, "open": 2, "overdue": 1}
-    assert t["by_owner"]["@y"] == {"deployed": 0, "gap_premises": 1, "open": 1, "overdue": 1}
+    assert t["by_owner"]["x"] == {"deployed": 0, "gap_premises": 2, "open": 2, "overdue": 1}
+    assert t["by_owner"]["y"] == {"deployed": 0, "gap_premises": 1, "open": 1, "overdue": 1}
 
 
 def test_a_lock_that_holds_only_open_premises():
