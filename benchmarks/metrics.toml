@@ -42,6 +42,33 @@ every = "7d"
 goal = "benchmarks/proof-system-performance"
 
 [[metric]]
+id = "benchmarks/exfiltration-gb-world-year"
+title = "GLM-5.3's exfiltration capacity over the world's year at 10% of compute: the headline figure, λ times the bound where the plan of record's row's total is 10% of compute"
+owner = "benchmarks"
+unit = "GB a world year at 10% of compute"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
+every = "7d"
+
+[[metric]]
+id = "benchmarks/exfiltration-compute-audit-gb"
+title = "GLM-5.3's exfiltration capacity over the world's year at 10% of compute: the compute audit's part"
+owner = "benchmarks"
+unit = "GB a world year at 10% of compute"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
+every = "7d"
+
+[[metric]]
+id = "benchmarks/exfiltration-network-certifier-gb"
+title = "GLM-5.3's exfiltration capacity over the world's year at 10% of compute: the network certifier's part, as the scan's check charges it"
+owner = "benchmarks"
+unit = "GB a world year at 10% of compute"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
+every = "7d"
+
+[[metric]]
 id = "vllm/serving-cost-glm53"
 title = "GLM-5.3's serving cost over stock vLLM"
 owner = "vllm"
