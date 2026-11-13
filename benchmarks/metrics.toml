@@ -2,6 +2,46 @@
 # store. Its format and rules are benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py enforces them.
 
 [[metric]]
+id = "benchmarks/prover-gpus-per-serving-gpu"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPUs for each serving GPU"
+owner = "benchmarks"
+unit = "prover GPUs a serving GPU"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/prover-gpu-seconds-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPU-seconds for each served token"
+owner = "benchmarks"
+unit = "prover GPU-seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/lean-verifier-seconds-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: the Lean verifier's seconds for each served token"
+owner = "benchmarks"
+unit = "Lean verifier seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/proof-bytes-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: proof bytes for each served token"
+owner = "benchmarks"
+unit = "proof bytes a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
 id = "vllm/serving-cost-glm53"
 title = "GLM-5.3's serving cost over stock vLLM"
 owner = "vllm"
@@ -12,6 +52,16 @@ every = "7d"
 goal = "vllm/serving-cost-benchmark"
 
 [[metric]]
+id = "top/tree-not-yet-lines"
+title = "Paths main holds outside the layout of record: the lines of tests/tree.toml's not-yet list"
+owner = "top"
+unit = "lines"
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_yet.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
 id = "network-accounting/scan-proving-cost"
 title = "The network certifier's scan: proving seconds for each second of execution phase"
 owner = "network-accounting"
@@ -20,6 +70,59 @@ better = "lower"
 command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
 every = "7d"
 goal = "network/period-bound-checked"
+
+[[metric]]
+id = "vllm/prod-replay-match-glm53"
+title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back before a request's first difference"
+owner = "vllm"
+unit = "percent of served tokens"
+better = "higher"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/prod-advice-bits-glm53"
+title = "GLM-5.3 served at vLLM's production settings: the advice its replayed pass's schedule costs"
+owner = "vllm"
+unit = "bits a request"
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/prod-serving-cost-glm53"
+title = "GLM-5.3 served at the settings vLLM publishes for serving it: its serving cost over stock vLLM"
+owner = "vllm"
+unit = "percent of stock's serving time"
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+floor = 1
+goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/remote-demo-minutes"
+title = "The remote demo: minutes from its first command to its verdict"
+owner = "vllm"
+unit = "minutes"
+better = "lower"
+command = "research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN"
+every = "7d"
+floor = 60
+goal = "demos/remote-demo"
+
+[[metric]]
+id = "vllm/onsite-demo-minutes"
+title = "The onsite demo: minutes from its first command to its verdict"
+owner = "vllm"
+unit = "minutes"
+better = "lower"
+command = "research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN"
+every = "7d"
+floor = 60
+goal = "demos/onsite-demo"
 
 [[metric]]
 id = "network-accounting/scan-verifier-cost"
@@ -52,3 +155,13 @@ better = "lower"
 command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
 every = "12h"
 goal = "ci/lean-landing-two-hours"
+
+[[metric]]
+id = "training/inference-only-slowdown"
+title = "Llama 3.2 1B, the serve's stated policy: the least slowdown of training hidden in its inference blocks"
+owner = "training"
+unit = "the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs"
+better = "higher"
+command = "research run --on auto --mem-gb 16 --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/inference_only/run.py --out \"$OUT\"'"
+every = "7d"
+goal = "accounting/inference-only-small-model"

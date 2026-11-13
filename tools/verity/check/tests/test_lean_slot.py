@@ -1,5 +1,6 @@
 """`tools/verity/check/lean_slot.py`: a Lean audit takes one of the node's N slots, waits for one naming their holders, and frees it on
-exit; with no cap set it runs at once. And check's lean-audit step takes one only when it audits a package."""
+exit; with no cap set it runs at once, and where its pool is at 0 as it arrives it is refused. And check's lean-audit step takes
+one only when it audits a package."""
 from __future__ import annotations
 
 import fcntl
@@ -113,6 +114,32 @@ def test_a_request_that_does_not_queue_takes_a_free_slot_or_is_refused_at_once_a
     assert not list((slots / "lean-line-audit").iterdir())
     for fd in (first[2], second[2]):
         os.close(fd)
+
+
+def test_a_request_for_a_pool_at_0_is_refused_as_it_arrives_and_joins_no_line(slots, monkeypatch):
+    """`POOL 0` closes a pool on a machine. A request that joined its line would hold its run's cores for a slot that can't
+    come, so it is refused before it joins, whether or not it would queue: the refusal quotes the pool's line with the
+    steward's comment and says where to run instead, and the command exits unrun."""
+    LS.SLOTS.write_text("audit 0   # closed for a test\nany 2\n")                 # `any` stands in only for a pool not listed
+    lines = []
+
+    def sleep(_s):
+        raise AssertionError("a request for a closed pool never polls")
+
+    said = (f"{LS.SLOTS} reads `audit 0  # closed for a test`: pool 'audit' is closed on this machine, so this request takes no "
+            "slot and joins no line; run it on a machine whose `lean_slot.py --status` lists a slot of pool 'audit'")
+    for queue in (True, False):
+        with pytest.raises(LS.Refused) as e:
+            LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lines.append, mono=lambda: 0.0, queue=queue)
+        assert str(e.value) == said
+    monkeypatch.setattr(LS.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv)))
+    with pytest.raises(SystemExit) as e:
+        LS.main(["--pool", "audit", "--", "true"], now=lambda: NOW, sleep=sleep)
+    assert e.value.code == f"lean-slot: {said}"
+    LS.SLOTS.write_text("check 2\nany 0\n")                                       # `any` stands in for `audit`, and is closed
+    with pytest.raises(LS.Refused, match=r" reads `any 0`: pool 'any' is closed on this machine, .* a slot of pool 'audit' or 'any'$"):
+        LS.hold("audit", now=lambda: NOW, sleep=sleep, log=lines.append, mono=lambda: 0.0)
+    assert lines == [] and [p.name for p in slots.glob("lean-*")] == ["lean-slots"], "no line, ticket, lock or holder's record"
 
 
 def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots, monkeypatch):
@@ -272,6 +299,35 @@ def test_a_waiter_takes_the_slot_the_steward_adds_and_a_held_slot_past_n_is_list
     assert LS.status(LS.parse("audit 1"), slots, NOW) == ["audit/0  free"]
 
 
+def test_a_waiter_in_line_when_its_pool_goes_to_0_stays_there_and_takes_the_slot_the_steward_gives_back(slots):
+    """The steward lowers a pool to 0 for a timed window and raises it again. A request that joined before the window is not
+    refused: it keeps its place through the window, though the slot it waited for frees inside it, and takes a slot once the
+    N is raised. Its log through the window is a waiter's: the N it reads, and no slot to list."""
+    held = _hold(slots / "lean-audit-0.lock")
+    _proc_locks(slots / "proc", {slots / "lean-audit-0.lock": 4242})
+    LS.SLOTS.write_text("audit 1\n")
+    polls, in_line, lines = [], [], []
+
+    def sleep(s):
+        polls.append(s)
+        in_line.append(len(list((slots / "lean-line-audit").iterdir())))
+        if len(polls) == 1:                                                       # the window opens, and the holder ends in it
+            LS.SLOTS.write_text("audit 0   # closed for a test\n")
+            os.close(held)
+            _proc_locks(slots / "proc", {})
+        elif len(polls) == 3:                                                     # the window ends
+            LS.SLOTS.write_text("audit 1\n")
+
+    got = LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lines.append, mono=lambda: 0.0)
+    assert got[:2] == ("audit", 0) and polls == [LS.POLL_S] * 3 and in_line == [1, 1, 1]
+    waiting = f"are taken; waiting, with no time limit, and retrying every {LS.POLL_S} s ({LS.SLOTS})"
+    assert lines == [f"lean-slot: all 1 Lean audit slot(s) of pool audit {waiting}", "lean-slot:   audit/0  held by pid 4242: (gone)",
+                     f"lean-slot: all 0 Lean audit slot(s) of pool audit {waiting}",
+                     f"lean-slot: Lean audit slot audit/0 of 1 ({LS.SLOTS})"]
+    assert not list((slots / "lean-line-audit").iterdir())
+    os.close(got[2])
+
+
 def test_who_asked_is_the_lane_else_the_check_slot_s_holder(slots, monkeypatch, tmp_path):
     checks = tmp_path / "checks"
     checks.mkdir()
@@ -291,6 +347,27 @@ def test_status_lists_each_pool_s_slots_and_waiters(slots, monkeypatch, capsys):
     assert lines[3].startswith(f"check/1  held by pid {os.getpid()} since 2026-10-03T16:40Z (20 min) (run r-train, by lander): ")
     assert LS.main(["--status"], now=lambda: NOW) == 0 and "check/1  held by pid" in capsys.readouterr().out
     os.close(held)
+
+
+def test_status_says_a_pool_at_0_is_closed_quoting_its_line_and_json_adds_each_pool_s_comment(slots, capsys):
+    """A pool at 0 has no slot to list, so `--status` says it is closed, quoting its line with the comment the steward left
+    there, above a slot of it still held from before it closed. `--status --json` keeps each pool's document as it is, the
+    closed pool's with `n` 0, and adds every pool's comment beside them."""
+    LS.SLOTS.write_text("audit 0   # closed for a test\nbuild 0\ncheck 1 # check's lean-audit step\n")
+    past = _hold(slots / "lean-audit-0.lock")
+    _proc_locks(slots / "proc", {slots / "lean-audit-0.lock": 4242})
+    assert LS.main(["--status"], now=lambda: NOW) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "audit: closed on this machine (`audit 0  # closed for a test`)", "audit/0 (past N)  held by pid 4242: (gone)",
+        "build: closed on this machine (`build 0`)", "check/0  free"]
+    assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert sorted(doc) == ["file", "notes", "now", "pools"] and list(doc["pools"]) == ["audit", "build", "check"]
+    assert doc["notes"] == {"audit": "closed for a test", "check": "check's lean-audit step"}
+    assert doc["pools"]["build"] == {"n": 0, "slots": [], "waiters": []}
+    audit = doc["pools"]["audit"]
+    assert audit["n"] == 0 and [(s["index"], s["past_n"], s["holder"]["pid"]) for s in audit["slots"]] == [(0, True, 4242)]
+    os.close(past)
 
 
 def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch, capsys):
@@ -317,7 +394,8 @@ def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch
         os.close(fd)
     monkeypatch.setattr(LS, "SLOTS", slots / "absent")
     assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
-    assert json.loads(capsys.readouterr().out) == {"file": str(slots / "absent"), "now": "2026-10-03T17:00Z", "pools": None}
+    assert json.loads(capsys.readouterr().out) == {"file": str(slots / "absent"), "now": "2026-10-03T17:00Z", "pools": None,
+                                                   "notes": None}
     with pytest.raises(SystemExit, match="usage: lean_slot.py --status"):
         LS.main(["--status", "--all"])
 

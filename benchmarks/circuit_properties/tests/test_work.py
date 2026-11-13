@@ -10,7 +10,10 @@ row; a rank-4 bottleneck between two carried weights; each operand's β at min(1
 
 from __future__ import annotations
 
+import json
+import sys
 from collections import Counter
+from pathlib import Path
 
 import pytest
 from circuit_properties import work as WK
@@ -763,15 +766,18 @@ SOFTMAX = bind(RP.SoftmaxRef, N=D, DT="f32")
 S_T, V_T = Array(D, F32), Array(K, Array(D, F32))
 
 
-def _attention_loop() -> Program:
+def _attention_loop(depth: int = 0) -> Program:
     """Each iteration looks up PN rows of the carried table by its tokens, each times the carried g (so a block pays
     for its words), scores them by the carried W1 under a causal mask, and multiplies each score row's softmax P by
     the carried V1 and V2: O1 = P V1^T and O2 = P V2^T are specific, so O1 Wo^T is a token-indexed product of an
-    activation by a weight and O1 O2^T one of two activations. Wo is updated by the sum of O1's rows over the positions, as a gradient is; the others by an input."""
+    activation by a weight and O1 O2^T one of two activations. Wo is updated by the sum of O1's rows over the positions, as a gradient is; the others by an input.
+    The scores pass through ``depth`` multiplies by a stated 1 before the mask."""
     def step(B, c, tok, z, zn):
         table, g, w1, v1, v2, wo = c
         rows = _mul(B, Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)])), g)
         s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        for _ in range(depth):
+            s = _mul(B, s, B.call(const(32, 0x3F800000)))
         mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
         flat = Array(PN * D, F32)
         h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
@@ -799,8 +805,64 @@ def test_a_token_indexed_product_is_charged_at_keep_and_two_activations_are_left
                           "activations": (T - 1) * PN * K * PN}
 
 
+#: a chain longer than Python's default recursion limit
+DEEP = 3000
+
+
+@pytest.mark.parametrize("depth", [1, DEEP], ids=["short", "deep"])
+def test_a_chain_deeper_than_the_recursion_limit_is_read_as_a_short_one(depth):
+    """The scores times a stated 1, ``depth`` times, before the mask, are read as the scores themselves, a chain of
+    any depth under Python's default recursion limit: the softmax's rows are still the mask's, and the reading is the
+    one without the chain."""
+    assert sys.getrecursionlimit() < DEEP
+    w, plain = WK.read(_attention_loop(depth), KB), WK.read(_attention_loop(), KB)
+    assert (w.N, w.keep, w.left_out) == (plain.N, plain.keep, plain.left_out)
+    assert [(g.product, g.weight, g.macs, g.reason) for g in w.groups] == \
+        [(g.product, g.weight, g.macs, g.reason) for g in plain.groups]
+
+
 def test_clique():
     tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
     assert WK.clique(tri) == 3
     assert WK.clique(tri + [frozenset(e) for e in ((1, 4), (2, 4))]) == 4
     assert WK.clique([frozenset((1, 2))]) == 2 and WK.clique([]) == 0
+
+
+#: the suite's Programs built by name, each held to its reading in `READINGS`
+CASES = {
+    "train": loop, "carried": carried_loop, "lookup": lambda: _lookup_loop(False),
+    "lookup-carried": lambda: _lookup_loop(True), "pairs": _pairs_loop, "ternary": _ternary_loop,
+    **{f"tokens-{k}": (lambda k=k: _token_loop(k)) for k in ("positional", "mask", "flat", "mixed")},
+    **{f"rows-{f}": (lambda f=f: _rows_loop(f)) for f in ("batch", "calls", "scan", "inputs")},
+    "carried-rows": lambda: _carried_rows_loop(True), "rows": lambda: _carried_rows_loop(False),
+    **{f"with-{k}": (lambda k=k: _carried_with(k))
+       for k in ("calls", "composite", "batches", "replicated", "assembled", "shared", "view")},
+    **{f"scaled-{k}": (lambda k=k: _scaled(k)) for k in ("batch", "calls", "composite-word", "composite-row",
+                                                          "stated", "thetas", "thetas-cancel", "carried-cancel",
+                                                          "one-word", "computed-word")},
+    **{f"rows-plus-{k}": (lambda k=k: _rows_plus(k)) for k in ("input-times-weight", "weight")},
+    **{f"rows-times-{f}-{m}": (lambda f=f, m=m: _rows_times(f, m)) for f in ("batch", "calls", "composite")
+       for m in ("input", "one-word")},
+    "self-cancel": lambda: _self_cancel(True), "rows-alone": lambda: _self_cancel(False),
+    **{f"swap-{o}-{c}": (lambda o=o, c=c: _swap(o, c)) for o in ("swap", "same") for c in (True, False)},
+    "attention": _attention_loop,
+}
+READINGS = Path(__file__).with_name("readings.json")
+
+
+def _reading(w: WK.Work) -> dict:
+    return {"gates": w.gates, "r_step": w.r_step, "keep": w.keep,
+            "products": [[g.product, list(g.widths), list(g.weight), g.out_width, g.k_dim, g.macs, g.wires,
+                          sorted(repr(sorted(map(repr, e))) for e in g.edges), list(g.dims), list(g.rates),
+                          list(g.bits), list(g.beta), g.reason] for g in w.products]}
+
+
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_the_suites_programs_keep_their_readings(name):
+    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), compared whole, so
+    a change to the reader that moves a word or their order shows."""
+    assert _reading(WK.read(CASES[name](), KB)) == json.loads(READINGS.read_text())[name]
+
+
+if __name__ == "__main__":
+    READINGS.write_text(json.dumps({n: _reading(WK.read(CASES[n](), KB)) for n in sorted(CASES)}, indent=1) + "\n")

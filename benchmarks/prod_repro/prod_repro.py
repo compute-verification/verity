@@ -52,7 +52,10 @@ was served, naming each differing request and its first position, and where a re
 failure, and the last line counts the lines that are measured.
 
 Under research run, where OUT is the run's own out/, the run's result.json names what the report rests on among its
-artifacts (`declare`: the report's two files and the replay's record).
+artifacts (`declare`: the report's two files and the replay's record), and holds, each under the model's metric id
+where it stands as a measurement (`measurements`): the cost of ours over stock at vLLM's published settings
+(`METRICS`), and of ours there the share of the replayed window's served tokens the replay gave back before a
+request's first difference (`MATCH`) and the advice in bits a request (`ADVICE`).
 
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
@@ -88,6 +91,15 @@ PROD = ("prod", "prod-again", "prod-record")
 TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
+#: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
+#: recorded under in a run's result.json (`measurement`; benchmarks/metrics.toml), and that measurement's unit
+METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
+UNIT = "percent of stock's serving time"
+#: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of ours at vLLM's
+#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/metrics.toml)
+MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
+ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
+MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
 #: the keys of a checkpoint's config.json that bound its context, the smallest of which is the model's own limit
 CONTEXT_KEYS = ("max_position_embeddings", "n_positions", "max_seq_len", "seq_length", "max_sequence_length",
                 "max_seq_length", "seq_len")
@@ -502,12 +514,24 @@ def past_topk(w: dict, checkpoint: str | None, differing: list[dict]) -> dict | 
     return {"keys": k, "requests": len(past), "differing": sum(d["request"] in past for d in differing)}
 
 
+def given_back(served: dict[str, list[int]], got: dict[str, list[int]]) -> dict:
+    """Of each request's ``served`` tokens, those its replayed ones (``got``) give back: ``tokens_before_first_difference``,
+    those before the request's first difference (`replay.token_diff`), the match's figure (`MATCH`), since the replay
+    re-runs each request whole and a token after a difference was made from another prefix; and ``tokens_given_back``,
+    those equal at their own position, after a difference too, which is no metric's."""
+    first = {d["request"]: d["first_position"] for d in R.token_diff(served, got)}
+    return {"tokens_before_first_difference": sum(first.get(rid, len(a)) for rid, a in served.items()),
+            "tokens_given_back": sum(x == y for rid, a in served.items() for x, y in zip(a, got.get(rid, ())))}
+
+
 def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, state: dict) -> dict:
     """The tokens line: the served window of ``ours``'s pass ``load`` rep ``rep`` against the tokens its replay kept.
     ``dirs`` are the arm's directories (`arm_dirs`): of an arm served in lifetimes, the window is the pass of the
     lifetime the replay's record names. Not measured without a replay, where the replay is of another window, or
     where the window can't be read back. Each differing request has its first differing position, the ids served and
-    replayed there and the step that emitted it while serving, the earliest first."""
+    replayed there and the step that emitted it while serving, the earliest first. Of the served tokens, the line
+    counts those the replay gave back (`given_back`); ``tokens_differing`` counts those it kept at their own position
+    and not equal, or not at all, and every token it kept past a request's served end."""
     meta = json.loads((dirs[0] / "meta.json").read_text())
     if not state["ended"]:
         if state["expected"]:
@@ -540,7 +564,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
                        for r in w["requests"])
     n = {"requests": len(served), "tokens_served": sum(map(len, served.values())),
          "tokens_replayed": sum(len(got.get(rid, ())) for rid in served),
-         "requests_differing": len(diff), "tokens_differing": sum(d["positions"] for d in diff)}
+         "requests_differing": len(diff), "tokens_differing": sum(d["positions"] for d in diff), **given_back(served, got)}
     if not n["tokens_served"]:
         return not_measured("the window holds no served token", **n)
     disagree = (rec["requests_tokens_differing"], rec["token_positions_differing"]) != (n["requests_differing"], n["tokens_differing"])
@@ -620,9 +644,13 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     pair its unit too: stock again over stock where a twin of stock was served, else stock's own lifetimes, each
     second one over the one before it. On another load the cost is the one over the passes taken as independent, the
     noise floor is ``again`` over ``stock`` measured the same way, and there is no verdict. ``leaves_out_zero`` says
-    whether the floor's own interval leaves out 0: stock then differs from stock. Not measured where an arm did not
-    serve the load, where an arm left requests unserved (the arms then served different tokens), where the
-    benchmark's own cost refuses the arms, or where the corpus client's arrivals did not saturate stock."""
+    whether the floor's own interval leaves out 0: stock then differs from stock. ``stands`` says whether the cost
+    stands as a measurement, as the benchmark says it of its own (`serve_tax.result_of`): on a sessions load alone,
+    whose cost is the benchmark's own; on another the figure is none of the benchmark's measurements. ``metric`` is
+    the id it is recorded under (`METRICS`), for ours and stock at vLLM's published settings; None for other arms.
+    Not measured where an arm did not serve the load, where an arm left requests unserved (the arms then served
+    different tokens), where the benchmark's own cost refuses the arms, or where the corpus client's arrivals did not
+    saturate stock."""
     missing = [a for a in (stock, ours) if a not in by or not reps_of(by[a], load)]
     if missing:
         return not_measured(f"{', '.join(missing)} did not serve load {load}")
@@ -633,7 +661,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             f"{a} left {n} requests unserved" for a, n in unserved.items() if n))
     served = max(len(a.get("lifetimes") or [1]) for a in (ref, mine))
     lives = {"pairs": len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1])), "served": served, "ci95": None}
-    verdict = NOT_SHOWN
+    verdict, stands = NOT_SHOWN, False
     if load in S.bench_loads(ref):
         c = S.serving_cost(ref, mine, load)
         if c is None:
@@ -653,6 +681,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
                 return not_measured(f"the benchmark's own cost on a sessions load is of {own['load'] if own else 'none'}, "
                                     f"not of {load}: a job serves one sessions load", how=how)
             same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
+            stands = S.result_of(own)[0]
             both = dict(zip((stock, ours), (own["sides"]["reference"], own["sides"]["arm"])))
             lives = {"pairs": own["lifetimes"], "served": served, "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
                      "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
@@ -686,7 +715,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     return {"measured": value is not None, "value": value, "passes": {"value": c["value"], "ci95": c.get("ci95")},
             "how": how, **({} if value is not None else {"why": "an arm served no token in some rep"}),
             "lifetimes": lives, "noise_floor": noise or None, "target": target, "same_work": same,
-            "verdict": NOT_SHOWN if same is False else verdict}
+            "verdict": NOT_SHOWN if same is False else verdict, "stands": stands,
+            "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -817,15 +847,18 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
         toks = not_measured(state["why"])
     else:
         toks = read("the tokens", lambda: tokens(dirs[ours], ours, replayed or load, rep, replay_dir, state))
+    plan = read("the advice", lambda: advice(dirs[ours], ours, replayed or load, rep, replay_dir)) if ours in dirs else \
+        not_measured(f"{ours} was not served")
+    for figure, ids in ((toks, MATCH), (plan, ADVICE)):
+        if figure["measured"]:
+            figure["metric"] = ids.get(meta.get("model_id")) if ours == PROD[2] else None
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
             "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
-            "tokens": toks, "cost": line,
-            "advice": read("the advice", lambda: advice(dirs[ours], ours, replayed or load, rep, replay_dir))
-            if ours in dirs else not_measured(f"{ours} was not served")}
+            "tokens": toks, "cost": line, "advice": plan}
 
 
 #: the schema of a run's result.json, whose ``artifacts`` and ``measurement_files`` the store keeps as the run's files
@@ -840,11 +873,48 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
     return [str(f.relative_to(out.parent)) for f in files if f.is_file()]
 
 
+def measurement(r: dict) -> dict | None:
+    """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
+    cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
+    cost (`UNLIKE`). None otherwise."""
+    c = r["cost"]
+    if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
+        return None
+    life = c["lifetimes"]
+    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
+            "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
+            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
+            "run": r["run"]}
+
+
+def measurements(r: dict) -> list[dict]:
+    """The report's figures as measurements under their metric ids, each where it stands: the cost (`measurement`);
+    the share of the replayed window's served tokens the replay gave back before each request's first difference
+    (`given_back`), in `MATCH_UNIT`, where the tokens line is measured and the replay's record agrees with the tokens
+    and steps it kept; and the advice of the pass it re-ran,
+    the bits charged a request (`ADVICE_UNIT`), where the advice line is measured. A line's id (``metric``) is None
+    but for ours at vLLM's published settings on a model `MATCH` and `ADVICE` name."""
+    t, a, on = r["tokens"], r.get("advice") or {}, {"load": r["load"], "ours": r["arms"]["ours"], "commit": r["commit"],
+                                                       "run": r["run"]}
+    out = [m] if (m := measurement(r)) else []
+    if t.get("measured") and t.get("metric") and not t["record_disagrees"]:
+        given = t["tokens_before_first_difference"]
+        out.append({"name": t["metric"], "value": 100 * given / t["tokens_served"], "unit": MATCH_UNIT, "better": "higher",
+                    "tokens_served": t["tokens_served"], "tokens_before_first_difference": given, "requests": t["requests"], "requests_differing": t["requests_differing"],
+                    "reproduces": t["reproduces"], "rep": t["window"]["rep"], **on})
+    if a.get("measured") and a.get("metric"):
+        out.append({"name": a["metric"], "value": a["bits_a_request"], "unit": ADVICE_UNIT, "better": "lower",
+                    "bits": a["bits"], "requests": a["requests"], "tick": a["tick"], "rep": a["window"]["rep"], **on})
+    return out
+
+
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
-    artifacts, so a reader finds them as the run's files without listing its record. A result the benchmark's cost
-    wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose validation
-    is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
+    artifacts, so a reader finds them as the run's files without listing its record, and holds the cost, the replay's
+    match and the advice each under its metric id where it stands (`measurements`), and no entry under an id whose
+    figure does not. A result the benchmark's
+    cost wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose
+    validation is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
     run_dir = SHARED.RESEARCH_RUN_DIR
     if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
         return None
@@ -857,6 +927,8 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
                        "detail": next(x for x in text(r).splitlines() if x.startswith("tokens:"))},
         "measurements": [], "measurement_files": [], "artifacts": []}
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
+    ids = {*METRICS.values(), *MATCH.values(), *ADVICE.values()}
+    doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in ids), *measurements(r)]
     tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, f)
