@@ -56,12 +56,13 @@ def _entry(step: int, event: int, path: str, sha: str) -> dict:
     return {"step": step, "event": event, "path": path, "sha256": sha}
 
 
-def _llama_step(s: int, ids: Iterator[int], sampled: list[int], reqs: tuple[str, ...] = ("r0",), named: bool = True) -> tuple[list[Event], list[dict]]:
+def _llama_step(s: int, ids: Iterator[int], sampled: list[int], reqs: tuple[str, ...] = ("r0",), named: bool = True,
+                layers: int = LAYERS) -> tuple[list[Event], list[dict]]:
     """One Llama-shaped step of the observer's side and its snapshot entries: per layer the down projection's launch and the fused norm,
     then the final norm, the lm_head launch and the sample."""
     events: list[Event] = [_start(s, reqs, named)]
     entries: list[dict] = []
-    for layer in range(LAYERS):
+    for layer in range(layers):
         events.append(_launch(i := next(ids), s, "forward", f"model.layers.{layer}.mlp.down_proj"))
         entries.append(_entry(s, i, "args.c_ptr", f"hidden{s}.{layer}"))
         events += _call(i := next(ids), s, NORM, f"model.layers.{layer}.post_attention_layernorm")
@@ -77,12 +78,12 @@ def _record(module: str, index: int, sha: str, contiguous: bool = True) -> dict:
     return {"module": module, "index": index, "shape": [1, 4], "contiguous": contiguous, "sha256": sha}
 
 
-def _hooks_step(k: int, s: int | None, new_tokens: dict) -> dict:
+def _hooks_step(k: int, s: int | None, new_tokens: dict, layers: int = LAYERS) -> dict:
     """Engine step ``k`` of the hooks' side: device step ``s``'s records (none where the engine step launched nothing) and the tokens
     the engine reported at it, which the device step before sampled."""
     records: list[dict] = []
     if s is not None:
-        for layer in range(LAYERS):
+        for layer in range(layers):
             records += [_record(f"model.layers.{layer}", 0, f"hidden{s}.{layer}"), _record(f"model.layers.{layer}", 1, f"residual{s}.{layer}")]
         records += [_record("model.norm", 0, f"final{s}"), _record("logits_processor", 0, f"logits{s}")]
     return {"engine_step": k, "step": s, "records": records, "new_tokens": new_tokens}
@@ -113,17 +114,19 @@ def _observer(d: Path, events: list[Event], entries: list[dict]) -> Path:
     return d / "a_observer"
 
 
-def _run(d: Path) -> Path:
-    """A two-step, two-layer run whose three arms agree: event ids 1 to 6 are step 0's and 7 to 12 step 1's."""
+def _run(d: Path, layers: tuple[int, int] = (LAYERS, LAYERS)) -> Path:
+    """A two-step run whose three arms agree, step ``s`` of ``layers[s]`` layers on both sides: with two layers a step, event ids 1 to 6
+    are step 0's and 7 to 12 step 1's."""
     ids = itertools.count(1)
     events: list[Event] = []
     entries: list[dict] = []
     for s, token in enumerate(TOKENS):
-        step, snapshots = _llama_step(s, ids, [token])
+        step, snapshots = _llama_step(s, ids, [token], layers=layers[s])
         events += step
         entries += snapshots
     _observer(d, events, entries)
-    _write(d / "b_hooks", "hooks.json", _hooks([_hooks_step(0, 0, {}), _hooks_step(1, 1, {"r0": [7]}), _hooks_step(2, None, {"r0": [9]})]))
+    _write(d / "b_hooks", "hooks.json", _hooks([_hooks_step(0, 0, {}, layers[0]), _hooks_step(1, 1, {"r0": [7]}, layers[1]),
+                                                _hooks_step(2, None, {"r0": [9]})]))
     for arm in ("a_observer", "b_hooks", "c_bare"):
         _write(d / arm, "tokens.json", _tokens())
     return d
@@ -154,6 +157,7 @@ def test_three_arms_that_agree_pass_with_every_boundary_compared(tmp_path):
                                "logits_eq": True, "compared": 6, "equal": 6, "noncontiguous_b": [], "sampled_a": [9], "sampled_b": [9],
                                "sampled_eq_by_request": True, "batch_order_is_request_order": True, "sampled_eq": True}
     assert rep["hooked_modules_b"] == _hooks([])["hooked_modules"] and rep["variants"]["b_hooks"] == "forward hooks alone"
+    assert rep["schema"] == "verity-capture/noninterference/v1" and rep["dir"] == str(tmp_path)
 
 
 @pytest.mark.parametrize("module,index,tensor,layer", [("model.layers.1", 0, "hidden", 1), ("model.layers.0", 1, "residual", 0),
@@ -185,6 +189,31 @@ def test_the_layer_count_is_held_to_the_expected_one(tmp_path):
     assert other["problems"] == ['decoder layers per step 2 != profile C["NL"] 30']
     assert unknown["PASS"] is False and other["PASS"] is False and unknown["layers"] == other["layers"] == 2
     assert (unknown["hash_comparisons"], unknown["hash_equal"]) == (12, 12), "every digest and token agrees; the layer count alone fails it"
+
+
+def test_a_run_of_one_layer_passes_and_one_whose_steps_differ_in_their_layer_count_does_not(tmp_path):
+    rep = NI.compare(str(_run(tmp_path / "one", layers=(1, 1))), None, 1)
+    assert rep["PASS"] is True and rep["layers"] == 1 and (rep["hash_comparisons"], rep["hash_equal"]) == (8, 8)
+    rep = NI.compare(str(_run(tmp_path / "uneven", layers=(2, 1))), None, LAYERS)
+    assert rep["PASS"] is False and rep["layers"] == ["(1, 1)", "(2, 2)"], "each step's two sides agree, and the steps do not"
+    assert rep["problems"] == [] and rep["mismatches"] == [] and (rep["hash_comparisons"], rep["hash_equal"]) == (10, 10)
+
+
+def test_a_layer_the_observer_alone_shows_at_every_step_is_no_layer_count_and_a_mismatch_a_step(tmp_path):
+    def change(doc):
+        for step in doc["steps"]:
+            step["records"] = [r for r in step["records"] if (r["module"], r["index"]) != ("model.layers.1", 0)]
+
+    _edit(_run(tmp_path) / "b_hooks" / "hooks.json", change)
+    rep = NI.compare(str(tmp_path), None, LAYERS)
+    assert rep["layers"] == ["(2, 1)"] and rep["problems"] == [] and rep["PASS"] is False
+    assert rep["mismatches"] == [{"step": s, "layer": 1, "tensor": "hidden", "a": f"hidden{s}.1", "b": None} for s in (0, 1)]
+
+
+def test_a_row_names_the_records_the_hooks_hashed_from_a_tensor_that_was_not_contiguous(tmp_path):
+    _edit(_run(tmp_path) / "b_hooks" / "hooks.json", lambda doc: doc["steps"][1]["records"][2].update(contiguous=False))
+    rep = NI.compare(str(tmp_path), None, LAYERS)
+    assert rep["PASS"] is True and [row["noncontiguous_b"] for row in rep["steps"]] == [[], ["model.layers.1[0]"]]
 
 
 @pytest.mark.parametrize("side", ["(a)", "(b)"])
@@ -239,6 +268,19 @@ def test_the_reference_tokens_are_the_control_run_s_generated_ids_not_its_author
     assert rep["PASS"] is True and set(rep["tokens"]) == {"a_observer", "b_hooks", "c_bare", "accepted"}, "a control file that is absent: the bare arm's"
 
 
+def test_the_authored_record_is_compared_with_each_arm_and_is_none_for_an_arm_it_cannot_be_compared_with(tmp_path):
+    ctl = _write(tmp_path / "ctl", "tokens.json", _tokens())
+    _edit(ctl, lambda doc: doc["requests"][0].update(accepted_record_token_ids=TOKENS))
+    run = _run(tmp_path / "run")
+    _edit(run / "a_observer" / "tokens.json", lambda doc: doc["requests"].append({"request_id": "r1", "generated_token_ids": [1]}))
+    (run / "b_hooks" / "tokens.json").unlink()
+    rep = NI.compare(str(run), str(ctl), LAYERS)
+    assert rep["tokens_equal_workload_accepted"] == {"a_observer": None, "b_hooks": None, "c_bare": True, "accepted_ctl_file": True}, \
+        "(a) generated for a request the record does not name, and (b) wrote no tokens"
+    assert rep["tokens_equal_accepted"] == {"a_observer": False, "b_hooks": False, "c_bare": True, "accepted_ctl_file": True}
+    assert rep["problems"] == ["missing tokens for b_hooks"] and rep["PASS"] is False
+
+
 def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_then_16(tmp_path):
     bare = _run(tmp_path) / "c_bare" / "tokens.json"
     _edit(bare, lambda doc: doc.pop("timing"))
@@ -257,13 +299,33 @@ def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_t
 
 def test_the_markdown_of_a_comparison_that_passes_and_of_one_that_fails(tmp_path):
     rep = NI.compare(str(_run(tmp_path)), None, LAYERS)
-    lines = NI.compare_markdown(rep).splitlines()
-    assert lines[:3] == ["# Non-interference: observer vs bare (M1 workload)", "", f"- compared {rep['utc']}; results in `{tmp_path}`; **PASS**"]
-    assert "- hooks in (b): 5 modules; fire counts: {'model.layers.0': 2, 'model.norm': 2, 'lm_head': 0}" in lines
-    assert "| a_observer | `[7, 9]` | True |" in lines and "| accepted | `[7, 9]` | (reference) |" in lines
-    assert "12 / 12 sha256 pairs equal (per step: 30 hidden + 30 residual + final norm + logits)." in lines
-    assert "| 0 | 1/1 | 2/2 | 2/2 | 2/2 | True | True | True ([7]) |" in lines and "| 1 | 1/1 | 2/2 | 2/2 | 2/2 | True | True | True ([9]) |" in lines
-    assert "## Mismatches" not in lines and "## Problems" not in lines
+    assert NI.compare_markdown(rep) == "\n".join([
+        "# Non-interference: observer vs bare (M1 workload)",
+        "",
+        f"- compared {rep['utc']}; results in `{tmp_path}`; **PASS**",
+        f"- (a) {rep['variants']['a_observer']}",
+        "- (b) forward hooks alone",
+        f"- (c) {rep['variants']['c_bare']}",
+        "- hooks in (b): 5 modules; fire counts: {'model.layers.0': 2, 'model.norm': 2, 'lm_head': 0}",
+        "",
+        "## Tokens",
+        "",
+        "| variant | generated ids | == accepted record |",
+        "| --- | --- | --- |",
+        "| a_observer | `[7, 9]` | True |",
+        "| b_hooks | `[7, 9]` | True |",
+        "| c_bare | `[7, 9]` | True |",
+        "| accepted | `[7, 9]` | (reference) |",
+        "",
+        "## Boundary hashes (a) vs (b)",
+        "",
+        "12 / 12 sha256 pairs equal (per step: 30 hidden + 30 residual + final norm + logits).",
+        "",
+        "| step | rows a/b | layers a/b | hidden eq | residual eq | final eq | logits eq | sampled a == b |",
+        "| ---: | --- | --- | ---: | ---: | --- | --- | --- |",
+        "| 0 | 1/1 | 2/2 | 2/2 | 2/2 | True | True | True ([7]) |",
+        "| 1 | 1/1 | 2/2 | 2/2 | 2/2 | True | True | True ([9]) |",
+        ""])
     _edit(tmp_path / "b_hooks" / "hooks.json", lambda doc: doc["steps"][1]["records"][-2].update(sha256="other"))
     text = NI.compare_markdown(NI.compare(str(tmp_path), None, 30))
     assert "**FAIL**" in text and "| 1 | 1/1 | 2/2 | 2/2 | 2/2 | False | True | True ([9]) |" in text.splitlines()
@@ -279,6 +341,13 @@ def test_the_compare_command_writes_the_report_and_its_markdown_and_exits_by_the
     assert (tmp_path / "noninterference.md").read_text() == NI.compare_markdown(rep)
     verdict = "PASS" if code == 0 else "FAIL"
     assert capsys.readouterr().out == f"[nonint] {verdict}: hashes 12/12, tokens {rep['tokens_equal_accepted']}, problems {problems}\n"
+
+
+def test_the_compare_command_prints_the_first_five_problems(tmp_path, capsys):
+    _edit(_run(tmp_path) / "a_observer" / "snapshots.json", lambda doc: doc.update(entries=[]))
+    assert NI.main(NI.Options(out=str(tmp_path), compare=True, accepted_ctl=str(tmp_path / "absent.json"), expected_layers=LAYERS)) == 1
+    rep = json.loads((tmp_path / "noninterference.json").read_text())
+    assert len(rep["problems"]) > 5 and capsys.readouterr().out.endswith(f", problems {rep['problems'][:5]}\n")
 
 
 # ---- the hooks' side ----
@@ -335,7 +404,7 @@ def test_a_moe_layer_s_hidden_state_is_the_experts_op_s_output(tmp_path):
 def test_a_second_launch_for_one_boundary_and_a_norm_with_no_snapshot_are_problems(tmp_path):
     events = [_launch(1, 0, "forward", "model.layers.0.mlp.down_proj"), _launch(2, 0, "forward", "model.layers.0.mlp.down_proj"),
               *_call(3, 0, NORM, "model.layers.0.post_attention_layernorm"), *_call(4, 0, NORM, "model.layers.1.post_attention_layernorm"),
-              *_call(5, 0, NORM, "model.norm"), _launch(6, 0, "sample", None), _launch(7, 0, "sample", "logits_processor"),
+              *_call(5, 0, NORM, "model.norm"), _launch(6, 0, "sample", None), _launch(7, 0, "forward", "logits_processor"),
               _launch(8, 0, "forward", "model.layers.0.mlp.up_proj")]
     rec = _one_step(tmp_path, events, [*(_entry(0, i, "args.c_ptr", f"launch{i}") for i in (1, 2, 6, 8)), _entry(0, 3, "args[1]", "residual0")])
     assert rec["hidden"] == {0: "launch1"} and rec["residual"] == {0: "residual0"} and rec["final"] is None and rec["logits"] is None
@@ -344,10 +413,10 @@ def test_a_second_launch_for_one_boundary_and_a_norm_with_no_snapshot_are_proble
                                "step 0: no snapshot for the lm_head launch id 7"]
 
 
-def _unfused_step() -> tuple[list[Event], list[dict]]:
+def _unfused_step(softcap: bool = True) -> tuple[list[Event], list[dict]]:
     """A step of a family whose norms run unfused: per layer the fp32 residual sum and its bf16 cast in the pre-feedforward norm (events
     10L + 1 to 10L + 4) and two dispatches of the post-feedforward norm (10L + 5, 10L + 6); then the final norm (31, 32), the lm_head
-    launch (33) and the softcap in the logits processor (34)."""
+    launch in the logits processor (33) and, with ``softcap``, the softcap there (34)."""
     events: list[Event] = []
     entries = [_entry(0, 33, "args.c_ptr", "raw logits"), _entry(0, 31, "outs", "before the final norm's last"), _entry(0, 32, "outs", "final"),
                _entry(0, 34, "outs", "softcapped")]
@@ -360,8 +429,9 @@ def _unfused_step() -> tuple[list[Event], list[dict]]:
                    *_call(i + 5, 0, "aten.mul.Tensor", post), *_call(i + 6, 0, "aten.to.dtype", post)]
         entries += [_entry(0, i + 3, "outs", f"residual{layer}"), _entry(0, i + 4, "outs", "a later cast"), _entry(0, i + 5, "outs", "not the last"),
                     _entry(0, i + 6, "outs", f"hidden{layer}")]
-    events += [*_call(31, 0, "aten.mul.Tensor", "model.norm"), *_call(32, 0, "aten.to.dtype", "model.norm"), _launch(33, 0, "sample", None),
-               *_call(34, 0, "aten.tanh.default", "logits_processor")]
+    events += [*_call(31, 0, "aten.mul.Tensor", "model.norm"), *_call(32, 0, "aten.to.dtype", "model.norm"), _launch(33, 0, "sample", "logits_processor")]
+    if softcap:
+        events += _call(34, 0, "aten.tanh.default", "logits_processor")
     return events, entries
 
 
@@ -369,6 +439,11 @@ def test_unfused_norms_give_the_first_cast_of_the_residual_sum_and_each_module_s
     rec = _one_step(tmp_path, *_unfused_step())
     assert rec == {"hidden": {0: "hidden0", 1: "hidden1"}, "residual": {0: "residual0", 1: "residual1"}, "final": "final", "logits": "softcapped",
                    "rows": 1, "problems": []}
+
+
+def test_unfused_norms_with_no_dispatch_in_the_logits_processor_keep_the_launch_s_logits(tmp_path):
+    rec = _one_step(tmp_path, *_unfused_step(softcap=False))
+    assert rec["logits"] == "raw logits" and rec["final"] == "final" and rec["hidden"] == {0: "hidden0", 1: "hidden1"} and rec["problems"] == []
 
 
 def test_an_unfused_boundary_with_no_snapshot_is_a_problem(tmp_path):
@@ -405,11 +480,29 @@ def test_a_parallel_residual_boundary_with_no_snapshot_is_a_problem(tmp_path):
     assert rec["problems"] == ["step 0: no snapshot for the layer-1 residual add id 12 outs", "step 0: no snapshot for gpt_neox.final_layer_norm id 31 outs"]
 
 
+def test_the_parallel_residual_family_s_layers_and_its_final_norm_are_each_read_without_the_other(tmp_path):
+    events, entries = _parallel_step()
+    norm = [e for e in events if getattr(e, "id", None) == 31]
+    rec = _one_step(tmp_path / "layers", [e for e in events if e not in norm], entries)
+    assert rec["hidden"] == {0: "sum0", 1: "sum1"} and rec["final"] is None and rec["logits"] == "logits" and rec["problems"] == []
+    rec = _one_step(tmp_path / "norm", norm, entries)
+    assert rec["hidden"] == {} and rec["final"] == "final" and rec["problems"] == []
+
+
+@pytest.mark.parametrize("found,hidden", [("hidden", {0: "launch"}), ("final", {})])
+def test_the_parallel_residual_rule_is_asked_only_where_the_rules_before_it_found_no_hidden_state_and_no_final_norm(tmp_path, found, hidden):
+    before = [_launch(1, 0, "forward", "model.layers.0.mlp.down_proj")] if found == "hidden" else _call(1, 0, NORM, "model.norm")
+    entry = _entry(0, 1, "args.c_ptr", "launch") if found == "hidden" else _entry(0, 1, "args[0]", "final")
+    rec = _one_step(tmp_path, [*before, *_call(2, 0, "aten.add.Tensor", "gpt_neox.layers.0")], [entry, _entry(0, 2, "outs", "a sum no rule reads")])
+    assert rec["hidden"] == hidden and rec["final"] == ("final" if found == "final" else None) and rec["problems"] == []
+
+
 # ---- the token files and the case ----
 
 def test_a_variant_s_token_file_says_which_requests_generated_the_accepted_ids(tmp_path, capsys):
     wl = {"requests": [{"request_id": "r0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2, "arrive_step": 1},
-                       {"request_id": "r1", "prompt_token_ids": [4], "max_tokens": 2}], "serving_profile": "p", "expected_engine_steps": 3}
+                       {"request_id": "r1", "prompt_token_ids": [4], "max_tokens": 2}], "serving_profile": "p", "context_class": "c",
+          "expected_engine_steps": 3}
     timing = {"engine_steps": 3, "requests": {"r0": {"first_step": 1, "finish_step": 2, "finish_reason": "length"}}}
     NI._write_tokens(tmp_path, wl, {"r0": [7, 9]}, timing, {"r0": [7, 9]}, {"0": [7]}, "observer")
     doc = json.loads((tmp_path / "tokens.json").read_text())
@@ -420,7 +513,7 @@ def test_a_variant_s_token_file_says_which_requests_generated_the_accepted_ids(t
          "equals_accepted": None, "prompt_len": 1, "n_generated": 0, "arrive_step": 0, "first_step": None, "finish_step": None, "finish_reason": None}]
     assert doc["all_equal_accepted"] is False, "a request with no accepted record is not equal to one"
     assert {k: v for k, v in doc.items() if k not in ("requests", "all_equal_accepted")} == {
-        "per_step_sampled": {"0": [7]}, "timing": timing, "variant": "observer", "serving_profile": "p", "context_class": None,
+        "per_step_sampled": {"0": [7]}, "timing": timing, "variant": "observer", "serving_profile": "p", "context_class": "c",
         "expected_engine_steps": 3, "engine_steps": 3}
     assert capsys.readouterr().out.splitlines() == ["[nonint/observer] r0: generated [7, 9] equals_accepted=True",
                                                     "[nonint/observer] r1: generated [] equals_accepted=None"]
@@ -445,6 +538,8 @@ def test_the_reference_and_the_authored_record_are_read_from_the_first_file_that
     _edit(ctl, lambda doc: doc["requests"][0].update(generated_token_ids=None, accepted_record_token_ids=None))
     assert NI._accepted_tokens(str(ctl), run) == {"r0": [8]} and NI._workload_accepted(str(ctl), run) == {}, "a control file that states none: the bare arm's"
     assert NI._tokens_of(run / "c_bare" / "tokens.json") == {"r0": [8]} and NI._tokens_of(run / "absent.json") is None
+    _edit(run / "c_bare" / "tokens.json", lambda doc: doc["requests"][0].update(accepted_record_token_ids=[4]))
+    assert NI._workload_accepted(None, run) == NI._workload_accepted(str(ctl), run) == {"r0": [4]}, "the bare arm's, where no control file states one"
 
 
 def test_the_case_is_the_flag_s_else_the_workload_file_s_else_b0(tmp_path):
