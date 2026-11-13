@@ -661,7 +661,7 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
 
     assert set(contract.DOMAINS) == set(vocab.DOMAINS)
     root = Path(contract.__file__).resolve().parents[5]
-    writers = [*root.glob("verity/protocols/flock/prover/python/verity_flock/*.py"), *root.glob("benchmarks/numerical/python/verity_numerical/bench/*.py")]
+    writers = [*root.glob("verity/protocols/proofs/flock/prover/python/verity_flock/*.py"), *root.glob("benchmarks/numerical/python/verity_numerical/bench/*.py")]
     assert writers and not [str(p) for p in writers if re.search(r'domain\s*=\s*"finite"', p.read_text())]
     kw = dict(profile=None, K=None, B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
               security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}},

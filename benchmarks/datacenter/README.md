@@ -17,7 +17,7 @@
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
 - **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.hardware` (`registration`),
-  `verity.protocols.spot.verifier` and PoUB's `timing` and `codec` (`verity.protocols.poub.verifier`).
+  `verity.protocols.proofs.spot.verifier` and PoUB's `timing` and `codec` (`verity.protocols.accounting.poub.verifier`).
 
 ## Overview
 
@@ -93,7 +93,7 @@ section. `benchmarks/network_sim/workload/accounting.py` accounts for the networ
 verity_vllm's serving Program the same way.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.poub.verifier.timing`),
+`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.accounting.poub.verifier.timing`),
 `Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
 `Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
 `Interval` is `Accounting.Window`.
