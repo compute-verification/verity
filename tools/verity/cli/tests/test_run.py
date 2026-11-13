@@ -16,9 +16,9 @@ import pytest
 
 from verity import config as K
 from verity.protocol import Channel, Role
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage import registration as RG
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
 from verity.channel import Refused
 from verity_cli import run as R
 
