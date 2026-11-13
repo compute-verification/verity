@@ -311,8 +311,8 @@ def dgrad(dials: dict) -> dict:
             shapes = {k: theta[k].shape for k in names}
         store = {k: store[k] for n in names for k in (n, f"{n}#A", f"{n}#B") if k in store}
         held = {k: codes.values(*store[k], grid, shapes[k]) for k in store}
-        tensors = {k: (v.T if k.endswith("#B") else v if dials["rank"] else theta[k] + v).clone().requires_grad_()
-                   for k, v in held.items()}
+        tensors = {k: (v.T if k.endswith("#B") else v if dials["rank"] else theta[k] + v).clone(
+            memory_format=torch.contiguous_format).requires_grad_() for k, v in held.items()}
         for k, v in tensors.items():
             for name in ("m", "v"):
                 kept, state.setdefault(k, {})[name] = state.setdefault(k, {}).get(name), torch.zeros(v.shape)

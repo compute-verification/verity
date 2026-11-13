@@ -263,8 +263,9 @@ def stored(layer: Linear, name: str, r: int) -> tuple[torch.Tensor, torch.Tensor
 def factor(layer: Linear, name: str, r: int, levels: torch.Tensor) -> torch.Tensor:
     c, s, shape = stored(layer, name, r)
     v = codes.values(c, s, levels, shape)
-    # B laid out (out, r) in rows, as a parameter is: autograd arranges B's gradient product by its layout
-    return v.T.contiguous() if name == "b" else v
+    # B laid out (out, r) in rows, as a parameter is: autograd arranges B's gradient product by its strides, which
+    # `contiguous` leaves a column's view at
+    return v.T.clone(memory_format=torch.contiguous_format) if name == "b" else v
 
 
 def sliced(t: torch.Tensor, name: str, r: int) -> torch.Tensor:
