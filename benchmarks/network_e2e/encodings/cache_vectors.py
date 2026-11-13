@@ -11,7 +11,7 @@ the same rows and holds the two to each other:
 - the lookup and the computed units in one call give the same table as the two calls.
 
     python cache_vectors.py --trace tests/fixtures/corpus-smallkv --trace tests/fixtures/sync-crush.json.gz \\
-        --out ../../../verity/protocols/certifier/verifier/tests/fixtures/cache_step_vectors.json
+        --out ../../../verity/protocols/accounting/certifier/verifier/tests/fixtures/cache_step_vectors.json
 """
 from __future__ import annotations
 
