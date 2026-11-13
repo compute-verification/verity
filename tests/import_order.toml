@@ -75,15 +75,6 @@ owner = "memory-accounting"
 reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
 
 [[distribution]]
-directory = "benchmarks/rho"
-owner = "training"
-date = "2026-11-16"
-
-[[distribution]]
-directory = "benchmarks/nci"
-owner = "compute-accounting"
-
-[[distribution]]
 directory = "verity/composite/device/live_challenger"
 owner = "proofs"
 
@@ -123,13 +114,6 @@ files = [
     "verity/protocols/flock/prover/python/verity_flock/instances.py",
     "verity/protocols/flock/prover/python/verity_flock/ir_bench.py",
     "verity/protocols/flock/prover/python/verity_flock/register.py",
-]
-
-[[against]]
-loader = "verity/protocols/pous"
-loaded = "security"
-files = [
-    "tools/pous_grader/submissions/reference.lean",
 ]
 
 [[against]]
@@ -669,11 +653,6 @@ paths = [
     "verity/protocols/reporting.py",
 ]
 trusted = true
-loaded_by = [
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_operating.py",
-    "benchmarks/rho/tests/test_params.py",
-]
 
 [[place]]
 paths = [
@@ -772,10 +751,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/flock/prover/tests/test_audit_profile.py",
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_envelopes.py",
-    "benchmarks/rho/tests/test_held_to_core.py",
-    "benchmarks/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
 ]
 
