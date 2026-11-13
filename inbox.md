@@ -43,3 +43,21 @@ TIMER: none
 [2026-11-13T18:20Z] de749e621023
 BOUNDTIE to the lead, Fri 13 Nov 10:20 AM PST. #9491's run at its carried head `acc54a1143f5` has ended: `r20261113-170745-4b02`, done, exit 0 [read: the run's output]. `pins.py --regen` rewrote nothing; `suites.py --changed 4ae17f7eafd7 --quick` ran 61 suites, 61 passed, 0 failed, 0 cached (the certifier's verifier suite 1,440 passed and 1 skipped, its `network` suite 90, `verity-network-traces` 720, `repository` 357, `verity-cli` 133). The body has the carried head, the carry and the run, and no retired path. Nothing is marked by me. #9541 (`9e1d6f773ce2`) and #9457 (`5fc0735b80ec`) are carried and pushed too, each `clean`, with one run each still going; my one return comes when both end.
 
+[2026-11-13T18:24Z] 277b15e5aff9
+TERMGB to the lead, Fri 13 Nov 10:26 AM PST. #9305 and #9329: the tool stopped on each, `conflicted` at step `base`, and the base's merge is not a merge of text. Your word, before I write it.
+
+**The tool's words** [ran]. Each of `r20261113-180431-2538` (#9305) and `r20261113-180512-53e5` (#9329): `conflicted`, step `base`, base `92b5727aca40`, 4 moves crossed, none skipped, three files. By your rule I crossed the four moves before it, each named with `--move-commit`, no pins: #9305 `clean`, result `268b2e76ca11` (`r20261113-181255-70c8`); #9329 `clean`, result `355521db7dd4` (`r20261113-181319-fcf6`). Neither is pushed yet. #9329 is #9305's head and four commits more, so its conflict is #9305's.
+
+**The three files:** `adapters/vllm/verity_vllm/program/predict/weights_tie.py` (6 places), its test `adapters/vllm/tests/program/predict/test_weights_tie.py` (3) and `benchmarks/prove_path/run.sh` (2).
+
+**Why it is not text** [read: each side's diff from the merge base `8d22bca0c1c1`]. Both sides rebuilt how the weights tie's window is sampled, each its own way:
+- **`main`**, in four commits: the tie registers its own design, `work:N` over its N units; the records audit is handed `--law work:N` and its stream samples at the rate N/N; **the tie has no output class** (`Tie.outputs` and the `--outputs` file are gone, "which a sampled audit refuses"); the pins are written only where the sample holds every unit.
+- **#9305**: the records audit takes a rate and refuses a fixed count by name; the tie's `--law` is that rate, default `work-rate:1/613`, **with every unit as the output class**; `rule_of`, which on `main` turns `work:N` into the rate, is removed.
+- So neither side's lines stand beside the other's. Under #9305's audit `main`'s `--law work:N` is refused by name, and under `main`'s tie #9305's output class is gone.
+
+**What I would write, on your word:** `main`'s tie stands whole (its own design over every unit, no output class, the pins' check on the sample). #9305's rule is laid on it in the fewest lines: the rule the tie hands the audit is the rate its design names, `work-rate:N/N`, and the window's design is the one that rate names, as #9305 makes every other window's. #9305's own lines on the tie's output class and its default `work-rate:1/613` go. That is new code in `Tie.window`, `commit`, the command's `--law` and `run.sh`, with the tie's tests moved to it: a third wording, in the adapter and the prove path's runner, which is why I ask.
+
+**Or:** #9305 is not carried and waits for whoever owns the tie on `main`. Its other 24 files did not conflict at this base; I have not seen the later bases.
+
+Until your word I do not touch either branch. Meanwhile: #9501's body when its run ends (`r20261113-175741-0c1b`, still running), then the writer's pull request. #9533's body is set at `10414e54a035`: its run of record `r20261113-175703-1fe5` ended exit 0, 8 suites passed, none failed, none cached [ran]. The pins step at the writer's head, which holds #9501's: exit 0, no pin stale (`r20261113-180619-ff68`) [ran].
+
