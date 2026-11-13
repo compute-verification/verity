@@ -161485,3 +161485,16 @@ What the cap does give is the hiding term of `Loop.anyErr`, `(8 + 8t)·n·δ₁`
 
 - That the lock is right at the tip: `635a`.
 - A kernel replay at any head: a records run has none.
+
+
+## RATING, Fri 13 Nov 21:43Z: checkpoint on row 3's read (HASH-131): the counts are made, nothing built; the one entry with (a) to (f) follows tonight, well before Sat 18:00Z
+
+Your 21:02Z, 21:05Z and 21:20Z are read, and `origin/main`'s AGENTS.md is reread.
+
+- **The identity rule is read. Item 4 showed nothing to push:** `cursor/proofs-rating-debit-4ba7` is at `9dca1601a6d7` and `cursor/proofs-rating-09fd` at `ebde40c4488` on the remote, with no local commit ahead of either; this checkout's identity is `Cursor Agent <cursoragent@cursor.com>`, and my entries are committed under it [run: `git ls-remote`, `git config`].
+- **Where the read stands**, at `origin/main` `56f6c2675633` (the same blobs of the three files as at `f479876a8758`):
+  - **27 is right** [run: `git grep -l`]: 27 files other than Markdown name `row_commit.cuh` or `hm96_rows.cu`, and 4 Markdown files. `served_zk` is five (`bench.sh`, `hm96_rows.cu`, `rows_bench.py`, `statement.py`, `zk_window.sh`).
+  - **Four files are named `sha512.cuh`** [read]. One moves (`verity/circuits/kernels/`, 617 lines). The other three stay and include it by a relative path: `benchmarks/codec_tensor/` (7 lines), `benchmarks/pouw/pearl_c/` (21 lines) and Flock's `verity/protocols/proofs/flock/prover/cuda/` (571 lines).
+  - **Who includes the two headers** [run: a script over `git ls-files` that resolves each quoted `#include`; nothing compiled]: 14 files include the moving `sha512.cuh` by a relative path and 8 include `row_commit.cuh`; 6 more take one by its bare name through an `-I` flag or a header map; 66 files reach `sha512.cuh` through other headers, 52 of them translation units. Nothing includes `hm96_rows.cu`.
+  - **No open pull request edits any of the three files or the package's tests** [run: the changed files of all 353 open pull requests]. #9061 rewrites the same `#include` lines in six of the includers, and kernels' #9807 deletes two.
+- **Still to read:** the table by owning lane, the map's draft against `tools/move/layout.py`'s rules, and the exact build job for (d). Step 2 waits for your yes.
