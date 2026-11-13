@@ -217,12 +217,16 @@ structure Sent where
 def Sent.components (k : Verity.Registration.Composite) (s : Sent) : List Protocol :=
   (componentsOf k).map (·.onBlobs (Blobs.ofArray s.blobs))
 
+/-- **The components of `θ` that `read` reads**, each's parameters as `read` decodes them, where `θ` decodes as a
+composite's parameters. -/
+def componentsAt {α : Type} (read : Composition.Named → Option α) (θ : ByteArray) : List α :=
+  match canonicalJson θ >>= Composition.decodeParams with
+  | .ok ps => ps.filterMap read
+  | .error _ => []
+
 /-- **The sampled components' one-stage parameters in `θ`**, each component's that `Core.Composites.sampledAt`
 reads. -/
-def sampledParams (θ : ByteArray) : List _root_.Spot.OneStageZk.Params :=
-  match canonicalJson θ >>= Composition.decodeParams with
-  | .ok ps => ps.filterMap Core.Composites.sampledAt
-  | .error _ => []
+def sampledParams (θ : ByteArray) : List _root_.Spot.OneStageZk.Params := componentsAt Core.Composites.sampledAt θ
 
 namespace AuditorPins
 
@@ -232,27 +236,46 @@ def spotKey (P : AuditorPins) : Hash.Msg := ((P.keys.head?).map (·.key)).getD [
 /-- The window `w` is one of the sessions the auditor designated for role `r`. -/
 def Designated (P : AuditorPins) (r : Role) (w : String) : Prop := w.toUTF8.data.toList ∈ P.sessions r
 
+/-- **The LMS key `k` is SPOT's pinned challenger's**: the first pin is the challenger's, with `k`'s public key under
+`k`'s LMS parameters. -/
+def HoldsChallenger (P : AuditorPins) (k : _root_.Spot.Challenger.ChallengerKey) : Prop :=
+  ∃ q ∈ P.keys.head?, q.role = .challenger ∧ k.pub.data.toList = q.key ∧ (k.params.N, k.params.W, k.params.H) = q.scheme
+
+/-- **The public key `t` is the pinned memory challenger's**: the first memory challenger's pin. -/
+def HoldsMemory (P : AuditorPins) (t : ByteArray) : Prop :=
+  ∃ q ∈ P.keys.find? (fun p => decide (p.role = .memoryChallenger)), t.data.toList = q.key
+
+/-- **The LMS key `k` is a pinned network certifier's**: some certifier's pin has `k`'s public key under `k`'s LMS
+parameters. -/
+def HoldsCertifier (P : AuditorPins) (k : _root_.Spot.Challenger.ChallengerKey) : Prop :=
+  ∃ q ∈ P.keys, q.role = .networkCertifier ∧ k.pub.data.toList = q.key ∧ (k.params.N, k.params.W, k.params.H) = q.scheme
+
 /-- **The pins whose signed logs subprotocol `a`'s check reads**, by their places in `keys`: SPOT's live challenger's
-(the first) for sampled proofs and PoUW, the first memory challenger's for PoUS, PoUB-P2 and the wipe, every network
-certifier's for the network certifier, and none for the inference-only policy. -/
+(the first) for sampled proofs and PoUW, the first memory challenger's for PoUS and the wipe, every network
+certifier's for the network certifier, and none for PoUB-P2 and the inference-only policy, which read no device's
+signature. -/
 def reads (P : AuditorPins) : Subprotocol → List ℕ
   | .sampled | .pouw => [0]
-  | .pous | .poub | .wipe => (P.keys.findIdx? fun p => decide (p.role = .memoryChallenger)).toList
+  | .pous | .wipe => (P.keys.findIdx? fun p => decide (p.role = .memoryChallenger)).toList
   | .network => (List.range P.keys.length).filter fun i => decide ((P.keys[i]?.map (·.role)) = some .networkCertifier)
-  | .inferenceOnly => []
+  | .poub | .inferenceOnly => []
 
 /-- **The pins as the compiled verifier reads them** (`Core.Composites.Pins`, `product IDS --pins`): the first
-pin's key and LMS parameters, when it is a challenger's, and the sessions designated for the challenger. -/
+pin's key and LMS parameters, when it is a challenger's, the sessions designated for the challenger, the first memory
+challenger's key, and every network certifier's key and LMS parameters. -/
 def compiled (P : AuditorPins) : Core.Composites.Pins where
   challenger := (P.keys.head?.filter fun q => decide (q.role = .challenger)).map fun q =>
     ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
   sessions := (P.sessions .challenger).map fun m => ⟨m.toArray⟩
+  memory := (P.keys.find? fun q => decide (q.role = .memoryChallenger)).map fun q => ⟨q.key.toArray⟩
+  certifiers := (P.keys.filter fun q => decide (q.role = .networkCertifier)).map fun q =>
+    ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
 
 end AuditorPins
 
 /-- **Composite `k`'s compiled verifier under the pins `P`**: `verifier k` run as `product IDS --pins`
-(`Core.Composites.atPins`), whose acceptance stands only where the sampled components name the pinned challenger key
-and designated sessions. -/
+(`Core.Composites.atPins`), whose acceptance stands only where its components name only the device keys and
+sessions the pins hold. -/
 def pinnedVerifier (P : AuditorPins) (k : Verity.Registration.Composite) : BlobProtocol :=
   Core.Composites.atPins P.compiled (verifier k)
 
@@ -260,22 +283,43 @@ def pinnedVerifier (P : AuditorPins) (k : Verity.Registration.Composite) : BlobP
 pinned key under its pinned LMS parameters, and its window is a session the auditor designated for the challenger. -/
 def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ sampledParams θ,
-    (∀ kl ∈ p.base.challenger, ∃ q ∈ P.keys.head?, q.role = .challenger ∧ kl.1.pub.data.toList = q.key ∧
-      (kl.1.params.N, kl.1.params.W, kl.1.params.H) = q.scheme) ∧
-    ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w
+    (∀ kl ∈ p.base.challenger, P.HoldsChallenger kl.1) ∧ ∀ w ∈ p.base.verifier.windowRoot, P.Designated .challenger w
 
-/-- **Subprotocol `a`'s pin check on the parameters `θ`**: sampled proofs' is `SpotPinned`, which the compiled
-verifier checks (`pinnedVerifier`). PoUW's, PoUS's, the wipe's and the network certifier's checks each verify a
-device's signatures under a key their own parameters carry (PoUW's live challenger's, PoUS's and the wipe's memory
-challenger's, the network certifier's), which no pin check holds to a pin yet, so their `True` is that gap. PoUB-P2's
-and the inference-only policy's checks read no device's signature, and `True` is theirs. -/
+/-- **PoUW's parameters name only the pinned challenger**: each PoUW period's challenger key, where it reads as one,
+is SPOT's pinned key. -/
+def PouwPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
+  ∀ p ∈ componentsAt Core.Composites.pouwAt θ, ∀ k,
+    _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k
+
+/-- **PoUS's parameters trust only the pinned memory challenger**: every key a PoUS run trusts is its pin's. -/
+def PousPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
+  ∀ p ∈ componentsAt Core.Composites.pousAt θ, ∀ t ∈ p.trusted, P.HoldsMemory t
+
+/-- **The wipe's parameters trust only the pinned memory challenger**: every key a wipe trusts is its pin's. -/
+def WipePinned (P : AuditorPins) (θ : ByteArray) : Prop :=
+  ∀ p ∈ componentsAt Core.Composites.wipeAt θ, ∀ t ∈ p.trusted, P.HoldsMemory t
+
+/-- **The network certifier's parameters name only pinned certifiers**: each period's key, under its LMS parameters,
+is a pinned network certifier's. -/
+def NetworkPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
+  ∀ p ∈ componentsAt Core.Composites.networkAt θ, P.HoldsCertifier ⟨p.lms, p.key⟩
+
+/-- **Subprotocol `a`'s pin check on the parameters `θ`**, each of the device keys its check verifies signatures
+under, as its own decoder reads them from its parameters, which the compiled verifier checks (`pinnedVerifier`):
+sampled proofs' challenger key and window (`SpotPinned`), PoUW's challenger key (`PouwPinned`), the keys PoUS and the
+wipe trust, the memory challenger's (`PousPinned`, `WipePinned`), and the network certifier's key (`NetworkPinned`).
+PoUB-P2's and the inference-only policy's checks read no device's signature, and `True` is theirs. -/
 def PinnedFor (P : AuditorPins) : Subprotocol → ByteArray → Prop
   | .sampled, θ => SpotPinned P θ
-  | _, _ => True
+  | .pouw, θ => PouwPinned P θ
+  | .pous, θ => PousPinned P θ
+  | .wipe, θ => WipePinned P θ
+  | .network, θ => NetworkPinned P θ
+  | .poub, _ | .inferenceOnly, _ => True
 
 /-- **Composite `k`'s verifier, given the deployment's pins `P`, accepts what the prover sent**: the compiled
-verifier run under the pins (`pinnedVerifier`) accepts. That is the compiled verifier's acceptance with each of `k`'s
-subprotocols passing its pin check (`PinnedFor`; `Verity.accepts_iff`), so a key or session the pins don't hold is
+verifier run under the pins (`pinnedVerifier`) accepts. That is the compiled verifier's acceptance with every
+subprotocol's pin check passing (`PinnedFor`; `Verity.accepts_iff`), so a key or session the pins don't hold is
 refused. -/
 def Accepts (P : AuditorPins) (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ((pinnedVerifier P k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept
