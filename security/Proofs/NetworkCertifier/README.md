@@ -121,12 +121,12 @@ RecordRows.lean  the rows format reads back the code's cells on every schedule t
 TapRows.lean    at the network certifier's rows: the trace filled in with its values carries its records
     (carries_fillTrace), and a disagreement between the two is a collision
     (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
-MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (periodLeakChecked): each window's
+MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (monitoringPeriodLeakChecked): each window's
     bound at the network certifier's rows with a valid run
-    (periodChecked_first), and the records counted by Carried's count at the
-    empty pool (encard_periodChecked_le, periodChecked_second)
+    (monitoringPeriodChecked_first), and the records counted by Carried's count at the
+    empty pool (encard_monitoringPeriodChecked_le, monitoringPeriodChecked_second)
 MonitoringPeriod.lean  MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
-    (periodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
+    (monitoringPeriodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
     before the period)
 MonitoringPeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, monitoringPeriodLeak_le_sum)

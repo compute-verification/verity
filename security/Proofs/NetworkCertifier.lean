@@ -191,7 +191,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
-theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.periodLeakChecked
+theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.monitoringPeriodLeakChecked
 theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak

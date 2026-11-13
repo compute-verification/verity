@@ -50,7 +50,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leak through the network certifier over a monitoring period, with the checked inputs left out
 
-`periodLeakChecked` is `Guarantees.MonitoringPeriodLeakChecked`, in two steps, each over the checked form of what it reads.
+`monitoringPeriodLeakChecked` is `Guarantees.MonitoringPeriodLeakChecked`, in two steps, each over the checked form of what it reads.
 
 **Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network certifier
 wherever both open a gate gives the leak relation at the network certifier's rows with a valid run, where the run at
@@ -62,16 +62,16 @@ read, any other input in a proof block is opened, and no egress gate depends on 
 the run the relation accepts at is the run at the network certifier's rows. An accepted audit escapes the relation
 only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network certifier, which is a
 collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
-which `CheckedWitness` at `certifierRun` bounds (`periodChecked_first`).
+which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`).
 
 **The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network certifier registers, has them
-among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_windowGoodChecked`). A period's
+among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_executionPhaseGoodChecked`). A period's
 records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
 incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
 counts with the checked inputs left out; over the windows' possible incorrect sets they number at most `windowsCount`
-at `reg ∪ chk` (`encard_periodChecked_le`). The client's view reads back from the records under a registered parameter
+at `reg ∪ chk` (`encard_monitoringPeriodChecked_le`). The client's view reads back from the records under a registered parameter
 (`RecordFormat.ReadsBy`), so the views, and the secrets they decode to, number at most `#Θ` times that
-(`periodChecked_second`).
+(`monitoringPeriodChecked_second`).
 
 `rLeakCertifier_of_rLeakCertifierChecked` and `rLeakCertifierChecked_of_rLeakCertifier` move between the leak relation
 at the network certifier's rows and its checked form, the second at a check every run passes;
@@ -132,7 +132,7 @@ such a record is a run over the empty pool that restarts at no window (`leakAtCa
 `encard_carried_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
 sets, and the sum over them of the per-family products is the product of the per-window sums
 (`Finset.prod_univ_sum`), each at most `#faultySets_i · 2^β_i` times the window's other factors. -/
-theorem encard_periodChecked_le {L K S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (δ : ℝ) (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
@@ -207,7 +207,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A window that meets its good event holds an accepted sequence**: where the network certifier registers the
 window's observations at the operator `op`, the layout fits the window's registration and the observations are among
 the sequences `AccSeqsChecked` counts there, at the registration's values. -/
-theorem mem_accSeqsChecked_of_windowGoodChecked {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+theorem mem_accSeqsChecked_of_executionPhaseGoodChecked {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
     {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
     (hP₀ : D.partition s₀ = some P₀) {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)}
@@ -233,9 +233,9 @@ theorem mem_accSeqsChecked_of_windowGoodChecked {H : Msg → Msg} {D : Compiled 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The held and counted parts of `Guarantees.MonitoringPeriodLeakChecked`**, at one check `valid`: a good secret's view is read
 from the windows' records under a registered parameter, each record a sequence its registered Program accepts with a
-valid run (`mem_accSeqsChecked_of_windowGoodChecked`), so the good secrets are decoded from the views `rd` reads off
-`Θ` and the records `encard_periodChecked_le` counts. -/
-theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
+valid run (`mem_accSeqsChecked_of_executionPhaseGoodChecked`), so the good secrets are decoded from the views `rd` reads off
+`Θ` and the records `encard_monitoringPeriodChecked_le` counts. -/
+theorem monitoringPeriodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
@@ -273,7 +273,7 @@ theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : �
             (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj := by
     intro z hz hg
     obtain ⟨hfit, θ, hθ, hal⟩ := hch.1 z hz
-    refine ⟨θ, hθ, ?_, fun i => (mem_accSeqsChecked_of_windowGoodChecked (hplaced.1 i) (htap z hz i) (hg i)).2⟩
+    refine ⟨θ, hθ, ?_, fun i => (mem_accSeqsChecked_of_executionPhaseGoodChecked (hplaced.1 i) (htap z hz i) (hg i)).2⟩
     rw [htrust (schedOf z, srvOf z)]
     exact (hread θ _ hal hfit (arr (srvOf z))).symm
   refine ⟨hheld, ?_⟩
@@ -283,7 +283,7 @@ theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : �
   · rw [he, Set.encard_empty]
     exact zero_le
   have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i =>
-    (mem_accSeqsChecked_of_windowGoodChecked (hplaced.1 i) (htap z₀ hz₀.1 i) (hz₀.2 i)).1
+    (mem_accSeqsChecked_of_executionPhaseGoodChecked (hplaced.1 i) (htap z₀ hz₀.1 i) (hz₀.2 i)).1
   let Os : Set (Fin n → List (Obs L K S)) := {o | ∀ i, o i ∈ AccSeqsChecked (sw i).prog (Pw i) (sw i).design
     (lay (sw i)) (k (sw i)) (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) δ
     (op i (runsBefore o i)) Dj}
@@ -294,7 +294,7 @@ theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : �
     exact ⟨(run tap (schedOf z, srvOf z)).1, ⟨(θ, (run tap (schedOf z, srvOf z)).2), ⟨hθ, hmem⟩, hview.symm⟩,
       hch.2 z hz.1⟩
   have hOs : Os.encard ≤ ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) :=
-    encard_periodChecked_le lay k δ reg chk valid Dj sw Pw β hplaced.2 hfits hchk ρ op
+    encard_monitoringPeriodChecked_le lay k δ reg chk valid Dj sw Pw β hplaced.2 hfits hchk ρ op
   calc G.encard ≤ (dec '' Vs).encard := Set.encard_le_encard hsub
     _ ≤ Vs.encard := Set.encard_image_le _ _
     _ ≤ (Θ ×ˢ Os).encard := Set.encard_image_le _ _
@@ -397,7 +397,7 @@ is not in the leak relation at the network certifier's rows with a valid run is 
 `Compiled.KS` bounds, or disagrees with a passing opening of the network certifier, a collision
 (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or has a run at those rows that one of the two checks
 refuses, which `CheckedWitness` at `certifierRun` bounds (`rLeakCertifierChecked_of`). -/
-theorem periodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
+theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Msg → ℝ)
     (Dj : ℕ) (tops : AuditStatement → List (Opening Bool)) (x : Msg) (hx : ScopeAcc D lay k x)
@@ -450,14 +450,14 @@ open Claims Claims.Sampling
 
 /-- **The leak through the network certifier over a monitoring period, with the checked inputs left out**:
 `Guarantees.MonitoringPeriodLeakChecked`, from each window's bound at the network certifier's rows with a valid run
-(`TapProof.periodChecked_first`) and the held and counted parts at the two checks together
-(`periodChecked_second`). -/
-theorem periodLeakChecked : Guarantees.MonitoringPeriodLeakChecked := by
+(`TapProof.monitoringPeriodChecked_first`) and the held and counted parts at the two checks together
+(`monitoringPeriodChecked_second`). -/
+theorem monitoringPeriodLeakChecked : Guarantees.MonitoringPeriodLeakChecked := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk ρ op
     Conn Cell Srv Dev Zt Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb
   exact ⟨fun m hm h₁ h₂ Ω _ _ P =>
-      TapProof.periodChecked_first H D hks hb L K S lay k δ hδ reg valid₁ valid₂ ε₁ ε₂ Dj tops m hm h₁ h₂ Ω P,
-    fun htap => periodChecked_second H D L K S lay k δ reg chk (fun s r => valid₁ s r ∧ valid₂ s r) Dj sw Pw β
+      TapProof.monitoringPeriodChecked_first H D hks hb L K S lay k δ hδ reg valid₁ valid₂ ε₁ ε₂ Dj tops m hm h₁ h₂ Ω P,
+    fun htap => monitoringPeriodChecked_second H D L K S lay k δ reg chk (fun s r => valid₁ s r ∧ valid₂ s r) Dj sw Pw β
       hplaced hchk ρ op arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops htap⟩
 
 end NetTiming
