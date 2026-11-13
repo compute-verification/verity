@@ -57,10 +57,10 @@ open Properties.Challenger.CanonRead (sorted_getD sortedKeys_of_wf)
 /-! ## Lists -/
 
 /-- Of a list without its last entry, pairwise related: an entry and a later one that is not the last are related. -/
-theorem pairwise_dropLast_mid {α : Type} {R : α → α → Prop} {X Y Z : List α} {a b : α}
-    (h : (X ++ a :: (Y ++ b :: Z)).dropLast.Pairwise R) (hZ : Z ≠ []) : R a b := by
+theorem pairwise_dropLast_mid {α : Type} {R : α → α → Prop} {xs ys zs : List α} {a b : α}
+    (h : (xs ++ a :: (ys ++ b :: zs)).dropLast.Pairwise R) (hzs : zs ≠ []) : R a b := by
   rw [List.dropLast_append_of_ne_nil (by simp), List.dropLast_cons_of_ne_nil (by simp),
-    List.dropLast_append_of_ne_nil (by simp), List.dropLast_cons_of_ne_nil hZ] at h
+    List.dropLast_append_of_ne_nil (by simp), List.dropLast_cons_of_ne_nil hzs] at h
   exact (List.pairwise_cons.1 (List.pairwise_append.1 h).2.1).1 b (by simp)
 
 /-- Of two splits of one list, the one with fewer entries of a kind before its point comes first. -/
@@ -278,17 +278,17 @@ theorem coinTreesOf_listed {log : List String} {trees : Array LoggedTree} (h : c
 
 /-- Of the rounds a tree shows opened, an earlier one and a later one that is not the last are in the order the
 refusal holds the tree's rounds to, the last one aside. -/
-theorem mid_of_listed {t : LoggedTree} {X Y Z : List (String × ℕ)} {a b : String × ℕ}
-    (hW : t.opened.toList.map (fun o => (o.stream, o.round)) = X ++ a :: (Y ++ b :: Z))
+theorem mid_of_listed {t : LoggedTree} {xs ys zs : List (String × ℕ)} {a b : String × ℕ}
+    (hW : t.opened.toList.map (fun o => (o.stream, o.round)) = xs ++ a :: (ys ++ b :: zs))
     (hp : (t.opened.pop.toList.map fun o => (streamPlace t.spec o.stream, o.round)).Pairwise
       fun x y => roundBefore x y = true)
     {o : TreeOpening} (hb : t.opened.back? = some o) (hne : (o.stream, o.round) ≠ b) :
     roundBefore (streamPlace t.spec a.1, a.2) (streamPlace t.spec b.1, b.2) = true := by
-  have hZ : Z ≠ [] := by
-    intro hZ
-    rw [hZ] at hW
+  have hzs : zs ≠ [] := by
+    intro hz
+    rw [hz] at hW
     have hlast : (t.opened.toList.map fun o => (o.stream, o.round)).getLast? = some b := by
-      have hcat : X ++ a :: (Y ++ [b]) = (X ++ a :: Y) ++ [b] := by simp
+      have hcat : xs ++ a :: (ys ++ [b]) = (xs ++ a :: ys) ++ [b] := by simp
       rw [hW, hcat, List.getLast?_concat]
     rw [List.getLast?_map, Array.getLast?_toList, hb] at hlast
     exact hne (Option.some.inj hlast)
@@ -298,7 +298,7 @@ theorem mid_of_listed {t : LoggedTree} {X Y Z : List (String × ℕ)} {a b : Str
     rw [List.map_map, ← List.map_dropLast, ← Array.toList_pop]
     exact hp
   rw [hW, List.map_append, List.map_cons, List.map_append, List.map_cons] at hp'
-  exact pairwise_dropLast_mid (R := fun x y => roundBefore x y = true) hp' (fun h => hZ (List.map_eq_nil_iff.1 h))
+  exact pairwise_dropLast_mid (R := fun x y => roundBefore x y = true) hp' (fun h => hzs (List.map_eq_nil_iff.1 h))
 
 /-- **Where a tree's rounds are opened stream by stream, an earlier line opens an earlier round**: where `coinTreesOf`
 accepts the release log `lines` and `repStreamOrder` passes its tree `t`, of two lines that open rounds of `t`, the
@@ -368,11 +368,32 @@ theorem coinSpec_streams (t : String) :
   rw [← rep_zero, ← rep_one]
   rfl
 
-theorem tableNames_one (t : Flock.Tags) : t.tableNames 1 = #[t.table] := by
-  unfold Flock.Tags.tableNames
+/-- **A one-table session's rep streams are its table's two**, rep 0 then rep 1. -/
+theorem repStreams_table {spec : Flock.SessionSpec} {T : String} (h : spec.tables = #[T]) :
+    spec.repStreams.toList = [(0, 0, repStreamName T 0), (0, 1, repStreamName T 1)] := by
+  rw [FlockDeploy.repStreams_toList, h]
+  first
+    | rfl
+    | simp [repStreamName]
+
+/-- **A spec that is a one-table session's coin tree lists the session stream, then the session's rep streams**: where
+the JSON spec `d` is the coin tree of the table `T` and the session `spec` has that table alone, `d`'s streams are
+the session stream and then `spec.repStreams`' names, in `spec.repStreams`' order. -/
+theorem specStreams_repStreams {d : Json} {spec : Flock.SessionSpec} {T : String}
+    (hv : Lines.SpecValue d (Flock.Zk.coinSpec #[T])) (ht : spec.tables = #[T]) :
+    specStreams d = #[Json.str TREE_SESSION] ++ spec.repStreams.map fun x => Json.str x.2.2 := by
+  unfold specStreams
+  rw [hv.streams, coinSpec_streams]
+  apply Array.ext'
+  simp only [Array.toList_append, Array.toList_map]
+  rw [repStreams_table ht]
   first
     | rfl
     | simp
+
+theorem tableNames_one (t : Flock.Tags) : t.tableNames 1 = #[t.table] := by
+  unfold Flock.Tags.tableNames
+  rfl
 
 /-- **A spec that lists a one-table session's streams**: the session stream, then some table's rep 0 stream, then
 its rep 1 stream. -/
@@ -481,15 +502,15 @@ theorem slotStream_ne_closing (tab : String) (R j : ℕ) :
     slotStream tab R j ≠ (Spot.Challenger.TREE_SESSION, 1) := by
   unfold slotStream
   by_cases h0 : j = 0
-  · rw [if_pos h0]
+  · rw [ite_eq_left h0]
     intro h
     exact absurd (Prod.mk.inj h).2 (by decide)
-  · rw [if_neg h0]
+  · rw [ite_eq_right h0]
     by_cases hR : j - 1 < R
-    · rw [if_pos hR]
+    · rw [ite_eq_left hR]
       intro h
       exact Verity.Sampled.repStream_ne_session tab 0 (Prod.mk.inj h).1
-    · rw [if_neg hR]
+    · rw [ite_eq_right hR]
       intro h
       exact Verity.Sampled.repStream_ne_session tab 1 (Prod.mk.inj h).1
 
@@ -559,7 +580,7 @@ theorem MembersHeld.rise (H : MembersHeld lines trees log records tree)
     -- the earlier release's line comes first
     have hcount : openedOf (a ++ r :: b) (tree t₁) s₁ = openedOf a (tree t₁) s₁ + (openedOf b (tree t₁) s₁ + 1) := by
       unfold openedOf
-      rw [List.countP_append, List.countP_cons, if_pos (by simp [hf₁, Verity.Frame.opensAt])]
+      rw [List.countP_append, List.countP_cons, ite_eq_left (by simp [hf₁, Verity.Frame.opensAt])]
     have hlt : P.countP (Verity.Sampled.opensLine ρ name) < P'.countP (Verity.Sampled.opensLine ρ name) := by
       omega
     obtain ⟨Mid, hP'⟩ := Verity.Sampled.split_before (hls.symm.trans hls') hlt
@@ -709,11 +730,23 @@ theorem setupAt_coinTree {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
     exact (Verity.Sampled.setupHidden_coinTreeP hst).trans rfl
   · exact absurd h1 (by omega)
 
-/-- **A member's accepted session's tree lists a one-table session's streams**: where the per-member form accepted
-the session `s` at its member's statement, `recJ` is its record on the blobs, and `sessionTreeReason` holds that
-record to the logged tree `t` less its last opening, `t`'s spec lists the session stream and the statement's table's
-two rep streams. -/
-theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+/-- **The session `--zk` sets up at one table has that table alone.** -/
+theorem setupAt_oneTable {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr : Option Json}
+    {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
+    (hh : (Flock.Witness.zkTags W).hiddenOutputs = true) (hc : W.count = 1)
+    (h : Spot.OneStageZk.setupAt W rd dr = .ok (spec, tabs, x)) : spec.tables = #[W.tags.table] := by
+  obtain ⟨sts, hs, -⟩ := Verity.Sampled.setupAt_ok h
+  obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okHP hh hset with ⟨-, st, hst, rfl, -⟩ | ⟨h1, -⟩
+  · obtain ⟨_, hP⟩ := FlockSoundness.Discharge.Hidden.setupHidden_specP hst
+    exact congrArg (fun t : Flock.Tags => #[t.table]) hP.tagsEq
+  · exact absurd h1 (by omega)
+
+/-- **What a member's accepted session's verdict fixes of its tree**: where the per-member form accepted the session
+`s` at its member's statement, `recJ` is its record on the blobs, and `sessionTreeReason` holds that record to the
+logged tree `t` less its last opening, the session the verdict verified (`setupAt`'s, the one `Flock.Zk.verify`
+accepted the record at) has one table `T` alone, and `t`'s spec is that table's coin tree. -/
+theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
     {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
       (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
@@ -721,7 +754,11 @@ theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : 
     {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
     (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
-    Verity.Sampled.SessionStreams t.spec := by
+    ∃ text dr proofs spec tabs rest T,
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr = .ok (spec, tabs, rest) ∧
+        Flock.Zk.verify spec tabs text proofs = .ok () ∧ spec.tables = #[T] ∧
+        Verity.Sampled.Lines.SpecValue t.spec (Flock.Zk.coinSpec #[T]) := by
   obtain ⟨coinKeys, b, text, hg, hu, hv⟩ := hacc
   obtain ⟨proofs, spec, tabs, rest, -, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
   obtain ⟨sess, hd⟩ := Verity.Sampled.zkVerify_decode hzk
@@ -731,19 +768,59 @@ theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : 
     (Verity.Sampled.statement_zkTags htag _ _).1
   have hc := setupAt_coinTree (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I)
     hh rfl hst
+  have htab := setupAt_oneTable (W := (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I)
+    hh rfl hst
   obtain ⟨j, cj, nonce, key, hp, -, -⟩ := Verity.Sampled.decode_coinTree hd hc
   have hrec' : Verity.Sampled.recordOn bs s = some ((Flock.JsonParse.parse text).toOption.getD Json.null) := by
     simp [Verity.Sampled.recordOn, hg, hu, Except.toOption]
   have hj : recJ = j := by
     have e := Option.some.inj (hrec.symm.trans hrec')
     rw [hp] at e
-    first | exact e | simpa [Except.toOption] using e
+    exact e
   rw [← hj] at hp
   obtain ⟨t', ht', -, hjq⟩ := Verity.Sampled.Trees.coinTree_held hS
   have et' : t' = t.unclosed := Array.mem_singleton.1 ht'
   rw [et'] at hjq
   have hjq' : Spot.jeq (Spot.getD recJ "coin_tree") t.record = true := hjq
-  exact Verity.Sampled.sessionStreams_of_spec (Verity.Sampled.specValue_of_decode hd hc hp hT ht hjq')
+  exact ⟨text, _, proofs, spec, tabs, rest, _, hst, hzk, htab,
+    Verity.Sampled.specValue_of_decode hd hc hp hT ht hjq'⟩
+
+/-- **A member's accepted session's tree lists a one-table session's streams** (`accepted_spec`): `t`'s spec lists
+the session stream and the statement's table's two rep streams. -/
+theorem sessionStreams_of_accepted {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+    {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
+    (hacc : MemberChecks.SessionAccepted
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+    {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
+    {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
+    (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
+    Verity.Sampled.SessionStreams t.spec := by
+  obtain ⟨-, -, -, -, -, -, T, -, -, -, hv⟩ := accepted_spec hacc hrec hT ht hS
+  exact Verity.Sampled.sessionStreams_of_spec hv
+
+/-- **A member's session's verdict ties its tree's streams to the session's rep streams**: where the per-member form
+accepted the session `s` at its member's statement, `recJ` is its record on the blobs, and `sessionTreeReason` holds
+that record to the logged tree `t` less its last opening, `t`'s spec lists the session stream and then the rep
+streams of the session the verdict verified (`Flock.SessionSpec.repStreams` of `setupAt`'s session, the one
+`Flock.Zk.verify` accepted the record at), in that session's order. So the order the form's check holds the tree's
+rounds to, the tree's spec's, is the session's own order of its rep streams. -/
+theorem treeStreams_repStreams {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+    {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
+    (hacc : MemberChecks.SessionAccepted
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+    {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
+    {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
+    (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
+    ∃ text dr proofs spec tabs rest,
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr = .ok (spec, tabs, rest) ∧
+        Flock.Zk.verify spec tabs text proofs = .ok () ∧
+        Verity.Sampled.specStreams t.spec =
+          #[Json.str Spot.Challenger.TREE_SESSION] ++ spec.repStreams.map fun x => Json.str x.2.2 := by
+  obtain ⟨text, dr, proofs, spec, tabs, rest, T, hst, hzk, htab, hv⟩ := accepted_spec hacc hrec hT ht hS
+  exact ⟨text, dr, proofs, spec, tabs, rest, hst, hzk, Verity.Sampled.specStreams_repStreams hv htab⟩
 
 /-! ## The piece at the form's acceptance -/
 
