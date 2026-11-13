@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import importlib.util
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-import test_pearl_c_hash_decode as HD  # hash_decode.cuh's host test: the host `Dev` (`Host`), A's tree (`levels`)
-from conftest import load
 
 from verity.protocols.pouw.verifier import audit
 from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
@@ -28,7 +28,22 @@ from verity.protocols.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[0] / "pearl_c_sm90"
-R = load("pearl_c_sm90/run.py")
+
+
+def load(name: str, path: Path):
+    """The module at `path` under its own name: other trees in the suite have a run.py too.  Not the suite's
+    `conftest.load`: test_pearl_c_vllm.py runs this file by path, and the suites of benchmarks/one_stage and
+    benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this suite's."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+R = load("pearl_c_sm90_run", KERNEL / "run.py")
+#: the host `Dev` (`Host`) and A's tree in Python (`levels`): hash_decode.cuh's host test's
+HD = load("pearl_c_hash_decode_test", HERE / "test_pearl_c_hash_decode.py")
 SOURCE = (KERNEL / "pearl_c_sm90.cu").read_text()
 #: pearl_c_sm90.cu's PD_VARIANT_LIST, which hash_decode_host.cpp builds beside hash_prefill.cuh's PL_INSTANCE(851)
 PD_LIST = re.search(r"#define PD_VARIANT_LIST\(X\) (.*)", SOURCE).group(1).strip()
