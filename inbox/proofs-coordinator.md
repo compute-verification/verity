@@ -145471,3 +145471,397 @@ stage samples picked the second session's root with it; nothing else chooses it.
 ### Not established
 
 - Everything under "Not established" of 14:12Z stands: no run under a gate, no Lean, no carry.
+
+## GATHER, Fri 13 Nov 14:13Z: HEAD `fc5c9053db63c6e5458888de2dd00db95619aee9`; `af1b` ENDED rc 0: the clause moves ONE record, `reads["Spot.SecondStage"]` in `security/lean-audit.json`, read by THREE guarantees, NONE DEPLOYED; the two escape lines are GONE; only `reads` differs; `interior-parts` is PICKED (five commits) and the difftest whole and the plays PASS at the new head; its records run `2020` is OUT; the body's draft is at the end
+
+**The head.** `cursor/proofs-gather-wired-layout-6a9b` is at `fc5c9053db63c6e5458888de2dd00db95619aee9`, pushed 13:57Z [run]. I fetched at 14:06Z and the remote tip is that push: no other worker's commit is on the branch [run]. It is `faaa93a0780` plus six commits, each a pick, nothing rebased and nothing forced [run]:
+
+- `fab3acc3181`: the join's `65a6f23f426`, the lock's `escapes` entries, with `git cherry-pick -x` (your 13:29Z, item 1) [run].
+- `6bafbad1b6a`, `2dbb7472f71`, `44ed7610c37`, `70d9a15f599`, `fc5c9053db6`: ACCEPTS's five verifier-side commits (your 13:35Z) [run]. **Item 2 has one thing I did not do exactly as ordered** [run].
+
+**In plain words.**
+
+- The clause I added to round 2 changes one definition, `Spot.SecondStage.wiresOk` [run]. Three guarantees read it, all in `security/lean-audit.json`, and none of the three is deployed [run, derived: the three names against the lock's `deployed`].
+- With the join's lock entries picked, `security/Proofs` passes and the two escape lines are gone [run].
+- The regenerated locks differ from the tree's under `reads` only [run]. So R3 and the clause together move six `reads` records in two locks, and no statement, premise or trust-gap entry [derived].
+- `interior-parts` is on the branch, and at the new head the package builds whole, the difftest passes whole and both plays pass [run]. What it moves in the locks is not known: its records run is out [run].
+- No play at my head puts an honest interior of two or more templates through the compiled `interior-parts` clause [read]. Item 5 says why.
+
+**1. `af1b`'s printout** [run: `r20261113-130414-af1b`, vy-nebius-cpu-7, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, ended 14:04:52Z, rc 0, 3,606 s, outcome `regenerated`]. It ran at scratch `e41590644bb`, whose tree is the tree of `fab3acc3181`: R3, the clause and both picks of the join, without `interior-parts` [run: the two trees' hashes are equal].
+
+Your four questions:
+
+- **Which guarantees read `reads["Spot.SecondStage"]`'s changed definition.** In `security/lean-audit.json`: `Flock.SecurityProofs.SpotExfilTwo`, `Flock.SecurityProofs.SpotFirstHitTwo` and `Flock.SecurityProofs.SpotKSTwo` read `Spot.SecondStage.wiresOk` [run]. In any other lock: none [run]. `security/Properties/lean-audit.json` has no `reads["Spot.SecondStage"]` record, in the tree or regenerated [run: the written lock]. The verifier's package has 0 guarantees, `security/Proofs` has 0, and the certifier's package passes with its 4 unchanged [run].
+- **Whether a deployed guarantee is among them.** No [derived: none of the three names is in `security/lean-audit.json`'s `deployed`, which lists 14, or in `security/Properties/lean-audit.json`'s, which lists 6]. The deployed readers of R3's changes are the two of my 13:20Z entry, unchanged: `Flock.SecurityProofs.SampledKSLiveV5` and `Verity.remote_soundness_of_subprotocols` [run].
+- **Whether the two escape lines are gone with `65a6f23f426`.** Yes [run]. `security/Proofs` is audited four times in the run and each line says `PASS`; the printout has no line with the word `escape` [run: `rg -c escape` on its `stdout.log` finds none].
+- **Whether anything but `reads` differs.** No [run: `lockdiff.py` of each regenerated lock against the tree's]. `security/lean-audit.json`: 8 differences, the 6 of R3 and 2 for the clause (`reads / Spot.SecondStage / definitions / Spot.SecondStage.wiresOk` and that record's `digest`). `security/Properties/lean-audit.json`: 9 differences, the same 9 as in `3f16` [run]. The regenerated locks' SHA-256 are `9e93ed88ce43…` and `49a3bc121d28…`, the ones the run's `OUTCOME` line names [run].
+
+I did not commit the regenerated locks: the candidate's records run commits them [relayed: your earlier ruling on records].
+
+The verdict lines, word for word but for one cut: each `AUDIT` line's dictionary of timings is written `{…}`. Left out: the lines about staging, sampling, unread definitions and heartbeat overrides; each deployed guarantee's own trust-gap line; the source text printed under each `definition` line; and three of the four `security/Proofs` lines, which differ from the first only in their timings [run]. The whole printout is the run's `stdout.log`, 3,037 lines (`research fetch r20261113-130414-af1b`) [run].
+
+~~~text
+lean-records: this run audits verity/protocols/spot/verifier/lean, then verity/protocols/certifier/verifier/lean, then security (with security/Proofs), then security/Properties (with security/Proofs): a `--records` run for any of them beside this one audits it again
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/verity/protocols/spot/verifier/lean: PASS  6146 declarations in 57 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+AUDIT: PASS; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit
+lean-records: verity/protocols/spot/verifier/lean: check.py exit 0 in 39 s on /home/research/.cache/verity-check/lean-records/build-0 (4 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/verity/protocols/certifier/verifier/lean: PASS  1582 declarations in 11 modules; axioms propext, Classical.choice, Quot.sound; 4 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+AUDIT: PASS; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-verity_protocols_certifier_verifier_lean
+lean-records: verity/protocols/certifier/verifier/lean: check.py exit 0 in 29 s on /home/research/.cache/verity-check/lean-records/build-0 (0 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-verity_protocols_certifier_verifier_lean
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/security/Proofs: PASS  209465 declarations in 4210 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+audit: /workspace/research/cache/verity-check-root/lean-records_build-0/security/lean-audit.json: every failure is a record difference; /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security/audit-security/lean-audit.json is the record `--update` writes
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/security: FAIL  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees; {…}; built in the sandbox; inline debt 319 (885 premises)
+  guarantees: definitions in Spot.OneStage that Flock.SecurityProofs.RecursiveAuditC3, Flock.SecurityProofs.SampledKSLiveV5, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial read changed (changed: Spot.OneStage.paramsParsed)
+  guarantees: definitions in Spot.Registration that Flock.SecurityProofs.RecursiveAuditC3, Flock.SecurityProofs.SampledKSTwo, Flock.SecurityProofs.SampledKSTwo_honest, Flock.SecurityProofs.SpotExfilTwo, Flock.SecurityProofs.SpotFirstHitTwo, Flock.SecurityProofs.SpotKSTwo, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial read changed (changed: Spot.Registration.check; new: Spot.Registration.wiredHeld, Spot.Registration.wiredOk)
+  guarantees: definitions in Spot.SecondStage that Flock.SecurityProofs.SpotExfilTwo, Flock.SecurityProofs.SpotFirstHitTwo, Flock.SecurityProofs.SpotKSTwo read changed (changed: Spot.SecondStage.wiresOk)
+  trust gap: 35 premises outside their trust over the 14 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/cache/verity-check-root/lean-records_build-0/security: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: FAIL (/workspace/research/cache/verity-check-root/lean-records_build-0/security); reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security
+lean-records: security requires verity/protocols/spot/verifier/lean, and every failure of its records is a record difference (what its guarantees read changed): check.py --update on it too
+audit: /workspace/research/cache/verity-check-root/lean-records_build-0/security/lean-audit.json: guarantees and reads rewritten from the build; 1 lines say the same statements, printed differently, rehashed, moved or lifted; these change what a guarantee says, and the landing message shows them:
+  definition Spot.OneStage.paramsParsed (Spot.OneStage), read by Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial: changed
+  definition Spot.Registration.check (Spot.Registration), read by Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial: changed
+  definition Spot.Registration.wiredHeld (Spot.Registration), read by Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial: new
+  definition Spot.Registration.wiredOk (Spot.Registration), read by Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial: new
+  definition Spot.SecondStage.wiresOk (Spot.SecondStage), read by Flock.SecurityProofs.SpotExfilTwo, Flock.SecurityProofs.SpotFirstHitTwo, Flock.SecurityProofs.SpotKSTwo: changed
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees; {…}; built in the sandbox; inline debt 319 (885 premises)
+  trust gap: 35 premises outside their trust over the 14 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/cache/verity-check-root/lean-records_build-0/security: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: PASS; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security
+lean-records: security: check.py --update exit 0 in 2231 s on /home/research/.cache/verity-check/lean-records/build-0 (44 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security
+lean-records: security: the regenerated record is /workspace/research/runs/r20261113-130414-af1b/lean-audit/record/security/lean-audit.json; commit it over security/lean-audit.json
+audit: /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties/lean-audit.json: every failure is a record difference; /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security_Properties/audit-Properties/lean-audit.json is the record `--update` writes
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties: FAIL  3486 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees; {…}; built in the sandbox; inline debt 27 (128 premises)
+  guarantees: definitions in Properties.Spot that Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Properties.Spot.digestIsRecord's read changed (changed: Properties.Spot.R3; new: Properties.Spot.WiredIs)
+  guarantees: definitions in Spot.OneStage that Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Properties.Spot.digestIsRecord's, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial read changed (changed: Spot.OneStage.paramsParsed)
+  guarantees: definitions in Spot.Registration that Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial read changed (changed: Spot.Registration.check; new: Spot.Registration.wiredHeld, Spot.Registration.wiredOk)
+  trust gap: 30 premises outside their trust over the 6 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: FAIL (/workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties); reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security_Properties
+lean-records: security/Properties requires verity/protocols/spot/verifier/lean, and every failure of its records is a record difference (what its guarantees read changed): check.py --update on it too
+audit: /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties/lean-audit.json: guarantees and reads rewritten from the build; 1 lines say the same statements, printed differently, rehashed, moved or lifted; these change what a guarantee says, and the landing message shows them:
+  definition Properties.Spot.R3 (Properties.Spot), read by Properties.Spot.acceptMeans: changed
+  definition Properties.Spot.WiredIs (Properties.Spot), read by Properties.Spot.acceptMeans: new
+  definition Spot.OneStage.paramsParsed (Spot.OneStage), read by Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial: changed
+  definition Spot.Registration.check (Spot.Registration), read by Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial: changed
+  definition Spot.Registration.wiredHeld (Spot.Registration), read by Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial: new
+  definition Spot.Registration.wiredOk (Spot.Registration), read by Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial: new
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties: PASS  3486 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees; {…}; built in the sandbox; inline debt 27 (128 premises)
+  trust gap: 30 premises outside their trust over the 6 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/cache/verity-check-root/lean-records_build-0/security/Properties: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: PASS; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security_Properties
+lean-records: security/Properties: check.py --update exit 0 in 1243 s on /home/research/.cache/verity-check/lean-records/build-0 (1 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-130414-af1b/lean-audit/requirer-security_Properties
+lean-records: security/Properties: the regenerated record is /workspace/research/runs/r20261113-130414-af1b/lean-audit/record/security/Properties/lean-audit.json; commit it over security/Properties/lean-audit.json
+lean-records: OUTCOME {"outcome": "regenerated", "package": "verity/protocols/spot/verifier/lean", "passes": {"2f3094fb410f58c18d68a6923aa57e5f8ddfc62ed057ac53dca8f9b7be082737": "verity/protocols/spot/verifier/lean", "3814111f8349862573631358d97793068c27f0e0eedacec8c43ad58d32023fca": "security", "3917153d950c1aafbc0b98ac253bd6cc7c8c949efcd8df8b48a69810e8ba84be": "verity/protocols/certifier/verifier/lean", "5778600b999a36b0794c6c7e1021865150880e024fbfad7d08915b26fd3d7a8a": "security/Properties", "82b3f585a429a7df105009103a88d4810a2baac0a53e0587e33006f47cd70e97": "security", "dc51f7dcd4a3cb291614ed27b5452936829214dc81c45b2f86f60643da2b3102": "security/Properties"}, "records": {"security": {"inputs_key": "8bc6cfeae635e7523f56e1dfec377aa6f156e053a15c5df728e58220d729e3b2", "outcome": "regenerated", "record": "lean-audit/record/security/lean-audit.json", "record_sha256": "9e93ed88ce43f9f01acd10580bbc9cbba0e88e8d5911990cfd73e05d1beffa28"}, "security/Proofs": {"inputs_key": "ec045769d3be3ab22ebfc5c6a1866743dbae6d9b8ecf612ce2fa4227b45ee106", "outcome": "pass"}, "security/Properties": {"inputs_key": "a5400701a5d8ee2f381630ccdcba8a98518871ea83bc315aa72281d89f137179", "outcome": "regenerated", "record": "lean-audit/record/security/Properties/lean-audit.json", "record_sha256": "49a3bc121d282f150b21af6eb0b820341135995b6b1c774346ad297693b1a44e"}, "verity/protocols/certifier/verifier/lean": {"inputs_key": "3917153d950c1aafbc0b98ac253bd6cc7c8c949efcd8df8b48a69810e8ba84be", "outcome": "pass"}, "verity/protocols/spot/verifier/lean": {"inputs_key": "2f3094fb410f58c18d68a6923aa57e5f8ddfc62ed057ac53dca8f9b7be082737", "outcome": "pass"}}}
+~~~
+
+**2. The picks.**
+
+- **The lock's entries** (your 13:29Z, item 1): `fab3acc3181` is the join's `65a6f23f426` with `git cherry-pick -x`, one commit of its own, no conflict [run]. Its tree is the tree `af1b` ran on [run].
+- **`wiresOk_unlinked` stays `= none`** (item 2): nothing changed [run]. ADDRROW2 reports that on a scratch merge with my `faaa93a0780` its hypothesis `ReadersUnlinked` is deleted and `RowUnlinked.lean` compiles through `Option.isNone_iff_eq_none.2` of my lemma [relayed: ADDRROW2's 13:59Z entry, `r20261113-134107-b389`].
+- **`interior-parts`** (your 13:35Z): five commits, in ACCEPTS's order, each with its `(cherry picked from commit …)` line, its subject, its author and its author date [run].
+
+| mine | ACCEPTS's | files | how |
+|---|---|---|---|
+| `6bafbad1b6a` | `b7288fb7d6d` | `Spot/Run.lean` | **its `Run.lean` part only** |
+| `2dbb7472f71` | `9777a8781dd` | `Spot/Run.lean` | **its `Run.lean` part only** |
+| `44ed7610c37` | `ccf2242d3e1` | `service.py` | `git cherry-pick -x` |
+| `70d9a15f599` | `4286a9e44dd` | `tests/test_difftest.py` | `git cherry-pick -x`, one conflict |
+| `fc5c9053db6` | `66a637cb91a` | `tests/test_difftest.py` | `git cherry-pick -x` |
+
+- **THE ONE THING NOT EXACTLY AS ORDERED: two of the five are not whole picks.** ACCEPTS's `b7288fb7d6d` and `9777a8781dd` each change `Spot/Run.lean` and `AcceptsTop.lean`, the proofs' file [run: `git log --name-only`]. I took only the `Run.lean` part of each (`git show <commit> -- Run.lean | git apply --index`) and committed it under the original's subject, author and date, with a line that says so and the `(cherry picked from commit …)` line [run]. Why: the `AcceptsTop.lean` part of each does not apply on my branch [run: `git apply --check` fails on both]. My branch's `AcceptsTop.lean` is older than the one ACCEPTS wrote on, which is in the join [read: the two blobs differ]. And the proofs are not the verifier's side [relayed: your 13:35Z, "the verifier-side commits"].
+- **Not picked**: ACCEPTS's four commits that change `AcceptsTop.lean` alone (`50bca2d38dd`, `cf7f02ac690`, `c60474f2325`, `e432c092cdd`) [run]. So `partsSizedAt_of_formAccepts` and its lemmas are not on my branch [run].
+- **The conflict**, as ACCEPTS said: in `test_difftest.py`, both sides add a block after the same `PROGRAMS.update` line [run]. I kept both, mine first [run].
+- **What the picks give, checked by blob** [run]: `Spot/Run.lean` and `service.py` at my head are the same blobs as at ACCEPTS's head (`4db3830edb8`, `caadf774c5b`). `test_difftest.py` differs from ACCEPTS's head by my side's changes and nothing else: 246 lines added and 9 removed, the same count as between the two bases [run].
+
+**3. Runs at the new head** `fc5c9053db6` (each run's `head.txt` is that commit) [run].
+
+- **`Spot/Run.lean` compiles, and so does the one proof on my branch that walks `interiorSteps`** [run]:
+  - `verity lean try Spot/Run.lean --siblings` (`r20261113-134928-0d1b`, cpu-1): "lean exit 0 in 80 s"; "siblings: no built module of its package that doesn't import Spot.Run declares a name it does"; "axiom probe: no theorems in it".
+  - `verity lean try security/Proofs/Flock/SpotFlock/RunsAs/Steps.lean` (`r20261113-134928-5f9a`, cpu-1): "lean exit 0 in 206 s"; "none of its 17 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The file is unchanged: `interiorSteps_ok` walks the new clause as it stands [read].
+- **The difftest whole, with the recorded fixtures fetched: PASSES** [run: `r20261113-134746-a276`, cpu-9]:
+  - `the Lean package of the sampled proofs verifier, whole, rc=0`
+  - `the recorded fixtures fetched, rc=0`
+  - `the difftest of the sampled proofs verifier, rc=0`, "127 passed, 2 skipped in 179.40s".
+- **The two plays and the toy: PASS** [run: `r20261113-134717-ef3f`, cpu-8]:
+  - `two templates, inputs committed, rc=0`; `twenty templates, inputs committed, rc=0`; `the toy end to end, rc=0`.
+  - Each of the first two prints `TWO {"refused": null, …}`, `"round_two": {"ok": true, "codes": []}` and `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`.
+  - `windows and wiring tests, rc=0` (93 passed); `the registration and per-member form Python tests, rc=0` (85 passed); `the toy tests, rc=0` (10 passed).
+  - **One line of this run is `rc=1`**: `the difftest of the sampled proofs verifier, rc=1`, "1 failed, 126 passed, 2 skipped" [run]. The one failure is `test_the_recorded_public_files_pass_the_population_check`, which says its recorded files are "not fetched": this launcher does not fetch them [run]. `a276` fetches them and the same test passes there [run].
+- **The Python tests the mirror touches: PASS** [run: `r20261113-134859-31ee`, cpu-1, ended 14:04Z, rc 0]:
+  - `the verifier two-stage, service-output, interior-span and served-select Python tests, rc=0` (160 passed).
+  - `the one-stage second-stage and driver tests, rc=0` (36 passed).
+  - `the vLLM adapter interior-rows test, rc=0`.
+
+**4. What a merge with the join meets now** [run: `git merge-tree --write-tree` of my head with the join's tip; it writes no branch and no worktree].
+
+- The join's tip moved to `757ef18fdc6762c9fd346526a838cc060545233f`, and ACCEPTS's head is in it [run: fetched 14:09Z; `git merge-base --is-ancestor`].
+- Two conflicts [run]:
+  - `benchmarks/one_stage/a5.py`, as before. ADDRROW2 took my file whole on its scratch merge [relayed].
+  - One hunk in `test_difftest.py`: my block of the two port designs (`OUT_NAMED`, `BOTH`, `PORT_REPLAYS`, `PORT_INTERIORS`) against nothing on the join's side. Keeping my block resolves it [derived: the hunk's other side is empty].
+- `Spot/Run.lean` and `service.py` are the same blobs on both sides, so the picks meet no conflict there [run].
+- I compiled nothing on a merge with the new tip [run]. On the old tip (`4e986e339ad`): `InsideOf.lean` and `RowLeaves.lean` compile on my scratch merge (my 13:20Z entry), and ADDRROW2's `RowUnlinked.lean` compiles on its own [relayed].
+
+**5. Not established.**
+
+- **The compiled `interior-parts` clause on an honest interior of two or more templates, by a play.** My two plays (`two_stage_small.sh`) run round 2 and the interior registration through the Python: `two_stage.round_two` and `Stream.register_interiors` [read]. In `Stream` the interior program is the challenger's own, built from the same two lists as the cells, so there the comparison holds by construction and the play cannot trip it [read: `service.py`]. The play that reaches the compiled clause is the form's (`sampled_two_small.sh`), which passes `--interior-trees`, and I launch nothing with it [relayed: your order].
+- What ACCEPTS has, on its own trees and not at my head [relayed: ACCEPTS's 13:29Z entry]: an honest play of one template is accepted by the compiled verifier with the clause in it (`4cd2`). An honest play of two templates is refused at the join before the run of record starts (`51c9`, `4b4f`), and ACCEPTS reads that refusal as rule A, which my wired layout cures.
+- The form's run was last made on my branch at `70ca0eda5df`, before R3 and both clauses: past rule A on two templates and on twenty, refused at rule B on both [run: `r20261113-104757-9a9e`]. It has not been made since, so whether a play at my head takes two templates as far as the compiled clause is not known [run].
+- The compiled clause on built cases: the difftest holds the Lean to the model on an interior the replay sample does not divide, on two templates' slots out of the check's order, and on a template the replay block has no instance of [run: `a276`].
+- **What `interior-parts` moves in the locks**: not known until `2020` ends [run].
+- `interior-parts`' proofs are not on my branch, so nothing here compiles `partsSizedAt_of_formAccepts` over my head [run]. They compile on the join's side [relayed: ACCEPTS's `01ea`].
+- `verity check` has not run at this head; the records runs are the fast path's, with no kernel replay and no tests [run].
+- The `second-wires` clause: as in my 13:20Z entry, no play trips it and the difftest's four designs hold the compiled check to the Python [run].
+
+**6. Needs.**
+
+1. **Coordinator: yes or no on the two partial picks.** If you want whole picks, the `AcceptsTop.lean` parts need the join's `AcceptsTop.lean` under them, which is a merge of the join and not a pick [derived]. I do nothing more to them until your word [run].
+2. **Coordinator: who launches the form's run on two templates and on twenty** at my head, or on a tree with the join and my head, if you want the compiled clauses shown by a play before the pull request. It is not mine to launch [relayed].
+
+**7. Out, and the timer.**
+
+- `r20261113-135738-2020` (vy-nebius-cpu-11): the records fast path at `fc5c9053db6`, started 13:58Z [run]. At 14:07Z it had passed the verifier's package and the certifier's and was building `security/Proofs` [run]. Expected end about 15:00Z to 15:10Z, if it regenerates two locks as `af1b` did [guess: `af1b` took 60 minutes].
+- One one-off timer is set for it, `gather-interior-parts-records-2020`, for about 15:05Z [run]. When it ends I post which guarantees read `Spot.Run.interiorSteps` and `Run.cellParts`, whether any is deployed, and whether anything but `reads` differs, and I fill the draft's line for it [run: the timer's prompt].
+
+**Standing lines** [run: fetched 14:06Z]. Friday's branches are unmoved: `cursor/proofs-gather-second-try-5a28` at `984cb027efa3`, `cursor/proofs-gather-served-select-b88b` at `496aa183544b`. No `main` merged, nothing rebased, nothing forced. No pull request and no mark. Nothing on Linear or Slack. Nothing launched with `--interior-trees`. I did not write the possible third clause (the verifier's ports listed once). TWOLEG's commit is not on the trial branch yet.
+
+**8. The pull request's body, as a draft.** It names three clauses' worth: the wired layout with `R3-wired`, `wiresOk`'s reader port, and `interior-parts` [derived: from the runs and reads of this entry and of 13:20Z]. Its sentences are not tagged one by one, because it is the body's own text [derived]. Its line for `interior-parts`' records is a placeholder until `2020` ends, and "Checked" is filled for `fc5c9053db6` and is redone at the head that is opened [run]. Not opened: no pull request until the carry [relayed].
+
+~~~~markdown
+# Two-stage audit: a wired port is registered under its reader and R3 holds its root; round 2 refuses a wire at a linked port; the run refuses an interior whose strata are not its cells' parts
+
+## What changes
+
+Three clauses' worth, each in commits of its own. Each adds a refusal; none accepts anything that was refused.
+
+1. **The wired layout and `R3-wired`.** A member's port that is wired to another member's output, and has no tree of
+   its own, has its rows as leaves of its writer's output tree. The layout now names that port under its reader too,
+   and the registration's check holds the two names to one root.
+2. **`second-wires`: a wire at a port a link names.** Round 2's design check refuses a wire whose reader's port a
+   link names too.
+3. **`interior-parts`: an interior's strata.** The stream's run refuses an interior registration whose strata are not
+   the parts its replay block's cells give.
+
+## 1. The wired layout and `R3-wired`
+
+Three changes, stacked:
+
+- **The layout names the port under its reader too.** The verifier's layout (`rows.expected_ports`) and the
+  registration record (`rows.registration`) name such a port under its reader, at the leaves, the domain and the root
+  of the port whose tree holds its rows (`rows.wired_ports`). The commitment is unchanged: one tree, named at two
+  ports. The per-member form then finds a root for every port a member's public file names.
+- **The audit calls the per-member form's Python twin.** `a5.audit` kept a header rule of its own that accepted a
+  public file the Lean form refuses. It now asks `one_stage/members.py` (`slices`, `population_why`) for each
+  member's slice and header, so there is one implementation, held to the Lean by the form's difftest.
+- **R3 holds the two roots equal.** The parameters' `ports` entry of the added name gains `wired`, the port that
+  holds its rows. The registration's check (`Spot.Registration.check` and Python `registration.check`) refuses a
+  record whose roots under the two names differ, that lacks either, or whose root is not a string, by the code
+  `R3-wired`.
+
+### The changed statement: `Properties.Spot.R3`
+
+Before:
+
+```lean
+def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD rec "scheme") (.str v.scheme) ∧
+  rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
+  (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
+  (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
+  ∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2
+```
+
+After (one conjunct more, the last line, through one new definition):
+
+```lean
+def WiredIs (rec : Json) (p : String) (want : Json) : Prop :=
+  ∀ q, getD want "wired" = .str q →
+    ∃ r h s, rootFor rec p = some r ∧ rootFor rec q = some h ∧ getD r "root" = .str s ∧ getD h "root" = .str s
+
+def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD rec "scheme") (.str v.scheme) ∧
+  rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
+  (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
+  (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
+  (∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) ∧
+  ∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2
+```
+
+`registration_nil` (the check's codes are empty exactly when the registration's properties hold) is proved for the new
+check and the new property. `check_eq_checkRef` still holds.
+
+### What the rule does not give
+
+The clause is only as good as the parameters' `wired` entries, and the parameters of the sampled proof system are
+written by the run today. A run that leaves `wired` out is not refused by R3 for it, although `readOk_wired` still
+holds each session's read of a wired port to the writer's root. So `R3-wired` is a second check of what
+`readOk_wired` gives, and the parameters' provenance is the composite's, not R3's.
+
+Also not given:
+
+- A port whose `wired` names itself holds trivially.
+- An older compiled verifier refuses parameters that carry `wired` as an unknown key: the layout, the check and the
+  serving side go together.
+
+### A difference between the audit and the form
+
+The audit (`a5.audit`, under `benchmarks/`) and the per-member form agree on every window but one kind. Where a window
+has row tables, the registration names one more root, the row tables' (`rows.TABLE_PORT`), which is the window's and no
+member's. The per-member form refuses such a window. The audit does not: `a5.member_form` hands the twin the record
+without that root, reads each member's slice of the record's other roots, and holds the row tables' root by
+`tables.check_row_tables`. So plays with row tables keep running through the audit, and the audit there stands in for
+the form rather than mirroring it. On a window with no row tables the audit's header rule is the twin's, with no rule
+of its own.
+
+## 2. `second-wires`: round 2 refuses a wire whose reader's port a link names
+
+`SecondStage.wiresOk` (and Python `second_stage._wires_ok`) gains one clause: no link names the port a wire is read
+at. A session reads a port at its link's entry before it looks for a wire, so a port that had both was read at the
+link, and the wire held nothing of what was read. Such a design is now refused by the code `second-wires`, whose
+reason gains "or a link names the port that reads it". No new code.
+
+```lean
+def wiresOk (ps : Array Part) (own : Own) : Bool :=
+  match own.wires with
+  | some ws => ws.all fun w =>
+    ps.any (fun p => p.template == w.template && placed own p w.port) &&
+      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
+      ((linkOf own w.writer w.wport).isNone && (linkOf own w.template w.port).isNone) &&
+      decide (posOf ps w.writer < posOf ps w.template)
+  | none => false
+
+theorem wiresOk_unlinked {ps : Array Part} {own : Own} (hok : wiresOk ps own = true) {w : Wire}
+    (hw : w ∈ own.wires.getD #[]) : linkOf own w.template w.port = none
+```
+
+The new clause is paired with the writer's, so the reader's and the writer's clauses stand where they stood, and the
+two proofs that read them by position (`AddressRow.wiresOk_reader`, `wiresOk_writer`) are unchanged.
+
+**The negative cases.** The difftest holds the compiled check to the Python on four designs each side derives from a
+Definition, over an interior's parts after a replay sample of two:
+
+| design | link | wire | verdict |
+|---|---|---|---|
+| a template whose one parameter has its output's name, `o0`, called on another template's output | the return's, at `o0` | at `o0` | refused, `second-wires` |
+| the same with the parameter named `y` | the return's, at `o0` | at `y` | passes the design |
+| a template of two parameters, `a` over the block's parameter and `b` over another template's output | at `a` | at `b` | passes the design |
+| that design with its wire and the wire's rows moved onto `a` | at `a` | at `a` | refused, `second-wires` |
+
+The last is fed whole and not derived: it is the design a template with both parameters named `a` derives, and a
+Definition with two parameters of one name is the decoder's to refuse. A fifth case adds a link on the wired port of
+the two-template example. Without the clause the two refused designs pass the design check.
+
+**The served designs are not affected.** Greedy select at twenty templates derives 21 links and 19 wires, and no
+wire's port is one a link names.
+
+## 3. `interior-parts`: the run refuses an interior whose strata are not its cells' parts
+
+`Spot.Run.interiorSteps`, right after `interior-population` and before the window check:
+
+```lean
+def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStage.Part :=
+  ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
+
+  let strata ← Partition.strata v.program v.query
+  if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
+    return .error ("interiors", #["interior-parts"])
+```
+
+So the interior's strata must be, in the check's order, one per template, named by its id, each the one range of
+`q · ns[t]` slots from `q · Σ_{s<t} ns[s]`. The strata and their parts are what the run already computes for the
+second stage; they are now held to the replay block's cells one step earlier.
+
+- **Python.** `service.cell_parts`, and the same refusal in `Stream.register_interiors` after
+  `interior-population`. In `Stream` the interior program is the challenger's own, built from the same two lists, so
+  there the comparison holds by construction; the refusal can fire only where the params' program is read, in the
+  Lean run.
+- **Two verdicts that were not accepts change their text.** A strata read that throws now throws at `interiors`,
+  before `interior-window` and R1 to R8 are reported. Strata that make no parts, which the second stage refused as
+  `second-cells`, are now refused as `interior-parts`.
+- **The negative cases**, in `test_a_two_stage_run_reaches_every_step`, the Lean and the model agreeing: an interior
+  of three slots, which a replay sample of two does not divide; under a check of two templates, an interior with the
+  second template's slots ahead of the first's; and a check naming a template its replay block has no instance of,
+  which is no run on either side ("no instance of").
+- **The proofs that read this clause are not in this pull request.** `partsSizedAt_of_formAccepts` and its lemmas
+  are in `AcceptsTop.lean`, which arrives with the join. This pull request carries the verifier's side only:
+  `Run.lean`, `service.py` and the difftest. The one proof here that walks `interiorSteps` (`interiorSteps_ok`,
+  `RunsAs/Steps.lean`) compiles unchanged.
+
+## Lock records that move
+
+`reads` records only, in two locks. No guarantee's statement, premise or trust-gap entry moves. The tree's locks are
+not regenerated here: the candidate's records run commits them.
+
+| lock | record | what changed | guarantees that read it |
+|---|---|---|---|
+| `security/lean-audit.json` | `reads["Spot.OneStage"]` | `Spot.OneStage.paramsParsed` (a `ports` entry may carry `wired`) | 5 |
+| `security/lean-audit.json` | `reads["Spot.Registration"]` | `Spot.Registration.check`; new `wiredHeld`, `wiredOk` | 9 |
+| `security/lean-audit.json` | `reads["Spot.SecondStage"]` | `Spot.SecondStage.wiresOk` | 3 |
+| `security/Properties/lean-audit.json` | `reads["Properties.Spot"]` | `Properties.Spot.R3`; new `WiredIs` | 5 |
+| `security/Properties/lean-audit.json` | `reads["Spot.OneStage"]` | `Spot.OneStage.paramsParsed` | 30 |
+| `security/Properties/lean-audit.json` | `reads["Spot.Registration"]` | `Spot.Registration.check`; new `wiredHeld`, `wiredOk` | 29 |
+
+(to fill when the records run at the head with `interior-parts` ends: what `Run.interiorSteps` and `Run.cellParts`
+move)
+
+**Two deployed guarantees read a changed definition**: `Flock.SecurityProofs.SampledKSLiveV5` reads `paramsParsed`,
+and `Verity.remote_soundness_of_subprotocols` reads `paramsParsed`, `Registration.check` and the two new definitions.
+Neither one's statement or trust gap changes. No deployed guarantee reads `wiresOk`.
+
+The names of the guarantees, as the records run prints them:
+
+- `Spot.OneStage` in `security`: `Flock.SecurityProofs.RecursiveAuditC3`, `Flock.SecurityProofs.SampledKSLiveV5`,
+  `Verity.Sampled.remote_soundness_deployedReady` and its `_honest` and `_nontrivial`.
+- `Spot.Registration` in `security`: `Flock.SecurityProofs.RecursiveAuditC3`, `SampledKSTwo`, `SampledKSTwo_honest`,
+  `SpotExfilTwo`, `SpotFirstHitTwo`, `SpotKSTwo` (all `Flock.SecurityProofs`), and
+  `Verity.Sampled.remote_soundness_deployedReady` with its `_honest` and `_nontrivial`.
+- `Spot.SecondStage` in `security`: `Flock.SecurityProofs.SpotExfilTwo`, `SpotFirstHitTwo` and `SpotKSTwo`.
+- `Properties.Spot` in `security/Properties`: `Properties.Remote.SecurityProofs.acceptInferenceOnly` and its
+  `_nontrivial`, `Properties.Spot.acceptMeans`, `Properties.Spot.bernoulliBounds`, `Properties.Spot.digestIsRecord's`.
+- `Spot.OneStage` and `Spot.Registration` in `security/Properties`: the sampled proofs' accept statements
+  (`acceptComplies`, `acceptInferenceOnly`, `tablesRegistered`, `acceptMeans`, `bernoulliBounds`) and the `Verity.*`
+  composition statements (`coins_couple`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`,
+  `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront`, `target_of_periods`, `wipe_target`,
+  each with its `_honest` and `_nontrivial` where it has them). `Properties.Spot.digestIsRecord's` reads
+  `Spot.OneStage` only. The whole lists are in the records run's printout.
+
+## Also in this pull request
+
+Two commits of the join, picked so that `security/Proofs` builds whole and its lock passes at this head: the mend of
+`FirstCoins.lean` and `StageCut.lean` for the read-back records, and the lock's `escapes` entries for `jpBody` and
+`walkGoal`.
+
+## Not established
+
+- **The compiled Lean on an honest interior of two or more templates made by a play.** The plays here run round 2 and
+  the interior registration through the Python (`two_stage.round_two`, `Stream.register_interiors`). The compiled
+  `second-wires` and `interior-parts` clauses are held to the Python by the difftest's built cases. The form's run
+  on a kept case of twenty at this head has not been made.
+- `interior-parts`' proofs: on their own branch, compiled there, not here.
+- The check as a whole (`verity check`) has not run at this head. The records runs are the fast path's: no kernel
+  replay and no tests.
+
+## Checked
+
+At `fc5c9053db63c6e5458888de2dd00db95619aee9` unless a line says otherwise; to redo at the head that is opened.
+
+- **Lean.** The verifier's package built whole, rc 0 (twice). `Spot/Run.lean` tried with `--siblings`: exit 0, no
+  built module that doesn't import it declares a name it does. `security/Proofs/Flock/SpotFlock/RunsAs/Steps.lean`
+  tried: exit 0, none of its 17 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+  (`r20261113-134928-0d1b`, `r20261113-134928-5f9a`.)
+- **The difftest of the sampled proofs verifier, whole, with the recorded fixtures fetched**: 127 passed, 2 skipped.
+  (`r20261113-134746-a276`.)
+- **The plays**: two templates, twenty templates, and the toy, each rc 0; each of the first two with
+  `"refused": null`, round 2 `{"ok": true, "codes": []}`, and every line of `SMALL` true. (`r20261113-134717-ef3f`;
+  its own difftest line is rc 1 on the one test that needs the recorded fixtures, which that launcher does not
+  fetch.)
+- **Python**: the windows and wiring tests (93 passed), the registration and per-member form tests (85), the toy
+  tests (10), the verifier's two-stage, service-output, interior-span and served-select tests (160), the one-stage
+  second-stage and driver tests (36), the vLLM adapter's interior-rows test, rc 0. (`ef3f`, `r20261113-134859-31ee`.)
+- **Records, fast path, at the head before `interior-parts`** (`fab3acc3181`'s tree): the verifier's package, the
+  certifier's and `security/Proofs` pass; `security` and `security/Properties` fail only on record differences and
+  pass after `--update`; the regenerated locks differ from the tree's under `reads` only, 8 and 9 entries.
+  (`r20261113-130414-af1b`.)
+- **Records at this head**: running (`r20261113-135738-2020`).
+- Not run: `verity check`; the form's run on a kept case of twenty.
+~~~~
