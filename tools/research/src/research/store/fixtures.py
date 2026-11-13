@@ -1,4 +1,4 @@
-"""Repo replicas (README §7) and `research data refresh-fixtures`: keeping `fixtures/artifacts.json` honest when a fixture's bytes change.
+"""Repo replicas (README §7) and `research data refresh-fixtures`: keeping `artifacts.json` honest when a fixture's bytes change.
 
 A repo-registered fixture has *content-only identity*: kind `fixture/v1`, `meta {}`, `refs {}`, payload = the file (bare name) or
 the directory as a tree, so its id is a function of the bytes alone and `tools/research/tests/test_repo_replicas.py` recomputes it
