@@ -1,6 +1,6 @@
-"""a5 on a window with a history table: the verifier of record, the Lean and its Python mirror, computes the table's
+"""a5 on a window with a history table: the verifier, the Lean and its Python mirror, computes the table's
 root from its writer's public bodies, which the leaf layer binds (`ml.windows.history.params`), and accepts the root the
-window registers, in a5's check before the draw (`verifier.check`) and in its stream's registration, the run of record's
+window registers, in a5's check before the sample (`verifier.check`) and in its stream's registration, the run of record's
 (`a5.registering`); that root with a bit flipped (a5's negative) and the root over the same rows in another order are
 refused by both, `registration.HISTORY`."""
 
@@ -32,7 +32,7 @@ import fake_challenger as FC  # noqa: E402
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 G8ID = descriptor_id(G8)
 LAW = "stratified:2"
-#: the stream's rate, whose law over the window's four units is `LAW` (`service.params_law`)
+#: the stream's rate, whose sampling design over the window's four units is `LAW` (`service.params_law`)
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
 
