@@ -56,6 +56,7 @@ public import Proofs.Pous.EndToEndAt
 public import Proofs.Pous.PeriodAt
 public import Proofs.Pous.PeriodDeployed
 public import Proofs.Pous.PeriodGame
+public import Proofs.Pous.PeriodWitnesses
 public import Proofs.Pous.Obligation
 
 /-!
