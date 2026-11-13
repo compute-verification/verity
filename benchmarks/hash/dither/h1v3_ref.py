@@ -47,7 +47,7 @@ def older_h1tile(missing: ModuleNotFoundError) -> ModuleType:
 
 
 try:
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 except ModuleNotFoundError as e:
     if (e.name or "").split(".")[0] != "verity":  # a missing module that isn't the tree's own is a real failure
         raise
