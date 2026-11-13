@@ -157438,3 +157438,43 @@ Each is a file under `security/Proofs/Flock/SpotFlock/` that imports a file the 
 
 - That the lock is right at this tip: `fe1c` is out.
 - A kernel replay at any head of the join.
+
+## GATHER — 19:17Z Fri 13 Nov — the carried line holds the carried join and the mended join: `cursor/proofs-gather-wired-layout-6a9b` at `462ef981d91ef258bd5ab7416fee1a8e54391d3f`, pushed; both merges as FRAME's dry runs, the pins silent; its build, plays and tests wait for a slot on cpu-7, cpu-9 and cpu-11; NOT yet the "merge GATHER at" entry. The three runs at the head before the carry ended green, and the records run moved the same six `reads` records
+
+`cursor/proofs-gather-wired-layout-6a9b` `462ef981d91ef258bd5ab7416fee1a8e54391d3f` my live line
+
+**Your 18:49Z, steps 1 to 4.** It reached me at 19:01Z by the hook, when my timer fired [run].
+
+1. Fast-forward to the carried head `927258036e83f6cf8325d6edcadccd3dde2b26ab`: a plain push, `15b7af3dcd2..927258036e8`, 19:02Z [run]. The carried head holds `15b7af3dcd28` and `4ae17f7eafd7` [run: `git merge-base --is-ancestor`].
+2. The carried join `daa91ec75a3ea896790a6d7e539eab919d03f3f7` merged: commit `29d338455367296b3e885db0d03ba715809c1f46`, no conflict [run]. `git diff 927258036e83 HEAD` is empty [run].
+3. The mended join `20936c91d40bd5bf4143d22770786677f5243bb8` merged: commit `462ef981d91ef258bd5ab7416fee1a8e54391d3f`, no conflict [run]. It changes exactly the mend's five files, +12 −12, and its diff is the mend's own diff byte for byte [run: `diff` of the two `git diff`s]. I merged that commit, not the join's newer tip `7aeba81f536e` [run].
+4. `uv run tools/verity/check/pins.py --stale`: exit 0, nothing printed, the tree clean after it [run].
+
+Pushed at 19:05Z, a fast-forward `927258036e8..462ef981d91`, nothing forced [run]. Over the mended join the line holds 20 files, +486 −88, six of them Lean [run: `git diff --stat 20936c91d40b HEAD`]. Friday's two are unmoved [run: `git ls-remote origin` at 19:02Z]. No build ran on my machine [run].
+
+**Step 5, out at `462ef981d91e`, each on a node I named (`--pool research`), none on cpu-6, none through `auto`** [run: launched 19:12Z to 19:14Z]. At 19:17Z each still waits for a slot: every slot of cpu-7 and of cpu-11 is taken and `fe60` and `e203` are next in line there; `c832` has one ahead on cpu-9 [run: `slot.json`].
+
+| Run | Node | What |
+|---|---|---|
+| `r20261113-191249-fe60` | vy-nebius-cpu-7 | `lean_changed.py --build` of 62 named files |
+| `r20261113-191320-c832` | vy-nebius-cpu-9 | `flock-verify`, `flock-firewall` and the verifier's Lean package whole; the difftest with the twin and the refusal tests; the verifier's Python tests; the audit of two members and the windows' tests; the one-stage driver tests; the vLLM adapter's interior-rows test |
+| `r20261113-191356-e203` | vy-nebius-cpu-11 | the plays of two templates and of twenty (`first` then `second`, inputs committed, round 2 in Python); the toy end to end; the audit's, the windows', the wiring and the toy's tests |
+
+- What the build names [run: the import lines of the tree]: every module that imports one of the line's six Lean files, directly or through others, is 504 files: 460 in `security/Proofs` (all 91 under `SampledTwo`, the mend's four among them), 18 in the verifier's package, 10 in `security/Properties`, 9 in the recursive verifier's package (the mend's `VStarRecursive/SampledTwo.lean` among them), 7 in the two compose verifiers. The 62 are the 51 of those that no other of them imports, the mend's five and the line's six, so Lake builds all 504 [derived].
+- Why that set and not the whole of `security/Proofs` [derived]: the line's Lean differs from the mended join's in those six files alone [run: `git diff --stat`], and ASSEMBLY's `4205` built the mended join whole [relayed: ASSEMBLY's 18:26Z].
+- The launcher refuses `auto` and vy-nebius-cpu-6, each tried, exit 2 [run].
+
+**The three runs owed from 18:00Z, all at `15b7af3dcd28`, the head before the carry: all green.**
+
+- `r20261113-174838-ed41` [run]: the verifier's registration, service-output and interior-span tests, 78 passed; the one-stage driver tests, 18 passed; the vLLM adapter's interior-rows test, rc 0 (21 tests; its log has no summary line).
+- `r20261113-175334-3824` [run]: the toy's tests, 10 passed.
+- `r20261113-173617-7e59`, the records fast path [run]: ended 19:11Z, rc 0, outcome `regenerated`.
+  - The verifier's package and the certifier's: `check.py` exit 0, no record regenerated.
+  - `security/Proofs`: AUDIT PASS, 210,508 declarations in 4,239 modules, axioms `propext`, `Classical.choice`, `Quot.sound`. So the join's proofs compiled against this line's `wiresOk`, `Registration.check` and `paramsParsed` at that head.
+  - `security` and `security/Properties`: each failed its first audit as a record difference and passed under `--update`.
+  - What it regenerated, compared with the tree at `15b7af3dcd28` key by key [run: `lockdiff.py`]: differences under `reads` only, in six records. `security/lean-audit.json`: `reads["Spot.OneStage"]` (`paramsParsed`), `reads["Spot.Registration"]` (`check`; new `wiredHeld`, `wiredOk`), `reads["Spot.SecondStage"]` (`wiresOk`). `security/Properties/lean-audit.json`: `reads["Properties.Spot"]` (`R3`; new `WiredIs`), `reads["Spot.OneStage"]`, `reads["Spot.Registration"]`. No guarantee's statement, premises or listing differs [run]. They are the six my earlier runs found [derived].
+  - The regenerated locks are not committed [run]. Copies: `/opt/cursor/artifacts/wired-audit/7e59/`.
+
+**Not established.** That the carried head builds with the mend: `fe60` answers it [derived]. Anything at `462ef981d91e` but the two merges and the pins: no test and no play has run there yet [run]. No records run is out at the carried head, as you said the join's count [relayed: your 18:49Z]. No play through the compiled form; those are STAGECOINS's [relayed: your 14:18Z].
+
+**Next.** The entry "merge GATHER at <40 hex>" when the three are back [derived]. If the build asks for a mend, it is a commit on top and that entry names the new head [derived]. A timer every 20 minutes until then [run].
