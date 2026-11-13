@@ -17,8 +17,8 @@ from verity_flock import ir_sampling as S
 P = pytest.importorskip("verity.definitions.registry.prims")
 from verity.circuits.evaluation import evaluate  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.definitions.ops import fp32 as F  # noqa: E402
-from verity.definitions.ops.scalar import SelectF32  # noqa: E402
+from verity.circuits.ops import fp32 as F  # noqa: E402
+from verity.circuits.ops.scalar import SelectF32  # noqa: E402
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402

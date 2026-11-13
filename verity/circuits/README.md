@@ -2,7 +2,7 @@
 
 This package writes Verity's circuits down and computes on them, and this README is the way in to all the code that builds,
 evaluates or checks a circuit: this package and its subpackages, the served workloads' Definitions
-(`verity.definitions`), the private circuits (`verity.definitions.private_circuits`) and `circuit-check`. It says what the
+(`verity.definitions`), the private circuits (`verity.circuits.private_circuits`) and `circuit-check`. It says what the
 words mean, names the one front door for each job, and links each part's README.
 
 Everything in this package is on the soundness path (the trusted places of `tests/import_order.toml` reach it): the
@@ -55,7 +55,7 @@ rms = bind(REGISTRY["RMSNormTriton_v1"], N=64, EPS=1e-05)
 program = Program(rms)                                    # the specialization's root circuit
 ```
 
-A new Definition is written with `defs.primitive` or `defs.composite` in a module of `verity.definitions.ops` (a primitive
+A new Definition is written with `defs.primitive` or `defs.composite` in a module of `verity.circuits.ops` (a primitive
 circuit) or of `verity.definitions.registry` (a served kernel), with a binding in its module's binding file:
 circuit-check's suite fails a registered Definition family no binding reaches.
 
@@ -105,12 +105,12 @@ now, and the diff is reviewed.
 | Part | What it holds |
 | --- | --- |
 | this package (below) | Definitions and Programs, their encoding, queries, evaluation, partitions and accounting views |
-| [`ops`](./../definitions/ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
-| [`silicon`](./../definitions/silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
+| [`ops`](./ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
+| [`silicon`](./silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
 | [`targets`](./../definitions/circuits/targets/README.md) | the subcircuits a proof system is asked to prove |
 | [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
 | [`verity.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
-| [`verity.definitions.private_circuits`](./../definitions/private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
+| [`verity.circuits.private_circuits`](./private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
 | [`circuit-check`](../../tools/verity/circuit_check/README.md) | the property checks every circuit passes |
 
 ## Example
@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `./../definitions/ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
 of its own.
