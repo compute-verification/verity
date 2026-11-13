@@ -70,10 +70,7 @@ theorem heldStep_paired {ms held h' : Array Spot.OneStageZk.Member} {st : Spot.O
         · split at h
           · exact absurd h (throw_ne _ _)
           next hsz =>
-            refine ⟨m, ⟨name, hn, hm, ?_⟩, (Except.ok.inj h).symm⟩
-            first
-              | exact bne_eq_false_iff_eq.1 hsz
-              | simpa using hsz
+            exact ⟨m, ⟨name, hn, hm, bne_eq_false_iff_eq.1 hsz⟩, (Except.ok.inj h).symm⟩
 
 theorem foldlM_paired {ms : Array Spot.OneStageZk.Member} :
     ∀ (l : List Spot.OneStageZk.StatementFiles) (acc out : Array Spot.OneStageZk.Member),
