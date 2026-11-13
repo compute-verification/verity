@@ -143,7 +143,8 @@ V=2.102.0; $CP "set -e; d=\$(mktemp -d /data/tmp/gh.XXXX); cd \$d; B=https://git
   tar --no-same-owner -xzf gh_${V}_linux_amd64.tar.gz gh_${V}_linux_amd64/bin/gh; install -D -m 0755 gh_${V}_linux_amd64/bin/gh /data/watchers/bin/gh; cd /; rm -rf \$d"
 ~~~
 
-The watchers run from a pushed commit's tree. Deploy it, keeping the tree it replaces, then restart the supervisor (`run.sh`
+The watchers run from a pushed commit's tree, which holds `tools/verity/check/slot.py` and `lean_slot.py` because the relay's
+`stranded` monitor sends both to every CPU machine. Deploy it, keeping the tree it replaces, then restart the supervisor (`run.sh`
 starts it again 10 s later, and it stops every loop first). The new `watchers.toml` replaces the pod's only once `watchers.py
 check --replaces` has passed on it: the check prints each loop resolved, then each loop that is new or whose argv, env,
 env_files or needs differ from the pod's, and refuses a config that lacks a loop the pod's has, which the restart would stop.
@@ -151,7 +152,8 @@ Such a loop was added on the pod alone: add it to `watchers.toml` in a PR and de
 add `--allow-drop NAME` to the check. The last line restarts nothing while a config that didn't pass the check is left:
 
 ~~~sh
-git archive HEAD tools/research infra/control infra/ops/verity_ops .agents/skills/using-slack | $CP "set -e; cd /data/watchers; \
+git archive HEAD tools/research infra/control infra/ops/verity_ops .agents/skills/using-slack tools/verity/check/slot.py \
+  tools/verity/check/lean_slot.py | $CP "set -e; cd /data/watchers; \
   rm -rf src.new; mkdir src.new; tar -x -C src.new; echo $(git rev-parse HEAD) > src.new/COMMIT; \
   if [ -e src ]; then rm -rf src.prev; mv src src.prev; fi; mv src.new src"
 $CP "cat > /data/watchers/watchers.toml.new && PYTHONPATH=/data/watchers/src/tools/research/src python3.12 \
