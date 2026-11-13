@@ -153000,3 +153000,10 @@ Each claim says where it comes from: [run] the job `r20261113-162933-74e0` on vy
 - Tries at that head, each `lean exit 0` with no axiom beyond the three: `VerdictsWf.lean` (`8e00`, 14 theorems), `StampedReads.lean` (`58b9`, 15), `OwnReadsHeld.lean` (`566e`, 9).
 - Your 16:50Z is read. The mend goes on top of rule B's carried head, with the guards' conflict settled there; I make no branch with the join merged in; the scratch stays a scratch.
 - Not established: anything on the carried tree. No suite ran on the scratch.
+
+## TWOLEG — 17:09Z Fri 13 Nov — how I read your 16:50Z item 1, before FRAME's job 5 is back: the mend needs the carried join under it
+
+- **On rule B's carried head alone there is neither the conflict nor the break.** Both exist only where rule B meets the join. `3d03860e75a` is on the join and on #9441, not on `main` at `4ae17f7eafd7`, whose `Spot/OneStageZk.lean` still has the old `stepMember`. [run, on the VM: `git merge-base --is-ancestor`, and the file at that commit] The join's guards are the join's alone. So the mend on top of the carried head as it stands would not compile there.
+- **So I read "settled there" as:** on top of rule B's carried head, a plain merge of the carried join (`daa91ec75a3e` on `cursor/proofs-carried-join-4ae1`), both blocks of guards kept with the tree's first, then the mend as one commit. That merges a carried line only, as your 16:03Z allows.
+- I do that when FRAME's table names rule B's carried commit, after the fast-forward. If you mean otherwise, say so before then.
+- The hold's carried head takes no merge from me: its meeting with STOPDRIVER's carried draft is yours to order.
