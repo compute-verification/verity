@@ -476,6 +476,77 @@ theorem files_toList {C : Ctx} {full : Core.Blobs} {S : State} (h : FilesKept C 
     exact Array.getElem?_eq_none_iff.2 (h.1 ▸ hi)
   | some m => simp only [Option.map_some, h.2 i m hm]
 
+/-- A statement `heldStep` holds has one session, and its member is the parameters' first under its name. -/
+theorem heldStep_ok {ms acc held : Array Member} {st : StatementFiles} (h : heldStep ms acc st = .ok held) :
+    ∃ m s, held = acc.push m ∧ st.sessions = #[s] ∧ ms.find? (·.name == m.name) = some m := by
+  unfold heldStep at h
+  split at h
+  · cases h
+  · rename_i name _
+    split at h
+    · cases h
+    · rename_i m hm
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · split at h
+          · cases h
+          · rename_i hs
+            cases h
+            have h1 : st.sessions.size = 1 := by simpa using hs
+            have hn : m.name = name := by simpa using Array.find?_some hm
+            rcases hss : st.sessions with ⟨l⟩
+            rw [hss] at h1
+            cases l with
+            | nil => simp at h1
+            | cons s t =>
+              cases t with
+              | nil => exact ⟨m, s, rfl, rfl, hn ▸ hm⟩
+              | cons _ _ => simp at h1
+
+/-- What the statements' fold holds, from the members `acc` held before it: one member pushed a statement, the members
+before kept, and each statement's session one and its member the parameters' first under its name. -/
+theorem heldFold {ms : Array Member} :
+    ∀ (l : List StatementFiles) (acc held : Array Member), l.foldlM (heldStep ms) acc = .ok held →
+      held.size = acc.size + l.length ∧ (∀ k, k < acc.size → held[k]? = acc[k]?) ∧
+        ∀ (k : Nat) (st : StatementFiles) (m : Member), l[k]? = some st → held[acc.size + k]? = some m →
+          (∃ s, st.sessions = #[s]) ∧ ms.find? (·.name == m.name) = some m
+  | [], acc, held, h => by
+    cases h
+    exact ⟨by simp, fun _ _ => rfl, fun k st m hk _ => nomatch hk⟩
+  | st :: l, acc, held, h => by
+    rw [List.foldlM_cons] at h
+    cases h1 : heldStep ms acc st with
+    | error e => rw [h1] at h; cases h
+    | ok acc' =>
+      rw [h1, ok_bind] at h
+      obtain ⟨m, s, rfl, hs, hf⟩ := heldStep_ok h1
+      obtain ⟨hsz, hpre, hrest⟩ := heldFold l _ held h
+      refine ⟨by rw [hsz, Array.size_push, List.length_cons]; omega, fun k hk => ?_, fun k st' m' hk hm' => ?_⟩
+      · rw [hpre k (by rw [Array.size_push]; omega), Array.getElem?_push_lt hk, Array.getElem?_eq_getElem hk]
+      · cases k with
+        | zero =>
+          have he : held[acc.size]? = some m := by
+            rw [hpre acc.size (by rw [Array.size_push]; omega), Array.getElem?_push_size]
+          rw [Nat.add_zero, he] at hm'
+          cases hm'
+          cases hk
+          exact ⟨⟨s, hs⟩, hf⟩
+        | succ k =>
+          exact hrest k st' m' hk (by rwa [Array.size_push, show acc.size + 1 + k = acc.size + (k + 1) by omega])
+
+/-- **What `membersHeld` holds**: a member a statement, by place, each statement's session one and its member the
+parameters' first under its name. -/
+theorem membersHeld_ok {ms : Array Member} {sts : Array StatementFiles} {held : Array Member}
+    (h : membersHeld ms sts = .ok held) :
+    held.size = sts.size ∧ ∀ (k : Nat) (st : StatementFiles) (m : Member), sts[k]? = some st → held[k]? = some m →
+      (∃ s, st.sessions = #[s]) ∧ ms.find? (·.name == m.name) = some m := by
+  unfold membersHeld at h
+  rw [← Array.foldlM_toList] at h
+  obtain ⟨hsz, _, hk⟩ := heldFold sts.toList #[] held h
+  refine ⟨by rw [hsz]; simp, fun k st m hst hm => hk k st m (by rwa [Array.getElem?_toList]) (by simpa using hm)⟩
+
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
 def StepsKept : Prop :=
