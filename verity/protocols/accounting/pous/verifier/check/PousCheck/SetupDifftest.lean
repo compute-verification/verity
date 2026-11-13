@@ -16,7 +16,7 @@ public import PousCheck.Setup
 * `decode`: `Setup.decodeSegment` (`decode_segment`): the payload, or the kind of refusal;
 * `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`), the
   commitment over `Identity.taggedState` (the identity hash itself is `core_identity`'s, difftested there);
-* `vector` and `sigma`: an entry of the vectors file (`verity/protocols/pous/verifier/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
+* `vector` and `sigma`: an entry of the vectors file (`verity/protocols/accounting/pous/verifier/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
   its own `sha512` (of its canonical JSON without it) and whether `ENTRY_SHA512` pins it, its K, t, rejection index and `D(c)` under the
   spec's prefix (`Keys.specPrefix`); a σ rejection case's `p`, `r ⊕ K` and `σ_K(r)`. The test holds these to the file's
   recorded values, and the file to `reference.VECTORS_SHA512`.

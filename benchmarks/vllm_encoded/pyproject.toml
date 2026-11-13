@@ -16,4 +16,4 @@ inputs = ["verity/protocols/accounting/poub/prover/word_codec/paged.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
           "verity/hardware/__init__.py", "hardware/cards", "verity/hardware/cards.py",
-          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py"]  # kv_bench.py reads the RTX PRO 6000's card
+          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py"]  # kv_bench.py reads the RTX PRO 6000's card
