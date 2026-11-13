@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.SamplingTwoRegX
 public import Definitions.NetworkCertifier.PooledReg
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.EndToEndDraw
@@ -21,14 +20,12 @@ What the sample gives at one execution phase, and the form the pooled bound take
   `q · n ≤ kd`. `rateAt_all`: a sample of every proof block catches at rate `1`.
 * One execution phase. `pr_acc_of_event`: at a statement in scope and any set `F` of its proof blocks, a run that
   accepts with a sampled block of `F` with probability at most `c` accepts with probability at most
-  `(1 - q)^{|F|} + c`. It takes no knowledge soundness and no binding. `pr_acc_regX_le` and `pr_acc_regTwoX_le` are
-  that bound at the trace read at the statement, at one stage and at two.
+  `(1 - q)^{|F|} + c`. It takes no knowledge soundness and no binding.
 * The monitoring period. `phasesMiss_of_scope` turns a bound at each statement in scope into the bound on each
   phase's verdict that `NetTiming.pr_pooled_le` takes, the verifier refusing what is out of scope and reading the
   first of the phase's coins (`pr_castLE`); `phasesMiss_of_event` is it at the trace with the registered openings from
-  any bound on each phase's event, and `phasesMiss_regX` at the trace read at the statement. `phaseAcc_prefix` and
-  `wreg_prefix`: a phase's verdict and its incorrect set read only the earlier phases' coins where its statement, its
-  prover's strategy and its registered openings do.
+  any bound on each phase's event. `phaseAcc_prefix` and `wreg_prefix`: a phase's verdict and its incorrect set read
+  only the earlier phases' coins where its statement, its prover's strategy and its registered openings do.
 -/
 
 @[expose] public section
@@ -36,7 +33,7 @@ What the sample gives at one execution phase, and the form the pooled bound take
 namespace NetTiming
 
 open Claims Claims.Sampling Finset
-open Claims.SamplingGeneric (Arg Compiled CompiledTwo)
+open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Sampling.EndToEndDraw (SubsetDesign blocks_length Pa_subset)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -116,42 +113,6 @@ theorem pr_acc_of_event {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sessions
       by_cases h : ∃ u ∈ D.checked x p.2, u ∈ F
       · exact Or.inl ⟨hp, h⟩
       · exact Or.inr fun u hu hu' => h ⟨u, hu, hu'⟩) h1 hsnd
-  linarith
-
-/-- **Acceptance at the trace read at the statement**: a run accepts with probability at most
-`(1 − q)^{|FregX|} + ε_reg,X`. -/
-theorem pr_acc_regX_le {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sessions H) (hK : D.KSRegX H) {x : Msg}
-    (hx : D.Scope x) {q : ℝ} (hq1 : q ≤ 1)
-    (hq : ∀ s Pt, D.parse x = some s → D.partition s = some Pt → RateAt s Pt q)
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
-    Pr (fun p : Ω × (Fin (D.V.k x) → Coin) => (run H P D.V x p.1 p.2).out = .acc) ≤
-      (1 - q) ^ (D.FregX H P x).card + D.εregX H x P := by
-  have ⟨s, _, hs, _, _⟩ := hx
-  refine pr_acc_of_event hS hx hq1 hq Ω P (D.FregX H P x) (fun v hv => ?_) (hK x hx Ω P).1
-  simp only [Compiled.FregX, hs, mem_filter, mem_range] at hv
-  simp only [Compiled.nPU, hs]
-  exact hv.1
-
-/-- **Acceptance at the boundary trace read at the statement, two stages**: a run accepts with probability at most
-`(1 − r₁·r₂)^{|W|} + ε_reg,2,X`, `W` the replay blocks incorrect at that trace. -/
-theorem pr_acc_regTwoX_le {H : Msg → Msg} {D : CompiledTwo Coin A} (hK : D.KSRegTwoX H) {r₁ r₂ : ℝ}
-    (hM : D.MissTwoX H r₁ r₂) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hx : D.Scope x)
-    (hs : D.parse x = some s) (hPt : D.partition s = some Pt) (hd : D.two s = some d) (h1 : d.FirstRate r₁)
-    (h2 : d.SecondRate Pt r₂) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
-    Pr (fun p : Ω × (Fin (D.V.k x) → Coin) => (run H P D.V x p.1 p.2).out = .acc) ≤
-      (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (D.regValX H P x)).card + D.εregTwoX H x P := by
-  have hev := (hK x hx Ω P).1
-  have hmiss : Pr (fun p : Ω × (Fin (D.V.k x) → Coin) =>
-      ∀ u ∈ D.checked x p.2, u ∉ D.FregTwoX H P x p.1 p.2) ≤
-      (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (D.regValX H P x)).card := by
-    rw [Claims.Sampling.Pr_prod_eq_Ex]
-    exact (Claims.Ex_mono fun ω => hM x s Pt d hx hs hPt hd h1 h2 Ω P ω).trans_eq (Claims.Ex_const _)
-  have h3 := Claims.Sampling.Pr_or_le
-    (p := fun p : Ω × (Fin (D.V.k x) → Coin) => (run H P D.V x p.1 p.2).out = .acc)
-    (fun p hp => by
-      by_cases h : ∃ u ∈ D.checked x p.2, u ∈ D.FregTwoX H P x p.1 p.2
-      · exact Or.inl ⟨hp, h⟩
-      · exact Or.inr fun u hu hu' => h ⟨u, hu, hu'⟩) hev hmiss
   linarith
 
 /-- `FregR` holds only the statement's proof blocks. -/
@@ -240,25 +201,6 @@ theorem phasesMiss_of_scope [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled
     have h1 := pow_nonneg (sub_nonneg.2 hq1) (W z ω i).card
     have h2 := he0 i
     linarith
-
-/-- **The bound on each execution phase's verdict at the trace read at the statement**: at `KSRegX` and the sessions'
-contract, over a monitoring period whose statements and provers the secret and the period's coins fix, where every
-phase's design catches at rate `q` and `e i` bounds phase `i`'s `ε_reg,X`. -/
-theorem phasesMiss_regX [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A}
-    (hS : ∀ y, (D y).Sessions H) (hK : ∀ y, (D y).KSRegX H) (Zs : Set Sec)
-    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
-    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x) {q : ℝ}
-    (hq1 : q ≤ 1)
-    (hrate : ∀ z ∈ Zs, ∀ ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
-      (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
-    {e : Fin m → ℝ} (he0 : ∀ i, 0 ≤ e i)
-    (he : ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) ≤ e i) :
-    ∀ z ∈ Zs, ∀ i ω, Pr (phaseAcc H D x Pv hk z i ω) ≤
-      (1 - q) ^ ((D (x z ω i)).FregX H (Pv z ω i) (x z ω i)).card + e i :=
-  phasesMiss_of_scope hS Zs x Pv hk (fun z ω i => (D (x z ω i)).FregX H (Pv z ω i) (x z ω i)) hq1 he0
-    fun z hz i ω hsc =>
-      (pr_acc_regX_le (hS (x z ω i)) (hK (x z ω i)) hsc hq1 (fun s Pt hs hPt => hrate z hz ω i s Pt hs hPt) Tp
-        (Pv z ω i)).trans (add_le_add le_rfl (he z hz ω i))
 
 /-- **The bound on each execution phase's verdict at the trace with the registered openings, from any bound on each
 phase's event**: `e i` bounds the probability that phase `i`'s run accepts with a sampled proof block of its `FregR`,

@@ -16,8 +16,9 @@ incorrect sets `WregR` both are proved: the bound on each phase's verdict from t
 
 * `pooled_of_event` is the bound from any bound `e i` on each phase's event, the probability that its run accepts with
   a sampled proof block of its `FregR`. It takes no knowledge soundness of the proof system and no binding: a caller
-  meets the event with its own bound, the square-root form (`Compiled.ksRegR_of_sessionKS`) or one from costs
-  (`Compiled.ksRegR_of_costs`). Its event holds, beside each phase's verdict, whatever else `R` says of the phase.
+  meets the event with its own bound, the square-root form (`Compiled.ksRegR_of_sessionKS`) or one from its own
+  bounds on the three masses (`Compiled.ksRegR_of_masses`). Its event holds, beside each phase's verdict, whatever
+  else `R` says of the phase.
 * `pooledLeakRegistered` is `Guarantees.PooledLeakRegistered`: `pooled_of_event` at the square-root form, the sessions'
   bound from the proof system's knowledge soundness (`Claims.SamplingGeneric.sessionKSOf`), with `R` the phase
   registered as the period's and its record complete.

@@ -13,8 +13,6 @@ public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.RegTrace
 public import Proofs.Flock.SamplingGeneric.RegX
-public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
-public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.NetworkCertifier.TapRows
 
 /-!
@@ -31,7 +29,6 @@ At one execution phase, the event the sample's term is paid against: the run acc
 * `pr_offOps_le`: the fourth mass is at most `Pr[B_ops,X]`, by the commitment's binding.
 * `ksRegR_of_sessionKS`: the event is at most `ε_reg,X + Pr[B_ops,X]`, its binding terms in the square-root form;
   `εregX_nonneg`: `ε_reg,X` is not negative.
-* `ksRegR_of_costs`: the event with its binding terms from costs, with no square root of a collision term.
 -/
 
 @[expose] public section
@@ -167,42 +164,6 @@ theorem εregX_nonneg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Ty
   unfold Compiled.εregX
   exact add_nonneg (add_nonneg (add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
     (mul_nonneg (Nat.cast_nonneg _) (Real.sqrt_nonneg _))) (Pr_nonneg _)
-
-/-! ## The binding terms from costs -/
-
-/-- **The committed form at the trace with the registered openings, with no square root of a collision term**:
-`ksRegR_of_masses` at `bconfX_le_at` and `pr_offRegX_le_cls_at`. Where a run's extractions open a class of gates whole
-or not at all (`hallX`), every run calls `H` at most `T` times, and `B_conf,X` and the by-class finders meet the
-linear expected-time bound, an accepted run samples a proof block of `FregR` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + 2·runCost/2^256 + 2·firstHitCost/2^256 + Pr[B_ops,X]`. -/
-theorem ksRegR_of_costs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
-    (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) (ops : AuditStatement → List (Opening Bool)) {x : Msg}
-    (hsc : L.Scope x) (hops : ∀ s, L.parse x = some s → ∀ o ∈ ops s, L.commit.Opens H s.roots o = true)
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
-    (hpos : ∀ s, L.parse x = some s → ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
-    (cls : Fin (L.nG x) → Fin (L.nG x))
-    (hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
-      (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
-    (T : ℕ) (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
-    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
-    (hKs : Ex (fun r : Fin (L.V.k x) → Coin =>
-      (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
-    (hKm : Ex (fun r : Fin (L.V.k x) → Coin =>
-      (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ)) ≤ Km)
-    (hB : ExpectedCR H (BconfX H L Ω P x))
-    (hX : ∀ s, L.parse x = some s → ∀ K : ℕ, ExpectedCR H (L.finderXCls H P x s needs cls K)) :
-    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-        ∃ u ∈ L.checked x p.2, u ∈ FregR H L P x ops) ≤
-      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + 2 * L.runCost x T Ns / 2 ^ (256 : ℝ) +
-        2 * L.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ) + (BopsX H L ops Ω P x).Pr H := by
-  have ⟨s, _, hs, _, _⟩ := hsc
-  exact ksRegR_of_masses hS hSK ops hsc Ω P
-    (fun s' hs' => (pr_inConfX_le hbind hs' P).trans (bconfX_le_at hS.toCostContract hopen x P T hT hNs hB))
-    ((Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-        L.OffRegX H P x q.1 q.2.1 q.2.2)).symm.trans_le
-      (pr_offRegX_le_cls_at hbind hS.toCostContract hopen hs P needs (hpos s hs) cls hallX T hT hNs hKs hKm
-        (hX s hs)))
-    (fun s' hs' => pr_offOps_le hbind ops hs' (hops s' hs') P)
 
 end Compiled
 
