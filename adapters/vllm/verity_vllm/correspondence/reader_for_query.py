@@ -5,8 +5,8 @@
 is the frontend's naming of the Call (module, fx node, return-slot hint, row) the v1 bridge's member naming reads.  Where they come from:
 
   correspondence   `source = "correspondence"`: the `runtime-correspondence/v1` record the frontend emitted into the descriptor's
-                   `annotations["correspondence"]` (`verity_vllm.correspondence.runtime`, read through its one loader
-                   `read_program_dir(program_dir)`): `owning_module(cid)` and the record's `node` / `member` / `row` (its raw `hint`
+                   `annotations["correspondence"]` (`verity_vllm.correspondence.runtime`, read through
+                   `read_program_document(program_dir)`): `owning_module(cid)` and the record's `node` / `member` / `row` (its raw `hint`
                    when the record did not parse the naming suffix, parsed here exactly as the fallback parses a name).
   v1_annotations   `source = "v1_annotations"`: a v1-frontend Build (no such namespace): the ONE annotation those Builds record per Call,
                    its naming hint (`annotations["node_hints"][k]` in the descriptor, `name` in the instance sequence), parsed::

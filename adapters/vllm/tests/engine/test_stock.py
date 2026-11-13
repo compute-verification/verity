@@ -25,13 +25,12 @@ def fake_vllm(monkeypatch):
             return SimpleNamespace(args=args)
 
     root = types.ModuleType("vllm")
-    root.EngineArgs = lambda **kw: SimpleNamespace(**kw)
-    root.SamplingParams = lambda **kw: SimpleNamespace(**kw)
-    root.__version__ = VERSION
+    root.__dict__.update(EngineArgs=lambda **kw: SimpleNamespace(**kw), SamplingParams=lambda **kw: SimpleNamespace(**kw),
+                         __version__=VERSION)
     scm = types.ModuleType("vllm._version")
-    scm.__commit_id__ = "gd9105ea80"
+    scm.__dict__.update(__commit_id__="gd9105ea80")
     core = types.ModuleType("vllm.v1.engine.llm_engine")
-    core.LLMEngine = LLMEngine
+    core.__dict__.update(LLMEngine=LLMEngine)
     for name, mod in {"vllm": root, "vllm._version": scm, "vllm.v1": types.ModuleType("vllm.v1"),
                       "vllm.v1.engine": types.ModuleType("vllm.v1.engine"), "vllm.v1.engine.llm_engine": core}.items():
         monkeypatch.setitem(sys.modules, name, mod)
