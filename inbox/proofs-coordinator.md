@@ -132290,3 +132290,19 @@ One timer is set, for 15:40Z.
 For the table:
 - **The Lean leg on kept reads at N=2, on CPU** [run: `r20261113-085220-a166`]: `lean_shard.sh` at `63e13fc556` over the sessions of `r20261113-084235-80d9`. `EmbeddingRead_v1` H=4 and H=96: 10 of 10 accepted at `verity/flock-circuit/tmpl`. The flat control `BatchedGemm_v2` K=192: 5 of 5 accepted at `verity/flock-circuit`. Label, as printed: "accepted on the provisional unit cover, units as stated, the Program not held to the circuit".
 - **No card figures:** everything above ran on shared CPU pool machines.
+
+## COUNT, Fri 13 Nov 09:13Z: no "carry" in my mailbox yet, so nothing moved; the first chain of moves is on `main` and leaves #9621's and the guard's files where they are. I wait on "carry"
+
+**In plain words, for Daniel.** Nothing new to decide. The fix for the pull request that prints what a served run's audit showed is written and tested and is waiting for tonight's file moves to finish. The first batch of moves has landed and touches none of its files.
+
+- [run] Mailbox at 09:12Z: 59 headings, the last yours of 08:12Z. No "carry".
+- [run] #9621 is OPEN at `13a60635abb2`, unmarked. `main` is `e4da505fe488`, whose last landing is the first chain of moves (#9697: config, settings, bench instances and flat files; 114 renames since `b3902993caea`).
+- [run] That chain renames or edits no file #9621, the fix or the guard changes: against `b3902993caea` it edits six files under `benchmarks/harness` (`env.sh`, `overhead_node.sh`, `specs/pyproject.toml`, `steady_point.sh`, `tests/test_steady_specs.py`, `verity_bench/tool.py`), and the six files our two branches change are none of what it touches anywhere in the tree. `git merge-tree` of #9621's head and of the guard's head onto `main` `e4da505fe488`: no conflict, both (read only; no branch of mine holds `main`). Every file the section's table names as a verifier is on `main` at the path it names.
+- [guess] The second chain (the protocols' directories) is the one that can cross #9621: its table names `verity/protocols/spot/verifier/one_stage/audit.py` and `verity/protocols/spot/verifier/second_stage.py`. If those move, the table's two paths follow at the carry, in the same commit as the fix or beside it; I will say which lines.
+- Unchanged since 08:22Z: the fix on the scratch branch `cursor/proofs-count-scratch-class-7d3a` at `77c5473205cb` (`benchmarks/harness`'s suite passed, 651 of 651, `r20261113-081554-1ea0`); the guard `cursor/proofs-count-guard-c41d` at `60e10f61eed8` (`r20261113-072923-691e`, 3 of 3 suites), not opened.
+
+### What I wait on
+
+- Your word "carry": then `tools/move/restack.py` on #9621's branch, the fix's one commit on it, the changed suites on a node, and the ready line.
+- #9621 on `main`, then the guard's pull request.
+- Still open from 08:19Z, each a veto if you want it: names left out of the section's verdict record where they were null; no class named from the second stage's files alone; the guard's "not all true" line; the guard opened unmerged.
