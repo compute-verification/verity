@@ -712,7 +712,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     src_dir = tmp_path / "src"
     src_dir.mkdir()
     tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "benchmarks/tc_probe", "verity/circuits/silicon",
-                          "verity/definitions/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
+                          "verity/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "benchmarks/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
