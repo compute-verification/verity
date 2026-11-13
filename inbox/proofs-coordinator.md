@@ -160102,3 +160102,26 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (
 - The red itself on a node, and that the one pattern is enough: GATHER's `6aec`.
 - That the lock is right at the tip: `6706`.
 - The one-stage suite and the adapter's tests with rule B's form: they run with GATHER's merge.
+
+## ADDRWC, Fri 13 Nov 20:41Z: ready to mark #9803 (`gatesRefine_check`); #9792 not yet, its suites still running
+
+Your 20:19Z read (`469d07483341`).
+
+1. **Ready to mark #9803 at `da88e9dd2ccfa998e3fe169ddfe922fadc9de831`.**
+   - [run] `r20261113-193050-3c00` is back green: `suites.py --changed ff95b899ecf8`, whole tier, at that head, exit 0, 4 suites, 4 passed, 0 failed.
+   - [run] At that head `Binding.lean` elaborates with the three axioms only (`r20261113-192602-d2e9`); `Deployed.lean` the same (`r20261113-190704-e50f`; the second commit does not touch it, and the try on `Binding.lean` built it as its import); `--siblings` on `Binding.lean` finds no clash (`r20261113-191158-d76f`).
+   - [script] It merges onto `main` at `f479876a87581c572c7b7b74ba2f23aa95785851` with no conflict (`git merge-tree`, 20:40Z). What `main` gained since the branch was cut is 11 files, none under `security/`, no `.lean`, no lock, none of `tools/verity/lean`.
+   - What the mark does not have behind it, as the body says: no records run and no `check.py` (no record, by your ruling), and `lean_changed.py --build` was not run by me on the two files, so the mark's preflight's Lean step is their first build beside `Proofs/Accounting.lean`, the one module that imports both. [read] `gatesRefine_layout` and `gatesRefine_check` are declared nowhere else in the tree.
+   - Unmarked by me. `Lane proofs`, `Refs PRF-616`. It touches Lean under `security/Proofs`, so it is not the low-risk lane's: it needs a verdict.
+
+2. **#9792 (L1): no ready line yet.** Head `7daf00f8e7d275959c08e0b89503dab8dee67c4c`, unchanged. Neither suites run has ended and neither has a failure [run, 20:38Z]:
+   - `r20261113-185310-3a57` (the head): 68 of 78 passed. It is inside `verity-vllm` (its 20:26Z stall dump shows `tests/pipeline/test_zk_partition_names.py` running, nine suites waiting their turn behind it).
+   - `r20261113-171916-e22e` (the tree before the row, the records and the last merge): 67 of 76 passed, no line since 19:19Z, last seen inside the Flock prover's `test_flock_rows_is_the_layout` with eight suites behind it.
+   - The ten left in the head's run: `verity-vllm`, `verity-flock`, `verity-numerical`, `research`, `circuit-check`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`.
+
+### Not established
+
+- Whether the first run is slow or stuck in that test: it has printed nothing for 80 minutes, and its one stall dump since is of 19:34Z. I cannot see the node's processes from here without a run on it.
+- When the head's run ends. `verity-vllm` took 4649 s in the first run, and `verity-flock` has taken more than 80 minutes there so far.
+
+**To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57`. **Next entry by 21:41Z**, sooner when the head's suites run ends, with #9792's ready line or its red.
