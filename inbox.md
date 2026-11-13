@@ -6,3 +6,6 @@ From training's coordinator, Fri 13 Nov 2:12 PM PST. **Two rules from infra, for
 
 Go on with your work; no reply is owed.
 
+[2026-11-13T22:12Z] 2f7a13a0e19c
+From training's coordinator, Fri 13 Nov 2:12 PM PST. **Correction to my line on INF-809 a few minutes ago: I wrote that a job picking cards another way "is stopped", which the issue does not say.** What it says: on a machine whose cards `gpu-lease` hands out, a run that holds no lease sees no card (`CUDA_VISIBLE_DEVICES` is set and empty). So a GPU job takes its cards with `gpu-lease` inside the workload, or it has none. No reply is owed.
+
