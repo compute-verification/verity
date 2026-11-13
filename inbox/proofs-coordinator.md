@@ -158608,3 +158608,29 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 ## TWOLEG, Fri 13 Nov 20:04Z: a twelfth timer of yours reached me, 19 hours late; acted on in no way
 
 - [read: the notification] `gather-five-facts-0030z`, `firedAt` 2026-11-13T00:23:46Z, delivered to me at 19:56Z Fri: your 00:30Z round (GATHER's five facts relayed to FRAME, RUNSAS and RUNCOINS, a post on PRF-579, what compiled on vy-nebius-2, telling lean of my two lines, the workers' needs, `due.md`). I relayed nothing, posted on no issue, told lean nothing and read no `due.md`.
+
+## WINDOWAT, Fri 13 Nov 19:57Z: the four suites at the carried head: three pass, `repository` fails one test, `test_no_long_module_grows`, on MEMBERS's `Spot/OneStageZk.lean` (2,602 lines), which is the split you have already ordered; none of my 19 files is in it
+
+**In plain words.** The suites my change reaches ran at `5961fa466d1e` on vy-nebius-cpu-9 [run `r20261113-193052-6058`, 19:44Z to 19:53Z after 13 minutes in the memory line, rc 1, none cached]:
+
+| Suite | Verdict |
+|---|---|
+| `verity-graph` | passed, 220 |
+| `verity/circuits/ops` | passed, 949 (2 skipped) |
+| `verity/protocols/accounting/pouw/verifier` | passed, 2,007 |
+| `repository` | **failed: 356 passed, 1 failed** (4 deselected by `--quick`, 17 warnings) |
+
+**The one failure is not from my files, and not from the carry** [read, and measured from git at three commits]:
+
+- `tests/test_lean_packages.py::test_no_long_module_grows`. The run prints the test's name only; I measured what it measures. The package `verity/protocols/proofs/spot/verifier/lean` has 602 lines past 2,000 and no entry in `OVERLONG`: `Spot/OneStageZk.lean` is 2,602 lines. Every other package is at or under its cap, `security/Proofs` among them at 53,152 of 54,185, the same count as `main`'s at `4ae17f7eafd7`.
+- The file is 1,713 lines on `main` at `4ae17f7eafd7`, and 2,602 at MEMBERS's carried switch `097b85eff21b` and at my head, the same blob (`1f242da16d73`). It was 2,602 at MEMBERS's line before the carry too (`fd561fbff5b2`), under the same rule. So the test fails at MEMBERS's carried switch alone, by the same measure.
+- The mend is the split of that file you ordered of MEMBERS (its 18:39Z and 19:34Z: one cut at line 1604, `Spot/OneStageZkStatement.lean`, not yet written). I do nothing to the file or to the cap: my line turns green on this test when the split reaches it through MEMBERS's carried line, at your word.
+
+**Not established.**
+
+- The 17 warnings one by one: the run prints only their tail (`tests/tree.toml`'s lines whose move landed), and the suite's full log is on the node. The printed part names none of my files.
+- The slow tests: `--quick` leaves them out. No kernel replay (as in the 19:33Z entry).
+
+**STOP RULE.** I merge, commit and open nothing before your word on the three things of my 19:33Z entry (the merge of #9520's new head, the regenerated `security/Properties` record, the pull request). A fourth now stands beside them: whether the pull request waits for MEMBERS's split or opens with this test red and named in its body.
+
+**Next.** Nothing runs of mine. I read the mailbox each quarter hour.
