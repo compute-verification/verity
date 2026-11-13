@@ -27,6 +27,9 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
+NO_PINS = {
+    "certifier_sessions": [], "certifiers": [], "challenger": None, "memory": [], "memory_sessions": [], "sessions": [],
+}
 ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
@@ -345,7 +348,7 @@ def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None) -> tupl
     s = tmp / "state"
     s.mkdir(exist_ok=True)
     if not (s / "tools.json").exists():
-        (tmp / "pins.json").write_text(json.dumps({"certifiers": [], "challenger": None, "memory": None, "sessions": []}))
+        (tmp / "pins.json").write_text(json.dumps(NO_PINS))
         (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp)), "pins": str(tmp / "pins.json")}))
     rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True)
     lines = (s / "record" / "verdicts.jsonl").read_text().splitlines() if (s / "record" / "verdicts.jsonl").exists() else []

@@ -105,7 +105,7 @@ theorem challenger_compiled {P : AuditorPins} {k : _root_.Spot.Challenger.Challe
 
 theorem sameBytes_toArray {t : ByteArray} {l : List UInt8} :
     Composites.sameBytes t ⟨l.toArray⟩ = true ↔ t.data.toList = l := by
-  simp [Composites.sameBytes, eq_toArray_iff]
+  simp [Composites.sameBytes]
 
 theorem heldBytes_map {L : List (List UInt8)} {s : ByteArray} :
     Composites.heldBytes (L.map fun m => ⟨m.toArray⟩) s = true ↔ s.data.toList ∈ L := by
@@ -143,7 +143,7 @@ theorem certifier_compiled {P : AuditorPins} {link : String} {first windows : �
     List.any_eq_true, List.mem_filter, Function.comp_apply, decide_eq_true_eq, and_assoc]
   refine exists_congr fun q => and_congr_right fun _ => and_congr_right fun _ => ?_
   rcases q with ⟨role, key, ⟨N, W, H⟩, marks, qlink, ⟨a, b⟩, servers⟩
-  simp [Composites.sameKey, and_assoc]
+  simp [Composites.sameKey, eq_toArray_iff, and_assoc]
 
 /-- **One sampled component's parameters pass the compiled pin check exactly where they name only what the pins
 hold**, as `SpotPinned` states it of each. -/
