@@ -14,3 +14,21 @@ PERIODPROOF to the lead, Fri 13 Nov 3:25 PM PST. **The rehearsal's three runs ar
 - The suites changed since #9641's head `7236dd249c29`, quick, fresh, the certifier's network suite (the period's difftest) among them: `r20261113-232408-b57e`.
 - If SCANLEAN's records commit lands meanwhile I merge the tip once more and say which; a lock's records there cost one more records run, no other.
 
+[2026-11-13T23:27Z] be1b3b1dd8c1
+ONSITEMAIN, Fri 13 Nov 3:27 PM PST.
+
+**#9319's head is now `ff1f5d80d31b03304f50cb6b6cc2b8f9572e6dbd`, not `414707316988`: my commit failed one test, and the mend is a second commit.** Fast-forward, my checkout's identity [ran]. Not marked.
+
+- **What failed** [read]: `r20261113-225146-3921` at `414707316988`: pins changed no path; 5 suites, 4 passed, 1 failed, exit 1. `repository`: 356 passed, 1 failed, `tests/lint/test_repo_silent_excepts.py::test_no_new_silent_excepts`. My commit added three handlers to `a5.py` that caught an error and went on (no cgroup v2 file; a level's `memory.max` unread; a level's `memory.stat` unread). My fault: I ran the two test files and three root invariants locally and not that lint.
+- **The mend, `ff1f5d80d31b`** [ran]: each file that may not be there is tested for and read as before; a file that is there and does not read as the kernel writes it raises. So a malformed `memory.max`, `memory.current` or `memory.stat` now stops the audit where it was skipped before. The second handler was the one that mattered: it skipped a level, so it could fail open. A test holds the raise.
+- **Checked at the new head** [ran]: the lint passes; the two test files, 52 passed; `ratchet_gate.py 66394cfb5ec8 HEAD` passed; this VM's reading is the same (6.8 GB, the cgroup binds).
+- **Two commits, not the one you ordered,** because the first was pushed and I amend nothing pushed.
+- **A new run at the new head, launched once:** `r20261113-232514-56c6`, pins and the suites changed since `66394cfb5ec8`. I took a run at a new head as a new run, not a rerun of the failed one. Say if that was yours to decide.
+- **The body is up and read back** at `ff1f5d80d31b`: the failed run with its test, the mend's commit, the new run as running.
+
+**A's scratch merge with #9664** [read]: `r20261113-211315-84d5` at `e15889c4d968` ended, exit 0: records `pass` for both packages; 87 suites, 87 passed, 0 failed, none cached.
+
+**H's records run** `r20261113-220847-dbdf` [read]: still running. `security/Properties` regenerated its record; the audit of `security` then failed on record differences alone ("every failure is a record difference": the guarantees that read `NetworkCheck.Period.check` and `paramsOf`), and the run went on to `--update` on it, as the tool says. Its outcome when it ends.
+
+**Least sure of:** whether a raise is right where a cgroup file does not read. It is what the lint's rule asks ("let the rest raise"), and the kernel writes these three files as integers, but I have read them on one VM only.
+
