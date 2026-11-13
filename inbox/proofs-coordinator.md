@@ -111266,3 +111266,46 @@ NEEDS:
 To post: nothing.
 
 Not established: that my branch builds (it can't until NEEDS 1 and 2). That `binds_dev₂` and `cut_dev₂` rest on no `sorry` (they rest on five of CUT's and TWOLEG's proofs, stubbed in scratch). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
+
+## STOPS, Fri 13 Nov 01:00Z: both unpushed commits are recovered and pushed (head `161cf0038b87`, nothing unpushed); the twelve theorems on what a passing `checkAny` says compile with the standard axioms only; the rehearsal held with no leaf layer and nothing of a member staged before the sample
+
+In plain words: the proofs about the new rule of the second stage compile. They say what an accepted second stage guarantees when a session's statement holds only the sampled inner blocks: the statement's blocks are exactly the ones the draw picked, in the draw's order, every one of them is checked, and its header is the auditor's reference placed at those blocks. And the first step of the plan ran: the two-stage rehearsal on the select, with the verifier's side doing nothing in proportion to an outer block's size before the sample is drawn. All twenty sessions were accepted by the Lean verifier, all fifteen tampered inputs were refused, and the second stage's check gave no code in Python and in compiled Lean. It is a development run and the last accept stays withheld. Nothing changes for Friday's proof.
+
+**Recovered** [run]. This machine was new. Both commits were in the node's own git store (`/workspace/research/git/verity.git` on vy-nebius-2, under the refs of the runs' sources); I bundled the two against `dc7007f28430`, fetched the bundle here, and they are on the branch with their own ids.
+
+| Commit on `cursor/proofs-stops-drawn-7b3e` | What |
+|---|---|
+| `d66eab79a7` | the twelve theorems, as tried |
+| `dee50ddb3f` | `two_stage.py second --roots-only`, as run |
+| `ba7a2942ab` | the merge of those two (no file in common) |
+| `e191017959` | `main` `4e7a25c6a766` merged; no file of the sampled-only statement, the roots-only mode or the second stage's check differs between the sides |
+| `161cf0038b87` | the head: one line of the new test fixed (below) |
+
+**The theorems** [run: `r20261112-232041-425c`, vy-nebius-2, tree `d66eab79a7`, rc 0].
+- `lean-try: verity/protocols/spot/verifier/lean/Spot/SecondStage.lean: lean exit 0 in 355 s`; `axiom probe: none of its 40 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+- The twelve: `sampledCodes_nil`, `codes_nil_shared`, `getD_mem_of_lt`, `anySampled_false`, `checkAny_ok`, `checkAny_ok_refs`, `checkAny_ok_wired`, `checkAny_ok_values`, `mem_sampledSlots`, `sampledOk_indices`, `sampledHeaderOk_ref`, `checkAny_ok_sampled`. With `checkAny_eq_check` that is thirteen about the new rule, all compiled, on the first try each.
+- [read] They are about the code's own function. No statement under `security/` reads them, the proved model still runs `stmtCodes`, and no lock is regenerated.
+- [run] It took its place at 00:14Z after waiting in line since 23:21Z, 53 minutes.
+
+**The rehearsal with no leaf layer** [run: `r20261112-234010-dddd`, vy-nebius-2, tree `dee50ddb3f`; it took its place at 00:49Z after 69 minutes in line]. A development run: made-up logits, no engine, local challenger sessions, the form's switch off.
+- `second rc=0`, `held` true. The interior's record has `leaf_layer` null, 40 roots, one registered value. `staging`: `public_files` 0, `roots_only` true. The 22 checks before the sample pass: one a member on its circuit alone (partition, program, template program), the registration's, and the window's source.
+- 20 statements, each at 2 sampled slots of 8. `lean-verify` 20 of 20, `lean-draw` 20 of 20, the session verifier 20 of 20. The second stage's check: no code in Python, and the compiled Lean check gives the same verdict (`round_two_lean {"ok": true, "codes": [], "agrees": true}`). The outcome is refused by `two-stage-form` alone.
+- Negatives: 15 of 15 refused. Three fewer than the earlier runs' 18: the three wiring negatives read the members' public bodies before the sample, which this mode does not make; the leaf-layer negative is now "a verifier that holds a leaf layer refuses a record that names none", refused by R4.
+- The run's own exit is 1, for a reason of mine: the new test in `test_two_stage_second.py` expected the code `R4`, and the check's code is `R4-leaf-layer` (5 other tests of the file passed). Fixed at the head; the corrected test has not run yet.
+
+**Runs out**
+
+| Run | Node | What | State [run] |
+|---|---|---|---|
+| `r20261113-005847-8842` | vy-nebius-2 | suites `benchmarks/one_stage`, `benchmarks/two_stage`, `verity/commitments/windows`, `verity-vllm`, `--quick`, 32 GB, cap 120 min, tree `161cf0038b87` | launched 00:58Z |
+| `r20261112-234110-5c97` | vy-nebius-2 | the same suites from `dee50ddb3f` | cancelled 00:53Z: 73 minutes in line, never started |
+| `r20261113-005410-c877` | vy-nebius-cpu-11 | the same from `e191017959` | cancelled 00:58Z after 4 minutes in line, never started: its tree held the wrong expected code. cpu-11 had no memory free then (`slot.json`: "-124 GB of memory free"), so the new one went to vy-nebius-2 |
+
+**For the plan** [relayed: your message; GATHER 00:01Z]. Taken: no driver on any tree proves a sampled stop block; the stop sample is registered and drawn and its order held, nothing more. It goes into the plan's last milestone with circuits' two fields when they come. Also from GATHER's entry, which my plan did not have in these words: the second stage's law is the verifier's own, one unit of each cell (a sampled outer block and a template), so the sampled-only statement of a template holds one block for each sampled outer block. That is the 2 of 8 of every run above.
+
+**Next**: the 02:30Z line (what has compiled, what Friday's `complete` takes); the suites' verdict; then the plan's item 4 (the auditor's reference staged at the sampled blocks).
+
+**Not established**
+- That the four suites pass on the tree with the `rows.py` change, and that the corrected test passes.
+- Any proof about the sampled-only rule under `security/`; that a regenerated lock moves no record.
+- The roots-only mode at any size but 2 of 8, with a history, with row tables, or as a plain audit (it refuses those three).
