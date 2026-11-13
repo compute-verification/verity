@@ -66,7 +66,6 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                                "a warm request's cached rows (the engine's first scheduled position) and their producers are the Program's declared prefix-cache hit")
     glob2loc: dict[int, tuple[str, int, int]] = {}
     shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # weight-only instance -> {request: its local identity}
-    loc_count = 0
     exec_pop = 0
     unexercised = 0
     A_cache: dict[str, SEQ.RootView] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
@@ -103,7 +102,7 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     def apply(out: dict) -> None:
         """Global reconciliation of one request's facts, in request order: problems to their checks in the order met, the identity map
         over all requests (an instance with two local identities is named), the population sums, the request entry on the record."""
-        nonlocal loc_count, exec_pop, unexercised
+        nonlocal exec_pop, unexercised
         rid, ent = out["rid"], out["ent"]
         for role, msg in out["fails"]:
             checks_by_role[role].fail(msg)
@@ -133,12 +132,10 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                     # a weight-only instance has one local identity PER request whose leg holds it (never a bijection
                     # with the global node): kept apart from glob2loc, so G7's owner blocks and G8's layout skip it like an unowned node
                     shared_loc.setdefault(gi, {})[rid] = key
-                    loc_count += 1
                     continue
                 if gi in glob2loc:
                     c4.fail(f"global instance {gi} carries two local identities {glob2loc[gi]} and {key}")
                 glob2loc[gi] = key
-                loc_count += 1
         exec_pop += out["exec_pop"]
         unexercised += out["unexercised"]
         res["requests"].append(ent)
