@@ -56,8 +56,8 @@ def test_a_prefix_row_without_prompt_ids_is_refused():
 def test_shape_keys_and_names_keep_every_uncached_shape():
     assert PP.shape(168, 9) == (168, 9) and PP.shape(168, 9, 0) == (168, 9) and PP.shape(168, 9, 128) == (168, 9, 128)
     assert PP.shape_name((168, 9)) == "LP168_T9" and PP.shape_name((168, 9, 128)) == "LP168_T9_C128"
-    assert PP.shape_key((168, 9, 128)) == "168,9,128" and PP.parse_shape_key("168,9") == (168, 9)
-    assert PP.cached_rows(PP.parse_shape_key("168,9,128")) == 128 and PP.cached_rows((168, 9)) == 0
+    assert PP.shape_key((168, 9, 128)) == "168,9,128" and PP.shape_key((168, 9)) == "168,9"
+    assert PP.cached_rows((168, 9, 128)) == 128 and PP.cached_rows((168, 9)) == 0
 
 
 def test_a_warm_prefill_launches_its_uncached_suffix_from_row_c():
@@ -92,6 +92,7 @@ def test_a_warm_request_finds_its_own_program_and_a_cold_one_never_takes_it(tmp_
 
 def test_a_warm_programs_cached_rows_are_not_token_ids():
     from types import SimpleNamespace as NS
+
     from verity_vllm.query.required import ValueRef, cached_prefix_inputs
     P_ = NS(params=[NS(id="prompt", port_table=[NS(name="out")]), NS(id="prefix", port_table=[NS(name="out")]),
                     NS(id="weights", port_table=[NS(name="w0"), NS(name="w1")])])

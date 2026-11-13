@@ -22,7 +22,8 @@ scope = "prose"
 "C Flock" = "Flock"
 
 # --- the ZK server (was the firewall); `FC_FIREWALL*`, `flock-firewall`, `core-firewall`, `--firewall*`, the
-# `verity/firewall-*` formats, `FIREWALL-REFUSED` and the package directory `verity/core/service/firewall/` stay
+# `verity/firewall-*` formats, `FIREWALL-REFUSED` and the package directory
+# `verity/protocols/recursion/verifier/firewall/` stay
 "Flock.Firewall" = "Flock.ZkServer"
 "Flock/Firewall" = "Flock/ZkServer"
 "the Lean firewall" = "the Lean ZK server"
@@ -329,7 +330,7 @@ words = { "laws" = "sampling designs", "law" = "sampling design", "Laws" = "Samp
 # the PoUW budget's plan point, a `Sample` that would declare the concept `Draw` becomes (`tests/test_lean_vocabulary.py`)
 # PoUB's remote audit keeps its own `Draw` ([keep_in]) and names Flock's, which moves
 [[words_in]]
-files = ["Security/Properties/RemoteAudit*", "Security/Proofs/Properties/RemoteAudit*", "Security/*Accounting*Remote*"]
+files = ["security/*Accounting*Remote*"]
 words = { "Flock.Draw" = "Flock.Sample" }
 
 [[words_in]]
@@ -338,7 +339,7 @@ words = { "Sample" = "PlanPoint" }
 
 # Dither's noise period L′ is its noise repeat length
 [[words_in]]
-files = ["verity/core/protocols/pouw/**", "verity/ml/protocols/pouw/**", "benchmarks/pouw/**"]
+files = ["verity/protocols/pouw/verifier/**", "verity/protocols/pouw/prover/**", "benchmarks/pouw/**"]
 words = { "noise periods" = "noise repeat lengths", "noise period" = "noise repeat length", "Noise period" = "Noise repeat length" }
 
 # The bandwidth audit's session beside Dither's arms is one run of it, and `dbw.py`'s table keeps its columns; the op
@@ -395,108 +396,113 @@ files = ["benchmarks/hash/dither/**"]
 # keeps its spelling: `window`, `epoch` and `pass_epoch` as names, `pouw-window`, the domain tags, and, in [keep],
 # network accounting's certifier window and the windows and epochs of other senses these files name
 [[words_in]]
-files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
-         "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
-         "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/run.py", "benchmarks/pouw/highutil/period.py",
+files = ["benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/recorded.py",
          "benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/verify_run.py",
-         "benchmarks/pouw/served_zk/served_commit.py", "benchmarks/pouw/tests/test_accel_v31.py",
+         "benchmarks/pouw/served_zk/served_commit.py",
          "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_served_zk.py",
-         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
-         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py", "verity/core/protocols/pouw/audit.py",
-         "verity/ml/protocols/pouw/circuit/admit.py", "verity/ml/protocols/pouw/circuit/anchors.py",
-         "verity/ml/protocols/pouw/circuit/compile.py", "verity/ml/protocols/pouw/circuit/dither.py",
-         "verity/ml/protocols/pouw/circuit/eps1_reference.py", "verity/ml/protocols/pouw/circuit/h1device.py",
-         "verity/ml/protocols/pouw/circuit/h1tile.circuit-check.py", "verity/ml/protocols/pouw/circuit/h1tile.py",
-         "verity/ml/protocols/pouw/circuit/h1window.circuit-check.py",
-         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/h1zy.py",
-         "verity/ml/protocols/pouw/circuit/__init__.py", "verity/ml/protocols/pouw/circuit/leaves.py",
-         "verity/ml/protocols/pouw/circuit/live.circuit-check.py", "verity/ml/protocols/pouw/circuit/live.py",
-         "verity/core/protocols/pouw/live_reads.py", "verity/ml/protocols/pouw/circuit/ncp2.circuit-check.py",
-         "verity/ml/protocols/pouw/circuit/ncp2.py", "verity/ml/protocols/pouw/circuit/partition.py",
-         "verity/ml/protocols/pouw/circuit/pc8.circuit-check.py", "verity/ml/protocols/pouw/circuit/plan.py",
-         "verity/ml/protocols/pouw/circuit/seeds.py", "verity/ml/protocols/pouw/circuit/segment.circuit-check.py",
-         "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
-         "verity/core/protocols/pouw/dither/PROTOCOL.md", "verity/core/protocols/pouw/grind.py",
-         "verity/core/protocols/pouw/identifier.py", "verity/core/protocols/pouw/__init__.py",
-         "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/pouw/lean/check/PouwCheck/Check.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/CreditDifftest.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Difftest.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/DifftestMain.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/LeafOwn.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/LeafOwnMain.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Opening.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Protocol.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Rounds.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/Tile.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/VerifiedDifftest.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/WindowSalt.lean",
-         "verity/core/protocols/pouw/lean/check/README.md",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_check_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_live_verified_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_opening_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_pass_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_rounds_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_verified_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/test_coins.py",
-         "verity/core/protocols/pouw/lean/check/tests/test_leaf_own.py",
-         "verity/core/protocols/pouw/lean/commit/PouwCommit/Bindings.lean",
-         "verity/core/protocols/pouw/lean/commit/PouwCommit/Coins.lean",
-         "verity/core/protocols/pouw/lean/commit/PouwCommit/Difftest.lean",
-         "verity/core/protocols/pouw/lean/commit/PouwCommit/Draws.lean",
-         "verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean",
-         "verity/core/protocols/pouw/lean/commit/tests/difftest_vectors.py",
-         "verity/core/protocols/pouw/lean/commit/tests/test_pouw_commit_lean_difftest.py",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Difftest.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Draw.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Entry.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Grid.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Inputs.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Json.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Lanes.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Length.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/OwnPorts.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Public.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/RegFile.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Rounds.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean",
-         "verity/core/protocols/pouw/lean/window/PouwWindow/Statement.lean",
-         "verity/core/protocols/pouw/lean/window/README.md",
-         "verity/core/protocols/pouw/lean/window/tests/test_difftest.py",
-         "verity/core/protocols/pouw/lean/window/tests/test_reg_file.py", "verity/core/protocols/pouw/operands.py",
-         "verity/core/protocols/pouw/protocol.py",
-         "verity/core/protocols/pouw/README.md", "verity/core/protocols/pouw/registration.py",
-         "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/serving.py",
-         "verity/core/protocols/pouw/tests/epoch_coins.py", "verity/core/protocols/pouw/tests/epoch_coins_vectors.py",
-         "verity/core/protocols/pouw/tests/pouw_rows_vectors.py",
-         "verity/core/protocols/pouw/tests/splitk_rows_vectors.py",
-         "verity/core/protocols/pouw/tests/test_circuit_anchors.py",
-         "verity/core/protocols/pouw/tests/test_circuit_compile.py",
-         "verity/core/protocols/pouw/tests/test_circuit_h1tile.py",
-         "verity/core/protocols/pouw/tests/test_circuit_h1window.py",
-         "verity/core/protocols/pouw/tests/test_circuit_h1zy.py",
-         "verity/core/protocols/pouw/tests/test_circuit_leaves.py",
-         "verity/core/protocols/pouw/tests/test_circuit_live.py",
-         "verity/core/protocols/pouw/tests/test_circuit_plan.py", "verity/core/protocols/pouw/tests/test_h1device.py",
-         "verity/core/protocols/pouw/tests/test_h1tile_population.py",
-         "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
-         "verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py",
-         "verity/core/protocols/pouw/tests/test_pouw_identifier.py",
-         "verity/core/protocols/pouw/tests/test_pouw_live_window.py",
-         "verity/core/protocols/pouw/tests/test_pouw_operands.py",
-         "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py",
-         "verity/core/protocols/pouw/tests/test_pouw_registration.py",
-         "verity/core/protocols/pouw/tests/test_pouw_salt.py",
-         "verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py",
-         "verity/core/protocols/pouw/tests/test_pouw_verifier.py",
-         "verity/core/protocols/pouw/tests/test_pouw_window.py", "verity/core/protocols/pouw/tests/test_splitk_rows.py",
-         "verity/core/protocols/pouw/tests/window_vectors.py", "verity/core/protocols/pouw/verifier.py",
-         "verity/core/protocols/pouw/weights.py", "verity/core/protocols/pouw/window.py",
-         "benchmarks/hash/dither/**", "benchmarks/hash/exactlin/tensor_util.py"]
+         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py", "verity/protocols/pouw/verifier/audit.py",
+         "verity/protocols/pouw/prover/circuit/admit.py", "verity/protocols/pouw/prover/circuit/anchors.py",
+         "verity/protocols/pouw/prover/circuit/compile.py", "verity/protocols/pouw/prover/circuit/dither.py",
+         "verity/protocols/pouw/prover/circuit/eps1_reference.py", "verity/protocols/pouw/prover/circuit/h1device.py",
+         "verity/protocols/pouw/prover/circuit/h1tile.circuit-check.py",
+         "verity/protocols/pouw/prover/circuit/h1tile.py",
+         "verity/protocols/pouw/prover/circuit/h1window.circuit-check.py",
+         "verity/protocols/pouw/prover/circuit/h1window.py", "verity/protocols/pouw/prover/circuit/h1zy.py",
+         "verity/protocols/pouw/prover/circuit/__init__.py", "verity/protocols/pouw/prover/circuit/leaves.py",
+         "verity/protocols/pouw/prover/circuit/live.circuit-check.py", "verity/protocols/pouw/prover/circuit/live.py",
+         "verity/protocols/pouw/verifier/live_reads.py", "verity/protocols/pouw/prover/circuit/ncp2.circuit-check.py",
+         "verity/protocols/pouw/prover/circuit/ncp2.py", "verity/protocols/pouw/prover/circuit/partition.py",
+         "verity/protocols/pouw/prover/circuit/pc8.circuit-check.py", "verity/protocols/pouw/prover/circuit/plan.py",
+         "verity/protocols/pouw/prover/circuit/seeds.py",
+         "verity/protocols/pouw/prover/circuit/segment.circuit-check.py",
+         "verity/protocols/pouw/verifier/coins.py", "verity/protocols/pouw/verifier/core_check.py",
+         "verity/protocols/pouw/verifier/dither/PROTOCOL.md", "verity/protocols/pouw/verifier/grind.py",
+         "verity/protocols/pouw/verifier/identifier.py", "verity/protocols/pouw/verifier/__init__.py",
+         "verity/protocols/pouw/verifier/leaf_lanes.py",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Check.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Difftest.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/DifftestMain.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/LeafOwn.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/LeafOwnMain.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Opening.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Protocol.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Rounds.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/Tile.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/VerifiedDifftest.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/WindowSalt.lean",
+         "verity/protocols/pouw/verifier/lean/check/README.md",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_check_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_credit_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_live_verified_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_opening_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_pass_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_rounds_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_verified_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/test_coins.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/test_leaf_own.py",
+         "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Bindings.lean",
+         "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Coins.lean",
+         "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Difftest.lean",
+         "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Draws.lean",
+         "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean",
+         "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
+         "verity/protocols/pouw/verifier/lean/commit/tests/test_pouw_commit_lean_difftest.py",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Difftest.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Draw.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Entry.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Grid.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Inputs.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Json.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Lanes.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Length.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/OwnPorts.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Public.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/RegFile.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Rounds.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Side.lean",
+         "verity/protocols/pouw/verifier/lean/window/PouwWindow/Statement.lean",
+         "verity/protocols/pouw/verifier/lean/window/README.md",
+         "verity/protocols/pouw/verifier/lean/window/tests/test_difftest.py",
+         "verity/protocols/pouw/verifier/lean/window/tests/test_reg_file.py",
+         "verity/protocols/pouw/verifier/operands.py",
+         "verity/protocols/pouw/verifier/protocol.py",
+         "verity/protocols/pouw/verifier/README.md", "verity/protocols/pouw/verifier/registration.py",
+         "verity/protocols/pouw/verifier/salt.py", "verity/protocols/pouw/verifier/serving.py",
+         "verity/protocols/pouw/verifier/tests/epoch_coins.py",
+         "verity/protocols/pouw/verifier/tests/epoch_coins_vectors.py",
+         "verity/protocols/pouw/verifier/tests/pouw_rows_vectors.py",
+         "verity/protocols/pouw/verifier/tests/splitk_rows_vectors.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_anchors.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_compile.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_h1tile.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_h1window.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_h1zy.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_leaves.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_live.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_plan.py",
+         "verity/protocols/pouw/verifier/tests/test_h1device.py",
+         "verity/protocols/pouw/verifier/tests/test_h1tile_population.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_core_check.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_epoch_coins.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_identifier.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_live_window.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_operands.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_registration.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_salt.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_verifier.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_window.py",
+         "verity/protocols/pouw/verifier/tests/test_splitk_rows.py",
+         "verity/protocols/pouw/verifier/tests/window_vectors.py", "verity/protocols/pouw/verifier/verifier.py",
+         "verity/protocols/pouw/verifier/weights.py", "verity/protocols/pouw/verifier/window.py",
+         "benchmarks/hash/dither/**"]
 [words_in.words]
 "PoUW's window salt" = "the execution phase's salt"
 "the epoch's live salt" = "the execution phase's salt"
@@ -533,10 +539,8 @@ files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
 
 # Dither's bare cell is its output cell
 [[words_in]]
-files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
-         "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
-         "benchmarks/pouw/highutil/period.py", "verity/ml/protocols/pouw/circuit/dither.py",
-         "verity/core/protocols/pouw/dither/PROTOCOL.md"]
+files = ["verity/protocols/pouw/prover/circuit/dither.py",
+         "verity/protocols/pouw/verifier/dither/PROTOCOL.md"]
 [words_in.words]
 "a cell" = "an output cell"
 "A cell" = "An output cell"
@@ -547,17 +551,18 @@ files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
 
 # H1's period, credit's span, is its credit period where PoUW's credit names it (its other periods stay: [keep])
 [[words_in]]
-files = ["verity/core/protocols/pouw/README.md",
-         "verity/core/protocols/pouw/lean/check/README.md", "verity/core/protocols/pouw/lean/check/PouwCheck.lean",
-         "verity/core/protocols/pouw/lean/check/PouwCheck/VerifiedDifftest.lean",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_live_verified_cases.py",
-         "verity/core/protocols/pouw/lean/check/tests/pouw_verified_cases.py",
-         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/live.py",
-         "verity/core/protocols/pouw/live_reads.py", "verity/core/protocols/pouw/core_check.py",
-         "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/verifier.py",
-         "verity/core/protocols/pouw/weights.py", "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
-         "verity/core/protocols/pouw/tests/test_circuit_h1window.py"]
+files = ["verity/protocols/pouw/verifier/README.md",
+         "verity/protocols/pouw/verifier/lean/check/README.md",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck.lean",
+         "verity/protocols/pouw/verifier/lean/check/PouwCheck/VerifiedDifftest.lean",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_credit_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_live_verified_cases.py",
+         "verity/protocols/pouw/verifier/lean/check/tests/pouw_verified_cases.py",
+         "verity/protocols/pouw/prover/circuit/h1window.py", "verity/protocols/pouw/prover/circuit/live.py",
+         "verity/protocols/pouw/verifier/live_reads.py", "verity/protocols/pouw/verifier/core_check.py",
+         "verity/protocols/pouw/verifier/salt.py", "verity/protocols/pouw/verifier/verifier.py",
+         "verity/protocols/pouw/verifier/weights.py", "verity/protocols/pouw/verifier/tests/test_pouw_core_check.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_h1window.py"]
 [words_in.words]
 "periods" = "credit periods"
 "Periods" = "Credit periods"
@@ -623,8 +628,8 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # Lean's `DRAW {…}`, which `grep '^DRAW '` reads, the served-ZK reply `DRAWN`), the parties' message types `CoinsDraw`
 # and `Firewall` (a deploy log records them), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit`
 # and the `"proof-unit"` kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three
-# more), the package directory `verity/core/service/firewall`, its Lake package `core_firewall` and the names of the files
-# [keep_paths] holds; the structure `Accounting.TS.DrawnLayer` and its projection
+# more), the package directory `verity/protocols/recursion/verifier/firewall`, its Lake package `core_firewall` and
+# the names of the files [keep_paths] holds; the structure `Accounting.TS.DrawnLayer` and its projection
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
 # own); `law` where it touches a name (GLOSSARY.md keeps `law` identifiers); the other senses of law and draw (a power
 # law, the law of large numbers, nvidia-smi's `power.draw`, a game's coin `Game.draw` (a coin is flipped, not sampled), its bare uses (`← draw F`,
@@ -667,7 +672,7 @@ patterns = ['(?i:\bcertifier windows?\b)', '(?i:\b(?:promotion|partial|device|ro
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
             '\btest_firewall_(?:release_agreement|release_protocol|session_loop)\b',
             '(?:(?<=\()|(?<=type == )|(?<=messages = \[))\x22Firewall\x22|\bFirewall(?= \{sha512)',
-            '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
+            '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\b(?:service|verifier)/firewall\b',
             'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
             'T proof units per registration, unit t the link-window\x27s bucket row t',
             '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
@@ -697,27 +702,24 @@ strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof bloc
 # names a test reads out of a recorded lock fixture or a fixture module, which the move leaves as it is
 "benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
 "benchmarks/numerical/tests/bench/test_placement_gate.py" = ["firewall", "a firewall"]
-"verity/ml/flock/pod/85-rec-reprice.sh" = ["firewall"]
-"verity/core/service/flock/Flock/Zk.lean" = ["draws"]
+"verity/protocols/flock/pod/85-rec-reprice.sh" = ["firewall"]
+"verity/protocols/flock/verifier/Flock/Zk.lean" = ["draws"]
 "benchmarks/pouw/period_cost.py" = ["draws"]
 "benchmarks/pouw/tests/test_period_cost.py" = ["draws"]
-"Security/Definitions/Core/Game.lean" = ["draw"]
-"Security/Definitions/Flock/Game.lean" = ["draw"]
-"benchmarks/pouw/clear/clear_audit.py" = ["drawn"]
-"verity/core/protocols/certifier/service.py" = ["drawn"]
-"verity/core/protocols/certifier/tests/test_network_certifier_period.py" = ["drawn"]
-"verity/core/protocols/remote_bandwidth/**" = ["draw", "draws", "Draw", "Draws"]
+"security/Definitions/Core/Game.lean" = ["draw"]
+"security/Definitions/Flock/Game.lean" = ["draw"]
+"verity/protocols/pouw/clear/clear_audit.py" = ["drawn"]
+"verity/protocols/certifier/verifier/service.py" = ["drawn"]
+"verity/protocols/certifier/verifier/tests/test_network_certifier_period.py" = ["drawn"]
+"verity/protocols/poub/verifier/**" = ["draw", "draws", "Draw", "Draws"]
 "benchmarks/remote_session/**" = ["draw", "draws", "Draw", "Draws"]
-"Security/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
-"Security/Proofs/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
-"Security/*Accounting*Remote*" = ["draw", "draws", "Draw", "Draws"]
+"security/*Accounting*Remote*" = ["draw", "draws", "Draw", "Draws"]
 "benchmarks/pous/p2_v1/**" = ["draws"]
 "benchmarks/pous/held_bandwidth.py" = ["draws"]
 "benchmarks/one_stage/a7.py" = ["draws"]
 "benchmarks/one_stage/a8.py" = ["draws"]
-"verity/ml/flock/live/src/firewall_record_vectors.json" = ["firewall"]
-"integrations/vllm/verity_vllm/pipeline/pouw_serve.py" = ["draws"]
-"integrations/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
+"verity/protocols/flock/prover/live/src/firewall_record_vectors.json" = ["firewall"]
+"adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
 "**/drawn-unit-bundle*" = ["drawn"]
 "benchmarks/pouw/served_zk/**" = ["DRAWN"]
 "tools/verity/lean/tests/test_merge.py" = ["Draw", "Drawn"]
@@ -727,5 +729,5 @@ strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof bloc
 [keep_paths]
 # the ZK server's release-side Lake and uv package and the module `verity_flock.firewall` (`python -m` runs it) stay
 # where they are, while their text follows the map
-"verity/core/service/firewall/**" = ["firewall"]
-"verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
+"verity/protocols/recursion/verifier/firewall/**" = ["firewall"]
+"verity/protocols/flock/prover/python/verity_flock/firewall.py" = ["firewall"]

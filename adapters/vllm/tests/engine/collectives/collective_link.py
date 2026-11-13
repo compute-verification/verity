@@ -22,13 +22,33 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict, deque
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Root, RunHeader, StepStart, StorageAlloc, StorageFree, TritonLaunch, ViewDesc, views_in
-from verity_vllm.observe.log import read_log
+from tests.engine.collectives.collective_record import (
+    COLLECTIVE_KINDS,
+    COMMUNICATOR_KINDS,
+    MISSING_IN_RECORD,
+    SCHEMA_LINK,
+    SCHEMA_SHARD,
+    validate_launch,
+)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Event,
+    Root,
+    RunHeader,
+    StepStart,
+    StorageAlloc,
+    StorageFree,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 from verity_vllm.observe.fold.views import byte_extent
-from tests.engine.collectives.collective_record import COLLECTIVE_KINDS, COMMUNICATOR_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
+from verity_vllm.observe.log import read_log
 
 GROUP_NAME_RE = re.compile(r"^[a-z_]+:\d+$")   # vLLM GroupCoordinator.unique_name, e.g. "tp:0"
 
@@ -211,7 +231,10 @@ def _geom(v: dict | None) -> tuple | None:
 def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[int, dict]) -> dict:
     if kind == "all_reduce":
         from verity.definitions.registry import b1_tp2 as TP2
-        from verity_vllm.program.quarantine.collective.allreduce import all_reduce_sum_bf16
+
+        from verity_vllm.program.quarantine.collective.allreduce import (
+            all_reduce_sum_bf16,
+        )
         R = int(world) if world else len(rows)
         if R > 2:
             sp, module = (TP2.all_reduce(R, int(count)) if count else None), "verity.definitions.registry.b1_tp2"
@@ -319,19 +342,19 @@ def link_shards(shards: dict[int, dict], instances: dict[int, list[dict]] | None
                 "required_writes": {str(r): rows[r]["result"] for r in present} if kind in COMMUNICATOR_KINDS else {},
                 "agreement": agreement, "status": status}
         links.append(link)
-    by_status = Counter(l["status"] for l in links)
-    by_kind = Counter(l["kind"] for l in links)
-    n_prod = sum(1 for l in links for pr in l["ranks"].values() if pr["producer"] is not None)
-    n_root = sum(1 for l in links for pr in l["ranks"].values() if pr["operand_root"] is not None)
-    n_prod_inst = sum(1 for l in links for pr in l["ranks"].values() if pr["producer_instance"])
-    n_cons_inst = sum(len(pr["consumer_instances"] or []) for l in links for pr in l["ranks"].values())
-    producers_by_op = Counter((l["kind"], pr["producer"]["op"]) for l in links for pr in l["ranks"].values() if pr["producer"] is not None)
-    first_cons_by_op = Counter((l["kind"], pr["first_consumer"]["op"]) for l in links for pr in l["ranks"].values() if pr["first_consumer"] is not None)
+    by_status = Counter(ln["status"] for ln in links)
+    by_kind = Counter(ln["kind"] for ln in links)
+    n_prod = sum(1 for ln in links for pr in ln["ranks"].values() if pr["producer"] is not None)
+    n_root = sum(1 for ln in links for pr in ln["ranks"].values() if pr["operand_root"] is not None)
+    n_prod_inst = sum(1 for ln in links for pr in ln["ranks"].values() if pr["producer_instance"])
+    n_cons_inst = sum(len(pr["consumer_instances"] or []) for ln in links for pr in ln["ranks"].values())
+    producers_by_op = Counter((ln["kind"], pr["producer"]["op"]) for ln in links for pr in ln["ranks"].values() if pr["producer"] is not None)
+    first_cons_by_op = Counter((ln["kind"], pr["first_consumer"]["op"]) for ln in links for pr in ln["ranks"].values() if pr["first_consumer"] is not None)
     return {"schema": SCHEMA_LINK, "ranks": ranks, "world_size": world,
-            "communicators": sorted({l["key"]["communicator"] for l in links if l["key"]["communicator"] != "local"}),
-            "steps": sorted({l["key"]["step"] for l in links}),
+            "communicators": sorted({ln["key"]["communicator"] for ln in links if ln["key"]["communicator"] != "local"}),
+            "steps": sorted({ln["key"]["step"] for ln in links}),
             "n_links": len(links), "by_status": dict(by_status), "by_kind": dict(by_kind),
-            "links_per_step": {str(s): n for s, n in sorted(Counter(l["key"]["step"] for l in links).items())},
+            "links_per_step": {str(s): n for s, n in sorted(Counter(ln["key"]["step"] for ln in links).items())},
             "producers_found": n_prod, "root_operands": n_root, "producers_by_op": {f"{k}|{op}": n for (k, op), n in sorted(producers_by_op.items())},
             "first_consumers_by_op": {f"{k}|{op}": n for (k, op), n in sorted(first_cons_by_op.items())},
             "instances_given": {str(r): len((instances or {}).get(r) or []) for r in ranks},
@@ -347,12 +370,12 @@ def summary(link: dict) -> str:
              f"  first consumers by op {link['first_consumers_by_op']}",
              f"  instances given {link['instances_given']}  producer instances joined {link['producer_instances_joined']}  consumer instances joined {link['consumer_instances_joined']}",
              f"  invalid rows {len(link['invalid_rows'])}"]
-    for l in link["links"][:6]:
-        r0 = l["ranks"][str(link["ranks"][0])]
+    for ln in link["links"][:6]:
+        r0 = ln["ranks"][str(link["ranks"][0])]
         prod = r0["producer"]
         fc = r0["first_consumer"]
-        lines.append(f"  {l['key']} {l['kind']} {l['module']} N={l['count']} -> {l['definition']['id'] if isinstance(l['definition']['id'], str) else 'per-rank'} "
-                     f"[{l['status']}] rank0: event {r0['event']} operand a{(r0['operand'] or {}).get('alloc')} <- {prod['event'] if prod else None} {prod['op'] if prod else None}; "
+        lines.append(f"  {ln['key']} {ln['kind']} {ln['module']} N={ln['count']} -> {ln['definition']['id'] if isinstance(ln['definition']['id'], str) else 'per-rank'} "
+                     f"[{ln['status']}] rank0: event {r0['event']} operand a{(r0['operand'] or {}).get('alloc')} <- {prod['event'] if prod else None} {prod['op'] if prod else None}; "
                      f"result a{(r0['result'] or {}).get('alloc')} -> {fc['event'] if fc else None} {fc['op'] if fc else None}")
     return "\n".join(lines)
 
@@ -389,10 +412,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--max-consumers", type=int, default=8)
     e.add_argument("--compact", action="store_true", help="no indentation (fixtures)")
     e.add_argument("--out", required=True)
-    l = sub.add_parser("link")
-    l.add_argument("shards", nargs="+")
-    l.add_argument("--instances", action="append", default=[], help="RANK=instances.jsonl (repeatable)")
-    l.add_argument("--out", required=True)
+    ln = sub.add_parser("link")
+    ln.add_argument("shards", nargs="+")
+    ln.add_argument("--instances", action="append", default=[], help="RANK=instances.jsonl (repeatable)")
+    ln.add_argument("--out", required=True)
     s = sub.add_parser("summary")
     s.add_argument("link")
     a = ap.parse_args(argv)
