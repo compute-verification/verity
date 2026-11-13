@@ -11,6 +11,7 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -69,6 +70,10 @@ def _record(d: Path) -> tuple[str, tuple]:
     return path, (np.load(path), meta)
 
 
+def _save(d: Path, arrays: dict[str, Any]) -> None:
+    np.savez_compressed(d / "fixture.npz", **arrays)
+
+
 def _drain(arrays: dict[str, np.ndarray]) -> dict:
     dc: dict = {"id": DRAIN_ID, "kind": "drain", "V": 1024, "seed": 100, "k": 24, "keep_frac": 0.5, "p": None, "num_sm": NUM_SM, "batches": []}
     rows = [tp.gen_ties(dc["seed"] + b, dc["V"], 16 if b % 2 == 0 else 32, dc["k"], dc["keep_frac"]) for b in range(3)]
@@ -89,14 +94,14 @@ def made(tmp_path_factory) -> Path:
     for c in cases:
         _row(arrays, c, *tp.case_row(c))
     _path, record = _record(d)
-    rc = {"id": RECORD_ID, "kind": "record", "S": 2, "V": 1024, "row": 0}
+    rc: dict[str, Any] = {"id": RECORD_ID, "kind": "record", "S": 2, "V": 1024, "row": 0}
     bf, top_p = tp.case_row(rc, record)
     rc["temperature"] = tp.record_temperature(rc, record)
     x_in = TS.tl_div(bf, f32(rc["temperature"]), TS.Cfg())
     rc["x_in_sha"] = hashlib.sha256(x_in.view(np.uint32).tobytes()).hexdigest()[:16]
     _row(arrays, rc, x_in, top_p)
     cases += [rc, _drain(arrays)]
-    np.savez_compressed(d / "fixture.npz", **arrays)
+    _save(d, arrays)
     (d / "manifest.json").write_text(json.dumps({"cases": cases, "seed": tp.MANIFEST_SEED, "num_sm": NUM_SM}, indent=1))
     return d
 
@@ -111,7 +116,7 @@ def _alter(d: Path, key: str, change) -> None:
     with np.load(d / "fixture.npz") as z:
         arrays = {k: z[k] for k in z.files}
     arrays[key] = change(arrays[key].copy())
-    np.savez_compressed(d / "fixture.npz", **arrays)
+    _save(d, arrays)
 
 
 def _alter_manifest(d: Path, change) -> None:
@@ -328,5 +333,5 @@ def test_the_check_command_exits_1_on_a_failing_fixture_and_still_writes_its_rep
 def test_the_produce_command_hands_produce_its_directory_record_and_seed(monkeypatch, argv, passed):
     calls: list[tuple] = []
     monkeypatch.setattr(tp, "produce", lambda *a: calls.append(a))
-    assert tp.main(cli.parse("topp-split-probe", ["produce", *argv], {})) is None
+    tp.main(cli.parse("topp-split-probe", ["produce", *argv], {}))      # returns: this branch does not exit
     assert calls == [passed]
