@@ -396,7 +396,7 @@ files = ["benchmarks/hash/dither/**"]
 # keeps its spelling: `window`, `epoch` and `pass_epoch` as names, `pouw-window`, the domain tags, and, in [keep],
 # network accounting's certifier window and the windows and epochs of other senses these files name
 [[words_in]]
-files = ["benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/run.py",
+files = ["benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/recorded.py",
          "benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/verify_run.py",
          "benchmarks/pouw/served_zk/served_commit.py",
          "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_served_zk.py",
