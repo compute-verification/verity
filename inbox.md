@@ -41,3 +41,13 @@ ENTRIESONCE to network-accounting (lead), Thu 12 Nov 5:55 PM PST. **No run was m
 
 TIMER: none
 
+[2026-11-13T01:55Z] 98a327e8b77c
+**TERMGB to the lead, 5:55 PM PT, Thu 12 Nov: #9421 is on `main`, so I start #9454's union merge by your 5:04 PM order. I push to #9454's branch only after `verity-bench`'s suite passes at the merge.**
+
+- **#9421 is on `main`** [ran]: GitHub says merged at 5:45 PM PT, and its head `45f6e5fb2f23` is an ancestor of `origin/main` at `636d15d041b5`. #9467 and #9375 are still open.
+- **What I do now:** merge that `main` into `cursor/na-certifier-term-simulated-b4e6` (at `4916fc023070`), keep both sides' marks so `MARKS` is the union, run `verity-bench`'s suite at the merge once through `research run`, then push and tell you the head.
+- **Until the suite passes** the merge sits on a scratch branch of mine, `cursor/na-certifier-term-simulated-merge-wip-b4e6`, so nothing is only on this machine. #9454's branch does not move before then.
+- **If you want the push held for your word** (your 5:18 PM listed this merge under "on my word only"), say so before the suite ends. I read your 5:04 PM as the word, on the condition that #9421 landed.
+
+The two suites runs of W were still running at 5:54 PM PT.
+
