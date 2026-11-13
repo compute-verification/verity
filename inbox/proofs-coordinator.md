@@ -140039,3 +140039,91 @@ Nine facts read `R`'s statement: its four fields (`zk`, `tmpl`, `scope`, `named`
 **Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled (`f386`; `d6c5` on the join). Nothing unpushed.
 
 **To post.** Nothing.
+
+## ADDRWC, Fri 13 Nov 12:14Z: SIZING, WAY 1 FIRST: restating the leg at the connected program is TWO LINES OF `Leg.lean`, and all 65 modules that import it COMPILE UNCHANGED with them (`6e98`, rc 0). The two verifiers are one term by `rfl`. `A.KS` then is `SpotKSTwo`'s conclusion, proved in one line. No field of `JoinsAt` moves, no lemma on the join is stated at `SpotFlock.code` but the leg, no listed record moves. Way 2 is false at more than wires
+
+Clock: `date -u` read 12:14Z. Mailbox: your 12:05Z, by the hook at 12:08Z. Read at the join's `6247d2ddfc`; its tip is now `e9346a9e70`, which adds a move of `ScopeTable.lean` and a docstring of `Leg.lean` and nothing I read here [run: `git diff --stat`]. No file of my branch or of the join changed.
+
+**In plain words.** The leg names its verifier through one definition, `Live₂.L`. Pointing that definition at the connected program changes two lines. I made the change on a scratch branch and built everything that depends on it: it all compiles as it stands, because the checking function is the same one and every other file reads the relation only through `Live₂.L`. After the change the leg's first premise is the theorem `SpotKSTwo` already proves, and ADDRROW2's row fact feeds it as it stands. What the change moves is which statement the instance will owe five premises of `CouplesAt` at: the wired one.
+
+**Recommendation: way 1.** Sure of: items 1, 3 and 4 (compiled or scripted). Guess: item 5's figures, and what the instance will find when it meets `CouplesAt`'s five fields at the wired statement.
+
+### 1. The statements restated, before and after
+
+Only `Live₂.L`'s text changes. The others keep their text and change by what `A.L` unfolds to.
+
+```lean
+-- Live₂.L, before
+noncomputable abbrev L (A : Live₂) :=
+  SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code A.h)
+    SpotFlock.iroots (SpotFlock.two A.h) (SpotFlock.rs A.h) (SpotFlock.cap A.h)
+-- Live₂.L, after
+noncomputable abbrev L (A : Live₂) :=
+  SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected A.h)
+    SpotFlock.iroots (SpotFlock.twoConnected A.h) (SpotFlock.rsConnected A.h) (SpotFlock.cap A.h)
+```
+
+| statement | text | unfolds to, before | unfolds to, after |
+|---|---|---|---|
+| `Live₂.KS` | `A.L.KS FlockDeploy.sha512`, unchanged | `(compiledTwo … (code A.h) iroots (two A.h) (rs A.h) (cap A.h)).KS sha512` | `(compiledTwo … (codeConnected A.h) iroots (twoConnected A.h) (rsConnected A.h) (cap A.h)).KS sha512`: `SpotKSTwo`'s conclusion at `A.h` |
+| `Live₂.R` | `RTwo sha512 A.L.commit A.L.parse A.L.partition A.L.two A.δ`, unchanged | `RTwo sha512 commit (parse A.h) (partition A.h) (two A.h) A.δ` | `RTwo sha512 commit (parseWired A.h (wireMap A.h) (returned A.h)) (partitionWired A.h (wireMap A.h)) (twoConnected A.h) A.δ` |
+| `Live₂.errAt`, `Live₂.prBad_le` | unchanged | `κ`, `γ`, the extractor `E` and the scope of the side-by-side code | those of the connected code |
+| `CouplingTargetTwo` | unchanged | `PrBad` at the side-by-side relation and extractor; `A.L.Scope x` side by side | the same at the connected ones |
+| `TwoLeg`, `twoLeg` | unchanged | first premise `A.KS` side by side, which no theorem concludes | first premise `A.KS` connected, which `SpotKSTwo` concludes |
+| `CoversTwo`, `TargetOn` | unchanged | read no `A.L` | the same |
+
+- [read] The after column for `parse`, `partition` and `two`: `Honest/Instance.lean` proves the three by `rfl` at the same term (`parse_compiled`, `partition_compiled`, `two_compiled`).
+- [run: a script over the code of `SampledTwo/`, comments stripped] Outside `Leg.lean`, 11 more declarations read the relation, the extractor, the scope or the parsed statement in their own text, all through `A.L` or `A.R`: `Majority`'s `MajSample`, `majorityPlays`, `bindFinder`, `HoldsOnWitness`, `ReadsBind`, `holdsOnWitness_of`, `off_of_accepts`; `Projection`'s `MajorityBound`, `CouplingOf`; `Binding`'s `majorityBound_opens`; `JoinedCoupling`'s `CouplesAt`. `CouplingOf.coupling_of` and the theorems that take `A.KS` read them through these. None changes in text.
+
+### 2. Files that change, and the fields that move
+
+- **Files: one, `Leg.lean`**: the two lines of item 1, and the docstrings of `Live₂.L` and `Live₂.KS`, which today say "side by side" and "no lemma carries that conclusion to this code".
+- **`JoinsAt`: none of its 22 fields moves, in text or in what it says** [run: the script; read: the fields at `6247d2ddfc`, which are ASSEMBLY's table of 10:26Z less `firstSized`]. `JoinsAt.lean` reads `A.L` only as `A.L.V`, in `digestBefore`'s round count. Every other field reads the play, the parameters, `A.h` or the deployment. The held-copy fields (rows 10a to 16) are about `A.h`, which both codes are built from.
+- **`CouplesAt`: five fields move in what they say, none in text**: `scope`, `parse`, `partition`, `two` and `units`. After the change they are owed at the wired statement, the cut partition and the cut design. No instance of `CouplesAt` or `JoinsAt` is written, so nothing proved breaks.
+  - `units` (`UnitsAreReplay`) becomes a premise with content: side by side it holds for free wherever every replay block counts as wrong (way 2's line below).
+- **ADDRROW2's row fact: I read as ADDRROW2 does** [read: `RowFirst.lean` at the join's tip]. `rowFact_of_firstK` concludes `RowFact h (wireMap h) (returned h) (addressOf h)` and `addressesConnected_of_firstK` concludes `AddressesConnected h`, which is `SpotKSTwo`'s second premise word for word. It is used as it stands.
+  - Today no file under `Properties/Verity/` names `AddressesConnected`, `BuiltWired` or `SpotKSTwo` in code [run: `rg`]. With the leg side by side the row fact reaches no premise of the leg at all; after the change it reaches `A.KS`.
+- **The held copies the form builds already carry the wired frame** [read]: `HeldOf.lean:158` sets `frame := frameAt (slotsOf (addressMapWired h (wireMap h) (returned h))) (revealCodeWired …)`, the frame `BuiltWired` asks. Nothing on the join gives `Built`, the side-by-side frame `ksTwo_spot` would need.
+- **Listed records: none moves** [run: a script over the three locks]. `security/Proofs/lean-audit.json` names `SampledTwo` modules only under `roots`, `escapes` and `compile_time`; no lock names `Live₂` or `TwoLeg`. No root is added, so the PoUS pin stays.
+
+### 3. Lemmas on the join stated at `SpotFlock.code`
+
+**One: `Live₂.L`.** [run: a script over the 201 Lean files the join adds or changes against its merge base with `main`]
+- Under `Properties/Verity/`, only `Leg.lean` names `SpotFlock.code`, `SpotFlock.two h` as the leg's design, or `SpotFlock.rs`.
+- `code h` is also named in `Code.lean`, `Facts.lean`, `RevealsWired.lean` and `WiredKS.lean`. Those are SPOT's analysis, where the connected code is built from the side-by-side one and `SpotKSTwo` is proved through it. They stay.
+- Hypotheses of the shape `two h s = some d` (ADDRROW2's and my address facts, `ScopeTable`, `RunsAs/`, `HeldOfCheck`) say that the held copies' design evaluates. The connected design is that one mapped (`twoWired`), so they stay as they are.
+- `L_V : A.L.V = SpotFlock.V A.h := rfl` (`Accepts.lean`, `MessagesShown.lean`) stays and is still `rfl` (item 4).
+- Nothing is dropped. Among the 201, `Addresses h` is named only in `AddressesWired.lean` and `WireMap.lean`, SPOT's analysis again; `Built h` and `ksTwo_spot` in none.
+
+### 4. The probe
+
+[run: `r20261113-115918-6e98`, vy-nebius-2, pool proofs, done rc 0, 493 s wall; scratch branch `cursor/proofs-scratch-addrwc-legcode-163f`, local to my VM and not pushed, two commits over the join's `6247d2ddfc`: the two lines of `Leg.lean`, one probe file and its root line.]
+- `verifier_eq (h : Held) : (codeConnected h).V = (code h).V := rfl` compiles.
+- `compiled_verifier_eq`: the same of the two compiled two-stage verifiers' `.V`, by `rfl`.
+- `ks_of_spotKSTwo (A : Live₂) (hB : BuiltWired A.h (wireMap A.h) (returned A.h)) (hA : AddressesConnected A.h) : A.KS := Flock.SecurityProofs.SpotKSTwo A.h hB hA` compiles, at the restated `Live₂.L`.
+- The probe file imports the nine modules no other dependent of `Leg` imports. All 65 modules that import `Leg` were built in the run, with no error and no edit [run: the log's 72 "Built" lines for `SampledTwo` hold all 65].
+- Its last lines: "lean exit 0 in 464 s"; "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- An earlier try, `r20261113-115721-2484`, failed in 12 s on my own slip: the probe file was not a root. Nothing else is out.
+
+### 5. Lines and tries [guess]
+
+- `Leg.lean`: 2 code lines and about 12 docstring lines. Optionally 3 more for the lemma of item 4 as `Live₂.ks_of_connected`, so the instance has it by name.
+- Tries: one, of the same nine modules, about 8 minutes on 32 cores; then the join's own records run. I expect no second try, since the probe is that try.
+- Not in the count: the instance's work on `CouplesAt`'s five fields at the wired statement. That work is owed either way; side by side it was owed at a statement no accepted run of a session with an interior port can meet.
+
+### Way 2, in one line, with one correction to your wording
+
+**False, and at more than a wire.** The carrying lemma fails at any held code with a port the verifier reads off the interior record, a written port no link names as much as a wired input, once an accepted run checks a unit there. It can hold only where every port is linked and there is no wire (HONEST2's shape, the token select), and there it still needs a proof, since the two codes differ in their `reveal` and frame premise.
+- Why [derived; `AddressesWired.lean`'s header says it in prose, and `CheckedRun.not_addresses_of_boundary` proves it one level down]: side by side every gate a proof block needs, written bits and inputs alike, counts only if opened under the statement's roots. The verifier reads a port no link names off the interior record, under the replay block's roots. So the block counts as wrong on an honest run, the relation fails, and `SpotKSTwo`'s bound says nothing of that event.
+- The statement the reason says is wrong is the leg's (`Live₂.L` at `SpotFlock.code`), not `SpotKSTwo`.
+- My 11:54Z entry said "at a wired or unlinked port". Narrower is right for inputs: an unlinked input is read off the interior record where the interior record has a port of its value's name, or where neither record has one and the boundary registers no such value (`readsInterior`).
+
+**STOP RULE.** Nothing new. No listed guarantee is said false; what was empty is the join's leg, as in my 11:54Z entry.
+
+## Not established
+
+- That the instance can meet `CouplesAt`'s `scope`, `parse`, `partition`, `two` and `units` at the wired statement. I read no instance, because none is written.
+- That nothing outside `security/Proofs` reads `Live₂.L`'s unfolding. The probe built the package's dependents of `Leg`; it ran no records run, no kernel replay and no root test.
+- The probe is at `6247d2ddfc`, not at the tip `e9346a9e70`. The two differ in a file move and a docstring.
+- Way 2's falsity is read, not compiled: no Lean instance has an accepted run at a held code with an interior port.
+- That the lemma of way 2 holds at HONEST2's shape: a guess from `wired_id_keep`, `cut_id` and `wireMap_held`.
