@@ -7,7 +7,7 @@
 #                        HGMMA.64xNx16.F32.BF16 (4 in each gemm_pearlc and gemm_pearlc_s, none elsewhere), no other MMA form
 #                        (sass_gate.py)
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
-#   harness_gate.json    benchmarks/pouw/harness/sass_gate.py's verdict on the cubin (.FTZ and FP32 MUFU outside its pinned
+#   harness_gate.json    verity/protocols/pouw/prover/sass_gate.py's verdict on the cubin (.FTZ and FP32 MUFU outside its pinned
 #                        IEEE sequences), recorded, not enforced here: its pins name sm_120a's ptxas arguments alone
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
@@ -26,7 +26,7 @@ case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm90.cubin" > "$OUT/pearl_c_sm90.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm90.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm90.sass"
-POUW_CUDA_BIN="$CUDA/bin" POUW_SASS_GATE_CACHE=none python3 "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$OUT/pearl_c_sm90.cubin" \
+POUW_CUDA_BIN="$CUDA/bin" POUW_SASS_GATE_CACHE=none python3 "$ROOT/verity/protocols/pouw/prover/sass_gate.py" "$OUT/pearl_c_sm90.cubin" \
   --json "$OUT/harness_gate.json" && echo "harness gate: pass" || echo "harness gate: FAIL (recorded in harness_gate.json)"
 [ -n "${CUBIN_ONLY:-}" ] && exit 0
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm90/fixture.py "$OUT/check")

@@ -2193,6 +2193,12 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/sass_gate.py": "verity/protocols/pouw/prover/sass_gate.py",
+        "benchmarks/pouw/harness/sass_pins.json": "verity/protocols/pouw/prover/sass_pins.json"
+      }
     }
   ]
 }

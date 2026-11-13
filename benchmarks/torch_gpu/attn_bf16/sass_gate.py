@@ -1,5 +1,5 @@
 """build.sh's gate on one attn_bf16 cubin (sm_90a or sm_120a): ptxas's report and cuobjdump's SASS, through the harness's
-`mma_gate` (benchmarks/pouw/harness/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning, a kernel
+`mma_gate` (verity/protocols/pouw/prover/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning, a kernel
 compiled for another arch, a stack frame, a spill or local memory, and on any kernel whose floating-point instructions aren't
 the Definition's: every tensor-core instruction an HMMA.16816.F32.BF16 (D/16 of them in QK^T's unrolled k loop, 4 D/16 in
 _s16's, at least one in PV's and in the _ref kernels'), the cvt an F2FP.BF16(.F32).PACK_AB, and no other floating-point
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 def _harness() -> ModuleType:
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / "pouw" / "harness" / "sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "prover" / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
