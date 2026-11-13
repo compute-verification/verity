@@ -71,18 +71,47 @@ def test_the_shell_hook_judges_a_pretooluse_shell_event_like_a_beforeshellexecut
     assert ask("env | cut -d= -f1") == "deny" and ask("ls") == "allow"
 
 
-def test_each_hook_run_records_its_events_key_names_and_never_a_value(event_log):
-    W = "bc-44444444-4444-4444-8444-444444444444"
-    subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "conversation_id": W,
-                                                             "command": "echo not-to-be-copied", "cwd": "/"}),
-                   capture_output=True, text=True, check=True)
-    subprocess.run([sys.executable, HOOK], input="not json", capture_output=True, text=True, check=True)
+def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model_and_the_turns_id(tmp_path, event_log):
+    """Cursor's payload names a model and a turn (`generation_id`) beside the command, the account and paths. Each hook's
+    line keeps those two where the payload has them as strings, cut at 64 characters, and no other value."""
+    W, turn = "bc-44444444-4444-4444-8444-444444444444", "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f"
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"handles": []}))
+    env = {**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_REGISTRY": str(registry),
+           "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    sent = {"conversation_id": W, "generation_id": turn, "model": "a-model-name", "cursor_version": "0.0-not-to-be-copied",
+            "sandbox": False, "session_id": "session-not-to-be-copied", "tool_use_id": "tool-not-to-be-copied",
+            "transcript_path": "/not-to-be-copied/transcript.jsonl", "user_email": "an-address-not-to-be-copied",
+            "workspace_roots": ["/not-to-be-copied"]}
+    shell = {**sent, "hook_event_name": "beforeShellExecution", "command": "echo not-to-be-copied", "cwd": "/"}
+    task = {**sent, "hook_event_name": "preToolUse", "tool_name": "Task",
+            "tool_input": {"subagent_type": "explore", "prompt": "not-to-be-copied", "model": "not-to-be-copied"}}
+    stop = {**sent, "hook_event_name": "stop", "status": "completed", "loop_count": 0}
+
+    def run(name, event):
+        subprocess.run([sys.executable, HOOK.parent / name], input=event if isinstance(event, str) else json.dumps(event),
+                       capture_output=True, text=True, check=True, env=env)
+
+    for name, event in (("shell_hook.py", shell), ("task_hook.py", task), ("stop_hook.py", stop)):
+        run(name, event)
+    run("shell_hook.py", {**shell, "model": "m" * 500, "generation_id": "g" * 500})
+    run("shell_hook.py", {**shell, "model": {"name": "not-to-be-copied"}, "generation_id": 7})
+    run("shell_hook.py", {k: v for k, v in shell.items() if k not in ("model", "generation_id")})
+    run("shell_hook.py", "not json")
     text = event_log.read_text()
-    first, second = (json.loads(ln) for ln in text.splitlines())
+    lines = [json.loads(ln) for ln in text.splitlines()]
     assert "not-to-be-copied" not in text
-    assert (first["hook"], first["event"], first["conversation_id"]) == ("shell_hook.py", "beforeShellExecution", W)
-    assert first["keys"] == ["command", "conversation_id", "cwd", "hook_event_name"]
-    assert second["keys"] == "str" and second["conversation_id"] is None
+    assert [(e["hook"], e["event"], e["conversation_id"], e["generation_id"], e["model"]) for e in lines[:3]] == [
+        ("shell_hook.py", "beforeShellExecution", W, turn, "a-model-name"),
+        ("task_hook.py", "preToolUse", W, turn, "a-model-name"), ("stop_hook.py", "stop", W, turn, "a-model-name")]
+    assert [e["keys"] for e in lines[:3]] == [sorted(shell), sorted(task), sorted(stop)]
+    assert lines[1]["tool_input_keys"] == ["model", "prompt", "subagent_type"]
+    assert sorted(lines[0]) == ["conversation_id", "event", "generation_id", "hook", "keys", "model", "t", "tool_input_keys",
+                                "tool_name"], "the two values, and nothing else new"
+    cut, typed, without, unread = lines[3:]
+    assert (cut["model"], cut["generation_id"]) == ("m" * 64, "g" * 64)
+    assert not {"model", "generation_id"} & (set(typed) | set(without) | set(unread)), "kept only where the payload has a string"
+    assert typed["keys"] == sorted(shell) and unread["keys"] == "str" and unread["conversation_id"] is None
 
 
 @pytest.fixture(scope="module")
