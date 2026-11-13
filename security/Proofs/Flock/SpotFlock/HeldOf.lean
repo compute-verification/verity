@@ -25,9 +25,9 @@ session statement, the code the frame is built from, and the rounds past round 1
 * `frame`: SPOT's own frame at the wired program, from `Unread.c₀` (`withFrame`), as HONEST2's instance sets it.
 
 `heldOf` is `none` unless the descriptor's checks pass (`descCore`: each member fits, the design is well formed on the
-layout's strata, the second stage has a cell and a count of at least `1` for each template, and each template's
-reference statement reads as a member's), the templates' names are distinct, and the interior registration registers
-no value. Each check takes a step per template or stratum, none per unit or gate. A held copy it builds discharges
+layout's strata, the second stage has a cell and a count of at least `1` for each template, each template's
+reference statement reads as a member's, each member's circuit is in Flock's hidden-output scope and the registered
+wiring passes its check), the templates' names are distinct, and the interior registration registers no value. A held copy it builds discharges
 `NamesDistinct` (`namesDistinct_of`), with the run's population check RUNCOINS's `TwoHolds` (`HeldOfRun.twoHolds_of`),
 and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
 the second two-stage try's design, whose interior registration registers none; the first try's registers `logits`,
@@ -161,14 +161,14 @@ noncomputable def withFrame (h : Held) (c₀ : Code) : Held :=
 
 /-- **The descriptor's checks `heldOf` makes**: at the replay layout and the first stage's design, every member fits
 (`memberOk`), the design is well formed on the layout's strata (`designOk`), the second stage has a count of at least
-`1` and a cell for each member, and every template's reference statement reads as a member's (`templateOk`). It is
-`descOk` and `two`'s `templateOk` without the steps per unit (`filesOk`, `fillOk`), which the run's population check
-gives (`HeldOfRun.filesOk_held₀`, `HeldOfRun.fillOk_held₀`), and without `scopeOk`'s pass over every gate, which
-`memberOk` gives (`two_of_descOk`). -/
+`1` and a cell for each member, every template's reference statement reads as a member's (`templateOk`), and `two`'s
+`membersScoped` and `wiringOk`. It is `descOk` and `two`'s other clauses without the steps per unit (`filesOk`,
+`fillOk`), which the run's population check gives (`HeldOfRun.filesOk_held₀`, `HeldOfRun.fillOk_held₀`), and without
+`scopeOk`'s pass over every gate, which `memberOk` gives (`two_of_descOk`). -/
 def descCore (h : Held) : Bool :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some d => h.ms.all memberOk && designOk d l && h.k.length == h.ms.length && h.k.all (1 ≤ ·) &&
-      h.reg.ns.size == h.ms.length && (List.range h.ms.length).all (templateOk h)
+      h.reg.ns.size == h.ms.length && (List.range h.ms.length).all (templateOk h) && membersScoped h && wiringOk h
   | _, _ => false
 
 /-- **What `heldOf` decides of the copies it builds**: as many reference statements as templates, the templates'
