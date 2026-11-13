@@ -371,7 +371,8 @@ by its path alone. A file equal to one of the gate's public files (by sha256, so
 members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
-each by the record's file; none excuses a piece by its key path in the witness file. A value of the witness that other
+each by the record's file. An entry names its witness file and its records and nothing else: the guard refuses one
+that excuses a piece by a key path. A value of the witness that other
 files repeat by chance is written so that they don't: the certifier's usage record holds its CPUs as one string of
 ranges (`active_replay.cpu_ranges`), not as a list of integers, which an indented list of consecutive integers anywhere
 would repeat. The guard reads pieces of 32 bytes and sees no shorter value of the witness, so what a step may write of
