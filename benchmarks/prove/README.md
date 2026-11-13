@@ -81,6 +81,9 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
+- **Under `--system spot`, SPOT's resampling holes in the code that ran**, over the runs among its inputs (not its
+  arts): the label (`SPOT`, or `SPOT soundness` only when both holes are closed), each hole's status, and the theorem
+  with its open premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
 
 `--system flock` proves every block. `--system spot` takes the same costs at the blocks a sampling plan samples: a
 system is a `prove.ProofSystem`, a census in and a table out, and SPOT wraps one with a plan.

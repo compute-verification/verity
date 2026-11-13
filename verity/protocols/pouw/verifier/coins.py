@@ -157,5 +157,5 @@ class Challenger:
         return CoinOpening(self.epoch, label, bytes(after), coin, salt, self._tree.open(LABELS.index(label)).path)
 
 
-__all__ = ["COIN_BYTES", "LABELS", "SCHEME", "Challenger", "CoinCommitment", "CoinOpening", "coin_reason", "domain",
-           "leaf_value"]
+__all__ = ["COIN_BYTES", "HM96", "LABELS", "SCHEME", "Challenger", "CoinCommitment", "CoinOpening", "coin_reason",
+           "domain", "leaf_value"]

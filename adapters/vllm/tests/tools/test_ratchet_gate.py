@@ -1713,11 +1713,65 @@ def test_a_file_whose_count_a_mended_site_lowers_is_no_new_violation(terms_linte
             f"added by {wrote}: {B_SITE.format(5)}, repo_retired_terms: docs/b.md: 2 found, 0 allowed") in c["why"], c["why"]
 
 
+A_USES = "# A\n\nA teapot boils it.\n\nA teapot cools.\n"
+B_USES = "# B\n\nA teapot pours it.\n\nA teapot whistles.\n\nA teapot sings.\n\nA teapot rests.\n"
+
+
+@pytest.fixture
+def terms_behind(repo) -> Repo:
+    """``repo`` with the repository's real retired-terms lint, a file its list covers and one it is behind: docs/a.md's two
+    uses are both listed, and of docs/b.md's four, on lines 3, 5, 7 and 9, the list allows two."""
+    repo.commit("retired terms", {
+        REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY, "docs/a.md": A_USES,
+        "docs/b.md": B_USES, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/b.md", "count": 2})})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def test_a_list_that_falls_with_its_files_count_is_no_new_violation(terms_behind):
+    """A change that mends two of the four uses a file holds against a list that allows two, and lowers the file's entry
+    to one: it removes sites and adds none, so the file's count, lower than its base's against a lower allowance, is the
+    base's still, and the change passes, each violation named as the base holds it."""
+    wrote = terms_behind.git("rev-parse", "main").strip()[:12]
+    terms_behind.commit("b.md says the term twice, and its entry falls", {
+        "docs/b.md": B_USES.replace("teapot sings", "kettle sings").replace("teapot rests", "kettle rests"),
+        REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/b.md", "count": 1})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_retired_terms"]), c["why"]
+    assert ("finds 3 violation(s) its own tree already holds, which aren't this change's: "
+            f"added by {wrote}: {B_SITE.format(3)}, {B_SITE.format(5)}, "
+            "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
+
+
+def test_a_count_that_rises_past_its_bases_is_the_changes_whatever_its_list_allows(terms_behind):
+    """A change that touches the list where it may (docs/a.md says the term once and its entry falls) and uses the term a
+    fifth time in the file the list is behind in, whose entry stays: that file's count is past its base's, so the change
+    fails, naming the count and the one new site."""
+    terms_behind.commit("a.md says the term once, and b.md uses it a fifth time", {
+        "docs/a.md": A_USES.replace("teapot cools", "kettle cools"), "docs/b.md": B_USES + "\nA teapot naps.\n",
+        REPO_TERMS_JSON: _allowlist(DOCS_A, {"file": "docs/b.md", "count": 2})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
+    assert c["fix"] == ["repo_retired_terms: docs/b.md: 5 found, 2 allowed", B_SITE.format(11)], c["why"]
+
+
+def test_a_list_lowered_under_a_tree_its_bases_list_covered_fails(terms_behind):
+    """A change that lowers the entry of a file whose uses its base's list covered, and mends none: the base names no
+    violation there, so the file's count and each of its sites are the change's, and it fails."""
+    terms_behind.commit("a.md's entry falls and its uses stay", {
+        REPO_TERMS_JSON: _allowlist(DOCS_A, {"file": "docs/b.md", "count": 2})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "finds 3 violation(s) on its tree" in c["why"], c["why"]
+    a_site = B_SITE.replace("docs/b.md", "docs/a.md")
+    assert c["fix"] == ["repo_retired_terms: docs/a.md: 2 found, 1 allowed", a_site.format(3), a_site.format(5)], c["why"]
+
+
 def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_never_by_its_line():
     """`beyond`: of a file's sites of one kind, as many as its base holds are the base's (those at a line the base names
-    first, then the earliest), each named at the base's line; a count is the base's while it is no more than the base's
-    against the same allowance; a key's violation that names each of its lines counts a site a line; and a violation that
-    names neither a line nor a count is the base's when the base has the same one."""
+    first, then the earliest), each named at the base's line; a count is the base's while it is no more than the base's,
+    whatever each list allows, and the change's where the base names none; a key's violation that names each of its lines
+    counts a site a line, with the count it states after them or without; and a violation that names neither a line nor a
+    count is the base's when the base has the same one."""
     a, b, count = "l: f.py:3 x", "l: f.py:9 x", "l: f.py: 2 found, 0 allowed"
     assert G.beyond([a], ["l: f.py:4 x"]) == (["l: f.py:4 x"], [])
     assert G.beyond([a, b], ["l: f.py:9 x"]) == ([b], [a])
@@ -1728,12 +1782,20 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     assert G.beyond([count, a], [count]) == ([count], [a])
     more, fewer = "l: f.py: 3 found, 0 allowed", "l: f.py: 1 found, 0 allowed"
     assert G.beyond([count], [more]) == ([more], []) and G.beyond([count], [fewer]) == ([], [count])
-    assert G.beyond([count], ["l: f.py: 3 found, 1 allowed"]) == ([], [count])
+    behind, lowered, same, risen = (f"l: f.py: {n} found, {m} allowed" for n, m in ((44, 11), (38, 6), (44, 6), (45, 11)))
+    assert G.beyond([lowered], [behind]) == ([behind], []) and G.beyond([same], [behind]) == ([behind], [])
+    assert G.beyond([risen], [behind]) == ([], [risen]) and G.beyond([behind], [lowered]) == ([], [behind])
+    assert G.beyond(["l: f.py: 5 found, 3 allowed"], []) == ([], ["l: f.py: 5 found, 3 allowed"])
+    assert G.beyond([count], ["l: f.py: 3 found, 1 allowed"]) == (["l: f.py: 3 found, 1 allowed"], [])
+    assert G.beyond([count], ["l: g.py: 3 found, 1 allowed", "l: f.py:3 x"]) == ([], [count])
     assert G.beyond(["l: f.py [k]: 2 found, 0 allowed"], ["l: f.py [j]: 2 found, 0 allowed"])[0] == []
     keyed, moved = "p: f.py:3,9 [k] s: d  (2 found, 1 allowed)", "p: f.py:4,10 [k] s: d  (2 found, 1 allowed)"
     one, two = "p: f.py:4 [k] s: d", "p: f.py:4,10 [k] s: d"
     assert G.beyond([keyed], [moved]) == ([moved], []) and G.beyond([keyed], [one]) == ([], [keyed])
     assert G.beyond([two], [one]) == ([], [two]) and G.beyond([one], [two]) == ([two], [])
+    three = "p: f.py:4,10,12 [k] s: d  (3 found, 1 allowed)"
+    assert G.beyond([two], [three]) == ([three], []) and G.beyond([three], [two]) == ([], [three])
+    assert G.beyond([two], [keyed]) == ([keyed], []) and G.beyond([keyed], [two]) == ([two], [])
     assert G.beyond(["l: test_x raised E", "l: nothing here"], ["l: test_x raised E"]) == (["l: test_x raised E"], ["l: nothing here"])
 
 

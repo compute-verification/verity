@@ -385,22 +385,33 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
 
 def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
-    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    private/, 0700, and leaves the piece's answer, its certificates and its verdict where the record and its reader
+    find them. The piece's case is in that private directory already, where the piece keeps it (0600): the move
+    leaves it as it is, and no case is under $OUT."""
     piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
     moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log",
              "chain.log", "period.log"]
-    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    kept = ["answer.json", "certificates.json"]
     for f in moved + kept:
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
         (piece / f).write_text(f)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
-                        check=False).returncode
-    assert rc == 0
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
+                                 cwd=tmp_path, env=env, check=False).returncode
+    assert run() == 0
     assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
     private = d / "private" / "pieces" / "certifier"
     assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
     assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    (private / "case.json").write_text("the case")
+    (private / "case.json").chmod(0o600)
+    (piece / "period.log").write_text("a later step's")
+    assert run() == 0 and (private / "period.log").read_text() == "a later step's"
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(
+        moved + ["case.json"])
+    assert (private / "case.json").read_text() == "the case" and (private / "case.json").stat().st_mode & 0o777 == 0o600
+    assert not list((tmp_path / "out").rglob("case.json"))
     assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
@@ -5203,6 +5214,62 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
         assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
             p for p in C.COMPONENTS[x] if p not in want]
+
+
+def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory_which_holds_no_answer(tmp_path):
+    """The certifier's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
+    `private-pieces` moves there and no answer: its answer is the run's, under OUT/pieces. served_composite.sh, with
+    onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
+    takes a directory for a case beside an answer, so it composes every other subprotocol's case and nothing of that
+    directory: no product's case has a component of it, onsite names the certifier missing (NOT_ESTABLISHED), and
+    remote, which doesn't compose it, misses nothing. What reads the certifier's private case into a composite is not
+    shown here."""
+    import composite as C
+    certifier = "verity/certifier/v0"
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+    own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
+           if p != certifier}
+    for p, where in own.items():
+        (d / "private" / where).mkdir(parents=True)
+        (d / "private" / where / "case.json").write_text(json.dumps(
+            {"commitment": "c0", "evidence": "beef", "params": {"in": where}}))
+        (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": p, "verdict": "accept"}))
+    for _, summary, lean, _ in ONSITE_OWN.values():
+        (out / "pieces" / summary).parent.mkdir(parents=True)
+        (out / "pieces" / summary).write_text(json.dumps(
+            {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
+    kept = d / "private" / "pieces" / "certifier"
+    case = json.dumps({"commitment": "ce", "evidence": "f00d", "params": {"in": "pieces/certifier"}})
+    for f, text in (("case.json", case), ("chain/report/report.json", "{}"), ("piece.log", "")):
+        (kept / f).parent.mkdir(parents=True, exist_ok=True)
+        (kept / f).write_text(text)
+    (out / "pieces" / "certifier").mkdir(parents=True)
+    (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
+    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+                       check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
+    said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
+    assert said == [f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}"]
+    for x in ("remote", "onsite"):
+        want = [p for p in C.COMPONENTS[x] if p != certifier]
+        made = d / "private" / "composite" / x / "private"
+        assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
+            (p, {"in": own[p]}) for p in want]
+        assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
+        assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
+            p for p in C.COMPONENTS[x] if p not in want]
+    assert (kept / "case.json").read_text() == case and not list(out.rglob("case.json"))
 
 
 DIGEST = "5e" * 64
