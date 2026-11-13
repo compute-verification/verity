@@ -21,6 +21,7 @@ namespace SpotFlock.RunsAs
 
 open Claims
 open Lean (Json)
+open Round2 (core OwnAgrees)
 
 /-- Failing a check at each of a list's entries leaves a code where the check had one or the list has an entry. -/
 theorem foldl_fail_ne : ∀ (l : List (String × Json)) (c : Spot.Check), (c.codes ≠ #[] ∨ l ≠ []) →
@@ -98,10 +99,12 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
     rw [hsample, ← hproved, ← hns', ← hks'']
     exact hss
   have hsd : secondDraw h c₀ c₁ = some draw₂ := secondDraw_read h c₀ c₁ hss' (hpc.2 _ _ hss')
+  have hpa := hm.parts draw rest read strata hsel' hstrata
+  rw [← hproved] at hpa
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
-    unfold OwnAgrees core runOwn ownOf
-    rw [hsample, ← hproved, hm.parts strata _ hstrata, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]
+    unfold Round2.OwnAgrees Round2.core runOwn ownOf
+    rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]
     all_goals rfl
   obtain ⟨ss, hst⟩ := statements_some hcodes
   rw [hst] at hcodes
