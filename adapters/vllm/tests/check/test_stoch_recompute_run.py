@@ -275,6 +275,18 @@ def test_the_programs_split_count_is_held_to_the_mask_kernels_at_every_row(tmp_p
     assert rep["reasons"][0] == "step 0 row 0 (a): the Build has no request Program for this request's shape -- its S is undeclared"
 
 
+def test_a_build_result_that_cannot_be_read_fails_the_check_by_its_path_beside_one_that_declares_the_split_count(tmp_path):
+    run, manifest = _capture(tmp_path)
+    torn = run / "build_request1" / "result.json"
+    torn.parent.mkdir()
+    torn.write_text("{")
+    rep = _recompute(run, manifest, build_dir=_build(run, S))
+    assert (rep["summary"]["verdict"], rep["summary"]["rows"], rep["program_splits"]) == ("FAIL", _tally(exact=6), {"a": S, "b": S})
+    (reason,) = rep["reasons"]
+    assert reason.startswith(f"Build result unreadable ({torn}: JSONDecodeError(")
+    assert reason.endswith("): the Program's S of its request shape is not read")
+
+
 def test_a_seed_the_kernels_consumed_that_is_not_the_declared_one_fails_though_the_token_matches(tmp_path):
     run, manifest = _capture(tmp_path, device_seed=8)
     rep = _recompute(run, manifest)
@@ -332,6 +344,16 @@ def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the
     assert rep["summary"]["verdict"] == "FAIL" and rep["summary"]["rows"]["mismatch"] + rep["summary"]["rows"]["exact-match"] == 6
     assert "a: manifest declares seed=8 but the run's header records seed=7" in rep["reasons"]
     assert "step 0 row 0 (a): the sampler kernels consumed seed=7 but the manifest declares seed=8" in rep["reasons"]
+
+
+def test_a_header_whose_temperature_and_top_p_are_the_manifest_s_as_fp32_agrees_with_it(tmp_path):
+    """The kernels consume both as fp32, so the two are held to each other at that width: a header that records the fp32
+    values the manifest's round to declares the same facts."""
+    as_fp32 = {"temperature": float(np.float32(TEMPERATURE)), "top_p": float(np.float32(TOP_P)), "top_k": 0}
+    assert as_fp32["temperature"] != TEMPERATURE and as_fp32["top_p"] != TOP_P
+    rep = _recompute(*_capture(tmp_path, header_sampling=as_fp32))
+    assert (rep["summary"]["verdict"], rep["header_vs_manifest"], rep["reasons"]) == ("PASS", [], [])
+    assert rep["run_header_facts"]["a"]["temperature"] == as_fp32["temperature"] and rep["declared_facts"]["a"]["temperature"] == TEMPERATURE
 
 
 @pytest.mark.parametrize("left_out", [ABSENT, None, {}], ids=["absent", "null", "empty"])
