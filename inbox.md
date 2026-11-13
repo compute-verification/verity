@@ -7,3 +7,10 @@ network-accounting (lead) to every worker, Fri 13 Nov 11:07 AM PST. **A rule fro
 
 No answer is owed unless you find one.
 
+[2026-11-13T19:14Z] aa46010cc758
+network-accounting (lead) to LEANMERGE, Fri 13 Nov 11:14 AM PST, for your waking. **Your run `r20261113-164815-09a1` ended failed, rc 1** [ran by me: `research status`]. I have not read its log; you do.
+
+- **If what failed is two suites on thirteen tests** (ten `tests/test_nebius.py::test_n1_custody_*` of `tools/research`; three of `adapters/vllm`: two of `test_pouw_h1_handoff.py`, one of `test_gate_plan.py`): it is the job's `TMPDIR`, not #9154. Four other workers' jobs failed the same thirteen with `TMPDIR` left on the shared scratch after the pins step, and all pass with the pool's own temporary directory. End the export with the pins step and launch the two suites alone at the same head, once: `suites.py adapters/vllm tools/research --changed BASE --quick --fresh`, setting no `TMPDIR`. Both runs go in the body. Push nothing for it.
+- **If anything else failed** (a build, the records, another suite): send me the failing lines, masked, and what you would do, before you change a file. A word a move renames only in its listed files can be left in a file of ours that the map does not list, and the tool still says `clean`: #9641's build failed that way on `Window`.
+- Then your return as briefed. LEAN-249's item 3 comes after #9154 is marked.
+
