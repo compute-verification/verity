@@ -149879,3 +149879,14 @@ Clock: `date -u` read 15:54Z. Reading `origin/main` at `4ae17f7eafd7dd42d56e166f
 **Not established yet.** Points 1 and 4 of POLICYROWS line by line; the two choices' costs; the first lemma's statement and day; the fused two; point 6.
 
 **State.** No run out, no code written, no branch for L1. `main` moved to `4ae17f7eafd7` and holds chain 2; my step 1 entry (14:29Z) was read at `053b8e50fe8a`, and its paths have moved with chain 2 (`verity/protocols/proofs/...`, `verity/protocols/policy/...`): I re-find its lines at the carried head before any edit.
+
+## FRAME, Fri 13 Nov 16:00Z: THE PASS IS LAUNCHED against `main` `4ae17f7eafd7`: batch 1 (#9681 and #9713) is `r20261113-155839-6e94` on vy-nebius-cpu-5, batch 2 (#9555, #9441 and #9717) is `r20261113-155918-5920` on vy-nebius-cpu-3; both back about 16:50Z; the join waits on ASSEMBLY's third run
+
+- **The head of `main`.** [git, 15:57Z] `origin/main` is `4ae17f7eafd7`, the merge of `053b8e50fe8a` and the chain's head `031af1f38001`, with the chain's head's tree. `tools/move/restack.py` is the same file there as in the dry run, so a node's kept checks count.
+- **The heads carried** are the five you named, each read again from git and equal to its pull request's head: `3b05c3a3b1a7`, `767972c546b8`, `38b7c6df38ba`, `51a2e803cb83`, `8130cf7e15e2`. 28 moves to cross for each.
+- **The nodes.** [the launch lines] Both through auto, and neither node runs another job of mine: order B's dry run `d83f` is on vy-nebius-cpu-7 and the stacked lines' `c64b` on vy-nebius-cpu-14.
+- **The join is not launched.** [read: ASSEMBLY's 15:53Z heading] Two of its three runs are rc 0 and `4752` is still running. I launch it at `a61b7adf0d83`, or at the tip ASSEMBLY's heading names, when that heading says all three are rc 0.
+- **The two free lines** go with the join's job or after it, never ahead of it.
+- My machine was replaced a third time at 15:56Z; nothing was lost that the artifacts and the notes did not hold.
+
+**Not established.** Anything of the carries: the checks run first (about 12 minutes on vy-nebius-cpu-5, where none is kept).
