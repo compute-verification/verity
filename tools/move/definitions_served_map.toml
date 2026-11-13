@@ -5,11 +5,11 @@
 #   Definition's encoding and the evidence ids (the top-level modules left once `definitions_kept_map.toml` has moved
 #   the proof-block cut), and the suite (`pyproject.toml`, `tests/`) move to `verity_vllm.definitions`, laid out as
 #   they were, so the suite stays one suite with its own settings.
-# - `verity/definitions/__init__.py` moves with them: what is left is the two Lake packages, no Python package, until
-#   `definitions_lake_map.toml` moves them.
+# - `verity/definitions/__init__.py` moves with them, so nothing is left under `verity/definitions/` once
+#   `definitions_lake_map.toml` has moved the two Lake packages.
 # Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs after
 # `definitions_kept_map.toml` and `definitions_merge_map.toml`, which move the Python packages left under
-# `verity/definitions/`.
+# `verity/definitions/`, and after `definitions_lake_map.toml` or with it (that map's header says why).
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }

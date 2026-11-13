@@ -7,7 +7,9 @@
 # - A Lean module is named from its package's root, so no Lean module, declaration or lock record changes; what changes
 #   in a lakefile or a manifest is a path to these packages.
 # Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It needs none of the other
-# `definitions_*_map.toml` maps and none needs it, so it runs last, or later.
+# `definitions_*_map.toml` maps, and it is the only one that changes a Lean input. Run it before the served map, or
+# with it: once the served circuits have left, three files that name `verity/definitions/` name only these two
+# private packages, which `public_boundary.py` refuses until this map moves them.
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
