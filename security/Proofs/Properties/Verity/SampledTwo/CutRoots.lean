@@ -197,7 +197,7 @@ of each family those its lines' pairs name. -/
 theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : drawCoins key w label after coins = .ok ξ) :
     ∃ cm roots, ∃ (ls : Array Json) (lines : List String),
-      trustedSessionOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+      trustedChallengePhaseOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
         (Spot.getD coins "pins") (Spot.getD coins "main") (Spot.getD coins "session") = .ok (cm, roots) ∧
       Spot.getD (Spot.getD coins "session") "log" = .arr ls ∧ ls.toList = lines.map Json.str ∧
       (∀ r ∈ Verity.Sampled.look roots label, r = after) ∧
@@ -217,7 +217,7 @@ theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Para
     (hd : firstDraws key p c e = some d)
     (hξ : drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) (hr : firstRead key p c e ξ = some r) :
     ∃ cm roots,
-      trustedSessionOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
+      trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
         (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
           .ok (cm, roots) ∧
       (∀ x ∈ Verity.Sampled.look roots d.label, x = d.after) ∧
@@ -238,7 +238,7 @@ theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recurs
     (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondDraws p e = some d)
     (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ) (hr : secondRead p e bs ξ = some r) :
     ∃ cm roots,
-      trustedSessionOf (Spot.getD e.interior.base.coins "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
+      trustedChallengePhaseOf (Spot.getD e.interior.base.coins "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
         (Spot.getD e.interior.base.coins "pins") (Spot.getD e.interior.base.coins "main")
         (Spot.getD e.interior.base.coins "session") = .ok (cm, roots) ∧
       (∀ x ∈ Verity.Sampled.look roots d.label, x = d.after) ∧
@@ -269,12 +269,12 @@ def OtherRoots (s : Verity.Sent) : Prop :=
   ∀ p c e key d₁ d₂, caseOf s = .ok (p, c, e) → keyOf s.params = some key → firstDraws key p c e = some d₁ →
     secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
     (∀ cm roots,
-      trustedSessionOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
+      trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
         (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
           .ok (cm, roots) →
       ∀ x ∈ Verity.Sampled.look roots d₂.label, x = d₂.after) ∧
     ∀ cm roots,
-      trustedSessionOf (Spot.getD e.interior.base.coins "ledger") (Json.mkObj [("root", Json.str d₂.window)]) d₂.key
+      trustedChallengePhaseOf (Spot.getD e.interior.base.coins "ledger") (Json.mkObj [("root", Json.str d₂.window)]) d₂.key
         (Spot.getD e.interior.base.coins "pins") (Spot.getD e.interior.base.coins "main")
         (Spot.getD e.interior.base.coins "session") = .ok (cm, roots) →
       ∀ x ∈ Verity.Sampled.look roots d₁.label, x = d₁.after
