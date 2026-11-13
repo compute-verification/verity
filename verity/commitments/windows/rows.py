@@ -804,11 +804,12 @@ def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
     domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run.
     A wired port with no tree of its own is named under its reader too, at the leaves and domain of the port whose
-    tree holds it (`wired_ports`): one tree at two ports."""
+    tree holds it (`wired_ports`), which its entry names (``wired``): one tree at two ports, whose two roots R3 holds
+    equal."""
     prog, part, segs = window.partition["program"], window.partition_digest, len(window.segments)
     own = {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
            for m in window.members for p, n in port_leaves(m).items()}
-    return own | {a: dict(own[q]) for a, q in wired_ports(window).items()} | \
+    return own | {a: {**own[q], "wired": q} for a, q in wired_ports(window).items()} | \
         ({TABLE_PORT: {"leaves": segs, "domain": window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, segs, window.run)}}
          if segs else {})
 

@@ -448,7 +448,7 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
     assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains))
     lay, named = CS.expected_ports(held), CS.wired_ports(held)
     assert named == {m.port(p): held.held(m, p) for m in ms for p, _o, _ws in m.wired} and set(named) == wired
-    assert all(lay[a] == lay[q] for a, q in named.items())
+    assert all(lay[a] == {**lay[q], "wired": q} for a, q in named.items()) and not any("wired" in lay[q] for q in c.roots)
     assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(lay)
 
     class Roots:

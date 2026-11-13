@@ -102,7 +102,7 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
         (p, o, writers), = m.wired
         assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
         assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
-        assert m.port(p) not in c.roots and lay[m.port(p)] == lay[win.held(m, p)]
+        assert m.port(p) not in c.roots and lay[m.port(p)] == {**lay[win.held(m, p)], "wired": win.held(m, p)}
         assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
         assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
     assert set(c.roots) == {m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}

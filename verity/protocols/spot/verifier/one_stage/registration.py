@@ -252,7 +252,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
-    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
+    (`{port: {"leaves", "domain"}}`, a port whose rows are the leaves of another port's tree naming that port too,
+    `"wired"`: R3 refuses a record whose roots under the two names differ, `R3-wired`), the digest of its copy of the
+    leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
@@ -384,6 +386,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
+        # one tree at two names: a port its layout wires to another's tree has that port's root
+        for p, want in sorted(ports.items()):
+            q = want.get("wired")
+            if isinstance(q, str) and not (p in got and q in got and isinstance(got[p]["root"], str)
+                                           and got[p]["root"] == got[q]["root"]):
+                c.fail("R3-wired", {"port": p, "wired": q})
     # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
     if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
