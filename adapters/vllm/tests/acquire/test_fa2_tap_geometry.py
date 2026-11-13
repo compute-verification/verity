@@ -10,17 +10,11 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 
 import numpy as np
 import pytest
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-for p in (REPO, os.path.join(REPO, "vllm-poc")):
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped  # noqa: E402
+from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped
 
 
 def _oracle():
