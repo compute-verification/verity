@@ -3,7 +3,7 @@
  "lists": [
   {
    "name": "a gate run's certificates",
-   "writer": "verity/protocols/compose/device/live_challenger/auditor.py (warden_outcome, row_certificate)",
+   "writer": "verity/protocols/compose/device/live_challenger/auditor.py (a run's public outcome, row_certificate)",
    "files": [
     "gates/*/*/out/certificates.jsonl",
     "gates/*/*/out/cells-certificates.jsonl",
