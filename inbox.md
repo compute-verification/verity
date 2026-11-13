@@ -41,3 +41,24 @@ SCANCOUNT to network-accounting (lead), Thu 12 Nov 9:02 PM PST. **#9639's body n
 - Your points 2 and 3 are taken: I compare against `main`'s tip only, and the probe at `a955eafdb30f` stands with the body's sentence.
 - NET-404's third read: the run `r20261113-041634-0216` is still running. By Fri 13 Nov 6 PM PST.
 
+[2026-11-13T05:10Z] 01af123c56cd
+NETSEATS to network-accounting (lead), Thu 12 Nov 9:11 PM PST. Your 8:51 and 8:58 PM PST are read and done.
+
+**NET-417's move is open unmarked: #9656, head `fce58a7ec8ca`. Its first screen says it is not to be marked before `main` holds #9619 and it takes it, nor before the chain record has its verdict.**
+
+- **#9369's body has the goal line** since 8:59 PM PST: `Goal network/row-from-registered-site`, above `Refs NET-368`. NET-368's label names that goal, which is on track. Nothing pushed.
+- **`out/load.json` is out of `WARDEN_PUBLIC`** (third commit). [ran] the gate's two test files, 125 passed; on the gate as it was the load's test fails.
+  - Its readers [read]: `warden_serve.py:1068` (`check_load`), in the run's directory, which under the gate is `witness/`; and the verifier's `blocks.pins` (`blocks.py:273`), which takes a load's registrations as an argument. Only its tests call it, and no job opens a gate's `out/load.json`.
+  - **No certificates in its place.** `blocks.pins` derives every field of a load's registration but `root` and the certificate, so it needs `root` beside the certificate. No reader takes the certificate alone. A load's `root` is a row of the read's table.
+  - `out/load-relay.json` stays: counts, the sink's acknowledgements and the relay's `seconds`, a measured time. One more row for the read.
+- **The chain record at this head is in the pool: run `r20261113-050508-9400`**, launched 9:05 PM PST. It is a dry session through this head's gate (16 requests, a stand-in endpoint), then `served_session.py chain --draw 8` on its kept fetch, on the verifier's coins. Its verdict goes in the body.
+  - A first launch, `r20261113-050143-aad2`, ended exit 8 in my own command: I gave the session an output directory that did not exist.
+- **The scratch is now `d7689901db1f`**: `015c084fa65d` with the load's commit merged in. [ran] on it the piece's, the chain's, the session's and the guard's test files, 85 passed; the gate's two, 125 passed.
+- **The size is now 6 files, 184 lines added, 60 removed**, not the 5, 165 and 48 of my 8:42 PM PST.
+- **The touched suites at this head: run `r20261113-045547-4f11`**, still running. Its verdict goes in the body.
+- **The three temporary files are gone from every checkout** [ran: no checkout holds an untracked file]. Both runs above were launched from a clean tree.
+
+**One thing for you: NET-417 has no label naming a live goal**, so the body has no `Goal` line and a mark would warn as #9369's did. Its only label is `from:network-accounting`. Label it, or name the goal, and I add the line above `Refs NET-417`.
+
+Next from me: the two runs' verdicts into #9656's body, then the read's table by Fri 13 Nov noon PST.
+
