@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Record.PartReadsBack
 public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.Json.Canon
+public import Proofs.Flock.Claims.Complete.Json.Stmt
 
 /-!
 # The session the form verified is the one template `t`'s statement sets up
@@ -17,11 +18,15 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
 
 * **The statement's fields** (`memberFields_stmtRaw`): `SessionMsgs.stmtRaw`'s fields are a member's
   (`MemberChecks.MemberFields`), by definition.
+* **The sample the form set a session up at is printable** (`draw_good`): it is the record's `unit_draw` rebuilt, so
+  its objects are well-formed trees, and the setup decodes it to a subset or a stratified sample
+  (`Verity.Sampled.setupAt_drawLaw`), each printable where it decodes.
 * **The statement's printed files read back** (`readsBack_stmtRaw`, `draw_readsBack`): where the member's partition
-  object, its registered reads and the record's sample are printable (`Claims.Json.Good`), Flock's parser reads the
-  statement's partition and registered reads back alike (`Flock.PartCong.partition_readsBack`,
-  `registered_readsBack`), and its sample back as a value whose rebuilt form (`Flock.norm`) is the record's sample:
-  the record's sample is itself rebuilt, and alike values rebuild to one.
+  object's objects are well-formed trees (`Claims.Json.Wf`) and its registered reads are printable
+  (`Claims.Json.Good`), at a session the form set up, Flock's parser reads the statement's partition and registered
+  reads back alike (`Flock.PartCong.partition_readsBack_of_setup`, `registered_readsBack`), and its sample back as a
+  value whose rebuilt form (`Flock.norm`) is the record's sample: the record's sample is itself rebuilt, and alike
+  values rebuild to one.
 * **One session** (`setupOf_of_fields`): a statement with a member's fields, whose printed files read back and whose
   bytes decode as it, sets up under `--zk` the session the form set up on the member's files at the record's sample
   (`MemberChecks.ins_of_fields`, `Verity.Sampled.Record.setup_of_setupAt`).
@@ -32,8 +37,9 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
 What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`) and
 `StmtsCount`, each a named hypothesis no check gives here:
 
-* `StmtsPrint`: what each session's statement prints is printable. Nothing the setup checks holds a member's
-  partition object to well-formed trees or its registered reads to integers.
+* `StmtsPrint`: each member's partition object's objects are well-formed trees, and its registered reads are
+  printable. Nothing the setup checks holds a member's partition object to well-formed trees or its registered
+  reads to integers.
 * `StmtsFit`: each session's statement decodes from its bytes, and the statements' message holds fewer than `2^64`
   statements of fewer than `2^64` bytes each. The form refuses a field its statement can't hold
   (`Spot.OneStageZk.fitsWhy`, `drawFitsWhy`); that refusal is not carried to here, and it bounds no sum.
@@ -83,16 +89,48 @@ theorem draw_readsBack {record : String}
       rw [hbd] at hs
       exact congrArg some ((FlockDeploy.norm_congr a dj (FlockComplete.JsonRT.same_jsonEquiv hs)).trans hn)
 
-/-- **A member's statement's printed files read back** (`MemberChecks.ReadsBack`), where the member's partition
-object, its registered reads and the record's sample are printable. -/
-theorem readsBack_stmtRaw {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray}
-    {tables : List (String × ByteArray)} {record : String} (hp : Claims.Json.Good m.own.partition)
+/-- **The sample the form set a session up at is printable**: the record's sample is its `unit_draw` rebuilt
+(`Verity.Sampled.recordDraw_raw`), so each of its objects is a well-formed tree (`FlockDeploy.wf_norm`). The setup
+decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_drawLaw`, `drawLaw_ok`, `lawWhy_zk`), and a
+well-formed value that decodes to either is printable (`FlockComplete.JsonRT.good_subset`, `good_stratified`). -/
+theorem draw_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {record : String} {dj : Json}
+    {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hrd : Flock.Witness.recordDraw record = some dj)
+    (h : Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok x) : Claims.Json.Good dj := by
+  obtain ⟨_, d, -, -, -, hdj⟩ := Verity.Sampled.recordDraw_raw hrd
+  have hw : Claims.Json.Wf dj := by
+    rw [hdj]
+    exact FlockDeploy.wf_norm d
+  rw [hrd] at h
+  obtain ⟨D, hD, hlaw⟩ := Verity.Sampled.drawLaw_ok (Verity.Sampled.setupAt_drawLaw h)
+  rcases Verity.Sampled.lawWhy_zk hlaw with ⟨kd, hl⟩ | ⟨K, St, hl⟩
+  · exact FlockComplete.JsonRT.good_subset hw hD hl
+  · exact FlockComplete.JsonRT.good_stratified hw hD hl
+
+/-- **A member's statement's printed files read back** (`MemberChecks.ReadsBack`), at a session the form set up on
+the member's files at the record's sample, where the member's partition object's objects are well-formed trees and
+its registered reads are printable. The setup returned only where `Flock.canon` prints the partition object
+(`Flock.PartCong.partition_readsBack_of_setup`), and its sample is printable (`draw_good`). -/
+theorem readsBack_stmtRaw {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+    {tables : List (String × ByteArray)} {rd : Spot.OneStageZk.Reads} {record : String}
+    {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hp : Claims.Json.Wf m.own.partition)
     (hr : ∀ j, m.own.registered = some j → Claims.Json.Good j)
-    (hd : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj) :
+    (hst : Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs) rd
+      (Flock.Witness.recordDraw record) = .ok x) :
     MemberChecks.ReadsBack
       (SessionMsgs.stmtRaw m circuitB pubB tables (SessionMsgs.drawBytes record)
-        (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) m record :=
-  ⟨Flock.PartCong.partition_readsBack hp, Flock.PartCong.registered_readsBack hr, draw_readsBack hd⟩
+        (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) m record := by
+  have hd : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := fun dj hdj => draw_good hdj hst
+  obtain ⟨spec, tabs, rest⟩ := x
+  obtain ⟨sts, hs, -⟩ := Verity.Sampled.setupAt_ok hst
+  obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
+  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  have hh : (Flock.Witness.zkTags
+      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs)).hiddenOutputs = true :=
+    (Verity.Sampled.statement_zkTags htag _ _).1
+  have hb : (Flock.Witness.zkTags
+      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs)).bindings = true := rfl
+  exact ⟨Flock.PartCong.partition_readsBack_of_setup (o := m.own.partition) hp hh hb hset,
+    Flock.PartCong.registered_readsBack hr, draw_readsBack hd⟩
 
 /-- **A member's statement sets up the session the form set up**: a statement `w` with the member's fields, whose
 printed files read back and whose bytes decode as `w`, sets up under `--zk` (`FlockDeploy.setupOf true`) the session
@@ -135,15 +173,14 @@ theorem setupAt_sha512 {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {
 
 /-! ## `VerdictsAt`, from what is left -/
 
-/-- **What each session's statement prints is printable**: on a play the form accepts whose log the check read is
-the device's, template `t`'s member's partition object and registered reads, and the sample of its session's record,
-are printable (`Claims.Json.Good`: every object a well-formed tree, every number an integer). -/
+/-- **What each member's statement prints of the member reads back**: on a play the form accepts whose log the
+check read is the device's, each object of template `t`'s member's partition object is a well-formed tree
+(`Claims.Json.Wf`), and the member's registered reads are printable (`Claims.Json.Good`: every object a well-formed
+tree, every number an integer). -/
 def StmtsPrint (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
   ∀ o k p e, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
-    ∀ t m fs record, SessionMsgs.memberAt p e t = some m → SessionMsgs.filesAt e t = some fs →
-      SessionMsgs.recordAt k.blobs fs = some record →
-        Claims.Json.Good m.own.partition ∧ (∀ j, m.own.registered = some j → Claims.Json.Good j) ∧
-          ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj
+    ∀ t m, SessionMsgs.memberAt p e t = some m →
+      Claims.Json.Wf m.own.partition ∧ ∀ j, m.own.registered = some j → Claims.Json.Good j
 
 /-- **The session statements fit their length words**: on a play the form accepts whose log the check read is the
 device's, each template's session statement decodes from its bytes (`each`), and the statements' message holds
@@ -208,13 +245,13 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
   obtain ⟨m, circuitB, pubB, rd, record, spec, tabs, ⟨p0, o0⟩, proofs, hm, hc, hp, hrd, hrec, hsetup, hfiles,
     hzk⟩ := verified_at hacc hk hf hfs
   have hxw := stmtAtCase_of_member hf hm hfs hrec hc hp
-  obtain ⟨hgp, hgr, hgd⟩ := hprint o k p e hacc hgood hk hf t m fs record hm hfs hrec
+  obtain ⟨hgp, hgr⟩ := hprint o k p e hacc hgood hk hf t m hm
   have hdec := hfit.each o k p e hacc hgood hk hf t m fs record circuitB pubB hm hfs hrec hc hp
   obtain ⟨si, sts, hset, htabs⟩ :=
     setupOf_of_fields
       (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.drawBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
-      (readsBack_stmtRaw hgp hgr hgd) hdec hrd hsetup
+      (readsBack_stmtRaw hgp hgr hsetup) hdec hrd hsetup
   have hxe : SpotFlock.stmtAt A.h m₂ t =
       (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode :=
