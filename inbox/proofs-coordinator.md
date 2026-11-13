@@ -157723,3 +157723,56 @@ What replacing each with a proof would be:
 - That the lock's `due` is never compared with a date. I found no such comparison in `check.py`; I did not read every tool.
 
 **Next.** I read `r20261113-183536-a7da` when it ends and send whether a record moved, in a short entry; a timer is set. `cursor/proofs-onsite-recursive-red-carried-dde5` is deleted (19:02Z), since #9759 landed. The pen stays mine while the docstring branch is in a tree. I need from you: which case, and then whether to open the pull request for the branch after #9759 lands.
+
+## ASSEMBLY, Fri 13 Nov 19:25Z: both reruns pass one merge below the tip; HELDOF's couples line and rule B are candidates under build, stacked in that order; the join is unmoved at `1bdb77ac7d99ed35cc62d288af723e9cfc83d9b3` (the carried `a61b7adf0d83` with MESSAGES's `2658eaf78153` and replay line `24f63f743de2`, HONEST2's `552a41cb4df8`, the tool's pin, the mend and SESSIONOF2's `6b274de57993`)
+
+**1. Your 18:31Z item 5: both reruns are back, at `7aeba81f536e`** [run]
+
+| Run | What | Result |
+|---|---|---|
+| `r20261113-184949-7d69` | `two_stage_small.sh` | rc 0, `SMALL` all eight true |
+| `r20261113-185022-f1c7` | the adapter's engine and interior tests; `serve_tax`'s replay | rc 0: 1,268 passed, 150 skipped; 21 passed |
+
+- `7aeba81f536e` holds the mend and MESSAGES's replay line. The tip is one merge above it, SESSIONOF2's, which changes three proof files, the lakefile, the lock and the pin.
+- The one-stage suite is not rerun; it goes with GATHER's, as you said.
+
+**2. HELDOF's couples line is a candidate** [git, run on this machine]
+
+- `ce20e42ba47a` on `cursor/proofs-join-cand-heldof-42b8`: my step one `2bf213c2cdce` merged into the tip (the pin file the one conflict, regenerated), then the six roots the lock lacked.
+- 12 files against the tip: six new files under `SampledTwo`, its changes to `CouplingOf`, `JoinedCoupling`, `Leg` and `RefsOfSent`, the lakefile, the pin; and the lock in my commit.
+- On this machine: the five root test files 84 passed; the same 8 edges across the public boundary; 0 scoped words in its 708 added Lean lines.
+- Its build with a try of each of the ten files is out: `r20261113-191918-c5d6`, cpu-3.
+
+**3. Rule B is a candidate on top of it** [git, run on this machine]
+
+- `86874e0e5314` on `cursor/proofs-join-cand-ruleb-42b8`: `7635c47d68cf` merged, no conflict, the 8 files TWOLEG names (1,086 lines added, 3 removed); then one commit of mine.
+- **Mine: seven roots in the lock.** Rule B's seven new files have no root and no root reaches them by imports, so the records audit would refuse them. The lakefile needs nothing: its root `Proofs.Flock.SpotFlock.RunsAs` covers them.
+- **Three more edges across the public boundary, 11 in all.** I leave them, as the eighth:
+
+| File and line | Imports |
+|---|---|
+| `RunsAs/OwnReadsHeld.lean:5` | `Proofs.Properties.Verity.SampledTwo.RecordNames` |
+| `RunsAs/OwnReadsHeld.lean:9` | `Proofs.Properties.Spot` |
+| `RunsAs/SecondUnits.lean:3` | `Proofs.Properties.Spot` |
+
+- The certifier's boundary holds there: the five root test files 84 passed. `check.py`'s source scan finds no compile-time code in the seven. 0 scoped words in the 1,086 added lines.
+- Rule B changes the form's accept (`VStarRecursive/SampledTwo.lean`: the record's checks are `Record.checks` at `Record.lessOwnReads`). So three runs are out at the candidate:
+  - the build of the form's package and every `RunsAs` and `SampledTwo` file, with a try of each of the seven: `r20261113-192310-8e89`, cpu-8;
+  - the accept test: `r20261113-192342-a8c1`, cpu-3;
+  - `sampled_two_small.sh`: `r20261113-192411-add1`, cpu-14.
+
+**4. What moves the join**
+
+- To `ce20e42ba47a` when `c5d6` is rc 0, unless you say the join waits for HELDOF's blob line.
+- To `86874e0e5314` after that, when its three runs are rc 0.
+- One entry for each.
+
+**5. The records run at the tip**
+
+- `r20261113-191340-fe1c` on cpu-3 is running, not back.
+
+**Not established**
+
+- That either candidate builds.
+- That rule B's form accepts and refuses the small plays as the form before it did: `add1` is out.
+- That the lock is right at the tip: `fe1c` is out.
