@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import all Init.Data.Array.Basic
 
 /-!
-# Proofs of the sampled proofs' period's properties (`Properties.Spot.Period`)
+# Proofs of the properties of SPOT's period (`Properties.Spot.Period`)
 
 The period's check is monadic. What each of its functions read where it returns is a Hoare triple proved by `mvcgen`
 and read back at an `.ok` result (`read_ok`, `windowsIn_ok`, `caseAt_ok`, `windowAt_raw`, `run_ok`); the properties
