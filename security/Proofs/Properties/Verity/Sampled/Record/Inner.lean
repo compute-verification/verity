@@ -10,16 +10,16 @@ public import Proofs.Flock.Claims.KS.Range
 /-!
 # The sessions are in Flock's masked scope (`SessionsIn`, `InnerNumbers`)
 
-Every session the record shows is at the reference statement `xS₀` (a refused draw file) or at a kept draw file's
-statement, and `SessionsIn` holds wherever a reference draw file exists (`∃ d, RefOk A o d`):
+Every session the record shows is at the reference statement `xS₀` (a refused sample file) or at a kept sample file's
+statement, and `SessionsIn` holds wherever a reference sample file exists (`∃ d, RefOk A o d`):
 
 * **A session statement that sets up is in scope** (`inScope_sess`): flock-verify `--zk`'s own setup (`Ins.setup`)
   passes every table's `Zk.shapeOk` (`25 ≤ m ≤ 35`, `queries0_range`) and `Read.setup`'s range check (`read_setup_in`:
   `k_log`, regions and `m_pts` in `InRange`, two link points), and the session's statement sets up one table
   (`shape_sess`). So no session needs a scope beyond what its setup refuses.
-* **A kept draw file's statement sets up** (`kept_in`): its session has the statement's `N₀` (`numsOk`), which is
+* **A kept sample file's statement sets up** (`kept_in`): its session has the statement's `N₀` (`numsOk`), which is
   positive at the reference (`N₀_pos`) and `0` where nothing sets up, and its statement fits its length words (`Fits`),
-  so flock-verify reads it as `baseRaw` with the draw file (`ins_of_setupOf`).
+  so flock-verify reads it as `baseRaw` with the sample file (`ins_of_setupOf`).
 
 Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`): every unit of the record's code has the
 reference's `N₀`, so `SessionsIn` holds at `Code.atInnerN₀` too (`sessionsIn_atInnerN₀`).
@@ -52,7 +52,7 @@ theorem inScope_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array
   obtain ⟨_, hq, -⟩ := bind_ok h1
   exact FlockDeploy.KS.queries0_range hq
 
-/-- **A session statement that fits its length words reads as `baseRaw` with its draw file** wherever it sets up. -/
+/-- **A session statement that fits its length words reads as `baseRaw` with its sample file** wherever it sets up. -/
 theorem ins_of_setupOf {d : Msg} (hfits : Fits A o d) {s : Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h : FlockDeploy.setupOf true (sessStmt A o d) = some (s, spec, sts)) :
     ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s ∧ s.setup = .ok (spec, sts) := by
@@ -97,7 +97,7 @@ theorem ref_in (h : ∃ d, RefOk A o d) :
   have hin := inScope_sess hins (FlockDeploy.setupOf_some hset).2
   exact ⟨s, _, _, zkIn_of_inScope hset hin, hin.1.le⟩
 
-/-- **A kept draw file's statement is in scope** at one table: it has the reference's `N₀`, so it sets up, and it fits
+/-- **A kept sample file's statement is in scope** at one table: it has the reference's `N₀`, so it sets up, and it fits
 its length words, so its setup is the record session's. -/
 theorem kept_in (h : ∃ d, RefOk A o d) {d : Msg} (hn : numsOk A o d) (hf : Fits A o d) :
     ∃ s spec sts, FlockDeploy.ZkIn (sessStmt A o d) s spec sts ∧ sts.size ≤ 1 := by
@@ -112,7 +112,7 @@ theorem kept_in (h : ∃ d, RefOk A o d) {d : Msg} (hn : numsOk A o d) (hf : Fit
     have hin := inScope_sess hins hsu
     exact ⟨s, spec, sts, zkIn_of_inScope hsd hin, hin.1.le⟩
 
-/-- **The session a view shows** is the reference statement's or a kept draw file's. -/
+/-- **The session a view shows** is the reference statement's or a kept sample file's. -/
 theorem sessionOf_fst (v : Claims.Seen) :
     (sessionOf A o v).1 = xS₀ A o ∨ ∃ d, numsOk A o d ∧ Fits A o d ∧ (sessionOf A o v).1 = sessStmt A o d := by
   unfold sessionOf
@@ -131,7 +131,7 @@ theorem code_unitN₀ (e : Ext) (x : Msg) (u : ℕ) : (code A o e).unitN₀ x u 
   simp only [code]
 
 /-- **`SessionsIn` at the record**: every session's statement is in Flock's masked scope at one table, with the
-reference's `N₀` at every unit, wherever a reference draw file exists. -/
+reference's `N₀` at every unit, wherever a reference sample file exists. -/
 theorem sessionsIn (e : Ext) (h : ∃ d, RefOk A o d) : SamplingDeploy.SessionsIn (code A o e) := by
   intro x u v xS vS hs
   change (if x = xOf A o then some (sessionOf A o v) else none) = some (xS, vS) at hs
@@ -155,7 +155,7 @@ theorem sessionsIn_atInnerN₀ {c : SamplingDeploy.Code} (h : SamplingDeploy.Ses
     (hu : ∀ x u, c.unitN₀ x u = c.innerN₀ x) : SamplingDeploy.SessionsIn c.atInnerN₀ :=
   fun x u v xS vS hs => ⟨(h x u v xS vS hs).1, (h x u v xS vS hs).2.trans (hu x u)⟩
 
-/-- **`InnerNumbers` at the record**, wherever a reference draw file exists: `innerNumbers_deploy` at the record's
+/-- **`InnerNumbers` at the record**, wherever a reference sample file exists: `innerNumbers_deploy` at the record's
 code, whose units' `N₀` are the reference's (`sessionsIn_atInnerN₀`). -/
 theorem innerNumbers (e : Ext) (h : ∃ d, RefOk A o d) : Claims.Sampling.InnerNumbers (record A o e) :=
   SamplingDeploy.innerNumbers_deploy _root_.Flock.Readable.relation (code A o e)

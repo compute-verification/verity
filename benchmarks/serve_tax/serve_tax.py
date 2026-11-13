@@ -894,7 +894,7 @@ class Dataset:
 #: its prompt's and its output's tokens; and, on a request whose prompt begins as an earlier one's does, that line's
 #: place in the table, counted from 0, and the whole blocks the two share
 PLAN_KEYS, REPEAT_KEYS = ("at_s", "prompt", "output"), ("after", "blocks")
-#: the tokens of one block of a planned prompt. vLLM's client draws a block's tokens from the block's id, so two
+#: the tokens of one block of a planned prompt. vLLM's client samples a block's tokens from the block's id, so two
 #: prompts that begin with the same ids begin with the same tokens; a multiple of the engine's prefix-cache block
 BLOCK = 64
 
@@ -1020,7 +1020,7 @@ def load_tag(name: str, rep: int, bench: bool) -> str:
 def trace_lines(plan: Sequence[Planned]) -> list[dict]:
     """A planned load as vLLM's client's timed_trace dataset reads it, a line a request, under the client's names: its
     arrival, its prompt's and its output's tokens, and an id for each block of its prompt. A block's id is its own
-    request's, except the blocks a request shares with an earlier one, which carry that request's ids: the client draws
+    request's, except the blocks a request shares with an earlier one, which carry that request's ids: the client samples
     the same tokens for them. A line holds no token and no text."""
     out: list[dict] = []
     for k, r in enumerate(plan):
@@ -1302,7 +1302,7 @@ def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
     return out
 
 
-#: vLLM's client's environment beside the job's own: a planned load's tokens are drawn under Python's hash of each
+#: vLLM's client's environment beside the job's own: a planned load's tokens are sampled under Python's hash of each
 #: block's id, which differs from one process to the next unless its seed is set
 CLIENT_ENV = {"PYTHONHASHSEED": "0"}
 
@@ -1345,7 +1345,7 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     checkpoint; for its synthetic datasets it first asks the server's ``/tokenize``, which the engine never sees,
     whether the server counts the first prompt's tokens as it does, and trims every prompt to the server's count
     where it doesn't. A planned load (`Load.plan`) is sent from its file (``dataset``, `write_trace`) in the file's
-    order, each prompt as the token ids the client draws for its blocks (`CLIENT_ENV`), so the server counts each
+    order, each prompt as the token ids the client samples for its blocks (`CLIENT_ENV`), so the server counts each
     prompt's planned length: held at ``rung`` in flight whatever the file's arrivals (``--no-self-timed``), or, at
     `ARRIVING`, each sent at its arrival after the pass starts, which is the client's way with such a file, with no
     bound on the requests in flight. A sessions load's client is one user's (`drive_bench`): its file the user's own,
