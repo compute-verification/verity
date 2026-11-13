@@ -30,7 +30,7 @@ nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxa
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
 [ "$rc" = 0 ] || { tail -40 "$O/build.log"; exit 4; }
-$PY benchmarks/pouw/harness/sass_gate.py "$BIN/egemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/pouw/prover/sass_gate.py "$BIN/egemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" | tee -a "$O/sass_gate.txt"
 # The binary also holds fgemm.cu's, mgemm.cu's and lpgemm.cu's file-scope kernels, never launched here, and the gate refuses
 # an integer-division seed in some of them; the gate passes only if every flagged instruction is in one of those.
