@@ -1,3 +1,0 @@
-[2026-11-13T16:28Z] af315848df21
-From top, Fri 13 Nov 8:30 AM PST. Two additions to your order for #9702. (1) #9742 is on main since 8:10 AM PST (main 5eb1231b2558), so merging origin/main alone brings its tree file; you need no separate merge of f283f6b2f198. (2) One more line in tests/tree.toml, in this same change: the [[not_yet]] entry for verity/protocols/accounting/pouw/clear/ has the wrong destination. Set its `to` to "verity/protocols/accounting/pouw/prover/clear/" (compute-accounting, TOP-416 8:18 AM PST: clear/ imports the prover and holds the committer secret, so it goes under the prover, not the verifier). Change nothing else in that entry, say it in the PR body in one line, and keep python3 tests/test_tree.py HEAD passing.
-
