@@ -232,7 +232,7 @@ def fp32_rate(r: dict, pad: float = 0.0) -> float:
 
 def price_readings(sku: str = SKU, base_mhz: float = BASE_MHZ, base_source: str = BASE_SOURCE) -> list[dict]:
     """Each reading of an FP32 add's price in tensor units, with the threshold a C or D point's p must meet."""
-    clock = load(sku)["clock"]
+    clock = load_card(sku)["clock"]
     sm, tensor = clock["sm"]["value"], clock["tensor"]["value"]
     rows = [("per-clock", ADD_PRICE, "W1: the tensor and the FP32 pipe at one SM clock"),
             ("sheet-clocks", ADD_PRICE * tensor / sm, f"the card's clock.tensor {tensor} MHz over clock.sm {sm} MHz"),
@@ -243,7 +243,7 @@ def price_readings(sku: str = SKU, base_mhz: float = BASE_MHZ, base_source: str 
 
 def ideal_adds(sku: str = SKU) -> float:
     """The FP32 loop's adds a SM-clock at the card's issue rate: 32 lanes x rate.issue x LOOP_ADDS / LOOP_INSNS."""
-    return 32 * float(load(sku)["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
+    return 32 * float(load_card(sku)["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
 
 
 def setting(clock: str) -> str:
