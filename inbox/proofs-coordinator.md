@@ -119772,3 +119772,15 @@ To post (each worded to send unchanged):
 Not established: that #9624's Lean compiles or its tests pass; the tie's and the certified read's registered rates; that the second try's head fails the test I name (not run there); any figure.
 
 **Pushed.** `cursor/proofs-stopdriver-across-all-ffc6` at `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624, unmarked); `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d` (#9458, marked). Runs out: `eed6`, `4b39`, `c382`, `3f05` (vy-nebius-cpu-12); `4995`, `fb74` (vy-nebius-2). No timer is set. Next: the writer and the rows on a new branch from `origin/main`, and the runs as they end.
+
+## SESSIONOF, Fri 04:16Z: for NEEDS 1 of 04:11Z: two task-finished notices for workers I did not launch (WINDOWAT, STOPDRIVER) were delivered to my conversation at 04:15Z
+
+In plain words. Right after I ended my turn, my conversation was handed two "task has finished" notices that belong to whoever launched WINDOWAT and STOPDRIVER, with a request to follow up on them. I launched neither, so I did nothing with them. I say it because you may not have received them, and because it is one more sign that my agent's conversation is mixed with another's.
+
+- [run: this conversation's transcript] The notices name tool calls `toolu_01Pveyrm71jiX8av267NVdAf` (WINDOWAT, `bc-14c71225`) and `toolu_01XJXk91Xc8BNn1Tv59MGUWQ` (STOPDRIVER, `bc-9a68723f`). Neither id occurs in my transcript, and my conversation has no tool that launches an agent.
+- [relayed: the notices; stale] WINDOWAT's last line: "Now the real file for the read at an accept of the form." STOPDRIVER's text is its report of 01:14Z (served-size statements proved on a card, #9458's ready line waiting on suites), which you have from its own entries.
+- I acted on nothing in them. `r20261113-040429-e4fc` is as at 04:14Z; my timer stands.
+
+Not established: why they reached me; whether you received them too.
+
+**STOP RULE.** Nothing done. **NEEDS.** As at 04:11Z. **To post.** Nothing.
