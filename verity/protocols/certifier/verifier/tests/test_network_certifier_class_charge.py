@@ -142,3 +142,26 @@ def test_a_head_without_the_class_and_records_that_do_not_read_are_refused():
         with pytest.raises(ValueError, match="a verdict record is an object with the fields run, verifier, verdict, "
                                              "proved_by, its verdict an object with link, window, class, head"):
             K.charge(HEAD, 0, but(K.RESPONSE_TIE, off))
+
+
+def test_a_record_that_names_no_run_or_no_verifier_is_refused_though_its_verdict_accepts():
+    """Each record below holds an accepted, complete verdict on the head: what it lacks is who produced or judged it,
+    or the field that says what proves the verifier."""
+    tie = record(K.RESPONSE_TIE)
+    assert K.reads(tie) and K.reads(tie | {K.PROVED_BY: "A.Guarantee"}) and K.charge(HEAD, 0, but(K.RESPONSE_TIE, tie)).below
+    verifier = tie[K.VERIFIER]
+    lacking = [{k: v for k, v in tie.items() if k != field} for field in K.FIELDS]
+    lacking += [tie | change for change in (
+        {K.RUN: None}, {K.RUN: ""}, {K.RUN: 7}, {K.VERIFIER: None}, {K.VERIFIER: "a.verifier"}, {K.VERIFIER: {}},
+        {K.VERIFIER: {K.MODULE: verifier[K.MODULE]}}, {K.VERIFIER: {K.COMMIT: verifier[K.COMMIT]}},
+        {K.VERIFIER: verifier | {K.MODULE: ""}}, {K.VERIFIER: verifier | {K.COMMIT: None}}, {K.PROVED_BY: ""},
+        {K.PROVED_BY: False}, {K.PROVED_BY: ["A.Guarantee"]})]
+    for off in lacking:
+        assert not K.reads(off), off
+        with pytest.raises(ValueError, match="its run named, its verifier by its module and commit, and its "
+                                             "proved_by a name or null; the response tie's is "):
+            K.charge(HEAD, 0, but(K.RESPONSE_TIE, off))
+        # beside a record that reads, and on a class that owes nothing, it is refused the same
+        for at, cls, records in ((HEAD, 0, but(K.RESPONSE_TIE, tie, off)), (head(0, 5), 0, {K.RESPONSE_TIE: [off]})):
+            with pytest.raises(ValueError, match="a verdict record is an object with the fields"):
+                K.charge(at, cls, records)

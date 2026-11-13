@@ -14,13 +14,16 @@ length is no one's choice:
 - the compute audit: its second stage over the class's sample, that the committed ids are the outputs of the
   request's Program.
 
-**A verdict record** is an object with the four fields `FIELDS`: the run that produced the verdict (`run`), the
-verifier that judged it (`verifier`), the verdict (`verdict`) and what proves the verifier (`proved_by`). The verdict
-is the verifier's own object, and whichever of the four it is it says what it is of and how it went, in the fields
-`READ`: the execution phase and the class (`link`, `window`, `class`, as the head and the schedule name them), the
-digest of the signed head it was decided under (`head`), and two bits, `accepted` and `complete`, the second saying
-that what was accepted is the whole of what the verdict is of. `charge` reads those six and the run, and nothing
-else of a record. Which of the four a record is is its caller's to say: `charge` takes the records by verdict.
+**A verdict record** is an object with the four fields `FIELDS`: the run that produced the verdict (`run`, its id),
+the verifier that judged it (`verifier`: its `module` and the `commit` it ran at), the verdict (`verdict`) and what
+proves the verifier (`proved_by`: a guarantee's name, or null while none does). A record that names no run, or no
+verifier by its module and commit, is refused like one that is no object (`reads`): a verdict that can't be traced
+to what produced it holds nothing. The verdict is the verifier's own object, and whichever of the four it is it
+says what it is of and how it went, in the fields `READ`: the execution phase and the class (`link`, `window`,
+`class`, as the head and the schedule name them), the digest of the signed head it was decided under (`head`), and
+two bits, `accepted` and `complete`, the second saying that what was accepted is the whole of what the verdict is
+of. `charge` decides by those six alone: the names are held to be there and are not weighed, and `proved_by` moves
+no charge. Which of the four a record is is its caller's to say: `charge` takes the records by verdict.
 
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
@@ -51,6 +54,8 @@ STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "respo
 VERDICTS = (STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT)
 #: a verdict record's fields, and the fields of its verdict that `charge` reads
 RUN, VERIFIER, VERDICT, PROVED_BY = FIELDS = ("run", "verifier", "verdict", "proved_by")
+#: how a record names its verifier
+MODULE, COMMIT = NAMES = ("module", "commit")
 LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
 #: what a verdict that doesn't count lacks
 MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "refused", "not complete"
@@ -109,20 +114,35 @@ def _runs(records: Iterable[Mapping[str, Any]]) -> tuple[str, ...]:
     return tuple(sorted({str(r.get(RUN)) for r in records}))
 
 
+def _named(x: object) -> bool:
+    return type(x) is str and bool(x)
+
+
+def reads(record: object) -> bool:
+    """Whether `record` is a verdict record (the module docstring's "A verdict record"): an object with each of
+    `FIELDS`, its run named, its verifier named by each of `NAMES`, its verdict an object, and `proved_by` a name
+    or null."""
+    return (isinstance(record, Mapping) and all(k in record for k in FIELDS) and _named(record[RUN])
+            and isinstance(record[VERIFIER], Mapping) and all(_named(record[VERIFIER].get(k)) for k in NAMES)
+            and isinstance(record[VERDICT], Mapping)
+            and (record[PROVED_BY] is None or _named(record[PROVED_BY])))
+
+
 def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]]) -> ClassCharge:
     """How class `cls` of the execution phase `head` is signed for is charged, from the verdict records given, by
     verdict: a map from each of `VERDICTS` to its records, a verdict with none left out (the module docstring's
     "All four or none"). ValueError for a head without the class, a key that is none of the four, or a record
-    that is no object or whose verdict is none."""
+    that is no verdict record (`reads`)."""
     n = count(head, cls)
     other = [k for k in records if k not in VERDICTS] if isinstance(records, Mapping) else [type(records).__name__]
     if other:
         raise ValueError(f"the records are given by verdict, each one of {', '.join(VERDICTS)}, not {other[0]!r}")
     given = {kind: list(records.get(kind, ())) for kind in VERDICTS}
     for kind, its in given.items():
-        if off := [r for r in its if not (isinstance(r, Mapping) and isinstance(r.get(VERDICT), Mapping))]:
+        if off := [r for r in its if not reads(r)]:
             raise ValueError(f"a verdict record is an object with the fields {', '.join(FIELDS)}, its verdict an "
-                             f"object with {', '.join(READ)}; the {kind}'s is {off[0]!r}")
+                             f"object with {', '.join(READ)}, its run named, its verifier by its "
+                             f"{' and '.join(NAMES)}, and its proved_by a name or null; the {kind}'s is {off[0]!r}")
     if not n:
         return ClassCharge(cls, 0, False, (), ())
     digest = head.digest().hex()

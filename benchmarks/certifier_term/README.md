@@ -160,10 +160,11 @@ from the signed head of an execution phase and the verdict records on a class of
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
-- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `verifier`, `verdict` and
-  `proved_by`. Of its `verdict` the rule reads `link`, `window`, `class`, `head`, `accepted` and `complete`. Which of
-  the four verdicts it is, is its verdict's `format`; a verdict whose verifier's format the reader doesn't list reads
-  as missing;
+- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `verifier` (its `module`
+  and the `commit` it ran at), `verdict` and `proved_by`. A record that names no run or no verifier doesn't read,
+  and one that doesn't read holds no execution phase. Of its `verdict` the rule reads `link`, `window`, `class`,
+  `head`, `accepted` and `complete`. Which of the four verdicts it is, is its verdict's `format`; a verdict whose
+  verifier's format the reader doesn't list reads as missing;
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read.
 

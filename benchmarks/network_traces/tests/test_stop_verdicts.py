@@ -215,6 +215,10 @@ def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
         assert SV.stop([registration(first)], [tie]).verdicts == ()
 
 
+NO_RECORD = (f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an object, its run "
+             "named and its verifier by its module and commit")
+
+
 def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
     assert SV.stop([], []) == LB.NO_RECORDS
     assert SV.stop([], [], ["r9 is not read"]) == LB.Stop(0, (*LB.NO_RECORDS.why, "r9 is not read"))
@@ -228,14 +232,24 @@ def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
              f"two heads are given for execution phase 3 of the link {LINK}"),
             ([{"format": C.REGISTRATION}], four(first), "a registration of connection rows doesn't read: "
                                                         "KeyError('word_bits')"),
-            ([registration(first)], [*four(first), "accept"],
-             f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an object, not "
-             "'accept'"),
+            ([registration(first)], [*four(first), "accept"], f"{NO_RECORD}, not 'accept'"),
             ([registration(first)], [four(first)[0] | {CC.VERDICT: "accept"}],
-             f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an object, not "
-             f"{four(first)[0] | {CC.VERDICT: 'accept'}!r}")):
+             f"{NO_RECORD}, not {four(first)[0] | {CC.VERDICT: 'accept'}!r}")):
         got = SV.stop(registrations, records)
         assert (got.held, got.verdicts, got.why[0]) == (0, (), whole + why), why
+    # four verdicts that each accept on the head hold it, and hold nothing once one of them names no run, or no
+    # verifier by its module and commit: a verdict nobody can trace to what produced it. So does one of a format
+    # listed for no verdict, which would otherwise count for nothing
+    assert SV.stop([registration(first)], four(first)).held == 1
+    tie, unlisted = four(first)[1], four(first)[1] | {CC.VERDICT: four(first)[1][CC.VERDICT] | {SV.FORMAT: "another's"}}
+    for of in (tie, unlisted):
+        for off in ({k: v for k, v in of.items() if k != CC.RUN}, {k: v for k, v in of.items() if k != CC.VERIFIER},
+                    {k: v for k, v in of.items() if k != CC.PROVED_BY}, of | {CC.RUN: ""}, of | {CC.VERIFIER: None},
+                    of | {CC.VERIFIER: {"module": of[CC.VERIFIER]["module"]}},
+                    of | {CC.VERIFIER: of[CC.VERIFIER] | {"commit": ""}}, {CC.VERDICT: of[CC.VERDICT]}):
+            got = SV.stop([registration(first)], [*four(first)[:1], off, *four(first)[2:]])
+            assert (got.held, got.verdicts, got.why[0]) == (0, (), f"{whole}{NO_RECORD}, not {off!r}"), off
+    assert SV.stop([registration(first)], [*four(first), unlisted]).held == 1
     tampered = registration(first)
     tampered["tables"][2]["rows"] = 0
     got = SV.stop([tampered], four(first))

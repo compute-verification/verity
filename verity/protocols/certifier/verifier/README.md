@@ -307,7 +307,8 @@ A spec-level reference for network accounting's timing channel:
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`);
 - how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
-  in that head and its four verdicts, each accepted, complete and naming the head; else its whole schedule;
+  in that head and its four verdicts, each accepted, complete and naming the head; else its whole schedule. A
+  verdict's record names its run and its verifier's module and commit, or it is refused (`reads`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the

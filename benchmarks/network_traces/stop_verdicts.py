@@ -10,9 +10,10 @@ the answer.
 caller names (`read`'s ``runs``; the label's readers are the harness's). A run holds, each one JSON object a line:
 
 - its verdict records, in every file named as `RECORDS_FILES`: an object with the fields `class_charge.FIELDS`, as
-  the verdict's own verifier writes it. Which of the four verdicts a record is, is read from its verdict's
-  ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and a record of
-  such a format is counted in a line and charges nothing;
+  the verdict's own verifier writes it, naming its run and its verifier's module and commit (`class_charge.reads`;
+  a record that lacks one doesn't read, whatever its format). Which of the four verdicts a record is, is read from
+  its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
+  a record of such a format is counted in a line and charges nothing;
 - `REGISTRATIONS_FILE`: the registration of each execution phase's connection rows that its verdicts were decided
   under, as `connection_rows.registration` writes it. A record names its head by digest alone, and a class's count
   is read from the head.
@@ -111,10 +112,11 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     by_verdict: dict[str, list[Mapping[str, Any]]] = {}
     unlisted = 0
     for record in records:
-        verdict = record.get(CC.VERDICT) if isinstance(record, Mapping) else None
-        if not isinstance(verdict, Mapping):
+        if not CC.reads(record):
             return _whole(f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an "
-                          f"object, not {record!r}", *left)
+                          f"object, its run named and its verifier by its {' and '.join(CC.NAMES)}, not {record!r}",
+                          *left)
+        verdict = record[CC.VERDICT]
         kind = FORMATS.get(verdict.get(FORMAT)) if isinstance(verdict.get(FORMAT), str) else None
         if kind is None:
             unlisted += 1
