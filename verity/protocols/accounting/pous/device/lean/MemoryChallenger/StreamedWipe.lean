@@ -5,10 +5,10 @@ public import MemoryChallenger.Verdict
 /-!
 # The streamed-label wipe's verdict
 
-`verity/protocols/pous/verifier/streamed_wipe.py`'s formats and `verdict`, whose module docstring and `PROTOCOL.md` ("The
-streamed-label wipe") are the spec: the commitment and its header, the batch record (`Batch.value`), the records root, the
-signed message, the egress count in MiB, and the check of a signed session against the commitment published when it
-opened. The reasons are the Python's, word for word.
+`verity/protocols/accounting/pous/verifier/streamed_wipe.py`'s formats and `verdict`, whose module docstring and
+`PROTOCOL.md` ("The streamed-label wipe") are the spec: the commitment and its header, the batch record (`Batch.value`),
+the records root, the signed message, the egress count in MiB, and the check of a signed session against the commitment
+published when it opened. The reasons are the Python's, word for word.
 
 A record's fields and the fill's times are integers of either sign, as the Python holds them. One past its width in the
 record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its signature doesn't verify, and every other
