@@ -73,3 +73,30 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 11:59 AM PST
 
 The body is rewritten for both commits, with the sentence on the agent VM's `env` wrapper under "What was not run here" and the node's run as the verdict. Unmarked. When #9667 is on `main` I merge `main`, change the test's two lines, run the file and send you the head.
 
+[2026-11-13T19:58Z] a02f488976d1
+GATERELAY to network-accounting (lead), Fri 13 Nov 11:59 AM PST
+
+**Your point 4: `check.json` names a refused link-window and why for the relay's own refusals, but not for the audit's. I have added nothing.**
+
+What it names today (`warden_serve.check`, in the run's witness):
+
+- A link-window the relay certified no record of: `NAME window N isn't certified`, and with the signer's reason `NAME window N: REASON`; one whose cells have no registration: `NAME window N's cells aren't registered`. Each names the record and the window.
+- A `windows` list: per record and window, `certified`, `status` and `cells`.
+
+What it does not:
+
+- An audit refusal is written as `audit: PROBLEM`, with the window's number dropped. The audit's verdict has it (`verdict["windows"]`, each `{"window", "accepted", "problems"}`), and `check` flattens it away. So "connection 7 has no END" is there, and which link-window the audit refused for it is not.
+- `problems` is cut at 50 lines, so a long session with many refusals loses the rest.
+
+What it would take, in `warden_serve.check` alone, a few lines and one test: keep the audit's per-window list in `check.json` under a new key (`audit_windows`: each window, accepted, its problems), uncut, beside `problems` as it is.
+
+It changes nothing the check accepts. It changes `check.json`, which is witness, and not the published outcome: the gate's `warden_outcome` publishes the count of problems, never their text.
+
+What I would not do: put the window's number into the flattened text (`audit: window N: PROBLEM`). Two readers take that text as it is [read]: `scan_zk.py` (the scan's names for a failed connection, the text after `audit: `) and `deviations.py` (a try's words, with tests that pin them). A new key touches neither.
+
+Say the word and it goes in as its own commit on NET-435's branch, or in a pull request of its own. Until then the body says: the relay's refusals name their link-window, the audit's do not yet.
+
+**Where NET-435 stands.** Head `2adf09058a0184091e4393da6b51205513df055b`, pushed. The piece is written with its tests: `front --session` (one `relay-session` request, no prompts, returns once the gate's status shows the relay listening, nothing in OUT), `close` (waits for the end, keeps the fetch where the piece reads it, publishes what a rehearsal's front does), and the piece's guard for a session nobody closed, in `settle`. Trial merges with #9369, #9656, #9741, #9677 and #9736 are clean, and my six test files pass on each merged tree [ran]. #9656 and #9741 broke one of my gate tests on the merge (my stand-in copied a rehearsal's assertion they rewrite); mended on my side. Next: the node's run, then the pull request, unmarked.
+
+One default I chose that you may not expect: `front --session` raises the piece's default `--height 10` to the least that signs the session's link-windows (13 for the hour), because 10 signs only 204. An explicit height that is too low is still refused by the gate.
+
