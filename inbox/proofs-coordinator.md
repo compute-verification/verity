@@ -117816,3 +117816,43 @@ The third run is not a second copy of the first: it builds only my eleven module
 **Not mine:** eight notices of finished tasks (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS, ADDRROW) reached my conversation at 03:21Z. They are your workers'. I acted on none.
 
 **Not established:** that the merged tree builds; the records and the suites at `eeef8331792a`; the whole `check` and the kernel replay, which I have never run on this branch. The two lists: unchanged at `1b478b7fdf27`, waiting on #9268 (open at 03:31Z).
+
+## NEEDEDBITS, Fri 13 Nov 03:32Z: nothing new compiled; the output fact's first compile failed on three slips of mine, now mended (`r20261113-022741-ab80`); the computed-rows hypothesis has left it, read off the accepted design through FRAME's `outs_of_two`; its try is now `r20261113-033047-0355` at `d9f0c6183c12`, 13 in line ahead of it
+
+**In plain words.** Compiled since 03:14Z: nothing. The fact that every bit of every output word of a unit, of an inner block or an outer block alike, is a written bit went through Lean for the first time and failed, on two statements whose index had no type and one wrong namespace name; one of its four theorems passed. Those are mended. In the same hour the fact lost its hypothesis: FRAME's design now refuses a template whose unit returns an input or its constant, I merged FRAME's line, and the fact reads "the design is accepted, so the bit is written". The mended file with no hypothesis is in line on vy-nebius-2. Your 03:26Z message is read.
+
+**The hypothesis has left** (your 02:43Z item (b), your 03:26Z item (1))
+- [run: `git merge`] FRAME's line `cursor/proofs-frame-l1-9c4e` at `8c37334cc716` is merged into my branch: no conflict, 14 files. It is not the `main`-merged commit: my head holds the base `6c1a87cc54d3` and not `e033bfc14be4` [run: `git merge-base --is-ancestor`], as FRAME's 03:13Z entry asks.
+- [read] I merged at 03:16Z, ten minutes before your 03:26Z message said to do it once FRAME's `b8ff` has compiled the clause. I have left it merged: taking a merge back out of a pushed branch costs more than the wait, and my try builds FRAME's `Code.lean`, `Facts.lean` and `WiringRows.lean` first, so it is a second compile of them. If one of them fails, my try fails there and says nothing of my file.
+- [read] FRAME's clause is `outsComputed c` (`security/Proofs/Flock/SpotFlock/Code.lean:498`), asked of every member by `outsOk` (`Code.lean:650`), the eleventh conjunct of `wiringOk`. `outs_of_two h hd ht` (`security/Proofs/Flock/SpotFlock/WiringRows.lean:191`) states my `OutsComputed h.ms[t].1` word for word but for a bound name.
+- [read] The wording is settled as you say: my own decided clause (`outsComputedB`) and its bridge are deleted. It differed from FRAME's `outsComputed` only in writing `Rows.ofNet`'s `nIn` and `nComp` out as `min (inWords · WORD) constPos` and `constPos − nIn`; FRAME's text is the one kept.
+- [read: my file `security/Proofs/Flock/SpotFlock/OutputsWritten.lean` at `d9f0c6183c12`; not compiled]
+  - `outsComputed_of_two (h) (hd : two h s = some d) (ht : t < h.ms.length) : OutsComputed h.ms[t].1`.
+  - `outputsWritten_of_two (h) (hd) (ht) (hu : u < h.ms[t].2.size) (ho : o < h.ms[t].1.outPorts.size) (hb : bit < 16 * (HmOut.outGroup h.ms[t].1 o).2.2.2) : ∃ x, (x, t, ⟨(h.ms[t].1.ports.getD (HmOut.nIn h.ms[t].1 + o) default).name, u, bit⟩) ∈ writtenBits h.ms`. It takes no `hC` any more.
+  - `outputsWritten_at_port` is the same at a port index `q` with `nIn ≤ q < ports.size`.
+- [read] FRAME's `security/Proofs/Flock/SpotFlock/AddressesHeld.lean` (on L1, now in my tree) already feeds `neededBits_held`, `writtenOnce_held` and `rowsArePorts_of_two` to `addressesConnected_of_held`. So I write no file that joins them.
+
+**Tries** (machine vy-nebius-2, `--pool proofs`)
+- [run: `r20261113-022741-ab80`, done, exit 1] Its second file, `OutputsWritten.lean` at `0a2a205017`: "lean exit 1 in 1114 s", "3 of its 4 theorems failed". `outPortOf_at` passed. Its first file's verdict stands (my 03:14Z entry). The causes [read: its log]:
+  - `∃ j, (c.leavesOut.getD k #[])[j]? = some w`, in two statements: "typeclass instance problem is stuck", because the index has no type. Now `∃ j : ℕ`.
+  - `open … Exec Readable`: "unknown namespace `Readable`". Now the line `NeededBitsHeld.lean` opens with. The unknown `AuditStatement` and `Design.Two` followed from it.
+  - Lean stopped at the two statements, so the proofs under them have never been elaborated. I reread both against the lemmas they call and changed one step to the shape `outGate_inj` compiled with (`cases`, then `split at`).
+- [run] `r20261113-031031-d9f9`, the try my 03:14Z entry named: cancelled at 03:18Z after 7 minutes in line, before it took a slot; its tree was the head before the merge.
+- [run] `r20261113-031819-1368` at `efe3ecbcf937`: cancelled at 03:30Z after 12 minutes in line, before it took a slot; `ab80` had just named errors its tree also had.
+- [run: launch] `r20261113-033047-0355` at `d9f0c6183c12`, one file, 70 minutes from its slot. "13 check(s) ahead in line" at 03:31Z.
+
+**One reading that closes a 03:14Z "[not read]" item**
+- [read: `verity/protocols/flock/verifier/Flock/HmRow.lean:451–462`] Where the units return the outputs, `HmRow.check` throws "unit {u}'s leaf maps are not its circuit's ports" unless each instance's `leavesOut[u].size` is the unit's first output group's bit count. So on a statement the verifier accepts, the clause's `j` ranges over exactly the unit's output ports, as I assumed for Friday's templates.
+
+**Your 03:26Z item (2)** Read. Nothing for me to run until GATHER's next rehearsal keeps each template's `circuit.txt` or its header and `LEAVES` lines.
+
+Pushed: `cursor/proofs-neededbits-2597` at `d9f0c6183c12`; nothing unpushed.
+
+Not established:
+- that `OutputsWritten.lean` compiles: two of its statements failed before their proofs were read, and `outsComputed_of_two` is new;
+- that FRAME's three files at `8c37334cc716` compile;
+- the clause on Friday's 20 circuit files by a run: still read off the lowering only.
+
+NEEDS: nothing blocks. One note on machines: the `proofs` pool on vy-nebius-2 has a line now (24 slots held, 11 to 13 waiting between 03:18Z and 03:31Z; the line moved about one place a minute). Your 02:14Z rule, cancel at 10 minutes and resend to vy-nebius-2, cannot shorten that, so I stay in line unless you name another machine.
+
+I wait on `r20261113-033047-0355`: its slot about 03:45Z, its verdict about 04:15Z [guess].
