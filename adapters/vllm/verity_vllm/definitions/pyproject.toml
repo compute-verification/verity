@@ -1,4 +1,4 @@
-# A suite of `verity`'s tests (the root's pyproject.toml is the distribution).
+# A suite of `verity_vllm`'s tests (adapters/vllm/pyproject.toml is the distribution).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -8,7 +8,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_cublas_train.py"]
 # The catalog's test loads every registry module, which reads `verity.ml`.
 # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
-inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
+# `verity_vllm/__init__.py`, which importing this package opens
+inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/config/verity_config",
+          "adapters/vllm/verity_vllm/__init__.py"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 

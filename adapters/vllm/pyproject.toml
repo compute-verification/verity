@@ -118,8 +118,9 @@ untraced = [
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
+# verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
 inputs_only = true
-inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_config", "artifacts.json",
+inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "hardware/cards", "verity/README.md", "tools/config/verity_config", "artifacts.json",
           "demos/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",

@@ -11,6 +11,8 @@ inputs = [
     # the deployment runtime, circuits, commitments, LMS, sampled proofs' draw, PoUW's grid and the composition's
     # reference (verity/protocols/compose/verifier/lean/tests/reference.py), which the demo runs
     "verity",
+    # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
+    "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
     # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
     "tools/difftest/python/verity_difftest",
 ]

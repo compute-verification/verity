@@ -34,7 +34,7 @@ untraced = [
 # integration's window advice (`window_advice`), which the chain reads.
 inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
           "adapters/vllm/verity_vllm/pipeline/advice_code",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/vllm/verity_vllm/pipeline/window_advice.py",
           "verity/protocols/accounting/certifier/verifier/README.md", "verity/protocols/compose/device/live_challenger/auditor.py",
           "verity/protocols/compose/device/live_challenger/host.json",

@@ -21,7 +21,8 @@ untraced = [
 # from (tests/lean/generate.sh), and a test compares them with the tree. The catalog's Definitions register their kernels
 # (verity.circuits.kernels) lazily. test_proofs.py fetches its fixture through Flock's `verifier/ci.py`, whose child
 # `python -m research data fetch` imports the research files listed last.
-inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+# the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
           "security/Proofs/Flock/Soundness/Audit/Law.lean",
