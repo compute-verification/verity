@@ -3,13 +3,15 @@
 A turn starts on a new machine with a new clone on `main`; only what is pushed survives. Commit and push to
 `cursor/circuits-cir263-scratch-6f04` before every turn ends. Nothing goes to the PR branch except reviewed code changes.
 
-- PR branch: `cursor/circuits-cir263-draft-layer-kernels-6f04`, head `78884a1b8aa7dc72de9cca98568faeea8b3a0b8a` (three commits
-  over `920597d5ca7f`, the head tonight's lease ran at): the three captures are registered properties (schema ids in
-  `verity_vllm/records/mtp_captures.py`), the split-K probe separates strided from contiguous at K 12288, 2 splits, bf16, and
-  `tests/properties/test_glm53_mtp_captures.py` drives each capture's `main` on a CPU to its sealed record. At this head: the
-  ratchet gate `failures: []`; `repository` r20261113-035227-475a 352 passed, 0 failed; `verity-vllm` r20261113-040826-9fec
-  (see `checkpoint.md` for its counts; if the last line there does not give them, read `research status` and fetch it).
-  No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
+- PR branch: `cursor/circuits-cir263-draft-layer-kernels-6f04`, head `ce09de03c318f40d29efbec7cca2536a8b7cf735` (four commits
+  over `920597d5ca7f`, the head the first row's lease ran at): the three captures are registered properties (schema ids in
+  `verity_vllm/records/mtp_captures.py`); the split-K probe separates strided from contiguous at K 12288, 2 splits, bf16;
+  `tests/properties/test_glm53_mtp_captures.py` drives each capture's `main` on a CPU to its sealed record; and the eh_proj
+  capture puts its shape in the sibling's `MODELS` only while a run or a scan lasts (at `78884a1b8a` the import did it, and
+  `verity-vllm` r20261113-040826-9fec failed 18 of the sibling's tests on the third model: 14,979 passed, 18 failed). At
+  `ce09de03c3`: the ratchet gate `failures: []`; `repository` r20261113-052134-678c 352 passed, 0 failed; `verity-vllm`
+  r20261113-052846-14e2 (its counts are in `checkpoint.md`; if the last lines there do not give them, read `research status`
+  and fetch it). No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
 - Tonight's lease (Fri 03:15Z, r20261113-031522-215e at `920597d5ca7f`, `jobs/card_row.sh`): every comparison that ran found
   0 differing words (eh_norm 25,165,824 words; indexer_logits 290,933 words), but no record was sealed (the schemas were not
   registered) and eh_proj stopped at its first split launch (the probe). So nothing of tonight is a capture of record; the
@@ -22,7 +24,7 @@ A turn starts on a new machine with a new clone on `main`; only what is pushed s
 
     git -C /agent/repos/verity fetch origin cursor/circuits-cir263-draft-layer-kernels-6f04 cursor/circuits-cir263-scratch-6f04
     git -C /agent/repos/verity worktree add -B cursor/circuits-cir263-draft-layer-kernels-6f04 /tmp/cir263-pr origin/cursor/circuits-cir263-draft-layer-kernels-6f04
-    git -C /tmp/cir263-pr rev-parse HEAD        # must print 78884a1b8aa7dc72de9cca98568faeea8b3a0b8a (or what checkpoint.md's last line names)
+    git -C /tmp/cir263-pr rev-parse HEAD        # must print ce09de03c318f40d29efbec7cca2536a8b7cf735 (or what checkpoint.md's last line names)
     git -C /agent/repos/verity worktree add -B cursor/circuits-cir263-scratch-6f04 /tmp/cir263-scratch origin/cursor/circuits-cir263-scratch-6f04
 
 Push from the worktrees only (`git -C /tmp/cir263-scratch push origin cursor/circuits-cir263-scratch-6f04`,

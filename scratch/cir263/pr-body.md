@@ -19,6 +19,7 @@ GLM-5.3's recipe serves with five draft tokens from one MTP draft layer. At vLLM
 - **Each capture's record is a registered property's.** `seal` refuses a schema that no property names, so the three captures are registered in `verity_vllm/properties/record.py` (`glm53_mtp_eh_norm_capture`, `glm53_mtp_eh_proj_capture`, `glm53_mtp_indexer_logits_capture`), with their schema ids in a new `verity_vllm/records/mtp_captures.py`: the typed-records lint keeps schema literals in `records/` and its list only shrinks.
 - **The split-K probe at eh_proj's shape.** `splitk_probe_words` in `glm53_bf16_gemm_capture_gpu.py` could not tell the strided partition from the contiguous one at K 12288, 2 splits, bf16 output, and raised. Where its random rows leave those two equal, and only there, it now plants a third row (2^25 in block 0, -2^25 in block 1, +1 in block `splits`) that the two partitions sum differently. That is exactly where it raised before, so every probe that existed is unchanged.
 - **A CPU test of each capture's `main`**, `tests/properties/test_glm53_mtp_captures.py`: the GPU is stood in for by the twin's words at the launch, and everything after it is real, through the worker pool to the sealed record, the GO / NO-GO line and the exit status, with a flipped word found where it was put. The first run on a card found the two slips above only after its comparisons; this test finds both without a card.
+- **The eh_proj capture's shape in the sibling's `MODELS`.** The capture reuses `glm53_bf16_gemm_capture_gpu`'s scan and launch, which read a model's shapes from its `MODELS`. It now puts its shape there only while a run or a scan process lasts (`registered`), and takes it out when they end or raise. Importing the module used to add it, and the sibling's own tests, which read every model there, then failed on a third one.
 - No registered Definition's words changed; `catalog_ids.json` lists the seven new ids.
 
 ## circuit-check
@@ -61,7 +62,9 @@ All four unchecked are `vectors/none`, on word Definitions bound at 6,144 and on
 - `r20261113-031522-215e` (node A, card 0, cores 0-9, one lease of 124 s, at `920597d5ca`; **not a capture of record**: it sealed no record). `eh_norm`: 25,165,824 words compared (4 x 6,291,456), 0 differ; the PTX's hash and counts as pinned. `indexer_logits`: 290,933 words compared (100,664 + 190,269), 0 differ. Both then failed at `seal` (the schemas were not registered). `eh_proj`: the route scan finished (below) and 14 unsplit launches ran, then the split-K probe raised before any comparison.
 - `r20261113-033120-282e` (a CPU pod, at `bcc3d97e7d`; computed after the fact from the words that run kept, not by the job that ran the kernel): the 14 unsplit `eh_proj` launches at M 1 to 96 against `Gemm_v2{K=12288,N=6144,DOT=HopperBF16WgmmaDot16_v1}`: 321 rows, 1,972,224 words compared, 0 differ.
 - `r20261113-035227-475a` (`repository`, whole, at `78884a1b8a`): 352 passed, 0 failed.
-- `r20261113-040826-9fec` (`verity-vllm`, whole, at `78884a1b8a`): <counts>.
+- `r20261113-040826-9fec` (`verity-vllm`, whole, at `78884a1b8a`): 14,979 passed, 18 failed, 485 skipped. All 18 are the sibling capture's tests (17 in `test_glm53_bf16_gemm_capture.py`, 1 in `test_sampled_replay_glm53_rows.py`) seeing `glm53-mtp` in `MODELS` once the new test file imported the eh_proj capture. `ce09de03c3` fixes it.
+- `r20261113-052134-678c` (`repository`, whole, at `ce09de03c3`): 352 passed, 0 failed.
+- `r20261113-052846-14e2` (`verity-vllm`, whole, at `ce09de03c3`): <counts>.
 - <the captures of record: run id, head, rows and words compared, words that differ>.
 
 ## Not run
