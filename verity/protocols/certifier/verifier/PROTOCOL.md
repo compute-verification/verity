@@ -2223,7 +2223,8 @@ prompt ids and a size of ids released, each a power of two.
   - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network certifier
     (`Warden.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a served
     run the publisher process sends the line of `rows.jsonl` back and the tick appends it with the tick it left
-    at.
+    at. That tick is the device's own note beside the signed registration, not under its signature, so the run's
+    check refuses a late head only as far as the device's line says.
   - **A head back by its due tick** leaves at that tick and never sooner.
   - **A head back later** leaves at the first tick it is back by, at most W = `head_wait` ticks after the due one.
   - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A served
