@@ -12,7 +12,9 @@ registered has its registered root and any other's reads are free.
 A stack's tables are its e4m3 weight's blocks of ``blocks[proj]`` rows (n, a power of two dividing N) and its f32 scales' rows, as
 the partition's read templates read them: a block of rows of ``H = n K / 2`` words, a scale row of ``H = 2 K / G``.  The rank's
 embedding shard's tables (``shards``, ``--shard FIELD``) are its column blocks at its one width (`serving_templates.shard_block`,
-which no argument sets), each the whole vocabulary's rows (`expert_rows.shard_words`).  Without a Build,
+which no argument sets), each the whole vocabulary's rows (`expert_rows.shard_words`).  A ``(B, K, N)`` weight a GEMM reads as
+[B][N][K] (``bnk``, ``--bnk FIELD``) is one value in that order, ``hm96-sha512/row/v2`` rows of K words a read reads by
+reference (`expert_rows.bnk_words`), at the nonce of its field's place as a table's is.  Without a Build,
 a capture's served parameters name the weights (`served_fields`) and each composed weight is held to its served SHA-512, so the
 registered rows are the served bytes; with one, that the registered rows are the checkpoint's is the committer's own check, as for
 its weights (`window_weights`).
@@ -36,13 +38,15 @@ import numpy as np
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.expert_rows import committer, of_request, shard_param, shard_words, table_param, table_words
+from verity_vllm.pipeline.expert_rows import (bnk_param, bnk_words, committer, of_request, shard_param, shard_words, table_param,
+                                               table_words)
 from verity_vllm.pipeline.serving_templates import shard_block
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "of_request",
-           "program", "register", "served_fields", "shard_param", "shard_words", "table_param", "table_words", "tables_of"]
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "bnk_param", "bnk_words", "committer", "entries", "key_of", "mint_key",
+           "nonces", "of_request", "program", "register", "served_fields", "shard_param", "shard_words", "table_param", "table_words",
+           "tables_of"]
 
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
@@ -61,14 +65,22 @@ def program(repo: str, revision: str, world: int, rank: int, prefix: str) -> str
 
 
 def tables_of(fields: Sequence[tuple[str, Sequence[int], int]], blocks: Mapping[str, int],
-              shards: Sequence[str] = ()) -> dict[str, list[tuple[int, str, str, int]]]:
+              shards: Sequence[str] = (), bnk: Sequence[str] = ()) -> dict[str, list[tuple[int, str, str, int]]]:
     """The tables of the expert stacks among the weight ``fields`` (``(label, shape, bits)``, `weights_of_record.
     program_weight_fields`), by field, each ``(block, param, "w" | "ws", n)``: a stack's ``(E, N, K)`` e4m3 weight in N / n blocks of
     ``blocks[proj]`` rows, its ``(E, NB, K / G)`` f32 scales a row each; and of each embedding shard ``shards`` names, each
-    ``(block, param, "vocab", W)``: its ``(VS, H)`` bf16 words in H / W column blocks of its one width W (`shard_block`).  Refused
-    for a block that is not a power of two dividing N, and for a shard that is not two dimensions of 16-bit words."""
+    ``(block, param, "vocab", W)``: its ``(VS, H)`` bf16 words in H / W column blocks of its one width W (`shard_block`); and of
+    each weight ``bnk`` names, ``(0, param, "bnk", K)``: its ``(B, K, N)`` bf16 words in (B, N, K) order.  Refused for a block
+    that is not a power of two dividing N, a shard that is not two dimensions of 16-bit words and a ``bnk`` weight that is not
+    three."""
     out: dict[str, list[tuple[int, str, str, int]]] = {}
     for label, shape, bits in fields:
+        if label in bnk:
+            if bits != 16 or len(shape) != 3:
+                raise ValueError(f"{label}: a weight registered in (B, N, K) order is (B, K, N) 16-bit words, not {list(shape)} "
+                                 f"of {bits} bits")
+            out[label] = [(0, bnk_param(label, int(shape[1])), "bnk", int(shape[1]))]
+            continue
         if label in shards:
             if bits != 16 or len(shape) != 2:
                 raise ValueError(f"{label}: an embedding shard is (VS, H) 16-bit words, not {list(shape)} of {bits} bits")
@@ -157,11 +169,13 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":
             return shard_words(np.asarray(words).reshape([int(x) for x in shape]), vocab[0], vocab[1], b)
+        if what == "bnk":
+            return bnk_words(np.asarray(words).reshape([int(x) for x in shape]))
         E, N, K = (int(x) for x in shape)
         return table_words(words, what, E, N, K, 1, n, b)
 
-    return {param: H1R.commit(digest, param, rows(b, what, n), key, nonce[param], schema=G.SCHEMA_SEG).entry()
-            for b, param, what, n in tables}
+    return {param: H1R.commit(digest, param, rows(b, what, n), key, nonce[param],
+                              schema=G.SCHEMA_V2 if what == "bnk" else G.SCHEMA_SEG).entry() for b, param, what, n in tables}
 
 
 def served_fields(path: str) -> tuple[list[tuple[str, list[int], int]], dict[str, str]]:
@@ -196,12 +210,13 @@ def _commit(job: tuple[dict[str, Any], dict[str, Any], str, list[tuple[str, list
 def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: Mapping[str, int], *, served: str | None = None,
              world: int | None = None, rank: int | None = None, stacks: Sequence[str] | None = None,
              checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
-             verify_shards: bool = True, workers: int = 1, shards: Sequence[str] = ()) -> dict[str, Any]:
+             verify_shards: bool = True, workers: int = 1, shards: Sequence[str] = (), bnk: Sequence[str] = ()) -> dict[str, Any]:
     """The rank's registration (module docstring) of the tables of the Program at ``program_dir`` (a rank Program of the Build:
     its weights struct and its TP world and rank), its expert weights composed from ``checkpoint_dir`` (pinned by
     ``checkpoints_manifest``) under ``key``, each projection's weight in blocks of ``blocks`` rows; ``stacks``: only those expert
     stacks' tables (`weights_of_record.EXPERTS_RE`'s container, ``model.layers.5.mlp.experts``); ``shards``: the rank's embedding
-    shards' tables too, each field the rank's even share of the checkpoint's rows; ``workers``: processes, a stack's
+    shards' tables too, each field the rank's even share of the checkpoint's rows; ``bnk``: those weights in (B, N, K) order
+    too; ``workers``: processes, a stack's
     fields each.  Without a Program, ``served``: a capture's served parameters at TP ``world`` and ``rank`` (`served_fields`), the
     tables named as vLLM names the weights and each composed weight refused unless its SHA-512 is the served one."""
     from verity_vllm.check.checkpoint_index import manifest_entry
@@ -223,8 +238,8 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
         raise ValueError(f"--block {unknown}: no expert stack has that projection")
     if missing := sorted(set(stacks or ()) - set(stack_of.values())):
         raise ValueError(f"no expert stack {missing[:3]} among the weights")
-    if missing := sorted(set(shards) - {f for f, _s, _b in all_fields}):
-        raise ValueError(f"--shard {missing[:3]}: no weight of that name")
+    if missing := sorted({*shards, *bnk} - {f for f, _s, _b in all_fields}):
+        raise ValueError(f"--shard or --bnk {missing[:3]}: no weight of that name")
     manifest = checkpoints_manifest or WR._default_manifest()
     ckargs = {"checkpoints_manifest": manifest, "model": model, "revision": revision}
     ck = WR.CheckpointIndex(checkpoint_dir, **ckargs, verify_shards=verify_shards)
@@ -236,10 +251,11 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
     if not repo or not rev:
         raise ValueError(f"{checkpoint_dir}: no checkpoints.json entry names its repo and revision; give --model and --revision")
     prefix = "" if served is not None else _prefix(prog, ck)
-    fields = [f for f in all_fields if f[0] in shards or f[0] in stack_of and (stacks is None or stack_of[f[0]] in stacks)]
-    tables = tables_of(fields, blocks, shards)
+    fields = [f for f in all_fields
+              if f[0] in shards or f[0] in bnk or f[0] in stack_of and (stacks is None or stack_of[f[0]] in stacks)]
+    tables = tables_of(fields, blocks, shards, bnk)
     if not tables:
-        raise ValueError(f"no e4m3 expert weights of {sorted(blocks)} and no embedding shard among the weights")
+        raise ValueError(f"no e4m3 expert weights of {sorted(blocks)}, no embedding shard and no (B, N, K) weight among the weights")
     vocab: dict[str, tuple[int, int]] = {}
     for name, shape, _b in fields:
         if name in shards:
@@ -285,6 +301,7 @@ class Options:
     block: list[str] = option("--block", action="append", default=[], help="PROJ=n: the stacks' PROJ weights in blocks of n rows")
     shard: list[str] = option("--shard", action="append", default=[], help="FIELD: the rank's embedding shard FIELD's tables too, a "
                               "column block each at the shard's one width (no option sets it)")
+    bnk: list[str] = option("--bnk", action="append", default=[], help="FIELD: the (B, K, N) weight FIELD in (B, N, K) order too")
     out: str = option("--out", help="the registration's file")
     stacks: str | None = option("--stacks", default=None, help="comma-separated expert stacks, e.g. model.layers.5.mlp.experts "
                                 "(default: every one)")
@@ -304,14 +321,16 @@ def main(o: Options) -> int:
         if not proj or not n.isdigit():
             raise UsageError(f"--block {b!r}: PROJ=n")
         blocks[proj] = int(n)
-    if not blocks and not o.shard:
-        raise UsageError("give each projection's block rows (--block w13=n --block w2=n) or an embedding shard (--shard FIELD)")
+    if not blocks and not o.shard and not o.bnk:
+        raise UsageError("give each projection's block rows (--block w13=n --block w2=n), an embedding shard (--shard FIELD) or a "
+                         "weight in (B, N, K) order (--bnk FIELD)")
     if (o.program_dir is None) == (o.served is None) or (o.served is not None and (o.world is None or o.rank is None)):
         raise UsageError("give --program-dir, or --served with --world and --rank")
     key = mint_key(o.key) if o.new_key else key_of(o.key)
     doc = register(o.program_dir, o.checkpoint_dir, key, blocks, served=o.served, world=o.world, rank=o.rank,
                    stacks=o.stacks.split(",") if o.stacks else None, checkpoints_manifest=o.checkpoints_manifest,
-                   model=o.model, revision=o.revision, verify_shards=not o.no_verify_shards, workers=o.workers, shards=o.shard)
+                   model=o.model, revision=o.revision, verify_shards=not o.no_verify_shards, workers=o.workers, shards=o.shard,
+                   bnk=o.bnk)
     Path(o.out).write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[tp-register-tables] rank {doc['rank']}/{doc['world']}: {len(doc['values'])} tables under program {doc['program'][:16]} "
           f"-> {o.out}", flush=True)

@@ -112,6 +112,23 @@ def shard_words(shard: np.ndarray, V: int, start: int, block: int) -> np.ndarray
     return out
 
 
+def bnk_param(label: str, words: int) -> str:
+    """The registered parameter of the ``(B, K, N)`` weight ``label`` in (B, N, K) order, rows of ``words`` = K u16 words:
+    ``weights/<label>@<words>/bnk``."""
+    return f"{WR.weight_param(label, words)}/bnk"
+
+
+def bnk_words(field: np.ndarray) -> np.ndarray:
+    """A ``(B, K, N)`` weight's bf16 elements as read, as u16 words ``(B N, K)``: row b N + n its words [b, :, n], the K words
+    a unit (b, n) of a GEMM over the weight read as [B][N][K] reads, which are no run of the weight as the record holds it.
+    The elements are taken as their bytes, never converted."""
+    a = np.ascontiguousarray(field)
+    if a.ndim != 3 or a.dtype.itemsize != 2:
+        raise ValueError(f"a weight registered in (B, N, K) order is (B, K, N) 2-byte words, not {a.dtype} of shape {a.shape}")
+    B, K, N = a.shape
+    return np.ascontiguousarray(a.view("<u2").transpose(0, 2, 1)).reshape(B * N, K)
+
+
 def kind(t: str, statics: Mapping[str, Any]) -> tuple[str, int]:
     """Template ``t``'s part of the cut on a pair row of ``statics``: ``("slots", 1)``, ``("gemm", n)`` a block GEMM of n rows,
     ``("fused", n)`` a fused block of n rows, ``("w", n)`` the read of a block of n rows, or ``("ws", G)`` the read of a
@@ -406,6 +423,24 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
 #: the serving process's embedding shards' tables (`commit_shard`), by the committer's key and program and the table's
 #: parameter and nonce: committed once a process and held, rows and all, until it ends
 _SHARDS: dict[tuple[bytes, str, str, int], Any] = {}
+#: the serving process's weights in (B, N, K) order (`commit_bnk`), by the same: committed once a process and held
+_BNK: dict[tuple[bytes, str, str, int], Any] = {}
+
+
+def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable[[], np.ndarray]) -> Any:
+    """The rank's ``(B, K, N)`` weight ``label`` in (B, N, K) order (`bnk_param`, `bnk_words` of ``field()``, its elements as
+    served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
+    ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
+    handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
+    from verity_vllm.protocols.pouw.h1 import registered as H1R
+
+    param = bnk_param(label, K)
+    if param not in committer["nonces"]:
+        raise ValueError(f"{param}: the committer's registration names no nonce for the value (records.expert_tables)")
+    at = (bytes(committer["key"]), str(committer["program"]), param, int(committer["nonces"][param]))
+    if at not in _BNK:
+        _BNK[at] = H1R.commit(at[1], param, bnk_words(field()), at[0], at[3], keep_rows=True)
+    return _BNK[at]
 
 
 def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callable[[], np.ndarray]) -> dict[str, Any]:

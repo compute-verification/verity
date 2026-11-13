@@ -28,6 +28,7 @@ KEY = bytes(range(32))
 WRAP = "model."
 VS = 64
 EMBED = WRAP + "model.embed_tokens.weight"
+ABSORB, BKN = WRAP + "model.layers.1.self_attn.W_UK_T", [4, 6, 8]
 
 
 def _ty(shape, bits):
@@ -40,7 +41,7 @@ def _ty(shape, bits):
 def _fields() -> list[tuple[str, list[int], int]]:
     """The rank Program's weight fields, named under the export wrapper's prefix as a Build names them."""
     I_r = INTER // WORLD
-    out = [(EMBED, [VS, H], 16)]
+    out = [(EMBED, [VS, H], 16), (ABSORB, BKN, 16)]
     for L in LAYERS:
         c = f"{WRAP}model.layers.{L}.mlp.experts"
         out += [(f"{c}.w13_weight", [E, 2 * I_r, H], 8), (f"{c}.w13_weight_scale_inv", [E, 2 * I_r // G, H // G], 32),
@@ -60,6 +61,7 @@ def ckpt(tmp_path_factory):
                 t[name + ".weight"] = ("F8_E4M3", rng.integers(0, 256, size=(n, k), dtype=np.uint8))
                 t[name + ".weight_scale_inv"] = ("F32", rng.random((n // G, k // G), dtype=np.float32))
     t["model.embed_tokens.weight"] = ("BF16", rng.integers(0, 1 << 16, size=(WORLD * VS, H), dtype=np.uint16))
+    t[ABSORB.removeprefix(WRAP)] = ("BF16", rng.integers(0, 1 << 16, size=BKN, dtype=np.uint16))
     root = tmp_path_factory.mktemp("expert_tables")
     d = root / "snap"
     d.mkdir()
@@ -320,3 +322,32 @@ def test_a_shards_one_width_is_its_columns_alone():
     assert [ST.shard_block(H) for H in (6144, 4096, 2048, 5120, 256, 192, 7)] == [192, 256, 256, 160, 256, 192, 7]
     with pytest.raises(ValueError, match="no H / 2\\^k of at most 256 words"):
         ST.shard_block(771)
+
+
+def test_a_weight_in_bnk_order_is_one_value_at_its_fields_nonce_committed_once_a_process(ckpt, regs, monkeypatch):
+    """``bnk`` registers a ``(B, K, N)`` weight in (B, N, K) order beside the stacks' tables, whose entries and nonces stay
+    theirs (a nonce is its field's place, so a value added moves none): one ``row/v2`` value of B N rows of K words, row
+    b N + n the weight's words [b, :, n].  A window's committer commits it once a process (`expert_rows.commit_bnk`) at the
+    registered root; a registration without it and a weight that is not three dimensions refuse."""
+    monkeypatch.setattr(ER, "_BNK", {})
+    B, K, N = BKN
+    param = ER.bnk_param(ABSORB, K)
+    doc = ET.register(ckpt["progs"][1], ckpt["dir"], KEY, BLOCKS, bnk=[ABSORB], checkpoints_manifest=ckpt["man"])
+    assert set(doc["values"]) - set(regs[1]["values"]) == {param}
+    assert all(doc[k][p] == regs[1][k][p] for k in ("values", "nonces") for p in regs[1]["values"])
+    assert (doc["values"][param]["leaves"], doc["values"][param]["words"]) == (B * N, K)
+    field = WR.compose(ABSORB.removeprefix(WRAP), BKN, 16, WR.CheckpointIndex(ckpt["dir"], checkpoints_manifest=ckpt["man"]),
+                       world=WORLD, rank=1)[0]
+    com, reads = ER.committer(XT.ExpertTables.of(doc, "registration"), KEY), []
+
+    def served():
+        reads.append(1)
+        return field
+
+    got = ER.commit_bnk(com, ABSORB, K, served)
+    assert got.entry() == doc["values"][param] and ER.commit_bnk(com, ABSORB, K, served) is got and len(reads) == 1
+    assert all(np.array_equal(got.rows.at([b * N + n])[0], field[b, :, n]) for b in range(B) for n in range(N))
+    with pytest.raises(ValueError, match="names no nonce for the value"):
+        ER.commit_bnk(ER.committer(XT.ExpertTables.of(regs[1], "registration"), KEY), ABSORB, K, served)
+    with pytest.raises(ValueError, match=r"is \(B, K, N\) 16-bit words"):
+        ET.register(ckpt["progs"][1], ckpt["dir"], KEY, BLOCKS, bnk=[EMBED], checkpoints_manifest=ckpt["man"])
