@@ -19,6 +19,8 @@ sessions (`LogRead`) and every log it read is the device's (`LogIsDevice`).
   the first session's read shows no coin tree's `Hello` (`FirstTreeless`).
 * `firstTreeless_of_plain`: `FirstTreeless`, where no line of the first session's log is a coin tree's on two
   windows.
+* `heldSize`, `coinsRead_read`: the sessions' coins at the cut's read, with nothing assumed but that the case is the
+  one sent and `FirstTreeless`.
 
 The event has to be `ReadIsDevice`: `LogIsDevice` alone holds of any log on a play whose logs the cut didn't read, and
 says nothing of the interior's there.
@@ -171,5 +173,22 @@ theorem firstTreeless_of_plain (C : CaseOf)
   obtain ⟨lab, hlab⟩ := readLog_plain h8 (h o hacc p c e key d₁ d₂ ls h1 h2 h3 h6 hw (toOption_ok hls)) r hr
   rw [hlab] at hsp
   cases hsp
+
+/-! ## The sessions' coins at the cut's read -/
+
+/-- **`membersHeld` returns a member for each statement** (`HeldSize`): the cut's `held_size`. -/
+theorem heldSize : HeldSize := fun _ _ _ h => held_size h
+
+/-- **The sessions' coins the check reads are the device's, at the cut's read** (`coinsRead_sessions` at
+`ReadIsDevice`): on a play the form accepts whose logs the cut read and found the device's, wherever the check read a
+coin for a session's round, the device's release for that round is that coin. The play's case is the one sent (`hC`,
+as in `secondRead_interior`) and, on two windows, the first session's read shows no `Hello` (`FirstTreeless`). -/
+theorem coinsRead_read (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+    (dev : List Release → ℕ → Option FlockDeploy.Coin) (hdev : DevLocal A (locOf A tab) dev)
+    (hC : ∀ o k p c e, C o = some k → Decoded k p c e →
+      caseOf o.sent = .ok (p, c, e) ∧ k.blobs = _root_.Core.Blobs.ofArray o.sent.blobs)
+    (hfree : FirstTreeless C) :
+    CoinsReadSome A (formReading A C (withCoins A C tab dev Ms) dev) (FormAccepts C) ReadIsDevice .sessions :=
+  coinsRead_sessions A C Ms tab dev ReadIsDevice hdev (interiorLogged_read C hC hfree)
 
 end Verity.SampledTwo.SessionCoins

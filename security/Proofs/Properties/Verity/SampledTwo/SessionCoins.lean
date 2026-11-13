@@ -30,8 +30,9 @@ is the device's release for that round (`coinsRead_sessions`), and that the stat
 * **The sessions' coins** (`withCoins`): session `t`'s coin at its round `j` is `dev` at the read log, where every
   release the locator puts on the round shows its coins in the read; none otherwise. Two coins agree at a session's
   round on the elements the read's releases for it carry.
-* **The premise** (`InteriorLogged`, the cut's): on an accepted play whose log the check read is the device's, the read
-  log is the play's log after releases that open and sample no coin tree.
+* **The premise** (`InteriorLogged`): on an accepted play whose log the check read is the device's, the read log is
+  the play's log after releases that open and sample no coin tree. `SessionCut.interiorLogged_read` proves it at the
+  cut's read (`ReadIsDevice`), where on two windows the first session's read shows no `Hello` (`FirstTreeless`).
 * **The statements** (`CoinsReadSome`, `coinsRead_sessions`, `coinsAgree_sessions`, `stmtReadsNone`). `CoinsRead` asks
   the coin read to equal the device's release at every read round; at a session's round the check reads no coin where
   the evidence shows an opening without its coins, so the statement here is that wherever the check read a coin it is
@@ -42,9 +43,9 @@ That the coin read is the session's own tree's round, the coin its record gives 
 members' check on the read (`MembersAccepted`, through `Verity.Sampled.MemberForm.members_read`); that the locator puts at
 most one release on a round is `located_one`.
 
-**The earlier signature.** Nothing here reads a signature. `InteriorLogged` comes from the cut's `LogIsDevice`, whose
-forger term holds the hole of a history of one play (soundness's finding): a strategy replaying an earlier period's
-genuine signature shows there, not here.
+**The earlier signature.** Nothing here reads a signature. `InteriorLogged` is asked where the cut found the log the
+check read the device's (`ReadIsDevice`), and the cut's forger term holds the hole of a history of one play
+(soundness's finding): a strategy replaying an earlier period's genuine signature shows there, not here.
 -/
 
 @[expose] public section
@@ -148,10 +149,10 @@ def interiorRead (C : CaseOf) (o : Exchange) : Option (List Release) := do
   let recs ← (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs)
   Verity.Sampled.readLog d.label d.after recs ξ₂ (← (Verity.Sampled.linesOf e.interior).toOption)
 
-/-- **The log the check read is the play's, after releases of no coin tree** (the cut's premise, from its
-`LogIsDevice`): on a play the form accepts whose log the check read is the device's (`Good`), the interior read is the
-play's log after releases that neither sample nor open a coin tree, each read release of the device's (`Read.Of`).
-On one window the releases before are none; on two, the first session's. -/
+/-- **The log the check read is the play's, after releases of no coin tree** (proved at the cut's read,
+`SessionCut.interiorLogged_read`): on a play the form accepts whose log the check read is the device's (`Good`), the
+interior read is the play's log after releases that neither sample nor open a coin tree, each read release of the
+device's (`Read.Of`). On one window the releases before are none; on two, the first session's. -/
 def InteriorLogged (C : CaseOf) (Good : Exchange → Prop) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ l, interiorRead C o = some l →
     ∃ q l', o.log = q ++ l' ∧ (∀ r ∈ q, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp) ∧
@@ -198,7 +199,7 @@ theorem stmtReadsNone (A : Live₂) (C : CaseOf) (S : SessionReading)
   split_ifs at hg
 
 /-- **The sessions' coins the check reads are the device's** (piece: the sessions' coins): on a play the form accepts
-whose log the check read is the device's (`Good`, through the cut's `InteriorLogged`), wherever the check read a coin
+whose log the check read is the device's (`Good`, through `InteriorLogged`), wherever the check read a coin
 for a session's round, the device's release for that round (`dev`, at the coin map's locator, which agrees with the
 session-round locator there: `DevLocal`) is that coin. -/
 def CoinsReadSessions : Prop :=
@@ -881,7 +882,7 @@ theorem coinsAgree_of_some {A : Live₂} {Rd : Reading A} {Acc Good : Exchange �
 
 /-- **The sessions' coins agree as the device's releases do** (piece: the sessions' coins, as `ProjectionOf` takes
 it): `CoinsAgree` at the sessions' rounds, at the form's reading over `withCoins`, from the coin map's `DevLocal` and
-the cut's `InteriorLogged`. -/
+`InteriorLogged`. -/
 theorem coinsAgree_sessions (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop)
     (hdev : DevLocal A (locOf A tab) dev) (hlog : InteriorLogged C Good) :

@@ -15,7 +15,7 @@ releases the session-round locator puts on the round carry, in the log the check
 * `DevElems`: the coin map's agreement at the session-round locator, in the play's log.
 * `located_widths`: the elements a round's releases carry are the same in two logs of the same frames.
 * `slot_exists`: a round past the statements' and before the sessions' end is in one session's rounds.
-* `sessionsAgree`: `SessionsAgree` from `InteriorReads`, the cut's `InteriorLogged` and `DevElems`.
+* `sessionsAgree`: `SessionsAgree` from `InteriorReads`, `InteriorLogged` and `DevElems`.
 * `sessionsAgree_accepted`: the same at the form's acceptance, `InteriorReads` from `SessionHeld.interiorReads`.
 -/
 
@@ -63,7 +63,7 @@ theorem slot_exists {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t
 
 /-- **The sessions' releases agree with the run's coins** (piece: the sessions' coins, as `devAgrees_formReading`
 takes it): `SessionsAgree` at the sessions' reading `withCoins`, from the coin map's agreement at the session-round
-locator (`DevElems`), the cut's `InteriorLogged` and the read's existence on an accepted play (`InteriorReads`). A read
+locator (`DevElems`), `InteriorLogged` and the read's existence on an accepted play (`InteriorReads`). A read
 round past the statements' is in a session's rounds (`slot_exists`), and the releases the locator puts on it carry the
 same elements in the log the check read as in the play's (`located_widths`). -/
 theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
@@ -101,7 +101,7 @@ theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionR
   exact he
 
 /-- **The sessions' releases agree with the run's coins** (`SessionsAgree`), at the form's acceptance: from the coin
-map's agreement at the session-round locator (`DevElems`) and the cut's `InteriorLogged`. -/
+map's agreement at the session-round locator (`DevElems`) and `InteriorLogged`. -/
 theorem sessionsAgree_accepted (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
     (hsz : HeldSize) (hlog : InteriorLogged C Good) (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :

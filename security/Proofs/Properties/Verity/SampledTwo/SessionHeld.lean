@@ -22,7 +22,8 @@ The sessions' coins take two facts about a play the two-stage form accepts as pr
   (`named_records`).
 * **The statements and their members** (`HeldSize`, `zip_sessions`): `membersTreesHeld` runs over the statements paired
   with their members, which are all the statements where `membersHeld` returns a member for each. That it does is
-  `HeldSize`, a premise here: the cut's file proves it (`held_size`), and this file does not write it twice.
+  `HeldSize`, a premise here: the cut's file proves it (`held_size`, as `SessionCut.heldSize`), and this file does not
+  write it twice.
 * **The sample's source** (`source_some`): where the interior's sample read coins, its parameters name a challenger and
   a window.
 * **The members' check on the log the check read** (`MembersNamed`, `membersNamed`, `membersAccepted`), with what was
