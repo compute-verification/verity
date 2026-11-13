@@ -13,6 +13,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -32,23 +33,30 @@ print(json.dumps(held))
 """
 
 
+class Held(NamedTuple):
+    """What a process holds after it imports one module: which of the module's case are loaded (`loaded`), how many Definitions
+    the table holds (`ids`), and how many once the case's modules are imported there (`ids_with_them`)."""
+    loaded: list[str]
+    ids: int
+    ids_with_them: int
+
+
 @functools.cache
-def held(module: str) -> dict[str, object]:
-    """A fresh process that imports `module`: which of its case's modules are loaded then (`loaded`), how many Definitions the
-    table holds (`ids`), and how many once they are imported there (`ids_with_them`).  It runs in the adapter's directory, so the
-    `verity_vllm` it imports is this tree's."""
+def held(module: str) -> Held:
+    """A fresh process that imports `module`, and what it holds then.  It runs in the adapter's directory, so the `verity_vllm` it
+    imports is this tree's."""
     child = subprocess.run([sys.executable, "-c", CHILD, module, *CASES[module]], cwd=Path(__file__).resolve().parents[2],
                            capture_output=True, text=True, check=False)
     assert child.returncode == 0, child.stderr[-2000:]
-    return json.loads(child.stdout.splitlines()[-1])
+    return Held(**json.loads(child.stdout.splitlines()[-1]))
 
 
 @pytest.mark.parametrize("module", CASES)
 def test_the_import_leaves_them_unloaded(module: str) -> None:
-    assert held(module)["loaded"] == []
+    assert held(module).loaded == []
 
 
 @pytest.mark.parametrize("module", CASES)
 def test_their_definitions_enter_the_table_when_they_load(module: str) -> None:
     got = held(module)
-    assert got["ids_with_them"] > got["ids"]
+    assert got.ids_with_them > got.ids
