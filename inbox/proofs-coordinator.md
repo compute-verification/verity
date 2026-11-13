@@ -125050,3 +125050,77 @@ Nothing of you.
 ### To post
 
 Nothing.
+
+## HELDOF, Fri 06:33Z: the descriptor check compiles at `1e14660f7d` (`r20261113-062520-38bb`): `SampledTwoDesc.descOk` gives `heldOkDesc`; five per-bit clauses wait
+
+The verifier-side descriptor check from your 05:07Z item 1 is written and compiles. It is a new file of the verifier's
+package, beside the form's, and nothing calls it. One Proofs lemma shows that where it passes, `heldOkDesc` holds,
+which is `decided` at the held copies `heldOf` builds. It reads each template's circuit file, its setup and the
+registered wiring once per template, and no unit or bit. Five wiring clauses still walk every source or written bit, so
+the lemma takes them as one hypothesis, `walksOk`. They wait on FRAME's per-template clause.
+
+- [run] `r20261113-062520-38bb`, head `1e14660f7d` on `cursor/proofs-heldof-4c7b`: `VStarRecursive.SampledTwoDesc`
+  builds, and `Proofs.Flock.SpotFlock.HeldOfDesc` has lean exit 0. Its 39 theorems use only `propext`,
+  `Classical.choice` and `Quot.sound`. The two `sorry` warnings in the log are ArkLib's. Earlier tries of the same
+  file: `r20261113-061127-9bc3` (5 of 38 theorems failed) and `r20261113-061847-b3e2` (2 of 39 failed).
+- [read] The lemma, `SpotFlock.HeldOf.heldOkDesc_of_descOk u₀ (hd : SampledTwoDesc.descOk p bs i it = true)`, gives
+  `∃ xs first ns ks r hz, refStmtsOf p bs = some xs ∧ firstOf i = some first ∧ cellsOf i it = some (ns, ks) ∧
+  (walksOk (held₀ i it {u₀ with xs} first ns ks r hz) = true → heldOkDesc p bs i it u₀ = true)`. Here `walksOk` is
+  `sourcesNamed && wiresMove && returnedWhole && writtenUnwired && writtenRead`. `decided_of` gives `decided` from its
+  thirteen clauses, and the lemma proves each clause from the check.
+- [read] What `descOk` decides today, per template:
+  - as many reference statements as templates, and at least one;
+  - for each reference statement, that each field fits its length word, the `--zk` scope (`zkOk`), `templateOk` and
+    the hidden-output scope (`membersScoped`);
+  - `memberOk`, where the unit count is the number `requests l * n_t` and no unit list is built;
+  - `designOk` at the first stage's law and `.all`, where the rule is what `Spot.Select.resolve` returns;
+  - the counts `k` (as many as templates, each at least 1) and the cells `ns`;
+  - the clauses of `wiringOk` that need no bit walk: `namesOnce`, `writersFirst`, `wiresAlike` and `refReadsOwn`;
+  - and that the interior registration registers no value.
+- [read] What waits, in `walksOk`: `sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired` and `writtenRead`.
+  Each walks the units and their bits.
+- [derived] What deciding the check costs, under the verifier-cost rule:
+  - per template, one parse of its circuit file and one Flock setup of its reference statement;
+  - per template, one parse of its partition JSON and one scope check;
+  - `memberOk` from sizes;
+  - `namesOnce` in \(O(T^2)\) over \(T\) templates, and the wire clauses in \(O(W \cdot T)\) over \(W\) wires.
+
+  No term grows with the units \(r \cdot n_t\) or with bits: it is O(circuit description).
+- [read] How the lemma ties the check to the model, which the check cannot import:
+  - its bytes (`rawOf`), read back through `FlockDeploy.decode_encode_of_fits`;
+  - `Raw.ins`, then `Ins.setup`, which is the check's own `setupAt` by `rfl`;
+  - the first stage's design through `slotDesign`;
+  - the wiring clauses by `rfl` at any held copy.
+- [run] There is one change to the check since `9f762a5919`. Its `fits` also checks that the statement name fits its
+  length word. The check's bytes need `Raw.Fits`, and `decide` could not evaluate that constant in Proofs
+  (`b3e2`).
+- [read] The lock: one line, `"Proofs.Flock.SpotFlock.HeldOfDesc"`, at the end of `roots` in
+  `security/Proofs/lean-audit.json`, and the same name among the lakefile's roots (your 06:09Z rule).
+- [run] Every lock root is under a quoted lakefile root on both of my branches: this branch has 179 lock roots, and
+  `cursor/proofs-heldof-block-4c7b` (`fd41320f42`) has 169. On the block branch, `BlockCommits` is under
+  `Proofs.Flock`, which imports it through `ScopeOf`.
+- [read] I read the mailbox at 06:12Z. Nothing is new after 06:09Z.
+
+### STOP RULE
+
+No listed guarantee changes. What the verifier accepts does not change: `SampledTwoDesc.descOk` is new and nothing
+calls it. TWOLEG adds the call, on your word. Before: the form decides nothing of `templateOk` or `wiringOk`. After:
+the same, until the call lands.
+
+### NEEDS
+
+- FRAME's per-template clause, so that the five walks become a per-template check and `walksOk` leaves the hypothesis.
+- Your word on who writes the partition congruence lemma (my 05:48Z entry).
+- TWOLEG's call to `descOk`, when you give it.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- That `descOk` passes on an honest play: no run has executed it on any input, so there is no honest witness. Nothing
+  goes into a lock for it.
+- That the five per-bit clauses can be decided per template.
+- That `heldOkDesc` at the form's accept gives `TwoHolds` without `walksOk` [derived: it does not; `walksOk` stays a
+  premise].
