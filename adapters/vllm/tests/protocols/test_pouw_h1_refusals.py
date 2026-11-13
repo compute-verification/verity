@@ -10,8 +10,17 @@ import hashlib
 import json
 import random
 from fractions import Fraction
+from typing import TYPE_CHECKING
 
+import numpy as np
 import pytest
+
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+
+from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import HM96, commit_rows
@@ -20,8 +29,15 @@ from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device.challenger import LiveRecord
 
 import verity_vllm.protocols.pouw.h1.challenger as PHC
+import verity_vllm.protocols.pouw.h1.commit as CT
 import verity_vllm.protocols.pouw.h1.draw as PHD
+import verity_vllm.protocols.pouw.h1.drawn as DRAWN
+import verity_vllm.protocols.pouw.h1.drawn_rows as DR
+import verity_vllm.protocols.pouw.h1.hooks as PHK
+import verity_vllm.protocols.pouw.h1.live as LV
 import verity_vllm.protocols.pouw.h1.model_key as MK
+import verity_vllm.protocols.pouw.h1.prover as PV
+import verity_vllm.protocols.pouw.h1.registered as NR
 import verity_vllm.protocols.pouw.h1.requests as RQ
 import verity_vllm.protocols.pouw.h1.served as SV
 import verity_vllm.protocols.pouw.h1.static as ST
@@ -31,7 +47,9 @@ from tests.protocols.test_pouw_h1 import (
     DRAW_RESERVED,
     KEY,
     SALT,
+    K,
     Linear,
+    Runner,
     _admitted_run,
     _entry,
     _host,
@@ -41,8 +59,11 @@ from tests.protocols.test_pouw_h1 import (
     _salted,
     _serve_window,
     _settings,
+    _so,
+    _tap,
 )
 from verity_vllm import protocols as PO
+from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 
@@ -287,6 +308,222 @@ def test_a_model_key_answer_without_a_hex_key_or_its_digests_is_refused():
         with pytest.raises(ValueError, match=r"^model-key: the answer names no model, circuit and weights' root "
                                              r"\(SHA-512 digests in hex\)$"):
             MK.model_key({**answer, **named})
+
+
+def test_a_tile_unit_a_row_schema_and_a_public_salt_past_its_table_are_refused():
+    """The pouw setting ``unit`` is v1, the default, or j10r; a row table's schema is one of the two row leaves; and a
+    public table has its rows' salts and no more."""
+    assert SV.unit_of(None) is None and SV.unit_of("v1") is None and SV.unit_of("j10r") is not None
+    with pytest.raises(ValueError, match="^no tile unit 'j11': the pouw setting 'unit' is v1 or j10r$"):
+        SV.unit_of("j11")
+    words = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    assert NR.row_digests(words).shape == (3, 64)
+    with pytest.raises(ValueError, match="^rows of 'row/v3': hm96-sha512/row/v2 or hm96-sha512/row-seg/v1$"):
+        NR.row_digests(words, "row/v3")
+    salts = NR.PublicSalts(b"head", 5, 2)
+    assert len(salts) == 2 and salts[-1] == salts[1] != salts[0] and salts[0:2] == [salts[0], salts[1]]
+    for j in (2, -3):
+        with pytest.raises(IndexError, match=f"^{j}$"):
+            salts[j]
+
+
+def test_a_window_is_whole_tiles_under_a_salt_or_an_opener_and_a_proof_block_is_one_of_its_calls():
+    """A window's T is a positive multiple of 32; its salt is given or opened by its opener, never both and never
+    neither; a model with no linear layer installs none; and a proof block past the calls' units is no call's."""
+    assert PH.layout([(32, K), (40, K)], 32) == ([0, PH.units(K, 32, 32)], PH.units(K, 32, 32) + PH.units(K, 40, 32))
+    for rows in (33, 0, -32):
+        with pytest.raises(ValueError, match=f"^T = {rows} rows is not a positive multiple of 32$"):
+            PH.layout([(32, K)], rows)
+    for salt, opener in ((None, None), (SALT, lambda requests: None)):
+        with pytest.raises(ValueError, match="^t: a window's salt is given or opened by its opener, one of the two$"):
+            PH.H1Run("t", salt, {0: "q"}, [(32, K)], 32, 1, opener=opener)
+    with pytest.raises(ValueError, match=f"^pouw:{PH.SCHEME}: the model has no linear layer$"):
+        PHK.layers(torch.nn.Sequential(torch.nn.ReLU()), (Linear,))
+    manifest = [{"index": 0, "base": 0, "units": 2}, {"index": 7, "base": 2, "units": 3}]
+    assert [PV.locate(manifest, unit) for unit in (0, 1, 2, 4)] == [(0, 0), (0, 1), (7, 0), (7, 2)]
+    for unit in (5, -1):
+        with pytest.raises(ValueError) as refused:
+            PV.locate(manifest, unit)
+        assert str(refused.value) == f"unit {unit} is no call's: the window's units are its calls' [base, base + units)"
+
+
+def test_a_closed_window_takes_no_admission_and_no_call_and_names_only_its_calls(window):
+    """After its close a window refuses an admission and a call, each by name, and it has no call past the ones it
+    recorded."""
+    run, _coins = window
+    assert run.closed and [c.index for c in run.calls] == list(range(6)) and run.call(5) is run.calls[5]
+    with pytest.raises(KeyError, match="^'t: no call 6'$"):
+        run.call(6)
+    with pytest.raises(RuntimeError, match="^t: an admission after the window closed$"):
+        run.admit([("d", [7], 1)], [("d", 1)])
+    with pytest.raises(RuntimeError, match="^t: a call after the window closed$"):
+        run.record(0, *_tap(np.random.default_rng(0), 1, 32))
+    assert len(run.requests) == 3 and len(run.calls) == 6
+
+
+def _driven(*steps, salt=SALT, admission=RQ.PER_ROUND, **kw):
+    """`test_pouw_h1._admitted_run`'s window of 3 rounds over two linears, unclosed, after `admitting` took each of the
+    scheduler outputs ``steps`` and both linears served the step's rows."""
+    rng, runner = np.random.default_rng(12), Runner()
+    run = PH.H1Run("t", salt, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=_rounds(), key=KEY, admission=admission,
+                   **kw)
+    step = PHK.admitting(run, runner.execute_model, runner)
+    for so in steps:
+        step(so)
+        for w, n in ((0, 32), (1, 40)):
+            run.record(w, *_tap(rng, so.total_num_scheduled_tokens, n))
+    return run
+
+
+def test_a_step_scheduled_twice_before_its_forward_admits_once_and_is_a_gap():
+    """A second admission into a step whose forward hasn't run admits nothing, and the step is named among the window's
+    request gaps, so the window credits nothing."""
+    run = _driven()
+    assert [(e.index, e.round, e.slot) for e in run.admit([("a", [1, 2, 3], 4)], [("a", 3)])] == [(0, 0, 0)]
+    assert run.request_gaps() == []
+    assert run.admit([("b", [4], 2)], [("b", 1)]) == []
+    assert run.request_gaps() == ["step 0: scheduled twice before its forward"]
+    assert run.owners == {0: [0, 0, 0]} and [e.prompt for e in run.requests] == [(1, 2, 3)]
+
+
+@pytest.mark.parametrize("admission", [RQ.ROUND0, RQ.PER_ROUND])
+def test_a_window_whose_opener_refused_its_salt_opens_it_once(admission):
+    """A window opens its salt once: after its opener refused, the window records why, and it never asks the opener
+    again, at a later admission or for its salt."""
+    asked = []
+
+    def shut(requests):
+        asked.append(requests)
+        raise LC.CoinError("the gate is shut")
+    run = _driven(salt=None, opener=shut, admission=admission)
+    with pytest.raises(LC.CoinError, match="^the gate is shut$"):
+        run.admit([("a", [1, 2, 3], 4)], [("a", 3)])
+    assert run.details["unopened"] == "the gate is shut" and len(asked) == 1
+    for again in (run.open_window, lambda: run.salt):
+        with pytest.raises(RuntimeError) as refused:
+            again()
+        assert str(refused.value) == "t: the window's salt was refused (the gate is shut), and a window opens it once"
+    run.finish()
+    assert len(asked) == 1 and "draw" not in run.commits and "calls_root" not in run.commits
+
+
+def test_a_draw_coin_its_session_refuses_is_the_draws_refusal_beside_its_root():
+    """`finish` records the draw root it asked the coin after, and the session's refusal in place of the coin."""
+    asked = []
+
+    class Shut:
+        def record(self, root):
+            asked.append(root)
+            raise LC.CoinError("the draw session is closed")
+    run = _driven(_so(("a", [1, 2, 3], 4)), _so(running={"a": 1}), _so(running={"a": 1}), draw=Shut())
+    run.finish()
+    draw = run.commits["draw"]
+    root = RQ.draw_root(bytes.fromhex(run.commits["calls_root"]), bytes.fromhex(draw["receipts"]), run.round_log)
+    assert asked == [root] and len(run.round_log) == 3
+    assert draw == {"root": root.hex(), "receipts": run.receipts_of(2).hex(), "coin": None,
+                    "refused": "the draw session is closed"}
+
+
+def test_a_resumed_requests_ids_are_its_prompt_again_and_a_row_with_no_entry_has_none_to_be():
+    """`ids_reason` holds each prefill row's id to the next prompt token of the request its slot names, from token 0
+    again in the round a preempted request is resumed, and reads no id of a row no entry names; a round whose ids
+    aren't one a slot is refused."""
+    run = _driven(_so(("a", [1, 2, 3], 4), ("z", [7, 8], None)), _so(("a", [1, 2, 3], 4), ("b", [4], 2), running={"z": 1}),
+                  _so(running={"a": 1, "b": 1}))
+    assert run.owners == {0: [None, None, 0, 0, 0], 1: [None, 1, 0, 0, 0], 2: [0, 1]}
+    assert run.readmitted == [{"round": 1, "index": 0}] and [e.prompt for e in run.requests] == [(1, 2, 3), (4,)]
+    honest = {0: [7, 8, 1, 2, 3], 1: [0, 4, 1, 2, 3], 2: [0, 0]}
+
+    def reason(**rounds):
+        return CT.ids_reason(run, CT.CommitTap(round_ids={**honest, **{int(r[1:]): ids for r, ids in rounds.items()}}))
+    assert reason() is None and reason(r0=[9, 9, 1, 2, 3], r1=[9, 4, 1, 2, 3], r2=[9, 9]) is None
+    off = "layer 0's input is not its round's request table"
+    assert reason(r1=[0, 4, 1, 9, 3]) == (
+        f"roots1: step 1's slot 3 has input id 9 in the Commit, and request 0's prompt token 1 is 2: {off}")
+    assert reason(r0=[1, 2, 3, 7, 8]) == (
+        f"roots1: step 0's slot 2 has input id 3 in the Commit, and request 0's prompt token 0 is 1: {off}")
+    assert reason(r2=[0]) == "roots1: step 2's 1 input ids in the Commit are not its 2 slots of the batch"
+    assert reason(r1=[]) == "roots1: step 1's 0 input ids in the Commit are not its 5 slots of the batch"
+
+
+def test_a_scale_the_commit_acquires_with_no_codes_of_its_step_is_refused():
+    """The Commit's tap takes a site's s_a only after its x_q of the same engine step: one at a later step, or at a site
+    with no x_q, is refused by name."""
+    tap = CT.CommitTap()
+    tap.take("m/row_quant/0", np.zeros((2, 3), np.int8), 4)
+    tap.take("m/row_quant/1", np.ones(2, "<f4"), 4)
+    assert tap.refused == []
+    tap.take("m/row_quant/1", np.ones(2, "<f4"), 5)
+    tap.take("n/row_quant/1", np.ones(2, "<f4"), 5)
+    assert tap.refused == ["m/row_quant: an s_a at engine step 5 with no x_q",
+                           "n/row_quant: an s_a at engine step 5 with no x_q"]
+
+
+def test_round_0_admits_at_most_its_leaves_and_a_round_states_no_live_unit_before_it_closes():
+    """``requests@0`` has T rows, so round 0 admits at most T requests, and ``live@<s>`` reads round s's slot table,
+    which is committed when the round closes."""
+    entry = RQ.RequestEntry(0, 0, 0, 4, (1, 2, 3))
+    assert LV.request_words([entry], 2).tolist() == [[0, 0, 0, 0, 0, 0, 4, 0, 3, 0], [0] * 10]
+    with pytest.raises(ValueError, match="^round 0 admits 2 requests, past its 1 leaves$"):
+        LV.request_words([entry, entry], 1)
+    run = _driven(_so(("a", [1, 2, 3], 4)), admission=RQ.ROUND0)
+    assert [x["round"] for x in run.round_log] == [0]
+    for s in (1, 2):
+        with pytest.raises(ValueError, match=f"^round {s} hasn't closed, so its slot table isn't committed$"):
+            LV.statement(run, s)
+    unserved = _driven(admission=RQ.ROUND0)
+    assert unserved.round_log == []
+    with pytest.raises(ValueError, match="^round 0 hasn't closed, so its slot table isn't committed$"):
+        LV.statement(unserved, 0)
+
+
+def test_a_v1_leafs_statement_is_its_lane_or_its_combine_and_a_lanes_names_its_lane():
+    """A sampled v1 leaf has two kinds of statement, a lane's and the combine's; another kind has no rows, and a lane's
+    ok is asked of a lane."""
+    lane, combine = DR.leaf_rows(LL.LANE, K, (32, 32)), DR.leaf_rows(LL.COMBINE, K, (32, 32))
+    assert [port for port, *_ in lane][-4:] == [LL.ADMIT, LL.ZY, LL.PARTIALS, LL.PUB]
+    assert [port for port, *_ in combine][-1] == LL.RECEIPT and len(combine) == LL.lanes(32, 32) + 1
+    with pytest.raises(ValueError, match=f"^a v1 leaf's statement is its {LL.LANE} or its {LL.COMBINE}, not 'tile'$"):
+        DR.leaf_rows("tile", K, (32, 32))
+    with pytest.raises(TypeError, match="^a lane's statement names its lane$"):
+        DR.leaf_ok(LL.LANE, None, {}, {})
+
+
+def test_a_statements_port_reads_one_registered_value_and_each_position_as_one_row():
+    """`statement_tables` gives a port that reads no registered value its instances' rows as they are, and one that
+    does its distinct positions; it refuses a port whose instances read two values, or one position as two rows."""
+    z = {"units": [0, 1], "w_x": np.zeros((2, 3), np.uint16), "s_x": [b"a", b"b"]}
+    plain = DRAWN.statement_tables(z, ["x"], [])
+    assert plain["refs"] == {"x": [0, 1]} and plain["salts"] == {"x": [b"a", b"b"]} and plain["registered"] == {}
+    assert plain["tables"]["x"].tolist() == [[0, 0, 0], [0, 0, 0]]
+    shared = {**z, "s_x": [b"a", b"a"], "r_x": [4, 4], "v_x": ["v", "v"], "p_x": ["p", "p"]}
+    one = DRAWN.statement_tables(shared, ["x"], [])
+    assert one["registered"] == {"x": {"value": "v", "positions": [4], "paths": ["p"]}} and one["refs"] == {"x": [0, 0]}
+    assert one["tables"]["x"].tolist() == [[0, 0, 0]] and one["salts"] == {"x": [b"a"]}
+    for edit in ({"s_x": [b"a", b"b"]}, {"p_x": ["p", "q"]}, {"w_x": np.array([[0, 0, 0], [0, 0, 1]], np.uint16)}):
+        with pytest.raises(ValueError, match="^port x: instances 0 and 1 read position 4 as two rows$"):
+            DRAWN.statement_tables({**shared, **edit}, ["x"], [])
+    with pytest.raises(ValueError) as refused:
+        DRAWN.statement_tables({**shared, "v_x": ["v", "u"]}, ["x"], [])
+    assert str(refused.value) == ("port x: its instances read ['u', 'v'], and a port reads one registered value: one "
+                                  "call's units a statement")
+
+
+def test_the_draws_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
+    """`draw_k` is ``--k`` when given, else the ``draw_k`` the serve dir's period file holds; with neither, a period
+    file without one, or one that is no integer, it refuses and says where a K comes from."""
+    period = tmp_path / DRAWN.PERIOD
+    assert DRAWN.draw_k(tmp_path, 7) == 7
+    for text, what in ((None, f"[Errno 2] No such file or directory: '{period}'"), ('{"other": 1}', "'draw_k'"),
+                       ('{"draw_k": "k"}', "invalid literal for int() with base 10: 'k'")):
+        if text is not None:
+            period.write_text(text)
+        with pytest.raises(Refused) as refused:
+            DRAWN.draw_k(tmp_path, None)
+        assert str(refused.value) == (f"no draw K: give --k, or a serve dir whose {DRAWN.PERIOD} has the open's draw_k "
+                                      f"({what})")
+    period.write_text('{"draw_k": 9}')
+    assert DRAWN.draw_k(tmp_path, None) == 9 and DRAWN.draw_k(tmp_path, 7) == 7
 
 
 @pytest.fixture
