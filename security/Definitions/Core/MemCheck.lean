@@ -16,7 +16,7 @@ each access reads a time before its own, and one equality of multisets of record
 reads consume with the final contents of the touched addresses, against the records the writes produce with their initial
 contents at time `0`. What an accepted log reads is `Verity.Guarantees.MemoryChecked`.
 
-The verifier tests that equality by a fingerprint over a finite field `F`, at coins it draws after both multisets are
+The verifier tests that equality by a fingerprint over a finite field `F`, at coins it samples after both multisets are
 committed. A record is packed into `m` chunks `c : Fin m → F`; its element at a coin `γ` is `∑ i, γ^i · c i` (`element`),
 and a multiset of packed records has the fingerprint `∏ c, (α + element γ c)` at coins `α` and `γ` (`fingerprint`). The
 same `element`, at a coin of its own, prints a key packed into `m` chunks as one field element. Packing is the caller's:
