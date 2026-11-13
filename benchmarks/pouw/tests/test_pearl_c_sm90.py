@@ -21,6 +21,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from conftest import load
+from verity_config.settings import of
 
 from verity.protocols.pouw.verifier.audit import weights_root
 from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
@@ -189,8 +190,6 @@ def test_kernel_constants_match_the_reference():
 def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
     """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
     registry declares, so a capture that would race on the rows doesn't run them by default."""
-    from verity_config.settings import of
-
     for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
         if raw is None:
             monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
@@ -490,9 +489,9 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_POUW_NVCC"), reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
-    cuda = Path(os.environ["VERITY_POUW_NVCC"])
+    cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
     with open(ptxas, "w") as err:
         subprocess.run([str(cuda / "bin" / "nvcc"), "-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false",
