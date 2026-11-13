@@ -114321,3 +114321,37 @@ The branch is five commits on `origin/main` `417526501974`: the Lean (`9eae385b6
 - Bookkeeping that warns: the retired word `law` in the lines I added (record keys, Lean field names, and the refusal's text, worded as `Draw.BERNOULLI` is).
 - The second change (your 23:43Z, item 3) is sized in my 00:01Z entry, section 5, and must not land ahead of the strata's admission (00:45Z, section 1). Not started.
 - Other work, unchanged: #9441 waits on its records commit (runs `cfeb`, `c3cf` done, unread) and its ready line; the one-parse change after it; PRF-586, PRF-591, the missed-member test and the Python twin of the several-member run after those; PRF-593 on your word.
+
+## OWNREADS, Fri 13 Nov 02:20Z: still nothing new compiled (my one try has waited 21 minutes on vy-nebius-cpu-12 with 2 ahead); three more files written and pushed; a correction to my 02:04Z section 5: FRAME's files need no change
+
+In plain words: I have four small files written and none compiled, because my first try has not started. Each next try will queue the same way, one at a time, so at this rate the last result arrives after 03:30Z. One thing in my last entry was more work than needed and I correct it here: FRAME does not have to change its assembly at all to use my lemma.
+
+**1. The machine** [run]. Try `r20261113-015807-1593` (`HeldOfReads.lean`, head `f4162d4c2a`) on vy-nebius-cpu-12: sent 01:58:52Z, still waiting at 02:19Z. The slot record read "4 ahead" at 02:01Z, "3 ahead" at 02:12Z, "2 ahead" at 02:18Z. I hold to one try at a time there, as told. I have three more tries to send after it (below), on three different trees, so they cannot share a run. If another machine is free for me, say so and I send them there; I do not move on my own.
+
+**2. Correction: the call FRAME's assembly makes** [read: `WiringOk.lean`, `Facts.lean`, `AddressesGive.lean` at FRAME's `a6ccdd66a6`]. `OwnReads h` speaks only of accepted runs (`∀ r, r.Ok h → …`), and an accepted run already gives `wiringOk h = true` (`CheckedRun.wiring_of_ok`), whose ninth clause is `refReadsOwn h = true`. So `RefReadsWf h` alone gives `OwnReads h`, with no run-side premise and no change to `wiring_of_wiringOk`:
+```
+theorem ownReads_of_wf (hWf : RefReadsWf h) : OwnReads h := by
+  intro r hr
+  obtain ⟨-, -, -, -, -, -, -, -, hown, -⟩ := (wiringOk_iff h).1 (CheckedRun.wiring_of_ok hr).2
+  exact ownReads_of hown hWf r hr
+```
+FRAME's assembly passes `ownReads_of_wf hWf` where it takes `hOwn` today. I wrote this, and `addressesConnected_of_wf` (FRAME's `addressesConnected_of_rowed` with `RefReadsWf h` in the place of `OwnReads h`), in a new file of mine, `security/Proofs/Flock/SpotFlock/OwnReadsGive.lean`, on a new branch `cursor/proofs-ownreads-frame-a64c` at `4b55f363b4`: FRAME's `a6ccdd66a6` with my `cursor/proofs-ownreads-9a1c` merged (the merge is clean). Not compiled. Its try will also be the first compile of `OwnReads.lean` against FRAME's head.
+
+**3. `Apart`: the reduction is written** (the piece I sized at 02:04Z). New file `security/Proofs/Properties/Verity/SampledTwo/Apart.lean`, 71 lines, on a new branch `cursor/proofs-apart-a64c` at `9179aaea5a`, from HISTORY's `f54420243d`. Not compiled.
+- `OpensOwn S w`: the setup's ledger lines open only its own run, and only on the window `w`.
+- `apart_of_own (h₁ : OpensOwn S₁ w₁) (h₂ : OpensOwn S₂ w₂) (hid : S₁.id ≠ S₂.id) (hw : w₁ ≠ w₂) : Apart S₁ S₂ w₁ w₂`.
+- `binds_of_own`: HISTORY's `binds_dev₂` with the three per-session conditions in the place of `Apart`.
+So what a two-session device owes is said a session at a time: its lines open only its own run on its own window, and the two sessions' run ids differ. Whether the device has that is HISTORY's question (a), (b) or (c), which is still open.
+
+**4. The decided check of option (ii) is written, so you can see its size** (my 02:04Z section 4). New file `security/Proofs/Flock/SpotFlock/ReadsCheck.lean`, 116 lines, on `cursor/proofs-refreadswf-a64c` at `f167a566e1`. Not compiled. It changes nothing by being there: nothing calls it.
+- `balancedKeys j : Bool`: every object in `j` is a tree whose nodes record their sizes and are balanced.
+- `wf_of_checks : Spot.sortedKeys j = true → balancedKeys j = true → Wf j`.
+- `readsChecked cs : Bool` and `wf_of_checked : readsChecked cs = true → ∀ c ∈ cs, Wf c.2.2.2`, which is `ReadsWf cs`.
+
+**5. Order of my next tries**, one at a time: `Apart.lean`, then `OwnReadsGive.lean`, then `ReadsCheck.lean`. A fix to `HeldOfReads.lean` goes first if its try fails.
+
+NEEDS: unchanged from 02:04Z (your choice among (i), (ii), (iii)). FRAME needs nothing from me beyond taking `OwnReads.lean` and `OwnReadsGive.lean` once they compile on its head.
+
+To post: nothing.
+
+Not established: that any of `HeldOfReads.lean`, `Apart.lean`, `OwnReadsGive.lean`, `ReadsCheck.lean` compiles; that `OwnReads.lean` compiles against FRAME's head; `ReadsWf` or `OpensOwn` at anything real.
