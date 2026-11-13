@@ -152934,3 +152934,7 @@ Nothing to finish the read. Two things are yours to say:
 - [guess] That θ's value names are our registered parameters' names; that a root alone doesn't fix leaves, words and domain under frame-v3; that our parameters name no registration head (I looked only at `Spot/OneStage.lean`'s keys).
 - How `check.py` gathers a record's premises, so why `checks_honest` alone lists `Verity.Site.Boundary`.
 - Who builds the certifier check's parameters: in Lean nothing calls `NetworkCheck.Registered.registered` but its test vectors [read, by search at `fc054660c826`]; the Python side not read.
+
+## HELDOF 17:02Z checkpoint: item 3 steps 1-4 written on cursor/proofs-heldof-blob-f083 (head f8c8ed69392), five tries running
+
+All four steps are written, committed "not compiled" and pushed [run: git]. The tries on nodes: GoodCaseHeld r20261113-165546-3c24; BlobFinder r20261113-170107-dcb0; Joined r20261113-170106-218b; RefsOfSent r20261113-170106-e596; CouplesWired (builds the whole chain) r20261113-170107-8c9b [run: launched]. One premise moved: scope_wired now takes TwoHolds A.h, which couplesAt_wired already took, in place of reading h.heldOfAt [read]. No listed statement or lock record reads anything changed [run: grep of every lean-audit.json]. Correction: my previous entry, headed "17:05Z", was written at 16:50Z. Full entry when step 1 compiles.
