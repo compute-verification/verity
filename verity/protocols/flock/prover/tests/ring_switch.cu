@@ -1,6 +1,6 @@
-// cuda/ring_switch.cuh's tensor-core fold and combine against its split ones, for test_ring_switch.py. rs_combine_check draws eq
+// cuda/ring_switch.cuh's tensor-core fold and combine against its split ones, for test_ring_switch.py. rs_combine_check samples eq
 // halves for 2^d rows split at k and both claims' weights from seed, runs chunk_ring_combine_basis_split and
-// chunk_ring_combine_basis_bmma, and counts the rows that differ in bad[0]; rs_fold_check draws a witness of 2^d rows and eq
+// chunk_ring_combine_basis_bmma, and counts the rows that differ in bad[0]; rs_fold_check samples a witness of 2^d rows and eq
 // halves, folds it with chunk_ring_fold_rows_split and chunk_ring_fold_rows_bmma, each through an XOR of its partials, and counts
 // the 128 sums that differ in bad[0].
 // Built with -DRS_MAIN it is also `ring_switch D REPS`: a JSON line per check at small sizes, then one with each kernel's mean time
