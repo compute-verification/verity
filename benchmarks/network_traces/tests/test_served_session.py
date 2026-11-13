@@ -118,7 +118,7 @@ def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_
     a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     doc = SS.plan(a, json.dumps(ps).encode())
-    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes {a.minutes} --requests 4 "
+    assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes {a.minutes} --requests 4 "
                               "--height 10 --scan --prompts --tokens 4 --scan-class w63k4")
     session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
     assert {k: v for k, v in vars(session).items() if k in vars(a)} == {**vars(a), "cmd": "session"}
