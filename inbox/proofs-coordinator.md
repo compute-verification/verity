@@ -160399,3 +160399,76 @@ Your orders of 20:31Z (step 5 and 6) and 20:53Z (the `Goal` line). Mailbox read 
 
 - Nobody on my side watches #9815's comments: my subscription to its events was refused (a worker cannot receive them). A reviewer's words reach me only through you.
 - Next for me: the reading for fix 1 (the lemma restated at the deployed session), two hours at most, unless you say otherwise.
+
+## STOPDRIVER, Fri 13 Nov 21:00Z: B merged with #9717 at 12ee02ed7e12, five files settled; suites out, no ready line
+
+`cursor/proofs-stopdriver-family-ffc6` `12ee02ed7e12755e265c8e5dd7ff4d2936ece68c` B on #9717, #9810, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` unchanged
+
+To your 20:42Z and 20:48Z. This is not the ready line: the suites are out.
+
+- [run] `git merge 3e1103ded562ad68a1e8c2286491c82b7c314782` into B at `ca7a92c69852`: one merge commit, parents
+  in that order, pushed plain. No rebase, no force. 47 files against `4ae17f7eafd7`; against #9717's head, the
+  same 15 files as B alone (587 lines added, 114 removed).
+- [read] No settlement drops a check of either side or widens what the driver or a verifier accepts. Each file
+  keeps both: the key and `main` the verifier holds (#9555, #9717), and the family and the session root read from
+  the record's window and layout (B). Where the two named one argument differently, the stricter one stands.
+- [run] On the VM: the five files compile, ruff passes, `import_order.py --check` says "the same", `pins.py --stale`
+  exits 0. `git merge-tree` of the head into `main` at `f479876a8758`: no conflict.
+
+### The five files: what each side had, what I kept
+
+1. `verity/protocols/proofs/spot/device/coins.py`. B: one sentence in `coins_reason`'s docstring, no code (`window`
+   and `label` are the caller's to keep; a caller that resumes from a hand-off names them from the record and the
+   layout). #9717: the old `coins_reason(coins, window, ...)` and `COINS_FORM` gone, a new
+   `coins_reason(key, main, coins, window, label, after, read, verify)` with `same_main`. Kept: #9717's code whole,
+   and B's sentence in the new function's docstring.
+2. `benchmarks/one_stage/two_stage.py`, two places. `_first_all`'s docstring: both sides' sentences. The stop
+   sample's order: B had `stop_order(s["evidence"], root, family_of(laid[k], blocks=True), ...)`, #9717 had
+   `stop_order(ours["key"], ours["main"], s["evidence"], root, s.get("family"), ...)`. Kept:
+   `stop_order(ours["key"], ours["main"], s["evidence"], root, family_of(laid[k], blocks=True), ...)`: #9717's key
+   and `main`, and B's family from the layout, not the hand-off's word.
+3. `benchmarks/one_stage/stop_audit.py`, three places. Both docstrings: both sides' sentences. `resume`: B had
+   `root = TS.first_root(handoff)` and `coins.family = TS.family_of(layout, blocks=True)` with its refusal; #9717
+   had `root = handoff.get("window_root")`, `coins.family = s.get("family")`, and `key=key, main=main` to
+   `TS.resume` and to the stop stream. Kept: B's root and family, #9717's `key` and `main` on both streams. `link`:
+   B had `window` = `first.layout.run` and `family` = `TS.family_of(first.layout, blocks=True)`; #9717 had the
+   hand-off's `window_root` and `family`, and added `key` and `main` of `first.stream`. Kept: B's `window` and
+   `family`, #9717's `key` and `main`.
+4. `benchmarks/one_stage/tests/test_stop_audit.py`, the across difftest. B gave Lean `link`'s read with a case's
+   own family by hand and called `stop_order(evidence, run, family, ...)`. #9717 gave each case the key and `main`
+   its verifier holds (`holds`), called `SA.across` and `stop_order(key, main, evidence, run, the hand-off's family,
+   ...)`. Kept: `link` on a stream that holds `key` and `main`, B's assert that `link` names the layout's window and
+   family, the family by hand to Lean and to `stop_order(key, main, ...)`. Every case of both sides still runs.
+5. `benchmarks/one_stage/tests/test_two_stage_driver.py`. B asserted the stop sample's family is its place's and
+   called `coins_reason(evidence, ROOT, blocks, ...)`; #9717 asserted `FC.LABEL` and called
+   `coins_reason(FC.pinned_key(), FC.MAIN, evidence, ROOT, FC.LABEL, ...)`. Kept: B's family with #9717's key and
+   `main`, and B's placed challengers (`_placed`) in the refusals below it. Both sides' new tests stand, B's first:
+   `test_two_directories_of_one_place_are_refused_before_any_session` and
+   `test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers_key`.
+
+### What merged without a conflict, as I read it
+
+- [read] `_second` now calls #9717's `first_coins(again, evidence, first_root(stage1), ...)` with B's `first_root`:
+  the record's window's run, and a hand-off that names another root is refused. #9717's own `first_root` took the
+  hand-off's `window_root`, else its commitment's run. So the first stage's coins are read under the held key on
+  the record's root: stricter than either side alone.
+- [read] `verity/protocols/proofs/spot/verifier/service.py` against #9717's: B's four hunks and nothing else.
+
+### Runs out, and the hour
+
+- `r20261113-205520-3439`, vy-nebius-cpu-1: `suites.py --changed 4ae17f7eafd7 --quick` at the merged head, 88 suites,
+  started 20:55Z. [guess] It ends about 22:35Z: `c4f7`, the same 88 suites, took 97 minutes.
+- `r20261113-205559-f175`, vy-nebius-cpu-8, in a clone: the verifier's two test files, the driver's four, nine
+  others and the root's three. [guess] It ends about 21:40Z.
+- So the ready line can come by 23:00Z only if both pass the first time. A failure of the merge's costs one more
+  round of about 100 minutes: then about 00:40Z [guess]. I say which as soon as `f175` ends.
+
+### Not established
+
+- That any test passes at `12ee02ed7e12`: nothing has ended. One to watch: #9717's new test makes its second
+  stage's session with the test file's `OneSession(name)`, whose default families under B are the places', not
+  ranks 0 to 5. I expect it to pass (its replay is a stub and no challenge of rank 0 is read), not checked.
+- The body's two lines (`Stacked on #9717, which holds #9555`, `Goal proofs/spot-two-stage-e2e`): not yet edited
+  in; they go in with the runs' ids, before the ready line.
+- 1ee0's play on the hold branch, and my answer on #9458 and #9624 (owed 22:30Z): next, while the runs are out.
