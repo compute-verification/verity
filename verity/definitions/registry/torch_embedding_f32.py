@@ -66,7 +66,7 @@ _CAPTURE = EVIDENCE["cc12_embedding_backward_capture"]
 _CONF = ("exact-model-tested: up to FEATURE_MAX ids (embedding_backward_feature_kernel), every captured word of an f32 table's "
          "gradient on cc 12.0 with 188 SMs (torch 2.14.0+cu130), 2,048 ids into V = 32,000 at H 512, 768, 1,024 and 1,536 (each "
          "entry's first 256 features), uniform and Zipf ids, deterministic or not, is numerics.torch_kernels' feature model's "
-         f"(capture {_CAPTURE['run_record']}, fit {_CAPTURE['fit']}), and tests/test_torch_embedding_f32.py holds these "
+         f"(capture {_CAPTURE['run_record']}, fit {_CAPTURE['fit']}), and verity/definitions/tests/test_torch_embedding_f32.py holds these "
          "Definitions to that model on f32 words; above FEATURE_MAX (the sort kernels) only the model holds them, no capture")
 
 
