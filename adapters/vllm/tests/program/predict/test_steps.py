@@ -16,36 +16,21 @@ from typing import Any
 
 import numpy as np
 import pytest
-import verity.protocols.accounting.certifier.verifier.advice as I1
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.partition_object import calls
-from verity.circuits.refs import runs
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry import stop_check as SC
-from verity.definitions.registry.topp_geometry import registered_splits
-
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.build_instances import check_rows
-from verity_vllm.program.frontend import seed_rule as SEED
-from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict import batch as B
 from verity_vllm.program.predict import score as S
-from verity_vllm.program.predict.build import (
-    Unexpressible,
-    _Specs,
-    build_program,
-    model_shape,
-)
+from verity_vllm.program.predict.build import Unexpressible, _Specs, build_program, model_shape
 from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
+from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
     Registered,
     RowRef,
@@ -60,6 +45,15 @@ from verity_vllm.program.predict.steps import (
     trace_dir,
 )
 from verity_vllm.program.prune import dead_free_versions
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry import stop_check as SC
+from verity.definitions.registry.topp_geometry import registered_splits
+
+import verity.protocols.accounting.certifier.verifier.advice as I1
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.partition_object import calls
+from verity.circuits.refs import runs
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 

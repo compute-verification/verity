@@ -14,16 +14,15 @@ from collections import Counter
 from dataclasses import fields, replace
 
 import pytest
+
 from verity.circuits.refs import Affine
 from verity.circuits.types import Array, field_types
-
-from tests.program.predict.test_dsa_long_rows import (
-    I32,
-    TOPK,
-    _canonical,
-    _short,
-    _step,
-)
+from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.program.predict import reads as R
+from verity_vllm.program.predict.common import Unexpressible
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import Registered, RequestUnit, compile_steps, plan_steps, request_program
+from tests.program.predict.test_dsa_long_rows import I32, TOPK, _canonical, _short, _step
 from tests.program.predict.test_steps import (
     A_BODY,
     A_CHUNKED,
@@ -39,17 +38,6 @@ from tests.program.predict.test_steps import (
     _hit_chunked,
     _mixed,
     _registered,
-)
-from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.predict import reads as R
-from verity_vllm.program.predict.common import Unexpressible
-from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.predict.steps import (
-    Registered,
-    RequestUnit,
-    compile_steps,
-    plan_steps,
-    request_program,
 )
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")

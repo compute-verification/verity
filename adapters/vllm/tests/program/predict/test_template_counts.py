@@ -12,26 +12,17 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.partition_object import (
-    TemplatePartition,
-    calls,
-    template_instances_query,
-)
 
-from tests.program.predict.test_node import _first_layers
-from tests.program.predict.test_steps import _b8_window, _class_g, _spec
+from verity.circuits.codec import descriptor_id
+from verity.circuits.partition_object import TemplatePartition, calls, template_instances_query
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.predict.steps import (
-    Registered,
-    plan_steps,
-    policy_of,
-    request_program,
-)
+from verity_vllm.program.predict.steps import Registered, plan_steps, policy_of, request_program
 from verity_vllm.program.predict.template_counts import TemplateCounts
+from tests.program.predict.test_node import _first_layers
+from tests.program.predict.test_steps import _b8_window, _class_g, _spec
 
 GREEDY = {"kind": "greedy"}
 EDGE = ("prefix", "prefix_ik", "prefix_iks")

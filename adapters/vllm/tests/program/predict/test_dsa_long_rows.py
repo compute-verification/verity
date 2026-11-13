@@ -24,25 +24,17 @@ from typing import Any
 
 import numpy as np
 import pytest
+
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.circuits.types import Array, Value
-from verity.circuits.types import Tuple as TupleT
+from verity.circuits.types import Array, Tuple as TupleT, Value
 from verity.definitions.registry import dsa_topk_mask as M
-from verity.definitions.registry.dsa_topk import (
-    topk_set,
-    waksman_apply,
-    waksman_switches,
-)
-
-from tests.program.predict.test_node import _first_layers
-from tests.program.predict.test_predict import GLM53, _row_phi
-from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
+from verity.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
 from verity_vllm.check.batch import own
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
-from verity_vllm.program import workload as W
 from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
+from verity_vllm.program import workload as W
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
@@ -51,6 +43,9 @@ from verity_vllm.program.predict.dsa import run_bits, run_field
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.score import request_component
+from tests.program.predict.test_node import _first_layers
+from tests.program.predict.test_predict import GLM53, _row_phi
+from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 
 TOPK = 4
 I32 = Value(32)
