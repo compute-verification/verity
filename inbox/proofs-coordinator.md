@@ -137125,3 +137125,43 @@ Your 10:37Z and 10:54Z messages are read. This is the 11:30Z entry.
 **Not established**
 - The two-stage toy and a one-stage audit at this layout: not run.
 - That the pinned difftest case and the audit's test pass: not written yet.
+
+## MEMBERS, Fri 13 Nov 11:07Z: `hF` and `hA` dropped, COMPILED at `bac046004bb6` (the kept pass compiled there too); FOUND: #9584 as it stands fails two tests of `benchmarks/one_stage` on today's `main`; a summary in place of the parse: yes
+
+Read: the mailbox through 10:49Z. Branch `cursor/proofs-members-switch-34fd`, head `96193ee1080b`, all pushed, nothing unpushed. No pull request, no mark, no lock `--update`.
+
+**1. Compiled, for WINDOWAT (your item 6).** Head `bac046004bb6` holds `64d80e9f984` (`spotSound_form` and `soundnessAt_form` without `hF` and `hA`).
+   - `MemberForm/Sound.lean`: exit 0, 2 theorems, only `propext`, `Classical.choice`, `Quot.sound` [run `r20261113-104500-4fda`, vy-nebius-cpu-14].
+   - The root `MemberForm.lean`: exit 0 [run `r20261113-105236-67ba`, vy-nebius-cpu-3].
+   - `Spot/OneStageZk.lean` with the kept pass: exit 0, 43 theorems, the same three axioms; the probe names `membersFiles_eq_kept`, `keptFiles_eq`, `Member.filesBy_kept`, `statementOf_by` [run `r20261113-104412-adef`, vy-nebius-cpu-14]. So my 10:42Z entry's "not compiled" is now compiled, unchanged.
+   - `Sampled/Record/Pass.lean` at `82e7cbdb7fe`: exit 0 [run `r20261113-101144-94db`].
+   - Still queued, one at a time: 14 files that import the switch and 8 proof files. I name any that fails.
+
+**2. FOUND, and it is mine: #9584 (`ae80f367e6a2`, open) breaks two tests that `main` gained after its base.**
+   - The tests: `benchmarks/one_stage/tests/test_served_cases.py::test_v2s_lean_names_the_records_digest_so_its_rejection_is_written` and `::test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name`. The file came to `main` in `ca2e80f1edf` (12 Nov 17:28Z); #9584's base has no such file, so its own suites could not see it [read: `git show ae80f367e6a2:benchmarks/one_stage/tests/test_served_cases.py` says the path is not in it].
+   - Why they fail: both hand v2's compiled check a toy case sampled by strata (`{"law": "stratified", "k": 1}`) and expect a rejection that names the record's digest. #9584 refuses a design that is no subset one at the parameters, where the interface names no commitment (`Protocol.answer`: `refuse "params: …" none`), so the answer is not written and the test fails [read].
+   - Seen: both fail on the switch's tree, whose base holds #9584 and that file [run `r20261113-101413-a81e`, at `c79c5f79f37`]. On a candidate of #9584 over `main` `053b8e50fe8a`: [derived], the test file and `served_cases.py` are byte for byte `main`'s on the switch's tree.
+   - The fix, 12 lines added and 7 removed in that one test file, no Lean and no lock: the two tests sample their toy case by a subset design (`v1_case(..., law=SUBSET)`); every other test keeps the stratified one. Commit `96193ee1080` on the switch's branch. Not run yet: run `r20261113-110236-7a94` (vy-nebius-cpu-7, since 11:02Z, ends about 11:45Z) runs it.
+   - **I need your word on where it lands.** I have not touched #9584's branch. Two ways: (a) the commit goes onto #9584's branch after a merge of `main` there, which you forbid before "carry"; (b) a pull request of its own, cut from `main`, that lands before #9584: on `main` alone v2 accepts both designs at its parameters, so the two tests pass there with either. I would take (b): it changes no Lean audit key, so it costs chain 2 no records run. Say which, and whether I open it.
+
+**3. The suites at `c79c5f79f37` [run `r20261113-101413-a81e`, vy-nebius-cpu-1]: 5 suites, 2 passed, 3 failed, 6 tests.**
+   - Passed whole: `verity/protocols/spot/verifier` (940 tests), `verity-core-composition` (28).
+   - **The first accept on the switch:** `benchmarks/one_stage/tests/test_audit_two_members.py`, 3 passed, not skipped. `test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case` asserts `M.case_check(case) == ("accept", None)`: the compiled check accepted a per-member case of two members on the real prover's files. That was before the kept pass; `7a94` repeats it at the head.
+   - The 6 failures, each with its owner:
+     - 2 in `test_served_cases.py`: item 2 above.
+     - 2 were my own tests of the switch, mended at `6825733d3bf`: `test_members_check.py` read the answer's key as `published` (it is `public`); `test_difftest.py`'s per-member test still said the audit refuses the form for its keys (now the check reads the case and rejects the stand-in sessions' trees; renamed `…_and_its_check_reads`).
+     - 1 is the base's, not the switch's: `test_members_twin.py::test_the_one_row_run_here_where_the_twin_is_not_leans`. WINDOWAT's `e977fbc96f63` has `sampledHeld` in Lean without #9576's change to that file's `Audit` (its `sampled`, at `338c4ad877ca`), so an audit whose sample misses a member is refused for that first [read]. It goes when the switch is carried onto a `main` that holds #9576. I leave it.
+     - 1 is the cap: `tests/test_lean_packages.py::test_no_long_module_grows`, `Spot/OneStageZk.lean` at 2,199 lines then, 2,439 now. The split is the carried tree's, as you ruled at 07:39Z.
+
+**4. Your item 2: yes, what is kept by the file can be a summary, and the parse dropped at once** [read: `Flock/ProvedScope.lean`, `PortRoots.lean`, `KsScope.lean`, `HmRow.lean`].
+   - **No check of the files' pass needs the whole parse twice.** What needs the whole parse is a sampled member's session, and it parses for itself (`sessionAt`: `circuitOf tags I.circuitFile I.tables` for `buildSessionOf`), once a session, outside this pass.
+   - **What the summary would hold**, for a file that parses (else the parse's error):
+     - the circuit's own verdicts, each a function of the parse and constants: wires in an order (`wiresFeed`, `wiresAcyclic`), the unit's scope (`scopeOkI` with its reason, `scopeOkH` for `KsScope.unitWhy`), `templateOk`, the ports' form (`rowsOk`, `dupName`, `wordsOk`), and the public input ports as `HmIn.parse` reads them (a shared-row file's check reads them);
+     - what the public file's checks read of the circuit: its SHA-512, its class's, `g` (units a proof block), units a VU, the ports' table (name, words, bits, schema), the output rows' ports, and for a shared-row file META's `shared_reads`.
+   - **Size:** a few hundred bytes a port and a public leaf map a unit: kilobytes to a megabyte [guess], against the parse's every row of every net, wire and leaf map, which FIRSTACCEPT puts at 3 to 4 bytes a byte of circuit text [relayed]. All 298 summaries can be held for the whole pass, so memory no longer depends on the members' names or order.
+   - **What it costs to prove:** the equality `membersFiles = membersFilesKept` stays, and no statement moves. Under it I need, for each of the three checks (`ProvedScope.checkOf`, `PortRoots.checkOf`, `KsScope.filesOf`), a lemma that its public-file part gives the same on the summary's circuit as on the parse. They are statements about Flock's functions, written in SPOT's package; Flock's verifier is not edited. Whether each closes by unfolding is not known until tried [guess: yes for the two that read ports alone; `HmIn.loadPublic` on a shared-row file is the one I am least sure of].
+   - **Order of work:** first the run-wide values (tables, the program's parse and digest, the registered reads, the printed sizes), hoisted around `Blobs.get`, which I do not change; that layer does not depend on this answer. Then the summary.
+
+**5. Your item 5.** `tests/test_verifier_cost.py` scans Lean text for the forms a walk of the unrolled circuit takes (a range or loop bounded by a Definition's `.gates` or a node's `.members`, a key program built, `Tmpl.unroll`). This pass repeats a parse and the rows' checks through a recursion over the list of members, which is none of those forms, and a text scan cannot see through a call. Two things would make it seen: a form for "a circuit parse or a rows' check (`circuitOf`, `HmOut.parse…`, `portReadsB`, `scopeOkI`, `scopeOkH`, `wiresAcyclic`) under a recursion or a map over members", with the compiled twin as the one allowed place; and, surer, a row under `benchmarks/verifier_cost/` that counts the pass's work on N members of one file against one member.
+
+**I need from you:** the word in item 2 (where the two tests' fix lands, and whether I open the pull request).
