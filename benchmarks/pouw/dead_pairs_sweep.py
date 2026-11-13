@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import inspect
 import json
 import sys
 import time
@@ -202,8 +203,13 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
         lap("programs")
         flags, _ = FT._flags(FT._rows(ops.a.codes), FT._rows(ops.b.codes), H100)
         in_planted = int(flags[:, :T.G * groups].sum())
-        atoms_f, zeros, elements = D.tile_debit(ops.a.codes, ops.b.codes,
-                                                [(ops.a.alpha[p], ops.a.x[p], ops.a.beta[p]) for p in range(rows)], H100)
+        formed_a = [(ops.a.alpha[p], ops.a.x[p], ops.a.beta[p]) for p in range(rows)]
+        if "formed_b" in inspect.signature(D.tile_debit).parameters:
+            # a debit that reads B's forming too and counts the words' mends: the scheme's own `tile_debit` at this tree
+            formed_b = [(ops.b.alpha[p], ops.b.x[p], ops.b.beta[p]) for p in range(cols)]
+            atoms_f, zeros, elements, mends = D.tile_debit(ops.a.codes, ops.b.codes, formed_a, formed_b, H100)
+        else:
+            (atoms_f, zeros, elements), mends = D.tile_debit(ops.a.codes, ops.b.codes, formed_a, H100), None
         assert atoms_f == int(flags.sum())
         lap("debit")
         out = []
@@ -213,7 +219,8 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
             record = UnitRecord(Matmul(0, s, 0), real_rows=s.m, k_kept=k)
             rule = CW.check_opened(sch, record, tile, a_rows, b_rows, ops)
             lap(f"rule n={n}")
-            debit = D.debit_units(atoms_f, Fraction(cols * elements, n), sch.prices, H100, zeros=zeros)
+            debit = D.debit_units(atoms_f, Fraction(cols * elements, n), sch.prices, H100, zeros=zeros,
+                                  **({} if mends is None else {"mends": mends}))
             cap = sch.cap * CW.cell_credit(sch, record) * rows * cols
             per_word = Fraction(sch.credit_of(s), s.m * s.n)
             for name, (equal, atoms) in programs.items():
@@ -225,7 +232,9 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
                             "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": equal,
                             "scalar_chain_agrees": f"{scalar_equal}/{len(sample)}", "atoms": atoms,
                             "reference_atoms": k // 32, "flagged": atoms_f, "flagged_in_planted_groups": in_planted,
-                            "later_zero": int(zeros), "elements": int(elements), "debit": float(debit), "cap": float(cap),
+                            "later_zero": int(zeros), "elements": int(elements),
+                            "mends": None if mends is None else int(mends), "debit": float(debit), "cap": float(cap),
+                            "debit_over_cap": bool(debit > cap),
                             "cost": float(cost / (units * s.m * s.n)), "credit": float(per_word),
                             "bound": float((1 - T.G0) * (1 - T.RHO) * per_word), "fires": T._fires(credit, cost)})
         for o in out:
