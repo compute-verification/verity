@@ -147390,3 +147390,108 @@ B `cursor/proofs-stopdriver-family-ffc6` `7b140ae8ec07`. Unchanged: #9699 `72572
 ### Not established
 
 - That V*'s compiled check (`vstar-recursive verdicts`) accepts the same 10 parts: the run's test is on now.
+
+## WINDOWAT, Fri 13 Nov 15:00Z: the docstring commits compile (`7eb0`, rc 0); the scratch's records printout (`7bef`, rc 1) fails on the three `witnesses.unwitnessed-changed` and on nothing else from my text; two of my 13:23Z readings are corrected; one lemma left the scratch with `Ends.lean`
+
+**In plain words.** Your 14:18Z order is read (mailbox at `3a9b088d21f`; nothing newer for me). Both things it asks for are here, and after this entry I wait for #9520 on `main` and the word "carry".
+
+1. **The build passed.** Run `7eb0`, rc 0, on the scratch at `4667f9e890d`: the docstring commits, the removal of `Joint/V5/Ends.lean`, and one more removal I state under 5.
+2. **The records run ended failed, as your `unwitnessed` ruling expects, and on nothing else from my text.** In `security` there are exactly three failures, `witnesses.unwitnessed-changed` for `JointSampledV5`, `JointShareV5` and `JointHorizonV5`. In `security/Proofs` there is one, `orphan.file` for `Ends.lean`, which is off the scratch since. In `security/Properties` there are five, all record differences, all naming definitions in four files that MEMBERS's merged head changes and no commit of mine touches.
+3. **Your open point is answered for the scratch.** The three `unfolded_hash` values change; nothing else in the three records does. Each keeps the same three named assumptions, with no open and no domain premise and no inline one, so the check reads B's `∀ _ : Nonempty w.EndΩ, …` as adding no premise. The draft at `a5b8ce506db` was not run, by your order.
+4. **Two of my 13:23Z readings were wrong**, and the run corrects them: `signature` does not change, and plain `--update` drops the three `unwitnessed` entries rather than replacing them.
+5. **One step beyond your order, on the scratch only.** With `Ends.lean` gone, its one lemma in `Joint/V5/Member.lean` (`hend_of_stream`) had no reader, and two docstrings still named the removed field `hend`. I removed the lemma and mended the docstrings (`4667f9e890d`). Say the word and I revert it.
+
+### STOP RULE
+
+This entry restates nothing on a branch a pull request reads. The draft branch `cursor/proofs-windowat-hcls-b2b4` is at `a5b8ce506db`, unchanged, and nothing is carried onto it before #9520 lands. `cursor/proofs-windowat-5e4b` is at `e977fbc96f`, unchanged. The text is only on the scratch `cursor/proofs-windowat-hcls-snd-probe-b2b4`, now at `4667f9e890d`, which is never to merge. No lock is edited, the regenerated lock is in no tree, no pull request is open or marked, and #9576 waits for "carry".
+
+### 1. The build of the docstring commits
+
+[run: `r20261113-144728-7eb0`, rc 0, at `4667f9e890d`] `lean_changed.py --build` over `MemberForm.lean`, `Members.lean`, every file under `Window/`, `WeightSecurity.lean` and `Joint/V5/Layout.lean`: "Build completed successfully (11814 jobs)", `security/Proofs: exit 0 in 413 s`. It compiled all five `Joint/V5` files (`Statement`, `Session`, `Member`, `Bound`, `Layout`), `MemberForm.Reads`, `WindowPasses` and `Sound`, `Window.Instance` and `Window.Read`, and `WeightSecurity.Deployed` and `Pressure`.
+
+What it covers beyond `7c6f` (`edd98b08dba`), seven files, +39 −262:
+
+- the docstrings of my 14:12Z entry (`Deployed.lean`, `Window/Instance.lean`, `Window/Read.lean`, `MemberForm/Reads.lean`);
+- `Joint/V5/Ends.lean` removed (`d2dd6381c0a`, your ruling 2);
+- `Joint/V5/Member.lean` and `Joint/V5/Statement.lean` (`4667f9e890d`, under 5).
+
+Warnings in the files the change edits: two, both on lines that are soundness's from before my change [read: `git blame`]: `Window/Read.lean:68:10` (`dif_pos` deprecated) and `Window/Instance.lean:213:6` (`if_pos` deprecated). The first was in the logs of `9d44` and `7c6f` too, and my 13:23Z entry did not list it; that list was one short. The log's two "declaration uses `sorry`" lines are ArkLib's own files, not ours.
+
+### 2. The records printout as it stands
+
+[run: `r20261113-134731-7bef`, ended 14:45Z, `failed rc=1`, on the scratch at `edd98b08dba`] The fast path, with `--update`: it audited `security` with `security/Proofs`, then the requirer `security/Properties`. Its own words on what it is: "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse". It ran before the docstring commits and the two removals.
+
+**`security`: `check.py exit 1 in 2492 s`, three failures, one code.** `failure_codes` is three times `witnesses.unwitnessed-changed`; `failure_entries` is the three guarantees. One of the three, whole (the other two differ only in the name):
+
+> witnesses: Flock.SecurityProofs.JointSampledV5 changed since `unwitnessed` listed it, and the rule holds it to witnesses (it reads the claim Claims.Sampling.OneStage), so it carries them now: prove `Flock.SecurityProofs.JointSampledV5_honest : FlockSoundness.Discharge.ZkLink.LinkCRZC d … ∧ FlockSoundness.Discharge.ZkLink.SessCRZ d …` (its hypotheses hold at the honest deployed instance d, at the deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and `Flock.SecurityProofs.JointSampledV5_nontrivial : ¬ LE.le at acceptAll …` (its conclusion is false for a verifier that accepts everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field that can't be built a named assumption. List both under `guarantees`, and write "Flock.SecurityProofs.JointSampledV5": {"honest": ["Flock.SecurityProofs.JointSampledV5_honest"], "nontrivial": "Flock.SecurityProofs.JointSampledV5_nontrivial"} under `witnesses`: a guarantee carries an honest and a nontrivial witness, and remove its `unwitnessed` entry
+
+The run adds: "its records fail on this build, not only on record differences, so the record check.py --update wrote is not kept". So the regenerated lock is only in the run's reports, and I compared it there.
+
+**The regenerated lock against the scratch's own** [run; the comparison is mine, over the two files]. The top-level keys that differ are `guarantees`, `reads` and `unwitnessed`, and nothing else: `deployed`, `assumptions`, `open`, `domain`, `trust`, `trust_gap` and `shape` are equal.
+
+- `guarantees`: three records differ, each in `unfolded_hash` only. None is added or removed.
+
+| guarantee | `unfolded_hash` before | after |
+|---|---|---|
+| `JointSampledV5` | `374675d926db…` | `2fed8082c773…` |
+| `JointShareV5` | `120b414dc3c2…` | `0b2ed06f8fc9…` |
+| `JointHorizonV5` | `0c8033f67689…` | `d122e1504ca8…` |
+
+- Each of the three keeps `premises.assumptions` = `SHA512CRExpected`, `SHA512CRStrict`, `UniformRandomBytes`; `domain` and `open` empty; `premises.reads` = `HmRowComputes`, `Zk.RecordCustodyZKJPLaw`. None of the three is in the report's `inline` map. This is the confirmation soundness asked for: the check counts `Nonempty w.EndΩ` as no premise of its own, and still finds the two SHA-512 assumptions under it.
+- `unwitnessed`: 221 entries become 218. The three are dropped and none is added.
+- `reads`: five modules' records differ. One is mine, `Proofs.Flock.EndToEnd.Joint.V5.Statement`. Four are the merged heads': `Proofs.Properties.Verity.Sampled`, `Spot.ChallengerTrees`, `Spot.OneStageZk`, `VStarRecursive.Sampled`.
+- The trust gap is printed as "35 premises outside their trust over the 14 deployed guarantees, 26 distinct", which is `main`'s count too [read: `main`'s lock at `053b8e50fe8`]. None of the three is deployed.
+
+**The review** (`audit-security/review.txt`, 542 lines; what the landing message would show):
+
+- Lines 1–3, for each of the three: "printed differently: the same statement (type hash and named assumptions unchanged)". **Read this line with care.** Each guarantee's type is the one name (`signature` is `Flock.SecurityProofs.JointSampledV5 : Flock.Guarantees.JointSampledV5`), so its `type_hash` cannot change when the definition behind the name is restated. The statement did change: that is what the `unfolded_hash` and the three failures say.
+- 20 definitions of `Joint/V5/Statement.lean`, changed or new. These are mine: `JointAuditV5` (the field `hend` gone), `EndΩ`, `ended` and `sampleEnded` new, `Accepts`, `before`, `instFintypeBefore`, `game`, `memberLaw`, `memberSim`, `memberStrat`, `memberWrong`, `record`, `wrongSet`, the three guarantees' definitions, and `JointPeriodV5`'s `Plays`, `game` and `run`.
+- 35 definitions of the four other modules (`Spot.OneStageZk` 26, `Spot.Challenger` 5, `VStar.Recursive.Sampled` 2, `Verity.Sampled.OneStatement` new and `SetsUp` changed). These are read by `RecursiveAuditC3` and `Verity.Sampled.remote_soundness_deployedReady`, not by my three, and come with the merged heads.
+
+**`security/Proofs`: one failure, `orphan.file`**: "Flock/EndToEnd/Joint/V5/Ends.lean is not imported by the roots". The file is off the scratch since (`d2dd6381c0a`). The package's line is "206651 declarations in 4110 modules; axioms propext, Classical.choice, Quot.sound", built from its roots, so `Proofs.Flock` built at `edd98b08dba`; my earlier entries had it as not built.
+
+**The requirer `security/Properties`: `check.py exit 1 in 633 s`, five failures**, of which the run says "every failure is a record difference":
+
+- `guarantees.unfolded-hash`: `Properties.Spot.SecurityProofs.tablesRegistered` ("its definition Properties.Spot.TablesRegistered unfolded once, changed … the definition was restated; run `check.py --update` and commit the record");
+- `guarantees.reads-changed`, four times: definitions in `Properties.Spot.Tables`, `Spot.ChallengerTrees`, `Spot.OneStageZk` and `VStarRecursive.Sampled`.
+
+The four files that declare them are `security/Properties/Spot/Tables.lean`, `Spot/ChallengerTrees.lean`, `Spot/OneStageZk.lean` and `VStarRecursive/Sampled.lean`. No commit of mine on the draft or the scratch touches any of them [read: `git log --first-parent --no-merges e977fbc96f..HEAD` over the four is empty]. They reach the scratch through the draft's merge of MEMBERS's head (`a5b8ce506db`, of `bac046004bb`) and through #9520's branch. The run's last word on the requirer, "its records fail on this build, not only on record differences, which take a person", is said of the pair it audits, and the part that is not a record difference is the same `orphan.file` in `security/Proofs` [derived].
+
+### 3. What the run settles, and what it corrects
+
+Your 13:29Z open point, for the scratch: the lock's check does not keep the three `unfolded_hash` values. What trips is the one code, three times. Reading (i) stands: `shape.frozen` asks nothing (`shape` is equal before and after, and no `shape.*` code fails). Reading (ii) stands, as under 2.
+
+Two corrections to my 13:23Z entry:
+
+- I wrote "What changes is `signature`, `unfolded_hash` and the `reads` digests". `signature` does not change: it is the one line naming the definition. Only `unfolded_hash` and the `reads` digests change.
+- I wrote that the records run "re-lists" the three in `unwitnessed`. This run, plain `--update`, drops them (221 → 218). Re-listing at the new hashes is what `check.py`'s `repaired` does under `--bookkeeping warn`, which a candidate's records run uses; this run did not use it, so that part is still my reading [read], not a result. At 218 the cap of 221 in `tests/test_lean_packages.py` has room and only warns.
+
+The records at the scratch's head `4667f9e890d` were not run. They should be those of `edd98b08dba` without the `orphan.file` [derived]: a read's digest is over each definition's name, kind and term (`check.py`'s `digest`), which holds no docstring, and `hend_of_stream` is a theorem no statement reads.
+
+### 4. The body's first paragraph
+
+The draft body of my 14:12Z entry stands. Its first paragraph says the check is red on `witnesses.unwitnessed-changed` for the three; the run gives the words to quote there, as under 2. Its placeholders are filled on the carried tree, not from these runs, since that tree is another one.
+
+### 5. Beyond the order: `hend_of_stream` and two docstrings
+
+`4667f9e890d`, on the scratch only, two files, +20 −42:
+
+- `Joint/V5/Member.lean`: the theorem `hend_of_stream` and its mention in the module docstring are removed. Its only reader was `Ends.lean`.
+- `Joint/V5/Statement.lean`: the module docstring said "Some outcome of the sample's coins ends the sample (`JointAuditV5.hend`)", naming a field B removes. It now says that nothing asks this, and why. `JointSampledV5`'s and `JointHorizonV5`'s docstrings say the two SHA-512 premises are asked only where some outcome of the stream ends the sample (`Nonempty EndΩ`). No `def` or theorem statement in the file changes in this commit.
+
+I did this because a docstring naming a field that no longer exists is a stale statement, and a lemma with no reader is dead code. It is one commit: `git revert 4667f9e890d` undoes it, though the old docstring would then name a missing field. `7eb0` compiled it.
+
+### Not established
+
+- The compile and the records on `main` with #9520: #9520 is open and conflicts with `main` (head `e2865001c41`, read at 14:57Z).
+- The full Lean check. `7bef` is the fast path: no kernel replay and no tests.
+- The records at `4667f9e890d` (derived under 3, not run) and at the draft `a5b8ce506db` (not run, by your order).
+- That a candidate's records run re-lists the three: my reading of `repaired`, not run.
+- That the requirer's five differences are all the merged heads': I attribute them by the files' history, not by a records run of the base without my commits.
+
+### State
+
+- Scratch `cursor/proofs-windowat-hcls-snd-probe-b2b4` at `4667f9e890d`, compiled (`7eb0`). Against the draft `a5b8ce506db`: 20 files, +253 −345, of which `Ends.lean` is −211.
+- Draft `cursor/proofs-windowat-hcls-b2b4` at `a5b8ce506db`; `cursor/proofs-windowat-5e4b` at `e977fbc96f`. Both unchanged.
+- No run of mine is in flight.
+- Waiting for: #9520 on `main`, then "carry"; #9576 with it. `hready`'s removal still waits for soundness's `OpensAt.lean`.
