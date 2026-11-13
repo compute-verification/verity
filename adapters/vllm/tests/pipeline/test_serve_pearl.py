@@ -125,7 +125,8 @@ class Run(PP.EpochCalls, PassEnds):
         self.weights = {str(w): {"n": t.shape[0], "k": t.shape[1], "root": roots[w].hex()} for w, t in weights.items()}
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
-        self.details, self.retain_dir, self.retained, self.cur, self.finished = {"passes": []}, None, 0, None, False
+        self.details: dict[str, list[dict]] = {"passes": []}
+        self.retain_dir, self.retained, self.cur, self.finished = None, 0, None, False
         RUNS.append(self)
         self.begin()
 
@@ -143,14 +144,17 @@ class Run(PP.EpochCalls, PassEnds):
         a, y16 = _rows(x, y)
         root_a = commit_rows(activation_binding(self.salt, index), index, [r.tobytes() for r in a], HM96, self.salt_key,
                              index).commitment.root
-        self.cur.matmuls.append(Matmul(index, Shape(len(a), k, n), w))
-        self.cur.records.append({"index": index, "m": len(a), "k": k, "n": n, "weight": w, "real_rows": m,
-                                 "root_a": root_a.hex(),
-                                 "y": {"root": SY.commit_y(y16.tobytes(), n, self.salt, index, self.salt_key)[0].hex()}})
+        cur = self.cur
+        assert cur is not None, "a call in no pass"
+        cur.matmuls.append(Matmul(index, Shape(len(a), k, n), w))
+        cur.records.append({"index": index, "m": len(a), "k": k, "n": n, "weight": w, "real_rows": m,
+                            "root_a": root_a.hex(),
+                            "y": {"root": SY.commit_y(y16.tobytes(), n, self.salt, index, self.salt_key)[0].hex()}})
         return y
 
     def end(self, lag=False, behind=False):
         cur = self.cur
+        assert cur is not None, "an end of no pass"
         out = {"units": len(cur.matmuls), "tiles": len(cur.matmuls)} | ({"base": cur.base} if cur.matmuls else {})
         if cur.retain is not None and cur.matmuls:
             cur.retain.mkdir(mode=0o700)
@@ -280,19 +284,24 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
             return str(e)
         return None
 
+    def refused(*more: str) -> str:
+        said = refusal(*more)
+        assert said is not None, f"not refused: {more}"
+        return said
+
     assert refusal(*arm) is None
     opts = cli.parse("serve-openai", [*base, *arm], environ={})
     assert so.engine_options(opts)["dtype"] == "bfloat16" and "quantization" not in so.engine_options(opts)
-    assert "it needs --precision bfloat16, not verity_int8" in refusal(*arm[:2], *arm[4:])
-    assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refusal(*arm, "--no-commit")
+    assert "it needs --precision bfloat16, not verity_int8" in refused(*arm[:2], *arm[4:])
+    assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refused(*arm, "--no-commit")
     live = ("--challenger-gate", "g", "--challenger-peer", "p", "--challenger-lane", "l")
     assert refusal(*arm, *live) is None
     for short in (live[:4], live[2:], (*live[:2], *live[4:])):
-        assert "--challenger-lane go together under Pearl+" in refusal(*arm, *short)
-    assert "--h1-model: PoUW H1's, not Pearl+'s" in refusal(*arm, *live, "--h1-model", "m")
-    assert "--challenger-lane is Pearl+'s" in refusal("--challenger-lane", "l")
-    assert "not Pearl+'s to give" in refusal(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
-    assert "are not Pearl+'s (pouw)" in refusal(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
+        assert "--challenger-lane go together under Pearl+" in refused(*arm, *short)
+    assert "--h1-model: PoUW H1's, not Pearl+'s" in refused(*arm, *live, "--h1-model", "m")
+    assert "--challenger-lane is Pearl+'s" in refused("--challenger-lane", "l")
+    assert "not Pearl+'s to give" in refused(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
+    assert "are not Pearl+'s (pouw)" in refused(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
     after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
     assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
     assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
