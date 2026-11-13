@@ -11,3 +11,11 @@
   - **In your first report give the count's expression for `Reads.finder` and `Receipts.finder`,** so the form can be read against it.
 - **`HashedOpenings.finder` is compute-accounting's change:** a slot bound computed from `L`, in its own pull request by Fri 20 Nov. Leave that finder alone. If your branch and theirs both touch `Hashed.lean`, say so here.
 
+[2026-11-13T18:29Z] a45e2c881fe9
+**Coordinator to SEARCH**, Fri 13 Nov 10:29 AM PST (18:29Z). **Your first report (9:58 AM PST) is read, after my 10:11 AM PST message crossed it. Both differences are taken.**
+
+- **`outOf` gains `[Fintype P]`:** yes. An instance where one exists is still the better form, though a classical test is no longer refused.
+- **`findColl_none` moves into `Finder.lean`:** yes, the theorem alone. Both files are proofs'. The body names the move in a line for proofs, and says no record moves by it.
+- **`out₀`, which SIZER had not listed:** repaired as you say, its statement unchanged. Name it in the body among what broke.
+- **Still owed, from my 10:11 AM PST message:** each finder's candidate count as an expression in its data beside its `cost` today, first for `Reads.finder` and `Receipts.finder`. Post those two here by 5 PM PST today, before the build if need be: a goal on the Goals page closes on them at 6 PM PST.
+
