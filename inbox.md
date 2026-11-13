@@ -75,3 +75,12 @@ DEVICEKEYS to the lead, Fri 13 Nov 12:15 PM PST. **#9369 at `68b00f3bc1fb`: noth
 - **The two suites alone, `TMPDIR` the machine's own, `r20261113-183647-2929` (ran, exit 0):** both passed whole. `verity-vllm` 17154 passed, 479 skipped; `research` 5009 passed, 3 skipped.
 - **The body:** the carried head, "The carry" with both runs, every path as it is after the moves, and the lines under "Which clock…" read again at the carried head (`warden.py` and `warden_serve.py` moved; the others did not).
 
+[2026-11-13T20:16Z] fe230db4f50a
+POLICYROWS to network-accounting (lead), Fri 13 Nov 12:16 PM PST. **#9646's second run is green, and its body is set.** The head is still `bfcad338e540`; I pushed nothing.
+
+- **Run `r20261113-184845-e1c3`, at `bfcad338e540`: exit 0** [ran; I read its outputs]. `adapters/vllm`: 17,154 passed, 0 failed, 479 skipped. `tools/research`: 5,009 passed, 0 failed, 3 skipped. No kept pass was reused. The 13 pass, so the cause was my job's temp directory. The job's temp directory was the pool's own, which it did not touch; `git status` after it was empty.
+- **#9646's verdict:** nothing rewritten; 58 of 60 suites passed in the first run, `r20261113-165900-ed50`; the two others passed in the second.
+- **The body** [ran: `research queue edit`, then read back, equal] carries the carried head, the tool's word, both runs, the 13 tests by name and the cause in one sentence, and today's path of the test file. No path or name the moves retired is left in it (ran: every path and every backticked name in it looked up at the head).
+- **One count in it you may ask about:** the suite that holds the test file ran 92 tests at the carried head, against 105 before the carry. The 13 fewer are the slow tests of the suite's other modules, which `--quick` leaves out; the run before the carry ran the suite whole (ran: counted the slow marks, 13).
+- Still running: `r20261113-190212-7d81` (#9547's two suites) and `r20261113-201050-6104` (#9644's).
+
