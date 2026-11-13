@@ -3978,10 +3978,8 @@
     {"file": "adapters/vllm/verity_vllm/properties/difftests/collectives_difftest.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/properties/difftests/rope_difftest.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/properties/difftests/rope_gptj_difftest.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/properties/fa_tap_exactness.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/properties/kernel_allowlist.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/properties/noninterference.py", "count": 5},
-    {"file": "adapters/vllm/verity_vllm/properties/record.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/protocols/__init__.py", "count": 29},
     {"file": "adapters/vllm/verity_vllm/protocols/interface.py", "count": 4},
     {"file": "adapters/vllm/verity_vllm/protocols/pous.py", "count": 9},
@@ -5446,6 +5444,8 @@
     {"file": "tests/import_order.toml", "count": 4},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu", "count": 5},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh", "count": 13},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4},
+    {"file": "adapters/vllm/tests/properties/fa_tap_exactness.py", "count": 3},
+    {"file": "adapters/vllm/verity_vllm/records/property_record.py", "count": 1}
   ]
 }

@@ -520,7 +520,6 @@
     {"file": "tests/pipeline/test_serving_rows_bits.py", "kind": "attr-defined", "symbol": "test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_definitions_rows", "detail": "", "count": 2},
     {"file": "tests/program/predict/test_weights_tie.py", "kind": "arg-type", "symbol": "test_another_checkpoints_words_are_refused", "detail": ""},
     {"file": "tests/program/predict/test_window_circuit_pearl.py", "kind": "var-annotated", "symbol": "test_each_tables_readers_are_templates_of_their_own", "detail": "", "count": 2},
-    {"file": "tests/properties/test_specdec_replay.py", "kind": "operator", "symbol": "test_a_replay_from_the_trace_alone_repeats_vllms_scheduler_under_drafts", "detail": ""},
     {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "misc", "symbol": "_Count", "detail": ""},
     {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "valid-type", "symbol": "_Count", "detail": ""},
     {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "var-annotated", "symbol": "_window", "detail": ""},

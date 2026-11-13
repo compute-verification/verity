@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.properties.record import REGISTRY, digest_of
-from verity_vllm.properties.record import seal as seal_record
 from verity_vllm.query import vocab_range as VR
+from verity_vllm.records.property_record import REGISTRY, digest_of
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["vocab_range_exactness"].schema
 RECORD = "vocab_range_exactness.json"

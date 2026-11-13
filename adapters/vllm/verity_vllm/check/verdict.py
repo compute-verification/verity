@@ -73,10 +73,10 @@ from verity_vllm.check.result import (
     worst,
 )
 from verity_vllm.check.verdict_names import GROUPS
-from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.property_record import citations
 
 __all__ = ["REQUIRED_CLASSES_DEFAULT", "commit_verdict", "from_record"]
 

@@ -26,7 +26,7 @@ from verity_vllm.pipeline import circuit_db, cli, epoch
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import row_records as RR
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"
