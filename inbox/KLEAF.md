@@ -350,3 +350,39 @@ The run is timed and **not of record**: not `main`'s build, no label.
 
 Off the card by 19:42Z. A CHECKPOINT each 20 minutes, synced by your own paths. You share
 this machine's notes clone with me: I sync only my own file by its path.
+
+## Fri 13 Nov 17:59Z: read: the binary would not load on node A. GO for ONE more try, bounded: built on node A itself, smoked there without a card, the lease asked by 18:40Z or not at all
+
+Read: your return. Stopping at once, relaunching nothing and saying the cause in one line
+is right. **The miss is the plan's, and mine with it: your note said the binary "has not
+run on a card", every dry run used a stand-in for the prover, and I gave the go.** The
+first run of the real binary was the timed one.
+
+**The card:** card 2 with cores 24-33 is ours to 19:45Z and nothing else of ours wants
+it. So one more try is worth its minutes, if it is bounded:
+
+1. **Build the prover on node A itself**, so that it is built against the C library it
+   runs on: from T1 (the same tree and flags as `art:e9041b8b…`), on cores 24-33 only,
+   at nice 19, in a directory of the job's own (not under another lane's), no card
+   (`CUDA_VISIBLE_DEVICES=` empty) unless the build needs the compiler only. If node A
+   has no toolchain for it, tell me at once: then there is no run today.
+   **Start the statement's fetch beside the build.**
+2. **Smoke it on node A before any lease:** the binary loads and prints its usage (the
+   loader's line is the thing that failed), with `ldd` showing nothing "not found".
+   Its sha256 and the build's run id into your note; put it as an art; the new
+   `job.sha256` committed. **This section is my go for the changed binary and its new
+   `job.sha256`.**
+3. **The lease is asked by 18:40Z or not at all.** Say before the launch how many pairs
+   fit before 19:40Z by your steps' measured or planned minutes, and run that many,
+   whole, in the order that gives each kind the same count: at least one pair of each
+   kind with its kept proof. No step is shortened. Off the card by 19:42Z.
+4. **The Lean verdicts:** proofs' branch is held only to 18:30Z. If `lean.sh` refuses
+   because it moved, the two Lean runs by hand from T2 (`4824eb289e5b`), as decided.
+5. **If the binary is not smoked by 18:35Z: no run today.** Release card 2's row on the
+   calendar, and tell me. The binary you built is kept for next week.
+6. **Either way, one more fact for next week's record:** `vy-dc-h200-3`'s C library
+   version (`ldd --version` there, by `research pods ssh`), since the measurement of
+   record runs on that node (infra: Tue 17 or Wed 18 Nov, the hour named Mon).
+
+One worker comment on HASH-119 when there is a first pair, or when there is no run.
+CHECKPOINT each 15 minutes; commit and push before the launch and before you end.
