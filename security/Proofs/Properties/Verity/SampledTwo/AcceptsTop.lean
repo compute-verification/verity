@@ -8,7 +8,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf
 public import Proofs.Flock.SpotFlock.RunsAs.SecondStageOf
 public import Proofs.Properties.Verity.SampledTwo.RecordNames
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
-public import Proofs.Flock.SpotFlock.HeldOf
+public import Proofs.Flock.SpotFlock.HeldOfRun
+public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
 
@@ -20,23 +21,29 @@ public import Proofs.Flock.Claims.Complete.Encode
 an accepted run's bytes within its coins (`Fits.sourcesFit`). `reachedAccepts_form`: the same with the messages asked
 only where the run has one, and every message reached (`Reached.reachedAccepts`).
 
-The premises are `OfRun.lean`'s but six, each a named `Prop` about the plays the form's check accepts, and
-`SessionMsgs` (`Accepts.lean`): the sessions' messages the accepted prover sends are those the check read. The six
-that are proved and so not asked:
+The premises are what is left of `OfRun.lean`'s, each a named `Prop` about the plays the form's check accepts, and
+`SessionMsgs` (`Accepts.lean`): the sessions' messages the accepted prover sends are those the check read. For three
+of `OfRun.lean`'s, the held copies are asked to be the ones `heldOf` builds (`HeldOfAt`). The seven that are proved and
+so not asked:
 
 * `ReadsWithin` (`Within.playAccepts_of_run'`);
 * `RuleIsTwo` (`RuleTwo.ruleIsTwo`: the form's parser returns only a two-stage rule);
 * `RunsAs.RoundTwo` (`RunsAs.stmtOk_of_check`: the second stage's check gives the model's statement check at every
   held copy);
+* `TwoHolds` (`twoHolds_at`: at a held copy `heldOf` builds for an accepted run the design evaluates,
+  `HeldOf.twoHolds_of`, since an accepted run passed its population check, `RunsAs.population_of_accepted`);
 * `NamesDistinct` (`Round2.namesDistinct_of_two`: where the design evaluates, the templates' names are distinct);
 * `RecordsRead` (`recordsRead`: the form hands the run of record each registration's record as the proved verifier's
   parser reads its canonical text, `readBack`, so the proved verifier's reader reads it back from those bytes);
 * `RecordsAt`: the interior record registers no value (`Round2.registersNone_of_two`: where the design evaluates, the
   interior registration registers none), and both records name their registrations' names (`recordsHeldAt_of`: an
   accepted run's registration checks have no code, `checks_of_accepted`, and a check with no code names its
-  registration's names, `RecordNames.recordOk_of_check`). For that, the held copies are asked to be the ones `heldOf`
-  builds (`HeldOfAt`) and each registration to list each port once (`PortsDistinctAt`), which R3-ports doesn't
-  check.
+  registration's names, `RecordNames.recordOk_of_check`). For that, each registration is asked to list each port
+  once (`PortsDistinctAt`), which R3-ports doesn't check.
+
+`HeldAt` is asked in one clause of its nine, `PartsHeldAt`: the held copies' parts are the interior program's strata's
+at the play's replay sample. A held copy `heldOf` builds has the other eight by construction (`heldAt_of_parts`,
+`HeldOf.heldMatches_of`).
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
 it is off.
@@ -157,6 +164,33 @@ theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hports
   simp only [Option.map_some, Bool.and_eq_true]
   exact ⟨rb, ri⟩
 
+/-- **The held copies' parts are the interior program's strata's**, at each accepted play's replay sample
+(`HeldOf.PartsAt`): the clause of `HeldAt` that `heldOf`'s construction leaves. -/
+def PartsHeldAt (A : Live₂) (C : CaseOf) : Prop :=
+  ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → SpotFlock.HeldOf.PartsAt i it A.h
+
+/-- `HeldAt` gives its clause `PartsHeldAt`. -/
+theorem partsHeldAt_of {A : Live₂} {C : CaseOf} (hheld : HeldAt A C) : PartsHeldAt A C :=
+  fun o i it hA hi hit => (hheld o i it hA hi hit).parts
+
+/-- **Held copies `heldOf` builds agree with what each accepted play's run reads** (`HeldAt`), given their parts
+(`HeldOf.heldMatches_of`). -/
+theorem heldAt_of_parts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hparts : PartsHeldAt A C) : HeldAt A C := by
+  intro o i it hA hi hit
+  obtain ⟨u, hu⟩ := hof o i it hA hi hit
+  exact SpotFlock.HeldOf.heldMatches_of hu (hparts o i it hA hi hit)
+
+/-- **The design evaluates at the held copies** (`TwoHolds`), wherever a play is accepted: the play's run is an accepted
+two-stage run (`acceptedTwo_of_formAccepts`), which passed its population check (`RunsAs.population_of_accepted`), and
+the held copies are the ones `heldOf` builds from it (`HeldOf.twoHolds_of`). -/
+theorem twoHolds_at {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange} {i : Spot.Run.Input}
+    {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i) (hit : i.interior = some it) :
+    TwoHolds A.h := by
+  obtain ⟨u, hu⟩ := hof o i it hA hi hit
+  obtain ⟨j, hj⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
+  obtain ⟨_, -, _⟩ := SpotFlock.RunsAs.population_of_accepted hj
+  exact SpotFlock.HeldOf.twoHolds_of hu (by assumption)
+
 /-- **Where the design evaluates, records that name their registrations' names are `RecordsAt`**: the interior record,
 read back as the record the run held (`recordsRead`), registers no value (`Round2.registersNone_of_two`). -/
 theorem recordsAt_of_held {A : Live₂} {C : CaseOf} (htwo : TwoHolds A.h) (hrec : RecordsHeldAt A C) :
@@ -167,41 +201,44 @@ theorem recordsAt_of_held {A : Live₂} {C : CaseOf} (htwo : TwoHolds A.h) (hrec
 
 /-- **The form's accept is a play SPOT[Flock] accepts** (`PlayAccepts` at the form): `Within.playAccepts_of_run'` with
 the rule two-stage by the form's parser (`ruleIsTwo`), the second stage's hand-off proved at the held copies
-(`RunsAs.stmtOk_of_check`), the names distinct and the interior record registering no value where the design evaluates
-(`Round2.namesDistinct_of_two`, `recordsAt_of_held`), and the records naming their registrations' names
-(`recordsHeldAt_of`). -/
+(`RunsAs.stmtOk_of_check`), the held copies agreeing with the run's reads given their parts (`heldAt_of_parts`), the
+design evaluating at them at the accepted play (`twoHolds_at`), so the names distinct and the interior record
+registering no value (`Round2.namesDistinct_of_two`, `recordsAt_of_held`), and the records naming their registrations'
+names (`recordsHeldAt_of`). -/
 theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
-    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hheld : HeldAt A C) (htwo : TwoHolds A.h)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hparts : PartsHeldAt A C)
     (hof : HeldOfAt A C) (hports : PortsDistinctAt C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     (hsess : SessionsRun A C S P') :
-    PlayAccepts A C S P' :=
-  playAccepts_of_run' A C S P' (ruleIsTwo C) hheld htwo (SpotFlock.RunsAs.Round2.namesDistinct_of_two htwo)
-    (recordsAt_of_held htwo (recordsHeldAt_of hof hports)) (recordsRead C) (SpotFlock.RunsAs.stmtOk_of_check A.h) hst
-    hrounds hscope hpin hsess
+    PlayAccepts A C S P' := by
+  intro o i it x m₁ hA hi hit hx hm₁
+  have htwo : TwoHolds A.h := twoHolds_at hof hA hi hit
+  exact playAccepts_of_run' A C S P' (ruleIsTwo C) (heldAt_of_parts hof hparts) htwo
+    (SpotFlock.RunsAs.Round2.namesDistinct_of_two htwo) (recordsAt_of_held htwo (recordsHeldAt_of hof hports))
+    (recordsRead C) (SpotFlock.RunsAs.stmtOk_of_check A.h) hst hrounds hscope hpin hsess o i it x m₁ hA hi hit hx hm₁
 
 /-- **The form's accept is the run's accept** (`AcceptsRun` at the form): where the form's check accepts a play, every
 run of `SpotFlock.V` on coins agreeing with what the check read, whose messages are what the check read, accepts. -/
 theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (hsm : SessionMsgs A C S P') (hheld : HeldAt A C) (htwo : TwoHolds A.h) (hof : HeldOfAt A C)
+    (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
     (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') :
     AcceptsRun A x (formReading A C S dev) (FormAccepts C) :=
   acceptsRun_of' A x C S dev P' (sourcesFit A C)
-    (playAccepts_form A C S P' hheld htwo hof hports hst hrounds hscope hpin hsess) hsm
+    (playAccepts_form A C S P' hparts hof hports hst hrounds hscope hpin hsess) hsm
 
 /-- **The form's accept is the run's accept, with every message reached** (`ReachedAccepts` at the form): where the
 form's check accepts a play, every run of `SpotFlock.V` on coins agreeing with what the check read, whose messages
 are what the check read wherever the run has one, accepts and has all the verifier's `k` messages. -/
 theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (hsm : SessionMsgs A C S P') (hheld : HeldAt A C) (htwo : TwoHolds A.h) (hof : HeldOfAt A C)
+    (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
     (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') :
     ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
   reachedAccepts A x C S dev P' (sourcesFit A C)
-    (playAccepts_form A C S P' hheld htwo hof hports hst hrounds hscope hpin hsess) hsm
+    (playAccepts_form A C S P' hparts hof hports hst hrounds hscope hpin hsess) hsm
 
 /-- **The cases at `x` carry the play's commitment where `C`'s do.** -/
 theorem caseCommits_at {C : CaseOf} (x : Msg) (h : CaseCommits C) : CaseCommits (atStmt C x) :=
@@ -224,26 +261,26 @@ at `x` (`atStmt C x`), whose accepted plays are `C`'s at the statement `x`, the 
 (`acceptsRun_at`). -/
 theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (hsm : SessionMsgs A (atStmt C x) S P') (hheld : HeldAt A (atStmt C x)) (htwo : TwoHolds A.h)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
     (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
     (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
     (hsess : SessionsRun A (atStmt C x) S P') :
     AcceptsRun A x (formReading A C S dev) (FormAccepts C) :=
   acceptsRun_at
-    (acceptsRun_form A x (atStmt C x) S dev P' hsm hheld htwo hof hports hst hrounds hscope hpin hsess)
+    (acceptsRun_form A x (atStmt C x) S dev P' hsm hparts hof hports hst hrounds hscope hpin hsess)
 
 /-- **The form's accept is the run's accept, with every message reached, its premises asked at the plays at `x`**:
 `reachedAccepts_form` at the cases at `x` (`reachedAccepts_at`). -/
 theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (hsm : SessionMsgs A (atStmt C x) S P') (hheld : HeldAt A (atStmt C x)) (htwo : TwoHolds A.h)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
     (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
     (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
     (hsess : SessionsRun A (atStmt C x) S P') :
     ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
   reachedAccepts_at
-    (reachedAccepts_form A x (atStmt C x) S dev P' hsm hheld htwo hof hports hst hrounds hscope hpin hsess)
+    (reachedAccepts_form A x (atStmt C x) S dev P' hsm hparts hof hports hst hrounds hscope hpin hsess)
 
 end Verity.SampledTwo

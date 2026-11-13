@@ -9,6 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.CutAccept
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.SessionCut
+public import Proofs.Properties.Verity.SampledTwo.SessionTreeless
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
@@ -70,14 +71,15 @@ back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodC
   (`sessionMatches`). That the first stage's coins are read under the parameters' key and that an accepted play on two
   windows shows its sessions' order are theorems of the form's accept (`firstReads`, `orderShown`, CUT's
   `CutAccept.lean`), no longer fields.
-* **On two windows the first session samples no coin tree** (`firstTreeless`): a named hypothesis until the form
-  refuses a coin tree's line in the first session's log on two windows (TWOLEG); with `caseIsSent` it gives the
-  interior's log on the play's (`SessionCoins.interiorLogged_read`, SESSIONCOINS). **The messages** (`msgOpens`,
-  `digestBefore`, MESSAGES): no check gives either; their docstrings say what each holds of.
-* **The run of record's accept** (`playAccepts_form`'s premises): `heldAt`, `twoHolds`, `heldOfAt` (HELDOF);
+* **The messages** (`msgOpens`, `digestBefore`, MESSAGES): no check gives either; their docstrings say what each
+  holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
+  (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
+  `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
+* **The run of record's accept** (`playAccepts_form`'s premises): `partsHeldAt`, `heldOfAt` (HELDOF);
   `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions'
   workers); and `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the
-  records the run held are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`), no longer fields.
+  records the run held, and that the held copies' design evaluates, are theorems (ACCEPTS's `recordsHeldAt_of`,
+  `recordsRead`, `twoHolds_at`), no longer fields.
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -247,8 +249,6 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
   sessionMatches : SessionMatches C
-  /-- On two windows the first session's releases, as the cut reads them, hold no coin tree's `Hello`. -/
-  firstTreeless : SessionCoins.FirstTreeless C
   /-- The message the check reads at each round opens the digest the play records. Holds of a strategy whose message
   at each round is fixed before the round's coin; no check gives it: at the digests the device signs (the link's
   `after`, a rep round's SHA-512 of its retained bytes, the closing's SHA-512 of the session's evidence; the
@@ -261,10 +261,9 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- The held copies agree with what an accepted play's run reads (`RunsAs.HeldMatches`). -/
-  heldAt : HeldAt A C
-  /-- The held copies' two-stage design evaluates at every statement. -/
-  twoHolds : SpotFlock.RunsAs.Round2.TwoHolds A.h
+  /-- The held copies' parts are the interior program's strata's at each accepted play's replay sample
+  (`HeldOf.PartsAt`). -/
+  partsHeldAt : PartsHeldAt A C
   /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
   heldOfAt : HeldOfAt A C
   /-- Each accepted play's registrations list each port once. -/
@@ -366,7 +365,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The sessions' pieces, at the case itself.
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
   have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg =>
-    SessionCoins.interiorLogged_read C h.caseIsSent h.firstTreeless o hA hg.1
+    SessionCoins.interiorLogged_read C h.caseIsSent
+      (SessionCoins.firstTreeless_of_check C h.caseIsSent (fun _ _ _ _ _ _ _ _ => rfl)) o hA hg.1
   have hLoc := SessionCoins.locates_run A (CoinMap.stageLocate ℓ₁ ℓ₂) tab
   have hSess := SessionCoins.sessionsAgree_accepted A x C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood _
     hsz hlog
@@ -387,7 +387,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
     (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
-      (playAccepts_form A C _ P' h.heldAt h.twoHolds h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
+      (playAccepts_form A C _ P' h.partsHeldAt h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
         h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
