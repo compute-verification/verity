@@ -1507,7 +1507,7 @@ FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
-ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
+ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
 
 
 def one_session(s: str) -> int:
