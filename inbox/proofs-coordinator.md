@@ -130117,3 +130117,31 @@ A real run also needs a served window that may be audited. And the check today r
 **Runs.** Ended, rc 0: `fb83`, `5ee6`. Nothing out.
 
 **Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; inbox titles read to MEMBERS's 08:23Z; none since 08:08Z names me.
+
+## WINDOWAT, Fri 13 Nov 08:25Z: `Window.hcls` asks more than the check's `link-points` gives: at a sample that runs out the proofs' model samples every unit, so a window exists only where each member's whole size has its session's link points; by reading, not compiled
+
+A second limit on what `soundnessAt_form` covers, found while I read how the builder would get `Window.hcls` from the refusal my 08:19Z entry names. No statement of mine changed, and I changed nothing. The field is soundness's (`Sampled/Window.lean`, #9520) over Flock's (`Joint/V5/Statement.lean`, on `main`).
+
+**The reading.**
+- `hcls` is asked at every outcome `ω` of the device's bytes: each member's part of the sample has its session's link points, `mPtsOf g |part| = mPtsOf g (kd / nTab)` [read: `Sampled/Window.lean:248-250`; `Flock/EndToEnd/Joint/V5/Statement.lean:199-201`].
+- The sample at `ω` is `execSel`'s, and **where the sample's source runs out it is every unit** [read: `Flock/Bridge/Draw.lean:242-249`: "a sample that runs out of them samples every unit"]. There a member's part is all of its `m.n` proof blocks (`part`, `Statement.lean:113`) [derived].
+- Such an `ω` exists at almost every design. A3 as the window takes it gives every byte string of the stream's length its uniform weight (`UniformRandomBytes`, `Definitions/Assumptions/Flock.lean:109-111`; `Window.hA3`) [read]. `uniform` keeps a word only below the largest multiple of the number `n` it picks among (`Commitments/Draw.lean:34-42`), and a sample errors when its source runs out (`Spot/Draw.lean:258`, `:292-295`) [read]. So a word of all `0xFF` is rejected whenever `n` is not a power of two, and the stream of all `0xFF` runs out at any design with one such pick [derived]. Its probability is far below any term of the bound; `hcls` is a field, not a probability.
+- **So `hcls` holds only where `mPtsOf g m.n = mPtsOf g (kd / nTab)` for every member** [derived]. With `mPtsOf g c = 24 + max 3 ⌈log₂ ⌈c/g⌉⌉` (`Exec/Pts.lean:33`, `RowLeaf.lean:25`, `Base/Pow2.lean:14`) [read]: a member whose session proves at most 8 proof blocks must itself hold at most 8, and a larger one must sit in the same power of two as its session.
+- **The check's `link-points` does not give it, even once it is handed the members.** It reads the samples that end, between a member's fewest and most (`LinkPoints.lean:5-8`) [read]. `hcls_of_bounds` wants the bounds at every `ω` (`Joint/V5/Member.lean:148-149`), and at the `ω` above the part is `m.n`, above the check's most [derived]. Nothing proves `hcls` of any window from any check: `hcls_of_bounds` has no caller and no theorem names `LinkPoints.bounds` or `ended` [read: `rg` at my head, at #9520's `e2865001c4` and at #9475's `d2a507cb1b`].
+
+**What it means for item 1.** Where a member fails that equality the builder can give no window, the published bound is `⊤`, and `soundnessAt_form` says nothing of the run [derived]. Thursday's kept audit sampled 298 members under `stratified:1` [relayed: FIRSTACCEPT, 08:03Z]; if a member there holds more than 8 proof blocks and one is sampled, that window is outside the statement as it stands [derived]. I do not know the members' sizes.
+
+**Two ways out, neither mine to take.**
+- (i) Ask `hcls` only at the samples that end, and pay for the rest where the compiled check already refuses it: a sample whose source ran out fails the window (`RAN_OUT`, `Spot/Draw.lean:253`), so no accepted play has one [read: the docstring at `LinkPoints.lean:6`, the code path not traced; guess that the coupling can carry it].
+- (ii) Have the check refuse a member whose whole size gives other link points than its session's. It would refuse a window like Thursday's if its members are large [guess].
+
+**STOP RULE** (nothing done; for the record of the decision). (i) changes a field of `Flock.Guarantees.JointAuditV5`, which the listed guarantee `Flock.SecurityProofs.JointShareV5` reads [read: `security/lean-audit.json:5360`, `:52481`].
+- Before: `hcls : ∀ (k : Fin ms.length) (ω : Ω), mPtsOf … (part (draw ω)).card = mPtsOf … (kd / nTab)`.
+- After: the same, under the hypothesis that the sample at `ω` ended (`Spot.Draw.drawUnits … = .ok _`), with the ran-out outcomes carried by the acceptance event.
+That is a changed statement of a listed guarantee: soundness's file, and Daniel's decision through you.
+
+**Not established.** No Lean probe: I did not compile `¬ hcls` at a concrete member, and the argument is by reading five definitions. Whether soundness's builder has another route to `hcls`. The members' sizes in any real window. Whether a design used in serving has only power-of-two picks (then no sample runs out and the limit is not there). Whether the one statement's deployed guarantee has the same shape: not read.
+
+Quick tier of #9576, `r20261113-054307-ec73`: **68 of 75 suites passed, none failed**, 7 left, running at 08:24Z, timeout 08:43Z [run]. Mailbox read at `67c8fba9e1`; my newest message is yours of 07:54Z. No `~/wt/.pen`. No try sent. Branch `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged.
+
+**To post** (PRF-490, for soundness): "WINDOWAT: `Window.hcls` is over every `ω`, and `execSel` samples every unit where the source runs out (`Bridge/Draw.lean:247-249`). So `hcls` needs `mPtsOf g m.n = mPtsOf g (kd / nTab)` at every member, which `link-points` does not check (it reads the samples that end). How does the window's builder get `hcls`? My entry of this hour has the reading and two ways out."
