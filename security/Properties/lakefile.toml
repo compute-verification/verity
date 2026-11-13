@@ -20,47 +20,47 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/protocols/pouw/verifier/lean/window"
+path = "../../verity/protocols/accounting/pouw/verifier/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/protocols/pouw/verifier/lean/check"
+path = "../../verity/protocols/accounting/pouw/verifier/lean/check"
 
 [[require]]
 name = "pouw_commit"
-path = "../../verity/protocols/pouw/verifier/lean/commit"
+path = "../../verity/protocols/accounting/pouw/verifier/lean/commit"
 
 [[require]]
 name = "pouw_pearlplus"
-path = "../../verity/protocols/pouw/verifier/lean/pearlplus"
+path = "../../verity/protocols/accounting/pouw/verifier/lean/pearlplus"
 
 [[require]]
 name = "nci_check"
-path = "../../verity/protocols/inference_only/verifier/nci/lean"
+path = "../../verity/protocols/policy/inference_only/verifier/nci/lean"
 
 [[require]]
 name = "certifier_device"
-path = "../../verity/protocols/certifier/device/lean"
+path = "../../verity/protocols/accounting/certifier/device/lean"
 
 [[require]]
 name = "pous_check"
-path = "../../verity/protocols/pous/verifier/check"
+path = "../../verity/protocols/accounting/pous/verifier/check"
 
 [[require]]
 name = "core_memory_challenger"
-path = "../../verity/protocols/pous/device/lean"
+path = "../../verity/protocols/accounting/pous/device/lean"
 
 [[require]]
 name = "core_firewall"
-path = "../../verity/protocols/recursion/verifier/firewall"
+path = "../../verity/protocols/proofs/recursion/verifier/firewall"
 
 [[require]]
 name = "network_check"
-path = "../../verity/protocols/certifier/verifier/lean"
+path = "../../verity/protocols/accounting/certifier/verifier/lean"
 
 [[require]]
 name = "core_spot"
-path = "../../verity/protocols/spot/verifier/lean"
+path = "../../verity/protocols/proofs/spot/verifier/lean"
 
 [[require]]
 name = "verity_evaluate"
@@ -68,7 +68,7 @@ path = "../../verity/circuits/evaluate"
 
 [[require]]
 name = "remote_audit"
-path = "../../verity/protocols/poub/verifier/lean"
+path = "../../verity/protocols/accounting/poub/verifier/lean"
 
 [[require]]
 name = "core_requirement"
@@ -84,7 +84,7 @@ path = "../../verity/protocols/compose/verifier/onsite"
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/protocols/flock/verifier"
+path = "../../verity/protocols/proofs/flock/verifier"
 
 [[lean_lib]]
 name = "Properties"
