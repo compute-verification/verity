@@ -788,8 +788,8 @@ def test_a_holder_held_unread_is_posted_and_rings_top(relay):
 
 
 def test_a_github_read_of_the_watch_s_own_that_was_refused_leads_with_infra_rings_it_and_says_what_to_do(relay):
-    """The watch's refused read was a line in its log that nobody read. Its record is a sentence for infra, whose inbox is
-    rung, with what the watch misses meanwhile and the two commands that find and clear the cause."""
+    """A read of the watch's own that GitHub refused is a sentence for infra, whose inbox is rung: what the watch misses
+    meanwhile, and the two commands that find and clear the cause."""
     infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
     rec = {"t": "2026-10-30T00:52:00Z", "kind": "github_refused", "agent": "", "name": "", "run": "", "owner": "infra",
            "what": "the open PRs", "why": "GitHub answered HTTP 401 to the read of compute-verification/verity's open PRs",

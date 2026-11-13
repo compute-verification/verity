@@ -2211,9 +2211,9 @@ def test_the_token_command_is_run_at_each_read_and_one_that_gives_no_token_is_a_
 
 
 def test_a_refused_read_of_the_open_prs_is_recorded_once_for_infra_and_again_only_after_a_read_that_worked(tmp_path, monkeypatch):
-    """A token GitHub no longer took left the open PRs unread with one log line an hour and nobody rung. A 401 or 403, or a
-    token source that gives none, is one `github_refused` record per spell, across restarts; a server error is none, and
-    every failed read keeps the last one's PR branches."""
+    """While GitHub refuses the read, no new PR's branch counts for the agents it names, so a refusal is more than a log
+    line: a 401 or 403, or a token source that gives none, is one `github_refused` record per spell, across restarts; a
+    server error is none."""
     github = GitHub(monkeypatch)
     source = {"token": "dummy"}
 

@@ -307,8 +307,8 @@ def test_the_sweeps_token_is_what_the_pods_read_helper_prints_at_that_call(monke
 
 
 def test_a_refused_github_read_rings_infra_once_with_what_to_do_and_again_only_after_a_read_that_worked(monkeypatch):
-    """A refusal used to be a log line each hour while the stall ring was off. It rings infra once per spell: a 401 or 403
-    from GitHub, or a token source that gives none; a server error is no refusal and rings nobody."""
+    """While GitHub refuses the read the stall ring is off, so a refusal is more than a log line: it rings infra once per
+    spell, for a 401 or 403 from GitHub or a token source that gives none; a server error is no refusal and rings nobody."""
     github, state, ring = GitHub(monkeypatch), {}, Ring()
     monkeypatch.setattr(T, "gh_token", lambda: "dummy")
     main = {"main": lambda: T.main_stalled(state, ring, NOW)}
