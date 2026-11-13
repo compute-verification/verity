@@ -845,7 +845,6 @@
     {"file": "verity_vllm/protocols/pouw/h1/window.py", "kind": "return-value", "symbol": "reserve_draw", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun._open", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun.end_pass", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "union-attr", "symbol": "LeadRun.call", "detail": "", "count": 4},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "arg-type", "symbol": "PassEnds._write_retained.complete", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "arg-type", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "assignment", "symbol": "PassEnds.end", "detail": ""},
