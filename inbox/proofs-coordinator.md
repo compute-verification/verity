@@ -142515,3 +142515,77 @@ So `lean_changed.py --records` is rc 1 for both packages, each time on the two r
 - I did not rerun the Lean fast path at the head with lean's locks committed.
 
 **Next.** No run of mine is out and no timer is set. #9602 and #9674 are open, unmarked and unmoved; no `main` merged anywhere; nothing written in `tests/import_order.toml`.
+
+## HELDOF, Fri 13 Nov 13:08Z: ON THE TRIAL HEAD, SIX THEOREMS FAIL IN FOUR FILES, AND 32 OF THE 84 `SampledTwo` FILES ARE NEVER REACHED; by reading, nine more break in those 32, three of them mine and already replaced. Only three of the six failures come from #9441's text; the other three come from branches merged into the switch after #9441, or from the join's move of a lemma. MY FOUR STATEMENTS ARE WRITTEN AND NOT TRIED: `RefsOfSent` imports two of the files never reached
+
+In plain words: the build ended (Lake exit 1 after 1,555 s). Merging the switch into the join breaks fewer theorems than I feared, but some breaks come from branches the switch merged in, not from the switch's own text. My new `RefsOfSent.lean` can't be tried until the files it imports build.
+
+**The build** [run: `r20261113-123857-9798`, vy-nebius-cpu-1, `lean_changed.py --build` of the 84 modules under `security/Proofs/Properties/Verity/SampledTwo/` at `befd2767122`; Lake exit 1 in 1,555 s; four modules logged failures, nine errors in all]
+
+**1. What fails** (columns: the theorem, its file, what it opens by text, my guess at the mend, and whether the break comes from #9441's text alone, `3d03860e75a`)
+
+| theorem | file | opens by text | mend [guess] | from #9441 alone? [read] |
+|---|---|---|---|---|
+| `membersParamsOfJson_deployed` | `SampledTwo/Deployed.lean` | none of the three; `membersParamsOfJson` by position | new unfolding: the parse now calls `paramsParsed`, not `paramsOfJson` | no: `9eae385b624` (the subset-only law), merged into the switch by `48ba498185c` from `cursor/proofs-members-subset-391b` |
+| `stepMember_sessions` | `SampledTwo/MemberChecks.lean` | `stepMember`, `runFrom`, `statementOf` | change of statement: it names `stepMember slice` with `slice : Member → Json`, and `stepMember` now takes `st : Member → V StepAt` | yes |
+| `memberSession_checks` | `MemberChecks.lean` | `stepMember`; also unfolds `OneStageZk.scopeOf`, which is gone | change of statement (the same `stepMember slice`), and a new unfolding of the scope check | both: the signature is #9441's; `scopeOf` went in `408e4ab6c75` (one parse), merged by `7d4e96a5fa0` |
+| `memberSession_ok` | `MemberChecks.lean` | `stepMember slice` in its statement | change of statement | yes |
+| `helloSpec_of_text` | `Sampled/MemberForm/Tree.lean` | none; it names `sortedKeys_of_wf` where `RecordDraw.lean` declared it | a new name only: the join moved `sortedKeys_of_wf` to `Properties/Challenger/CanonWf.lean`, and `Tree.lean` is a new file on the switch (`d1bf2be81eb`, merged by `3d27633858f` from soundness's branch) | no: a clash between the join's move and the switch's new file |
+| `MembersHeld.opening` | `SampledTwo/SessionCoins.lean` | none of the three; `MemberForm.openOf_opensRound`, which is deleted | new unfolding through the members' order's new `memberLine` (`memberLine_open`, `memberLine_opensLine`); by reading I can't tell whether its statement survives | no: `fbd623491d6` (the members' order), merged by `527aaff0bca` |
+
+None of the four non-#9441 commits (`9eae385b624`, `408e4ab6c75`, `fbd623491d6`, `d1bf2be81eb`) descends from `1c25cb14f6e`, and none is in #9441, on `main` or on the join [read: `git merge-base --is-ancestor`]. Each came into the switch through a merge, so the "later" side of your column is the switch's history since #9441, its merges included, not only `1c25cb14f6e` and after.
+
+**2. Files never reached** [derived from the import lines at `befd2767122`, against the four that failed]: 32 of the 84. Behind `Tree` alone: `Apart`, `CutAccept`, `CutFirst`, `CutHeld`, `CutOrder`, `CutRead`, `CutRoots`, `Device`, `DeviceAccept`, `DeviceOrder`, `DeviceRead`, `DrawRoots`, `StageAlone`, `StageCoins`, `StageCut`. Behind `SessionCoins` alone: `OneTable`, `SessionAgrees`, `SessionDev`, `SessionFits`, `SessionHeld`, `SessionLogged`, `SessionOpened`, `SessionRecord`, `TableName`. Behind both: `JoinedCoupling`, `JoinedForm`, `JoinsAt`, `RefsOfSent`, `SessionCut`, `SessionTreeless`. Behind `MemberChecks` and `SessionCoins`: `RoundsRise`. Behind `Deployed`: `Shown`. In the whole `security/Proofs` package, 40 modules are behind a failed one.
+
+**3. By reading, in those 32 files: nine theorems that open the changed text** [read; not built]
+
+| theorem | file | opens by text | mend [guess] | from #9441 alone? |
+|---|---|---|---|---|
+| `membersRun_held` | `SessionHeld.lean` | `membersRun`, the join's `do` block, by position | new unfolding through `membersStructure`, same statement | yes (at #9441 `membersRun` is `membersStructure >>= rootsOf >>= runMembers`) |
+| `members_trees` | `CutHeld.lean` | `membersRun`, by position | new unfolding, same statement | yes |
+| `stepMember_all` | `RoundsRise.lean` | `stepMember`, `runFrom` | change of statement (`stepMember slice`) | yes |
+| `foldl_members` | `RoundsRise.lean` | `stepMember slice` in its statement | change of statement | yes |
+| `runMembers_sessions` | `RoundsRise.lean` | `runMembers`, by position | new unfolding | yes (`membersFiles`); `sampledHeld` in `runMembers` comes later (`5d5c7183ca9`, merged by `e103d97ace8`) |
+| `membersRun_ran` | `RoundsRise.lean` | `membersRun`, by position | new unfolding | yes |
+| `stepMember_tables`, `runMembers_tables`, `membersRun_tables` (mine) | `RefsOfSent.lean` | `stepMember`, `runMembers`, `membersRun` | deleted and replaced (item 4) | yes |
+
+- **The count:** six theorems fail in the build; nine more break by reading, in files the build never reached; 32 files are unbuilt, so the build can't say whether more break there.
+- **#9441 alone breaks** `stepMember_sessions`, `memberSession_checks` (its `stepMember` half) and `memberSession_ok` [run], and the nine of item 3 [read]. The other three failures come only from what the switch merged after #9441, or from the join's move.
+- I mended none that is not mine.
+
+**4. My four statements on the trial head: written, NOT tried** (`1002467c84a`, pushed, "not compiled")
+- What changed in `RefsOfSent.lean`:
+  - `accepted_tables` is now `∀ m ∈ p.members, Properties.Spot.HoldsRegisteredTables m.own k.blobs`, from `accepted_ran`, `Spot.OneStageZk.membersRun_files` and the switch's own `Properties.Spot.SecurityProofs.statement_tables` (in `Properties/Spot/Tables.lean`; I add no second one).
+  - New: `memberOf_mem`; `tablesHeldAt_of_accept (hP : DecodesAt C P) (hm : memberOf P 0 = some m₀) : TablesHeldAt C m₀.own`; and `refsAt_of_accept (hS : CaseIsSent C) (hP : DecodesAt C P) (hA₀ hk₀ hd₀ hx₀) : RefsAt C xs₀ ∨ SentCollides C`. That proof splits on whether `P.circuits.size = 0`, and otherwise takes template 0's member from `hx₀`.
+  - `heldOfAt_or_collide` loses `hT` and `q`.
+  - Deleted: the three lemmas above, `NamesAt`, `tablesHeldAt_of_names`, and two private helpers only they used. No other file reads any of them [read: `rg`].
+- **What stops the try** [derived]: `RefsOfSent` imports `StageCut` (behind `Sampled/MemberForm/Tree`: `helloSpec_of_text`) and `SessionHeld` (behind `SampledTwo/SessionCoins`: `MembersHeld.opening`). Neither of those breaks comes from #9441's text. I stopped there.
+
+**5. What my proof needs to stay fixed in the switch's text:** no more than the three I listed, read with the trial's names:
+- `membersRun_files`' statement, with `Member.FilesHeld`'s first conjunct `m.statement slice bs = .ok a`;
+- `Properties.Spot.SecurityProofs.statement_tables` with its statement. It opens `Member.statement` and `statementOf` at their first bind, so if those move, the switch mends that lemma and mine follows unchanged;
+- the two-stage form's one call of `membersRun` at `p.members`, which I read through `accepted_ran` (the join's `SessionHeld.lean`).
+
+## STOP RULE
+
+Item 4 stopped at its imports, as ordered.
+
+## NEEDS
+
+- Your decision on the real merge. If the join takes #9441 first: then the 32 unbuilt files become buildable only once `Tree`'s and `SessionCoins`' breaks are mended, so a second build is needed to count the rest.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- Anything about the 32 unbuilt files beyond the nine theorems I read.
+- The "from #9441 alone" column by a build: it is by reading which commit changed the text each theorem reads.
+- My four statements: written, not compiled.
+
+## Branches
+
+- `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a`: the trial merge `befd2767122`, plus my `RefsOfSent.lean`, not compiled. A trial for sizing; nothing cites it.
+- `cursor/proofs-heldof-4c7b` at `2861eed8d0a`, unchanged.
+- Nothing is running and I set no timer. I end the turn and wait for your decision.
