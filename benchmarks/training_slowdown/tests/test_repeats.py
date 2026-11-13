@@ -145,6 +145,28 @@ def test_a_read_that_is_not_rows_from_their_first_position_records_none(read):
     assert s["tokens"] > 0 and s["repeats"] is None and s["batch_rows"] is None
 
 
+@pytest.mark.parametrize("write", [
+    lambda rows: rows.fill_(3),                                          # to one token: every position would repeat
+    lambda rows: rows.copy_(torch.arange(rows.numel()).view_as(rows) % VOCAB),  # to other tokens: the repeats read missed
+    lambda rows: rows[1:2, :2].copy_(rows[4:5, :2]),                     # a row already read, through a view
+], ids=["one-token", "other-tokens", "a-read-row"])
+def test_a_batch_written_after_its_read_records_none(write):
+    """The count reads the batch's tokens at the step's end, so a batch written after the step's first read of it
+    records no repeats, whichever way the write would move them: not the words the model read. The same write before
+    the step's reads is counted, as the batch the model reads."""
+    def body(rows, w, embed):
+        F.embedding(rows[:3, :-1], embed) @ w
+        write(rows)
+        F.embedding(rows[3:, :-1], embed) @ w
+
+    s, _ = counted(body)
+    assert s["tokens"] == ROWS[:, :-1].numel() and s["repeats"] is None and s["batch_rows"] is None
+    written = ROWS.clone()
+    write(written)
+    assert counted(lambda rows, w, embed: (write(rows), F.embedding(rows[:, :-1], embed) @ w))[0]["repeats"] == \
+        definition(written[:, :-1].tolist()) != definition(ROWS[:, :-1].tolist())
+
+
 def test_a_batch_marked_by_the_program_and_a_one_dimensional_stream_record_none():
     """Token data the program marks (`Counter.tokens`) is no batch of the data stream, and a 1-D batch has no rows:
     neither step records repeats."""

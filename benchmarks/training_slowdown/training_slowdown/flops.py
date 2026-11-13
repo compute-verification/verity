@@ -627,7 +627,8 @@ class Counter(TorchDispatchMode):
         self.token_seen: dict = {}
         self.sources: set[int] = set()  # the token sources `_token_source` made (not the data stream's batches)
         self.stream: dict[int, weakref.ref] = {}  # each of the data stream's batches by its source
-        self.read: dict[int, torch.Tensor] = {}  # the data stream's batches the step reads, held to its end (`_repeats`)
+        self.read: dict[int, tuple[torch.Tensor, int]] = {}  # the data stream's batches the step reads, each with
+        # its version at its first read, held to the step's end (`_repeats`)
         self.lengths: set = set()  # each token read's prefix length (`_prefix`)
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
@@ -768,7 +769,7 @@ class Counter(TorchDispatchMode):
         """The length L of the prefix a read of a source (`src`, at the storage positions `read` of `base`) covers in
         each row it touches, from the row's first position: None unless it is a read of a 2-D batch of the data
         stream (`batch`) through the batch's own storage that covers [0, L) in every row it touches. A batch it reads
-        is held to the step's end (`_repeats`)."""
+        is held to the step's end with its version at its first read (`_repeats`)."""
         ref = self.stream.get(next(iter(src))) if len(src) == 1 else None
         b = None if ref is None else ref()
         if b is None or b.dim() != 2 or base is not (b if b._base is None else b._base):
@@ -781,19 +782,20 @@ class Counter(TorchDispatchMode):
         n = int(width[touched[0]])
         if (width[touched] != n).any() or not mask[touched, :n].all():
             return None
-        self.read[next(iter(src))] = b
+        self.read.setdefault(next(iter(src)), (b, b._version))
         return n
 
     def _repeats(self) -> tuple[int, int] | None:
         """The step's positions that repeat another's words by the batch's tokens (`repeats`) and the rows of its
         batches they are counted over, the batches it reads together: None unless every token read of the step
         covers [0, L) of each row it touches, with one L over the step (`_prefix`), so its `tokens` are those rows
-        times L. Its batches' tokens are read off their device once a batch, outside the count."""
-        if len(self.lengths) != 1 or None in self.lengths:
+        times L, and none of its batches was written after its first read, since the count reads their tokens at the
+        step's end. Its batches' tokens are read off their device once a batch, outside the count."""
+        if len(self.lengths) != 1 or None in self.lengths or any(b._version != v for b, v in self.read.values()):
             return None
         (n,) = self.lengths
         parts = [(b, np.flatnonzero(np.isin(_grid(b), self.token_seen[frozenset((src,))][
-            b if b._base is None else b._base]).any(1))) for src, b in self.read.items()]
+            b if b._base is None else b._base]).any(1))) for src, (b, _) in self.read.items()]
         if sum(len(t) for _, t in parts) * n != self.cur.tokens:
             return None
         with self.pause(), torch.utils._python_dispatch._disable_current_modes():
