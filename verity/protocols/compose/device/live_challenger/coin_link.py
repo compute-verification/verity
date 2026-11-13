@@ -1,5 +1,5 @@
 """The network certifier's coin link for one window's session, on the challenger's host
-(`verity.protocols.certifier.verifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
+(`verity.protocols.accounting.certifier.verifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
 on the link's grids.
 
     python3 -I verity/protocols/compose/device/live_challenger/coin_link.py --out DIR --port PORT [--peer NAME [--peers FILE]] [--minutes M]
@@ -37,9 +37,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402
-from verity.protocols.certifier.verifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
-from verity.protocols.spot.device import remote  # noqa: E402
-from verity.protocols.spot.device.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
+from verity.protocols.proofs.spot.device import remote  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 
 SUMMARY = "coin-link.json"
 TUNNEL = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
