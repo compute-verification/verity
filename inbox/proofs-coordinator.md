@@ -146608,3 +146608,37 @@ The nodes are four of the five your message lists with free root disk; vy-nebius
 ## HELDOF, Fri 13 Nov 14:38Z: the first fields compile, and the instance `couplesAt_wired` compiles too
 
 On `cursor/proofs-heldof-couples-f083` at `7152d0f3c8f`, the three files compiled on their first try, each with `--siblings`, no clash, and only `propext`, `Classical.choice` and `Quot.sound` [run]: `WiredParse.lean` (r20261113-142529-dbf9, 5 theorems), `WiredScope.lean` (r20261113-142636-1f9f, `scope_wired` from `JoinsAt` alone) and `CouplesWired.lean` (r20261113-142750-5b05, `couplesAt_wired` under `RecordWf`, `TwoHolds A.h` and `UnitsWired`). Your 14:28Z and 14:29Z mail is read; points 1, 2 and 4 go in the 16:30Z entry.
+
+## [2026-11-13T14:38Z] ACCEPTS: COMPILED HEAD `dd528bb7b6d3` on `cursor/proofs-accepts-partsout-3153`, one commit off the join's `757ef18fdc67`: the field `partsSizedAt` is OUT of `JoinsAt` (20 fields), `joinedOfLaw` proves it from `partsSizedAt_of_formAccepts`; the three files that read `JoinsAt` build (`93d5`, `5433`); the merge with the join's tip `ff6ea109e06` is clean
+
+In plain words: the join no longer has to assume that the held copies' parts are the interior's strata's. The lemma that proves it from the accept was already on the join; this commit deletes the field and calls the lemma where the field was read. `JoinsAt` goes from 21 fields to 20.
+
+**The head, for ASSEMBLY:** `dd528bb7b6d3eba5549fb6ce73a5f8448759dd6a` on `cursor/proofs-accepts-partsout-3153`, pushed. It is one commit on `757ef18fdc67`, the tip ASSEMBLY named at 14:06Z. No pull request, no lock edit, nothing merged.
+
+**What the commit changes** [read: `git diff 757ef18fdc67 dd528bb7b6d3`, one file, 10 lines added and 14 removed]. `security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean` alone:
+- The field `partsSizedAt : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K` and its docstring are deleted from the structure `JoinsAt`.
+- In `joinedOfLaw`, where the field was read: `have hParts : PartsHeldAt A C := partsHeldAt_of_accepts h.heldOfAt (partsSizedAt_of_formAccepts h.heldOfAt)`.
+- The module docstring's list of what is not established loses the field and names `partsSizedAt_of_formAccepts` among the theorems.
+- **Changed statement:** `JoinsAt` alone, one premise fewer. `joinedOfLaw`, `joinedForm`, `CouplesAt`, `joinedCouplingOfLaw` and `joinedCoupling` keep their text; each takes `JoinsAt` by name, so each now asks less.
+- The lemma needs `HeldOfAt A C` and nothing else, and `heldOfAt` stays a field.
+
+**The files that read `JoinsAt`, built on nodes.** They are three, in one chain [read: the imports]: `JoinsAt.lean`, then `JoinedCoupling.lean`, then `JoinedForm.lean`. Nothing else under `security/` names `JoinsAt` but the root lists.
+- [compiled] `r20261113-141902-93d5` (cpu-14): `verity lean try JoinedForm.lean --siblings` at `dd528bb7b6d3`. "lean exit 0 in 487 s"; "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings clean (2,065 imported). Its build lines: `Built Proofs.Properties.Verity.SampledTwo.JoinsAt` and `Built Proofs.Properties.Verity.SampledTwo.JoinedCoupling`, neither with a warning.
+- [compiled] `r20261113-142816-5433` (cpu-7): `verity lean try JoinsAt.lean --siblings` at the same head, for `joinedOfLaw`'s own probe. "lean exit 0 in 447 s"; "none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `joinedOfLaw` among them; siblings clean (181 imported); no warning in the file.
+
+**Against the join's tip as it is now.** The tip moved to `ff6ea109e06` at 14:11Z (HELDOF's merge), after ASSEMBLY named `757ef18fdc67`.
+- [derived: `git merge-tree --write-tree dd528bb7b6d3 ff6ea109e06`, again at 14:38Z with the tip still there] The merge is clean.
+- [read: `git diff --stat 757ef18fdc67 ff6ea109e06`] HELDOF's merge touches none of `JoinsAt.lean`, `AcceptsTop.lean`, `JoinedCoupling.lean` and `JoinedForm.lean`.
+- My tries ran at `757ef18fdc67` plus the commit, not at the merged tree. ASSEMBLY's own tries after the merge are the check of that.
+
+## STOP RULE
+I stop here and write nothing more until your word. The ports' keys lemma stays unwritten, as you said.
+
+## NEEDS
+- ASSEMBLY: merge `dd528bb7b6d3` into the join. No conflict is expected.
+- Anyone whose branch builds a `JoinsAt` term by fields would break on this. I found none in the join's tree [read: `rg` for `JoinsAt` and `partsSizedAt`].
+
+## Not established
+- That the merged tree at `ff6ea109e06` plus this commit compiles: by `merge-tree` and by reading only.
+- That no lock record moves: no lock names `JoinsAt` but as a root of `security/Proofs` [read], and no records run was made.
+- What my 13:29Z entry left open is unchanged: no honest play of an interior of two or more templates reaches the Lean's `interior-parts` clause at the join's tip.
