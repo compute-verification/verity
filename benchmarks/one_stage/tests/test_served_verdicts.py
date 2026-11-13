@@ -5020,6 +5020,24 @@ def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tm
     assert was_asked == ([str(tree)] if asked and pous_cmd == POUS_PIECE else [])
 
 
+@pytest.mark.parametrize("pinned", [True, False])
+def test_the_serves_preflight_asks_pous_piece_about_the_checkpoint_before_anything_runs(tmp_path, pinned):
+    """The whole preflight of a serving run (PREFLIGHT_ONLY, in `_v3c`'s toy tree) asks the question with the run's own
+    REPO and REV: a checkpoint the piece doesn't pin is refused there, and one it pins passes."""
+    (pieces := tmp_path / "pieces.sh").write_text(
+        "onsite_piece_commands() { :; }\n"
+        f'onsite_pous_pins() {{ echo "$1@$2" > {tmp_path}/asked; {"return 0" if pinned else "echo no pin; return 3"}; }}\n')
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", ONSITE_PIECES=str(pieces),
+                                     POUS_CMD=POUS_PIECE, REPO="some/model", REV="abc")
+    assert (tmp_path / "asked").read_text().split() == ["some/model@abc"] and order == []
+    if pinned:
+        assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert rc == 3 and len(lines) == 1 and lines[0].startswith(
+            "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: no pin. "), lines
+
+
 def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()

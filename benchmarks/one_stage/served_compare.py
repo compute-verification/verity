@@ -196,7 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--row", required=True, help="the row of record's id (its workload file's name)")
     ap.add_argument("--class", dest="cls", required=True, help="the window class, SLOTS,PROMPT,OUTPUTS")
     ap.add_argument("--pearl-tables", required=True, help="Pearl+'s scheme, whose tables the circuit is cut at")
-    ap.add_argument("--pred", type=Path, required=True, help="predict row's Build, its predicted.json")
+    ap.add_argument("--pred", type=Path, required=True, help="predict row's Build: its predicted.json and its copy of the checkpoint config")
     ap.add_argument("--of-record", required=True, help="the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST")
     ap.add_argument("--window-record", type=Path, required=True, help="W, Pearl+'s window record")
     ap.add_argument("--out", type=Path, required=True)
