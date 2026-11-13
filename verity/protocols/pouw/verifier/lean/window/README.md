@@ -26,7 +26,7 @@ fixed length, ignore_eos at each slot's public max_tokens, which the execution p
 | `PouwWindow.Difftest` | the difftest's table: one `Difftest.Fn` per ported function of `window.py`, and `PouwWindow.Lanes`' and `PouwWindow.KnownRows`' |
 
 `pouw-window-difftest` (`PouwWindow/DifftestMain.lean`) serves that table on the shared harness
-(`verity/difftest/`), and the suite `verity-pouw-window-difftest`, which `check` runs after its Lean steps, holds
+(`tools/difftest/`), and the suite `verity-pouw-window-difftest`, which `check` runs after its Lean steps, holds
 each function to Python on Hypothesis-generated inputs, refusals included: `tests/test_difftest.py` to `window.py`, and
 `tests/test_lanes.py` `PouwWindow.Lanes` to `h1zy.statement_ports` and `h1tile.Layout`, also at the served 32 × 32 leaf at
 K = 448, 4096 and 14336 and at the sidecar's 8 × 16 at K = 64, every lane and the combine, and its input wires to the
