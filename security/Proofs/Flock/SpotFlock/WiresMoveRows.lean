@@ -16,7 +16,7 @@ port a wire names and no link names (`wireTarget_of_rows`):
 * its unit is one of its member's (`bitsInUnits`), so it is a position of a whole cell, and that position reads one
   of the rows a replay block holds (`cellRow_of_fits`, through `RowAtFits.rowAt_of_fits`);
 * the writer's unit it reads at is one of the writer's (`writer_unit_lt`);
-* the writer's unit writes the bit (`outputsWritten_of_two`): the bit is inside the writer's output port's words,
+* the writer's unit writes the bit (`outputsWritten_words_of_two`): the bit is inside the writer's output port's words,
   which the decision reads off one unit's input columns (`sourceBits_cell`);
 * the boundary record holds no written bit at a port no link names (`returnedWhole_of_once`).
 -/
@@ -212,7 +212,7 @@ theorem writer_unit_lt {leaf U n nw Uw x per : ℕ} (hleaf : leaf < U) (hdiv : U
 
 /-- **A wired source bit has a gate to go to**, where the design evaluates and the per-template decision holds
 (`wiresMoveRows`): the bit's unit reads its row at one of the writer's units (`cellRow_of_fits`, `writer_unit_lt`),
-which writes the bit (`outputsWritten_of_two`), and the boundary record holds no written bit at a port no link
+which writes the bit (`outputsWritten_words_of_two`), and the boundary record holds no written bit at a port no link
 names (`returnedWhole_of_once`). -/
 theorem wireTarget_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s = some d)
     (hc : wiresMoveRows h = true) {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms)
@@ -244,7 +244,7 @@ theorem wireTarget_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s =
     writer_unit_lt hleaf hdiv hcnt hper hcp
   rw [← units_ms h htwl] at hul
   rw [memberCircuit_ms h htwl] at ho hname hbit
-  obtain ⟨gx, hgx⟩ := outputsWritten_of_two h hd (fun t ht => outs_of_two h hd ht) htwl hul ho hbit
+  obtain ⟨gx, hgx⟩ := outputsWritten_words_of_two h hd htwl hul ho hbit
   rw [hname] at hgx
   obtain ⟨⟨zx, zt, zr⟩, hz, hzm, hzt, hzr⟩ := _root_.Flock.Bridge.NeededBitsOf.find?_of_all
     (p := fun z : ℕ × ℕ × Spot.Bits.RowPos => z.2.1 == tw &&

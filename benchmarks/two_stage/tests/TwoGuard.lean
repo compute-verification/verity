@@ -241,6 +241,70 @@ def rowsAt (h : Held) (c : _root_.Flock.Circuit) (t : ℕ) : Rows :=
     unread := written.filter fun row =>
       !((heldLink h name row).isSome || (h.wires.getD #[]).any fun w => w.writer == name && w.wport == row) }
 
+/-! ## Every wired source bit has a gate to go to, asked once per template
+
+`wiresMove` passes over every source bit of the members' programs, so this never evaluates it. Below, the same is
+asked once per template, of the rows one unit reads source bits at and of how many bits of each it reads
+(`unmovedAt`): every unit of the template has a writer's unit to read each wired row at, and that unit writes every
+bit read. It is said beside the model's clauses and is not one of them: `twoFilesOk` does not read it, and no theorem
+here ties it to `wiresMove`. -/
+
+/-- **How many bits of each row one unit of circuit `c` reads**: for each row an input column's source is a message
+bit of (`Bits.srcKey`, `Bits.srcPos`), one more than the last bit of it any column reads. -/
+def readBitsAt (c : _root_.Flock.Circuit) : List (String × ℕ) :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).foldl (fun acc b =>
+    match Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b) with
+    | some x =>
+      match acc.find? (·.1 == x.row) with
+      | some e => if x.bit < e.2 then acc else acc.map fun e' => if e'.1 == x.row then (e'.1, x.bit + 1) else e'
+      | none => acc ++ [(x.row, x.bit + 1)]
+    | none => acc) []
+
+/-- **How many bits of the row named `wport` one unit of circuit `c` writes**: sixteen a word of its first output
+port of that name; none where no output row port has the name. An output row's port is padded to whole hash blocks,
+so the port's own `words` would say more. -/
+def writtenBitsAt (c : _root_.Flock.Circuit) (wport : String) : Option ℕ :=
+  ((List.range c.outPorts.size).find? fun o =>
+    (c.ports.getD (_root_.Flock.HmOut.nIn c + o) default).name == wport).map fun o =>
+      16 * (c.outPorts.getD o default).2
+
+/-- **Why a unit of template `t` has no gate to go to for some bit of its row `row`**, which wire `w` names, where
+one unit reads `bits` bits of it; none where every unit has one for each. -/
+def unmovedWhy (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) (t : ℕ) (row : String) (bits : ℕ)
+    (w : Spot.SecondStage.Wire) : Option String :=
+  match heldRows h (h.names.getD t "") row, heldWriterAt h n w.writer with
+  | none, _ => some "the registration gives the row no rows"
+  | _, none => some s!"the wire's writer {w.writer} names no template"
+  | some r, some tw =>
+    let nt := h.reg.ns.getD t 0
+    let nw := h.reg.ns.getD tw 0
+    let units := (h.vus.getD t #[]).size
+    let wunits := (h.vus.getD tw #[]).size
+    if (heldLink h (h.names.getD tw "") w.wport).isSome then some s!"a link names the writer's port {w.wport}"
+    else if nt == 0 then some "the reader's cell is empty"
+    else if units % nt != 0 then some s!"the reader's {units} units are not whole cells of {nt}"
+    else if wunits < units / nt * nw then
+      some s!"the writer's {wunits} units are fewer than {units / nt} cells of {nw}"
+    else if nw < r.per then some s!"the rows a replay block holds ({r.per}) are more than the writer's cell ({nw})"
+    else if !Spot.SecondStage.fits r.runs nt then some s!"the rows' runs do not hold the reader's cell of {nt}"
+    else if !(r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < r.per)) then
+      some s!"a run's last row is past the {r.per} rows a replay block holds"
+    else match writtenBitsAt (c tw) w.wport with
+      | none => some s!"the writer has no output row port {w.wport}"
+      | some wbits =>
+        if wbits < bits then some s!"a unit reads {bits} bits of the row and the writer's unit writes {wbits}"
+        else none
+
+/-- **Each template's rows a wire names and no link names at which some unit has no gate to go to**, with why
+(`unmovedWhy`): the template's name, the row and the reason. Empty where every wired source bit has one. -/
+def unmovedAt (h : Held) (n : ℕ) (c : ℕ → _root_.Flock.Circuit) : List (String × String × String) :=
+  (List.range n).flatMap fun t =>
+    (readBitsAt (c t)).filterMap fun rb =>
+      match heldLink h (h.names.getD t "") rb.1, heldWire h (h.names.getD t "") rb.1 with
+      | none, some w => (unmovedWhy h n c t rb.1 rb.2 w).map fun why => (h.names.getD t "", rb.1, why)
+      | _, _ => none
+
 /-! ## The auditor's copies -/
 
 /-- Template `t`'s reference statement among `refs`, the last template's past them. -/
@@ -388,7 +452,9 @@ def members (ms : Spot.Bits.Members) : IO (List Json) :=
 then each template's `templateOk`: `filesFitOk`), each clause of the wiring under its name (`wiringClausesAt`, the
 model's by `wiringClausesAt_eq`) and each template's rows (`rowsAt`). Its result's fields: `twoFilesOk` with its time,
 `filesFitOk`, the clauses (`wiring`), and each template's name with a row no link or wire names (`unnamed`) and with
-a written row no link names and no wire reads (`unread`). -/
+a written row no link names and no wire reads (`unread`). Beside them, not read by `twoFilesOk`: whether every wired
+source bit has a gate to go to, asked once per template (`wiresMoveRows`), and each template's name with a wired row
+at which some unit has none and why (`unmoved`, `unmovedAt`). -/
 def filesResult (h : Held) (c : ℕ → _root_.Flock.Circuit) (ms : Spot.Bits.Members) :
     IO (Bool × List (String × Json)) := do
   let mut total := 0
@@ -415,13 +481,16 @@ def filesResult (h : Held) (c : ℕ → _root_.Flock.Circuit) (ms : Spot.Bits.Me
       s!"{r.name}: scopeOkH {_root_.Flock.ProvedScope.scopeOkH (c t)}; source rows {r.source}, \
         unnamed {r.unnamed}; written rows {r.written}, unread {r.unread}"
     rows := rows ++ [r]
+  let (unmoved, _) ← timed "unmoved" (fun _ => unmovedAt h h.vus.length c) toString
   let files := fit && wiring.all (·.2)
   say s!"twoFilesOk = {files}"
   let pairs (f : Rows → List String) : Json :=
     Json.arr (rows.flatMap fun r => (f r).map fun row => Json.arr #[Json.str r.name, Json.str row]).toArray
   return (files, [("twoFilesOk", Lean.toJson files), ("twoFilesOk_ms", Lean.toJson total),
     ("filesFitOk", Lean.toJson fit), ("wiring", Json.mkObj (wiring.map fun kv => (kv.1, Lean.toJson kv.2))),
-    ("unnamed", pairs (·.unnamed)), ("unread", pairs (·.unread))])
+    ("unnamed", pairs (·.unnamed)), ("unread", pairs (·.unread)),
+    ("wiresMoveRows", Lean.toJson unmoved.isEmpty),
+    ("unmoved", Json.arr (unmoved.map fun e => Json.arr #[Json.str e.1, Json.str e.2.1, Json.str e.2.2]).toArray)])
 
 /-- Each conjunct of `runOkAt` on its own, in their order. -/
 def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
