@@ -1,7 +1,7 @@
 """Reference circuits: the declared Boolean circuits the properties are measured on, and the designation of their counted
 products.
 
-* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.definitions.ops.boolean.gemm`), one GEMM on bits.
+* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.circuits.ops.boolean.gemm`), one GEMM on bits.
 * `layer`: one transformer layer of the served b1 registry (`verity.definitions.registry.b1`) at T positions, on bits:
   σ(`LayerPre_v1`), the Boolean `Attention_v3` (`Attention_v6`), σ(`LayerPost_v1`), wired as `_forward_positions_v4` wires
   one layer (not layer 0: the fused add+RMSNorm with the residual). The GEMMs are σ(b1's `Gemm_v1`), `Gemm_v4`, whose dot
@@ -33,7 +33,7 @@ GEMM_PRODUCTS = Designation(sites=(Site(op=r"AmpereBF16TcDot16_v3", x="a", w="b"
 
 
 def boolean_gemm(K: int, N: int) -> Program:
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 
