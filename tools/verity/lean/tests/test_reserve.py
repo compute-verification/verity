@@ -118,6 +118,19 @@ def test_the_asks_floors_and_plan():
     assert [R.replay_threads(g, 35) for g in (t / 2, t, 3 * t, 100 * t)] == [1, 1, 3, 35]
 
 
+def test_compiles_beside_a_replay_fit_in_what_its_need_leaves():
+    """Compiles beside a replay (a sample's) run a heavy build's jobs in what the replay's need leaves of what the run
+    reserved, so that the two hold no more than it; below one job none fit, and they run after the replay."""
+    heavy, arklib = frozenset({"mathlib"}), frozenset({"mathlib", "Arklib"})
+    one, per, need = R.ONE_JOB_GIB, R.PER_JOB_GIB, R.REPLAY_ARKLIB_GIB
+    assert [R.held(j) for j in (1, 2, 64)] == [one, one + per, R.BUILD_HEAVY_GIB]
+    gibs = (need, need + one - 0.1, need + one, need + one + per, need + R.BUILD_HEAVY_GIB)
+    assert [R.beside(g, arklib, 32) for g in gibs] == [0, 0, 1, 2, 32]
+    assert R.beside(R.LIGHT_GIB + one, heavy, 32) == 1 and R.beside(R.LIGHT_GIB + one - 0.1, heavy, 32) == 0
+    for g in (need + one, need + one + 3 * per + 1, need + 500):
+        assert R.held(R.beside(g, arklib, 32)) + R.need("replay", arklib) <= g
+
+
 def test_a_run_that_declares_nothing_plans_by_what_the_machine_lets_it_hold():
     """A check slot says its GiB and a `research run --mem-gb` run its GB; what a run reserved is the least of those and
     what the machine lets it hold, which is all a run that declares none has, a research run's included: its cgroup's cap,

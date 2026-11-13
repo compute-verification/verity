@@ -6491,6 +6491,85 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     assert ("facts_document" in rep) is (matches and facts_to == "cache")
 
 
+def test_a_heavy_sample_beside_its_replay_takes_its_jobs_out_of_the_replay_s_share(tmp_path, monkeypatch):
+    """`sample_jobs`: the sample of a package pinning ArkLib runs beside its replay the jobs that fit in what the replay's
+    need leaves of what the run reserved, at most its own share of the build's threads, and the replay's threads leave out
+    the GiB they hold, so the two hold no more than the run reserved. Where less than one job is left it runs none beside
+    the replay (0), which keeps every thread; a package that pins neither, or an audit with no replay, keeps its own share
+    (None)."""
+    R = A.reserve()
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    monkeypatch.setattr(A, "_BESIDE", {})
+    monkeypatch.setattr(A, "cores", lambda: 1000)
+    monkeypatch.setattr(A, "memory", lambda *a: (1000.0, "this machine's memory"))
+    monkeypatch.setattr(A, "pins", lambda p: frozenset({"mathlib", "Arklib"}))
+    have = R.REPLAY_ARKLIB_GIB + R.ONE_JOB_GIB + 2 * R.PER_JOB_GIB
+    env = {"CHECK_SLOT_MEM_GB": str(have)}
+    assert A.sample_jobs(pkg, 64, True, env) == 3
+    assert A._BESIDE == {pkg.resolve(): (3, R.held(3))} and R.held(3) + R.REPLAY_ARKLIB_GIB == have
+    assert A.replay_threads(pkg, env) == R.REPLAY_ARKLIB_GIB // R.REPLAY_PER_THREAD_GIB
+    assert A.sample_jobs(pkg, 4, True, env) == 2, "its own share of the build's threads bounds it"
+    env = {"CHECK_SLOT_MEM_GB": str(R.REPLAY_ARKLIB_GIB)}
+    assert A.sample_jobs(pkg, 64, True, env) == 0 and A._BESIDE[pkg.resolve()] == (0, 0)
+    assert A.replay_threads(pkg, env) == R.REPLAY_ARKLIB_GIB // R.REPLAY_PER_THREAD_GIB
+    assert A.sample_jobs(pkg, 64, False, env) is None
+    monkeypatch.setattr(A, "pins", lambda p: frozenset())
+    assert A.sample_jobs(pkg, 64, True, env) is None
+
+
+@pytest.mark.parametrize("room", [0, 2], ids=["after", "beside"])
+def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeypatch, room):
+    """The audit asks `sample_jobs` how many recompiles of its sample fit beside its replay, given the build's threads:
+    with none the sample starts only once the replay has ended, and with room it is started before it; either way the
+    verdict holds the sample's report and nothing is left in `_BESIDE`."""
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    seal = type("Sealed", (), {"search": ["/sealed"], "digest": staticmethod(A.sha256), "dir": tmp_path / "seal"})()
+
+    class Seals:
+        def take(self, pkg, toolchain, roots, exempt, work, log=print):
+            return seal
+
+    def fake_run(argv, cwd, log=None, timeout=0, on_line=None):
+        Path(log).write_text(f"✔ [1/2] Built {'P.A' if argv[-1] == 'build' else 'P'} (1.2s)\n")
+        return 0, ""
+
+    order, asked = [], []
+
+    def sampled(pkg_, roots, work, built, sealed, threads=None, log=print):
+        order.append("sample")
+        return [], {"modules": ["P.B"]}
+
+    def replayed(*a):
+        order.append("replay")
+        return [], {"checked": 1, "reused": 0}
+
+    monkeypatch.setattr(A, "_BESIDE", {})
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "sampled_recompile", sampled)
+    monkeypatch.setattr(A, "replay_in_steps", replayed)
+    monkeypatch.setattr(A, "sample_jobs", lambda p, n, replay, env=None: asked.append((p, n, replay)) or room)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: {
+        "lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=True, log=lambda *_: None, seals=Seals())
+    assert asked == [(pkg, A.build_threads(pkg), True)]
+    assert order == ["replay", "sample"] if room == 0 else sorted(order) == ["replay", "sample"]
+    assert rep["sampled"] == {"modules": ["P.B"]} and "sampled" not in rep["failure_codes"] and A._BESIDE == {}
+
+
 @pytest.mark.parametrize("matches", [False, True, None], ids=["differs", "matches", "not-in-the-run"])
 def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_facts(tmp_path, monkeypatch, matches):
     """A spec reads its prover's facts from the prover's seal while the prover's sample still runs; its verdict waits for
