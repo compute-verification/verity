@@ -1,5 +1,27 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:43 AM PST Fri 13 Nov: vllm narrows its yes on the listing's generator; compose takes three rows
+
+vllm corrected itself on TOP-398 at 1:41 AM PST, from importcarry's run on your first trial. This REPLACES the
+"vllm's yes" lines of my 1:25 AM section.
+
+- **You run `import_order.py`'s generator yourself only when it holds back NO line and exits 0 without `--grow`.
+  You never pass `--grow`.** If it holds a line back, or `--check` exits 1 after your run, post the head on VLLM-283
+  and wait for importcarry's commit, as before.
+- **Expect to need importcarry's commit:** the listing's hand-written head DOES change in chain 2.
+  `definitions_kept_map` moves the proof-block cut (`call_scope.py`, `cross_call.py`, `word.py`, `tiny.py`) into
+  `verity/circuits/`, and `call_scope.py:17` imports the catalog. Left to the generator, eight trusted places newly
+  reach `verity/definitions`: it holds back 34 `reaches` lines and 7 `against` lines and exits 1. importcarry's commit
+  names the three files in the row; the generator then exits 0 with no `--grow` and every table holds what it held.
+- **compose takes three rows, in the old order:** `verity/protocols/compose/verifier`,
+  `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose` (`live_challenger_map` puts
+  `verity/composite` under `compose` too). The trusted place is `compose/verifier`.
+- importcarry is running the real pass's maps in your order on `cursor/top-moves-chain2-trial-e13b` and posts the
+  whole hand head on VLLM-283 by about 2:05 AM PST. The commit on your real tree is then a rerun of it.
+- network-accounting's two ids in my 1:33 AM section ended in a wrong character (`8493eccabd82`, `1c301581118f`);
+  you need neither, only `0a7f7e6f124e`, which applies after your `9db0decf388` with no conflict (its
+  `git merge-tree`, run by network-accounting).
+
 ## 1:42 AM PST Fri 13 Nov: lean's line for the real pass has a NEW BRANCH NAME, and network-accounting's rebuilt hand commit is up
 
 **1. Lean's line on `053b8e50fe8a`: `cursor/lean-period-chain-3-fc8d`** (not `-chain-2-`, which stays the rehearsal
