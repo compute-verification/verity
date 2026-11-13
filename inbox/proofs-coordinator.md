@@ -141710,3 +141710,158 @@ Out: `r20261113-124720-fcfb` (the tip's try), to end about 12:57Z [guess]. Ended
 - The siblings check read 874 built modules, not the tree (3340 unchecked). Against SESSIONCOINS's `3222236de4e` my new names are checked by `git grep` only: none is declared there.
 
 Branch `cursor/proofs-messages-rise-745c` at `086bbcde754`, pushed; nothing unpushed.
+
+## WINDOWAT, Fri 13 Nov 12:53Z: the split compiles on scratch, on #9520's files, with `Window.hcls` at the ended samples; it cannot keep `hend` a field of the audit, so the after-text soundness took changes by one field; the break reaches eleven of soundness's files, one line of MEMBERS's `Reads.lean` and our two
+
+**In plain words.** Your 12:00Z order is done (mailbox read at `18e2078a929`; nothing newer for me). On a scratch branch that is never to merge, the split compiles from `Joint/V5` through the window files to `MemberForm/Sound.lean`, with no premise on the window and with `Window.hcls` asked only where the sample ended. Three things in it are not what the ruling assumed. Soundness should read them before the pull request is cut.
+
+1. **`hend` cannot stay a field of `JointAuditV5`.** `Window.joint` is a definition, and it builds the audit at every window. A field would need its proof there, and that proof is a premise on the window under another name. So the field goes, the audit exists at every window, and "some outcome of the stream ends the sample" becomes a hypothesis of the member law and of what is built on it. The split itself is in `Window.ks`, where soundness put it. This changes the after-text soundness took at 11:57Z: one field fewer, and the three guarantees' text with it. There are two ways to write that text. Both compile. I recommend the second, in which no guarantee takes the hypothesis.
+2. **The break runs past `Walk`, `Unbound` and `Steps`.** It has two causes. It reaches nine files under `Window/`, `MemberForm/ClaimReads.lean`, one line of MEMBERS's `MemberForm/Reads.lean` (I did not edit that file; a mended copy compiles), and `WeightSecurity/Pressure.lean` beside `Deployed.lean`.
+3. **`Deployed.lean` is more than two lines.** The two errors of my 11:41Z entry were against the draft, where `hend` was a field.
+
+The base is #9520's head, not today's `main`, and #9520 still conflicts with `main`. What the pull request will meet once #9520 has merged `main` is not measured.
+
+### STOP RULE
+
+This entry proposes restated text. It restates nothing on a branch a pull request reads. The draft branch `cursor/proofs-windowat-hcls-b2b4` is at `a5b8ce506db`, unchanged since my 11:41Z entry, and its text of `JointAuditV5` and of the three guarantees is still the 10:29Z entry's. The proposed text is only on the scratch branch `cursor/proofs-windowat-hcls-snd-probe-b2b4` (head `45575d15ca0`): `JointAuditV5` without the field `hend`, and `JointSampledV5`, `JointShareV5` and `JointHorizonV5` with their two SHA-512 premises asked where some outcome ends the sample. Their right-hand sides are unchanged. I changed no lock and regenerated no record. There is no pull request and nothing is merged. `cursor/proofs-windowat-5e4b` is at `e977fbc96f`. The scratch holds edited copies of soundness's files and of `MemberForm/ClaimReads.lean`. MEMBERS's four files are byte for byte the draft's there: the mend of `Reads.lean` is in a file of another name.
+
+### What was compiled, and on what
+
+**The base** [run, read]. The scratch is cut from the draft at `a5b8ce506db`. #9520's head is `e2865001c4112d0940e5b612b4fb51db4690c40c`, branch `cursor/soundness-multileg-8fb2`, and it is an ancestor of the draft (`git merge-base --is-ancestor`). So the scratch is on #9520's files, with MEMBERS's `bac046004bb6` merged as the draft has it. It is not on today's `main`: at 12:39Z GitHub reports #9520 open, not a draft, `mergeable: CONFLICTING`.
+
+**What compiles** [run: `ba44` for the first text, `ddf9` for the second]. Every module from `Joint/V5/Statement` to `MemberForm.ProbeSound` (the copy of `Sound.lean`), `Sampled/Members`, `WeightSecurity` and `Joint/V5/Ends`. One file of the tree fails, by design: MEMBERS's `MemberForm/Reads.lean`, which I may not edit. Its three importers (`WindowPasses`, `Sound`, the root `MemberForm`) are hidden behind it; the first two are measured through copies that differ from the originals in one import line each. The root `MemberForm` is not measured.
+
+**Warnings my text adds** [run: `ddf9`], to mend in the pull request: `dif_pos` is deprecated (`Joint/V5/Statement.lean:305`, `Window/Instance.lean:376`), and `design_escape_le` (`Joint/V5/Layout.lean:379`) sits in the section that carries the hypothesis and does not use it.
+
+### Why the split takes `hend` out of the fields [read, run]
+
+`Window.joint (t : ℕ) : JointAuditV5` is a definition with no proof at hand, and three definitions read it at every window:
+
+- `Window.sessionDelta`, the published δ: `W.drawMiss + (W.joint t).eps + W.rootsErr`.
+- `WindowInstance.extractOf` in `Window/Instance.lean`, the vocabulary's extractor: `tracesWith … ((…).joint …).seats …`.
+- `WeightSecurity.servedRec` in `Deployed.lean`, a served window's record: `w.wrongSet (servedAudit w τ)`.
+
+With `hend` a field, each of these needs "some outcome ends the sample" at every window before it means anything. That is way 1, which soundness refused, or a field `hend` on `Window`, which is the same premise moved. The other way I weighed is to give `joint` the proof as an argument: `joint` is written 75 times in 12 files, and `sessionDelta` would need an `eps` that reads no audit. I set it aside.
+
+So in the scratch:
+
+- `JointAuditV5` loses the field `hend`. `EndΩ := {ω : w.L.Ω // w.ended ω = true}` stays.
+- `memberLaw`, `memberStrat`, `memberSim`, `memberWrong` and the lemmas about them take `[Nonempty w.EndΩ]`. The member law cannot be total: its `OneClass` comes from `hcls`, which is asked at the ended samples, so there is nothing to show it from where none ends.
+- One new lemma closes the other branch: `JointAuditV5.prob_accepts_of_not_ends (h : ¬ Nonempty w.EndΩ) τ : prob (fun o => w.Accepts o) w.game τ = 0`. `Accepts` says the sample ended, so where none ends no run is accepted.
+- `Window.ks` splits by cases on `Nonempty (W.joint t).EndΩ`. Its two hypotheses about the audit (`JointFinderCR`, and the claim's share) are asked under that hypothesis, so `WindowFinderCR.session` and `WindowDeployed.claim` are asked only where some outcome ends the sample.
+- `hend_of_zeros` is untouched, and is still what an honest witness uses to show the event is not empty. `Joint/V5/Ends.lean` is byte for byte the draft's.
+
+### The guarantees' text: two ways, both compiled; I recommend B
+
+**A: the guarantees take the hypothesis** [run: `1d05` to `ba44`]. `JointSampledV5` and `JointShareV5` begin `∀ (w : JointAuditV5) [Nonempty w.EndΩ], …`, `JointHorizonV5` begins `∀ (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] …`, and `TheftServedDeployed` and `TheftServedDeployedRate` take the same at every window. This is the smaller change, and it is a premise of the kind soundness refused for way 1: one more fact about the parameters, stated in the guarantee, that no check gives. In `Window.ks` it is discharged by the split, but `JointHorizonV5` and weight security's two theorems have no split above them, so there it stays a premise.
+
+**B: no guarantee takes it** [run: `ddf9`, rc 0, "Build completed successfully"]. The window's incorrect proof blocks are total:
+
+```lean
+noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
+  if _ : Nonempty w.EndΩ then Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb else ∅
+```
+
+and each guarantee asks its two SHA-512 premises where some outcome ends the sample, and nothing else changes:
+
+```lean
+def JointSampledV5 : Prop :=
+  ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
+    ∀ τ : Strategy w.game,
+    (∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512 … ) →
+    (∀ _ : Nonempty w.EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 … ) →
+    ∀ W : Finset (Fin w.nJ),
+      prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
+```
+
+`JointShareV5` the same; `JointHorizonV5` has `… JointPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j, …` in both. The proof is one lemma, `accepted_drawnWrong_le_of_ends`, which splits once and calls `prob_accepts_of_not_ends` where none ends. Under B the premises get weaker and the conclusions keep their text, so each guarantee is at least as strong as under A.
+
+**What B's `∅` means** [read]. Where no outcome ends the sample, every run is rejected, so every event of the three guarantees is empty there and the value of `wrongSet` there changes no probability. In `JointHorizonV5` a period that holds such a window is never all accepted. In weight security `servedRec.incorrect` is 0 at such a window, and `Served.Local` then asks that its release change no slot (`(changed …).card ≤ E * w.incorrect`), so the term `Pr[¬ Local]` on the right-hand side carries any change: the convention makes that theorem weaker there, never stronger. This reading is mine and is the one thing in B a second reader should check.
+
+**The extractor** [run]. Under both A and B soundness's `extractOf` is by cases: the members' traces where some outcome ends the sample, the zero trace where none does. The proof never reads the zero trace (`WindowDeployed.claim` is asked only in the other case). It is a convention in soundness's vocabulary, so it is soundness's to accept or replace.
+
+### How far the break runs: each file, its count and its cause
+
+Two causes.
+
+- **Cause 1, the hypothesis.** A definition or lemma that reads `memberLaw`, `memberSim`, `memberWrong` or (under A) `wrongSet` now needs `Nonempty w.EndΩ`.
+- **Cause 2, "the sample ended" must travel.** The outcome's first part is now the registration with whether the sample ended (`(ByteArray × Bool)`), `Accepts` says it ended, and `Window.hcls` is asked only there. `Bridge.execSel` samples every proof block where the draw fails, so a sample that did not end still has sessions, and `hcls` cannot be had there. The fact that the sample ended at the coupled outcome is known in `MemberForm/Reads.lean`, where the draw is known to have succeeded (`joint_drawUnits_of_drew`), and it is used in `Steps.lean` (for `hcls`) and in `Reach.lean` (for `Accepts`). It is carried down as one conjunct or field through `Read`, `Steps`, `Writes`, `Logged` and `Reach`.
+
+Counts are errors of the file as #9520 has it, compiled against the changed files below it. Where I mended a file before it was ever compiled broken there is no count, and I say so.
+
+| File | Whose | Errors, as it stands | Cause | Lines in the scratch (+/−) |
+|---|---|---|---|---|
+| `Members/Widen.lean` | soundness | first layer, edited with it | `extend` passes the ended hypothesis to `hcls` | 5/4 |
+| `Window.lean` | soundness | first layer, edited with it | `hcls` at ended samples; `Out`; the split in `ks`; `JointFinderCR`, `session`, `claim` | 23/16 |
+| `Window/Walk.lean` | soundness | 7 [run `1d05`], one cause | 2: the outcome's first part is a pair | 15/7 |
+| `Window/Reach.lean` | soundness | not counted | 2: `chain` states the pair; `MemberDecodes.ends`; `Accepts`' first conjunct | 12/4 |
+| `Window/Logged.lean` | soundness | not counted | 2: `MemberSteps.ends` | 6/0 |
+| `Window/Writes.lean` | soundness | not counted | 2: `memberSteps_of_verdicts` takes `hends` | 7/1 |
+| `Window/Steps.lean` | soundness | not counted | 2: `hses` gives "ended" first; `hcls … ω hE` | 5/3 |
+| `Window/Read.lean` | soundness | not counted | 2: `WindowRead.sessions` and two lemmas conclude "ended ∧ sessions" | 6/5 |
+| `Window/Unbound.lean` | soundness | not counted | 1 | 2/2 |
+| `Window/UnboundLaid.lean` | soundness | not counted | 1 | 2/2 |
+| `Window/Instance.lean` | soundness | 18 [run `b59b`], one cause | 1: 11 failed instances, 5 "Function expected", 2 mismatches after them; `extractOf` by cases | 17/9 |
+| `MemberForm/ClaimReads.lean` | not one of MEMBERS's four; owner not known to me | not counted (hidden behind `Instance`) | 1 | 2/2 |
+| `MemberForm/Reads.lean` | MEMBERS | 3 [runs `b59b`, `1e1f`], all at line 113, one cause | 2: `WindowRead.sessions` owes "ended" first | 6/1, in a copy; the file is not edited |
+| `WeightSecurity/Deployed.lean` | ours | 18 [run `b59b`]: 2 outcome types, 14 failed instances, 2 `whnf` timeouts after them | 2 and 1 | 15/10 |
+| `WeightSecurity/Pressure.lean` | ours | not counted (hidden behind `Deployed`) | 1 | 4/2 |
+| `Joint/V5/Statement.lean`, `Member.lean`, `Bound.lean`, `Layout.lean` | mine | first layer | the field, the hypothesis, two lemmas | 25/13, 6/0, 45/4, 14/1 |
+
+Built unchanged on top of these [runs `b59b`, `ba44`]: `MemberForm/Order.lean`, `Tree.lean` and `Read.lean` (MEMBERS's other three), `MemberForm/Units.lean` and `Laid.lean`; `Members/Draw.lean`, `Window/Draw.lean`, `Window/Leg.lean` and the root `Sampled/Members`, which name the audit and need no change; and, through the copies, `WindowPasses.lean` and `Sound.lean`. No other Lean file of the tree names the audit or its guarantees, except one doc comment in the spot verifier's `Spot/LinkPoints.lean` [read: grep of the tree].
+
+**The line for MEMBERS's `Reads.lean`** [run: compiled as `MemberForm/ProbeReads.lean`], at the last `refine` of `windowRead_members`:
+
+```lean
+  obtain ⟨read', hok⟩ := joint_drawUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
+  have hok' : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+      .ok (drawnUnits ev.base.draw, read') := hok
+  have hended : Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true := by
+    simp only [Flock.Guarantees.sampleEnded, hok']
+  refine ⟨hended, ?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
+```
+
+### The files the pull request will change
+
+Eighteen, and one of MEMBERS's:
+
+- **Mine:** `Flock/EndToEnd/Joint/V5/Statement.lean`, `Member.lean`, `Bound.lean`, `Layout.lean`, with the draft's `Session.lean` and `Ends.lean` as they are.
+- **Soundness's, with my text, for its reading before the mark:** `Sampled/Members/Widen.lean`, `Sampled/Window.lean`, `Sampled/Window/Walk.lean`, `Reach.lean`, `Logged.lean`, `Writes.lean`, `Steps.lean`, `Read.lean`, `Unbound.lean`, `UnboundLaid.lean`, `Instance.lean`. That is eleven, where the ruling named two and three more "if the break reaches them".
+- **`Sampled/MemberForm/ClaimReads.lean`:** two lines.
+- **MEMBERS's `Sampled/MemberForm/Reads.lean`:** its line 113 becomes the six lines above, which needs your word, since your 09:53Z order keeps me out of that file.
+- **Ours, as a commit of their own:** `WeightSecurity/Deployed.lean` and `WeightSecurity/Pressure.lean`.
+- **The lock:** `security/lean-audit.json`'s records of the three guarantees, whose statements change, and whatever else the records run regenerates. Not touched in the scratch. That lock holds `JointSampledV5` and `JointShareV5` under `frozen`; whether restating a frozen guarantee needs more than the records run, I do not know.
+
+The whole diff is `git diff a5b8ce506db 45575d15ca0 -- security` on the scratch branch, less the three `Probe*.lean` files, which exist only to measure and are not for the pull request.
+
+### Runs [run]
+
+All are `lean_changed.py --build` on the scratch branch, `--on auto`, 16 GB.
+
+- `r20261113-121216-1d05` at `86140276424`: the first layer builds (`Joint/V5`, `Members/Widen`, `Window`); `Window/Walk.lean` fails, 7 errors, one cause; rc 1.
+- `r20261113-122008-b59b` at `2202854888d`: with `Walk` to `UnboundLaid` mended, everything through `MemberForm.Units` builds; `Deployed.lean` (18), `Window/Instance.lean` (18) and `MemberForm/Reads.lean` (3) fail; rc 1.
+- `r20261113-122513-1e1f` at `a26d82a233c`: `WeightSecurity`, `Window.Instance`, `MemberForm.ClaimReads`, `.Laid`, `Members` and the copy of `Reads` build; only `MemberForm/Reads.lean` fails, the same 3; rc 1.
+- `r20261113-123205-ba44` at `fb3a8935cb5` (text A): everything named above builds, `MemberForm.ProbeSound` last. I cancelled it at 12:43Z, 11 minutes in, because its fifth target, `Proofs.Flock`, was still building that root's other imports, none of which reads the audit. It is recorded as rc 143, `CANCELLED_MANUAL`; its log shows no error.
+- `r20261113-124346-ddf9` at `45575d15ca0` (text B): rc 0, "Build completed successfully (11818 jobs)", on its first try. Its targets are `MemberForm/ProbeSound.lean`, `Sampled/Members.lean`, `WeightSecurity.lean` and `Joint/V5/Ends.lean`, so it does not build MEMBERS's `Reads.lean` or its three importers as they stand.
+
+Way 1's run (`1e35`, at `af527bdbbbf`) is on the same branch below these and is superseded by your 12:00Z order.
+
+### State
+
+- Scratch: `cursor/proofs-windowat-hcls-snd-probe-b2b4` at `45575d15ca0`, pushed. Never to merge.
+- Draft: `cursor/proofs-windowat-hcls-b2b4` at `a5b8ce506db`, untouched. It still has the field `hend`. I carry the chosen text onto it only on your word: that restates the three guarantees on the branch the pull request will be cut from.
+- No pull request, no mark, no lock change. #9576 waits for "carry". `hready` waits for soundness's `OpensAt.lean`.
+
+**What I need from you, in order of use:**
+
+1. Soundness's word on the changed after-text: `hend` out of the fields, and A or B for the guarantees. I recommend B.
+2. Soundness's word on `extractOf`'s zero trace.
+3. Who puts the six lines into `MemberForm/Reads.lean`: MEMBERS on its branch, or me in the pull request.
+
+**Not established.**
+
+- The compile after #9520 has merged `main`. #9520 conflicts with `main` today, so the files the pull request meets may differ from the ones measured.
+- Error counts for the nine files marked "not counted".
+- That the lock's check accepts B's `∀ _ : Nonempty w.EndΩ, …` as part of the two named assumptions' premises and not as a new premise. I ran no lock check and changed no lock.
+- Under B, that `MemberForm/Reads.lean` fails as it does under A. I did not rebuild it. B changes nothing below it that A did not, except three files of `Joint/V5`, so I expect the same 3 errors [derived].
+- Whether soundness wants `Window.hcls` stated with `Flock.Guarantees.sampleEnded src law nJ ω = true`, as the scratch has it, or in its own words.
