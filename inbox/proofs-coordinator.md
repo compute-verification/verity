@@ -158168,3 +158168,34 @@ No run of mine is out. Ready lines written by me today: #9681 (17:36Z) and #9441
 - The suites' verdict for the import's branch and the twin's.
 - Why those suites take more than two and a half hours on these nodes: I have not seen which suite is the slow one.
 - That the cut builds.
+
+## HELDOF, Fri 13 Nov 19:37Z: carry my blob line at 794613a89ee41033eff792d9c883216061292a6a
+
+carry my blob line at 794613a89ee41033eff792d9c883216061292a6a
+
+`cursor/proofs-heldof-blob-f083` is at that commit on the remote [run: `git ls-remote`], cut from `a7319a232b319179f766c435d9f2b8c68130c670`, never merged with `main`. I commit nothing on it from now until FRAME's table names its carried head.
+
+**It compiles through the deletions** [run, every run's record names tree `794613a89ee…`]: each try `lean exit 0`, no sibling clash, axiom probe clean.
+- WiredUnits `r20261113-185553-2886` and `r20261113-182607-2e19` (2 theorems), which built ProjectionOf, Joined, HeldOfAtDesc, RefsOfSent, GoodCaseHeld, BlobFinder, JoinsAt, JoinedCoupling, WiredScope and CouplesWired.
+- JoinedForm `r20261113-182607-da8b` (2), Undecodable `r20261113-182608-b27d` and `r20261113-185553-5877` (3), CopyOfOne `r20261113-182607-85b8` and `r20261113-185553-2934` (2), RefsOfSent `r20261113-182608-de72` (19), HeldOfAtDesc `r20261113-182608-ee57` (1).
+- These are the thirteen modules the line changes and the one unchanged module that imports any of them, WiredUnits [run: the import closure over `security/Proofs`].
+
+**The rule for the carry onto `02e3d5f39ec180f5df5b3de8c31e503d6f1b6c1c`** [run: `git merge-tree --write-tree` of the two heads, which touches no ref and no tree; the merged tree is not compiled]
+- Everything merges by itself but four hunks in two files (`lakefile.toml`, `JoinedCoupling.lean` and the new `GoodCaseHeld.lean` are among what merges). In each hunk the blob line's side is the text to keep:
+  1. `JoinsAt.lean`, module docstring, the bullet "The run of record's accept": both sides say `partsSizedAt` is now a theorem; mine also says what `heldOfAt` is now.
+  2. `JoinsAt.lean`, the structure's fields: mine has `heldOfAt : HeldOfAtOr A C (V.registered θ)` and no `partsSizedAt`; the join's has `heldOfAt : HeldOfAt A C` and no `partsSizedAt`.
+  3. `JoinsAt.lean`, `joinedOfLaw`'s proof: the join's one line `have hParts …` against my block from `have hCut` to `have hReached`, whose `hParts` is already the join's theorem, at the kept case.
+  4. `JoinedForm.lean`, module docstring, the paragraph on `joinedCoupling`: mine, with its last words "of the law" written "of the sampling design". That is the only word of the join's that taking my side loses.
+- Check of the rule [run]: with my side taken in the three hunks, `JoinsAt.lean` is my head's file but for eight docstring lines outside the hunks where the join's renames landed ("draw" to "sample", "the law" to "the sampling design"); `JoinedForm.lean` is my head's file.
+- Names [run, a heuristic over the declarations' names]: no identifier my added lines use is declared at `a7319a232b31` and gone on `02e3d5f39ec1`, and the eight declarations the new block of `joinedOfLaw` calls (`playAccepts_form`, `reachedAccepts`, `partsHeldAt_of_accepts`, `partsSizedAt_of_formAccepts`, `cutBound_and`, `cutOrder_dev₂`, `freshWide_play`, `sourcesFit`) have the same signature text on both.
+- For whoever takes the line: `JoinsAt` has no field `partsSizedAt`, and its `heldOfAt` is `HeldOfAtOr A C (V.registered θ)`; `CouplesAt` has the field `blobCR`; `joinBound` and `joinCRBound` hold the blob term; `RefsAt`, `copyAt_of`, `heldOfAt_at`, `CopyAt`, `heldOfAt_of_desc` and `partsSizedAt_goodCase` are gone. On my line no site builds a `JoinsAt` or a `CouplesAt` term but `couplesAt_wired`, which takes `hblob` [run: `git grep`].
+
+**STOP RULE**: not hit. No statement gains a hypothesis, `B₀` is free in none, no file under `verity/` and no lock record changes.
+
+**NEEDS**: the carried head's name, from FRAME's table.
+
+**Not established**: that the merged tree compiles.
+
+**Then**: I fast-forward `cursor/proofs-heldof-blob-f083` to the carried head (never a force; if refused I stop and say so) and go on with item 5 there.
+
+**Branches**: `cursor/proofs-heldof-blob-f083` at `794613a89ee41033eff792d9c883216061292a6a`.
