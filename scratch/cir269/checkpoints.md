@@ -21,3 +21,4 @@
 - 14:56Z (06:56 PST): records passes stored 886/886 at both (aa58 done rc 0, 1437 s; fa99 step1 1595 s). Comparison: no binding reads fewer at head. fa99 step 2 running, parent rss at fork 1.75 GiB. Pass 2.
 - correction: the line above was written at 14:53Z (06:53 PST), not 14:56Z
 - 15:11Z (07:11 PST): stop condition (peak > 56 GB): fa99 cancelled at 72 targets, 12 failures; two unlisted DsaTopKReadRows_v1 at ~30.7 GiB own ran at once. #9660 body updated. Posting the CIR-269 comment and returning.
+- 15:25Z (07:25 PST): woke on a new machine (up 0 min), branches from origin (1333bd53, scratch 9ef1238b, 8854b824 detached); main 053b8e50 holds no moves. Launching named-target jobs (27 targets: the 12, 2 controls, 13 for the hooks) at both commits, declared 32, 16 cores.
