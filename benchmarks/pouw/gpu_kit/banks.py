@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+#: what `sass_gate.py` and the tests read
+__all__ = ["degree", "matrix_registers", "phases", "worst"]
+
 BANKS, BANK_BYTES, PHASE_BYTES = 32, 4, 128
 
 

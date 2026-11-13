@@ -23,7 +23,7 @@ properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) i
 The statements are in `Soundness.lean` (this directory). **Remote's**: for any device and any names `V` the subprotocols
 define (`Vocab`), if SPOT, PoUW and the inference-only policy each meet their target at remote, then at all
 parameters `θ`, committed files `F` and commitments `c` and for every prover strategy, the probability that remote's
-compiled verifier (`Core.Remote.protocol`, `verity/remote/v0`) accepts files that passed the commit phase's check while
+compiled verifier (`Core.Remote.V1.protocol`, `verity/remote/v1`) accepts files that passed the commit phase's check while
 one of the three claims fails is at most the three errors at that strategy summed. Onsite's is the same statement over
 its seven. Each takes its targets by name, which are the target of every subprotocol its list names, `SoundnessOf`'s
 hypothesis (`Vocab.targets_remote`, `Vocab.targets_onsite`).
@@ -35,7 +35,8 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 ## The subprotocols each composes
 
 `Verity.subprotocols k` (`Game.lean`) is the subprotocols composite `k` composes: those whose compiled check's id
-(`Subprotocol.id`) `k` lists. A subprotocol's compiled check is the same in every composite (`Subprotocol.protocol`,
+(`Subprotocol.idAt`) `k` lists. A subprotocol's compiled check is the same in every composite but PoUW's, which is
+Pearl+'s run verdict in a composite that lists Pearl+'s id and H1's period credit elsewhere (`Subprotocol.protocolAt`,
 `Verity.component`), and the composite's verifier (`Verity.verifier k`) composes the listed ones under the code's one
 rule, with each tie between two it lists (`Verity.ties`). At onsite's and remote's lists it is the verifier the code
 builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
@@ -44,7 +45,8 @@ builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
 | Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|
 | SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes |
-| PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | yes | yes |
+| PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | yes |
+| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | |
 | the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | yes |
@@ -81,7 +83,8 @@ In this order:
 
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
-  `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
+  `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
+  a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the recursive configuration: `Verity.Recursive.spotRecursive`
   (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`

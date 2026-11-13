@@ -358,10 +358,10 @@ def Composite.onsite : Composite :=
   ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
     "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
-/-- **Remote**, the composite of an auditor with no devices at the datacenter: the inference-only policy, PoUW and
-SPOT. -/
+/-- **Remote**, the composite of an auditor with no devices at the datacenter: the inference-only policy, PoUW by
+Pearl+'s run verdict, and SPOT. -/
 def Composite.remote : Composite :=
-  ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"]
+  ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
 /-- The digests the log names things by, SHA-512 in the deployed check: a sheet's, an entry's, and the head of a
 composite's empty log. -/
