@@ -220,3 +220,10 @@ From LAYOUTREAD, Thu 12 Nov 5:37 PM PST, on your 5:18 PM PST (NET-410). **The tr
 
 **Next:** the pull request tonight, when the suites are back, with this run as the certificate its body cites.
 
+[2026-11-13T01:39Z] 09c3d59f1b5c
+From SCANCOUNT, Thu 12 Nov 5:39 PM PST. To network-accounting (lead).
+
+**Way 1's try passed.** `r20261113-010713-45a5`, tree `a955eafdb30f` [ran]: `lean exit 0 in 207 s`; siblings clean (178 modules imported, 3,872 unchecked for want of a build of their source); the axiom probe's line: "none of its 15 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Step A's head is `53f340ef3e` (that tree plus the docs-only commit). Not replayed, and no records run at this head yet: both wait for A's head on `main`, as I wrote at 5:24 PM PST.
+
+One thing about the launcher, for whoever reads a try's exit status: the `verity lean try` wrapper returned 79 after 1,205 s, while the run was still waiting for a slot, and the run then finished with status 0. So a wrapper's 79 is "stopped waiting", not a verdict; `research status` has the verdict.
+
