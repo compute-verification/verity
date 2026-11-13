@@ -52,6 +52,8 @@ from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm.records.schema_ids import EFFECTIVE_CONFIG_SCHEMA
 
+__all__ = ["COMMANDS", "main"]
+
 STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = EFFECTIVE_CONFIG_SCHEMA
 EFFECTIVE_NAME = "effective_config.json"
