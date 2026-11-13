@@ -104,25 +104,31 @@ theorem namesDistinct_of_two {h : Held} (hT : TwoHolds h) : NamesDistinct h := b
 
 /-- **Where the design evaluates, the interior record of a run whose records name their registrations' names
 registers no value**: the design evaluates only where the interior registration registers none (`wiring_of_two`). -/
-theorem registersNone_of_two {h : Held} (hT : TwoHolds h) {x m₁ : Msg} {st : Roots} {rec : Json}
-    (hx : decode x = some st) (hm₁ : jsonMsg m₁ = some rec) (hRec : RecordsHeld h x m₁) : RegistersNone rec := by
+theorem registersNone_of_two {h : Held} (hT : TwoHolds h) {x m₁ : Msg} {rec : Json}
+    (hm₁ : jsonMsg m₁ = some rec) (hRec : RecordsHeld h x m₁) : RegistersNone rec := by
   obtain ⟨_, _, hd⟩ := two_of_twoHolds hT
   obtain ⟨-, -, -, -, -, -, -, -, -, hv⟩ := wiring_of_two h hd
   unfold RecordsHeld recordsOk at hRec
-  rw [hx, hm₁] at hRec
-  simp only [Bool.and_eq_true] at hRec
-  exact registersNone_of_recordOk hv hRec.2
+  rw [hm₁] at hRec
+  cases hdx : decode x with
+  | none =>
+    rw [hdx] at hRec
+    cases hRec
+  | some st =>
+    rw [hdx] at hRec
+    simp only [Bool.and_eq_true] at hRec
+    exact registersNone_of_recordOk hv hRec.2
 
 /-- **Where the design evaluates, the second stage's `second-inputs` passes with nothing of the verifier's own**
 (`InputsNone`), at a running verifier that holds what the model holds of a run whose records name their
 registrations' names. -/
 theorem inputsNone_of_two {h : Held} (hT : TwoHolds h) {own : Spot.SecondStage.Own} {x m₁ : Msg} {st : Roots}
-    {rec draw : Json} {c₀ : FlockDeploy.Coin} (hx : decode x = some st) (hm₁ : jsonMsg m₁ = some rec)
+    {rec draw : Json} {c₀ : FlockDeploy.Coin} (hm₁ : jsonMsg m₁ = some rec)
     (hA : OwnAgrees h own st rec draw c₀) (hRec : RecordsHeld h x m₁) : InputsNone own := by
   have hi : own.interior = rec := congrArg Spot.SecondStage.Own.interior hA
   apply inputsNone_of_registersNone
   rw [hi]
-  exact registersNone_of_two hT hx hm₁ hRec
+  exact registersNone_of_two hT hm₁ hRec
 
 /-! ## The statement check -/
 
@@ -138,7 +144,7 @@ theorem stmtOk_of_secondStage (h : Held) (own : Spot.SecondStage.Own) (ss : Arra
     (hS : StmtsAre h m₂ ss) (hT : TwoHolds h) (hRec : RecordsHeld h x m₁) (hR : RoundsHeld h m₂)
     (hSc : ScopeHeld h m₂) (hP : PinHeld h m₂) (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
     stmtOk h x m₁ m₂ c₀ c₁ = true :=
-  stmtOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS (inputsNone_of_two hT hx hm₁ hA hRec) hT
+  stmtOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS (inputsNone_of_two hT hm₁ hA hRec) hT
     (namesDistinct_of_two hT) hRec hR hSc hP hc
 
 end SpotFlock.RunsAs.Round2
