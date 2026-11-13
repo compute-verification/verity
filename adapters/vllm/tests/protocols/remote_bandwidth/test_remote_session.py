@@ -420,6 +420,277 @@ def test_a_device_that_keys_an_append_off_its_bound_offset_fails_its_gate():
         b.audit.encode(a.first, bytes(range(32)))
 
 
+def test_a_device_encoded_store_takes_the_registered_payloads_and_each_appends_coin_once():
+    """`remote.DeviceEncoded` refuses payloads that are not the registration's, by their count or by their root, before
+    the device encodes a block.  An append is encoded once, by the coin for its first block: the store then holds the
+    codec's bound encoding of each of its blocks, and the gate counts the append and its first block."""
+    s = store()
+    b = remote.StoreBackend(s, engine(s), device=(d := Device()))
+    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    with pytest.raises(ValueError, match="the registration is of 18 blocks"):
+        remote.DeviceEncoded(reg, b.payloads[:-1], b.salts[:-1], d)
+    with pytest.raises(ValueError, match="these payloads are not the registered ones"):
+        remote.DeviceEncoded(reg, [*b.payloads[:-1], b"\x01" * rcodec.BLOCK_BYTES], b.salts, d)
+    assert d.calls == []
+    b.encode(reg)
+    payloads, coin = [b"\x01" * rcodec.BLOCK_BYTES, b"\x02" * rcodec.BLOCK_BYTES], bytes(range(32))
+    a = b.append(payloads, [bytes(192), bytes(192)])
+    with pytest.raises(ValueError, match="no append from block 19 awaits its coin"):
+        b.encode_append(a.first + 1, coin)
+    assert b.audit.blocks[18:] == [None, None]
+    b.encode_append(a.first, coin)
+    bound = [rcodec.encode(m, 18 + u, reg.key, bound=True, coin=coin) for u, m in enumerate(payloads)]
+    assert b.audit.blocks[18:] == bound
+    assert b.gates["device_encode"] == {"registered": 18, "appends": 1, "blocks_checked": 3}
+    assert d.calls == [(0, 18, False), (18, 2, True)]
+    with pytest.raises(ValueError, match="no append from block 18 awaits its coin"):
+        b.encode_append(a.first, coin)
+
+
+def test_a_store_that_changed_between_its_hello_and_its_registration_is_not_encoded():
+    """`StoreBackend.encode` holds the store to the payloads its hello committed: a byte changed since, in the first
+    block or the last, refuses the registration, and the store as it was at the hello is encoded."""
+    s = store()
+    b = remote.StoreBackend(s, engine(s))
+    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    for region, at in (("w", 0), ("dram", -1)):
+        held = s.backing(region).array
+        held[at] ^= 1
+        with pytest.raises(RuntimeError, match="the store changed between its hello and its registration"):
+            b.encode(reg)
+        held[at] ^= 1
+    assert b.encode(reg) == {"encode_bytes_per_s": 1.0} and len(b.audit.blocks) == 18
+
+
+def test_a_paced_backends_calibration_adds_its_step_to_each_pass_time():
+    """`StoreBackend.with_step`: with no step to wait on a calibration is returned as it is; with one, each pass time
+    (the maximum, the median and each quantile of ``pass_ns``) grows by ``step_ns``, which the result names, every
+    other entry stays, and the calibration handed in is not changed."""
+    s = store()
+    b = remote.StoreBackend(s, engine(s), read_bytes_per_s=5e9)
+    cal = {"pass_ns_max": 7, "pass_ns_median": 5, "pass_ns": {"p50": 5, "max": 7}, "gap_ns_max": 3}
+    assert b.with_step(cal) is cal
+    assert b.calibrate() == {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": 5e9}
+    b.step_ns = 40
+    assert b.with_step(cal) == {"pass_ns_max": 47, "pass_ns_median": 45, "pass_ns": {"p50": 45, "max": 47},
+                                "gap_ns_max": 3, "step_ns": 40}
+    assert cal == {"pass_ns_max": 7, "pass_ns_median": 5, "pass_ns": {"p50": 5, "max": 7}, "gap_ns_max": 3}
+    assert b.with_step({"gap_ns_max": 3}) == {"gap_ns_max": 3, "step_ns": 40}
+    assert b.calibrate() == {"pass_ns_max": 40, "gap_ns_max": 0, "read_bytes_per_s": 5e9, "step_ns": 40}
+
+
+def test_a_trace_runs_a_step_only_in_its_passs_window_and_none_before_the_first_once_one_began():
+    """`Serving.advance` refuses a pass's step while the store's open window is not the pass's, or is closed, and a
+    step before the first window once a window has begun, open or closed.  No refused step runs the engine."""
+    s, b = served(())
+    trace, asked = b.trace, []
+    b.engine = asked.append
+    with pytest.raises(RuntimeError, match="the pass is in window 0, the store's open window is -1"):
+        trace.advance(0)
+    b.begin_window(bytes(32), None)
+    with pytest.raises(RuntimeError, match="the pass is in window 1, the store's open window is 0"):
+        trace.advance(1)
+    with pytest.raises(RuntimeError, match="a step before the first window, and window 0 has begun"):
+        trace.advance(None)
+    s.end_window()
+    with pytest.raises(RuntimeError, match="the pass is in window 0, the store's open window is 0"):
+        trace.advance(0)
+    with pytest.raises(RuntimeError, match="a step before the first window, and window 0 has begun"):
+        trace.advance(None)
+    assert asked == [] and (trace.step, trace.steps, trace.map.last) == (-1, 0, -1)
+
+
+def test_a_traces_engine_step_opens_one_memory_map_line_and_its_first_takes_the_engines_number():
+    """An engine step that opens no memory-map line is refused, the session's first or a later one.  The first step is
+    numbered as the engine numbers it (here from 40).  After it, a step that opens two lines for one ask is refused
+    too, and a refused step is not counted."""
+    s, b = served(())
+    trace, step = b.trace, engine(s, 40)
+    b.engine = lambda k: None
+    with pytest.raises(RuntimeError, match=r"step after -1 opens one memory-map line \(kv_append\(0\)\)"):
+        trace.advance(None)
+    b.engine = step
+    assert trace.advance(None) == 40 and (trace.first, trace.step, trace.steps) == (40, 40, 1)
+    b.begin_window(bytes(32), None)
+    for run in (lambda k: None, lambda k: (step(k), step(k))):
+        b.engine = run
+        with pytest.raises(RuntimeError, match=r"step after 40 opens one memory-map line \(kv_append\(41\)\)"):
+            trace.advance(0)
+    assert (trace.first, trace.step, trace.steps) == (40, 40, 1)
+
+
+def test_a_trace_takes_an_append_and_a_closed_lines_writes_only_as_its_memory_map_gave_them():
+    """`Serving._apply` stops a step whose append is not the memory map's, of other bytes than the map digested or at
+    another index, and one that closes a line whose writes are not the digests appended at its indices."""
+    for other in ("bytes", "index"):
+        s, b = served(())
+        honest = b.append
+        if other == "bytes":
+            b.append = lambda payloads, salts, honest=honest: honest([bytes(len(m)) for m in payloads], salts)
+        else:
+            b.append = lambda payloads, salts, honest=honest: (honest(payloads, salts), honest(payloads, salts))[1]
+        with pytest.raises(AssertionError, match="the store's append is not its memory map's"):
+            b.trace.advance(None)
+        assert b.trace.appends == [] and b.trace.steps == 0, other
+    s, b = served((1,))
+    b.trace.digests[0] = bytes(len(b.trace.digests[0]))
+    b.begin_window(bytes(32), None)
+    with pytest.raises(AssertionError, match="step 0's writes from 18 are not the blocks appended there"):
+        b.trace.advance(0)
+    assert b.trace.steps == 1
+
+
+def test_a_backends_next_window_ends_the_stores_open_one_and_keeps_the_root_before_it():
+    """`StoreBackend.begin_window` opens the store's next window under the challenge, ending the one still open, and
+    keeps the previous root it was last given when a window brings none."""
+    s, b = served(())
+    b.begin_window(bytes(32), None)
+    assert (s.window, s.window_open, b.challenge, b.previous) == (0, True, bytes(32), None)
+    b.begin_window(bytes(range(32)), b"\x01" * 64)
+    assert (s.window, s.window_open, b.challenge, b.previous) == (1, True, bytes(range(32)), b"\x01" * 64)
+    b.begin_window(bytes(32), None)
+    assert (s.window, s.window_open, b.challenge, b.previous) == (2, True, bytes(32), b"\x01" * 64)
+
+
+def test_a_backends_openings_are_each_positions_block_its_leaf_and_its_payloads_commitment():
+    """`StoreBackend.open_window` answers each pass's positions in order, over a plan that skips blocks 2 and 3: the
+    block the plan reads at the position, as the audit store holds it; its leaf's receipts and salt, which verify
+    against the pass's root at the position and hold the block's receipt; and the payload's salt, path and digest, a
+    registered block's digest empty and an appended block's its append's."""
+    _, b = served((1,))
+    (a,), reg, seed = b.trace.appends, b.registration, bytes(range(64))
+    plan = rb.Plan(((0, 2), (4, 18)), 22)
+    root, handle = b.run_pass(seed, plan)
+    first, second = b.open_window([(handle, [0, 2, 15, 16]), (handle, [19])])
+    assert (len(first), len(second)) == (4, 1) and second == b.open(handle, [19])
+    receipt = rb.receipter(reg.receipt, seed, reg.rows)
+    for p, j, opening in zip([0, 2, 15, 16, 19], [0, 4, 17, 18, 21], first + second):
+        block, leaf, salt, path, *committed = opening
+        assert block == b.audit.blocks[j] and tuple(committed) == b.audit.committed(j), p
+        assert rb.verify_leaf(seed, plan, root, p, leaf, salt, path), p
+        assert rb.leaf_receipt(leaf, p, 20) == receipt(j, block), p
+        assert committed[2] == (b"" if j < 18 else a.digests[j - 18]), p
+
+
+def test_a_session_module_that_fails_to_load_is_not_kept(tmp_path):
+    """`session_module` loads a module once from its file and keeps it in ``sys.modules``.  One whose file is missing,
+    or whose body raises, is not kept, so the next call loads the file again; once kept, it is returned whatever the
+    directory asked."""
+    name = "session_module_under_test"
+    assert name not in sys.modules
+    try:
+        with pytest.raises(FileNotFoundError):
+            remote.session_module(name, tmp_path)
+        assert name not in sys.modules
+        (tmp_path / f"{name}.py").write_text("VALUE = 1\nraise RuntimeError('half loaded')\n", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="half loaded"):
+            remote.session_module(name, tmp_path)
+        assert name not in sys.modules
+        (tmp_path / f"{name}.py").write_text("VALUE = 2\n", encoding="utf-8")
+        module = remote.session_module(name, tmp_path)
+        assert module.VALUE == 2 and sys.modules[name] is module
+        assert remote.session_module(name, tmp_path / "elsewhere") is module
+    finally:
+        sys.modules.pop(name, None)
+
+
+def test_a_pass_interval_is_closed_with_its_phases_its_wall_and_what_they_leave(monkeypatch):
+    """`Phases.close` ends the interval open since the close before it: each phase's time in it, summed over its runs,
+    ``wall`` from that close to this one, and ``other``, the wall no phase took.  The first close ends no interval and
+    drops what ran before it.  The clock is the test's: each reading is the next of its list, and the first close
+    reads 0, a reading like any other."""
+
+    class Clock:
+        def __init__(self, *readings: int) -> None:
+            self.readings = iter(readings)
+
+        def perf_counter_ns(self) -> int:
+            return next(self.readings)
+
+    monkeypatch.setattr(remote, "time", Clock(-9, -2, 0, 10, 30, 40, 45, 50, 60, 100, 160))
+    phases = remote.Phases()
+    with phases.time("engine"):
+        pass
+    phases.close()
+    assert phases.closed == [] and phases.since == 0
+    for name in ("engine", "plan", "engine"):
+        with phases.time(name):
+            pass
+    phases.close()
+    phases.close()
+    assert phases.closed == [{"engine": 30, "plan": 5, "wall": 100, "other": 65}, {"wall": 60, "other": 60}]
+
+
+def test_a_run_whose_step_raises_fails_the_sessions_ask_with_its_reason():
+    """`Lockstep.step`: the run's engine step that raises answers the session's ask with what it raised, so the session
+    fails there, and raises in the run as it was; the step is counted neither audited nor unaudited."""
+    lock, failed = remote.Lockstep(), []
+
+    def session() -> None:
+        try:
+            lock(0)
+        except RuntimeError as e:
+            failed.append(str(e))
+
+    def step() -> None:
+        raise ValueError("no KV to write")
+
+    th = threading.Thread(target=session, daemon=True)
+    th.start()
+    with pytest.raises(ValueError, match="no KV to write"):
+        lock.step(step)
+    th.join()
+    assert failed == ["the run's engine step raised ValueError: no KV to write"]
+    assert (lock.audited, lock.unaudited) == (0, 0)
+
+
+def test_a_registration_cut_off_is_a_refusal_only_when_the_verifier_refused(monkeypatch):
+    """`prove` raises `Refused`, with the verifier's address and reason, for a registration the wire closed with
+    ``refused``; closed for any other reason it raises as the wire raised.  The connection is shut and closed either
+    way."""
+    done: list[str] = []
+
+    class Sock:
+        def shutdown(self, how: int) -> None:
+            done.append("shutdown")
+
+        def close(self) -> None:
+            done.append("close")
+
+    class Wire:
+        class Closed(Exception):
+            pass
+
+        @staticmethod
+        def connect(host: str, port: int) -> Any:
+            return type("Conn", (), {"sock": Sock()})()
+
+    def closing(why: str) -> None:
+        """The prover's module is one whose registration the wire closes with ``why``."""
+
+        class Side:
+            def __init__(self, conn, backend, node, plan, log) -> None:
+                self.plan = plan
+
+            def register(self, codec) -> None:
+                raise Wire.Closed(why)
+
+        class Prover:
+            wire, ProverSide = Wire, Side
+            parse_plan = staticmethod(lambda plan: [(plan, None)])
+
+        monkeypatch.setattr(remote, "session_module", lambda name: {"prover": Prover}[name])
+
+    closing("the peer closed the connection")
+    with pytest.raises(Wire.Closed, match="the peer closed the connection"):
+        remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
+    closing("refused: a live registration")
+    with pytest.raises(remote.Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
+        remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
+    assert (refused.value.verifier, refused.value.why) == ("10.0.0.7:7781", "refused: a live registration")
+    assert done == ["shutdown", "close"] * 2
+
+
 def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest():
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
     assert cs.engine_args({"max_model_len": 128}) == {"max_model_len": 128, "async_scheduling": False,
