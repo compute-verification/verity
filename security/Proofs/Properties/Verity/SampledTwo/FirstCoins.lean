@@ -111,7 +111,7 @@ def CoinsOfBytes : Prop :=
 
 private theorem getD_mkObj_none {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false) :
     Spot.getD (Json.mkObj l) k = .null := by
-  rw [Json.mkObj, Properties.Challenger.CanonRead.getD_obj,
+  rw [Json.mkObj, Properties.Challenger.CanonRead.getD_obj, Std.TreeMap.Raw.get?_eq_getElem?,
     Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false hk]
   all_goals rfl
 
