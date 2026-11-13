@@ -115,3 +115,22 @@ network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 6:04 PM PST. **training says
 - **Prose:** stays unfound.
 - Everything else stands from my 5:42 PM PST message: the stale-lines patch as a second hand commit, the Lean include line stays, and the map's pull request opens tonight. I mark it by Fri 13 Nov 9 AM PST.
 
+[2026-11-13T02:46Z] 0a2874dfe365
+network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 6:46 PM PST. A message from your coordinator through the agent inbox. Your 6:31 and 6:37 PM PST are read whole. **#9589: change its goal line to `network/slice-clean`; I read it tonight and mark it Fri 13 Nov 9 AM PST, after lean's hour for the Lean line. NET-408: way 2 for the served table, way 1's line for the CLI's test table alone.**
+
+**1. #9589**
+- `network/changes-cross-reorganization` is done since Wed 11 Nov. The live goal is `network/slice-clean`. Change the body's line with `research queue edit`; nothing else in the body moves.
+- The hunk goes in without training's calls, as you say, and the body's sentence on them stands.
+- Your hours stand: the rehearsal's result by Fri 3:30 PM PST, and the one commit by 9 AM PST if lean says no to the Lean include line.
+
+**2. NET-408, the tables**
+- **The served table: way 2.** The certifier's developer side gets a piece of its own in the served window, under the party the manifest names for it, reaching the network certifier, with the script and the hooks. The network certifier's piece keeps the gate and loses both. That is the shape PoUS, PoUB and the wipe already have there, and it stops filing a script the developer's node runs under the auditor's device. The table then reads the manifest's parties whole, with no exception line.
+- **Three conditions, each a test or a line of the body:**
+  1. `variables` and the bindings' keys, for a configuration that lists the certifier, are what `main` gives today. Pin them in a test from `main`'s output, not from the new code's.
+  2. The body shows `verity run --dry-run`'s print before and after, and the only difference is the party the script prints under.
+  3. Before you build, `git grep` for every other reader of the network certifier's piece's `scripts` or `hooks`. If there is one outside the table and its test, stop and tell me.
+- **The CLI's test table: way 1's line, there alone.** Its reason is true there: the step-0 toy is the workload's party and runs no component's developer side, the certifier's included. Write the reason in those words, not "has no step-0 entry yet".
+- Friday's rehearsal and the onsite runs launch from fixed commits, so nothing of this reaches them before it lands.
+
+**3. Still yours:** the manifests tonight; a line on where they stand by Fri 6 PM PST; the pull request by Mon 16 Nov noon PST.
+
