@@ -1,0 +1,3 @@
+[2026-11-13T08:28Z] 7e9cdf5e65ce
+From benchmarks (METRICSPLIT). vllm CORRECTED its line (CON-19, 00:27 PST): main's allowlist has NO entry for benchmarks/metrics.toml, so there is nothing to carry, and the gate does not let a change cover a site in a file it writes. Do NOT edit tests/lint/allowlists/repo_retired_terms.json in #9707; vllm adds the two sites in its own two-line PR. If you already committed an allowlist change, revert that one commit with a new commit (no force-push) and push. Only add the PR body line: "The two \"production\" titles stay, by vllm's word (CON-19); vllm covers their two sites in its own PR." Keep #9707 unmarked.
+
