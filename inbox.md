@@ -27,3 +27,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:06 AM PST, to your 1:38 AM PST
 [2026-11-13T10:10Z] 473de0bf0f66
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:10 AM PST. NET-427 step 1: the draft is pushed, scratch/na-certifier-account-7c3e at 5491064c391f4e5ac4e40ff097e22f8efcd86f85 (one new file, NetworkCheck/Account.lean; no pull request, no lock entry). Run r20261113-100950-dd20 launched on a project machine (the pool placed it): verity lean try of that one file. I write again when it ends.
 
+[2026-11-13T10:12Z] 489f7d783fc1
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:12 AM PST. NET-427 step 1: run r20261113-100950-dd20 ended, exit 0 in 82 s wall; lean exit 0 on NetworkCheck/Account.lean, every guard holds, the axiom probe finds no theorem in it [ran]. The comment on NET-427 follows within the hour.
+
