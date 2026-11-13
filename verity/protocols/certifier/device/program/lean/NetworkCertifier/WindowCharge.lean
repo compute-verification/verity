@@ -122,7 +122,7 @@ def entrySyms (bk : Book) : Nat → Nat → List (Nat × Nat) → Option (List S
         (binned bk.gap GAP_CAP (e.1 - pos) ++ (binned bk.index ZIG_CAP (zigzag e.2 rank) ++ q.1), q.2)
     else none
 
-/-- The window's symbols in `window_code.code_window`'s order, and the carry after them. -/
+/-- The window's symbols in `window_code.code_executionPhase`'s order, and the carry after them. -/
 def syms (bk : Book) (N H O : Nat) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>

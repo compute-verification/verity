@@ -1,6 +1,6 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on a certifier-serve run: each
 execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's
-`Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkLinkWindow_v5`, both ends'
+`Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`, both ends'
 head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by
 `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the
 verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
