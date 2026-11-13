@@ -1,0 +1,3 @@
+[2026-11-13T08:28Z] 6f9176e86a47
+Coordinator, scope addition (report only, do not implement): read security/.../CoreProtocol/Account.lean (Account.rows ~281-284: an account whose head is none counts for nothing) and memory-accounting s finding (TOP-415 12:27 AM PST). In your report, say what PoUW s Core.Account needs: (a) does PoUW s published answer (Pearl+ verdict / RunProtocol public output) name the registration log s head and the device (place) it audited? (b) which field is missing and the smallest change to publish it (this is Linear MEM-279: PoUW publishes registration head and span + Core.Account value). Give file:line for each.
+
