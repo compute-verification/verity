@@ -63,10 +63,13 @@ WORKERS=${V3C_NEGATIVE_WORKERS:-7} MEM_GB=${AUDIT_MEM_GB:-650} JOB_S=${JOB_SECON
 MIN_FREE_GB=${MIN_FREE_GB:-600} FLOOR_GB=${FLOOR_GB:-15}
 MEM_STOP_GB=${MEM_STOP_GB:-650} MEMINFO=${MEMINFO:-/proc/meminfo}
 # the table: a member of TABLE_BYTES took TABLE_MEMBER_S s in its session, its Lean check and the registered reads' four
-# checks at once; the outcome and the negatives' workers take TABLE_WORKERS_S whatever the member, by the workers' count
-TABLE_BYTES=3764130558 TABLE_MEMBER_S=1460 TABLE_WORKERS_S=''
-if [[ $WORKERS =~ ^[0-9]+$ ]]; then
-  if [ "$WORKERS" -ge 7 ]; then TABLE_WORKERS_S=2020; elif [ "$WORKERS" -ge 5 ]; then TABLE_WORKERS_S=2600; fi
+# checks at once; the outcome and the negatives' workers take TABLE_WORKERS_S whatever the member: the outcome, then the
+# negatives' twelve tasks in one wave, as six workers took them. The table has that stage at six workers alone: five
+# or more read it, the line saying so where they are not six, and under five it has no seconds
+TABLE_BYTES=3764130558 TABLE_MEMBER_S=1460 TABLE_WORKERS_S='' TABLE_AT=''
+if [[ $WORKERS =~ ^[0-9]+$ ]] && [ "$WORKERS" -ge 5 ]; then
+  TABLE_WORKERS_S=1600
+  [ "$WORKERS" = 6 ] || TABLE_AT=" (its last stage as six workers took it, not $WORKERS)"
 fi
 TREE=$PWD OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out} IN=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VW=$KEPT/v3c-w$K-${CLASS//,/-} WREG=$KEPT/weights_registration.json MAIN=${MAIN_FILE:-$IN/main.txt}
@@ -212,8 +215,8 @@ printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
      now=$(($(date +%s) - T0))
      if [ -n "$TABLE_WORKERS_S" ]; then
        more=$((TABLE_WORKERS_S + TABLE_MEMBER_S * b / TABLE_BYTES))
-       printf "REHEARSAL +%ss sampled: the member's circuit file is %s bytes; by the table the audit ends about %s s from here, at about +%ss, %s the job's %s s\n" \
-         "$now" "$b" "$more" "$((now + more))" "$([ $((now + more)) -le "$JOB_S" ] && echo inside || echo PAST)" "$JOB_S"
+       printf "REHEARSAL +%ss sampled: the member's circuit file is %s bytes; by the table the audit ends about %s s from here, at about +%ss, %s the job's %s s%s\n" \
+         "$now" "$b" "$more" "$((now + more))" "$([ $((now + more)) -le "$JOB_S" ] && echo inside || echo PAST)" "$JOB_S" "$TABLE_AT"
      else
        printf "REHEARSAL +%ss sampled: the member's circuit file is %s bytes; the table has no seconds for %s negative workers\n" "$now" "$b" "$WORKERS"
      fi
