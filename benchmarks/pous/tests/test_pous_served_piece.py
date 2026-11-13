@@ -30,12 +30,12 @@ from pathlib import Path
 import pytest
 
 from verity.runtime.stream import Side
-from verity.protocols.pous.device import challenger_party as CP
-from verity.protocols.pous.device import challenger_session as CS
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.verifier import period
-from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.poub.verifier import ledger, p2_case, p2_lean
+from verity.protocols.accounting.pous.device import challenger_party as CP
+from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.accounting.poub.verifier import ledger, p2_case, p2_lean
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -68,8 +68,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 
@@ -449,7 +449,7 @@ def _script(directory: Path, name: str, body: str) -> Path:
 def run_exe(tmp_path_factory) -> Path:
     """`pous-run-protocol`, built in the run protocol's package, behind a script of its name that runs it under
     ``--test``: the protocol of the test signers' schemes, which the deployed one refuses."""
-    real = _built(ROOT / "verity" / "protocols" / "pous" / "verifier" / "check", RUN_EXE)
+    real = _built(ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "check", RUN_EXE)
     return _script(tmp_path_factory.mktemp("lean"), RUN_EXE, f'exec {real} --test "$@"\n')
 
 
