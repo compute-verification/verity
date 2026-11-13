@@ -21,8 +21,8 @@ stage's last round. At it:
   on each session's round fit in one coin (`SessionsFit`): below 65536 elements the coin map's count of the releases
   that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`);
 * `sessionsFit_of`: on a play the form accepts, the session-round locator puts at most one release on each round
-  (`located_one_accepted`), so `SessionsFit` holds where every opening the check read is of at most one coin's elements
-  (`ReadFits`), which the form's acceptance gives (`readFits`): the check bounds an opening, not the device's game.
+  (`located_one_accepted`), and every opening the check read is of at most one coin's elements (`readFits`), so
+  `SessionsFit` holds: the check bounds an opening, not the device's game.
 
 At the stages' rounds the run's locator puts what the stages' locator puts, so `CoinMap.devFirst_stage` and
 `CoinMap.devSecond_stage` read the same release there (`dev_congr`).
@@ -200,9 +200,9 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
 
 /-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
 check read on each round (`located_one_accepted`), the play's log puts releases of the same frames there
-(`located_widths`), and the read's one is an opening of at most one coin's elements (`ReadFits`). -/
+(`located_widths`), and the read's one is an opening of at most one coin's elements (`readFits`). -/
 theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good : Exchange → Prop) (hsz : HeldSize)
-    (hlog : InteriorLogged C Good) (hfit : ReadFits C) : SessionsFit A tab (FormAccepts C) Good := by
+    (hlog : InteriorLogged C Good) : SessionsFit A tab (FormAccepts C) Good := by
   intro o hA hG n hg
   obtain ⟨l, hl⟩ := interiorReads C hsz o hA
   obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hA hG l hl
@@ -228,7 +228,7 @@ theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good :
       obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located (show x ∈ located (locOf A tab) n [] l by rw [hx]; simp)
       simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
       cases hfr : r.frame with
-      | opening i s c => exact hfit o hA l hl r (by rw [he]; simp) i s c hfr
+      | opening i s c => exact readFits C hsz o hA l hl r (by rw [he]; simp) i s c hfr
       | fresh _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
       | hello _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
 
