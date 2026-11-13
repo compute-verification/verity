@@ -771,6 +771,7 @@ ledger, which opens and closes no ledger line, samples nothing and signs every m
 def deployment : Device.Deployment where
   pin := Verity.Idle.pin
   sessions := []
+  earlier := ⟨fun _ => [], fun _ => []⟩
   run _ _ _ _ _ := ⟨ByteArray.empty, "", "", "", 0, [], fun _ => ByteArray.empty, fun _ => ByteArray.empty, none,
     fun _ => 0, []⟩
   opens _ _ := []
@@ -779,7 +780,7 @@ def deployment : Device.Deployment where
   ledger_le _ _ _ _ _ := Nat.le_refl 0
   draws _ := 0
   sign _ _ _ := []
-  numbered _ _ _ _ _ := List.nodup_nil
+  numbered _ _ _ _ _ := by simp [Device.Numbered]
   earlier_closed _ _ _ h := absurd h List.not_mem_nil
   opens_run _ _ _ _ _ _ _ h := absurd h List.not_mem_nil
   fresh_id _ _ _ _ _ _ _ h := absurd h List.not_mem_nil
@@ -805,6 +806,8 @@ reads the committed circuit or a strategy of the play at them. -/
 noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     signer := signer
+    pinned := fun _ => rfl
+    signer_families := fun _ => rfl
     read := readOf
     programDigest := programDigestOf
     publicDigest := publicDigestOf
@@ -817,6 +820,7 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     finders := fun _ _ _ _ => []
     premises := fun _ _ _ _ _ => True
     forger := fun _ _ _ _ _ _ => Verity.Idle.forger
+    forger_pinned := fun _ i _ _ _ _ _ => by rcases i with _ | _ <;> rfl
     forger_calls := fun _ _ _ _ _ _ _ => Nat.zero_le _
     signatures := deployment.signatures
     signs_le := fun θ P hP a log b ρ => by
