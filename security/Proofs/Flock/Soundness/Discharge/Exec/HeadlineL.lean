@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 `Prog.flock_headline` (`Headline.lean`) restated for the session at a leaf scheme `Lp` (`batchedSessionL H512 enc512 Lp
 plan`), the session flock-verify checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
-under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bind`, a collision of `H512`:
+under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.pair_spec`, a collision of `H512`:
 
 * `Prog.flock_headline_L`: the count curve on the statement's rows, at the live sample, with the same bound as
   `Prog.flock_headline`: `miss(K) + ksAvgStrict + linkBoundE + δ_tree`, under the same assumptions
