@@ -18,7 +18,7 @@ there. The log is consistent iff every read's t is below its now and, as multise
 
     reads ∪ finals = writes ∪ initials
 
-which the circuit checks as a fingerprint over F under α and γ, the verifier's live coins, drawn after the log is committed:
+which the circuit checks as a fingerprint over F under α and γ, the verifier's live coins, flipped after the log is committed:
 
     R = ∏ (α + e(read)) · ∏ (α + e(final)),   W = ∏ (α + e(write)) · ∏ (α + e(initial)),   accept iff R = W
 

@@ -1,10 +1,10 @@
 """A member's link points (Lean `SampledProofs.LinkPoints`, which the difftest's `link_points` piece holds this to).
 
 A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` points for its `c` proved units and its
-circuit's `g` units a proof block (META `vus_per_block`). A draw over several members draws a random count of each
+circuit's `g` units a proof block (META `vus_per_block`). A sample over several members samples a random count of each
 member's units. One that runs out of the verifier's public coins fails the window (`OneStageZk.RAN_OUT`); one that ends
-draws between the member's fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a
-member whose fewest and most give different link points, and a law no draw of which ends (`refused`, `ends`, the
+samples between the member's fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a
+member whose fewest and most give different link points, and a sampling design no sample of which ends (`refused`, `ends`, the
 registration's `link-points`).
 """
 from __future__ import annotations
@@ -35,10 +35,10 @@ def overlap(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]]) -> int:
 
 
 def ended(law: Mapping[str, Any], population: int, us: Sequence[Sequence[int]]) -> tuple[int, int] | None:
-    """The fewest and most of the units `us` of `[0, population)` a draw under `law` (well formed: `coins.law_problem`)
+    """The fewest and most of the units `us` of `[0, population)` a sample under `law` (well formed: `coins.law_problem`)
     holds when it ends: the fewest is what is left after its units fill the rest of the population, or of each stratum,
-    first, and the most `k`, or each stratum's `k_s`, where the member holds that many. None where no draw ends (`subset`
-    above the population, a stratum drawing more than it has), so every window under `law` fails."""
+    first, and the most `k`, or each stratum's `k_s`, where the member holds that many. None where no sample ends (`subset`
+    above the population, a stratum sampling more than it has), so every window under `law` fails."""
     n = size(us)
     if law["law"] == "subset":
         k = law["k"]
@@ -58,7 +58,7 @@ def ended(law: Mapping[str, Any], population: int, us: Sequence[Sequence[int]]) 
 
 
 def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[tuple[int, int] | None]:
-    """Each member's fewest and most drawn units when the draw ends (`ended`): a member is its units, `[lo, hi)` ranges,
+    """Each member's fewest and most sampled proof blocks when the sample ends (`ended`): a member is its units, `[lo, hi)` ranges,
     and its circuit's units a proof block. ValueError for a member with no unit, a range of none, ranges that meet, a
     unit outside the population, or no unit a proof block."""
     out = []
@@ -75,18 +75,18 @@ def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -
 
 
 def ends(law: Mapping[str, Any], population: int) -> bool:
-    """Whether some draw under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the law
+    """Whether some sample under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the sampling design
     and the population, never the member's units."""
     return ended(law, population, ()) is not None
 
 
-#: Lean `LinkPoints.NEVER_ENDS`: the refusal of a law no draw of which ends (`ends`).
+#: Lean `LinkPoints.NEVER_ENDS`: the refusal of a sampling design no sample of which ends (`ends`).
 NEVER_ENDS = "link points: no draw under the law ends, so each of its windows fails"
 
 
 def refused(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[int]:
-    """The members whose fewest and most drawn units, over the draws that end, give different link points (`bounds`),
-    by index; ValueError (`NEVER_ENDS`) when no draw under `law` ends."""
+    """The members whose fewest and most sampled proof blocks, over the samples that end, give different link points (`bounds`),
+    by index; ValueError (`NEVER_ENDS`) when no sample under `law` ends."""
     bs = bounds(law, population, members)
     if not ends(law, population):
         raise ValueError(NEVER_ENDS)
@@ -95,7 +95,7 @@ def refused(law: Mapping[str, Any], population: int, members: Sequence[Member]) 
 
 def law_of(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], int]:
-    """The sampling design the draw runs on, the verifier's own expanded over its program and query (`draw.derive`),
+    """The sampling design the sample runs on, the verifier's own expanded over its program and query (`draw.derive`),
     with the population; ValueError (or `partition.QueryRefused`) where it doesn't apply."""
     population = P.units(program, query)
     mine = D.derive(program, query, law, table)
