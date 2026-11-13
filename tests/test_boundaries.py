@@ -75,10 +75,12 @@ DEPENDENCIES = {"numpy"}
 #: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
 #: the hardware's cards, record and registration log, SPOT's planning beside its verifier, and the reporting
-#: grid.  Within them, what may use numpy.
+#: grid.  Within them, what may use numpy: with the parts of the Definitions that use it, which are no scalar reference
+#: in `verity/circuits` either.
 STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/protocols/spot", "verity/protocols/reporting.py")
-NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
+NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py", "verity/definitions/cross_call.py",
+               "verity/definitions/kernels", "verity/definitions/ops", "verity/definitions/word.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
 NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_only/nci",
