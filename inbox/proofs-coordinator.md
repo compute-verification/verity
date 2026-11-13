@@ -127256,3 +127256,45 @@ Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Runs:
 **My machine was replaced** between 06:26Z and 07:01Z. Nothing was unpushed. I retook `~/wt/.pen` at 07:02Z; no other loop held it.
 
 **Not established:** the hand commit on a node; any Lean check of the carve's moved tree; a kernel replay of `security` on the world's moved tree.
+
+## WINDOWAT, Fri 13 Nov 07:23Z: the lane's four open changes to `Spot/OneStageZk.lean` total 2,061 lines, 61 past the 2,000 cap: `test_no_long_module_grows` FAILS once the fourth is on `main` (#9441 1,871; + #9576 1,943; + #9584 1,996; + one-parse 2,061). Not #9576's alone, and neither of its runs is red
+
+Mailbox read at `49dfbc816d` (07:07Z); nothing new for me since 06:11Z. No `~/wt/.pen`. Head `e977fbc96f` on `cursor/proofs-windowat-5e4b`, unchanged since my 07:10Z entry; nothing unpushed.
+
+**The cap** [run, on my VM: `pytest tests/test_lean_packages.py`, 34 passed, 1 failed, on my branch, the one tree that holds all four changes].
+
+- `test_no_long_module_grows` holds the lines past 2,000 of each package's modules to a cap (`LONG`, `OVERLONG` in `tests/test_lean_packages.py`); `verity/protocols/spot/verifier/lean` has no entry, so its cap is 0. It is not a bookkeeping test: it fails.
+- The file's lines [run: a scratch merge onto `origin/main` `2e99b1cf48` of the four heads in this order, no conflict in the file, nothing built]: `main` 1,713; with #9441 (`51a2e803cb`) 1,871; with #9576 (`338c4ad877`) 1,943; with #9584 (`ae80f367e6`) 1,996; with one-parse (`a2d48735c2`) 2,061.
+- So #9441 and #9576 land under it, and with #9584 there are 4 lines of room. Whichever of #9584 and one-parse lands second takes the file past 2,000 and fails the root suite at its candidate. One-parse alone, on #9441, is 1,936, which is why its own suites pass.
+- The test's fix is "put the new declarations in a module beside the long one and import it". The file is the per-member form's; three of the four changes are MEMBERS'. I change nothing: #9576's head is marked, and a split is a change to a file all four touch. Proposal: the change that lands last carries the split, moving a group of the form's declarations of at least 61 lines to a module beside it; if that is one-parse, it does it before it opens. Yours and MEMBERS' to decide.
+
+**#9576's runs, neither red at 07:22Z** [run].
+
+- `r20261113-055558-8c61`: still on `security/Properties`; the four packages before it stand as in my 07:10Z entry.
+- `r20261113-054307-ec73`: 11 of 75 suites passed, 0 failed (`verity/protocols/certifier/verifier` 1,427, `verity-vllm` 14,573 in 4,911 s, `verity-core-composition` 22 since 07:10Z). 64 suites are left with 81 minutes to its timeout at 08:43Z.
+
+**My records run `r20261113-055755-5849`**: `security/Proofs` PASS as reported; on `security` now.
+
+**The ratchet gate over my whole branch** [run, on my VM: `ratchet_gate.py 4a7291116e11 HEAD`]: failed, 683 retired-term sites added in 48 files. It is a warn step, off the gate, and rings the lane of each merge it fails.
+
+- 78 are in 9 of my files. 3 are prose and mine to reword (a phrase in the aggregator's header and the old name of the verifier's command, twice); I do it in my next commit that needs a compile. The rest are uses of names declared in others' modules (`Draws`, `drawnBefore`, `UnitDraw`, `recordDraw`, `W.law`, `drawLaw_ok`) or binders named after them.
+- About 600 are in files of #9520 and of MEMBERS' changes, the largest `Window/Walk.lean` 72, `Members/Draw.lean` 70, `Flock/EndToEnd/Joint/V5/Layout.lean` 55, `Window/Steps.lean` 51. Not mine to edit.
+- My earlier gate runs compared one commit of my branch with the next, so they saw only what each commit added. That was too narrow a base for "done"; from now on I run it against the merge base with `main`.
+
+**Other root invariants on my branch** [run, on my VM, one named file each]: `tests/lint/test_lean_bar.py` 8 passed; `tests/test_lean_vocabulary.py` 15 passed; `tests/test_retired_terms.py` 23 passed; `tests/lint/test_repo_lane_text.py` 4 passed; none of their warnings names a file of mine.
+
+**Listing `soundnessAt_form`, read ahead** [read: PRF-490, soundness 06:35Z and yours of 07:01Z; `security/lean-audit.json`; `tools/verity/lean/check.py`'s `shape` and `witness_failures`]. Nothing is edited; it waits for #9520 on `main` and your word.
+
+- The theorem is now in `MemberForm/Sound.lean` (renamed from the file soundness's comment names, as my 06:14Z entry said).
+- By hand in `security/lean-audit.json`: the guarantee with owner `@proofs`; a `shape.frozen` reason of the kind `Verity.Sampled.remote_soundness_deployedReady` has ("frozen (premise): …"); four `open` entries (`WindowInstance.WindowRegistered`, `MemberForm.FormAccepts`, `MemberForm.FormApart`, `MemberForm.RegisteredHolds`), each with owner, issue and due date; one `unwitnessed` entry. `trees.except` already covers `Proofs.Properties.Verity.Sampled`.
+- The `unwitnessed` list is capped at 223 for `security` and holds 221, so one entry fits with no cap edit [read: `tests/test_lean_packages.py:97`].
+- It cannot be listed while it takes `hready`: an unnamed `∀` hypothesis is inline debt, and that list only shrinks. So the listing waits on soundness's one `OpensAt.lean` as well as on #9520.
+- I need from you, when it is time: the due date for the four `open` entries and the issue (PRF-490, as soundness wrote, unless you say otherwise).
+
+**For soundness's reconciliation of `OpensAt.lean`, one fact** [read: #9475's file at `d2a507cb1b`, `MemberForm/SetsUp.lean:198-203`]. #9475 proves the roots distinct from the ports check together with `Live.hdup` (no two ports with one published domain), and its other discharges take `pub.n = n`. `Commit`'s variables hold neither. At a member whose files pass, all three are there: `FilesPass.ports`, `FilesPass.distinct`, and `pub.n = m.n` from `FilesPass.loads` (through `Flock.Bridge.loadPublic_inOut`, as `opensOwn_of_ready` has it). So `Commit.Ready` may be the ports check alone with those two as arguments of its lemmas, or carry them as clauses; either is discharged at a window's members.
+
+**Not established.** `security/Properties` at #9576's head and at mine. Whether `ec73` ends before its timeout. The 2,061 is a count of lines after a textual merge; no merged tree was built or tested beyond `tests/test_lean_packages.py` on my branch, which holds older heads of one-parse (`daff2170a1`) and of the refusal. Which names the reconciled `Commit.Ready` will have. Everything at the form's accept is still true and empty, and `soundnessAt_form` is in no lock.
+
+## To post
+
+- To MEMBERS and ci: "Our four open changes to `Spot/OneStageZk.lean` total 2,061 lines; `test_no_long_module_grows` caps the package at 2,000. #9441, #9576 and #9584 fit (1,996). One-parse takes it past; it should move 61 lines or more of the form's declarations to a module beside it before it opens."
