@@ -6,7 +6,7 @@ of values a step rounds a hair apart is no distinct pair.
 
 Each step is `test_program_reading.loop`'s scan of three iterations of a training step under AdamW at random weights,
 and the third iteration's products are the ones compared. The batch repeats a token within each row and meets
-`SHARED_PREFIX`'s premise: past each row's first position, no two positions of the batch hold equal words. At a batch that
+`SHARED_PREFIX`'s premise, `training_slowdown.work.P_BATCH`. At a batch that
 breaks it in each of its three ways (`BROKEN`, a row of one token among them), the reading does charge MACs that read
 one pair twice (`test_a_batch_that_breaks_the_premise_repeats_pairs_the_reading_charges`). The steps:
 

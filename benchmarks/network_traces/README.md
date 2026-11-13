@@ -240,11 +240,33 @@ protocol's verdict.
 - The file is pcap; `tcpdump -r IN -w OUT.pcap` rewrites a pcapng one. A capture point that writes each direction of a
   fibre to its own file gives two files: name both.
 
+**On the server's loopback**, where the server listens on its machine's loopback at `PORT` and the network certifier
+reaches it through a forward that ends on that machine, their bytes pass in the clear only there, between the
+forward's end and the server's port:
+
+    tcpdump -i lo -U -s 54 -w run.pcap 'ip host 127.0.0.1 and tcp port PORT'
+
+- Every flow on a loopback has its address on both sides, so the address alone keeps them all, other programs' among
+  them. The port clause keeps the flows of the server's port and nothing else: none of the server's own connections
+  to another port is in the file.
+- `-s 54` keeps no byte of any segment's content, where `-s 130` keeps each segment's first bytes, a request's start
+  and a token id among them. A TCP packet's headers on a Linux loopback are Ethernet's 14 bytes, IPv4's 20 and TCP's
+  20 or more, so never under 54, and the reader reads none of TCP's options: it counts the file as it counts one
+  kept at 130. This length is for IPv4 on a loopback alone: an IPv6 packet, or one with eight bytes of IP options
+  or more, is kept too short for its headers, and the reader refuses the file by that name.
+- The two sides are one address, told apart by the server's port: the reader takes them as
+  `--server 127.0.0.1:PORT --certifier 127.0.0.1`.
+- The count is of what the server's port received and sent. The link under the forward carries the forward's own
+  bytes, which this capture doesn't hold and the reader doesn't read.
+
 **On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
 certifier and the load on one machine's loopback (`warden_serve.py rehearse --fake --watermark`), a capture of the
-loopback beside them, then the reader. The front and the relay share an address there, so the front's is given with
-its port, and the load's connections to the relay are among the other flows. It is a `research run` job where the job
-may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
+loopback beside them, then the reader. It captures at 54 bytes a packet, as the command above does, so neither its
+temporary file of every TCP flow on the loopback nor the file it keeps of the run's two ports holds a byte of
+content. The front and the relay share an address there, so the front's is given with its port, and the load's
+connections to the relay are among the other flows. The run is in the bytes egress form, or with `EGRESS=id` at its
+launch in the id form, id requests each answered an id event a token. It is a `research run` job where the job may
+capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
 link between two machines under the capture.
 
 **Reading it:**
