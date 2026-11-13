@@ -11,8 +11,9 @@ declares the tables as parameters of the rank's registration and commits nothing
 
 The tables are not weights: `window_weights.weight_nonces` numbers every name it is handed, so a table among them moves the
 plain weights' nonces and their roots stop being the registration's. `split` keeps the window's tables
-(``/b<b>/vocab``, ``/b<b>/table``) apart from its plain weights; the tables go to the tables' registration
-(`expert_tables`, its nonces from `expert_tables.TABLES_NONCE`), the rest to `window_weights`.
+(``/b<b>/vocab``, ``/b<b>/table``) and the absorption weights' entry (``/bnk``) apart from its plain weights; they go to
+the tables' registration (`expert_tables`, its nonces from `expert_tables.TABLES_NONCE`), the rest to `window_weights`.
+No lowering declares a ``/bnk`` name yet.
 
 `SHARD_VOCAB`, `shard_vocab`, `shard_param` and `unit_templates` belong in `serving_templates` and live here until it holds
 them. Refused by name (`Unexpressible`): a shard of no registered vocabulary, one past its vocabulary, an H that isn't whole
@@ -44,6 +45,8 @@ SHARD_VOCAB: dict[int, int] = {19360: 154880}
 #: the one row width of a shard's padded tables, the norms' apply width (`node_window._cols` of H = 6144 within 256)
 WIDTH = 192
 _TABLE = re.compile(rf"^{re.escape(WEIGHTS)}/(?P<label>.+)@(?P<words>\d+)/b(?P<block>\d+)/(?P<kind>vocab|table)$")
+#: the absorption weights' entry of the rank's registration beside the tables: B·N rows of K words, ``weights/<label>@<K>/bnk``
+_ENTRY = re.compile(rf"^{re.escape(WEIGHTS)}/(?P<label>.+)@(?P<words>\d+)/bnk$")
 
 
 def shard_vocab(spec: str) -> int:
@@ -86,15 +89,17 @@ def table_words(columns: np.ndarray, start: int, V: int) -> np.ndarray:
 
 def split(params: Iterable[str]) -> tuple[list[str], list[str]]:
     """The weight parameters among ``params`` apart from the tables, sorted: ``(plain, tables)``, the tables an embedding
-    shard's padded ones (``/b<b>/vocab``) and the expert blocks' (``/b<b>/table``). Only ``plain`` goes to `window_weights`."""
+    shard's padded ones (``/b<b>/vocab``), the expert blocks' (``/b<b>/table``) and the absorption weights' entry
+    (``/bnk``, which no lowering declares yet). Only ``plain`` goes to `window_weights`."""
     ws = sorted(p for p in params if p.startswith(f"{WEIGHTS}/"))
-    tables = [p for p in ws if _TABLE.match(p)]
-    return [p for p in ws if not _TABLE.match(p)], tables
+    kept = [bool(_TABLE.match(p) or _ENTRY.match(p)) for p in ws]
+    return [p for p, k in zip(ws, kept) if not k], [p for p, k in zip(ws, kept) if k]
 
 
 def tables_of(params: Iterable[str]) -> dict[str, list[tuple[int, str, str, int]]]:
     """The shards' padded tables among ``params``, by weight, each ``(block, param, "vocab", 0)``: the form the tables'
-    registration numbers them in (`expert_tables.nonces`)."""
+    registration numbers them in (`expert_tables.nonces`). Only the ``/vocab`` tables: not the expert blocks' or a ``/bnk``
+    entry, which `split` gives beside them."""
     out: dict[str, list[tuple[int, str, str, int]]] = {}
     for p in split(params)[1]:
         m = _TABLE.match(p)
