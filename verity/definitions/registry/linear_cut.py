@@ -19,7 +19,7 @@ template has a reader of every table.
 from __future__ import annotations
 
 from verity.circuits.defs import composite
-from verity.definitions.ops.scalar import U32Hi16
+from verity.circuits.ops.scalar import U32Hi16
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.boolean import sigma_lift
