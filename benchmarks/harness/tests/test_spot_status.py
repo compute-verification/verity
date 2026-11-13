@@ -239,7 +239,7 @@ def test_a_merge_declared_as_the_fix_says_its_lines_are_all_it_brings(changes):
     assert got["status"] == "not known"
     assert got["why"].startswith(f"The fix's commit {merge[:12]} is a merge, so the lines it added are all it brings "
                                  "to its first parent, in 1 file: declare the commit whose first parent is the base its change "
-                                 "landed on (its landing merge). ")
+                                 "landed on (its landing merge), or the fix's own commits as a range `A..B`. ")
 
 
 def test_a_deletion_only_fix_is_closed_while_its_lines_stay_absent(changes):
@@ -307,6 +307,62 @@ def test_the_fixes_file_names_only_holes_by_full_commit(repo):
     repo.data.write_text(json.dumps({"fixes": {REDRAWN: repo.fix1[:12]}}))
     with pytest.raises(ValueError, match="not a full commit id"):
         S.fixes(repo.data)
+    span = f"{repo.base}..{repo.fix1}"
+    repo.data.write_text(json.dumps({"fixes": {REDRAWN: [span, repo.fix2]}}))
+    assert S.fixes(repo.data) == {REDRAWN: (span, repo.fix2)}
+    for bad in ([f"..{repo.fix1}"], [f"{repo.base}.."], [repo.fix1, span]):
+        repo.data.write_text(json.dumps({"fixes": {REDRAWN: bad}}))
+        with pytest.raises(ValueError, match="not a full commit id"):
+            S.fixes(repo.data)
+
+
+def test_a_range_fix_is_closed_where_its_tip_is_held_and_its_change_kept(changes):
+    """A fix of several commits is the range ``A..B``: its change is ``git diff A B``, every commit of it counts."""
+
+    base = changes.head()
+    changes.commit(f"a\n{FIX}\n", "the fix's first commit")
+    tip = changes.commit(f"{MOVED}\n", "the fix's second commit", "h.txt")
+    run = changes.commit("other\n", "later", "g.txt")
+    assert S.closes(changes.root, [f"{base}..{tip}"], run) == {"status": "closed", "why": None}
+    assert S.closes(changes.root, f"{base}..{tip}", base) == {"status": "open",
+                                                             "why": f"the fix's commit {tip[:12]} is not an ancestor"}
+    with pytest.raises(ValueError, match="out of order"):
+        S.closes(changes.root, f"{tip}..{base}", run)
+
+
+def test_a_range_fix_rewritten_later_is_closed_with_the_rewrite_declared_and_not_known_without(changes):
+    """A later commit's hunk that rewrites the fix's lines moves the lines it removes to expected absent and the ones
+    it adds to expected present; its other hunks expect nothing; a run that doesn't hold it holds the fix as it was."""
+
+    base = changes.head()
+    changes.commit(f"a\n{FIX}\nb\n", "the fix's first commit")
+    tip = changes.commit(f"{MOVED}\n", "the fix's second commit", "h.txt")
+    rewrite = changes.commit("a\nrefuse_redraw(sample, strict=True)\nb\nunrelated_line = 1\n", "rewrite the fix's line")
+    run = changes.commit("a\nrefuse_redraw(sample, strict=True)\nb\nunrelated_line = 2\n", "change the unrelated line")
+    span = f"{base}..{tip}"
+    undeclared = S.closes(changes.root, [span], run)
+    short = _git(changes.root, "rev-parse", "--short", rewrite)
+    assert undeclared == {"status": "not known", "why": (
+        f"1 of the 1 line the fix {base[:12]}..{tip[:12]} added to f.txt is not in f.txt at the run's commit, among "
+        f"them `{FIX}`. {short} changed those lines since: if {short} keeps the fix, add it to this hole's commits in "
+        "spot_holes.json")}
+    assert S.closes(changes.root, [span, rewrite], run) == {"status": "closed", "why": None}
+    assert S.closes(changes.root, [span, rewrite], tip) == {"status": "closed", "why": None}
+    changes.commit(f"a\nrefuse_redraw(sample, strict=True)\n{FIX}\nb\n", "the old line back beside the new")
+    back = S.closes(changes.root, [span, rewrite], changes.head())
+    assert back["status"] == "not known" and back["why"].startswith(
+        f"1 of the 1 line the fix {base[:12]}..{tip[:12]} as {rewrite[:12]} keeps it removed from f.txt is in f.txt "
+        "again at the run's commit")
+
+
+def test_a_range_whose_inner_commit_is_reverted_is_open(changes):
+    base = changes.head()
+    first = changes.commit(f"a\n{FIX}\n", "the fix's first commit")
+    tip = changes.commit(f"{MOVED}\n", "the fix's second commit", "h.txt")
+    _git(changes.root, "revert", "--no-edit", first)
+    revert = changes.head()
+    assert S.closes(changes.root, [f"{base}..{tip}"], revert) == {"status": "open", "why": (
+        f"reverted by {revert[:12]}, which reverts the fix's commit {first[:12]} of {base[:12]}..{tip[:12]}")}
 
 
 def test_the_tree_declares_only_holes():
