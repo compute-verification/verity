@@ -19,7 +19,7 @@ from verity.protocols.spot.verifier.one_stage.draw import work_k
 from verity.protocols.spot.prover.optimize import Candidate
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 
 CENSUS = Path(__file__).resolve().parents[2] / "census" / "hardware.json"
 CIR_100 = ("Argmax", "EmbedSelect", "Quant", "Relu", "Rms", "Softmax")

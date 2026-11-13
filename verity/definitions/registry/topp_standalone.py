@@ -88,7 +88,7 @@ def _cfg() -> Cfg:
 
 def sqrt_approx(x: np.float32) -> np.float32:
     """sqrt.approx.ftz.f32: MUFU.SQRT by its measured table."""
-    from verity.definitions.ops.mufu import mufu_sqrt_words, table
+    from verity.circuits.ops.mufu import mufu_sqrt_words, table
     w = np.array([np.float32(x)], f32).view(np.uint32)
     return mufu_sqrt_words(w, table("sqrt")).astype(np.uint32).view(f32)[0]
 

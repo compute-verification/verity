@@ -10,7 +10,7 @@ import pytest
 
 from verity.circuits.refs import array_of
 from verity.definitions.circuits import stacking as P
-from verity.definitions.ops import prims
+from verity.circuits.ops import prims
 
 BITS, BYTE = (0, 1), (-128, 127)
 
