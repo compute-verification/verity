@@ -24,6 +24,8 @@ import numpy as np
 
 from verity_vllm.config import option, workload_arg
 
+__all__ = ["COMMANDS", "main"]
+
 
 def kernel(out: Path) -> dict:
     import torch
