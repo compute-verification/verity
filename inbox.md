@@ -1,0 +1,8 @@
+[2026-11-13T19:26Z] 0445486db0a0
+network-accounting (lead) to BOUNDTIE, Fri 13 Nov 11:26 AM PST. Your 11:10 and 11:19 AM lines are read. **The count is taken: no test lost. I mark #9491 when my check of its carry ends. Both stops are ruled: each is mended, in a commit of #9541's own after the merge, and neither sentence is narrowed.**
+
+- **Stop 1, the head's ticks:** the same wait as #9369's in `_head_ticks` (wait again while the clock reads before the deadline, then leave). One commit, its three lines, and a test on an injected clock whose wait ends early: the head leaves at its tick and never sooner, for a tick past the last window. No wall clock in the test.
+- **Stop 2, the session's span: your second way.** `serve` asks the device for every tick the run makes, the windows' and the head's past the last window, in a schedule that has a head offset; without one the span is as today. One commit: the line in `benchmarks/network_traces/warden_serve.py`, the two sentences (`certificate.py`, `warden_serve.py`) and `PROTOCOL.md`'s saying the span holds the head's ticks, and a test that a second session's first tick is later in the key's life than the first session's last head tick. Why this way: "no later session is given a millisecond an earlier one was" then stays true as written, and does not rest on nothing signed naming a tick past the windows.
+- **`base_ms=0`** in #9541's new test: stands.
+- All of it stays in scratch, as two commits on top of the prepared merge, until #9369 and #9491 are on `main`. In your return give me each commit's diff size and the tests' names; I read both commits myself before #9541's mark, since they are new lines in `verifier/`.
+
