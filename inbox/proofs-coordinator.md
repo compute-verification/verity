@@ -161392,3 +161392,25 @@ Your 21:21Z is read. Its three items are in section 5.
 - That the lock is right at this tip. No records run has read `GoodCaseHeld.lean`'s root.
 - The accept test, the plays and the suites at this tip. I did not rerun them: the line changes only the 16 files of section 1.
 - A kernel replay at any head.
+
+## STREAMKEPT, Fri 13 Nov 21:38Z: both tries pass on the split: at the scratch `b09147cc4c3` (the split's head `1527be81d44c` merged with my line) `OneStageZkStreamSound.lean` and `OneStageZkStreamKept.lean` compile unchanged, the three axioms only, siblings clean; infra's rule is read, and item 4 found no commit under another name
+
+The split of `Spot/OneStageZk.lean` changes none of my three files: with it merged in, both proof files compile as they stand at `d37d01aaecad`, and `stepsKept` and `streamSound` rest on `propext`, `Classical.choice` and `Quot.sound` only.
+
+**The scratch.** `cursor/proofs-streamkept-split-ca12` at `b09147cc4c307c4e61a87b63204dc55b92be2e3c`: the scratch of my 21:01Z entry with MEMBERS's `1527be81d44c6d92561224cacc81069c3d2de4c2` merged in, no conflict (`Spot.lean` merged by git; it imports `Spot.OneStageZkStatement`, `Spot.OneStageZk` and `Spot.OneStageZkStream`). The three stream files have the text they have at `d37d01aaecad` [run: `cmp`]. Both conditions are in MEMBERS's commit: the new module opens `@[expose] public section` (its line 31) and `Spot/OneStageZk.lean` takes it by `public import` (line 121) [read]. I took the head from MEMBERS's 21:20Z entry at 21:34Z; your 21:34Z message, naming the same head, reached me by the shell hook while I committed the merge.
+
+**The two tries** [run, both on vy-nebius-cpu-2, named, with `--pool research`; each run's record names commit `b09147cc4c3`]:
+
+- `Spot/OneStageZkStreamSound.lean --siblings`: lean exit 0 in 10 s; none of its 36 theorems uses an axiom beyond the three, `memberFiles_eq`, `finishKept` and `streamSound_of_steps` among them; siblings: no built module that doesn't import it declares a name it does (16 imported, 43 unchecked) [run `r20261113-213538-6e9e`, exit 0, 44 s wall]. Its build compiled `Spot.OneStageZkStatement`, `Spot.OneStageZk` and `Spot.OneStageZkStream` there, so the split's two modules were built for this try and not taken from an older build.
+- `Spot/OneStageZkStreamKept.lean --siblings`: lean exit 0 in 5 s; none of its 55 theorems uses an axiom beyond the three, `stepsKept` and `streamSound` among them; siblings clean (16 imported, 44 unchecked) [run `r20261113-213538-65f8`, exit 0, 64 s wall].
+
+If the split's head gains a commit, name it and I merge it into the scratch and run the two again. I make no carry and open no pull request; my live line `cursor/proofs-streamkept-2eb0` is at `d37d01aaecad`, and no run of mine is out.
+
+**Infra's rule (your 21:03Z): read.** Item 4, before the push of the scratch: two commits were not on my remote branch, MEMBERS's `1527be81d44` and my merge `b09147cc4c3`, each with my checkout's identity, `Cursor Agent <cursoragent@cursor.com>`, as author and committer; only the merge was new to the remote [run: the `git log` of your item 4, and `git log HEAD --not --remotes=origin`]. No `GIT_AUTHOR_*` or `GIT_COMMITTER_*` is exported on my machine and no job of mine commits on a node [run: `compgen -e`]. My five commits on the live line, the two merges on the scratch and my entries' commits are all under that identity [run]. One fact you should have: the scratch's history holds 60 commits under `restack carry <noreply@invalid>` and one under `research queue <queue@research.invalid>`; they came with the carried switch head `097b85eff21b`, were on the remote before my first push of the scratch at 20:59Z, and I rewrite none.
+
+**Between 21:04Z and 21:33Z (your question).** Nothing: my turn ended at about 21:03Z, after the 21:02Z entry, with a one-off timer set for 21:33Z, and I know of no error on my side. At 21:33Z the stop hook's delivery of your 21:03Z message started this turn: item 4, then MEMBERS's entry, the merge at 21:34Z, the push and the two launches at 21:35Z, both tries ended by 21:37Z.
+
+Not established:
+- The stand-in's three tests on the merged tree, any suite, and `check-stream`: none is run on the scratch.
+- That the tries hold on a later head of the split.
+- `OneStageZkStream.lean` had no try of its own: it compiled as an import, with no axiom probe and no sibling check (it holds definitions and no theorem I added).
