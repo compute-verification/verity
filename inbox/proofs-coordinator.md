@@ -136747,3 +136747,45 @@ theorem drawWithheld_honest :
 - `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
 
 **I wait on:** `r20261113-102457-87d9` (about 11:10Z [guess]), then the one-call records run (about 42 minutes after it starts [guess]); and `r20261113-102627-2b97` for the session pull request.
+
+## LOOSEMAP, Fri 13 Nov 10:55Z: THE SUITES' LINE: all 96 suites the move touches pass on chain 2's moved tree with both hand patches; the 13 that had not ended all pass (`verity-flock` 2145 passed in three parts); the only failure there ever was is the two tests the second patch mends. New: the real pass's base is lean's head `28a271c823e7`, so the map is being rehearsed there too
+
+Every test suite that reads a file the loose paths' map moves or rewrites now has a pass on the moved tree. The thirteen suites that the earlier runs never reached finished in four runs, all green, the prover's own suite among them. Nothing failed anywhere except the two tests of the check's own suite that the second hand patch mends. One thing changed under me: top's thread says the stager's real pass starts from lean's renamed tree, not from the base I certified on; what I can read with git says the map and both patches carry over unchanged, and a run to show it is out.
+
+**The 13 suites**, all on `3f774f731771` (pushed, `cursor/proofs-loosemap-0917-on-chain2`: `5b2c1e735b92`, the map, the move, both patches), `--cwd clone`, `suites.py NAMES --changed 18203bab2789 --quick`, each "suites rc=0" `[run]`:
+- X1 `r20261113-101441-c9b5` (cpu-1, done, rc 0): "passed  verity-flock:1/3  621 passed, 12 skipped in 623 s on 2 workers".
+- X2 `r20261113-101513-ef14` (cpu-2, done, rc 0): "passed  verity-flock:2/3  817 passed, 19 skipped in 1595 s on 2 workers".
+- X3 `r20261113-101543-81d9` (cpu-9, done, rc 0): "passed  verity-flock:3/3  707 passed, 5 skipped in 1161 s on 2 workers". The three parts hold each test file once (`suites.py`'s `partition`) `[read: tools/verity/check/suites.py:1746]`; the move reaches 66 of the suite's test modules, which ran whole, slow tests included `[run: suites.txt:2]`.
+- X4 `r20261113-101620-718b` (cpu-1, done, rc 0), twelve passed: `verity/protocols/recursion/verifier/vstar_cli` 21 passed, 7 skipped; `research` 4997 passed, 3 skipped; `verity/protocols/pouw/verifier` 2007 passed; `verity/definitions/ops` 949 passed, 2 skipped; `verity/definitions` 1027 passed; the circuit-check tool's suite 383 passed, 2 skipped; `verity/commitments` 600 passed; `verity-numerical` 660 passed, 6 skipped; `verity/circuits` 1120 passed; `verity-ops` 628 passed; `verity-core-evaluate` 36 passed; `verity/commitments/windows` 101 passed, 1 skipped.
+- Where they imported from, the two lines (X1; the other three alike, each in its own clone of the pushed commit): "verity /workspace/research/scratch/r20261113-101441-c9b5/tree/verity/__init__.py", "verity_flock /workspace/research/scratch/r20261113-101441-c9b5/tree/verity/protocols/flock/prover/python/verity_flock/__init__.py".
+
+**The count** `[derived from the runs]`: `suites.py --changed` names 96 suites for the move on chain 2's base. 82 passed in S (`r20261113-084411-37ea`, on pushed `546575e05f79`, the tree with the first patch only); `verity-check` failed there on the two tests and passes with the second patch, 1001 passed (`r20261113-090849-cd23`, on `3f774f731771`, which also reran `repository` 355 passed and `verity-graph` 220 passed, the suites the second patch's one file reaches); the 13 above pass on `3f774f731771`. 82 + 1 + 13 = 96. No one run holds all 96 on one head: 80 of the passes are on the tree that differs from `3f774f731771` by `tools/verity/check/tests/test_check.py` alone.
+
+**S and C ended by their time limit**, not by a verdict: S `r20261113-084411-37ea` and C `r20261113-082338-f6dc` are both `cancelled`, `STAGE_TIMEOUT`, at 82 passed, 1 failed, 13 not ended `[run: research status]`.
+
+**The base of the real pass** `[read: TOP-398, top's comment of 09:58Z]`: "The stager has lean's whole head `28a271c823e7` as the base of its real pass". My certificates are on `5b2c1e735b92` and on the trial branch. With git on my VM `[my VM]`:
+- `5b2c1e735b92` is an ancestor of `28a271c823e7` (`cursor/lean-period-chain-3-fc8d`, its tip at 10:50Z).
+- Between the two, the files my two patches change (`tools/verity/check/tests/test_check.py`, `verity/protocols/flock/prover/README.md`), the rule's file (`tools/verity/check/tool.py`) and the helper that carries the four Lean keys (`verity/protocols/recursion/verifier/firewall/tests/_release.py`) are byte for byte the same.
+- Three of the files the map moves change there, by words only, no path and no import: `flock/agreement/README.md` (1 line), `spot/candidates.py` (1), `spot/optimize.py` (2).
+- The same 187 files name the seven paths at both; the same three old-path lines stand in Lean sources and lakefiles.
+- So I expect the same certificate but for its count of edits, and both patches to apply `[guess, until L]`. Lean's lead writes on TOP-398 (10:39Z) that their worker ran chain 2's 19 maps in order on that tree and all certify but the grader's `[relayed; whether mine is one of the 19 I have not read]`.
+- L `r20261113-105249-b09c` (cpu-7, launched 10:53Z, `--cwd clone`): the map alone on `15a834d98bbb` (`28a271c823e7` plus the map's file, pushed as `cursor/proofs-loosemap-0917-on-lean-head`): the certificate, `resolve_check.py`, both patches by `git am`, the listing's check and the four root tests before and after, the two mended tests, `PYTHONPATH` cleared.
+
+**Which file top's chain branch holds** `[my VM: git diff]`: `cursor/top-moves-chain2-42e2` at `880f4d9b9d5f` holds `tools/move/proofs_loose_map.toml` identical to `56561c89bb4a`'s, the form for a place before `difftest_map.toml`; its last commit restates `[roots]` of eight maps for the chain's order (where the maps before each leave `verity_config` and `verity_difftest`), and this map is not one of the eight `[read: its message and stat]`. That is right if the stager runs it before the difftest map. If it runs after, the file to take is `6fc27ced33de`'s.
+
+**My machine was replaced** between 10:19Z and 10:38Z. Every commit was pushed; the rehearsal scripts were not, and I took them back from the runs' own inputs. I retook `~/wt/.pen` at 10:40Z; no other loop held it. At 10:38Z my session was also handed the completion notices of seven tasks I did not launch (CUT, ACCEPTS, HELDOF, COUNT, SESSIONCOINS, ASSEMBLY, with texts from about 07:00Z to 07:25Z, and SESSIONOF, whose notice is an error with no report). I act on none of them.
+
+**NEEDS**
+- Coordinator, for top: one word on which side of `difftest_map.toml` the stager runs the loose paths' map. Top's chain branch holds the before form; after it, the variant's file.
+- Nothing else for the map.
+
+**To post** (TOP-398, unchanged): "The loose paths' map, the suites: all 96 suites the move touches pass on the moved tree with both hand patches of `cursor/proofs-loosemap-0917-hand-patch` at `bf5b5eb2e469` (on `5b2c1e735b92`: 82 in `r20261113-084411-37ea`; `verity-check` 1001 passed in `r20261113-090849-cd23`; the last 13, `verity-flock` among them at 2145 passed in three parts, in `r20261113-101441-c9b5`, `r20261113-101513-ef14`, `r20261113-101543-81d9`, `r20261113-101620-718b`). Without the second patch `verity-check` fails two tests; the stager needs both. Your chain branch `cursor/top-moves-chain2-42e2` at `880f4d9b9d5f` holds the map in its form for a place before `difftest_map.toml`; for a place after it, take the file of `cursor/proofs-loosemap-0917-after-difftest` at `6fc27ced33de`. On lean's head `28a271c823e7` the files the two patches change are unchanged from `5b2c1e735b92`; a rehearsal there is running (`r20261113-105249-b09c`)."
+
+**Not established**
+- L: the certificate, the patches and the root tests on lean's head. No suite has run on a moved tree of that base.
+- What the mover does with the before form of the map placed after `difftest_map.toml`: I never ran that.
+- The 13 suites on chain 1's moved tree (C was not run again: that tree is no longer tonight's base).
+- Whether the skipped tests (36 in `verity-flock`) are the ones the base skips too: I compared no skip list.
+- Any test after the group map; the Lean check of the four packages whose key changes (ruled out for tonight).
+
+**Pushed heads:** `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone); `cursor/proofs-loosemap-0917-after-difftest` `6fc27ced33de`; `cursor/proofs-loosemap-0917-hand-patch` `bf5b5eb2e469`; `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771`; `cursor/proofs-loosemap-0917-on-lean-head` `15a834d98bbb` (new, L's base); `cursor/proofs-loosemap-0917-on-trial-after-difftest` `583fcd1f2122`; `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`.
