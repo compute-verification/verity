@@ -152664,3 +152664,39 @@ Nothing is pushed, launched or merged. What is here is by reading and by `git me
 - SESSIONOF2's `why` is accurate. I add the tactics its list of expansions leaves out (`clear`, `have`, `apply`, `assumption`, `trivial`, `done`), and I hash the file again at the carried head before I list it.
 
 To post: nothing. Run going on: none of mine. My timer is set for FRAME's report.
+
+## MESSAGES, Fri 13 Nov 16:55Z: STEP 1 COMPILES (`50f6`, rc 0, 15 theorems, at `39f98b73927` on `cursor/proofs-messages-word-745c`): the messages' bound from two facts a round, `ShowsAt` and `ExplainsOr`; `FixedBefore` is proved inside at every round. Fact 6's caveat is closed by reading: the check refuses a second-stage design of no stratum. One change to the word's table, on the files read under a digest
+
+**What compiled** [run: `verity lean try --siblings`, `r20261113-165202-50f6`, rc 0, tree of `39f98b73927`, not dirty; probe: no axiom beyond the three; siblings: no name clash]
+
+- `Messages.reachedLog`, `Messages.messagesFixedLog` (`LogStrings.lean`, new, my own): `MessagesReached` and `MessagesFixed` at the frame whose context is the play's log before each round. Premises: `ShowsPlaced` (the join has it from `showsPlaced_form`), that `Dg` at a round is a reading of the tape and the log before the round, and, a round, `ShowsAt` and `ExplainsOr`. No `FixedBefore` premise: `fixedBefore_log` proves it from the reading.
+- `CoinMap.before_split`: a log is its log before a round, then the release that ends it, then the rest. The readings of steps 2 to 4 use it.
+- Round 0 and rounds 2 to `stage` at the form's reading: both facts proved (`showsAt_form_zero`, `explains_form_zero`, `showsAt_form_mid`, `explains_form_mid`). The empty message needs no digest.
+- [run: `3007`, rc 0] The same file one commit earlier, 11 theorems.
+
+**The one change to the word's table** [derived; compiled as `ExplainsOr`, `breaks_or`, `blobsAlt`]
+
+- The word's row for the statements' round put the circuit files, public files and lookup tables among `raw`, with their digests among `Dg`. That does not fit: `Dg` must be read off the log before the round and the tape, and which digests a play reads those files under is in the interior record, which the log holds only the digest of.
+- So those files are not among the strings. `ExplainsOr` asks: two accepted plays with one context and the same strings read the same message, or they give a pair of their own. `blobsAlt` is that pair: two blobs the two plays sent, different, with one SHA-512. The finder outputs that pair when there is one, else two strings under one digest as before.
+- The bound keeps its form: the sum over the rounds of the square roots of a collision finder's success. `Dg` at the statements' round is round 1's digest alone.
+
+**Fact 6's caveat** (my 16:44Z)
+
+- [read: `Commitments/Draw.lean` 291 and 319; `Spot/Draw.lean` 284; `Commitments/Draw.lean` 172] `strataProblem` and `workProblem` both refuse a design of no stratum, `flockLaw` throws on either, and a stratum reads `2 k w + 64` bytes. So every design the check accepts reads at least 64 bytes of the second stage's challenges.
+- The line for soundness stands as "no new named premise". Not compiled: fact 6 is step 2, which I start now.
+
+**Fact 7, the parts I need named** (your 16:40Z, point 2): not read yet. I read `AddressFacts/RowDraw.lean` and `FirstSample.lean` after step 2's first try is out and name them in my next entry.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock.
+
+## NEEDS
+
+Nothing.
+
+## Not established
+
+- Facts 6 to 11 as theorems. `ShowsAt` and `ExplainsOr` at round 1, the statements' round and a session's rounds.
+- That the bytes the second stage reads are the sum of the strata's, so at least 64, as a theorem: read, not proved.
+- Which parts of `AddressFacts/RowDraw.lean` and `FirstSample.lean` fact 7 needs.
