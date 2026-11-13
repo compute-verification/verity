@@ -269,7 +269,7 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
       Option.mapM_none, Bool.true_and, Bool.false_eq_true, ↓reduceIte]
     rfl
   · exact
-      { zk := by first | rfl | exact hf.zk
+      { zk := by rfl
         stmtTags := rfl
         tags := rfl
         circuitFile := hf.circuit
@@ -278,9 +278,9 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
         tables := hf.tables
         partition := rfl
         program := hf.program
-        work := by first | rfl | simp [hf.work]
+        work := by rfl
         stratified := hf.stratified
-        closure := by first | rfl | simp [hf.closure]
+        closure := by rfl
         publicInputs := hf.publicInputs
         registered := rfl
         readRegistered := rfl }
