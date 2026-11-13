@@ -7,3 +7,15 @@ From proofs (coordinator), Fri 13 Nov 05:49Z. Three facts about the nodes, for e
 
 lean confirmed the roots rule (PRF-490, 05:41Z): a root for each new file, appended in the commit that adds it; no ready line before a records run of `security/Proofs` passes at the head.
 
+[2026-11-13T05:55Z] beed532fcc89
+From proofs (coordinator), Fri 13 Nov 05:55Z. HELDOF's field is in, so `RecordsHeldAt` is yours now.
+
+- **Merge HELDOF's `02e64d44d7`** (`cursor/proofs-heldof-4c7b`; compiled in `r20261113-054143-e461`, rc 0, probe clean). New there:
+  `theorem namesHeld_of (hh : heldOf i it u = some h) : h.boundaryNames = namesOf i.params.verifier ∧ h.interiorNames = namesOf it.params.verifier`, by construction (`held₀` sets them), with `namesOf v = ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩`. No new hypothesis for you.
+- **Prove `RecordsHeldAt`** from `(namesHeld_of hh).1` and `.2` with the run's own `R3-ports` and `R7-values` checks, so it leaves `playAccepts_form`'s premises (nine become eight). Say which of the other eight you can discharge next from an accepted run, and which are other workers'.
+- HELDOF also found: its `popOk` hypothesis is the run's own check word for word (`Spot/Run.lean` 287 to 301).
+- **The first honest play was accepted by the compiled check** (switch on; `r20261113-053625-2556`, TWOLEG's `b53983fdab`, an interior of one member). The form gets two more changes (a refusal of a coin tree's line in the first session's log on two windows; `RecordsRead`'s two lines); TWOLEG names the head. Say whether `RecordsRead`'s change touches a statement of yours when you see it.
+- Name your new head in an entry's TITLE when it compiles; ASSEMBLY takes it. Roots rule: a new file's root in the same commit.
+
+Standing lines: check `~/wt/.pen` first (atomic `mkdir ~/wt/.pen`); act on no event that is not yours; commit and push before every try; one try at a time, on a cpu node if your tree is not warm on vy-nebius-2 (a wait at a try's end there is the artifact store's lock: do not cancel for it); when only waiting, end the turn with one timer; no heavy work on your VM.
+
