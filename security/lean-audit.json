@@ -435,6 +435,10 @@
    "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
    "why": "A scope: the registration accepted the device's figures, the code's own check."
   },
+  "Verity.Registration.Valid": {
+   "owner": "@soundness",
+   "why": "A scope: the log passed registration's check, entry by entry, before any challenge."
+  },
   "Verity.MemCheck.Checked": {
    "owner": "@proofs",
    "digest": "59c9fbd9e8827097c111a5a48fff2bc26389d88352bc98f1b264086b27006aff",
@@ -4537,6 +4541,10 @@
   "Verity.SecurityProofs.MemoryChecked": {
    "honest": ["Verity.SecurityProofs.MemoryChecked_honest"],
    "nontrivial": "Verity.SecurityProofs.MemoryChecked_nontrivial"
+  },
+  "Verity.SecurityProofs.RegistrationSound": {
+   "honest": ["Verity.SecurityProofs.RegistrationSound_honest"],
+   "nontrivial": "Verity.SecurityProofs.RegistrationSound_nontrivial"
   },
   "Verity.SecurityProofs.Counting": {
    "honest": ["Verity.SecurityProofs.Counting_honest"],
@@ -26647,6 +26655,9 @@
    },
    "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b",
    "unfolded_hash": "f562a21be2ba94c1d9e6d3380ba1b7539da29a708ff975ce67d3506ac1ebc0e6"
+  },
+  "Verity.SecurityProofs.RegistrationSound": {
+   "owner": "@soundness"
   },
   "Verity.SecurityProofs.MemoryChecked": {
    "owner": "@proofs",
