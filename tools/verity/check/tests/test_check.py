@@ -54,7 +54,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
     flock = tmp_path / "verity" / "protocols" / "flock" / "prover"
     files = {"verity/protocols/flock/prover/check_build.sh": "set -e\n", "verity/protocols/flock/prover/flock-sha512-b684b12.patch": "p",
-             "verity/protocols/flock/prover/live/src/lib.rs": "fn a() {}", "verity/protocols/flock/agreement/ci.py": "", "verity/protocols/flock/prover/README.md": ""}
+             "verity/protocols/flock/prover/live/src/lib.rs": "fn a() {}", "verity/protocols/flock/prover/agreement/ci.py": "", "verity/protocols/flock/prover/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
@@ -103,7 +103,7 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
-    shutil.copy(ROOT / "verity" / "protocols" / "flock" / "agreement" / "agree.py", v / "agree.py")
+    shutil.copy(ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement" / "agree.py", v / "agree.py")
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": [{
         "pr83": "abc", "lean_statement": "verity/flock-circuit@abc", "statement": {"circuit": "art:0123/c.txt", "public": "art:0123/pub.bin"},
         "sessions": [{"dir": "art:0456/honest", "expect": {"accepted": True, "why": ""}}]}]}}))
@@ -368,7 +368,7 @@ def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
     """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
     import json
 
-    sets = json.loads((ROOT / "verity" / "protocols" / "flock" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
+    sets = json.loads((ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
     assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
 
 
@@ -376,15 +376,15 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/",
-                                                           "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/",
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/flock/prover/", "verity/protocols/flock/prover/pod/", "verity/protocols/flock/prover/agreement/",
+                                                           "verity/protocols/flock/prover/tool.py", "verity/protocols/flock/verifier/",
                                                            "verity/circuits/base/", "verity/circuits/lean/",
                                                            "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/protocols/flock/verifier/VStar/In.lean", "verity/protocols/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
-    pin = __import__("json").loads((ROOT / "verity" / "protocols" / "flock" / "agreement" / "upstream.json").read_text())
+    pin = __import__("json").loads((ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
-        (ROOT / "verity" / "protocols" / "flock" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]}
+        (ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]}
 
 
 def test_the_recorded_check_takes_cpu_only_torch():
@@ -1057,10 +1057,10 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/protocols/flock/prover/live/PROTOCOL.md", "verity/protocols/flock/agreement/README.md", "verity/protocols/flock/prover/README.md", "AGENTS.md"]
+    docs = ["verity/protocols/flock/prover/live/PROTOCOL.md", "verity/protocols/flock/prover/agreement/README.md", "verity/protocols/flock/prover/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/agreement/"]
-    assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/agreement/"]  # only the two names are left out
+    assert rule_touches(rule, [*docs, "verity/protocols/flock/prover/agreement/ci.py"]) == ["verity/protocols/flock/prover/agreement/"]
+    assert rule_touches(rule, ["verity/protocols/flock/prover/agreement/DESIGN.md"]) == ["verity/protocols/flock/prover/agreement/"]  # only the two names are left out
 
 
 def _lean_code(text: str) -> str:
@@ -1096,7 +1096,7 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
     kept = CHECK.agreement_closure(files)
     dirs = {f.rsplit("/", 1)[0] + "/" for f in kept}
     dropped = [f for f in files if f.endswith(".md") and f.rsplit("/", 1)[0] + "/" in dirs]
-    assert "verity/protocols/flock/agreement/README.md" in dropped and not any(f.endswith(".md") for f in kept)
+    assert "verity/protocols/flock/prover/agreement/README.md" in dropped and not any(f.endswith(".md") for f in kept)
     doc = re.compile(r"\.md\b|README|PROTOCOL")
     reads = []
     for f in kept:
@@ -1119,14 +1119,14 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
-    """`agreement_key` covers verity/protocols/flock/agreement/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
+    """`agreement_key` covers verity/protocols/flock/prover/agreement/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
     it runs would be an input the key misses, so one fails here until the key covers it.  The key also leaves out the Lean
     package's `lean-audit.json` (`agreement_closure`), so neither those scripts nor the package's lakefile may mention it."""
     import ast
     import re
     import sys
 
-    here = ROOT / "verity" / "protocols" / "flock" / "agreement"
+    here = ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement"
     todo, seen = ["ci"] + re.findall(r'HERE / "([a-z_]+)\.py"', (here / "ci.py").read_text()), set()
     while todo:
         m = todo.pop()
@@ -1155,8 +1155,8 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     closure = CHECK.agreement_closure(files)
     policy, other = "verity/protocols/flock/verifier/lean-audit.json", "verity/protocols/flock/verifier/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "verity/protocols/flock/agreement/ci.py" in closure and "verity/protocols/flock/verifier/FlockVerify.lean" in closure
-    assert "verity/protocols/flock/agreement/upstream.json" in closure
+    assert "verity/protocols/flock/prover/agreement/ci.py" in closure and "verity/protocols/flock/verifier/FlockVerify.lean" in closure
+    assert "verity/protocols/flock/prover/agreement/upstream.json" in closure
     assert not [f for f in closure if f.startswith("security/")]
     assert [f for f in files if f.startswith("security/Proofs/Flock/")]
     nested = ["verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/nested/lakefile.toml",
@@ -1174,7 +1174,7 @@ def test_a_doc_edit_keeps_the_agreements_key_and_a_script_or_source_edit_moves_i
     """Neither Lake nor a script of the agreement reads Markdown (`test_the_agreement_is_not_required_for_docs_alone` holds
     the scripts to it), so `agreement_key` leaves it out: a README edit keeps the stored pass, which a recorded check then
     reuses, while an edit to a script or to the verifier's Lean moves the key."""
-    agree, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
+    agree, lean = "verity/protocols/flock/prover/agreement/", "verity/protocols/flock/verifier/"
     files = {agree + "README.md": "# the job\n", agree + "ci.py": "x = 1\n", lean + "lakefile.toml": "",
              lean + "README.md": "# the verifier\n", lean + "PROTOCOL.md": "# its wire\n", lean + "Flock.lean": "def a := 1\n"}
     for f, text in files.items():
@@ -1914,7 +1914,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert ("check: changes under verity/protocols/flock/prover/, verity/protocols/flock/pod/, verity/protocols/flock/agreement/, verity/protocols/flock/tool.py, "
+    assert ("check: changes under verity/protocols/flock/prover/, verity/protocols/flock/prover/pod/, verity/protocols/flock/prover/agreement/, verity/protocols/flock/prover/tool.py, "
             "verity/protocols/flock/verifier/, verity/circuits/base/, verity/circuits/lean/, "
             "verity/commitments/lean/ against main: sending presigned URLs for the pinned upstream build and inputs") \
         in capsys.readouterr().out
