@@ -131337,3 +131337,84 @@ Nothing.
 - `cursor/proofs-heldof-logitsrun-f684` at `b290831555`: scratch, that + GATHER's `984cb027efa3`.
 - I hold the pen (`~/wt/.pen`, since 07:45:22Z). No other HELDOF entry or commit since 07:48Z [read, 08:48Z].
 - One timer, `heldof-logits-23d2`, for 09:08Z; then I end this turn.
+
+## TWOLEG, Fri 13 Nov 08:53Z: YES: an honest play that commits the select's inputs is ACCEPTED by the form's check with the switch on, at a tree that holds FRAME's `second-inputs` rule (`3f1b`, rc 0, scratch `e7fd09e4ae`); `744ded04cb` is NAMED compiled; the scratch is made again on the join's `03273f219d`, head `de592c42ef`, its plays out: ASSEMBLY, merge it only after my next entry
+
+No Lean-slot wait over 10 minutes on a try of mine. Mail read: your 08:18Z, and ASSEMBLY's 08:45Z entry.
+
+**In plain words.** I made the tree you ordered and pushed it. On it, a play whose serve commits the select's inputs passes the second stage's statement check with no code, and the form's check accepts it with the switch on. The kept play of last night, whose interior registers the logits as the prover's value, is refused there by `second-inputs`: FRAME's rule doing its work. The mend to the recursive package's root compiles and its records run passes, so I name it. The join moved nine merges while I worked, so I merged its tip into the scratch; the plays at that head are out, and that run is the one you asked for.
+
+**1. `744ded04cb` is named compiled** [run]. ASSEMBLY: it is in the scratch head; a records run of the join no longer meets the orphan line once it is in.
+- `r20261113-080909-6319` (vy-nebius-cpu-9), rc 0, at `744ded04cb`: `BUILD rc=0`; the fifteen files of `SampledTwo/` and `Recursive` each `rc=0`, each axiom probe clean or "no theorems in it"; `DIFFTEST rc=0`, "65 passed, 1 skipped".
+- `r20261113-080956-4da9` (vy-nebius-cpu-3), rc 0, at `744ded04cb`, the recursive package's records run with its requirers: "…/recursive: PASS  426 declarations in 4 modules", and no line of the log holds "orphan"; `security/Proofs` "PASS  204718 declarations in 4066 modules"; `security` "PASS  27776 declarations in 730 modules … 1137 guarantees"; `security/Properties` "PASS  3485 declarations in 107 modules … 540 guarantees"; `OUTCOME {"outcome": "pass", …}`. Each is the fast path's result ("without the kernel replay or the tests").
+
+**2. The scratch branch** is `cursor/proofs-scratch-twoleg-join-gather-ad71`, head `de592c42efca28a630c79b6012a8b5405766e8e7`, tree `6240717ecc12f21368d2773838bd7c4baa424cf0` [run: `git rev-parse HEAD^{tree}`]. The join's tip `03273f219d` is its ancestor, so ASSEMBLY's merge is a fast-forward while the join stays there.
+- What is in it: the join's tip, `744ded04cb`, GATHER's `984cb027efa3`, and six small commits of mine: `0e0d120c45` (the play script hands `second` the serve's kept inputs; `dd2c557f3f` of my branch, cherry-picked), `c53806ae4c` (place 3), `e7fd09e4ae` (place 12), `c511f09006` (place 13), `10234e796e` and `de592c42ef` (place 14, before and after the join's tip came in).
+- Against the join's tip it changes 51 files and nothing under `security/`: GATHER's 48, my mend's two (`VStarRecursive.lean`, the form's docstring) and one line of `TRUSTED.sha256` [run: `git diff --name-only`]. `security/` is the join's own tree, `0075815853…`, on both.
+- One conflict in making it again: `SampledTwo/Accepts.lean` (add/add). I took the join's, which is ACCEPTS's file.
+
+**3. The plays** [run], each an interior of one member (8 inner blocks of one Definition, `GreedyCombine_v2{V=128,N=128}`), each with `SMALL_ARGS="--inline --units 1 --logits"`. K = 1 runs: the check is `GreedySelect_v1{V=128,N=128}`.
+- **`r20261113-084025-3f1b`** (vy-nebius-cpu-8), **rc 0**, at scratch `e7fd09e4ae`:
+  - The honest play: `second rc=0`; `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`; the summary's interior has `"registered": []`, so the prover registers no value there; **`FORM_ON rc=0`, verdict accept** under `verity/sampled-proofs/two-stage/v1/switch-on`; `FORM_OFF rc=1`, the run of record's statements `["two-stage-form"]` and nothing else.
+  - The play whose first session shows a tree's line: `second-tree rc=0`, `FORM_TREE rc=1`, "two-stage: on two windows the first session's log holds a coin tree's line: …".
+  - `PLAY rc=0`; `DIFFTEST rc=0`, "66 passed" with the play's case given.
+- `r20261113-081610-59f4` (vy-nebius-cpu-11), rc 0, at scratch `0e0d120c45`: the same four verdicts. This is the rehearsal of my 08:16Z entry.
+- `r20261113-082656-d600` (vy-nebius-cpu-5) at `c53806ae4c` and `r20261113-083629-5354` (vy-nebius-cpu-4) at `e7fd09e4ae`, both **rc 1, from the kept case alone** (item 4): the honest play in each is as above (`ROUND_TWO` ok with no code, `FORM_ON rc=0` accept, `FORM_OFF rc=1`, `DIFFTEST rc=0`). The script stops on a kept case's verdict before the first-tree play, so these two hold none.
+- `r20261113-083700-fbc7` (vy-nebius-cpu-9), rc 0, at `e7fd09e4ae`: GATHER's own rehearsal, `two_stage_small.sh` with the same arguments, on the one challenger: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`.
+- Outside `security/`, `e7fd09e4ae` and the head `de592c42ef` differ in two files, neither read by a play: `tests/test_two_stage_driver.py` and `TRUSTED.sha256` [run: `git diff --name-only`]. I still do not call `3f1b` the run at the head; `4ec1` is.
+
+**4. The kept play of `2556` is refused at such a tree, and the accept test's kept case must change** [run: `d600`, `5354`]. `KEPT_ON rc=1`: with the switch on, the run of record's statements are `["second-inputs"]`, value `logits`. With the shipped switch the same code, and not the form's. At `1e20910586` alone that case was accepted (`54e6`). Its interior registers the logits, so the rule refuses it, as it should. `DIFFTEST_KEPT rc=1` for the same reason (`test_the_form_accepts_one_honest_play_with_its_switch_on` with that case). I change no file for this: the test takes its case from `SAMPLED_TWO_CASE` and skips without one. The case to keep from now on is a play that commits the select's inputs; `3f1b` holds one under `out/form`, and `4ec1` will.
+
+**5. The eleven places** (GATHER: your lines; say yes or name one).
+- `a5.py` (1):
+  1. `audit`'s `summary["staging"]`: both. Your comment and `"gpus": 0`, then the join's `link_points` line.
+- `two_stage.py` (2):
+  2. The usage of `second`: both. The join's `--challenger-host HOST`, your `[--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]`.
+  3. `_second`'s docstring: both. The join's sentences on the one challenger's key, then your clause that the summary says what the stage cost. My first resolution dropped your clause; `c53806ae4c` puts it back.
+- `two_stage_small.py` (4): yours in all four, and the file equals yours at `984cb027efa3` byte for byte [run: `git diff`]. In each the join's side was your text without the later parts.
+  4. The module docstring and `serve`'s usage line.
+  5. `MAX_MODEL_LEN`, `TABLE_LAYER`, `TABLE_LEAVES` (the join's side was empty).
+  6. `expect`'s docstring.
+  7. `expect`'s return with `record` and `cost`, `PROVE_SECONDS`, `costed`.
+- `two_stage_small.sh` (2):
+  8. The header comment: yours, which says what happens with `--logits` and without.
+  9. The `second` command: both. Your `"${ON_CARDS[@]}"`, `"${STOP[@]}"` and `"${KEPT[@]}"`; the join's `--challenger-host "$W/first/challenger-host"`.
+- `tests/test_two_stage_second.py` (2): yours in both, and the file equals yours byte for byte.
+  10. The small rehearsal's test: its docstring, `summary` with the timing and the record, `passed`, the untimed case.
+  11. The assertion on a failed record (the join's side was empty).
+
+**6. Three more places, which git merged with no marker.**
+- 12. `two_stage_small.sh` assigned `INPUTS` twice: the join's line before the serve, yours after it reads `logits`. Yours runs later, so the join's was dead; `e7fd09e4ae` drops it. The script now differs from yours only by the one challenger: `--challenger-host` on `second`, and the files under `challenger-host/` left out of the records.
+- 13. `tests/test_two_stage_driver.py::test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers_key` (the join's) called `_second` with arguments that lack `kept`, which your `_second` reads at the replay. `r20261113-082751-0bce` (the `benchmarks/one_stage` suite, quick, at `c53806ae4c`) [run]: "1060 passed, 1 failed", `AttributeError: 'types.SimpleNamespace' object has no attribute 'kept'`. The test now gives `kept=None` (`c511f09006`).
+- 14. `verity/protocols/pous/lean/TRUSTED.sha256`: its line for `security/Proofs/lakefile.toml` was stale on the merged roots (`pins.py --stale` named it; `--regen` wrote it; hashing only, on my VM). It is stale at the join's own tip too [run: the tip's line reads `0dda2d39…`, its lakefile hashes to `59d215bb…`]. It goes stale again with the next root; `pins.py --regen` writes it.
+
+**7. ASSEMBLY's question, which paths the hash covers.** A play builds three Lean packages under `verity/` (`flock/verifier`, `spot/verifier/lean`, `recursion/verifier/recursive`), flock's Rust, and runs Python under `benchmarks/`, `adapters/` and `verity/` [read: `sampled_two_small.sh`]. No line of it names `security/`, and no code package requires `security/`. So the plays stand for every later head of the join whose trees outside `security/` equal the scratch's: `verity` `9d9493b4ac…`, `benchmarks` `0e58cccb3a…`, `adapters` `4e5227ee12…`, `tools` `a54458591f…`, `tests` `45b36ec144…`, `uv.lock` `e66be93c2b…` [run: `git rev-parse HEAD:<path>`]. A merge that touches only `security/` keeps all six, apart from the pin's one line in `verity/`.
+
+## STOP RULE
+
+Not reached. The scratch holds no change of mine to a Lean file beyond `744ded04cb`'s, and no change to a lock. No form refused today is accepted: the form's check still refuses the shipped switch last, and now refuses the old kept play earlier, by `second-inputs`.
+
+## NEEDS
+
+- **ASSEMBLY:** hold the merge of the scratch until my next entry names the run at `de592c42ef`. If the join moves before then, tell me the tip and I merge it in again; a move under `security/` alone needs no new play (item 7).
+- **GATHER:** items 5 and 6.
+- **You:** nothing to decide. One thing to know: the kept case of the form's accept test is no longer last night's (item 4).
+
+## Runs
+
+- At `de592c42ef`, launched 08:48Z to 08:50Z, running: `r20261113-084838-4ec1` (vy-nebius-cpu-8), the honest play, the first-tree play and the difftest; `r20261113-084908-8360` (vy-nebius-cpu-1), `two_stage_small.sh` with the select's inputs committed; `r20261113-084942-a01e` (vy-nebius-cpu-3), the quick tier of every suite the 51 files touch (`suites.py --changed 03273f219d --quick`). Expected ends: the first two about 09:05Z; the tier later, I read it at 09:20Z.
+- Superseded, still running, I cancel none: `r20261113-083814-7127` (vy-nebius-cpu-9), the same quick tier at `e7fd09e4ae` over `42bba26494`, five suites passed so far; `r20261113-084249-12f5` (vy-nebius-cpu-4), the plays at `c511f09006`; `r20261113-084212-d5ad` (vy-nebius-cpu-9), the `benchmarks/one_stage` suite at `c511f09006`.
+- `r20261113-083750-ae11`: failed rc 2 at once, my typo in the base commit's id; `7127` is the same job with the id right.
+- `r20261113-075127-7dfd` and `r20261113-073349-9ee4` (the quick tiers at `1963dc9dec` and at #9574's head): running.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- The plays, GATHER's rehearsal and the suites at the head `de592c42ef`: all three are out. The `benchmarks/one_stage` suite has not passed at any scratch head yet; its one failure is mended and not rerun to the end.
+- That `security/Proofs` compiles at the scratch head. I ran no Lean try there: its `security/` is the join's tip's, which ASSEMBLY says does not compile until STAGECOINS's two lines are in.
+- That any suite beyond the five `7127` has printed passes with GATHER's second try on the join.
+- That a play with K above 1 units is accepted by the form's check: every play here is K = 1, an interior of one member.
+- That an evidence file reaches `RECORD_DIGEST` or `RECORD_READ` through the binary: `#guard`s only, as before.
