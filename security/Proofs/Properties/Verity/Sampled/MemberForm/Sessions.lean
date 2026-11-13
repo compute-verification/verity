@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Closing
 /-!
 # What the verifier's read of a member's session holds the device's log to
 
-A window's sessions take, of each drawn member's session, what the verifier's read holds the device's log to at
+A window's sessions take, of each sampled member's session, what the verifier's read holds the device's log to at
 that session's tree (`Verity.Sampled.SessionRead`). This module proves it of the per-member form's read: v2's read
 (`readLog`) of release log lines `coinTreesOf` accepts, against which `Spot.Challenger.membersTreeReason` accepts
 the sessions' records and evidence.

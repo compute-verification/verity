@@ -16,9 +16,8 @@ read is flock-verify `--zk`'s at the window's member (`SessionVerdict.accepts_me
 * **What the statement read** (`statementOf_reads`, `statement_reads`): the statement's tags, the blobs' circuit and
   public files under the member's two digests, the circuit file's lookups the pinned tables the blobs hold, and the
   inputs `--zk` is handed at them (`Spot.OneStageZk.inputsOf`).
-* **The blobs hold a member's files** (`HoldsFiles`, `ReadsFiles`, `readsFiles_of_holds`): what v2 reads on the
-  blobs under the member's two digests are the files those digests name among some files; so it is on blobs that
-  start with files holding the member's two.
+* **v2 reads a member's files among some files** (`ReadsFiles`): what v2 reads on the blobs under the member's two
+  digests are the files those digests name among those files.
 * **The statement is the window's member's** (`statesMember`): on blobs where v2 reads the member's files among
   the files the window's member is on, and each pinned table the blobs hold is its registered file (`TablesSent`),
   the statement the form read for a member is `StatesMember` of the window's member.
@@ -83,25 +82,11 @@ theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs 
   subst ha
   exact statementOf_reads hs
 
-/-- **The committed files `F` hold the members' files**: each member's circuit file's digest and public file's
-digest is the SHA-512 of one of `F`. -/
-def HoldsFiles (ms : Array _root_.Spot.OneStageZk.Member) (F : Array ByteArray) : Prop :=
-  ∀ vm ∈ ms.toList, (∃ f ∈ F, digestOf vm.own.circuit = some (Verity.sha512 f.data.toList)) ∧
-    ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)
-
 /-- **v2 reads the member `vm`'s files among `R` on the blobs `bs`**: the circuit file and the public file it reads
 there under the member's two digests are the files those digests name among `R` (`Verity.namedFile`). -/
 def ReadsFiles (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (bs : _root_.Core.Blobs) : Prop :=
   (∀ b, bs.get vm.own.circuit "circuit" = .ok b → b = Verity.namedFile (digestOf vm.own.circuit) R) ∧
     ∀ b, bs.get vm.own.pub "public file" = .ok b → b = Verity.namedFile (digestOf vm.own.pub) R
-
-/-- **On blobs that start with files holding a member's two, v2 reads the member's files among those.** -/
-theorem readsFiles_of_holds {F B : Array ByteArray} {vm : _root_.Spot.OneStageZk.Member}
-    (hc : ∃ f ∈ F, digestOf vm.own.circuit = some (Verity.sha512 f.data.toList))
-    (hp : ∃ f ∈ F, digestOf vm.own.pub = some (Verity.sha512 f.data.toList)) :
-    ReadsFiles F vm (_root_.Core.Blobs.ofArray (F ++ B)) :=
-  ⟨fun _ hg => get_named (digestOf_unhex vm.own.circuit) hc hg,
-    fun _ hg => get_named (digestOf_unhex vm.own.pub) hp hg⟩
 
 /-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, where
 v2 reads the member's files among the files `R` and each pinned table the blobs hold is its registered file, the

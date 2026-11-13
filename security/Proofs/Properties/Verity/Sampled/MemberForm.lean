@@ -18,6 +18,10 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Read
 public import Proofs.Properties.Verity.Sampled.MemberForm.Ranges
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
 public import Proofs.Properties.Verity.Sampled.MemberForm.Units
+public import Proofs.Properties.Verity.Sampled.MemberForm.Registered
+public import Proofs.Properties.Verity.Sampled.MemberForm.Apart
+public import Proofs.Properties.Verity.Sampled.MemberForm.Laid
+public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -73,4 +77,15 @@ the lock) give of the bytes and the release log they accept, each stated at the 
 * `MemberForm.Units`: the units the form's sessions proved, member by member (`run_over`), and the session of a
   member the sample holds (`member_session`): its statement's place among the statements, its verdict at the
   member's own statement, and its record's sample the sample file of the member's part of the window's sample.
+* `MemberForm.Registered`: on blobs that hold each member's file as the registered files' file under its digest,
+  v2 reads the members' files among the registered files (`readsFiles_of_sent`), at registered files that hold
+  each file the parameters' members name (`RegisteredHolds`).
+* `MemberForm.Apart`: no unit is in two members' ranges at parameters the form's parse accepts (`membersOf_apart`,
+  `membersParamsOfJson_apart`), and what the proofs read of that at an accept (`FormApart`, of the check as it is
+  by `formApart_refused`).
+* `MemberForm.Laid`: the window the parameters' members are on is laid out (`WindowOn.laid`): its members' units'
+  counts sum to its units (`WindowOn.total`, from the files' units), and each member's units lie one after another
+  from where the members before it end.
+* `MemberForm.WindowPasses`: at each play the form accepts, the window the verifier sets up is laid out and each
+  member's files pass (`windowPasses_members`), which is what a window's instance takes of the form's acceptance.
 -/
