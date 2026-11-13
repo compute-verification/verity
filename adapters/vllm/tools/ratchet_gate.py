@@ -51,7 +51,8 @@ when:
   for a queue merge), whose own merge the source checks below fail.  A site (``lint: file:line what``) is the tree
   below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
   an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
-  count that a mended site lowers is no new violation (`beyond`).  In a temporary worktree of the change's top, each
+  count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
+  lowered under a tree that its base's list covered is one.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -112,9 +113,9 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check).  The ready mark's preflight runs it on the PR's merge, as BASE has it, and only warns
-(``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new violation; what
-judges a PR is the check's ``ratchet-gate`` step
+and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
+and only warns (``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new
+violation; what judges a PR is the check's ``ratchet-gate`` step
 (``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
 drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
 change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
@@ -217,6 +218,9 @@ INTEGRATION_RUFF = (RUFF_LINT, RUFF_VLLM_LINT)
 #: where a ruff lint runs ruff, when that isn't its first config's directory: its config's paths are relative to there
 RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 MOVE_CHECK = "tools/verity/check/move_check.py"
+#: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
+#: directory's own files) and the pins list
+MOVE_CHECK_READS = ("tools/move/", "tools/verity/check/pins.py")
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
 #: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)
@@ -229,8 +233,9 @@ CHEAPEST = 12
 SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
 #: the lines a site's violation names after its file: one, or each line of one key (``12,40``, `_ratchet.new_violations`)
 LINES = re.compile(r"\d+(?:,\d+)*")
-#: the count a violation states against its allowance: ``2 found, 0 allowed``
-COUNT = re.compile(r"\b(\d+) found, \d+ allowed\b")
+#: the count a violation states against its allowance, whole: ``2 found, 0 allowed``, or the suffix
+#: ``  (2 found, 1 allowed)`` that `_ratchet.new_violations` writes after a key's lines only while the key has an allowance
+COUNT = re.compile(r"\s*\(?\b(\d+) found, \d+ allowed\b\)?")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the tables that place a module, by lint file: each a dict literal of strings, which a change may edit for the modules it
@@ -453,14 +458,21 @@ def is_revert(c: Change) -> bool:
 
 
 def is_pure_move(c: Change, base: str) -> bool:
+    """Whether ``base``'s move_check certifies the change. It runs from a copy of ``base``'s scripts written at their paths
+    (``MOVE_CHECK_READS``), since it finds the root, and from it what it imports, by where its own file is."""
     try:
-        script = git("show", f"{base}:{MOVE_CHECK}")
+        listed = git("ls-tree", "-z", "--name-only", base, "--", MOVE_CHECK, *MOVE_CHECK_READS).split("\0")
     except GitError:
         return False
+    scripts = tree_files(base, {p for p in listed if p.endswith(".py")})
+    if MOVE_CHECK not in scripts:
+        return False
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
-        p = Path(d) / "move_check.py"
-        p.write_text(script)
-        return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
+        for path, data in scripts.items():
+            f = Path(d) / path
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(data)
+        return subprocess.run([sys.executable, str(Path(d) / MOVE_CHECK), c.lo, c.hi], capture_output=True).returncode == 0
 
 
 def kind(entry: object) -> object:
@@ -1229,12 +1241,14 @@ def violations(failures: list[dict]) -> list[str]:
 
 
 def unplaced(v: str) -> tuple[str, int] | None:
-    """(a violation less where it is and how many it counts; how many sites it stands for), for one that names its lines
-    (`SITE` with a line, ``lint: file:line what``, or one key's lines, ``lint: file:12,40 what``: one site a line) or a count
-    (`COUNT`, ``lint: file: 2 found, 0 allowed``: that many).  None for a violation that names neither."""
+    """(a violation less where it is, how many it counts and what its list allows; how many sites it stands for), for one
+    that names its lines (`SITE` with a line, ``lint: file:line what``, or one key's lines, ``lint: file:12,40 what``: one
+    site a line) or a count (`COUNT`, ``lint: file: 2 found, 0 allowed``: that many).  None for a violation that names
+    neither.  The allowance is no part of what a violation is: a list that falls with its file's count names the same
+    thing, and so does a key whose entry goes, which then states no count after its lines."""
     m, n = SITE.match(v), COUNT.search(v)
     lines = LINES.match(v, m.start(2)) if m and m[2] else None
-    cuts = [x for x in (lines and lines.span(), n and n.span(1)) if x]
+    cuts = [x for x in (lines and lines.span(), n and n.span()) if x]
     if not cuts:
         return None
     sites = int(n[1]) if n else v[slice(*cuts[0])].count(",") + 1
@@ -1250,8 +1264,10 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     edit above it moves is the base's still, named at the base's line, where `added_by` finds the change that wrote it,
     and a second site of the same kind is the change's.  Of a file's sites of one kind, those at a line the base names too
     are the base's first, then the earliest.  A count is the base's while it is no more than the base's count of the same
-    thing against the same allowance, so a file's count that a mended site lowers is no new violation.  A violation that
-    names neither a line nor a count is the base's when the base has the same one."""
+    thing, whatever each list allows, so a file's count that a mended site lowers is no new violation, with its entry
+    lowered or not.  A count the base doesn't name is the change's: a list lowered under a tree its base's list covered
+    fails; one that rises is `growth`'s to refuse.  A violation that names neither a line nor a count is the base's when
+    the base has the same one."""
     whole = set(had)
     theirs: dict[str, list[tuple[int, str]]] = {}
     for h in had:

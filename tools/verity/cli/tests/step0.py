@@ -1,12 +1,11 @@
-"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
+"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
 `verity.protocols.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
-(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites, remote and onsite, run on
-it.
+(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
 """
@@ -21,13 +20,13 @@ from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy import runtime
-from verity.configuration.deploy.config import Component, Workload
-from verity.configuration.deploy.manifest import Channel, Role
+from verity.runtime import runner as runtime
+from verity.config import Component, Workload
+from verity.protocol import Channel, Role
 from verity.protocols.certifier.verifier.warden import WardenParams
 from verity.protocols.spot.verifier import parties as SP
 from verity.protocols.spot.verifier.one_stage.draw import parse_design
-from verity.configuration.wire import Refused
+from verity.channel import Refused
 from verity.circuits.codec import canonical_json
 from verity.commitments.crypto import lms
 
@@ -106,6 +105,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
+    Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
@@ -147,6 +147,7 @@ def unserved(what: str) -> Check:
 
 #: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
+                            "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
                             "wipe": unserved("memory challenger's wipe check")}
@@ -248,7 +249,7 @@ def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
          machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
-    """The live run of sampled proofs' parties ``here`` (`verity.configuration.deploy.runtime.run`) on ``machine``: every one
+    """The live run of sampled proofs' parties ``here`` (`verity.runtime.runner.run`) on ``machine``: every one
     of them in this process when all four are here, else each listening one at its configured address (`listening`)
     and the verifier dialing those that run elsewhere; refused by name (``listen``) when one the verifier needs has
     none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``."""
@@ -272,7 +273,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
     "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
-    **{c: {"verifier": LIVE} for c in ("pouw", "inference-only", "pous", "bandwidth", "wipe")},
+    **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
 #: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them

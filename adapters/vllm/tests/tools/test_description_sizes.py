@@ -8,9 +8,12 @@ for exactly the templates the partitions name; every one recorded past SIZE is l
 matches a named template, and only ones recorded past SIZE.  The second rebuilds each template recorded at most SIZE and
 holds its bytes to the record, so a change that grows one past SIZE, or moves its bytes, fails here.  A template recorded
 past SIZE is never built in a suite (a traced one takes far more time and memory than a test may): its entry stands on the
-run it cites until a change rewrites the template and its record."""
+run it cites until a change rewrites the template and its record.  The last part holds ``update``'s rule for a template
+it measures (`description_sizes.entry`), on entries written here, building nothing: an entry whose description has not
+moved stands as it is too."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -113,3 +116,26 @@ def test_a_template_recorded_under_the_size_rebuilds_to_its_bytes(template: str,
         pytest.fail(_past(template, {"bytes": got, "largest": DS.largest(desc)}))
     assert got == recorded, (f"{template}: its description is {got:,} bytes, its record {recorded:,}; when the change "
                              f"means to move it, record it with {UPDATE}")
+
+
+#: an entry of the record, and what a later ``update`` measures of the same description: its seconds and gb differ, as
+#: two runs' do, and it cites no run until ``update`` writes it
+_OLD = {"bytes": 1000, "gb": 0.1, "largest": ["Dot_v1", 600], "run": "an-earlier-run", "seconds": 1.5}
+_SAME = {"bytes": 1000, "gb": 0.7, "largest": ["Dot_v1", 600], "seconds": 9.9}
+_BYTES = {**_SAME, "bytes": 1001}
+_LARGEST = {**_SAME, "largest": ["Dot_v2", 600]}
+
+
+@pytest.mark.parametrize(("old", "new", "remeasure", "want"), [
+    pytest.param(_OLD, _SAME, False, _OLD, id="same-bytes-and-largest"),
+    pytest.param(_OLD, _BYTES, False, {**_BYTES, "run": "this-run"}, id="bytes-moved"),
+    pytest.param(_OLD, _LARGEST, False, {**_LARGEST, "run": "this-run"}, id="largest-moved"),
+    pytest.param(_OLD, _SAME, True, {**_SAME, "run": "this-run"}, id="remeasure-names-it"),
+    pytest.param(None, _SAME, False, {**_SAME, "run": "this-run"}, id="no-entry"),
+])
+def test_update_keeps_a_measured_entry_whose_description_has_not_moved(old: dict | None, new: dict, remeasure: bool,
+                                                                       want: dict) -> None:
+    """An entry whose template measures to the same bytes and largest Definition stays whole, with the run, seconds and
+    gb it has, so ``update`` writes its line back as it was; a moved description, a template ``--remeasure`` names and
+    one the record has no entry for get the measurement, citing the run."""
+    assert DS.entry(copy.deepcopy(old), copy.deepcopy(new), "this-run", remeasure) == want
