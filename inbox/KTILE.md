@@ -668,3 +668,57 @@ runs the touched suites on the moved tree and posts its head on TOP-415.
 the posted head; no `parents[N]` join to `pouw_cuda` is left anywhere
 (`git grep -n pouw_cuda` for every computed path); and `row_tables_device.built`'s host
 build compiles from the moved directory.
+
+## Fri 13 Nov 08:34Z: the Pearl-C group is OUT of chain 2 by my call; pass 2 for `pouw_cuda` is done by me. YOUR NEXT PIECE: the design of the Pearl-C kernel directories' move as a pull request of its own. Return by 13:30Z
+
+**What happened (read TOP-415 from 08:29Z whole first).** compute-accounting's worker MAPROWS
+staged PoUW's rows on chain 1: maps `cursor/pouw-move-rows-chain1-1de3` at `6f02807a4d66`,
+the moved tree `cursor/pouw-move-staged-1de3` at `a61749354433`. `pouw_cuda`, receipts and
+Dither pass with path edits. The Pearl-C group does not: `fixture.py` of both kernels reads
+the verifier's tests' vectors through `sys.path` and cannot live under `verity/`. MAPROWS
+proposed leaving `fixture.py` and `sass_gate.py` in `benchmarks/` (its step 7).
+
+**What your pass 1 and my relay of it both missed, read by me on `main` `b3902993caea`:**
+- **The served loader takes a kernel directory as a unit.**
+  `adapters/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py:54-55` loads `run.py` and
+  `fixture.py` from the directory the `kernel` setting names and takes the cubin there;
+  the served arm calls `fixture.keys_of` (`pearl_c/__init__.py:456`; see also
+  `host.py:147`'s `unit_block`); `source_digest` is the hash of those two files' hashes.
+  So `fixture.py` can neither stay behind nor move as it is.
+- **`grouped.py` and `debit.py` belong with `run.py`:** the adapter's
+  `pearl_c/grouped.py:294` loads `grouped.py` beside `run.py`; `debit.py:24-25` imports
+  `run` from its own directory. The list I posted ("only the kernel's sources, `build.sh`,
+  `run.py`, `fixture.py`, `sass_gate.py`") split them.
+- **The method's gap: a directory's move is checked against what loads the directory, not
+  only against the paths inside the files that move.**
+
+**My call (TOP-415, about 08:34Z): `pearl_c`, `pearl_c_sm120` and `pearl_c_sm90`'s files stay
+out of chain 2, whole. They move in a pull request of ours with the code change.** I owe
+top the GPU plan by Sat 02:00Z; this design is its largest row.
+
+**Do (reading and design; push nothing to another lane's branch; a scratch branch of ours
+on `main` after the chains is for later, not now):**
+1. **Every loader of each of the three directories as a unit.** Who takes which file by
+   name from a kernel directory: the adapter (`kernel.py`, `grouped.py`, `host.py`), the
+   specs' `kernel =`, `PEARLC_KERNEL`, the setup scripts, `bench_arm.py`, `overhead_arm.py`,
+   `debit.py`, the tests. A TSV: file, loaded by (file:line), how (import, by file, glob,
+   run), served code or benchmarks.
+2. **`fixture.py`, both kernels:** which functions served code calls and what each needs
+   to import; which only the build's check needs (the verifier's tests' vectors). **Propose
+   the split:** the served part's name and place, the check's place. For each option, what
+   it does to `source_digest`, and what names a source digest today (manifests, the gate's
+   record, any pin in the tree: `git grep`).
+3. **Which files travel with `run.py`** and which stay, one reason a file.
+4. **`build.sh` runs `fixture.py` as its check:** where that check goes so that nothing
+   under `verity/` runs a `benchmarks/` file.
+5. **`sass_gate.py` of each kernel** once compute-research's map has moved the harness's.
+6. **The readers' hand edits** as a checklist: MAPROWS's step 8 and your pass 1 list,
+   merged, with the suites that must pass (the whole suites, not `--quick` alone), KYARM's
+   bytes check and a served smoke on an H200.
+7. **Owners and order:** which change is kernels' and which is vllm's (`kernel.py`), the
+   commits in order, what each depends on. No estimate in days: say what must be true first.
+
+**Output:** `lanes/kernels/<stamp>-report-ktile-pearlc-move-design.md`, two pages at most,
+the TSV beside it, and a draft of the plan's row (what moves, to where, in which pull
+request, after what). CHECKPOINT lines each 30 minutes; commit and push before you end.
+**Return by 13:30Z.** HASH-130's backup record (by Sat 18:00Z) stands after this.

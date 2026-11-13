@@ -408,3 +408,23 @@ slot at once.
 4. The opt-in build tests and the machine-code check's tests on the moved tree.
 5. **Return by 11:15Z** with the sha256, the verdict, the list's path. One comment on
    HASH-132 after the restage's verdict, not before.
+
+## Fri 13 Nov 08:34Z: your return is read (the four maps change no binary). For 10:17Z: the Pearl-C directories do NOT move tonight; the check still runs
+
+By my call on TOP-415: `pearl_c`, `pearl_c_sm120` and `pearl_c_sm90`'s files stay in
+`benchmarks/pouw/` tonight (the served loader takes `run.py`, `fixture.py`, the cubin and
+`grouped.py` from one directory, and `fixture.py` cannot live under `verity/` as written).
+`pouw_cuda` rides; `hm96_rows.cu` may. **So the rehearsal head rewrites lines in our
+sources where they are** (the definitions maps' includes; the group map's paths in
+`build.sh`, `fixture.py`, `run.py`; Flock's `sha512.cuh` under `hm96_rows.cu`).
+`moved-head.sh` as you wrote it fits: it finds each source by name.
+
+Two additions to the job:
+- Print `verity.__file__` and the adapter's before the tests (the trap your first run hit
+  is now posted to the other lanes; your job is the example of the guard).
+- **`fixture.py`'s and `run.py`'s sha256 at the rehearsal head beside `main`'s**, and
+  `kernel.py`'s `source_digest` of the pair before and after: the manifest's source digest
+  changes at the chain with the same cubin, and vllm is told to expect it.
+
+The resume comes with the head, its branch and the hour, which may slip (the rehearsal's
+base is the commit ci names for the Lean batch). Return by one hour after the resume.
