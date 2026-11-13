@@ -521,12 +521,11 @@ theorem push_proved {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Read
       r'.proved = r.proved ++ units := by
   unfold _root_.Spot.OneStageZk.push at h
   dsimp only at h
-  split at h
-  · cases h
-  · obtain ⟨units, hu, h⟩ := ebind_ok h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact ⟨units, hu, rfl⟩
+  split_ifs at h
+  obtain ⟨units, hu, h⟩ := ebind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  exact ⟨units, hu, rfl⟩
 
 /-- **One session's `step` from the empty run, where every session accepted, passed the population check and proved
 the public file's units its record samples** (`provedUnits`). -/
