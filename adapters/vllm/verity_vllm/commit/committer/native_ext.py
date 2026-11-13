@@ -4,21 +4,14 @@ here, so neither imports the other."""
 from __future__ import annotations
 
 import os
-import sys
-
-import torch
 
 from verity_vllm import settings
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def build_source_digest() -> str:
-    """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.commit.committer import native_jit
-
-    return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
 
 
 def ext(build_dir: str | None = None, verbose: bool = False):
@@ -29,6 +22,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
     on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
+        # Read here, not at import: `native_jit` takes the kernels' headers from the core `verity`, which only a build needs.
         from verity_vllm.commit.committer import native_jit
 
         _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
@@ -39,5 +33,5 @@ def ext(build_dir: str | None = None, verbose: bool = False):
             _EXT = None
             raise RuntimeError(f"native collector .so in {bd} does not expose {missing} bound by {HERE}/native_collect.cpp -- a stale build "
                                f"(source digest {digest[:12]}); remove the directory and rebuild")
-        print(f"[jit] native collector source digest {digest[:12]} -> {bd}", file=sys.stderr, flush=True)
+        logger.info("[jit] native collector source digest %s -> %s", digest[:12], bd)
     return _EXT

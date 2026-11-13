@@ -35,13 +35,13 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend import derive_examples as ex
 from verity.definitions.numerics.serve3_reference import materialize
 
+from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend.derive import derive_report
+
 REF = dict(mode="reference")
-T, H, I, E, K = 4, 8, 16, 4, 2
+T, H, INTER, E, K = 4, 8, 16, 4, 2
 
 RESULTS: list[dict] = []
 
@@ -56,7 +56,8 @@ def _dump_results():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "moe_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "moe_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 def _reason(rep) -> str:
@@ -87,7 +88,7 @@ def _routes(m, x) -> list[list[int]]:
 
 def _inputs_with_different_routing(m) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Three inputs whose top-k routes differ pairwise for at least one token (searched, then asserted)."""
-    xs = []
+    xs: list[torch.Tensor] = []
     for seed in range(50):
         x = torch.randn(T, H, generator=torch.Generator().manual_seed(100 + seed)) * 1.5
         if all(_routes(m, x) != _routes(m, y) for y in xs):
@@ -105,8 +106,8 @@ def _inputs_with_different_routing(m) -> tuple[torch.Tensor, torch.Tensor, torch
 class Experts(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.w1 = nn.ModuleList([nn.Linear(H, I, bias=False) for _ in range(E)])
-        self.w2 = nn.ModuleList([nn.Linear(I, H, bias=False) for _ in range(E)])
+        self.w1 = nn.ModuleList([nn.Linear(H, INTER, bias=False) for _ in range(E)])
+        self.w2 = nn.ModuleList([nn.Linear(INTER, H, bias=False) for _ in range(E)])
 
     def expert(self, e: int, x):
         return self.w2[e](F.relu(self.w1[e](x)))
@@ -167,7 +168,7 @@ class Top1SwitchMoE(Experts):
 
 def test_M1_sparse_gather_moe_is_refused_at_the_routing_for_every_example_input():
     torch.manual_seed(0)
-    m = ex.NegMoE(H=H, I=I, E=E, k=K)
+    m = ex.NegMoE(H=H, INTER=INTER, E=E, k=K)
     reps = [derive_report(m, (torch.empty(T, H),), **REF, name="NegMoE") for _ in range(2)]
     for rep in reps:
         assert not rep.ok, "a sparse-gather MoE derived to a Program: its structure would encode the example input's routing"

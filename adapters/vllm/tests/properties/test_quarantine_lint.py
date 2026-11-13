@@ -32,7 +32,8 @@ SEMANTIC_ID = "gen-x/Gelu@v1"
 
 
 def test_good_and_bad(tmp_path):
-    root = tmp_path / "q"; (root / "gen_x").mkdir(parents=True)
+    root = tmp_path / "q"
+    (root / "gen_x").mkdir(parents=True)
     (root / "gen_x" / "gelu.py").write_text(GOOD)
     (root / "gen_x" / "bad.py").write_text(BAD)
     (root / "gen_x" / "gelu_difftest.py").write_text(ADAPTER_OK)

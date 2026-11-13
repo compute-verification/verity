@@ -29,6 +29,10 @@
                                     axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
+    verity lean deployed [--rev REV] [--today YYYY-MM-DD]
+                                    the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
+                                    each one's gap as the running checkout's Lean check computes it, and each open or gap
+                                    premise once by name; --today defaults to today in America/Los_Angeles (deployed.py)
     verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]
                                     every guarantee the locks list (default the three security locks), with the
                                     bits of its error term where something gives it a number, that number's source,
@@ -52,6 +56,7 @@ HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
 USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
+         "verity lean deployed [--rev REV] [--today YYYY-MM-DD]\n"
          "verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
@@ -181,6 +186,10 @@ def _lean_here(file: str, siblings: bool = False) -> int:
 
 
 def _lean(args: list[str]) -> int:
+    if args and args[0] == "deployed":
+        from . import deployed
+
+        return deployed.main(args[1:])
     if args and args[0] == "bits":
         return _run([sys.executable, str(HERE / "lean" / "bits.py"), *args[1:]])
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "

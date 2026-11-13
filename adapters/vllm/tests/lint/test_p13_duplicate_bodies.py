@@ -1,4 +1,4 @@
-"""P13: no function body is written twice, inside ``verity_vllm`` or against ``verity.ml``.
+"""P13: no function body is written twice, inside ``verity_vllm`` or against the provers' side of ``verity``.
 
 Two functions are copies when their bodies are equal after normalizing: the docstring and every other bare string
 statement, comments, formatting, annotations and type comments are dropped, and the names the function binds (its
@@ -10,8 +10,9 @@ bodies of their own.
 
 Every copy inside ``verity_vllm`` is a violation, keyed ``(file, "duplicate-body", symbol, "verity_vllm")``, so a group of
 n copies has n entries in ``allowlists/p13_duplicate_bodies.json`` and the dedup that keeps one deletes them all.  A body
-that ``verity.ml`` (its importable modules, tests aside) already has is keyed with detail ``"verity.ml"``, and only the
-integration's copies are violations: ``verity.ml``'s is the one to keep.
+that the provers' side of ``verity`` already has is keyed with detail ``"verity"``, and only the integration's copies
+are violations: ``verity``'s is the one to keep.  That side is the importable modules, tests aside, of the directories
+its units are in (``PROVER_PLACES``) and of each package of ``verity/definitions`` that is not the integration's.
 """
 from __future__ import annotations
 
@@ -31,8 +32,13 @@ NAME = "p13_duplicate_bodies"
 RULE = "P13 (no duplicate function bodies)"
 KIND = "duplicate-body"
 MIN_LINES = 9
-ML = R.CORE_PKG / "ml"
+#: where the provers' side of ``verity`` is, from ``verity/``, beside the packages of ``verity/definitions``
+PROVER_PLACES = ("circuits", "commitments", "protocols/certifier/prover", "protocols/poub/verifier/commitments/gates",
+                 "protocols/pous/prover", "protocols/pouw/prover")
+#: a verifier's package inside one of those
+VERIFIER_PLACES = ("commitments/attest",)
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
+_Def = ast.FunctionDef | ast.AsyncFunctionDef
 _SKIP_FIELDS = frozenset({"ctx", "annotation", "returns", "type_comment", "type_params"})
 
 
@@ -42,14 +48,14 @@ class Body:
     symbol: str
     line: int
     digest: str
-    node: ast.AST
+    node: _Def
 
 
 def _is_doc(stmt: ast.AST) -> bool:
     return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
 
 
-def _bound(fn: ast.AST) -> frozenset[str]:
+def _bound(fn: _Def) -> frozenset[str]:
     """The names ``fn`` binds: parameters, targets, nested defs and classes, except, import and match-capture names."""
     a = fn.args
     out = {x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x is not None}
@@ -88,7 +94,7 @@ def _statements(body: list[ast.stmt]) -> list[ast.stmt]:
     return [s for s in body if not _is_doc(s)]
 
 
-def digest(fn: ast.AST) -> str:
+def digest(fn: _Def) -> str:
     """The normalized body's digest: equal exactly when the bodies are copies (module docstring)."""
     names = _bound(fn)
     renamed: dict[str, int] = {}
@@ -122,7 +128,8 @@ def digest(fn: ast.AST) -> str:
 
 class _Normalize(ast.NodeTransformer):
     def __init__(self, names: frozenset[str]) -> None:
-        self.names, self.renamed = names, {}
+        self.names = names
+        self.renamed: dict[str, int] = {}
 
     def _r(self, x: str) -> str:
         return f"_{self.renamed.setdefault(x, len(self.renamed))}" if x in self.names else x
@@ -139,7 +146,7 @@ class _Normalize(ast.NodeTransformer):
         return None if _is_doc(n) else self.generic_visit(n)
 
 
-def lines(fn: ast.AST) -> int:
+def lines(fn: _Def) -> int:
     """The normalized body's length: the lines ``ast.unparse`` gives it, equal for every copy."""
     fn = copy.deepcopy(fn)
     norm = _Normalize(_bound(fn))
@@ -161,6 +168,15 @@ def _is_module(p: Path, root: Path) -> bool:
     return all((d / "__init__.py").is_file() for d in p.parents if d == root or root in d.parents)
 
 
+def prover_files() -> tuple[Path, ...]:
+    """The modules of the provers' side of ``verity`` (module docstring)."""
+    roots = [R.CORE_PKG / d for d in PROVER_PLACES]
+    roots += sorted(d for d in R.DEFINITIONS.iterdir() if d.is_dir() and d.name not in R.MOVED_OUT | R.SKIP_DIRS)
+    verifiers = [R.CORE_PKG / d for d in VERIFIER_PLACES]
+    return tuple(p for root in roots for p in R.library_files(".py", root)
+                 if _is_module(p, R.CORE_PKG) and not any(p.is_relative_to(v) for v in verifiers))
+
+
 def duplicates(pkg: Iterable[Body], ml: Iterable[Body]) -> list[tuple[Body, str, list[Body]]]:
     """(copy, where the other copies are, the other copies) for each integration body over the size floor that repeats."""
     groups: dict[str, list[Body]] = defaultdict(list)
@@ -176,7 +192,7 @@ def duplicates(pkg: Iterable[Body], ml: Iterable[Body]) -> list[tuple[Body, str,
         if len(group) + len(theirs) < 2 or lines(group[0].node) < MIN_LINES:
             continue
         for b in group:
-            out.append((b, "verity.ml" if theirs else "verity_vllm", [x for x in (*theirs, *group) if x is not b]))
+            out.append((b, "verity" if theirs else "verity_vllm", [x for x in (*theirs, *group) if x is not b]))
     return sorted(out, key=lambda t: (t[0].file, t[0].line))
 
 
@@ -184,9 +200,9 @@ def duplicates(pkg: Iterable[Body], ml: Iterable[Body]) -> list[tuple[Body, str,
 def scan() -> tuple[tuple[R.Violation, ...], dict[tuple[str, str, str, str], list[str]]]:
     """The violations, and for each key the other copies (``file:line symbol``) the failure message names."""
     pkg = [b for p in R.library_files() for b in bodies(R.parse(p), R.rel(p))]
-    ml = [b for p in R.library_files(".py", ML) if _is_module(p, ML)
-          for b in bodies(R.parse(p), p.relative_to(R.CORE_PKG.parent).as_posix())]
-    found, others = [], {}
+    ml = [b for p in prover_files() for b in bodies(R.parse(p), R.rel(p))]
+    found: list[R.Violation] = []
+    others: dict[tuple[str, str, str, str], list[str]] = {}
     for b, where, rest in duplicates(pkg, ml):
         v = R.Violation(b.file, KIND, b.symbol, where, b.line)
         found.append(v)
@@ -203,13 +219,22 @@ def test_no_new_duplicates() -> None:
     for k, line in zip(new_keys, R.new_violations(NAME, found)):
         detail += [line, *(f"      same body as {o}" for o in sorted(set(others[k])))]
     assert not new_keys, (f"{RULE}: {len(new_keys)} function bod(y/ies) not in allowlists/{NAME}.json repeat another. Keep "
-                          "one: call verity.ml's where it has the body, else keep the copy in the module that owns its job "
+                          "one: call verity's where it has the body, else keep the copy in the module that owns its job "
                           "and import it in every other copy's place (no re-export shim). (If an allowlisted copy only "
                           "moved, move its entry in the same change.)\n" + "\n".join(detail))
 
 
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan()[0], RULE)
+
+
+def test_the_provers_side_is_there_to_compare_against() -> None:
+    missing = [d for d in (*PROVER_PLACES, *VERIFIER_PLACES) if not (R.CORE_PKG / d).is_dir()]
+    assert not missing, f"{RULE}: PROVER_PLACES or VERIFIER_PLACES names directories verity/ doesn't have: {missing}"
+    compared = {R.rel(p).split("/")[1] for p in prover_files()}
+    assert {"circuits", "commitments", "definitions", "protocols"} <= compared, \
+        f"{RULE}: no module to compare against under verity/{{circuits,commitments,definitions,protocols}}: {sorted(compared)}"
+    assert not [p for p in prover_files() if R.in_library(p)], "the integration's own Definitions are compared as its copies"
 
 
 def _defs(src: str, rel: str) -> list[Body]:
@@ -231,12 +256,14 @@ def test_detectors_on_examples() -> None:
     assert got == [("verity_vllm/a.py", "f", "verity_vllm", ["g", "C.f"]),
                    ("verity_vllm/b.py", "g", "verity_vllm", ["f", "C.f"]),
                    ("verity_vllm/c.py", "C.f", "verity_vllm", ["f", "g"])], got
-    ml = _defs("def kept(x):\n" + steps.format(v="x") + "    return len(x)\n", "verity/ml/x.py")
-    got = [(b.file, where, [o.file for o in rest]) for b, where, rest in duplicates(pkg, ml)]
-    assert ("verity_vllm/m.py", "verity.ml", ["verity/ml/x.py"]) in got, got
+    ml = _defs("def kept(x):\n" + steps.format(v="x") + "    return len(x)\n", "verity/commitments/x.py")
+    with_ml = [(b.file, where, [o.file for o in rest]) for b, where, rest in duplicates(pkg, ml)]
+    assert ("verity_vllm/m.py", "verity", ["verity/commitments/x.py"]) in with_ml, with_ml
 
     def same(a: str, b: str) -> bool:
-        return digest(ast.parse(a).body[0]) == digest(ast.parse(b).body[0])
+        fa, fb = ast.parse(a).body[0], ast.parse(b).body[0]
+        assert isinstance(fa, _DEFS) and isinstance(fb, _DEFS)
+        return digest(fa) == digest(fb)
 
     assert same("def f(a):\n    b = a\n    return b\n", "def f(x):\n    y = x\n    return y\n")
     assert not same("def f(a):\n    return g(k=a)\n", "def f(a):\n    return g(j=a)\n")     # keyword names are kept

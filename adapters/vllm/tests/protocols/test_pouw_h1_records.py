@@ -86,7 +86,7 @@ def test_a_served_y_that_is_not_the_records_is_refused():
 
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
 def test_non_finite_weight_scales_take_the_whole_read(bad):
-    s_w = np.full(N, 0.003, np.float32)
+    s_w: np.ndarray = np.full(N, 0.003, np.float32)
     s_w[40] = bad
     records, y, s_a, s_w = _call(2, s_w=s_w)
     assert not ZR._holds(records, ROWS, N, y, s_a, s_w)
@@ -94,7 +94,7 @@ def test_non_finite_weight_scales_take_the_whole_read(bad):
 
 
 def test_negative_and_zero_weight_scales_hold():
-    s_w = np.full(N, 0.003, np.float32)
+    s_w: np.ndarray = np.full(N, 0.003, np.float32)
     s_w[::3], s_w[1::7] = -0.004, 0.0
     call = _call(5, s_w=s_w)
     assert ZR._holds(call[0], ROWS, N, *call[1:])
