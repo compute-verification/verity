@@ -144,7 +144,10 @@ theorem Dep.weight_plays (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Arra
 theorem Dep.extract_plays (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace) :
-    q.extract V S readX = (q.plays V S readX).extract := rfl
+    q.extract V S readX = (q.plays V S readX).extract := by
+  funext g
+  unfold Dep.extract Majority.Plays.extract
+  rw [Dep.weight_plays]
 
 /-- **The event a bit's weight counts** (`Dep.weight`'s): at the sample `ξ` and a run with the extractor's seed `s`, the
 run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a witness in the recursive relation whose
@@ -168,8 +171,9 @@ theorem extract_bit (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byt
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     (q.extract V S readX g).getLsbD i = true ↔
-      q.weight V S readX g i false < q.weight V S readX g i true :=
-  (q.plays V S readX).extract_bit g hi
+      q.weight V S readX g i false < q.weight V S readX g i true := by
+  rw [Dep.extract_plays, Dep.weight_plays]
+  exact (q.plays V S readX).extract_bit g hi
 
 /-- **The plurality's minority weighs at most its majority**: at a bit `i` of a wire `g`, the weight of the bit
 `Dep.extract` didn't pick is at most that of the bit it picked. -/
@@ -178,8 +182,9 @@ theorem minority_le_majority (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : 
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     q.weight V S readX g i (!(q.extract V S readX g).getLsbD i) ≤
-      q.weight V S readX g i ((q.extract V S readX g).getLsbD i) :=
-  (q.plays V S readX).minority_le_majority g hi
+      q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
+  rw [Dep.extract_plays, Dep.weight_plays]
+  exact (q.plays V S readX).minority_le_majority g hi
 
 /-- **The event the binding term counts at the unit `u`**: at the sample `ξ` and a run with the extractor's seed `s`, the
 run accepts, `ξ` samples `u`, and the extractor returns a witness in the recursive relation whose reading differs from
@@ -250,8 +255,10 @@ theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Arra
     (he₁ : (q.E.eval FlockDeploy.sha512 (S.P ξ₁) (S.x ξ₁) s₁.1 s₁.2.1 s₁.2.2).1 = some w₁) (hR₁ : q.R (S.x ξ₁) w₁)
     (hb₁ : (readX (S.x ξ₁) w₁ g).getLsbD i = !(q.extract V S readX g).getLsbD i) :
     q.weight V S readX g i ((q.extract V S readX g).getLsbD i) ≤
-      Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) :=
-  (q.plays V S readX).majority_le_coll (collEvent q V S collOf dColl)
+      Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+  rw [Dep.extract_plays] at hb₁
+  rw [Dep.extract_plays, Dep.weight_plays]
+  exact (q.plays V S readX).majority_le_coll (collEvent q V S collOf dColl)
     (plays_binds q V S readX collOf dColl hcoll) (s₁ := s₁) hd₁ he₁ hR₁ hb₁
 
 /-- **Two independent plays collide at most `E[bindBudget] / 2^256`** under `FinderCR`'s binding premise (`hbind`):
@@ -274,8 +281,9 @@ theorem drawn_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace) {u : Fin (V.units θ F)}
     {g : Fin (V.circuitOf θ F).N} (hg : g ∈ (V.partsOf θ F).io u) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
-    Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) :=
-  (q.plays V S readX).drawn_le_weight hg hi
+    Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
+  rw [Dep.extract_plays, Dep.weight_plays]
+  exact (q.plays V S readX).drawn_le_weight hg hi
 
 /-- **The binding term at the bits**: averaged over the samples, the probability that the run accepts while the
 extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a sampled proof block is at most
@@ -294,8 +302,9 @@ theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array 
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
       Real.sqrt ((∑ g, (V.circuitOf θ F).w g : ℕ) *
-        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) :=
-  (q.plays V S readX).ex_off_le_bits (collEvent q V S collOf dColl) (plays_binds q V S readX collOf dColl hcoll)
+        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
+  rw [Dep.extract_plays]
+  exact (q.plays V S readX).ex_off_le_bits (collEvent q V S collOf dColl) (plays_binds q V S readX collOf dColl hcoll)
     (ex_coll_le q V S collOf dColl hbind)
 
 /-- **The binding term at the units**: averaged over the samples, the probability that the run accepts while the
@@ -315,8 +324,9 @@ theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
       Real.sqrt (2 * V.units θ F *
-        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) :=
-  (q.plays V S readX).ex_off_le_units (collEvent q V S collOf dColl) (plays_binds q V S readX collOf dColl hcoll)
+        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
+  rw [Dep.extract_plays]
+  exact (q.plays V S readX).ex_off_le_units (collEvent q V S collOf dColl) (plays_binds q V S readX collOf dColl hcoll)
     (ex_coll_le q V S collOf dColl hbind)
 
 /-- **A sampled unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
