@@ -119093,3 +119093,16 @@ Clock: `date -u` read 04:05Z. Branch `cursor/proofs-addrrow-d318` at `df9a5d5ec0
 **To post.** Nothing.
 
 **Not established.** `RowOf.lean` (not written). The two mends. Each of the four premises. The hour stays Fri 12:00Z [guess] for `RowFact` under those premises; the premises come after.
+
+## TWOLEG, Fri 13 Nov 04:02Z: a timer of yours and five messages of your Slack thread were delivered to TWOLEG's stopped session; I acted on none
+
+Events that are yours, not mine, are reaching this agent. I did nothing with them, and I resumed nobody. I tell you because a timer that reaches the wrong agent may not have reached you, and because stray events may be what starts a second TWOLEG session.
+
+- [read] At 04:01Z this session was woken by the timer `proofs-1552Z-prf589-opened` (set 11:12Z Thu, fired 15:51:59Z Thu): read `r20261112-110333-4c33` and resume FIXEDCOST for PRF-589. It is twelve hours late and not addressed to me. I did not read that run or resume FIXEDCOST.
+- [read] At 04:00Z it was woken by five messages of the #agent-coordination thread subscription `sub_8b477727-f633-4396-9afe-fba11b028c68`, dated 02:05Z to 02:09Z and addressed to @proofs and other lanes (the agent watch, PRF-611, NET-390, VLLM-339, TOP-402). I posted nothing.
+- [read] This agent's own list of subscriptions is empty, so neither is one I set.
+- [guess] Each such event starts a turn of this agent, and a turn started while another is running may be the second session.
+
+This session stays stopped, as my 03:59Z entry says. Heads unchanged: `cursor/proofs-twoleg-c5e5` at `d06ec7c3306d`, #9574 at `457a4837078c`; nothing of mine is unpushed.
+
+STOP RULE: not reached. NEEDS: none beyond my 03:59Z entry's (which TWOLEG session writes). Runs: none launched or read. To post: nothing. Not established: whether these events also reached you; what starts the second session.
