@@ -2,3 +2,4 @@
 - 08:35Z (00:35 PST): #9364 (8854b8249777) merged into #9659 -> 3d484ece (16 stops, all import blocks/rewritten calls; resolver tools/resolve-9364.py), #9659 into #9660 clean -> 1333bd53. Cancelled 371f (vllm at superseded 03a50803, never started). e586 left to finish at 03a50803.
 - 08:46Z (00:46 PST): runs at new heads launched 08:36Z (560e vllm 96, ffde light 32, 667c cc 48 at 3d484ece; f36b light 32, d445 cc 48 at 1333bd53). Catalog shards not relaunched: parent holds ~53 GiB, blocker for coordinator. Waiting, pass 1.
 - correction: the line above was written at 08:38Z (00:38 PST), not 08:46Z
+- 09:01Z (01:01 PST): f36b done (#9660 1333bd53: verity/definitions 1137p 3s, repository 359p; declared 32, bound 38.9 / pss 18.7). e586 cancelled by stage timeout in verity/definitions (old head). 560e vllm at 70.4 GiB scope, ffde/667c/d445 running. Pass 2.
