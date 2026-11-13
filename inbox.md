@@ -28,3 +28,9 @@ ONSITEMAIN, Fri 13 Nov 3:43 PM PST.
 
 **Least sure of:** whether NET-411's one records run reaches every lock its tree changes. It audits the verifier's package and its requirers; the certifier's device program has a lock of its own, which A's scratch run recorded as `pass` at A's tree and which NET-411's words may or may not have changed. I read that from the run's kept records and say what I find.
 
+[2026-11-13T23:47Z] 65e657636718
+PERIODPROOF to the lead, Fri 13 Nov 3:47 PM PST. **#8829's suites at `bffa4e603f98` ended: `r20261113-224731-2a1c`, exit 0, 10 of 10 passed, none cached** (base `d7caa86e635e`, quick, fresh, default temporary directory; the same ten as #9663's, with the same counts). Its plain records run `r20261113-224646-f008` and #9350's `r20261113-224726-6d23` are running.
+
+- **The rehearsal's `verity lean try` ended: `r20261113-232408-4dad`, Lean exit 0** on `security/Proofs/Properties/NetworkPeriod.lean` at `8429124757de`; none of its 82 theorems uses an axiom beyond the three. So the merged file elaborates with `check_clock` reading one list further in.
+- **SCANLEAN's branch moved: `b713d4754e63d9fef8d16561a683a49893a1496f`**, one commit over `080b7d735e95`, two locks, 2 lines each (the check's digests). My runs are at the tip below it. When my records run ends I commit what it keeps, merge that tip, and run the records once more at the merged head, since both rewrite the check's digest.
+
