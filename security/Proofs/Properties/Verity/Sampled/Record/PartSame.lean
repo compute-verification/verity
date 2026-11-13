@@ -21,6 +21,8 @@ object only through `view`, and every reader there returns the same on alike obj
 * `strat_same`, `work_same`: a stratified and a work sample's design;
 * `view_same`: so two alike objects have one view.
 
+An object that passes the binding check has a canonical text (`canon_of_chkPart`): the check hashes it.
+
 `PartSame x y` is what a session's two readings of the partition may be: one partition, or two alike objects. On
 both, `Stmt.setupTables` is the same (`setupTables_same`).
 
@@ -44,13 +46,13 @@ open HmRow (PARTITION_V1 isSha512Hex EVALUABLE Q_CALL)
 private abbrev sub (j : Json) (k : String) : Json := (j.getObjVal? k).toOption.getD Json.null
 
 /-- Two reads of a key that a reader matching on them cannot tell apart: two refusals, or two alike values. -/
-private def AlikeE (x y : Except String Json) : Prop :=
+def AlikeE (x y : Except String Json) : Prop :=
   (∃ e e', x = .error e ∧ y = .error e') ∨ ∃ a b, x = .ok a ∧ y = .ok b ∧ Same a b
 
 /-- Two optional values that a reader matching on them cannot tell apart: both missing, or both there and alike. -/
 private def Alike (x y : Option Json) : Prop := (x = none ∧ y = none) ∨ ∃ a b, x = some a ∧ y = some b ∧ Same a b
 
-private theorem alikeE_get {j j' : Json} (h : Same j j') (k : String) : AlikeE (j.getObjVal? k) (j'.getObjVal? k) := by
+theorem alikeE_get {j j' : Json} (h : Same j j') (k : String) : AlikeE (j.getObjVal? k) (j'.getObjVal? k) := by
   cases hv : j.getObjVal? k with
   | ok v =>
     obtain ⟨v', hv', hs⟩ := h.getObjVal hv
@@ -75,9 +77,9 @@ private theorem same_sub {j j' : Json} (h : Same j j') (k : String) : Same (sub 
   · rw [e₁, e₂]; exact Same.null
   · rw [e₁, e₂]; exact hs
 
-private theorem getStr_same {v v' : Json} (h : Same v v') : v.getStr? = v'.getStr? := by cases h <;> rfl
+theorem getStr_same {v v' : Json} (h : Same v v') : v.getStr? = v'.getStr? := by cases h <;> rfl
 
-private theorem getNat_same {v v' : Json} (h : Same v v') : v.getNat? = v'.getNat? := by cases h <;> rfl
+theorem getNat_same {v v' : Json} (h : Same v v') : v.getNat? = v'.getNat? := by cases h <;> rfl
 
 private theorem asStr_same {j j' : Json} (h : Same j j') (k : String) :
     j.getObjValAs? String k = j'.getObjValAs? String k := getStr_same (same_sub h k)
@@ -91,7 +93,7 @@ private def keysOf (j : Json) : Array String :=
   | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
   | _ => #[]
 
-private theorem keysArr_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF)
+theorem keysArr_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF)
     (hk : ∀ k, (m.get? k).isSome = (n.get? k).isSome) : m.toArray.map (·.1) = n.toArray.map (·.1) := by
   have e : ∀ t : Std.TreeMap.Raw String Json, t.toArray.map (·.1) = t.keys.toArray := fun t => by
     rw [Std.TreeMap.Raw.toArray_keys]
@@ -311,6 +313,38 @@ theorem chkPart_same {a b : Json} (h : Same a b) (c : Circuit) :
     HmRow.checkPartition c (some a) = HmRow.checkPartition c (some b) := by
   rw [chkPart_view c a, chkPart_view c b, chkObj_same h, digest_same h, asStr_same h "program"]
   exact chkPartV_obj c a b _ _ _
+
+/-- The binding check passes at an object only where the object's tagged digest returned. -/
+private theorem chkPartV_dig {c : Circuit} {o : Json} {chk : V (String × Nat)} {dig : V ByteArray}
+    {prog : Option String} {f : HmRow.PartitionFinding} (h : chkPartV c (some o) chk dig prog = .ok f) :
+    ∃ d, dig = .ok d := by
+  cases dig with
+  | ok d => exact ⟨d, rfl⟩
+  | error e =>
+    exfalso
+    unfold chkPartV at h
+    dsimp only at h
+    split at h
+    · cases h
+    · cases chk with
+      | error e' => cases h
+      | ok nv => cases h
+    · cases h
+    · rename_i hn hx
+      cases hn
+
+/-- **A partition object that passes the binding check has a canonical text**: the check passes at an object only
+under a `verity/partition/v1` binding, where it hashes the object's canonical text (`HmRow.partitionDigest`). -/
+theorem canon_of_chkPart {c : Circuit} {o : Json} {f : HmRow.PartitionFinding}
+    (h : HmRow.checkPartition c (some o) = .ok f) : ∃ s, Flock.canon o = .ok s := by
+  rw [chkPart_view] at h
+  obtain ⟨d, hd⟩ := chkPartV_dig h
+  cases hc : Flock.canon o with
+  | ok s => exact ⟨s, rfl⟩
+  | error e =>
+    unfold HmRow.partitionDigest at hd
+    rw [hc] at hd
+    cases hd
 
 theorem derive_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveTemplateUnits c a program indices = HmRow.deriveTemplateUnits c b program indices := by
