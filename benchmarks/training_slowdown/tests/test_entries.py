@@ -209,8 +209,10 @@ def qat(dials: dict) -> dict:
 
 def dgrad(dials: dict) -> dict:
     """The coded reduction written out, a block of rows at a time. Each block of rows takes one forward of the start's
-    own model on the matrices as the store gives them (θ + its codes' values for a matrix trained whole; θ + B·A, the
-    factors from their codes, for an adapter) and its gradient with respect to each trained tensor. Blocks are sent
+    own model on the matrices as the store gives them (θ + its codes' values for a matrix trained whole; for an
+    adapter, θ's product plus x·Aᵀ·Bᵀ, the factors from their codes) and its gradient with respect to each trained
+    tensor. An adapter is its own product, as the route computes it, not merged into θ: the two round apart in a
+    last bit on some CPUs, which the store's stochastic rounding can turn into a whole level. Blocks are sent
     in turn: block j (the last block 0) adds its children's (2j + 1, 2j + 2) to its own, coded (a vote takes its
     own as a sign too, and the root codes its own), and sends the sum on, coded; the root's sum over the blocks is
     the step's gradient. The update rule is the program's, on that gradient: the sign, the sign of a momentum or
@@ -261,6 +263,13 @@ def dgrad(dials: dict) -> dict:
                  if k == "norm" or k.endswith(("attn_norm", "mlp_norm")) and int(k.split(".")[1]) >= lo}
     gain_opt = torch.optim.AdamW(list(gains.values()), lr=dials["gain_lr"], betas=(0.9, 0.95), weight_decay=0.0,
                                  foreach=True) if gains else None
+    factors: dict[str, torch.Tensor] = {}
+    for k in names if dials["rank"] else ():
+        def through(layer, inputs, out, k=k):
+            if f"{k}#A" not in factors:
+                return out
+            return out + F.linear(F.linear(inputs[0], factors[f"{k}#A"]), factors[f"{k}#B"])
+        model.get_submodule(k.removesuffix(".weight")).register_forward_hook(through)
     for t, rows in enumerate(batches()):
         frac = subset.schedule(dials, t, STEPS)
         if dials["rank"]:
@@ -286,11 +295,11 @@ def dgrad(dials: dict) -> dict:
                 if kept is not None:
                     state[k][name][tuple(slice(0, n) for n in kept.shape)] = kept
 
+        factors.clear()
+        factors.update(tensors if dials["rank"] else {})
+
         def weights() -> dict:
-            if not dials["rank"]:
-                return theta | tensors | gains
-            return theta | gains | {k: theta[k] + tensors[f"{k}#B"] @ tensors[f"{k}#A"]
-                                    for k in names if f"{k}#A" in tensors}
+            return theta | gains | ({} if dials["rank"] else tensors)
 
         blocks, sent, root = rows.chunk(dials["micro_batches"]), {}, None
         for i, x in enumerate(blocks):
