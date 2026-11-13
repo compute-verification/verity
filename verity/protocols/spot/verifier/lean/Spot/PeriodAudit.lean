@@ -29,7 +29,7 @@ one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), ne
    commits a circuit lists is refused (`outside`), and one of this registration's is a root committed under this
    registration and never sampled, refused by its session's name (`period`);
 3. the evidence holds as many windows' sessions as the ledger lists windows (`evidence`);
-4. then each window, in the ledger's order (`windowAt`): its session's files are the ones the ledger sealed, run from
+4. then each window, in the ledger's order (`executionPhaseAt`): its session's files are the ones the ledger sealed, run from
    a commit the pins log records on main's first-parent line, and its open withheld its coins (`coin`);
 5. its session's signed log shows coins of the family released after exactly one registration, the coin after the
    window's own root aside (`sampledOn`): none is a root committed and never sampled (`missing`), and several are
@@ -291,7 +291,7 @@ the evidence holds one case (`evidence`); and the audit answers the case (`caseA
 reject refuses the period (`audit`), and an undecided is kept as the period's, the first one, while later windows are
 still checked. The sampled registrations and the cases are matched as lists: a property of the check splits a list's
 match, and Lean generates no equations for an array literal's. -/
-def windowAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
+def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
     (w : Window) (ev : WindowEvidence) : Except (Code × String) Progress := do
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
@@ -344,7 +344,7 @@ def registeredIn (p : AuditParams) (r : Read) (ws : Windows) : Except (Code × S
     (registrationOf r s.session).map fun d => ({ registration := d, session := s.session } : Other)
 
 /-- The ledger's half, whose each session is (`registeredIn`), then every window in the ledger's order against its
-evidence (`windowAt`): the lane's sessions that are other registrations' with the check's state at the end, or the
+evidence (`executionPhaseAt`): the lane's sessions that are other registrations' with the check's state at the end, or the
 first refusal. -/
 def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Except (Code × String) (Array Other × Progress) := do
@@ -355,7 +355,7 @@ def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : 
     throw (Code.evidence, s!"the evidence holds {e.windows.size} windows' sessions, and the ledger lists " ++
       s!"{ws.windows.size} windows in the monitoring period")
   let st ← (ws.windows.zip e.windows).foldlM (init := ({} : Progress))
-    fun st (w, ev) => windowAt inner p r c.ledger e.pins bs st w ev
+    fun st (w, ev) => executionPhaseAt inner p r c.ledger e.pins bs st w ev
   return (others, st)
 
 /-- The period's check with the audit `inner`: a refusal of `run` rejects under its code; an audit left undecided
