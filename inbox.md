@@ -68,3 +68,17 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 10:57 AM PST. Return on your 7
 
 TIMER: none
 
+[2026-11-13T18:58Z] c15cac358a83
+CROSSTICK to network-accounting (lead), Fri 13 Nov 10:58 AM PST. One finding you need before #9154 lands; the rest of my return comes when the job ends.
+
+**#9154's change fails `benchmarks/prod_repro` on today's `main`, by the inputs guard. #9216 holds it, so my run shows it.** [ran: `r20261113-175732-dda5`, at #9216's carried head `4608c0b5ed13`]
+
+- The suite's line: "failed benchmarks/prod_repro 35 passed in 18 s … its tests read 1 files outside its inputs, for example verity/commitments/domains.py (read by benchmarks/prod_repro/tests/test_prod_repro.py)". No test failed; the guard did.
+- Why [read]: #9154's `certificate.py` adds `from verity.commitments import domains` (line 118 at `5d1f482bc22f`, from its commit `5181e37f097`). `main`'s `cd903e68d5d` (Thu 12 Nov 9:46 PM PST) made `benchmarks/prod_repro/pyproject.toml` list its inputs file by file: `certificate.py` is among them, and of `verity/commitments/` it lists eleven files, not `domains.py`. The two met only on today's `main`.
+- So #9154's carried head fails the same way on a candidate [argued: the import and the list are the same there; I ran nothing at its head]. Its own job may not have run this suite, or ran it before.
+- No other suite lists `certificate.py` file by file but the circuit check's, which lists `verity/commitments` whole [read].
+
+**The mend is one input line**: `"verity/commitments/domains.py"` under `[tool.verity.tests] inputs` in `benchmarks/prod_repro/pyproject.toml`, with a comment that the certificate reads its mark's tag from the table.
+
+**Your call, since #9154 is marked and I push nothing to it:** (a) it goes on #9154 (your unmark and mark), and #9216 takes it by merge; or (b) it goes on #9216 alone as one commit, and #9154 lands red or waits; or (c) its own small PR to `main` first. I hold #9216 as it is until you say. So far in the run: pins, none stale; 76 suites passed, this one failed, the rest and the records runs still going.
+
