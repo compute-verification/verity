@@ -153584,3 +153584,36 @@ Nothing to start item 3. For the drafts: soundness's word on the form (a premise
 - Which guarantees' `unfolded_hash` moves under (a), (b) or (c): only the records run says.
 - Who owns `security/Definitions/Core/Compiler.lean`.
 - The Python side of the head field is sized, not read in full.
+
+## ASSEMBLY, Fri 13 Nov 17:20Z: THE JOIN IS AT ITS CARRIED HEAD `daa91ec75a3ea896790a6d7e539eab919d03f3f7`, pushed to `cursor/proofs-join-42b8` by a fast-forward at 17:12Z; beyond the carried `a61b7adf0d83` it holds what the old tip held (MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`) and the tool's pin, nothing else; the whole build is out (`d51a`), with the suites and the two plays beside it
+
+Your 17:07Z reached me at 17:09Z. This is the move only; my entry on the whole build follows when `d51a` is back.
+
+**1. The move** [git, run on this machine]
+
+- `daa91ec75a3e` is FRAME's commit on `cursor/proofs-carried-join-4ae1`, as its table 2 names it. It holds `6bae773eb345` and `4ae17f7eafd7`.
+- `git merge --ff-only`, then a plain push: `6bae773eb34..daa91ec75a3`. No commit of mine is on top, so the join's tip is the tool's own end commit.
+- `cursor/proofs-join-main-42b8` stays at `a61b7adf0d83`, on the old layout. Nothing reads it now.
+
+**2. On this machine at the carried head** [run]
+
+- `lock_roots.py --check`: clean. `dup_names.py`: the same 17 names. `pins.py --stale`: silent. `public_boundary.py`: the same 7 edges.
+- The five named root test files: 84 passed. The 7 warnings are bookkeeping, dead paths that docs name; I have not read which are the join's own.
+
+**3. Out at the carried head, all launched 17:13Z to 17:18Z**
+
+| Run | Node | What | State at 17:20Z |
+|---|---|---|---|
+| `r20261113-171338-d51a` | cpu-14 | the records run, `--records security/Proofs --update`: the whole build | running, holds its Lean slot since 17:14Z |
+| `r20261113-171620-df47` | cpu-8 | the accept test in its suite (`verity-core-composition`) | running |
+| `r20261113-171656-0e89` | cpu-6 | the whole `benchmarks/one_stage` suite | running |
+| `r20261113-171724-5183` | cpu-10 | the adapter's engine and interior tests, `serve_tax`'s replay test | waiting: every check slot of its node is taken |
+| `r20261113-171810-48a0` | cpu-14 | `sampled_two_small.sh`, the play through the compiled form | running |
+| `r20261113-171825-9788` | cpu-2 | `two_stage_small.sh` | waiting: every check slot of its node is taken |
+
+- The records run took 51 minutes at the merge, so about 18:05Z [guess].
+- The two that wait: I move each to a named node if it has no slot by 17:25Z.
+
+**4. Next, by your 16:40Z order.** Nothing is merged into the join before `d51a` is back. Then GATHER's clause with its mend, SESSIONOF2's params line and MESSAGES's replay line, each from the carried head FRAME's table names. Nothing of HELDOF's.
+
+To post: nothing. My timer is set.
