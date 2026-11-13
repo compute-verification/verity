@@ -17,6 +17,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Links
 public import Proofs.Properties.Verity.Sampled.MemberForm.Read
 public import Proofs.Properties.Verity.Sampled.MemberForm.Ranges
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
+public import Proofs.Properties.Verity.Sampled.MemberForm.Units
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -69,4 +70,7 @@ the lock) give of the bytes and the release log they accept, each stated at the 
 * `MemberForm.Sample`: the sample a session's record holds at its member's statement, and the units it proved
   (`session_sample`): the subset print of slots ascending below the member's count, the units the member's first
   unit plus each slot.
+* `MemberForm.Units`: the units the form's sessions proved, member by member (`run_over`), and the session of a
+  member the sample holds (`member_session`): its statement's place among the statements, its verdict at the
+  member's own statement, and its record's sample the sample file of the member's part of the window's sample.
 -/
