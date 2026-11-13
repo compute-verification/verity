@@ -125,17 +125,17 @@ def test_without_a_sent_cubin_the_arm_builds_one_for_development(tmp_path, monke
     assert OA.settings().VERITY_BENCH_CUBIN is None
 
 
-def test_the_development_build_is_build_sh_s_cubin_and_gates_alone(tmp_path, monkeypatch):
+def test_the_development_build_is_build_sh_s_cubin_and_gates(tmp_path, monkeypatch):
     runs = []
 
-    def run(argv, env, stdout, stderr):
-        runs.append((argv, env["CUBIN_ONLY"]))
+    def run(argv, stdout, stderr):
+        runs.append(argv)
         return subprocess.CompletedProcess(argv, len(runs) - 1)
 
     monkeypatch.setattr(OA.subprocess, "run", run)
     out = tmp_path / "pearl-plus-cubin"
     assert OA.build_dev(out) == out / "pearl_c_sm90.cubin"
-    assert runs == [(["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)], "1")]
+    assert runs == [["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)]]
     with pytest.raises(RuntimeError, match=r"build.sh exited 1 \(see .*pearl-plus-cubin.log\): send the cubin"):
         OA.build_dev(out)
 
