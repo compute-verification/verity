@@ -16,9 +16,9 @@ from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ArgSlot,
     ReturnSlot,
-    runtime_tree_from_paths,
 )
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.runtime_tree import runtime_tree_from_paths
 
 PD = hashlib.sha256(b"program").hexdigest()
 

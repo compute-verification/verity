@@ -21,11 +21,9 @@ from verity_vllm.acquire.install import (
     install_from_plan,
     plan_selection,
 )
-from verity_vllm.correspondence.reader_for_acquire import (
-    AcquireCorrespondence,
-    runtime_tree_of,
-)
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
 TABLES: dict[str, set[str]] = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}

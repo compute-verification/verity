@@ -23,7 +23,7 @@ from typing import Any
 
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite
 from verity_vllm.engine import hooks as engine_hooks
-from verity_vllm.observe.runtime_tree import RUNNER_PATH
+from verity_vllm.records.runtime_tree import RUNNER_PATH
 from verity_vllm.records.schema_ids import ACQUISITION_OBSERVED_SCHEMA
 
 Sink = Callable[[tuple[str, str, str], Any], None]
