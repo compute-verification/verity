@@ -46,12 +46,12 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
-- **The thread count.** A config's step is counted at the CPU thread count its record states (`threads`), set
-  before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
-  is counted at a job's default (`run.THREADS`), and the output says the record names none.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
+- **The thread count.** A config's step is counted at the CPU thread count its record states (`threads`), set
+  before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
+  is counted at a job's default (`run.THREADS`), and the output says the record names none.
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """

@@ -416,20 +416,6 @@ def as_cuda(struct: dict, rows: int) -> dict:
     return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
-def test_a_made_up_record_is_written_from_a_step_whose_rows_name_a_dtype_or_none():
-    """`as_cuda` reads a counted step's rows as the counter writes them, each naming its op's dtype in a seventh
-    field, and rows of six, and writes the same record from either: rows of six, the norm one fused kernel and
-    attention one row a kernel."""
-    x = [2, CTX, D]
-    bare = a_step(2, *attention(2, calls=1), ("fwd", "updated", "mul", [x, G], 1, 2 * CTX * D),
-                  ("fwd", "act", "mul", [x, [2, CTX, 1]], 3, 3 * 2 * CTX * D))
-    named = bare | {"log": [[*row, "bfloat16"] for row in bare["log"]]}
-    record = as_cuda(bare, rows=2)
-    assert {len(row) for row in bare["log"]} == {6} and {len(row) for row in named["log"]} == {7}
-    assert as_cuda(named, rows=2) == record and {len(row) for row in record["log"]} == {6}
-    assert [row[2] for row in record["log"]] == ["mm", "_fused_rms_norm", FLASH, FLASH + "_backward"]
-
-
 def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None):
     """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it, the
     gradients `partial` says its attention backward asked for, the lines `record_only` of its program and the step
@@ -446,6 +432,20 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
                                     + (f'step = {{ counted = {step["counted"]}, why = {json.dumps(step["why"])} }}\n'
                                        if step else "") + lines)
     return root / "records", root / "held.toml"
+
+
+def test_a_made_up_record_is_written_from_a_step_whose_rows_name_a_dtype_or_none():
+    """`as_cuda` reads a counted step's rows as the counter writes them, each naming its op's dtype in a seventh
+    field, and rows of six, and writes the same record from either: rows of six, the norm one fused kernel and
+    attention one row a kernel."""
+    x = [2, CTX, D]
+    bare = a_step(2, *attention(2, calls=1), ("fwd", "updated", "mul", [x, G], 1, 2 * CTX * D),
+                  ("fwd", "act", "mul", [x, [2, CTX, 1]], 3, 3 * 2 * CTX * D))
+    named = bare | {"log": [[*row, "bfloat16"] for row in bare["log"]]}
+    record = as_cuda(bare, rows=2)
+    assert {len(row) for row in bare["log"]} == {6} and {len(row) for row in named["log"]} == {7}
+    assert as_cuda(named, rows=2) == record and {len(row) for row in record["log"]} == {6}
+    assert [row[2] for row in record["log"]] == ["mm", "_fused_rms_norm", FLASH, FLASH + "_backward"]
 
 
 @pytest.mark.slow
