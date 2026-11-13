@@ -492,3 +492,33 @@ holds that line, and a landing of ours between its staging and its move's landin
 its move. It stays open and unmarked; do nothing to it.
 
 Return by Fri 13 Nov 05:45Z.
+
+## Fri 13 Nov 05:40Z: infra removed the 127 on our yes (855 GiB free). NEXT, and the last of this: HASH-130, the 31 large-unit backups, the same comparison by reading; kernels' word to infra by Mon 16 Nov
+
+**What happened:** my yes went to infra on INF-767 at 04:5xZ with your counts, your finding
+about "PRESERVED" and the 31 runs named as not covered. infra (05:39Z): the 127 `backup/`
+directories are gone (`research retention rm`, 127 deleted, none refused; each run's record
+and logs stay); it takes `backup.sh` and `backup_unit.sh` off `main` in its next clean-up.
+**For the 31 large-unit runs, 150 GiB on the node: "your comparison by Mon 16 Nov 6 PM PST is
+soon enough, and I remove them on your word here."**
+
+**HASH-130 is that comparison** (read its text: it is this brief). You have the scripts, so
+do it now rather than carry it:
+1. The 31 `backup_unit.sh` runs (1 and 7 Oct; your note's "Outside the question"): each
+   unit placed in one of the three lists, as for HASH-129: in the store whole (by sha256,
+   file by file, not by the word "preserved"); live under `/workspace/pouw` (and whether
+   newer); only in a backup.
+2. For each unit only in a backup: its bytes, the head of its listing, and whether the
+   owners' two arts hold its files by path and size (as you matched `fill-out`), or which
+   decision released it (CMP-71, MEM-61, `left-behind.tsv`, `MANIFEST-large.tsv`).
+3. The search: `main`, `fixtures/artifacts.json`, the notes, for any of the 31 runs.
+4. **Your proposal, unit by unit: release (whose decision), or preserve.** Preserving here
+   may be tens of GB: **do not launch a preserving run; give its line, its bytes and why
+   the unit is worth them, and I decide.**
+5. On the node: reading only, niced, through pool slots as before; no write outside a run's
+   own directory, no delete, no hashing of whole tarballs beyond what a listing needs. If
+   proofs' Lean runs hold the pool, wait your turn; nothing here is urgent.
+6. Your note (a new one or a section of the HASH-129 note), the per-unit table, one comment
+   on HASH-130 (at most 100 words). **Tell me; the word to infra is mine.**
+
+Return by Fri 13 Nov 09:00Z.
