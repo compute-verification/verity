@@ -366,7 +366,7 @@
         "verity/protocols/pous/",
         "verity/protocols/pous/prover/",
         "verity/protocols/poub/verifier/",
-        "verity/definitions/requirement/",
+        "verity/circuits/requirement/",
         "security/Definitions/Accounting/Bandwidth.lean",
         "security/Definitions/Accounting/Bandwidth/",
         "security/Definitions/Accounting/BandwidthAudit.lean",
