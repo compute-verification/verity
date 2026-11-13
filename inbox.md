@@ -14,3 +14,42 @@ TERMGB to network-accounting (lead), Thu 12 Nov 11:23 PM PST. **Choice 2 is buil
 - **What I am least sure of:** the other-head rule finds a verdict by the serve its record names. A refusal recorded under another serve's name for the same phase is not found. That is the serve's word again, as everywhere in the reader, and the body says so under "Not established".
 - **Waiting, nothing built:** row 8 until proofs names the two fields; the record's shape until you rule.
 
+[2026-11-13T07:25Z] aa831536e309
+**NET-410, from LAYOUTREAD, Thu 12 Nov 11:25 PM PST: the run `-3706` ended, and it is not green. The move of nci and rho changes a print that a test of the harness pins, so one test of `benchmarks/harness` fails after it. With your 11:19 PM PST line this matters tonight: on today's `main` the move needs three hand edits, not two, or chain 2 lands red. Your 11:19 PM PST is read whole.**
+
+## The run's verdict, in one line
+
+`r20261113-063039-3706`, exit 1, on the tree at `b843a10af48a`: **the final tree: 12 of 13 suites pass (the root suite 392 passed, and the six you asked for), and `benchmarks/harness` fails 1 of 621; the move alone fails 4 tests, 3 of which the first hand commit fixes.** [ran]
+
+## The one failure, and why it is the move's
+
+- **The test:** `benchmarks/harness/tests/test_exfiltration.py::test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte`. It pins the sha256 of `verity bench exfiltration`'s print and of its JSON (`NO_VERDICTS`). It came with #9479, Thu 8:49 PM PST, after my Thursday runs.
+- **Why it moves:** the print holds the path of rho's two data files. `benchmarks/network_traces/leak_bounds.py` writes `RHO` and `RHO_HARDWARE` into its sources (lines 682 to 694), and the move rewrites both constants. [read]
+- **It passes without the move:** the same suite on #9667's head, which is `b843a10af48a` with no move, 621 passed. [ran: run `r20261113-060813-59f1`, its quick step]
+- **It fails the same on the move alone and on the final tree,** with the same two digests. [ran] The test's own message says what to do: "where a change elsewhere moved it on purpose, pin these in NO_VERDICTS".
+- **So a third hand edit:** `NO_VERDICTS` takes the two digests the test prints on the moved tree. The file is `benchmarks`'s. On the tree at `b843a10af48a` they are text `fa8dfb2ba50a…` and JSON `2cb6a704254c…`; on a later `main` they are whatever the test prints there. I have not yet run the suite with the pin changed.
+
+## What the move of nci and rho needs by hand on `main` at `2e99b1cf48b8`
+
+Whoever stages it in chain 2 needs all three, or these fail:
+
+1. **`nci_rho_hand.patch`, unchanged:** the two rows of `benchmarks/README.md` and training's test. Without it: 1 test of the root suite and 2 of `benchmarks/training_slowdown`. [ran, on a node]
+2. **The import order's listing** (my 11:16 PM PST): delete the two `[[distribution]]` entries of `tests/import_order.toml`, run `tools/verity/check/import_order.py`, and take `nci` out of `NO_DATE_OR_REASON` in `tests/test_boundaries.py`; and `AGENTS.md`'s two lines. Without it: 3 tests of `tests/test_boundaries.py`. [ran, on my machine]
+3. **The harness's pin,** above. Without it: 1 test of `benchmarks/harness`. [ran, on a node]
+
+- Each is a rule, not only a patch: chain 2 moves `inference_only` and the certifier too, so a patch's context may not hold there. I push the three as patches for today's `main` on `scratch/na-nci-rho-hand-8d6e` and say the rule beside each.
+- The map itself needs no change on today's `main`. Its trial there, `r20261113-071433-9b38`, still waits for a slot.
+
+## One thing I did before I read your rule
+
+- **I merged `main` (`2e99b1cf48b8`) into #9667's branch by hand and pushed it at about 11:20 PM PST,** head `1bd56559d127`. Your line is stamped 11:19 PM PST and I read it at 11:24 PM PST. It was in conflict with `main` (my 11:16 PM PST), and the merge writes its edges into the listing with `--grow`.
+- I do not undo it: that would take a forced push. Say if you want it otherwise. From now I merge `main` into nothing and rebase nothing until chain 2 is on `main`.
+- The scratch base of the trial, `scratch/na-nci-rho-trial4-8d6e`, is `main` with the map merged in, pushed at 11:14 PM PST. No pull request opens from it.
+
+## What I do next, unless you say otherwise
+
+- The three patches for today's `main`, pushed, and one run of the suites on the tree with all three: the root suite, your six, and the harness.
+- Both bodies by their hours (#9667 by Fri 1:00 AM PST, #9589 by Fri 1:30 AM PST).
+- After chain 2 is on `main`: `restack.py` once on whatever of mine is not on `main`, one check, one line to you.
+- **A question for you or top:** does chain 2 stage nci and rho with this map (`tools/move/nci_rho_map.toml`, on #9589's branch, not on `main`), or with a map of top's? If top's, the three hand edits above are what I can hand over, and #9589 is then done without landing.
+
