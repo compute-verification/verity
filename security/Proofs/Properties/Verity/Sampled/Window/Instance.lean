@@ -71,6 +71,11 @@ theorem Window.delta_extend (W : Window) (S : Widening) (t : ℕ) (cr : ℝ) : (
   rw [W.sessionDelta_extend S t]
   rfl
 
+/-- **The window's δ is at least its read finder's term.** -/
+theorem Window.ofReal_le_delta (W : Window) (t : ℕ) (cr : ℝ) : ENNReal.ofReal cr ≤ W.delta t cr := by
+  unfold Window.delta
+  exact le_add_left le_rfl
+
 /-- **A list's mapped entries, by place**: what holds of `f` at each entry of `l` with its place holds of each entry
 of `l.map f` with its place. -/
 theorem get_map_of {α β : Type*} (f : α → β) (P : ℕ → β → Prop) :
@@ -524,6 +529,20 @@ def WindowAt (k : Verity.Registration.Composite) : Prop :=
     (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent ∧
       FilesSent I.base o) → I.SetsUp θ F W
 
+/-- **Where the deployment runs a window the verifier doesn't set up on the committed files, an accepted play is a
+collision of the window's read finder**: an accepted play whose blobs sent hold v2's tables and the members' files
+would be one the verifier sets the window up on (`WindowAt`), and every other is one the window's read finder outputs
+a collision at (`verdict_le_files`). -/
+theorem uncovered_le (k : Verity.Registration.Composite) (hWa : I.WindowAt k) {θ : ByteArray}
+    {F : Array ByteArray} {W : Window} (hA : I.window θ = some W) (hP : ∃ p, ParamsAt θ p)
+    (hS : I.windows θ F = none) (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
+    Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
+      ENNReal.ofReal ((windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
+  verdict_le_files I.base k I.dev θ F c σ fun t hv ht hf => by
+    have hs := hWa θ F W hA hP ⟨c, _, Verity.Game.Tape.reaches_out _ σ t, hv, ht, hf⟩
+    rw [I.windows_of hA hs] at hS
+    cases hS
+
 /-- **`WindowCovers` at the deployed vocabulary**: where the deployment runs no window, the published δ is `⊤`
 (`deltaOf`); where it runs one that the verifier doesn't set up on the committed files, a play the sampled verdict
 accepts there has blobs sent holding a pinned table or a member's file at other bytes than its registered file, as
@@ -535,20 +554,18 @@ theorem covers (k : Verity.Registration.Composite) (hWa : I.WindowAt k) :
   intro θ F hS hP c σ _ hFC
   rcases hA : I.window θ with _ | W
   · exact le_top.trans_eq (I.deltaOf_none hA _).symm
-  have hv : Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
-      ENNReal.ofReal ((windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
-    verdict_le_files I.base k I.dev θ F c σ fun t hv ht hf => by
-      have hs := hWa θ F W hA hP ⟨c, _, Verity.Game.Tape.reaches_out _ σ t, hv, ht, hf⟩
-      rw [I.windows_of hA hs] at hS
-      cases hS
-  have hcr : (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
-      I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
+  have h0 : Verity.Game.prob (fun o => (I.vocab K).Verdict k .sampled o) ((I.vocab K).game θ F c) σ ≤
+      Verity.Game.prob (fun o => I.base.Verdict k .sampled o) ((I.vocab K).game θ F c) σ :=
+    Verity.Game.prob_mono (p := fun o => (I.vocab K).Verdict k .sampled o)
+      (q := fun o => I.base.Verdict k .sampled o) (fun _ ho => ho) _ σ
+  have h1 := I.uncovered_le k hWa hA hP hS c σ
+  have h2 : (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+      (I.vocab K).crBound θ .sampled ((I.vocab K).cost θ F c σ) :=
     (I.vocab K).finderPr_le_crBound hFC
-  refine hv.trans ((ENNReal.ofReal_le_ofReal hcr).trans ?_)
-  show _ ≤ I.deltaOf θ .sampled ((I.vocab K).cost θ F c σ)
-  rw [I.deltaOf_some hA]
-  unfold Window.delta
-  exact le_add_left le_rfl
+  have h3 : ENNReal.ofReal ((I.vocab K).crBound θ .sampled ((I.vocab K).cost θ F c σ)) ≤
+      (I.vocab K).delta θ .sampled ((I.vocab K).cost θ F c σ) :=
+    (W.ofReal_le_delta _ _).trans_eq (I.deltaOf_some hA _).symm
+  exact h0.trans (h1.trans ((ENNReal.ofReal_le_ofReal h2).trans h3))
 
 /-- **The deployment's window is the parameters' members on the registered files**, at parameters naming the
 one-stage form: a statement of `I.window θ` and the registered files alone. -/
