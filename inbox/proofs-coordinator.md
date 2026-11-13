@@ -130578,3 +130578,45 @@ theorem probe_window_small (W : Window) (ω : W.Ω) {e : String}
 
 end Verity.Sampled
 ```
+
+## CUT, Fri 13 Nov 08:41Z: `4c18473270` on `cursor/proofs-cut-9323` COMPILES over TWOLEG's `1e20910586`: `5897` ended rc 0, all eight Cut files "lean exit 0" with clean axiom probes; `firstReads` and `cutBound_accept` are proved from the form's digest comparison, no premise, no statement changed; ASSEMBLY: one merge of `4c18473270` brings `1e20910586` and the mend, and no file of mine conflicts
+
+**In plain words.** The cut is proved on the form as soundness took it: each record read back by the verifier's parser, and the boundary's held to the commitment's digest. The first stage's challenges are read after the commitment's digest because the form refuses anything else, where before it was a fact about how the commitment was decoded. Nothing the cut, STAGECOINS or the join states changed.
+
+1. **`r20261113-081936-5897`** (vy-nebius-cpu-3, source `4c18473270806bd4509fe07f9764d39d38e3c3ee`) [run]: "done rc=0 class=SUCCESS". Each file's line is "lean exit 0 in N s", then "axiom probe: none of its T theorems uses an axiom beyond propext, Classical.choice and Quot.sound", then `=== rc … 0`:
+   - `Cut.lean`: 414 s, 7 theorems.
+   - `CutPrints.lean`: 60 s, 23 theorems.
+   - `CutHeld.lean`: 198 s, 10 theorems.
+   - `CutRead.lean`: 55 s, 8 theorems.
+   - `CutFirst.lean`: 96 s, 23 theorems (24 at `4d24802945`; `commitment_of_caseOf` is gone).
+   - `CutOrder.lean`: 30 s, 15 theorems.
+   - `CutAccept.lean`: 102 s, 11 theorems.
+   - `CutRoots.lean`: 125 s, 16 theorems.
+   - Each of the eight siblings lines: "no built module of its package that doesn't import … declares a name it does".
+2. **What the head is** [read]: `4d24802945`, then the merge of `1e20910586` (`95ca8be6a7`, no conflict), then one commit to `CutFirst.lean` (6 lines in, 24 out; my 08:23Z entry, item 2). `firstReads_of_shown` reads `inputAt_ok`'s last conjunct, `Registration.digest j₁ = .ok c.digest`.
+3. **ASSEMBLY: merge `4c18473270`** [run: `git merge-tree --write-tree` onto the join's `401d7ef808`, which holds `4d24802945` since your `b1ef2f6260`].
+   - Conflicts: two, both TWOLEG's and both in `SampledTwo/Accepts.lean` against `AcceptsOfSteps.lean` (TWOLEG's rename meets ACCEPTS's file; an add/add in `AcceptsOfSteps.lean`). Merging `1e20910586` alone gives the same two and no other [run]. RUNCOINS's 07:44Z entry says how they are put right; git's own result deletes ACCEPTS's `Accepts.lean` and one root of the lock.
+   - In the merge's result my eight files are byte for byte my head's, `Steps.lean` and the form are `1e20910586`'s, and `Spot/Run.lean` stays the join's own, which is the one my try compiled over [run: blob ids]. Of the cut's files only `CutFirst.lean` changes on the join.
+   - **Five lines on the join's tip, in no file of mine or TWOLEG's, take `inputAt_ok` apart to its end in the old shape** and stop compiling once `1e20910586` is in [run: `git grep inputAt_ok` at `401d7ef808`; derived: the pattern meets two more witnesses]: `RunsAs/OfCheck.lean:35`, `SampledTwo/FirstCoins.lean:262`, `SampledTwo/Fits.lean:33`, `SampledTwo/StageCut.lean:209`, `SampledTwo/Within.lean:262`. RUNCOINS's `ad1c6637c1` mends the first; the coordinator's 08:37Z mail to you says STAGECOINS is at its two. The shape that compiled in `CutFirst.lean`: `⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩`.
+4. **Mailbox** [run]: read through `5f06f6bbb9` at 08:38Z; nothing new for CUT since your 07:54Z, which is done.
+
+### STOP RULE
+
+Not reached. No statement of mine changed between `4d24802945` and `4c18473270`; the form's change is TWOLEG's, taken by soundness.
+
+### NEEDS
+
+- ASSEMBLY: item 3.
+- Nothing from the coordinator. `OtherRoots` stays a field of `JoinsAt` on two windows; I write nothing for the two refusals.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- My files on the join's own tree: `5897` ran on my branch, which holds `4d24802945` and `1e20910586` and not the rest of the join. The join's whole compile says.
+- A records run at any head that holds these files as they are now: none, as ruled.
+- That an evidence file reaches `RECORD_DIGEST` through the binary: TWOLEG's `#guard`s only, as its 08:12Z entry says.
+
+Branch `cursor/proofs-cut-9323` at `4c18473270` (pushed). Runs ended rc 0: `r20261113-071814-640b` (at `4d24802945`), `r20261113-081936-5897` (at `4c18473270`). No run of mine is out.
