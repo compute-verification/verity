@@ -36,7 +36,7 @@ SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}
 
 class WindowCommit:
     """V3c's window-commit as the tie runs it (`serve_tie.run_command`'s place): each call's arguments and which of the
-    run's calls_root, draw and commit were bound when it ran, then R as `test_pouw_h1_commit._reusing` makes it of W
+    run's calls_root, sample and commit were bound when it ran, then R as `test_pouw_h1_commit._reusing` makes it of W
     (``edit`` the record; none with ``write`` False) and the exit code ``rc``."""
 
     def __init__(self, runs: dict[int, Any], *, edit: Callable[[dict], dict] = lambda r: r, rc: int = 0, write: bool = True,
@@ -75,7 +75,7 @@ def test_a_tied_window_names_r_reusing_its_tables_from_w_as_its_commit_record_be
     log's last record (window 0's after none, window 1's after window 0's R), then runs the command, with the serve dir,
     the window, W's and R's files and the window's prover directory, once the advice trace is flushed and before calls_root,
     draw_root or the commit are bound. R is the window's Commit record: its canonical JSON is the commitment's ``commit``,
-    the draw coin opens after it, the outcome records both digests, and the log names W then R, so a tie over the same
+    the sampling coin opens after it, the outcome records both digests, and the log names W then R, so a tie over the same
     serve dir chains after the last R."""
     serve = tmp_path / "serve"
     srv, arm, wc, runs, flushed = _tied(tmp_path, monkeypatch, closer := Later())
@@ -148,7 +148,7 @@ def _seal(arm: SH.H1Windows) -> None:
 def test_a_tied_window_with_no_r_reusing_w_binds_no_record_and_opens_no_coin(tmp_path, monkeypatch, act, commit, why,
                                                                               logged):
     """No seal (it failed, or the server stopped first), a command that fails or writes no R, or an R that isn't chained
-    right after W: the window binds no Commit record and opens no draw coin, its outcome's error names why, and only a W
+    right after W: the window binds no Commit record and opens no sampling coin, its outcome's error names why, and only a W
     written goes into the log, so the next window chains after it. Nothing is retried."""
     serve = tmp_path / "serve"
     srv, arm, wc, runs, _flushed = _tied(tmp_path, monkeypatch, closer := Later(), **commit)

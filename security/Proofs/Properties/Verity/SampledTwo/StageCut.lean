@@ -53,7 +53,7 @@ def CaseIsSent (C : CaseOf) : Prop :=
 def CutReads (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → readsLogs o.sent ≠ []
 
-/-- **The first stage read the draw the cut reads**: on a play the form accepts, the bits of the bytes the run's first
+/-- **The first stage read the sample the cut reads**: on a play the form accepts, the bits of the bytes the run's first
 stage read start those of the coins `drawCoins` reads under the parameters' key, on the boundary registration's
 window, in the family of its challenger, after the boundary registration's digest. -/
 def FirstDrawn (C : CaseOf) : Prop :=
@@ -110,7 +110,7 @@ theorem firstLines_arr {e : VStar.Recursive.SampledTwo.Evidence} {l : List Strin
       | cases h
       | simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The first stage's draw on the case is the cut's**: its family and digest are those of the cut's first draw. -/
+/-- **The first stage's sample on the case is the cut's**: its family and digest are those of the cut's first sample. -/
 theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d : Draws} (hd : Decoded k p c e)
     (h : firstDraws key p c e = some d) : firstDraw k = some (d.label, d.after) := by
@@ -136,7 +136,7 @@ theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spo
         rw [hl]
         rfl
 
-/-- **The interior's draw on the case is the cut's**: its family and digest are those of the cut's second draw. -/
+/-- **The interior's sample on the case is the cut's**: its family and digest are those of the cut's second sample. -/
 theorem secondDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {s : String} {c₂ : Spot.OneStage.Commitment} {d : Draws}
     (hd : Decoded k p c e) (hs : Flock.canon e.record = .ok s) (hc : Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂)

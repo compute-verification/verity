@@ -135,8 +135,8 @@ theorem registeredEntry_isSome_iff {rec : Json} {ns : List String} (hn : namesAt
 
 variable (h : Held)
 
-/-- **An accepted run's statement check draws the second stage**: where `stmtOk` passes and there is a template, the
-second stage's draw reads (`secondDraw`), which each template's `readsOk` asks. -/
+/-- **An accepted run's statement check samples the second stage**: where `stmtOk` passes and there is a template, the
+second stage's sample reads (`secondDraw`), which each template's `readsOk` asks. -/
 theorem draw_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ draw, secondDraw h c₀ c₁ = some draw := by

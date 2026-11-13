@@ -23,7 +23,7 @@ open Claims Claims.Sampling SamplingDeploy
 variable {h : Held}
 
 /-- **The two clauses of an accepted statement**, with the run's statement, round 1's record and the second stage's
-draw it was read at. -/
+sample it was read at. -/
 theorem readsOk_inputs_design {t : ℕ} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hr : readsOk h t x m₁ xS c₀ c₁ = true) :
     ∃ st rec draw, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
