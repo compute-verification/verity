@@ -40,13 +40,13 @@
 
 
 [[words_in]]                              # the cap circuit's module, as the files that import it use it
-files = ["verity/protocols/pouw/prover/circuit/pc8.py",
-         "verity/protocols/pouw/prover/circuit/leaves.py",
-         "verity/protocols/pouw/prover/circuit/cap.circuit-check.py",
-         "verity/protocols/pouw/verifier/tests/test_circuit_cap.py",
-         "verity/protocols/pouw/verifier/tests/test_circuit_leaves.py",
-         "verity/protocols/pouw/verifier/tests/test_cap_lean.py",
-         "verity/protocols/pouw/verifier/tests/circuit_fixtures.py",
+files = ["verity/protocols/accounting/pouw/prover/circuit/pc8.py",
+         "verity/protocols/accounting/pouw/prover/circuit/leaves.py",
+         "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_cap.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_leaves.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_cap_lean.py",
+         "verity/protocols/accounting/pouw/verifier/tests/circuit_fixtures.py",
          "benchmarks/pouw/tests/test_pearlc_cap_agreement.py"]
 
 [words_in.words]
@@ -81,10 +81,10 @@ files = ["verity/protocols/pouw/prover/circuit/pc8.py",
 "cap.call"                  = "inert_bound.call"
 
 [[words_in]]                              # the share's constants, where they are defined and read
-files = ["verity/protocols/pouw/prover/schemes/pearl_c4.py",
-         "verity/protocols/pouw/prover/schemes/pearl_c_debit.py",
-         "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py",
-         "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
+files = ["verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
+         "verity/protocols/accounting/pouw/prover/schemes/pearl_c_debit.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c4.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
          "benchmarks/pouw/pearl_c4/replay.py",
          "benchmarks/pouw/pearl_c_vllm/served_debit.py",
          "benchmarks/pouw/harness/price_twins.py"]
