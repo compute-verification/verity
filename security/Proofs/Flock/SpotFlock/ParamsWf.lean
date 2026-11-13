@@ -49,7 +49,7 @@ namespace SpotFlock.ParamsWf
 
 open Lean (Json)
 open Claims.Json (Wf)
-open Spot (getD entries)
+open Spot (getD)
 open Properties.Spot.SecurityProofs (bind_eq_ok)
 open Properties.Spot.Units (wf_getD)
 open SpotFlock.ReadsJson (wf_obj wf_mkObj getElem?_of_mem)
@@ -115,13 +115,13 @@ theorem array_mapM_self {α ε : Type} {f : α → Except ε α} (hf : ∀ a b, 
 /-! ## The entries of a well-formed object -/
 
 /-- **The entries of a well-formed value are well formed.** -/
-theorem wf_entries {j : Json} (hj : Wf j) : ∀ kv ∈ entries j, Wf kv.2 := by
+theorem wf_entries {j : Json} (hj : Wf j) : ∀ kv ∈ Spot.entries j, Wf kv.2 := by
   intro kv hkv
   cases j with
   | obj m =>
     obtain ⟨hm, hv⟩ := wf_obj hj
     exact hv kv.1 kv.2 (getElem?_of_mem hm hkv)
-  | _ => simp [entries] at hkv
+  | _ => simp [Spot.entries] at hkv
 
 /-- The entries of a well-formed object, in its order, have distinct keys. -/
 theorem distinct_toList {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) :
@@ -130,7 +130,7 @@ theorem distinct_toList {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) :
   exact Std.TreeMap.Raw.distinct_keys_toList hm
 
 /-- **No key is twice among the entries of a well-formed value.** -/
-theorem entries_nodup {j : Json} (hj : Wf j) : ((entries j).map (·.1)).toList.Nodup := by
+theorem entries_nodup {j : Json} (hj : Wf j) : ((Spot.entries j).map (·.1)).toList.Nodup := by
   cases j with
   | obj m =>
     obtain ⟨hm, -⟩ := wf_obj hj
@@ -139,10 +139,10 @@ theorem entries_nodup {j : Json} (hj : Wf j) : ((entries j).map (·.1)).toList.N
     refine List.pairwise_map.2 ((distinct_toList hm).imp fun {a b} hab e => hab ?_)
     rw [e]
     exact Std.ReflCmp.compare_self
-  | _ => simp [entries]
+  | _ => simp [Spot.entries]
 
 /-- **A well-formed object less a key is well formed**, as the form's parser rebuilds it (`without`). -/
-theorem wf_without {j : Json} (hj : Wf j) (k : String) : Wf (Json.mkObj (without j k)) := by
+private theorem wf_without {j : Json} (hj : Wf j) (k : String) : Wf (Json.mkObj (without j k)) := by
   refine wf_mkObj ?_ fun kv hkv => wf_entries hj kv ?_
   · cases j with
     | obj m =>
@@ -150,7 +150,7 @@ theorem wf_without {j : Json} (hj : Wf j) (k : String) : Wf (Json.mkObj (without
       show ((m.toArray.filter (·.1 != k)).toList).Pairwise _
       rw [Array.toList_filter]
       exact (distinct_toList hm).filter _
-    | _ => simp [without, entries, FlockComplete.JsonRT.Distinct]
+    | _ => simp [without, Spot.entries, FlockComplete.JsonRT.Distinct]
   · exact (Array.mem_filter.1 (Array.mem_toList_iff.1 hkv)).1
 
 /-! ## Walking a `do` block by its join points -/
@@ -206,6 +206,9 @@ elab "head_whnf" " at " h:ident : tactic => withMainContext do
   let g ← (← getMainGoal).replaceLocalDeclDefEq hDecl.fvarId (← mkEq (← headMatchWhnf lhs) rhs)
   replaceMainGoal [g]
 
+/-- `throws h`: closes a goal whose `h` says a line that throws returned. -/
+macro "throws " h:ident : tactic => `(tactic| (cases $h:ident; done))
+
 /-- `jp_step h to r with inv by tac`: one join point of a `do` block. The block from it on returned `r` (`h`), so
 the join point did, at a value where `inv` holds: each arm that returns jumps to the join point, and `tac` proves
 `inv` there. `h` becomes the join point's own equation at that value. -/
@@ -236,7 +239,7 @@ macro "do_walk " h:ident " to " r:term : tactic => `(tactic|
 
 /-! ## The stream's parameters (`Spot.OneStage.paramsParsed`) -/
 
-theorem obj_ok {a b : Json} {w : String} (h : obj a w = .ok b) : b = a := by
+private theorem obj_ok {a b : Json} {w : String} (h : obj a w = .ok b) : b = a := by
   unfold obj at h
   split at h
   · exact (Except.ok.inj h).symm
@@ -244,7 +247,7 @@ theorem obj_ok {a b : Json} {w : String} (h : obj a w = .ok b) : b = a := by
 
 /-- **The parameters' ports are the entries of the tree's `ports`, and their partition object is its `partition`.** -/
 theorem paramsParsed_reads {j : Json} {p : Spot.OneStage.Params} (h : Spot.OneStage.paramsParsed j = .ok p) :
-    p.verifier.ports = entries (getD j "ports") ∧ ∀ o, p.verifier.partition = some o → o = getD j "partition" := by
+    p.verifier.ports = Spot.entries (getD j "ports") ∧ ∀ o, p.verifier.partition = some o → o = getD j "partition" := by
   unfold Spot.OneStage.paramsParsed at h
   repeat' first
     | (jp_step h to p with (fun w : Option Json => ∀ o, w = some o → o = getD j "partition") by
@@ -252,7 +255,7 @@ theorem paramsParsed_reads {j : Json} {p : Spot.OneStage.Params} (h : Spot.OneSt
     | (jp_step h to p with (fun _ => True) by trivial)
     | head_zeta at h
     | (have h' := bind_eq_ok.1 h; clear h; obtain ⟨_, _, h⟩ := h')
-    | (cases h; done)
+    | throws h
     | split at h
   cases h
   refine ⟨?_, by assumption⟩
@@ -263,7 +266,7 @@ theorem paramsParsed_reads {j : Json} {p : Spot.OneStage.Params} (h : Spot.OneSt
   repeat' first
     | exact (Except.ok.inj hb).symm
     | (have h' := bind_eq_ok.1 hb; clear hb; obtain ⟨_, _, hb⟩ := h')
-    | (cases hb; done)
+    | throws hb
     | split at hb
     | dsimp only at hb
 
@@ -336,9 +339,9 @@ theorem match_entry_ok {ε : Type} {ko : Option (Array String)} {a b c d : Json}
     by_cases h₄ : k₄ = "template"
     case neg => exfalso; lit_walk h h₄
     subst h₄
-    cases a <;> first | (cases h; done) | skip
-    cases b <;> first | (cases h; done) | skip
-    cases c <;> first | (cases h; done) | skip
+    cases a <;> first | throws h | skip
+    cases b <;> first | throws h | skip
+    cases c <;> first | throws h | skip
     rename_i t cc hh
     have h' : (if cond t cc hh d = true then pure (t, cc, Json.obj hh, d) else throw e₁ :
         Except ε (String × String × Json × Json)) = .ok r := h
