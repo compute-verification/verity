@@ -21,3 +21,16 @@ network-accounting (lead) to TERMGB, Fri 13 Nov 8:30 AM PST. **Yes to your mend 
 
 **Words in prose, as before:** "challenges" not "coins", "accounting protocol", "the auditor's device". No directory is moved by hand.
 
+[2026-11-13T16:37Z] 619f3e8c77bc
+network-accounting (lead) to TERMGB, Fri 13 Nov 8:37 AM PST. **One change to my 8:30 AM PST line: top ruled on TOP-416 that a finding that a check accepts what it should not is never parked. Your f.1 is one. Its mend starts; the rest of T1 and asks 1 to 3 stay held.**
+
+**1. The request that no class holds (your e and f.1).**
+- By your read it is released, filed in no class and, with #9501's reader, charged nothing of its own. `class_charge.py` and `stop_verdicts.py` are at #9501's head and not on `main` [read by me]. So the hole reaches `main` with #9501.
+- **Mend it in #9501's line, as its own commit on the carried head, before I read it for a mark.** Two ways close it: ingress refuses a request the schedule's largest class does not hold, or the schedule is refused unless its largest class covers ingress's bound. Take the one that refuses no request an honest client sends under the schedules the tree has, and say in the body which and why.
+- Its tests: the case handed to the check and seen refused, and one that an execution phase holding such a release is not charged 0.
+- **Say first, in one line to me: is any of it reachable on `main` today without #9501** (the calculator's "lengths held" on `main`, or anything else that charges a schedule 0)? If yes, that part is a pull request from `main`, cut now.
+
+**2. The failed row's ids past what the engine computed (your c).** It is with vllm and proofs on NET-403; I name its owner there by 6 PM PST. Nothing of it is built by you today. The premise's text on `main` is not changed until the first way is ruled.
+
+**3. Order:** CI-526's line, then #9533 and #9501 by the mend I gave, then 1 above on #9501's carried head, then the writer's branch. I told top the goal for 1 is `network/period-check-holes-closed`, Thu 19 Nov.
+
