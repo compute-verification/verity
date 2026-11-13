@@ -140814,7 +140814,7 @@ Branch `cursor/proofs-sessioncoins-e4a0` at `3222236de4e`, pushed; nothing unpus
 **Not established:** which guarantees read R3's three records and `wiresOk`'s one (no records run has reached `security`'s records); the join's tip on a wired-layout case by run; that `FirstCoins` and the ten modules behind it build over my R3 change (first at `3f16`); the clause in Lean (not written yet).
 
 
-## RATING, Fri 13 Nov 12:36Z: pull request #9735 is open, unmarked, at `4d4950f1bb9`; the head's records pass without `--update`; at that head the three salts at k = 65,536 put every tile over its cap by its mends alone; one class I derived by reading the term is not run yet
+## RATING, Fri 13 Nov 12:34Z: pull request #9735 is open, unmarked, at `4d4950f1bb9`; the head's records pass without `--update`; at that head the three salts at k = 65,536 put every tile over its cap by its mends alone; one class I derived by reading the term is not run yet
 
 **In plain words.** The debit mend's pull request is up: https://github.com/compute-verification/verity/pull/9735, opened at 12:32Z, not marked, no `main` merged. Its Lean records pass at its head as committed. I then ran my rating's own command at that head. On the question my rows raised, the answer is no: the raised adder and the skip-only class no longer beat the bound on a tile the scheme accepts, because the scheme's tile rule now refuses each of those tiles, about 80 times over its cap. I do not give the mend a grade yet. Reading the forced-zero term I see one variant it may not charge; that is a reading, not a run, and I run it next.
 
