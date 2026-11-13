@@ -602,9 +602,10 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
 
 
 def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monkeypatch):
-    """A run's watermark stream, whole, then POSTs to its route that aren't one: the run's second, and a client's,
-    which carries the release the network certifier put on it. Each is answered 400 and none of its body reaches the
-    feed, so the gate reads no line of theirs; the client's is its release's request, fed as passed."""
+    """A run's watermark stream, whole, then POSTs to its route that aren't one: the run's second, a stream from bucket
+    0 that names release 0 lost, and a client's, which carries the release the network certifier put on it. Each is
+    answered 400 and none of its body reaches the feed, so the gate reads no line of theirs; the client's is its
+    release's request, fed as passed."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
     app = App()
@@ -613,7 +614,7 @@ def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monke
     assert asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1\n1 3\n"])[0]["status"] == 200
     rows = [{"run": "ab", "t": 0, "n": 1}, {"run": "ab", "t": 1, "n": 3}, {"run": "ab", "end": True}]
     assert read() == rows
-    second = asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"2 4 3\n"])
+    second = asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1 0\n"])
     assert second[0]["status"] == 400 and b"run 'ab' has had its watermark stream, and a run has one" in second[1]["body"]
     assert read() == []
     clients = asgi(feed, scope_of(sa.WATERMARK_PATH, {**own, "x-verity-release": "3", "x-verity-release-bucket": "2"}), [b"2 4 3\n"])
@@ -1057,8 +1058,9 @@ def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
     """Beside the run's own watermark stream, two POSTs to the watermark's route, each a whole stream whose one line
     names releases 0 and 1 lost: one names the run as the network certifier's head does, and one is that stream as a
     client sends it through the network certifier, which puts release 0 on it (`release.with_release`). Each is
-    answered 400 and none of it read: release 1's request is admitted at its bucket's close and served, and the gate
-    has seen no line but the run's own. The client's POST is release 0's request, which the gate is told won't come."""
+    answered 400 and none of it read: release 1's request, which comes once its bucket has closed, is admitted and
+    served, and the gate has seen no line but the run's own. The client's POST is release 0's request, which the gate is
+    told won't come."""
     body = dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2)
     forged = REL.watermark_head(bytes.fromhex(RUN)) + REL.watermark_chunk(0, 2, [0, 1]) + REL.WATERMARK_END
     with tick_endpoint() as e:
@@ -1070,11 +1072,10 @@ def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
             c = socket.create_connection(e.address)
             c.sendall(stream)
             answers.append(read_all(c))
+        wm.sendall(REL.watermark_chunk(1, 2))
+        e.lines.acquire()
         c1 = socket.create_connection(e.address)
         c1.sendall(request(body, 1, 1))
-        e.held.acquire()
-        assert e.engine.sched.added == []                # the gate holds it: bucket 1 hasn't closed
-        wm.sendall(REL.watermark_chunk(1, 2))
         served = read_all(c1)
         wm.sendall(REL.WATERMARK_END)
         end = read_all(wm)
@@ -1155,11 +1156,12 @@ def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_r
 
 
 def test_serve_openai_names_a_header_as_the_network_certifier_does():
-    """A request with a client's own release headers, one byte (each of the 256) before each one's name or between the
-    name and its colon, on which the network certifier then puts release 3 (`release.with_release`), dropping those of
-    the client's it takes for release headers. Whichever it kept, the server's headers (`so.header_fields`) give the
-    certifier's release, as the certifier's own reader does. Then one such request over HTTP (its body not JSON, so it
-    is answered at once): the frontend has read the certifier's release of it, not the client's."""
+    """A request with a client's own release headers, one byte before each one's name or between the name and its
+    colon, on which the network certifier then puts its release (`release.with_release`), dropping those of the
+    client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
+    once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
+    place: whichever fields the certifier kept, the server's headers (`so.header_fields`) give the certifier's
+    release, as the certifier's own reader does."""
     run = bytes.fromhex(RUN)
 
     def stamped(pre: bytes, post: bytes, n: int, rest: bytes = b"\r\n") -> bytes:
@@ -1167,11 +1169,6 @@ def test_serve_openai_names_a_header_as_the_network_certifier_does():
                                                                         (REL.BUCKET_HEADER, b"9")))
         return REL.with_release(b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n" + own + rest, n, run, 1)
 
-    for b in range(256):
-        for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
-            line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
-            assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert sa.release_of(so.header_fields(fields)) == (RUN, 3, 1), (pre, post)
     sent = stamped(b"\xa0", b"", 0, b"content-length: 1\r\n\r\n{")
     assert b"\xa0x-verity-release: 7\r\n" in sent
     with tick_endpoint() as e:
@@ -1180,6 +1177,11 @@ def test_serve_openai_names_a_header_as_the_network_certifier_does():
         answer = read_all(c)
     assert answer.startswith(b"HTTP/1.1 400") and b"the body is not JSON" in answer
     assert e.admit.seen == {RUN: {0}}
+    for b in range(256):
+        for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
+            line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
+            assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
+            assert sa.release_of(so.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times():
