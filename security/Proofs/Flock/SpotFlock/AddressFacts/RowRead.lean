@@ -22,41 +22,6 @@ namespace AddressRow
 
 open Lean (Json)
 
-/- The step both checks share once `reads` is `rs` and `reads_from` is `f`: the check's clause at slot `u`, `hall` at
-`u - f`, read at the row `hr` names. Hygiene is off so that it reads the proof's own `hok`, `hrd`, `rs`, `f`, `u`. -/
-set_option hygiene false in
-local macro "slot_row " hr:ident : tactic => `(tactic| (
-  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
-  obtain ⟨-, hall⟩ := hok
-  by_cases hfu : f ≤ u
-  · simp only [hfu, ↓reduceIte] at hrd
-    cases hx : rs[u - f]? with
-    | none => simp [hx] at hrd
-    | some x =>
-      simp only [hx, Option.bind_some] at hrd
-      have hk : u - f < rs.size := by
-        rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
-        · exact hc
-        · simp [hc] at hx
-      have hgx : rs.getD (u - f) Json.null = x := by
-        first
-          | simp [Array.getD_eq_getD_getElem?, hx]
-          | simp [Array.getD, hk, hx]
-          | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-             simp [Array.getD, hk, hx'])
-      have h1 := hall (u - f) hk
-      rw [hgx, show f + (u - f) = u by omega, $hr:ident] at h1
-      cases x with
-      | null => simp [Spot.nat?, Spot.int?] at hrd
-      | bool _ => simp [Spot.nat?, Spot.int?] at hrd
-      | str _ => simp [Spot.nat?, Spot.int?] at hrd
-      | arr _ => simp [Spot.nat?, Spot.int?] at hrd
-      | obj _ => simp [Spot.nat?, Spot.int?] at hrd
-      | num _ =>
-        simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
-        exact h1.2
-  · simp [hfu] at hrd))
-
 /-- **A read `placedOk` passes is its row**: where `placedOk` passes entry `e` against rows `row`, the read of slot `u`
 (`readsAt`) is the row `row u` names. -/
 theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
@@ -85,7 +50,36 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
       | null =>
         simp only at hrd hok
         generalize (0 : ℕ) = f at hrd hok
-        slot_row hrow
+        simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
+        obtain ⟨-, hall⟩ := hok
+        by_cases hfu : f ≤ u
+        · simp only [hfu, ↓reduceIte] at hrd
+          cases hx : rs[u - f]? with
+          | none => simp [hx] at hrd
+          | some x =>
+            simp only [hx, Option.bind_some] at hrd
+            have hk : u - f < rs.size := by
+              rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
+              · exact hc
+              · simp [hc] at hx
+            have hgx : rs.getD (u - f) Json.null = x := by
+              first
+                | simp [Array.getD_eq_getD_getElem?, hx]
+                | simp [Array.getD, hk, hx]
+                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
+                   simp [Array.getD, hk, hx'])
+            have h1 := hall (u - f) hk
+            rw [hgx, show f + (u - f) = u by omega, hrow] at h1
+            cases x with
+            | null => simp [Spot.nat?, Spot.int?] at hrd
+            | bool _ => simp [Spot.nat?, Spot.int?] at hrd
+            | str _ => simp [Spot.nat?, Spot.int?] at hrd
+            | arr _ => simp [Spot.nat?, Spot.int?] at hrd
+            | obj _ => simp [Spot.nat?, Spot.int?] at hrd
+            | num _ =>
+              simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+              exact h1.2
+        · simp [hfu] at hrd
       | num n =>
         simp only at hrd hok
         generalize Spot.nat? (Json.num n) = fst at hrd hok
@@ -93,7 +87,36 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
         | none => simp at hrd
         | some f =>
           simp only at hrd hok
-          slot_row hrow
+          simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
+          obtain ⟨-, hall⟩ := hok
+          by_cases hfu : f ≤ u
+          · simp only [hfu, ↓reduceIte] at hrd
+            cases hx : rs[u - f]? with
+            | none => simp [hx] at hrd
+            | some x =>
+              simp only [hx, Option.bind_some] at hrd
+              have hk : u - f < rs.size := by
+                rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
+                · exact hc
+                · simp [hc] at hx
+              have hgx : rs.getD (u - f) Json.null = x := by
+                first
+                  | simp [Array.getD_eq_getD_getElem?, hx]
+                  | simp [Array.getD, hk, hx]
+                  | (have hx' : rs[u - f] = x := by simpa [hk] using hx
+                     simp [Array.getD, hk, hx'])
+              have h1 := hall (u - f) hk
+              rw [hgx, show f + (u - f) = u by omega, hrow] at h1
+              cases x with
+              | null => simp [Spot.nat?, Spot.int?] at hrd
+              | bool _ => simp [Spot.nat?, Spot.int?] at hrd
+              | str _ => simp [Spot.nat?, Spot.int?] at hrd
+              | arr _ => simp [Spot.nat?, Spot.int?] at hrd
+              | obj _ => simp [Spot.nat?, Spot.int?] at hrd
+              | num _ =>
+                simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+                exact h1.2
+          · simp [hfu] at hrd
 
 /-- **A read `rowsOk` passes is its unit's first row**: where `rowsOk` passes entry `e` of `l` leaves over `units` units
 against the units `unit` names, the read of slot `u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a
@@ -121,7 +144,36 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
     | null =>
       simp only at hrd hok
       generalize (0 : ℕ) = f at hrd hok
-      slot_row hb
+      simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
+      obtain ⟨-, hall⟩ := hok
+      by_cases hfu : f ≤ u
+      · simp only [hfu, ↓reduceIte] at hrd
+        cases hx : rs[u - f]? with
+        | none => simp [hx] at hrd
+        | some x =>
+          simp only [hx, Option.bind_some] at hrd
+          have hk : u - f < rs.size := by
+            rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
+            · exact hc
+            · simp [hc] at hx
+          have hgx : rs.getD (u - f) Json.null = x := by
+            first
+              | simp [Array.getD_eq_getD_getElem?, hx]
+              | simp [Array.getD, hk, hx]
+              | (have hx' : rs[u - f] = x := by simpa [hk] using hx
+                 simp [Array.getD, hk, hx'])
+          have h1 := hall (u - f) hk
+          rw [hgx, show f + (u - f) = u by omega, hb] at h1
+          cases x with
+          | null => simp [Spot.nat?, Spot.int?] at hrd
+          | bool _ => simp [Spot.nat?, Spot.int?] at hrd
+          | str _ => simp [Spot.nat?, Spot.int?] at hrd
+          | arr _ => simp [Spot.nat?, Spot.int?] at hrd
+          | obj _ => simp [Spot.nat?, Spot.int?] at hrd
+          | num _ =>
+            simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+            exact h1.2
+      · simp [hfu] at hrd
     | num n =>
       simp only at hrd hok
       generalize Spot.nat? (Json.num n) = fst at hrd hok
@@ -129,7 +181,36 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
       | none => simp at hrd
       | some f =>
         simp only at hrd hok
-        slot_row hb
+        simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
+        obtain ⟨-, hall⟩ := hok
+        by_cases hfu : f ≤ u
+        · simp only [hfu, ↓reduceIte] at hrd
+          cases hx : rs[u - f]? with
+          | none => simp [hx] at hrd
+          | some x =>
+            simp only [hx, Option.bind_some] at hrd
+            have hk : u - f < rs.size := by
+              rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
+              · exact hc
+              · simp [hc] at hx
+            have hgx : rs.getD (u - f) Json.null = x := by
+              first
+                | simp [Array.getD_eq_getD_getElem?, hx]
+                | simp [Array.getD, hk, hx]
+                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
+                   simp [Array.getD, hk, hx'])
+            have h1 := hall (u - f) hk
+            rw [hgx, show f + (u - f) = u by omega, hb] at h1
+            cases x with
+            | null => simp [Spot.nat?, Spot.int?] at hrd
+            | bool _ => simp [Spot.nat?, Spot.int?] at hrd
+            | str _ => simp [Spot.nat?, Spot.int?] at hrd
+            | arr _ => simp [Spot.nat?, Spot.int?] at hrd
+            | obj _ => simp [Spot.nat?, Spot.int?] at hrd
+            | num _ =>
+              simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+              exact h1.2
+        · simp [hfu] at hrd
 
 /-- **Round 2's row is the read's** (`ReadFact`): at each kind of read `placedRow` names a row for, `second-read`'s
 case for it (`readOk`) passes the entry through `placedOk` or `rowsOk` at that row. -/
