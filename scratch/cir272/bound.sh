@@ -9,9 +9,15 @@
 #   - no type starts once fewer than CB_TYPE_S + 300 seconds of CB_BUDGET_S (default 21000) are left: it is listed in
 #     $OUT/not-reached.tsv;
 #   - the job's threads are CB_THREADS (default 8): hidden_zk/job.sh's TH and RAYON_NUM_THREADS, and the BLAS pools'.
-# $CB_TYPES: TAG<TAB>UNIT<TAB>N<TAB>WORDS, WORDS of: session (the CPU prover's --zk session), more (the partition check also
-# without the partition object, with the same Definition's Program at another count, and with a larger population's).
-# A type whose Lean check may peak over the job's memory (6 x circuit.txt + 4 GB) is staged and recorded, its checks not run.
+# CIR-272's second pass adds: a row's fifth column, its own limit in seconds (else CB_TYPE_S), which the budget check uses too;
+# the list as run ($OUT/types.tsv, form.py) stages the Boolean version the census lookup names where it refuses the word form
+# under --zk; the --zk session's serve and prove get --tables when the stage wrote tables/; each Lean check is stopped past
+# CB_STAGE_GB as the stager is.
+# $CB_TYPES: TAG<TAB>UNIT<TAB>N<TAB>WORDS[<TAB>LIMIT_S], WORDS of: session (the CPU prover's --zk session), more (the partition
+# check also without the partition object, with the same Definition's Program at another count, and with a larger
+# population's).
+# A type whose Lean check may peak over CB_LEAN_GB (default the job's memory less 4; the peak taken as 4.42 x circuit.txt's
+# GiB) is staged and recorded, its checks not run.
 # The stager is stopped once its resident memory passes CB_STAGE_GB (default the job's memory); stage.rss holds its samples.
 # Every type's records are under $OUT/TAG as it goes, and $OUT/TAG/done holds its end, so a run cut short keeps what it did.
 # env: CB_MEM_GB (the job's --mem-gb), CB_PROVE_GB / CB_SERVE_GB (the session's two `ulimit -v`, default 85% and 50% of
@@ -39,6 +45,34 @@ case "$W" in *served-units-time*) echo "scratch $W is under a prove_time.sh dire
 setup
 log "scratch $W; cache ${HZ_CACHE:-scratch}; threads $TH; type limit ${TYPE_S}s, budget ${BUDGET_S}s; session limits: prove $PROVE_GB GB, serve $SERVE_GB GB; lean $(sha256sum "$LEAN" | cut -c1-16)"
 export PATH=$(dirname "$LEAN"):$PATH
+LEAN_GB=${CB_LEAN_GB:-$(( MEM_GB - 4 ))}
+
+# job.sh's session, but serve and prove read the MUFU tables staged beside a statement that reads in slots (--tables)
+session() {
+  local D=$1 O=$2 port pin srv rc try up= tu= tb=
+  pin=$(cat "$D/pin.txt")
+  [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
+  [ -d "$D/tables" ] && tb="--tables $D/tables"
+  for try in 1 2 3 4 5; do
+    port=$(free_port)
+    $TIME "$O/serve.time" bash -c "$(vlimit $SERVE_GB) exec $BIN serve --zk --listen 127.0.0.1:$port --out $D/sessions \
+      --instances $D/pub.bin --circuit $D/circuit.txt $tu $tb --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
+    srv=$!
+    until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do
+      kill -0 $srv 2>/dev/null || break
+      sleep 1
+    done
+    grep -q '^SERVING ' "$O/serve.log" 2>/dev/null && { up=1; break; }
+    log "  serve exited before SERVING (try $try): $(tail -1 "$O/serve.log")"; wait $srv 2>/dev/null
+  done
+  [ -n "$up" ] || { log "  serve never came up after $try tries"; return 1; }
+  $TIME "$O/prove.time" bash -c "$(vlimit $PROVE_GB) exec $BIN prove --zk --verifier 127.0.0.1:$port --instances $D/inst.bin \
+    --circuit $D/circuit.txt $tu $tb --runs $RUNS --warm $WARM" > "$O/prove.out" 2> "$O/prove.err"
+  rc=$?
+  kill $srv 2>/dev/null; wait $srv 2>/dev/null
+  du -sb "$D/sessions"/*/ > "$O/sessions.du" 2>/dev/null
+  return $rc
+}
 
 stage() {   # stage TAG UNIT N: $W/TAG/B, its record under $OUT/TAG/B
   local d=$W/$1/B o=$OUT/$1/B rc pid kid rss top=0 gb=${CB_STAGE_GB:-$MEM_GB}
@@ -75,7 +109,20 @@ lean() {    # lean TAG NAME ARGS...: one flock-verify command, its output, exit 
   local o=$OUT/$1/lean n=$2 rc
   shift 2
   mkdir -p "$o"
-  /usr/bin/time -v -o "$o/$n.time" "$LEAN" "$@" > "$o/$n.out" 2> "$o/$n.err"
+  /usr/bin/time -v -o "$o/$n.time" "$LEAN" "$@" > "$o/$n.out" 2> "$o/$n.err" &
+  local pid=$! kid rss gb=${CB_STAGE_GB:-$MEM_GB}
+  # the check's resident memory every 10 s; past CB_STAGE_GB it is stopped, as the stager is
+  while kill -0 $pid 2>/dev/null; do
+    sleep 10
+    kid=$(pgrep -P $pid | head -1); [ -n "$kid" ] || continue
+    rss=$(ps -o rss= -p "$kid" 2>/dev/null | awk '{s += $1} END {print s + 0}')
+    if [ "$rss" -gt $(( gb * 1048576 )) ]; then
+      echo "stopped: the Lean check's resident memory, $(( rss / 1048576 )) GB, passed this job's $gb GB" | tee "$o/$n.stopped" >> "$o/$n.err"
+      kill "$kid"
+      break
+    fi
+  done
+  wait $pid
   rc=$?
   echo $rc > "$o/$n.rc"
   log "  lean $n: exit $rc; $(grep -E 'Elapsed|Maximum resident' "$o/$n.time" | sed 's/^\s*//' | paste -sd ';'); $(grep -E '^(VERDICT|KS-FORM|setup:|\{)' "$o/$n.out" | tail -1 | cut -c1-900) $(tail -1 "$o/$n.err" | cut -c1-200)"
@@ -90,9 +137,11 @@ one() {     # one TAG UNIT N WORDS: the type's staging and Lean checks; its exit
 import json
 r = json.load(open('$T/B/stage.json'))
 print('STAGED $tag', json.dumps({k: r.get(k) for k in ('definition', 'word', 'n', 'ands', 'k_log', 'circuit_bytes', 'statement', 'seconds', 'maxrss_gb', 'lookups', 'slot_types')}))" | tee -a "$OUT/job.log"
-  need=$(( $(stat -c %s "$T/B/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))   # hidden_zk/job.sh's rule for a Lean check's peak
-  if [ "$need" -gt "$MEM_GB" ]; then
-    log "$tag: Lean not run: a check of its $(stat -c %s "$T/B/circuit.txt")-byte circuit.txt may peak at $need GB, over this job's $MEM_GB GB"
+  # a Lean check's peak: at most 4.42 x circuit.txt's GiB over CIR-272's accepted circuits past 5 GiB (r20261112-215857-32d2,
+  # r20261112-215921-f101); job.sh's 6 x + 4 GB is logged beside it
+  need=$(awk -v b="$(stat -c %s "$T/B/circuit.txt")" 'BEGIN {g = 4.42 * b / 2^30; print (g == int(g)) ? g : int(g) + 1}')
+  if [ "$need" -gt "$LEAN_GB" ]; then
+    log "$tag: Lean not run: a check of its $(stat -c %s "$T/B/circuit.txt")-byte circuit.txt may peak at $need GB (4.42 x its GiB; job.sh's rule $(( $(stat -c %s "$T/B/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 )) GB), over this job's $LEAN_GB GB for Lean"
     echo "$need" > "$OUT/$tag/lean-not-run"
     return 4
   fi
@@ -133,17 +182,22 @@ print('STAGED $tag', json.dumps({k: r.get(k) for k in ('definition', 'word', 'n'
 }
 
 "$PYM" "$IN/names.py" "$IN/${CB_TYPES:?}" > "$OUT/names.jsonl" 2> "$OUT/names.err"; log "names: rc $?; $(wc -l < "$OUT/names.jsonl") rows"
+# the list as run: a census type whose word form the lookup refuses under --zk is staged as the Boolean version it names
+"$PYM" "$IN/form.py" "$IN/$CB_TYPES" "$OUT/names.jsonl" "$OUT/form.tsv" > "$OUT/types.tsv" 2> "$OUT/form.err" \
+  || { log "form.py FAILED: $(tail -2 "$OUT/form.err")"; exit 1; }
+log "form: $(wc -l < "$OUT/types.tsv") types, $(awk -F'\t' '$3 != $2' "$OUT/form.tsv" | wc -l) staged in the lookup's Boolean version"
 
 : > "$OUT/not-reached.tsv"
-while IFS=$'\t' read -r tag unit n words; do
+while IFS=$'\t' read -r tag unit n words lim; do
   [ -n "$tag" ] || continue
-  if [ $(( SECONDS + TYPE_S + 300 )) -gt "$BUDGET_S" ]; then
-    printf '%s\t%s\tnot reached: %ss of the run'"'"'s %ss budget were left, under a type'"'"'s %ss limit and 300s\n' \
-      "$tag" "$unit" $(( BUDGET_S - SECONDS )) "$BUDGET_S" "$TYPE_S" >> "$OUT/not-reached.tsv"
+  lim=${lim:-$TYPE_S}
+  if [ $(( SECONDS + lim + 300 )) -gt "$BUDGET_S" ]; then
+    printf '%s\t%s\tnot reached: %ss of the run'"'"'s %ss budget were left, under its %ss limit and 300s\n' \
+      "$tag" "$unit" $(( BUDGET_S - SECONDS )) "$BUDGET_S" "$lim" >> "$OUT/not-reached.tsv"
     continue
   fi
   mkdir -p "$OUT/$tag"
-  log "$tag: $unit N=$n ($words)"
+  log "$tag: $unit N=$n ($words; limit ${lim}s)"
   t0=$SECONDS
   set -m
   one "$tag" "$unit" "$n" "$words" < /dev/null &
@@ -151,9 +205,9 @@ while IFS=$'\t' read -r tag unit n words; do
   set +m
   out=
   while kill -0 $p 2>/dev/null; do
-    if [ $(( SECONDS - t0 )) -gt "$TYPE_S" ]; then
+    if [ $(( SECONDS - t0 )) -gt "$lim" ]; then
       kill -TERM -- -$p 2>/dev/null; sleep 15; kill -KILL -- -$p 2>/dev/null
-      echo "timed out: the type's ${TYPE_S}s limit passed at $(( SECONDS - t0 ))s" > "$OUT/$tag/timeout"
+      echo "timed out: the type's ${lim}s limit passed at $(( SECONDS - t0 ))s" > "$OUT/$tag/timeout"
       log "$tag: timed out after $(( SECONDS - t0 ))s"
       out=timeout
       break
@@ -165,6 +219,6 @@ while IFS=$'\t' read -r tag unit n words; do
   echo "{\"exit\": $code, \"seconds\": $(( SECONDS - t0 )), \"timeout\": $([ "$out" = timeout ] && echo true || echo false)}" > "$OUT/$tag/done"
   log "$tag: done: exit $code in $(( SECONDS - t0 ))s"
   rm -rf "${W:?}/$tag"
-done < "$IN/${CB_TYPES:?}"
+done < "$OUT/types.tsv"
 log "done; $(wc -l < "$OUT/not-reached.tsv") not reached"
 exit 0
