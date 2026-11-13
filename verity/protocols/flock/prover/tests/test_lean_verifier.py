@@ -20,7 +20,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 #: the base packages the verifier requires by path: bytes, hashes and parsing; the circuit format; the commitments
 BASE = [LEAN.parents[2] / d for d in ("circuits/base", "circuits/lean", "commitments/lean")]
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 PROOFS = Path(__file__).resolve().parents[5] / "security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
