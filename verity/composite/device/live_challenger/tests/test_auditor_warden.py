@@ -182,18 +182,19 @@ def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_an
 
 SALT_C = "5a" * 64
 CELL_SALTS = bytes(range(192))
-#: a link-window's cells' registration, with `warden_rows.registration`'s keys
-REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": "warden/egress/0", "link": "warden",
+#: the stand-in registrations' link
+LINK = "warden"
+#: the registration of an execution phase's egress cells, with `warden_rows.registration`'s keys
+REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": f"{LINK}/egress/0", "link": LINK,
                 "direction": "egress", "window": 0, "parameters": "31" * 64, "cell_bytes": 512, "rows": 600,
                 "words": 1024, "word_bits": 16, "row_schema": "cells/v1", "domain": "d0" * 64, "wiring": "17" * 64,
                 "root": "ab" * 64, "layout": {"buckets": 600, "slots": 4, "connection_slots": 4, "first_bucket": 0},
                 "certificate": {"key": "0c" * 16, "digest": "9d" * 64, "signature": "e5" * 40}}
 #: an execution phase's connection rows' registration, with `connection_rows.registration`'s keys: it names no
 #: direction
-ROWS_REGISTRATION = {"format": "verity-network-certifier/connection-rows-registration/v1", "link": "warden",
-                     "window": 0,
+ROWS_REGISTRATION = {"format": "verity-network-certifier/connection-rows-registration/v1", "link": LINK, "window": 0,
                      "parameters": "31" * 64, "word_bits": 16, "row_schema": "rows/v1",
-                     "tables": [{"name": "lengths", "value": "warden/lengths/0", "rows": 48, "words": 4,
+                     "tables": [{"name": "lengths", "value": f"{LINK}/lengths/0", "rows": 48, "words": 4,
                                  "domain": "d1" * 64, "root": "ac" * 64, "layout": {"first_bucket": 0}}],
                      "certificate": {"key": "0c" * 16, "digest": "9e" * 64, "signature": "e6" * 40}}
 #: a line's cost: a registration's rows and their bytes, and two measured times
@@ -210,9 +211,9 @@ CHECK = {"accepted": True, "problems": [], "summary": {
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
-    f' + json.dumps({{"refused": ["warden", "ingress", 1], "withheld": True, "cost": {COST!r}}}) + "\\n")\n'
+    f' + json.dumps({{"refused": [{LINK!r}, "ingress", 1], "withheld": True, "cost": {COST!r}}}) + "\\n")\n'
     f'(out / "rows.jsonl").write_text(json.dumps({{"registration": {ROWS_REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
-    f' + json.dumps({{"refused": ["warden", "egress", 1], "cost": {COST!r}}}) + "\\n")\n'
+    f' + json.dumps({{"refused": [{LINK!r}, "egress", 1], "cost": {COST!r}}}) + "\\n")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT_C!r}, "head": {{"root": "77" * 64}}, '
     f'"certificate": {{"digest": "cd" * 64, "signature": "ef"}}}}) + "\\n" + json.dumps({{"refused": ["warden-fails", '
     f'"egress", 1]}}) + "\\n")\n'
@@ -281,18 +282,18 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     run, end = run_warden(host)
     d = host.certifier / run
     out = d / "out"
-    whole = [{"registration": REGISTRATION, "cost": COST}, {"refused": ["warden", "ingress", 1], "withheld": True,
+    whole = [{"registration": REGISTRATION, "cost": COST}, {"refused": [LINK, "ingress", 1], "withheld": True,
                                                             "cost": COST}]
     assert [json.loads(x) for x in (d / A.WITNESS / "cells.jsonl").read_text().splitlines()] == whole
     assert not (out / "cells.jsonl").exists() and not (out / "rows.jsonl").exists()
     assert [json.loads(x) for x in (out / "cells-certificates.jsonl").read_text().splitlines()] == [
-        {"certificate": {"key_id": "0c" * 16, "link": "warden", "direction": "egress", "window": 0,
+        {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
                          "digest": "9d" * 64, "signature": "e5" * 40}},
-        {"refused": ["warden", "ingress", 1]}]
+        {"refused": [LINK, "ingress", 1]}]
     assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()] == [
-        {"certificate": {"key_id": "0c" * 16, "link": "warden", "direction": "egress", "window": 0,
+        {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
                          "digest": "9e" * 64, "signature": "e6" * 40}},
-        {"refused": ["warden", "egress", 1]}]
+        {"refused": [LINK, "egress", 1]}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     body = [REGISTRATION[k] for k in ("value", "parameters", "domain", "wiring", "root", "row_schema")]
     body += [t[k] for t in ROWS_REGISTRATION["tables"] for k in ("value", "domain", "root")]

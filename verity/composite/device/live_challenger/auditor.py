@@ -238,13 +238,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), each row registration whole with its cost (`cells.jsonl`, `warden_rows`, a line a
-  link-window; `rows.jsonl`, `connection_rows`, a line an execution phase), the cells' salts (each link-window's
-  rows' and wiring's), the traffic, the client's log and the check, all the prover's. Its unit publishes to `out/`
-  only what isn't: `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records'
-  certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate
-  alone, `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or
-  layout, and no cost) and a `--window-per-group` run's `groups.json`.
+  with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
+  the connection rows', a line a registration), the cells' salts (each link-window's rows' and wiring's), the
+  traffic, the client's log and the check, all the prover's. Its unit publishes to `out/` only what isn't:
+  `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
+  alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
+  `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or layout,
+  and no cost) and a `--window-per-group` run's `groups.json`.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
@@ -445,16 +445,16 @@ PROMPTS = "prompts.json"
 #: own lane alone. `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the
 #: request's public counts and the scan's schedule alone
 WARDEN_PUBLIC = ("deployment.json", "groups.json", "load.json", "load-relay.json")
-#: the row registrations' files of `witness/`, the cells' (`warden_rows`) and the connection rows'
-#: (`connection_rows`), each with the file of `out/` that holds its lines' certificates, line for line
-#: (`row_certificate`). A line is a registration, or the execution phase it was refused for, and its cost; of a
-#: registration `out/` holds the certificate and nothing else
+#: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
+#: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
+#: registration, or the execution phase it was refused for, and its cost; of a registration `out/` holds the
+#: certificate and nothing else
 ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
 #: the direction a connection rows' certificate signs, which its registration doesn't name
 #: (`connection_rows.check_registration`)
 ROWS_DIRECTION = "egress"
-#: of the check's `cell_rows`, what an end carries: how many link-windows' cells registered, and of how many. Its
-#: other keys are the registrations' cost
+#: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
+#: many. Its other keys are the registrations' cost
 CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)

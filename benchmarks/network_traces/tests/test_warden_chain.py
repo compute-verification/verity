@@ -1,6 +1,6 @@
 """The network chain on an active network certifier's run (`warden_chain`, `chain_record`'s network certifier path),
 here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
-under ``witness/``, and under ``out/`` what the gate's own `auditor.warden_outcome` publishes of it): the
+under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
 refusing a changed one and a changed cell; the certified I/O read off the cells is the requests and responses served;
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
@@ -54,11 +54,11 @@ def gate_run(d: Path) -> Path:
 
 
 def test_the_gate_publishes_a_row_registrations_certificate_and_the_leak_guard_holds_the_rest_of_it(tmp_path):
-    """Of each link-window's cells' registration the gate's ``out/`` holds the certificate, with the link, direction
-    and window the registration names, and no root, wiring or domain; the line whole is in ``witness/``, where the
-    chain reads it. So the record's leak guard, which reads a job's files against the gate run's witness, releases a
-    file of those certificates and of the gate's own public files, and holds a file with a registration whole, with
-    its root alone or with its wiring alone."""
+    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
+    direction and window the registration names, and no root, wiring or domain; the line whole is in ``witness/``,
+    where the chain reads it. So the record's leak guard, which reads a job's files against the gate run's witness,
+    releases a file of those certificates and the gate's own public files, and holds a file with a registration
+    whole, with its root alone or with its wiring alone."""
     run = gate_run(tmp_path / "g")
     lines = [json.loads(x) for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
     regs = [x["registration"] for x in lines if "registration" in x]
@@ -70,7 +70,7 @@ def test_the_gate_publishes_a_row_registrations_certificate_and_the_leak_guard_h
     assert not (run / "out" / "cells.jsonl").exists()
     out = b"".join(p.read_bytes() for p in sorted((run / "out").rglob("*")) if p.is_file())
     assert not [(r["value"], k) for r in regs for k in ("root", "wiring", "domain") if r[k].encode() in out]
-    assert WC.certificates(run)["warden_check"]["summary"]["cell_rows"]["registered"] == len(regs)
+    assert WC.WS.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
 
     record = tmp_path / "record"
     shutil.copytree(run / "out", record / "gates" / "out")
