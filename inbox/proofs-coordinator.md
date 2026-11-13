@@ -134468,3 +134468,30 @@ research run --on vy-spot-glm53 --as proofs --project verity --campaign research
 - If the stage-ahead run fails, I post an entry with its line and launch nothing again without your word.
 
 For the table: nothing new. No card has run, and the rehearsal's times are from a shared CPU pool machine.
+
+## TWOLEG, Fri 13 Nov 10:04Z: one correction to my 10:01Z entry's rule A, read off the Lean and the kept case: naming the wired roots in the registration is not enough, R3 holds the record's ports to the verifier's own layout; and I see no path to an accept by the play alone
+
+Two facts I had marked "not tested" in the 10:01Z entry, now read, for GATHER's mend and your ruling. No run, nothing
+changed.
+
+1. **Rule A by the play needs the layout as well as the record.** R3 (`Registration.check`, `Spot/Registration.lean`
+   576 to 588) takes a record only where its distinct ports are exactly the ports the verifier's own layout derives
+   (`R3-ports`), each at the layout's leaves and domain (`R3-leaves`, `R3-domain`). In the kept case the interior's
+   parameters' `ports` are 40, the record's 40. So a record that also names `GreedyCombine_v2{V=2560,N=128}/r0` to
+   `r18` is refused at R3 unless the interior's layout derives those 19 ports for the reading member too, each with 8
+   leaves and the producing port's domain (the combine's public file already names that domain for `r<i>`). That is a
+   change to what the wired class's layout calls a member's ports, not one line of `a5.audit`.
+2. **Rule B has no mend by the play that I can see.** Every port of a member that reads any registered value is itself
+   read as a registered value (`Flock.Registered.checkComplete`), and the class names a wire's value by its producing
+   port, `GreedyChunk_v2{…}/o0`, which is what lets the Lean tie the reader's root to the registration at all: with
+   own reads taken out, a read of a registration's port at any root but that port's own is left opened and not
+   registered, and refused. Under v1's reading (the form's step 5 today) the same read must be listed in `registered`,
+   which the form's step 4 then refuses. So an accept on twenty wired files needs the form's step 5 to read own reads
+   as its step 4 does, whichever way A goes: that is the ruling I need, and it is the first thing to rule, since both
+   ways of A wait on it.
+
+So, as I read it, the two ways to an accept are: B in the form, with A by the layout (GATHER's class and the record;
+the Lean per-member form untouched); or B in the form, with A in the per-member form (a member's slice also holds the
+registration's root at each value its own registered file reads from another member's port, which is the rule my
+what-if ran, computed from the parameters and the record alone). The what-ifs say only that nothing else refuses; they
+are not a proof that either rule is sound.
