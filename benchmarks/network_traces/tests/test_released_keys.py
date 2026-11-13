@@ -44,10 +44,11 @@ def test_the_declared_lists_load_and_each_names_its_writer_in_the_tree():
     assert not waiting & {g for x in declared.lists for g in x.globs}
 
 
-def test_the_cells_registrations_list_is_the_gates_ruling_of_a_line():
+def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
     """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (`ROW_LINE`'s
     PUBLIC ones), so a key the gate starts publishing fails a record until the list gives it a kind, and the list
-    holds none the gate leaves out."""
+    holds none the gate leaves out. The certificates' list names exactly a certificate's fields as the gate writes
+    them of a row registration (`row_certificate`), and the execution phase a line was refused for."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
 
@@ -56,14 +57,29 @@ def test_the_cells_registrations_list_is_the_gates_ruling_of_a_line():
             return {p for k, v in rule.items() for p in public(v, (*at, k))}
         return {"/".join(at)} if rule == A.PUBLIC else set()
 
-    listing = RK.load().listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
-    doc = next(d for d in json.loads(RK.DECLARED.read_text())["lists"] if d["name"] == listing.name)
-    assert {k.removesuffix("/*") for k in doc["keys"]} == public(A.ROW_LINE)
-    line = {"registration": {"format": "f", "wiring": "w", "layout": {"buckets": 1}, "certificate": {"key": "k"}},
+    def declared(listing):
+        doc = next(d for d in json.loads(RK.DECLARED.read_text())["lists"] if d["name"] == listing.name)
+        return {k.removesuffix("/*") for k in doc["keys"]}
+
+    lists = RK.load()
+    listing = lists.listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
+    assert declared(listing) == public(A.ROW_LINE)
+    line = {"registration": {"format": "f", "wiring": "w", "link": "l", "direction": "ingress", "window": 2,
+                             "layout": {"buckets": 1}, "certificate": {"key": "k", "digest": "d", "signature": "s"}},
             "cost": {"s": 1}}
+    refused = {"refused": ["l", "ingress", 3], "withheld": True}
     assert listing.undeclared(A.row_registration(json.dumps(line)).encode()) == {}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration/wiring", "cost"}
-    assert listing.undeclared(A.row_registration(json.dumps({"refused": [0, "ingress", 3], "withheld": True})).encode()) == {}
+    assert listing.undeclared(A.row_registration(json.dumps(refused)).encode()) == {}
+    certificates = {lists.listing(f"gates/c0/r0/out/{f}").name
+                    for f in ("certificates.jsonl", *A.ROW_CERTIFICATES.values())}
+    assert len(certificates) == 1
+    listing = lists.listing("gates/c0/r0/out/certificates.jsonl")
+    written = A.row_certificate(line)
+    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} | {"refused"}
+    for doc in (written, A.row_certificate(refused), A.row_certificate({A.ROWS_NO_HEAD: line["registration"]})):
+        assert listing.undeclared(json.dumps(doc).encode()) == {}
+    assert set(listing.undeclared(json.dumps(line).encode())) == {"registration", "cost"}
 
 
 def test_a_file_is_read_by_key_and_strictly():
