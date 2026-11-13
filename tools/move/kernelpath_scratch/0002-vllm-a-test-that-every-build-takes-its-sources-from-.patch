@@ -1,0 +1,46 @@
+From 5d5c9baadc7a5a3830a8d89ca670c942b7f3555d Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 13 Nov 2026 07:57:13 +0000
+Subject: [PATCH] vllm: a test that every build takes its sources from the one
+ directory of PoUW's prover
+
+row_tables_device.CUDA_DIR and pouw.device.HERE are held to one directory, found from the
+verity.protocols.pouw.prover package and not from where the adapter's files are, and every
+source a build names is held to be a file there: the device builds' sources too, which
+only nvcc compiles, so a machine without it never read them.
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+---
+ .../vllm/tests/commit/test_row_tables_device.py  | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/adapters/vllm/tests/commit/test_row_tables_device.py b/adapters/vllm/tests/commit/test_row_tables_device.py
+index 128925d205..05740d3370 100644
+--- a/adapters/vllm/tests/commit/test_row_tables_device.py
++++ b/adapters/vllm/tests/commit/test_row_tables_device.py
+@@ -114,6 +114,22 @@ def test_two_files_with_one_name_are_refused_before_the_compiler_runs(tmp_path,
+     assert not list(rec.iterdir()) and not (tmp_path / "built").exists()
+ 
+ 
++def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
++    """`CUDA_DIR` and `pouw.device`'s directory are one directory, found from the package that holds it and not from where the
++    adapter's own files are, so it is the same in a checkout and in an installed adapter; and every source a build names is a
++    file there, the device builds' too, which only nvcc compiles and no test without it reads."""
++    pytest.importorskip("torch")
++    from verity.protocols.pouw import prover
++    from verity_vllm.protocols.pouw import device as PD
++    from verity_vllm.protocols.pouw.h1 import receipts
++    from verity_vllm.protocols.pouw.h1 import registered_device as RD
++
++    assert D.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
++    named = {*D.DEVICE_SOURCES, *D.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,
++             *RD.HOST_SOURCES, *RD.ZY_DEVICE_SOURCES, *RD.ZY_HOST_SOURCES, receipts.NOISE_CU}
++    assert sorted(s for s in named if not (D.CUDA_DIR / s).is_file()) == []
++
++
+ def _cuda():
+     torch = pytest.importorskip("torch")
+     if not torch.cuda.is_available() or D.nvcc() is None:
+-- 
+2.43.0
+
