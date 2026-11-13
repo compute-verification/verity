@@ -2,8 +2,8 @@
 
 The model, its small point and the challenger's in-process session are `test_pous_option`'s.  Two things here are
 stand-ins, each named where it is used: vLLM (`tests.fake_vllm`, for the linear layers' base type) and the period's Lean
-tools (`period.serve` replaced by a function that answers as the test says).  So the tests of `PousOption.leg` hold what
-the option does with a tool's answer, and nothing about the tools.
+tools (`period.serve` replaced by a function that answers as the test says).  So the tests of a monitoring period's
+subprotocol hold what the option does with a tool's answer, and nothing about the tools.
 """
 from __future__ import annotations
 
@@ -81,17 +81,19 @@ def test_a_salt_source_of_another_type_is_refused_by_the_selector_and_by_the_ins
     assert target.made == [] and _untouched(toy, before)
 
 
-def test_a_callable_salt_source_is_asked_once_with_the_commitment_and_its_coin_makes_the_salt(toy):
+def test_a_callable_salt_source_is_asked_once_with_the_commitment_and_what_it_returns_makes_the_salt(toy):
     asked = []
 
     def source(commitment):
         asked.append(commitment)
         return bytearray.fromhex(SOURCE)
 
+    with PO.install(Model(), _ctx(ENTRY)) as comp:                                  # the same model; the settings' hex is the same bytes
+        by_hex = comp.get("pous").commitment()
     with PO.install(toy, _ctx(ENTRY, settings=_settings(source))) as comp:
         c = comp.get("pous").commitment()
         assert asked == [bytes.fromhex(c["commitment"])]
-        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
+        assert (c["commitment"], c["salt"]) == (by_hex["commitment"], by_hex["salt"])
         assert comp.info()[ENTRY]["salt_source"] == "callable"
 
 
@@ -227,8 +229,9 @@ def _lean(monkeypatch, tmp_path):
     return say, runs, served
 
 
-def _leg(opt, tmp_path, n):
-    """Period ``n``'s leg of ``opt``, its ``period.json`` naming `TOOLS`; the answer and what ``pous.json`` holds."""
+def _subprotocol(opt, tmp_path, n):
+    """Monitoring period ``n``'s subprotocol of ``opt``, its ``period.json`` naming `TOOLS`; the answer and what
+    ``pous.json`` holds."""
     directory, out = _period_dir(tmp_path, n), tmp_path / f"out{n}"
     described = json.loads((directory / "period.json").read_text()) | {"tools": TOOLS}
     (directory / "period.json").write_text(json.dumps(described))
@@ -236,34 +239,34 @@ def _leg(opt, tmp_path, n):
     return got, json.loads((out / "pous.json").read_text())
 
 
-def test_where_a_period_names_the_lean_tools_the_legs_answer_is_theirs_and_must_be_the_pythons(toy, tmp_path, monkeypatch):
+def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_and_must_be_the_pythons(toy, tmp_path, monkeypatch):
     """The tools are stand-ins (`_lean`).  The run tool is asked every period with the run's case and the setup tool at
-    the first alone, with the setup's; the leg answers with the run tool's answer, and refuses one that differs from the
-    Python's in more than its reason."""
+    the first alone, with the setup's; the subprotocol answers with the run tool's answer, and refuses one that differs
+    from the Python's in more than its reason."""
     say, runs, served = _lean(monkeypatch, tmp_path)
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
-        got, doc = _leg(opt, tmp_path, 0)
+        got, doc = _subprotocol(opt, tmp_path, 0)
         assert served == [("RUN", [runs[0].case]), ("SETUP", [runs[0].setup_case])]
         assert runs[0].answer["verdict"] == "accept" and runs[0].answer["reason"] != "the Lean's words"
         assert got == runs[0].answer | {"reason": "the Lean's words", "profile": got["profile"]} == doc["answer"]
         assert doc["lean"] == {"run": runs[0].answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
 
-        got, doc = _leg(opt, tmp_path, 1)
+        got, doc = _subprotocol(opt, tmp_path, 1)
         assert served[2:] == [("RUN", [runs[1].case])] and set(doc["lean"]) == {"run"} and got["reason"] == "the Lean's words"
 
         say["run"] = lambda answer: answer | {"verdict": "reject"}
         with pytest.raises(RuntimeError, match="^pous-run-protocol answered .*'verdict': 'reject'.*, the Python .*'verdict': 'accept'"):
-            _leg(opt, tmp_path, 2)
+            _subprotocol(opt, tmp_path, 2)
         assert not (tmp_path / "out2").exists()
 
 
-def test_a_setup_the_lean_refuses_fails_the_first_leg_whatever_the_python_said(toy, tmp_path, monkeypatch):
+def test_a_setup_the_lean_refuses_fails_the_first_period_whatever_the_python_said(toy, tmp_path, monkeypatch):
     """The tools are stand-ins (`_lean`)."""
     say, runs, served = _lean(monkeypatch, tmp_path)
     say["setup"] = {"verdict": "reject", "reason": "C* is not the encoding"}
     with PO.install(toy, _ctx(ENTRY)) as comp:
         with pytest.raises(RuntimeError, match="^pous-setup refused the setup the Python accepted: .*C\\* is not the encoding"):
-            _leg(comp.get("pous"), tmp_path, 0)
+            _subprotocol(comp.get("pous"), tmp_path, 0)
         assert runs[0].answer["verdict"] == "accept" and [exe for exe, _ in served] == ["RUN", "SETUP"]
         assert not (tmp_path / "out0").exists()
