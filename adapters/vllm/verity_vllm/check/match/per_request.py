@@ -360,7 +360,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
             leftover = sum(len(v) for v in by_hash.values())
             permuted = sum(1 for j, x in enumerate(addr) if x is not None and x != j)
             if unmatched or leftover:
-                spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+                def spec(Q: Any, i: int) -> str:
+                    return Q.inst[i]["spec"].split("{")[0]
                 bad_dag.append({"step": s, "n_a": len(A.steps[s]), "n_b": len(P.steps[s]), "unmatched_fold": len(unmatched), "unmatched_component": leftover,
                                 "unmatched_fold_specs": dict(collections.Counter(spec(P, i) for i in unmatched).most_common(6)),
                                 "unmatched_component_specs": dict(collections.Counter(spec(A, A.steps[s][j]) for v in by_hash.values() for j in v).most_common(6)),

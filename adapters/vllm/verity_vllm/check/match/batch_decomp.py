@@ -432,7 +432,9 @@ def _compare_request(reads: _RequestReads, item) -> tuple:
             ma, mb = collections.Counter(ha.values()), collections.Counter(hb.values())
             only_a, only_b = ma - mb, mb - ma
             diff = only_a + only_b
-            spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+
+            def spec(Q: Any, i: int) -> str:
+                return Q.inst[i]["spec"].split("{")[0]
             ent["dag_multiset_equal"] = not diff
             ent["dag_multiset"] = {
                 "a_live": len(la), "a_dead": len(A.inst) - len(la), "b_live": len(lb), "b_dead": len(P.inst) - len(lb),
