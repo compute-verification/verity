@@ -159724,3 +159724,61 @@ records run). I read them at my next checkpoint.
 ## STREAMKEPT, Fri 13 Nov 20:24Z: checkpoint: your 20:19Z is read (hook and mailbox); I run the two tries when you pass me the split's head; the split is not written yet, so no merge is made and no run of mine is out
 
 MEMBERS's newest word on the split is that nothing of it is written and it waits for its two pull requests [read: its 19:34Z and 20:17Z entries; its eleven branches on the remote, none of them the split's]. Nothing is carried: `cursor/proofs-streamkept-2eb0` is at `d37d01aaecad` [run: `git ls-remote`]. I read the mailbox every half hour from now, so the tries go out within that of your message.
+
+## ADDRROW2, a second and stale execution, Fri 13 Nov 20:27Z: NOTICE: two executions of this agent have run side by side since 19:38Z; the one that wrote the 20:09Z and 20:21Z entries holds your orders and its account stands; I am the other; what I did is below, and I stop
+
+**In plain words.** When the VM restarted at about 19:38Z and you sent the 19:40Z order, the turn that was already
+running under your 17:33Z order did not end. It went on, on the old machine, with no word of the restart, of your
+19:40Z order or of your 20:19Z. That turn is me. The other execution wrote "I am the only session of this agent" at
+20:09Z; it could not have known otherwise. At about 20:09Z the old machine went away and my commands began to land on
+the new one, where I found the other execution's worktrees, commits and entries. I have edited none of them. I stop
+with this entry, so that two executions do not write the same files or open pull request 1 twice.
+
+**What I did from 19:38Z to 20:09Z, on the old machine** [run: my own commands; that machine is gone]:
+- Nothing reached a branch or this file. Every `git push` was refused from about 19:50Z ("Cursor refused this
+  agent's identity"). My last pushes were the 19:31Z entry (`5a953186ae9`) and the trial at 19:35Z (`8b434778d3c`).
+- I launched no run in that time. One run of mine from before it is not in the other execution's list:
+  `r20261113-193531-67e1` (19:35Z, the three search-picker tries at `8b434778d3c`), done, failing on `pickOf_isColl`
+  as `r20261113-194523-6705` did. It is a duplicate.
+- Two bundles went to the evidence store at about 20:00Z, when the pushes stayed refused. Neither is needed: the
+  other execution wrote both changes again and pushed them.
+  - `art:3163565484f386f4a384d69ba007ef5eb2c3192c3a4d613d2dba1d0606e9a46f`: my writing of the sampled half, commit
+    `1dcb3ccd1e0c` on `main` `f479876a8758`, never compiled. `e44c1faf080b` is the one that counts.
+  - `art:763ca39058e7f3b354199caac6c0f5af0c8208b5638782e8444d2cf284c8a63c`: my mend of `pickOf_isColl`, commit
+    `4c4ce0d37142` on `8b434778d3c`. `c5817bb3182` is the one that counts.
+
+**What I did after 20:09Z, on the new machine** [run]:
+- A note in the agent's store (`addrrow2-second-execution-note.md`) and a short section at the end of its state
+  file that points to it, so that the other execution learns of me.
+- One new branch of my own, pushed: `cursor/proofs-addrrow2-leafpair-681e` at
+  `9c348a268af5c9f8043681e362971f53053b4e05`, cut from pull request 1's head. It is the base of the C-Flock half as I
+  had written it before the old machine went (the uncommitted copy was lost with it): `Leaf` holds `pair` and
+  `pair_spec`; `walk_binding`, `opening_binding` and `opening_bindingL` keep their statements and become one-line
+  corollaries of the three specs; `append_inj` moves to the specs' file. **It duplicates the base the other execution
+  says at 20:21Z it has written** on its local branch `cursor/proofs-addrrow2-cflock-pairs-681e`; I pushed mine
+  before I read that entry. It differs in one choice: mine keeps the three bare lemmas as corollaries, so their ten
+  call sites do not change in this layer; the other deletes them. The other execution takes it or drops it.
+- One run: `r20261113-202258-62eb` on vy-nebius-cpu-12 (launched 20:23Z, still waiting for a slot at 20:26Z): a try
+  of that branch's three core files at `584ee4849d5b`. Nothing on the branch is compiled until it is back. Its
+  result goes in the store note, not here.
+
+**Three things for whoever writes the base** [read; they hold for either copy]:
+1. `Definitions/Flock/Merkle.lean` does not import `Mathlib.Tactic.SplitIfs`, and the trial's `hm96Pair_spec` uses
+   `split_ifs`. Moved into the definitions file, the proof needs `by_cases` with `rw [ite_eq_left …]` (as on my
+   branch), or the definitions tree gains an import.
+2. `FlockSoundness.Binding.hm96Input` and `.hm96Pair` exist already (`Soundness/Binding/Leaf.lean`, a file in
+   namespace `Binding` that opens `Merkle`), with another meaning. My branch names the leaf's `hm96LeafInput` and
+   `hm96LeafPair`.
+3. `Exec/Headline.lean:68` unfolds `conflictPick`, `onePick` and `collOf` by `simp` at `TreeRewind.ofNever`, so that
+   proof reads the picker's body and changes with it.
+
+**Not established.**
+- Why the earlier turn kept running after the restart, and whether it can happen again. I see only that it did.
+- That anything on `cursor/proofs-addrrow2-leafpair-681e` compiles.
+- Whether my turn's last message reaches you as the answer to your 17:33Z order. If it does, it is from me, the
+  stale execution, and it says what this entry says.
+
+**For you.** Nothing to decide. One fact you may want: an order sent to a worker whose turn is still running can
+leave the earlier turn running unseen. Its pushes are refused while it sits on the old machine, but once its commands
+land on the new machine they are not, as this entry and that branch show. I do nothing more without your word, and a
+word to this agent reaches the other execution, not me, unless you say it is for the second one.
