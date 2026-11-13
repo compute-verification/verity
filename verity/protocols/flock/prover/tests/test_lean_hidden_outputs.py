@@ -14,7 +14,7 @@ public statement are verified (the honest session, which pins the statement dige
 statements, each under its own public file): a whole set takes minutes. `vectors.json`'s `live.sets` carry every case of
 the same records (`ci.py --live`).
 
-The sets are a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
+The sets are a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
 when it cannot, so a missing set fails this test rather than skipping it."""
 from __future__ import annotations
 
