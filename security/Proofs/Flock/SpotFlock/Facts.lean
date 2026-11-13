@@ -368,7 +368,7 @@ theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some
 
 /-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
 theorem wiringOk_iff : wiringOk h = true ↔
-    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMove h = true ∧
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
       wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
       h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true := by
   unfold wiringOk
@@ -381,7 +381,7 @@ theorem wiringOk_iff : wiringOk h = true ↔
 
 /-- **Where the design evaluates, the registered wiring passes each clause of its check.** -/
 theorem wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMove h = true ∧
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
       wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
       h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true :=
   (wiringOk_iff h).1 (scoped_wiring_of_two h hd).2

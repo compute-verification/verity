@@ -22,8 +22,8 @@ verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
   wiring map (`wireMap h`, `returned h`). The replay sample reads the registration and the first stage's coins only,
   so `rsConnected h` is `rs h` itself.
 * `WiresFirst h`, `WiresMove h`, `SourcesNamed h`: three conditions on the code's own wiring, each decided on what the
-  verifier holds, which the design's evaluation decides (`wiresFirst_of_two`, `wiresMove_of_two`,
-  `sourcesNamed_of_two`).
+  verifier holds, which the design's evaluation decides (`wiresFirst_of_two`, `sourcesNamed_of_two`, and
+  `wiresMove_of_two` in `WiresMoveRows`).
 * `rows_of_two`: where the design evaluates, every member with a unit has a computed row.
 * `rewires_of_two`: where the design evaluates and each wire's writer's part is before its reader's, the code's
   wiring map rewires the members' programs (`Prog.Rewires`).
@@ -112,10 +112,10 @@ a run's parts (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`).
 `wiresOk` fails. -/
 def WiresFirst : Prop := writersFirst h = true
 
-/-- **Every wired source bit has a gate to go to** (`wiresMove`), which the design's evaluation decides
-(`wiringOk`). Under it and `SourcesNamed`, a source bit at a port no link names is sent to its writer's output
-(`wireTarget_of_sourcesNamed`), so only the source bits at a port a link names stay inputs of the connected
-program. -/
+/-- **Every wired source bit has a gate to go to** (`wiresMove`), which the design's evaluation decides once per
+template (`wiringOk`, `wiresMoveRows`; `wiresMove_of_two` in `WiresMoveRows`). Under it and `SourcesNamed`, a source
+bit at a port no link names is sent to its writer's output (`wireTarget_of_sourcesNamed`), so only the source bits at
+a port a link names stay inputs of the connected program. -/
 def WiresMove : Prop := wiresMove h = true
 
 /-- **Every source bit is at a port a link or a wire names** (`sourcesNamed`), which the design's evaluation decides
@@ -131,10 +131,6 @@ theorem wiresFirst_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
 /-- **Where the design evaluates, every source bit is at a port a link or a wire names.** -/
 theorem sourcesNamed_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : SourcesNamed h :=
   sourcesNamed_of_rows h (wiring_of_two h hd).2.2.1
-
-/-- **Where the design evaluates, every wired source bit has a gate to go to.** -/
-theorem wiresMove_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : WiresMove h :=
-  (wiring_of_two h hd).2.2.2.1
 
 /-! ## The wiring map rewires the members' programs -/
 

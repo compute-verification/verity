@@ -12,7 +12,7 @@ templates' reference statements, made from the interior window with no run in it
 checks each is in Flock's masked scope (`zkOk`), and the templates' reference reads as the params name them
 (`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. Of `two`'s conjuncts on the
 members' files (`twoFilesOk`), the layout fits them and each reference statement reads as a member's (`filesFitOk`),
-and the registered wiring passes every clause that reads the description alone but one: FLIP_B writes its own port
+and the registered wiring passes every clause of its check but one: FLIP_B writes its own port
 `o0`, which no link names and no wire reads, so `writtenRowsRead` refuses the toy's registration, and `twoFilesOk` and
 the design with it. `runOkAt` refuses the altered run,
 and the honest run with one byte of a session statement's registered reads

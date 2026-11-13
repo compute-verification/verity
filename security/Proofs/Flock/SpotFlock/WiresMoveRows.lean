@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.SpotFlock.WiresGo
 public import Proofs.Flock.SpotFlock.RowAtFits
 public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.SpotFlock.OutputsWritten
@@ -9,8 +8,9 @@ public import Proofs.Flock.SpotFlock.BitsInUnitsOf
 /-!
 # The per-template decision gives every wired source bit a gate to go to
 
-`wiresMove_of_rows`: where the design evaluates and `wiresMoveRows` holds, `wiresMove` holds. For a source bit at a
-port a wire names and no link names (`wireTarget_of_rows`):
+`wiresMove_of_rows`: where the design evaluates and `wiresMoveRows` (`Code`) holds, `wiresMove` holds. The design
+decides `wiresMoveRows` (a clause of `wiringOk`), so `wiresMove` holds wherever it evaluates (`wiresMove_of_two`).
+For a source bit at a port a wire names and no link names (`wireTarget_of_rows`):
 
 * the bit is the first entry at its gate (`source_find`): a gate is one member's, at one place of it (`pos_eq`);
 * its unit is one of its member's (`bitsInUnits`), so it is a position of a whole cell, and that position reads one
@@ -295,5 +295,10 @@ theorem wiresMove_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s = 
       obtain ⟨y, hy⟩ := wireTarget_of_rows h hd hc hs hl hw
       rw [hy]
       rfl
+
+/-- **Where the design evaluates, every wired source bit has a gate to go to**: the design decides it once per
+template (`wiring_of_two`, `wiresMoveRows`), which gives it bit by bit (`wiresMove_of_rows`). -/
+theorem wiresMove_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : WiresMove h :=
+  wiresMove_of_rows h hd (wiring_of_two h hd).2.2.2.1
 
 end SpotFlock

@@ -14,8 +14,9 @@ is read off the accepted run's own design:
 * every gate a checked unit needs is one of its own unit's bits (`neededBits_held`), the members' proof blocks stand
   side by side (`sideBySide_of_held`), each bit is a gate of its unit's proof block (`bitsInUnits`) and a gate is at
   one written position at most (`writtenOnce_held`): at every held code;
-* a commitment position's row is a port of its member's circuit (`rowsArePorts_of_two`) and the registered wiring
-  passes its check (`CheckedRun.wiring_of_ok`): where the design evaluates, which an accepted run's does.
+* a commitment position's row is a port of its member's circuit (`rowsArePorts_of_two`), the registered wiring
+  passes its check (`CheckedRun.wiring_of_ok`) and every wired source bit has a gate to go to
+  (`CheckedRun.wiresMove_of_ok`): where the design evaluates, which an accepted run's does.
 
 What remains is the width, the copy and the row at the address map (`WidthFact`, `CopyFact`, `RowFact`) and the
 reference reads being well formed (`RefReadsWf`): `addressesConnected_of_held`. With the session frame built
@@ -43,7 +44,8 @@ theorem addressesConnected_of_held (hWf : RefReadsWf h) (hW : WidthFact h (addre
     (hC : CopyFact h (addressOf h)) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) :
     AddressesConnected h :=
   addressesConnected_of_wiring h
-    (fun _ hr => wiring_of_wiringOk (CheckedRun.wiring_of_ok hr).2 (neededBits_held h)
+    (fun _ hr => wiring_of_wiringOk (CheckedRun.wiring_of_ok hr).2 (CheckedRun.wiresMove_of_ok hr)
+      (neededBits_held h)
       (inside_of (neededBits_held h) (sideBySide_of_held h) (bitsInUnits h) (writtenOnce_held h))
       (writtenOnce_held h) (CheckedRun.rows_of_ok hr) hWf) hW hC hRow
 

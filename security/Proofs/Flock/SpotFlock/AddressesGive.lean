@@ -5,6 +5,7 @@ public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.AddressFactsGive
 public import Proofs.Flock.SpotFlock.BitsInUnitsOf
 public import Proofs.Flock.SpotFlock.OwnReads
+public import Proofs.Flock.SpotFlock.WiresMoveRows
 
 /-!
 # The addresses premise, from the facts of an accepted run
@@ -22,9 +23,10 @@ The entry and one tree a gate are proved from those (`entryFact_of_wiring`, `one
 ask of the registered wiring is no premise: a run is accepted only where the design evaluates, and the design
 evaluates only where the registered wiring passes its check (`CheckedRun.wiring_of_ok`, `wiringOk`). The check
 decides its clauses on the rows once per template; the statements the entry reads bit by bit follow
-(`sourcesNamed_of_rows`, `writtenUnwired_of_rows`), as does a registered read at a port no link or wire names
-reading a port of the interior record (`OwnReads`, `ownReads_of`), and the boundary record holds no written bit at a
-port no link names because a gate is at one written position at most (`returnedWhole_of_once`).
+(`sourcesNamed_of_rows`, `writtenUnwired_of_rows`, and `wiresMove_of_rows` where the design evaluates:
+`CheckedRun.wiresMove_of_ok`), as does a registered read at a port no link or wire names reading a port of the
+interior record (`OwnReads`, `ownReads_of`), and the boundary record holds no written bit at a port no link names
+because a gate is at one written position at most (`returnedWhole_of_once`).
 
 Each of those facts is stated over accepted runs, so its own proof may read the design's conditions the same way.
 `Inside` is one of them proved (`inside_of`), from the members' proof blocks standing side by side (`SideBySide`) and
@@ -48,12 +50,20 @@ theorem CheckedRun.wiring_of_ok {r : CheckedRun h.stage} (hr : r.Ok h) :
   obtain ⟨Pt, d, spec, hx, hP, h2, hrest⟩ := hr
   exact scoped_wiring_of_two h h2
 
-/-- **What the entry and one tree a gate ask of the held code**, where the registered wiring passes its check: the
-facts of an accepted run, and the check's own clauses. -/
-theorem wiring_of_wiringOk (hw : wiringOk h = true) (hN : NeededBits h) (hI : Inside h) (hO : WrittenOnce h)
-    (hR : RowsArePorts h) (hWf : RefReadsWf h) : Wiring h := by
-  obtain ⟨-, hfirst, hnamed, hmove, halike, hunwired, -, hown, -, -⟩ := (wiringOk_iff h).1 hw
-  exact ⟨hN, hI, hO, hR, portsMember h, ownReads_of hown hWf, sourcesNamed_of_rows h hnamed, hmove, hfirst, halike,
+/-- **At an accepted run, every wired source bit has a gate to go to**: the run's design evaluates
+(`wiresMove_of_two`). -/
+theorem CheckedRun.wiresMove_of_ok {r : CheckedRun h.stage} (hr : r.Ok h) : WiresMove h := by
+  obtain ⟨Pt, d, spec, hx, hP, h2, hrest⟩ := hr
+  exact wiresMove_of_two h h2
+
+/-- **What the entry and one tree a gate ask of the held code**, where the registered wiring passes its check and
+every wired source bit has a gate to go to: the facts of an accepted run, and the check's own clauses. The check
+decides the wired source bits once per template (`wiresMoveRows`), which gives `WiresMove h` only where the design
+evaluates (`wiresMove_of_two`), so it is taken beside the check. -/
+theorem wiring_of_wiringOk (hw : wiringOk h = true) (hM : WiresMove h) (hN : NeededBits h) (hI : Inside h)
+    (hO : WrittenOnce h) (hR : RowsArePorts h) (hWf : RefReadsWf h) : Wiring h := by
+  obtain ⟨-, hfirst, hnamed, -, halike, hunwired, -, hown, -, -⟩ := (wiringOk_iff h).1 hw
+  exact ⟨hN, hI, hO, hR, portsMember h, ownReads_of hown hWf, sourcesNamed_of_rows h hnamed, hM, hfirst, halike,
     returnedWhole_of_once hO, writtenUnwired_of_rows h hunwired⟩
 
 variable (h) in
@@ -78,7 +88,8 @@ theorem addressesConnected_of_runs (hN : NeededBits h) (hI : Inside h) (hO : Wri
     (hWf : RefReadsWf h) (hW : WidthFact h (addressOf h)) (hC : CopyFact h (addressOf h))
     (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h :=
   addressesConnected_of_wiring h
-    (fun _ hr => wiring_of_wiringOk (CheckedRun.wiring_of_ok hr).2 hN hI hO hR hWf) hW hC hRow
+    (fun _ hr => wiring_of_wiringOk (CheckedRun.wiring_of_ok hr).2 (CheckedRun.wiresMove_of_ok hr) hN hI hO hR hWf)
+    hW hC hRow
 
 variable (h) in
 /-- **The addresses premise, from the facts of the members' programs and of an accepted run**:
