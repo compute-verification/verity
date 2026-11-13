@@ -42,19 +42,15 @@
 # directory's maps and toy fixtures, research's store vocabulary and `moves.json`, and fixtures, whose bytes tests pin.
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
-files = ["verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean",
-         "Security/Properties/NetworkCertifier/*LinkWindow.lean",
-         "Security/Proofs/Properties/NetworkCertifier/*LinkWindow.lean"]
+files = ["verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
+         "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+         "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
 
 [words]
 "Kind.warden" = "Kind.networkCertifier"
-"linkWindowAcceptMeans_honest_warden" = "linkWindowAcceptMeans_honest_certifier"
-"WardenSchedule" = "CertifierSchedule"
-"wardenCode" = "certifierCode"
-"wardenLane" = "certifierLane"
 "NetworkCertifier/Warden" = "NetworkCertifier/Cells"
 "NetworkCertifier.Warden" = "NetworkCertifier.Cells"
 "Warden.lean" = "Cells.lean"
