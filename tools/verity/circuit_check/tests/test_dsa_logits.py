@@ -6,7 +6,7 @@ import pytest
 
 
 def _lowered_ands(t) -> int:
-    """The ANDs of ``t``'s C-Flock lowering."""
+    """The ANDs of ``t``'s Flock lowering."""
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
 

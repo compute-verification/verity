@@ -1793,8 +1793,8 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
 
 def decoy_window(rng: random.Random, live: bool = False) -> dict:
     """A `window` case honest in everything but a decoy (`decoy`) in its circuit's root, or with `live` in its live
-    Program's: its commitments, proof outcomes and ledger are over that descriptor, as a prover who built its window on
-    it presents them. A reader of ids alone skips the node and credits the window."""
+    Program's: its commitments, proof outcomes and ledger are over that descriptor, as a prover who built its execution phase on
+    it presents them. A reader of ids alone skips the node and credits the execution phase."""
     if live:
         d = window_instance(rng, "live-decoy")
         program = hashlib.sha512(bytes.fromhex(d["live"]["descriptor"])).hexdigest()

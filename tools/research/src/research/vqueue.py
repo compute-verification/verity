@@ -569,7 +569,7 @@ MOVE_ON_CHAIN = ("move on chain", "a candidate on main's chain holds a move it d
 class _Tried:
     """What a tick that builds on the chain's top tried (`decide`): its Lean batch and why it opened none, its batch of PRs
     with no Lean change, whether the chain had room, whether it holds a member changing `tools/move/`'s scripts, the
-    pool the Lean batch was drawn from, and the heads of the moves it advanced to (``hold``) and of every move its builds
+    pool the Lean batch was sampled from, and the heads of the moves it advanced to (``hold``) and of every move its builds
     sit on (``moves``)."""
     lean: tuple[int, ...]
     why: str
