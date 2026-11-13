@@ -10,7 +10,7 @@ public import Proofs.Pouw.Lead.Tail.Fiber
 `λ_G^k / k!` share of the coins, `λ_G = pairs · colBlocks · S · tiles / 7^8` (`lamG`).
 
 A column block's own coordinates are its eight columns' tag weights (`setG`), and the coins are the rest (`b`, `a₁`,
-the coin lanes), drawn first, and a product over the column blocks (`gEquiv`). `count_tail_equiv` then needs:
+the coin lanes), sampled first, and a product over the column blocks (`gEquiv`). `count_tail_equiv` then needs:
 
 * **Reads**: a column block's tiles read the tag weights of its own columns only.
 * **The fiber** (`columns_fiber`): two tiles at one step, column block and coin tile have rows of one parity in one

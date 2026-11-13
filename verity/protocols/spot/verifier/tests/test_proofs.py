@@ -339,9 +339,9 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
 
 
 def _pointed(fx: Path) -> str:
-    """The fixture's public file with the first drawn unit's ref at port 0 (the row it reads of that port's shared table)
-    pointed at the next instance's, as a prover pointing a drawn unit at another unit's rows would write it; its header
-    and tables kept. A drawn unit's, since the session's statement is the drawn units' (`Flock.Draw`); port 0, an input,
+    """The fixture's public file with the first sampled proof block's ref at port 0 (the row it reads of that port's shared table)
+    pointed at the next instance's, as a prover pointing a sampled proof block at another unit's rows would write it; its header
+    and tables kept. A sampled proof block's, since the session's statement is the sampled proof blocks' (`Flock.Draw`); port 0, an input,
     since a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
     st = fx / "stage"
     head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
@@ -361,7 +361,7 @@ def _pointed(fx: Path) -> str:
 @pytest.mark.slow
 def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
     """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
-    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a drawn unit's input ref
+    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a sampled proof block's input ref
     pointed at the next instance's row is refused at setup, before any proof is read, and proves no proof block. Round 2
     requires every port a second-stage header shares rows at to be registered (`second-refs`), so its sessions' refs are
     held this way."""

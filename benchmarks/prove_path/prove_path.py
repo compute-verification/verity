@@ -165,7 +165,7 @@ every byte string: the requests, or a `ValueError` naming why, the same one on e
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
-covers (`I2Compiler`, `advice_windows.Traced`). The window's work law (``work-rate:NUM/DEN``, a stream's rule being a rate) then
+covers (`I2Compiler`, `advice_windows.Traced`). The window's work sampling design (``work-rate:NUM/DEN``, a stream's rule being a rate) then
 samples every unit of theirs beside the rest's share (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
 A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
