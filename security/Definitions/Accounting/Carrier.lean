@@ -64,7 +64,7 @@ to `joined t + L − 1`. The game flips every append's coin with the codec, so `
 **A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
-passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's
+passes' ticks (`Placement.executionPhaseTicks`). On one clock with a placed execution's other windows (compute accounting's
 `region` over ticks), they say which of a device's ticks a pass and a window take. `Placement.Deadlines` asks that no
 device tick be in two windows or in two passes of one window.
 
@@ -371,13 +371,13 @@ def Placement.passTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ
   Finset.Ico (p.ticks d (bind w j)) (p.ticks d (bind w j) + τ)
 
 /-- **Window `w` on device `d`'s clock**: the ticks of its passes. -/
-def Placement.windowTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (d : L) : Finset ℕ :=
+def Placement.executionPhaseTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (d : L) : Finset ℕ :=
   Finset.univ.biUnion fun j => p.passTicks bind τ w j d
 
 /-- **The passes keep their deadlines on every device's clock**: on each device, no tick is in two windows or in two
 passes of one window, so each of a device's ticks is taken by at most one pass. -/
 def Placement.Deadlines (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) : Prop :=
-  ∀ d, (Pairwise fun w w' => Disjoint (p.windowTicks bind τ w d) (p.windowTicks bind τ w' d)) ∧
+  ∀ d, (Pairwise fun w w' => Disjoint (p.executionPhaseTicks bind τ w d) (p.executionPhaseTicks bind τ w' d)) ∧
     ∀ w, Pairwise fun j j' => Disjoint (p.passTicks bind τ w j d) (p.passTicks bind τ w j' d)
 
 end Accounting.Requirement
