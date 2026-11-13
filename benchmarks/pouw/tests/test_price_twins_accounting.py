@@ -22,7 +22,6 @@ from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 import clear_work as CW
 
