@@ -36,5 +36,4 @@ what it holds.
 - **Loads:** vLLM, torch, triton, numpy and, in `meta_inventory`, `huggingface_hub`; the integration's `config`,
   `settings`, `errors`, `log`, `target_family`, `records.logits_capture`, `program.frontend` (the target profile,
   the kernel read-back, the export's compatibility) and, in `vllm_adapter`, `program.prefix_plan` and `commit`;
-  `verity.definitions.registry`, `verity.definitions.commitments`, `verity.commitments`, `verity.circuits.codec`
-  and `verity_config`.
+  `verity.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.
