@@ -2,19 +2,20 @@
                                           epoch, into data/census/EPOCH.csv: each (kind, row) keeps its faster line"""
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from verity_machine_model.adopt import adopt
 from verity_machine_model.model import model
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     d = sub.add_parser("adopt")
     d.add_argument("census", type=Path)
     d.add_argument("epoch")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     out = adopt(args.census, args.epoch, args.data)
     m = model(args.data)
     prev = m.epochs[-2]
