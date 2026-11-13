@@ -132715,3 +132715,41 @@ Nothing.
 - That anything at `b0048e4e24` compiles: `4d80` decides. The last compiled head of the join is `401d7ef808` (`22d3`); the three mends of `JoinsAt.lean` since then are not compiled.
 - The 18 files of `SampledTwo/` outside the five tries, at the tip.
 - The two red root tests of my 09:15Z entry are as they were; this merge touches none of the files they name.
+
+## CUT, Fri 13 Nov 09:27Z: `1ae7e0f73d` on `cursor/proofs-cut-9323` COMPILES (`6730`, rc 0): one deletion in `CutRoots.lean`, of `oneRoot_first` and its helper `firstDraws_after`, which nothing on the join reads since `361166f5de`; no statement that stays changed. ASSEMBLY: merge it when convenient, no conflict at the join's `023df63610`. No Cut file is named in any failure
+
+**In plain words.** The cut stands as it did at 08:41Z. The join stopped reading one of my theorems when it named the first stage's draw at the boundary parameters' family, so I deleted that theorem and the one lemma only it used. That is 29 lines out and 3 in, and nothing that is read moved. `OtherRoots` is as it was.
+
+1. **What changed** [read: `git diff 4c18473270 1ae7e0f73d`]: `CutRoots.lean` only. `oneRoot_first` and `firstDraws_after` are gone; the module docstring names `oneRoot_draws` and `oneRoot_second` where it named `oneRoot_first`. `oneRoot_draws`, `oneRoot_second`, `OtherRoots` and every other statement in the file are byte for byte as before.
+2. **Why it is safe to delete** [run: `git grep` at the join's `023df63610`]: no file under `security/`, `verity/` or `tests/` there names either one outside `CutRoots.lean`. `DrawRoots.lean` reads `oneRoot_draws` (line 71) and `oneRoot_second` (line 96), as ASSEMBLY's 08:45Z entry says.
+   - Two other branches' tips hold an older copy of the join's `DrawRoots.lean`, whose line 85 reads `oneRoot_first`: `cursor/proofs-addrrow2-5e1b` (`d2cae2a309`) and `cursor/proofs-sessionof2-7c3a` (`d45f63a86c`). Neither holds `361166f5de` [run: `git merge-base --is-ancestor`]. The join merged `d2cae2a309` at 09:16Z and its `DrawRoots.lean` still reads no deleted name [run], so those copies are the join's old ones and not those branches' own work. [derived] A branch that takes my head without the join's `DrawRoots.lean` would not compile; it reaches them only through the join.
+3. **`r20261113-091646-6730`** (vy-nebius-cpu-1, source `1ae7e0f73de254e94e281f80c04225bfc580589a`) [run]: "done rc=0 class=SUCCESS".
+   - "lean exit 0 in 378 s".
+   - "axiom probe: none of its 14 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". It was 16 at `4c18473270`.
+   - Siblings: "no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.CutRoots declares a name it does (74 imported in 10 s …); 4016 unchecked". That node's build held few of the package's modules, so this siblings check is thin; `5897` imported 2797. The change adds no name, so it can't add a clash. [derived]
+   - Only `CutRoots.lean` was tried. No `.lean` file on my branch imports it [run: `git grep`], and the other seven Cut files are unchanged from `4c18473270`, which `5897` compiled.
+4. **ASSEMBLY: merge `1ae7e0f73d`** [run: `git merge-tree --write-tree` onto `023df63610`]: no conflict; the result differs from the join's tip in `CutRoots.lean` alone (3 lines in, 29 out), and all eight Cut files in it are my head's by blob id. It is not urgent: the join compiles the same with or without it. `tests/test_lean_packages.py` at my head: "35 passed" [run].
+5. **The join and my files** [read: ASSEMBLY's 08:45Z, 09:10Z and 09:15Z entries]: the join holds `4c18473270` since `56ec905f82`. No entry names a failure in a Cut file. The two red root tests at `82ad1c6cb5` name no Cut file: the certifier test names `RunsAs/Proved.lean`, and the public-boundary test's eight edges are from `Flock/SpotFlock/`.
+6. **ASSEMBLY's 09:10Z table, row 5 (`otherRoots`)** [read, against `OtherRoots`, `CutRoots.lean:268` at my head]: it matches. On two windows, each session shows the other stage's family after that stage's digest alone; the form's accept does not give it, and there is no lemma.
+7. **Mailbox** [run]: read through `97eda212f6` at 09:27Z; nothing new for CUT since your 07:54Z.
+
+### STOP RULE
+
+Not reached. No statement that anything reads changed.
+
+### NEEDS
+
+- ASSEMBLY: item 4, at its next merge.
+- Nothing from the coordinator. I write nothing for the two refusals, and merge no `main`.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- My files on the join's own tree over `1e20910586`: the join's whole compile says. The join merged STAGECOINS's `5f7eec4add` at `b0048e4e24` (09:19Z) [read: its log]; I have read no verdict of a whole compile at or after that.
+- That `DrawRoots.lean` compiles over `1ae7e0f73d`: not tried, since it is the join's file and not on my branch. It reads only names whose statements did not change. [derived]
+- A records run at any head that holds these files: none, as ruled.
+
+Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). Run ended rc 0: `r20261113-091646-6730`. No run of mine is out.
