@@ -5,16 +5,16 @@ torch-free, no run artifacts.  The default B0 profile stays the pinned one (PROT
 from __future__ import annotations
 
 import importlib
-
 import json
 from pathlib import Path
 
-from verity_vllm.observe.fold.profiles import profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
+from tests.observe.test_gen_sampling import _adapter_fn
+from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
 
 OVB0 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0_ovs")
 OVB1 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B1_ovs")
-from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
-from tests.observe.test_gen_sampling import _adapter_fn
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 

@@ -5,10 +5,10 @@ import json
 
 import numpy as np
 
-from verity_vllm.pipeline import vu_export as VX
-from verity_vllm.pipeline import vu_store as VS
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _weights
 from tests.pipeline.test_vu_export import ROOT
+from verity_vllm.pipeline import vu_export as VX
+from verity_vllm.pipeline import vu_store as VS
 
 
 def test_the_draw_budget_starts_after_a_slow_population_build(tmp_path, monkeypatch):
@@ -49,8 +49,8 @@ def test_the_draw_budget_starts_after_a_slow_population_build(tmp_path, monkeypa
 def test_the_export_reuses_the_replays_population_and_never_keeps_it(tmp_path, monkeypatch):
     """The Commit's replay has already built every request Program's index and population: the export takes that one (no rebuild
     inside the Commit), and `after_replay` drops it whether or not it exports."""
-    from verity_vllm.check.replay import driver as SR
     from tests.pipeline.test_vu_export import _world
+    from verity_vllm.check.replay import driver as SR
     world = _world(attn=True)
     programs = {rid: world.inst for rid in world.prompts}
     bmap, committed = world.bmap_and_reader()
