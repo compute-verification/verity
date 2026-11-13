@@ -4,7 +4,7 @@
 # and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
 set -uo pipefail
 cd "$(dirname "$0")"
-security=$(cd ../../../../security && pwd)
+security=$(cd ../../security && pwd)
 export PATH="$HOME/.elan/bin:$PATH"
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
