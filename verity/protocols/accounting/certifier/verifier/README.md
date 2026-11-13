@@ -59,10 +59,11 @@ Open premises (`open`):
 - **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`,
   `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; the tests of `../../pouw/verifier` and
-  `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
-  `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
-  and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and `../../../proofs/recursion` import none.
+  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `demos/onsite_served`; the tests of
+  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
+  `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
+  check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
+  `../../../proofs/recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
@@ -90,10 +91,10 @@ Open premises (`open`):
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
   `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
-  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.
-  The modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier`
-  and, `coin_link` alone, `verity.protocols.proofs.spot.device`, never the prover side, which
-  `../device/program/lean/scripts/window_vectors.py` and the tests import.
+  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
+  modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
+  `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.protocol` and `verity.channel`;
+  never the prover side, which `../device/program/lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs (`benchmarks/network_traces`).
 
 ## What this package holds
@@ -301,6 +302,7 @@ A spec-level reference for network accounting's timing channel:
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
+- its deployment manifest (`parties`): no party of it runs under the runtime;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the

@@ -23,7 +23,9 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused
@@ -94,6 +96,9 @@ def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 _VERIFIER = (Role("verifier", "auditor"),)
+#: the certifier's parties less the workers: the step-0 toy is the workload's party and runs no component's developer
+#: side, the certifier's included
+_CERTIFIER = tuple(r for r in NC.MANIFEST.parties if r.name != NC.WORKERS)
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"],
               parties=(Role("challenger", "auditor"), Role("firewall", "developer"), *_VERIFIER),
@@ -106,12 +111,10 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
-    Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
+    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=(Role("network-certifier", "auditor"), *_VERIFIER),
-              channels=(Channel("network-certifier", "workers", ("out-opening",)),
-                        Channel("network-certifier", "verifier", ("out-record",))),
+    Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
               default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
