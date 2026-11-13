@@ -114,8 +114,9 @@ def _sha256(p: Path) -> str:
 #: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
                        "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
-#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
-RUN_FILE_GLOBS = ("logs/stall-*.txt",)
+#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run),
+#: and the runner's answers to `research run-preserve` (run_preserve.ANSWERS).
+RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
 #: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"

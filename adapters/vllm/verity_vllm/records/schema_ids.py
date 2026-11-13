@@ -1,7 +1,8 @@
 """The schema ids of the records that have no type in this package yet: the string a record carries as ``schema``.
 
 Each id is written once, here; its writers and readers read the constant.  Beside each: the record, and what writes it.
-An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.
+An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.  One constant
+is no ``schema``: `SERVED_REQUIRED_MANIFEST_KIND`, the ``kind`` a served Build carries beside its ``schema``.
 """
 from __future__ import annotations
 
@@ -22,6 +23,12 @@ COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 #: the record of `verity-vllm gate call-boundaries` (`acquire.gate.CALL_BOUNDARIES_SCHEMA`), which `call_boundaries_of`
 #: writes
 CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+#: what the acquisition plan's hooks saw in one run, occurrence counts and shapes only, which
+#: `acquire.install.OccurrenceSink.to_json` builds and the capture writes as `acquisition_observed.json`
+ACQUISITION_OBSERVED_SCHEMA = "verity-vllm/acquisition-observed/v1"
+#: the `kind` of a served Build (`acquire.served.KIND`), a manifest of `query.manifest.format.SCHEMA`, which
+#: `acquire.served.assemble` writes
+SERVED_REQUIRED_MANIFEST_KIND = "verity/served-required-manifest/v1"
 
 # --- the Commit (`verity_vllm.commit`)
 #: a dumped store's `store.json` (`commit.store_dump.SCHEMA`), which `dump_files` writes and `load` refuses any other
@@ -54,6 +61,9 @@ ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
 #: container's limit, which the Commit's driver writes as `admission_<kind>.json`, and the record of the scheduled steps
 #: inside it
 ADMISSION_BOUND_SCHEMA = "verity-sweep/admission/f-da-15/v1"
+#: a leased Commit's lease record (`pipeline.gpu_lease.run`): when the GPU was requested, held and released, and why it
+#: was kept where it was; the row's driver writes it as `gpu_lease.json` beside the row
+GPU_LEASE_SCHEMA = "verity-vllm/gpu-lease/v1"
 
 # --- the Build (`verity_vllm.pipeline`)
 #: the Build's result, a derive dir's `result.json`, which `pipeline.build.run` makes
@@ -106,6 +116,12 @@ CONFIGURATION_CARD_SCHEMA = "verity-gen/card/v1"
 TIMELINE_SCHEMA = "verity-sweep/timeline/v1"
 #: the `row.json` beside a row, its stages' Attempts, which `pipeline.research._row_json` writes
 ROW_ATTEMPTS_SCHEMA = "verity-sweep/row-v2/v1"
+#: the configuration a row command ran with, `<row dir>/effective_config.json` (`pipeline.row.EFFECTIVE_SCHEMA`), which
+#: `effective_config` writes
+EFFECTIVE_CONFIG_SCHEMA = "verity-vllm/effective-config/v1"
+#: a run's `tree.json`, the tree a row runs from with its export and its release line, which
+#: `pipeline.row_stages.SingleRow.prepare` writes
+EXECUTING_TREE_SCHEMA = "verity-sweep/executing-tree/v1"
 #: the document of `epoch digests`, which `pipeline.epoch`'s `main` writes
 REBASELINE_DIGESTS_SCHEMA = "verity-vllm/rebaseline-digests/v1"
 
@@ -186,6 +202,8 @@ CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
 LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
 #: the TP Commit's value check, `value_check.json`, which `pipeline.tp.commit`'s `main` writes
 TP_VALUE_CHECK_SCHEMA = "verity/commit-integ/value-check-tp/v1"
+#: one pair's cross-rank check of the ranks' collectives, `xrank_pair<N>.json`, which `pipeline.tp.commit`'s `main` writes
+XRANK_COLLECTIVES_SCHEMA = "verity/tp2/xrank-collectives/v1"
 #: the pairs' cross-rank checks folded, `xrank_collectives.json`, which `pipeline.tp.commit`'s `main` writes
 XRANK_COLLECTIVES_FOLD_SCHEMA = "verity/tp2/xrank-collectives-fold/v1"
 #: the ranks' weights pins folded, `weights_pin.json`, which `pipeline.tp.commit`'s `main` writes

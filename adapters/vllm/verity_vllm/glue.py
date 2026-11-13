@@ -53,7 +53,6 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine.profiles import dense_generic
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.observe.fold import profiles
 from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
 
@@ -212,6 +211,8 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
 
 
 def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
+    # Here, not at the module's head: the package adds its finder to `sys.meta_path` when it is first imported.
+    from verity_vllm.observe.fold import profiles
     from verity_vllm.observe.fold.profiles import generic
     cfg, source = config
     if cfg is None:

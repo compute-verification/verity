@@ -97,6 +97,40 @@ def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_i
     assert w._fit(n * PV.ALIGN) == (None if at is None else at * PV.ALIGN)
 
 
+def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_the_ring_in_order(tmp_path, monkeypatch):
+    """With two writer threads, call 1's file is written while call 0's is still held, and a third call waits for room
+    though call 1 is written: its bytes go where call 0's still are only once call 0 is written, so every file is
+    ``np.savez``'s of its own call. The third caller starts once call 1's writer has finished with the lock, so the only
+    notify it can wake to before call 0 is written is the one that frees the ring."""
+    gate, savez = threading.Event(), PV._savez
+
+    def held(path, *arrays):
+        if path.name == "0.npz":
+            gate.wait()
+        return savez(path, *arrays)
+    monkeypatch.setattr(PV, "_savez", held)
+    calls = [_call(10 + i) for i in range(3)]
+    w, d = PV.Writer(2 * _size(*calls[0])), tmp_path / "w0"
+    w.open(d)
+    w.keep(d, 0, *calls[0])
+    w.keep(d, 1, *calls[1])
+    st = w._dirs[str(d)]
+    with w._cv:
+        w._cv.wait_for(lambda: st["pending"] == 1)
+    third = threading.Thread(target=w.keep, args=(d, 2, *calls[2]), daemon=True)
+    third.start()
+    with w._cv:
+        w._cv.wait_for(lambda: st["waits"] > 0 or st["calls"] == 3)
+        assert (st["waits"], st["calls"], [j.index for j in w._jobs]) == (1, 2, [0, 1])
+        assert sorted(p.name for p in (d / PV.CALLS).iterdir()) == ["1.npz"]
+    gate.set()
+    third.join()
+    assert w.wait(d)["waits"] == 1
+    for i, c in enumerate(calls):
+        assert (d / PV.CALLS / f"{i}.npz").read_bytes() == _today(tmp_path / f"{i}.today", *c), i
+    w.close()
+
+
 @pytest.mark.parametrize("error, named", [(OSError(28, "No space left on device"), r"OSError: .*No space"),
                                           (RuntimeError("CUDA error: an illegal memory access was encountered"),
                                            r"RuntimeError: CUDA error")])
@@ -148,8 +182,9 @@ def test_an_unexpected_failure_stops_the_writer_and_no_window_waits_on_it(tmp_pa
     with pytest.raises(OSError, match=r"2 of its 3 calls' prover state wasn't written: call 1: ValueError: a bug$"):
         w.wait(tmp_path / "w0")
     assert sorted(p.name for p in (tmp_path / "w0" / PV.CALLS).iterdir()) == ["0.npz"]
-    w._thread.join()
-    assert [(x.exc_type, x.thread and x.thread.name) for x in raised] == [(ValueError, "h1-keep")]
+    for t in w._threads:
+        t.join()
+    assert [x.exc_type for x in raised] == [ValueError] and raised[0].thread in w._threads
     w.open(tmp_path / "w1")
     w.keep(tmp_path / "w1", 0, a, s_a, r)
     with pytest.raises(OSError, match=r"1 of its 1 calls' .* call 0: the writer stopped at call 1: ValueError: a bug$"):
@@ -169,3 +204,5 @@ def test_a_call_past_the_bound_is_refused_and_a_directory_opens_on_one_writer(tm
     assert w.wait(tmp_path) == {"calls": 0, "bytes": 0, "waits": 0}
     w.close()
     other.close()
+    with pytest.raises(ValueError, match="at least one"):
+        PV.Writer(PV.ALIGN, threads=0)

@@ -2,7 +2,7 @@
 code, by the exact path `row_pod.sh` uses (`verity-vllm manifest build-global --fixture WL --programs-root ROW --workload-digest WD`
 at B>=2; `verity-vllm manifest build --program ROW/build_request --workload WL` at B=1) and compare:
 
-    manifest_digest     sha256 over the sorted (family + IDENTITY_KEY) rows     -- `manifest_format.manifest_digest`
+    manifest_digest     SHA-512 over the sorted (family + IDENTITY_KEY) rows    -- `manifest_format.manifest_digest`
     program_digest      the Program digest the identities are keyed by          -- GP-01's workload digest (B>=2) / the request Program's (B=1)
     identities          the identity count
     identity_rows_sha256  sha256 over the sorted canonical IDENTITY_KEY tuples (family-blind): byte-for-byte equality of the identity SET

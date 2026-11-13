@@ -226,6 +226,45 @@ def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_wh
          " -- one triple aliases")]
 
 
+@pytest.mark.parametrize("block", [None, {}])
+def test_a_record_whose_blocks_are_null_or_empty_reads_as_one_that_leaves_them_out(tmp_path: Path, logged: Lines, block: Any) -> None:
+    """`record` reads a replay record's `sample`, `population`, `strata` and `moe_planes` as blocks the record may leave out: a
+    replay that did not run holds none of them, and one that holds them null or empty puts the same on the run's row."""
+    absent, held = sources(tmp_path), sources(tmp_path)
+    sr, lk = {"schema": SAMPLED_REPLAY, "result": None, "grade": "not-evaluated"}, {"schema": BOUNDARY_LINKAGE, "result": None}
+    blocks = dict.fromkeys(("sample", "population", "strata", "moe_planes"), block)
+    C2.record(absent, dict(sr), dict(lk), tmp_path / "sampled_replay_p0.json")
+    lines = logged()
+    C2.record(held, sr | blocks, dict(lk), tmp_path / "sampled_replay_p0.json")
+    assert held.components == absent.components and logged()[len(lines):] == lines and len(lines) == 2
+    assert held.components["sampled_replay"]["population"] == {"n": None, "source": None, "by_family": None, "not_evaluable_by_family": None}
+    assert (held.components["sampled_replay"]["n"], held.components["sampled_replay"]["strata_n"]) == (None, 0)
+    assert held.row["commit"]["sampled_replay"] == absent.row["commit"]["sampled_replay"] | {k: block for k in blocks if k != "strata"}
+    assert held.row["commit"]["sampled_replay"]["strata_n"] == 0
+
+
+@pytest.mark.parametrize("check, layers", [({}, 0), ({"per_layer": None}, 0), ({"per_layer": {}}, 0), ({"per_layer": {"0": {}, "1": {}}}, 2)])
+def test_the_alias_check_s_line_counts_the_layers_the_check_names(tmp_path: Path, logged: Lines, check: Record, layers: int) -> None:
+    sr, lk = evaluated()
+    sr["moe_planes"] = {"alias_check": {"compared": 2, "identical_n": 0, "result": True, "plane_words": 8} | check}
+    C2.record(sources(tmp_path), sr, lk, tmp_path / "sampled_replay_p0.json")
+    assert logged()[-1] == (f"[delta] C2 MOE PLANE ALIAS CHECK (pair 0): OK up != down bytes on 2/2 (request, step, layer) triples, {layers} layers, "
+                            "plane words 8")
+
+
+@pytest.mark.parametrize("sample", [None, {}])
+def test_a_replay_whose_sample_is_null_or_empty_is_kept_with_no_seed_and_counts_no_evaluation(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample: Any) -> None:
+    sr, lk = evaluated()
+    evaluates(monkeypatch, (sr | {"sample": sample}, lk))
+    readings(monkeypatch, None, None, None)
+    s, cache = sources(tmp_path, **CACHED), Cache()
+    C2.run(s, cache)
+    (kept,) = cache.values()
+    assert kept["seed"] is None and kept["sr"]["sample"] == sample
+    assert s.tl.calls[-1] == ("end", "validate.sampled_replay", {"pair": 0, "ok": True, "n": None, "linkage": True, "reused": False})
+
+
 def test_the_live_replay_reads_a_registered_weight_from_the_engine_s_model() -> None:
     """`live_weights` is the in-process replay's reader of registered inputs: a field's words from the model's own tensor,
     under the Program's prefix or without it, and None for a field the model does not hold."""

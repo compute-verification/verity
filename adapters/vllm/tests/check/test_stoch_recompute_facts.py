@@ -9,12 +9,12 @@ import os
 import struct
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
 
 from verity_vllm.check.replay import stoch_recompute as SR
-from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import SCHEMA
 
 
@@ -48,6 +48,36 @@ def test_a_header_that_states_no_sampling_declares_greedy_and_one_without_a_work
         SR._request_facts(SimpleNamespace(workload={"sampling": {"temperature": None}, "requests": [{"request_id": "a"}]}))
 
 
+@pytest.mark.parametrize("left_out", [None, [], {}], ids=["null", "empty list", "empty table"])
+def test_a_block_the_headers_workload_leaves_out_declares_nothing(left_out):
+    """Its requests, its children, its sampling and the sampling's per-request entries: each absent, null or empty."""
+    one = {"requests": [{"request_id": "a", "seed": 1}], "children": [{"request_id": "a.1", "parent": "a"}],
+           "sampling": {"temperature": 0.5, "per_request": [{"request_id": "a", "top_k": 40}]}}
+    stated: dict[str, dict[str, Any]] = {"a": {"seed": 1, "temperature": 0.5, "top_p": 1.0, "top_k": 40},
+                                         "a.1": {"seed": None, "temperature": 0.5, "top_p": 1.0, "top_k": 40}}
+    assert SR._request_facts(SimpleNamespace(workload=one)) == stated
+    greedy = {"seed": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}
+    without = {"requests": {"a.1": {"seed": None}}, "children": {"a": stated["a"]}, "sampling": {"a": greedy, "a.1": greedy | {"seed": None}}}
+    for block, facts in without.items():
+        assert SR._request_facts(SimpleNamespace(workload={k: v for k, v in one.items() if k != block})) == facts, block
+        assert SR._request_facts(SimpleNamespace(workload=one | {block: left_out})) == facts, block
+    no_entries = {"a": stated["a"] | {"top_k": 0}, "a.1": stated["a.1"] | {"top_k": 0}}
+    assert SR._request_facts(SimpleNamespace(workload=one | {"sampling": {"temperature": 0.5}})) == no_entries
+    assert SR._request_facts(SimpleNamespace(workload=one | {"sampling": {"temperature": 0.5, "per_request": left_out}})) == no_entries
+    assert SR._request_facts(SimpleNamespace(workload=left_out)) == {}
+
+
+@pytest.mark.parametrize("program", [{}, {"stop_rule": None}, {"stop_rule": {}}], ids=["absent", "null", "empty"])
+def test_a_workload_program_without_a_stop_rule_states_its_source_alone(tmp_path, program):
+    assert SR._stop_rule(None) == {} and SR._stop_rule(tmp_path) == {}
+    (tmp_path / "build_workload").mkdir()
+    file = tmp_path / "build_workload" / "workload_program.json"
+    file.write_text(json.dumps(program))
+    assert SR._stop_rule(tmp_path) == {"source": str(file)}
+    file.write_text(json.dumps({"stop_rule": {"eos_token_ids": [2], "eos_lag_rows": 1}}))
+    assert SR._stop_rule(tmp_path) == {"eos_token_ids": [2], "eos_lag_rows": 1, "source": str(file)}
+
+
 def _manifest(tmp_path: Path, requests: list[dict], sampling: dict | None) -> Path:
     doc = {"schema": SCHEMA, "model": "m", "engine": {}, "requests": requests,
            "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95}, "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
@@ -68,15 +98,16 @@ def test_the_manifests_facts_are_each_requests_variant_and_seed_else_the_workloa
         "a": {"seed": None, "temperature": 0.0, "top_p": 1.0, "top_k": 0}}              # no sampling declaration: the greedy variant
 
 
-def test_a_request_that_pins_a_variant_the_manifest_does_not_hold_is_refused_by_name(tmp_path):
+def test_a_request_that_pins_a_variant_the_manifest_does_not_hold_is_not_read(tmp_path):
+    """No record refuses it by name: the variant's parameters are read off None."""
     wl = _manifest(tmp_path, [{"request_id": "a", "max_tokens": 4}, {"request_id": "b", "max_tokens": 4, "variant": "stoch-t9"}],
                    {"variant": "greedy", "seed": None})
-    with pytest.raises(RecordError, match=r"requests\[1\]\.variant.*'stoch-t9'"):
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'get'"):
         SR._manifest_facts(wl)
 
 
 def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count_otherwise(tmp_path, monkeypatch):
-    """A cgroup file that is there and is not `<quota> <period>` is never taken for 'no quota'."""
+    """A cgroup file that is not `<quota> <period>` in integers, or cannot be read, states no quota."""
     f = tmp_path / "cpu.max"
     monkeypatch.setattr(SR, "CGROUP_CPU_MAX", str(f))
     machine = os.cpu_count() or 1
@@ -87,10 +118,12 @@ def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count
     assert SR._cpu_quota() == 2
     f.write_text("50000 100000\n")
     assert SR._cpu_quota() == 1                                                      # half a CPU is one worker
-    for text in ("250000\n", "many 100000\n"):
+    for text in ("250000\n", "many 100000\n", "250000 x\n", "1 2 3\n", ""):
         f.write_text(text)
-        with pytest.raises(ValueError):
-            SR._cpu_quota()
+        assert SR._cpu_quota() == machine
+    f.unlink()
+    f.mkdir()                                                                        # there, and not a file that reads
+    assert SR._cpu_quota() == machine
 
 
 def _row(V: int, top_p: float, temperature: float, seed: int, pos: int) -> list[np.ndarray]:
