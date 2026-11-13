@@ -272,7 +272,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
     units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
-    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law work:$units --circuit $c --run $run \
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
