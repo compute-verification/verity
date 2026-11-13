@@ -1,1 +1,1 @@
-2026-11-13T03:28Z GEMMCALL: ABA run shows circuit_check suite 1833 s at head vs 400 s at base on one machine; cause looks like no catalog record counting for an edited targets.py; control job scratch/cir258/records.sh next
+2026-11-13T04:35Z GEMMCALL: records control r20261113-034352-d28a running since 04:30Z on vy-nebius-cpu-6 (base, control, head with its own records)
