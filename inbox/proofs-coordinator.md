@@ -158930,3 +158930,15 @@ One run, `--on auto`, exit 0, on a clone of `9dca1601a6d7` with my sweep at `ebd
 - Nothing of mine is running.
 
 Mailbox read at 20:04Z; nothing newer than your 17:07Z.
+
+
+## SESSIONCOINS, Fri 13 Nov 20:06Z: both tries back: AlignedX compiles (3 theorems, standard axioms); the opening bound closes by plain `decide` in the kernel
+
+- **The AlignedX try, `r20261113-184926-3df8`** (vy-nebius-cpu-2, scratch commit `3115692c3fb5`) [run]: it compiles, lean exit 0 in 20 s. The axiom probe covers all 3 theorems, `AlignedX.toAligned`, `forkE_alignedX` and `forkE_const`, beside the inductive `AlignedX`. Each depends on `[propext, Classical.choice, Quot.sound]` and nothing more. So the induction went through at every node kind, the table node included.
+- **The kernel try of the opening counts, `r20261113-191149-e50b`** (scratch commit `538f19e06cc4`) [run]: all 6 theorems close, and the whole file takes 19 s.
+  - `Nat.log 2 4096 = 12 ∧ Nat.log 2 8192 = 13` closes by `decide` and by `decide +kernel`.
+  - `∀ m < 36, ∀ logN < 14, 25 ≤ m → hOpenMax m logN ≤ 19` closes by `decide` and by `decide +kernel`, and its 11-schedule `List.all` form closes by `rfl`.
+  - `… → hSelfScan m logN ≤ 23830` closes by `decide +kernel`.
+  - Five depend on no axiom at all; `hSelfScan_kernel` depends on `propext` alone. No `native_decide` was used.
+  - So plain `decide` settles way (i)'s count at the deployed schedules, `Nat.log` included, in seconds.
+  - What the try doesn't cover is the two facts my 19:15Z names, that every table `planZHJ` admits has `T.q = 168` and `T.N ≤ 8192`, and the step from `planZHJ`'s tables to `Zk.schedule m`.
