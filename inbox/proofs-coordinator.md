@@ -135867,3 +135867,37 @@ behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 
 - [run] `CopyOfOne.lean` at the head `96b2def6e27`: "lean exit 0 in 427 s", "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", no sibling clash in 414 built modules; it builds `HeldOfAtDesc.lean` as it stands at the head (`r20261113-102551-a97b`, vy-nebius-cpu-3, ended 10:33:32Z).
 - [run] `HeldOfAtDesc.lean` at the merge `bd2ff4df21f`, before the reduction: "lean exit 0 in 2059 s", 1 theorem, clean (`r20261113-095643-3716`, the cold build my 10:32Z entry said was still going).
 - This closes the two lines my 10:32Z entry left open. No run of mine is running. Branch `cursor/proofs-heldof-4c7b` at `96b2def6e27`, pushed.
+
+## RELAX, Fri 13 Nov 10:37Z: the rest of task 2: rows C2 and C3 of the layers document (my reading of "circuits' rows 1 and 2"), proofs' part; a read of `main` at `6b1483bbb2a6`, nothing run
+
+I do not hold the 08:31Z text for this item, so I took it as the two rows of part 2.3 that the document marks "found by circuits 1" and "circuits 2" and gives proofs as an owner. If you meant other rows, this entry is beside the point and I need the pointer. With the 10:31Z entry (`d2d9c5a4ef3c`: `Profile.lean:70` in row L1, and the site entry's bump) and section 8 of the 09:43Z entry (the read rate), this closes what I know of the 14:00Z list.
+
+**Also for you:** two loops of RELAX were live from 10:15Z to 10:24Z. The other loop wrote the 10:23Z line and set the word timer for about 12:24Z. I hold the pen (token `cd2489ec0703`) and did everything else. #9555 was open at `38b7c6df38ba` at 10:32Z [ran: `gh`].
+
+### For TOP-415: rows C2 and C3, proofs' part
+
+**C2, the cap. Lines right; one correction to the target.**
+
+- **The cap is not a caller's to set** [read]. It is the range Flock's soundness bound covers: "at most `2^27` witness bits per block, 1024 public regions, and 64 coordinates per link point", and the setup refuses a statement outside it (`flock/verifier/Flock/Statement.lean:117-121`; the same 27 at `Flock/HmRow.lean:1587`). A caller of SPOT can pass a smaller cap, never a larger one.
+- **So the cap is three numbers, not one** [read], and a cut must also keep each piece's outputs inside the public size class [derived from the design rules; its place in code: not read].
+- **Python states the 27 once already** [read]: `K_MAX` at `verity/commitments/windows/interface.py:308`, "Flock's composer's sizes" (`:305-307`). Flock's prover reads it (`verity_flock/circuit.py:69, 599-603, 680-686`), and the checker reads it through the prover (`tools/verity/circuit_check/src/circuit_check/checks.py:1445-1457`, `block_held.py:1-3`).
+- **I found no test that holds Python's 27 to the Lean's** [VM grep for `K_MAX` beside the Lean or the number; weak].
+- **The other two statements of the cut are as the row says** [read]: `CUTS` in nine modules of `verity/definitions/registry/` (`greedy_stages.py:253`) and the adapter's table (`adapters/vllm/verity_vllm/pipeline/serving_templates.py:16`).
+
+**C3, the lowering in Flock's prover. Right as written, with the split it needs.**
+
+- **30 import lines in 5 files, 18 of them in `checks.py`: right** [VM grep].
+- **They name 14 modules, 11,956 lines of the prover's 31,457** [VM count; each module's own docstring read]. Three kinds:
+
+| Kind | Modules | Lines |
+| --- | --- | --- |
+| The lowering and what sits on it (the templates, the traced types, the Boolean export) | `ir_lower`, `struct_lower`, `lowerings`, `type_trace`, `circuit_types`, `subcircuit_templates`, `boolean_export`, `gf2` | 5,877 |
+| Flock's own statement and its file format | `circuit`, `class_statement`, `tmpl` | 4,662 |
+| Three named circuits | `ir_sampling`, `topp_word`, `tail_pieces` | 1,417 |
+
+- **The lowering already imports nothing of the prover proper** [read]: `ir_lower.py:24-31` imports the circuit language, `tail_pieces`, and two 7-line modules that only rename another: `gf2` is `verity.circuits.boolean.forms`, and `fp` is `verity.definitions.silicon.fp`. So it can move once `tail_pieces` goes with the named circuits.
+- **Two things stand in the way of "move it to `verity/circuits/`"** [read]:
+  1. `ir_lower` reads the catalog: at import through `fp` (`:28`), and at two late imports (`:58` `verity.definitions.registry.prims`, `:118` `verity.definitions.ops.boolean`). The target rule is that circuits imports nothing, so the lowering sits beside the catalog or the rule gains a registry.
+  2. `struct_lower` writes Flock's template file (`struct_lower.py:57` imports `tmpl`), whose parser is in Flock's Lean (`flock/verifier/Flock/Tmpl.lean`). Either that format becomes the circuit language's, or the structural lowering returns a structure and Flock writes the file.
+- **No verifier changes either way** [derived]: Flock's Lean reads the circuit file and never the lowering.
+- **Not read:** the other modules of the prover that name a served circuit (the row's "F4; circuits 2"), and which of the 14 the adapter and SPOT import.
