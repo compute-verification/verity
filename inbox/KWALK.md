@@ -156,3 +156,46 @@ at each put, by `verity/protocols/flock/verifier` and `verity/protocols/flock/po
 - **A branch or pull request of yours that crosses a move waits until the chains are on
   `main`; then `tools/move/restack.py` carries it across. Do not rebase it by hand and do not
   merge `main` into it tonight.**
+
+## Fri 13 Nov 07:18Z: your reading is taken whole. DECIDED: one commit pins the reader, the end reading and the Lean runs; `launch-lean.sh:64` takes `MAIN`; the commit is Thursday's. Make the change, pin it again, rehearse in full. Return by 10:30Z
+
+Read: your return and section 5 of your note. **Finding that a moved verifier lets the tree
+check pass with nothing compared, and that the verdict can then go missing as NOT YET for
+ever, is the worst kind of failure caught before it happened: a silent one.** And that
+`main`'s Flock verifier already changed with #9375, before any chain. By me: `5f0c008aa040`
+is an ancestor of `main`, its `verity/protocols/flock/verifier` is tree `20e03d443f4b`, and
+`main`'s is now `5c1db727d7dd` (14 files, +557 −104).
+
+**1. Yes to your proposal's 1 and 2.**
+- `MAIN=<c>` in front of the reader line and of `fri-after.sh`: no file changes.
+- **The one line: `launch-lean.sh:64` becomes
+  `main=$(git -C "$SRC" rev-parse "${MAIN:-FETCH_HEAD}^{commit}")`,** so the same `MAIN` pins
+  the Lean run's tree. Nothing else in that file. Then its line of `fri.sha256` is pinned
+  again (say the old and the new sha256 in your note), and **the full rehearsal with that
+  `MAIN` set, plus `launch-lean.sh tree`: it must end as Thursday's did (exit 0, 41 held, 0
+  NOT HELD), and `lean-runs.tsv`'s verifier trees must read `20e03d443f4b,…`, the four of
+  Thursday.** If the rehearsal does not hold, put the old line back, say so, and we run with
+  `KEPT=0` and put the proofs after the window.
+
+**2. The commit: `<c>` = `5f0c008aa0403ac275f5626828c534f93d987048`.** One commit for all
+three places. Why Thursday's and not the last one before the chains: the prover's two trees
+were built and rehearsed against that verifier, and a proof is checked by the verifier of
+the commit its prover came from. The verifier after #9375 has never read a walk proof; a
+refusal by it on Friday would say nothing about the witness kernel.
+
+**3. Say it where the result is read.** In the kept proofs' comment on HASH-112: the Lean
+run's commit, the verifier's four trees, that `main`'s verifier has moved to
+`5c1db727d7dd` with #9375, and that these two proofs have not been put to it.
+
+**4. After the window, on my word and not before:** the same two kept proofs put once more
+to the verifier of the last commit of `main` before chain 1 (I give it then). It tells
+proofs whether the verifier now on `main` takes the walk's proofs, before the measurement
+of record from `main`. A refusal there is a finding for proofs, not a failure of Friday.
+
+**5. Before the launch, after the chains are on `main`** (the plan says 15:00Z; ci says chain
+2 may be 16:00Z): the `DRY=1 LOOK=1` line you already run first also shows whether that
+hour's `research` takes the pinned trees (another worker found that `research` re-executes
+from `origin/main`'s cached copy at every call). If it refuses, tell me at once.
+
+Return by Fri 13 Nov 10:30Z with: the changed line, the two sha256 of `launch-lean.sh`,
+`sha256sum -c fri.sha256`'s count, the rehearsal's last lines, and `lean-runs.tsv`'s trees.
