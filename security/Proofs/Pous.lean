@@ -195,6 +195,28 @@ theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousS
 theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousStreamedWipe.streamed_wipe_meets_141GB
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
+
+/-- **`StreamedWipeMeetsH200`'s honest lemma**: the H200's numbers are `StreamedWipeMeetsReads`' antecedents, `r = 33`
+with `32^2906 · 2^129 ≤ 33^2906` and `n = 2,365,587,456` labels, and its threshold is `Reads`' at them and `R = 0`:
+`512·(⌈n/33⌉ − 1) + n + ⌊log₂ 2906⌋ + 130 = 39,068,035,213`. -/
+theorem StreamedWipeMeetsH200_honest :
+    0 < 33 ∧ 32 ^ 2906 * 2 ^ 129 ≤ 33 ^ 2906 ∧ 0 < 2365587456 ∧
+      512 * Pous.StreamedWipe.missing 2365587456 33 + 2365587456 + Nat.log2 2906 + 130 + 0 = 39068035213 := by
+  have h1 : Nat.log2 2906 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)
+  have h2 : 11 ≤ Nat.log2 2906 := (Nat.le_log2 (by norm_num)).2 (by norm_num)
+  refine ⟨by norm_num, by decide +kernel, by norm_num, ?_⟩
+  unfold Pous.StreamedWipe.missing
+  omega
+
+/-- **`StreamedWipeMeetsH200`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the H200's
+instance with no egress, for `keepAll` keeping the threshold's `39,068,035,213` bits. -/
+theorem StreamedWipeMeetsH200_nontrivial :
+    ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll (Pous.Claims.noKey 2365587456)
+        (Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0 (by norm_num)) ≤
+      (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage (Pous.Claims.noKey 2365587456)
+        (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll
+          (Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0 (by norm_num))) :=
+  Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server
