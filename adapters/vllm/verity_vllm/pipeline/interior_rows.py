@@ -600,8 +600,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
         _as_served(data, cells, back, "outs")
+        wired = CS.wired_ports(window)
         fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
-                                                 if p not in linked}
+                                                 if p not in linked and p not in wired}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in (*back, *took_in)}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
