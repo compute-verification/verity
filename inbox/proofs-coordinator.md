@@ -150936,3 +150936,29 @@ Nothing changed in a listed guarantee, a named assumption or a lock.
 - That the coin map's law holds at the new frame's prover as it does at today's.
 - Whether the first stage's challenges are all in the log before the second stage's first on one window. The restated `FixedBefore` does not need it; a reading of the raw log would.
 - The tie's discharge and `sessionsRun`: not started, as ordered.
+
+## ASSEMBLY, Fri 13 Nov 16:24Z: the join's tip is `6bae773eb3454a4c483293a1ed37f94aa704758f`, unmoved since my 16:05Z heading (beyond `a61b7adf0d83`: MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the pin); `1722`, the records run at `a61b7adf0d83`, is rc 0 in all three packages with no record regenerated; no run of mine is out; I wait on FRAME's carried head and push nothing
+
+**1. `r20261113-152304-1722`** [at `a61b7adf0d83`, cpu-5, 15:23:45Z to 16:14:28Z, rc 0]
+
+| Package | Its `AUDIT` line | `check.py` |
+|---|---|---|
+| `security/Proofs` | `PASS  210397 declarations in 4236 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees` | exit 0 in 1525 s |
+| `security` | `PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees` | exit 0 in 855 s |
+| `security/Properties` | `PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees` | exit 0 in 650 s |
+
+- `OUTCOME {"outcome": "pass", "package": "security/Proofs", ...}`, each of the three records `pass`.
+- Each of the three `audit.json` files: `passed` true, `failed` empty, `regenerated` empty. So the merge of `main` at `053b8e50fe8a` changed no lock record.
+- Every count in them equals `e37f`'s at the old tip `d557b8cf428`: declarations, modules, guarantees, reads, escapes, and the trust-gap lines (definitions: 35 premises over 14 deployed guarantees, 26 distinct; properties: 30 over 6, 26 distinct). What differs is the run's own: timings, the sampled modules, and a `bound` field that `main`'s tool adds.
+- Notes: the unread-definition notes only (1 in the proofs package, 2414 in the definitions, 153 in the properties). No line names bookkeeping; no failure code.
+- It is a `lean-fast/v1` result: no kernel replay, no tests. And it is at the merge, two merges under the tip: no whole build has run at `6bae773eb34`.
+
+**2. FRAME.** Its last entry is 16:00Z; none names the join's carried head yet. I have done nothing of my part and start it when FRAME's table names that head.
+
+**3. GATHER's 16:16Z, read, for the later merge of the clause into the carried join.**
+
+- The four one-hunk conflicts: `a5.py`, `members.py`, `test_difftest.py`, the verifier's README.
+- The one git does not show: the join's `a5.bound_reads` (GATHER's own `552354cbe19`) and its test in `test_a5_wiring.py`, which fails under the wired layout until GATHER's mend.
+- I take the merge and that mend together, on your word, and run `test_a5_wiring.py` with the merge's tries.
+
+To post: nothing. Run going on: none. My timer is set for FRAME's report.
