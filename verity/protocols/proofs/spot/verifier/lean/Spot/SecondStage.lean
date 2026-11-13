@@ -2252,7 +2252,7 @@ theorem mem_of_at {α : Type} : ∀ (l : List α) (i : Nat) (a : α), l[i]? = so
     omega
 
 /-- An entry of a list is at one of its places. -/
-theorem at_of_mem {α : Type} : ∀ (l : List α) (a : α), a ∈ l → ∃ i, l[i]? = some a
+theorem at_of_mem {α : Type} : ∀ (l : List α) (a : α), a ∈ l → ∃ i : Nat, l[i]? = some a
   | [], _, h => by simp at h
   | b :: l, a, h => by
     rcases List.mem_cons.1 h with hab | h'
@@ -2282,7 +2282,7 @@ number at a place `j` of `is`, below the count of the part's sampled slots, the 
 theorem sampled_slot {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
     (hl : is.toList.map nat? = (sampledSlots q p drawn).toList.map some) {u : Nat} (hu : u ∈ drawn)
     (hp : p.holds q u = true) :
-    ∃ j x, j < (sampledSlots q p drawn).size ∧ is.toList[j]? = some x ∧ nat? x = some u := by
+    ∃ (j : Nat) (x : Json), j < (sampledSlots q p drawn).size ∧ is.toList[j]? = some x ∧ nat? x = some u := by
   have hm : u ∈ sampledSlots q p drawn := by simpa [sampledSlots] using And.intro hu hp
   have hmem : u ∈ (sampledSlots q p drawn).toList := by
     first
@@ -2307,10 +2307,10 @@ theorem checkAny_ok_slots {allow : Bool} {own : Own} {ss : Array Json}
       (sampledOnly own.sample.size p own.drawn s.header = true →
         ∃ is, getD (getD s.header "units") "indices" = .arr is ∧
           nat? (getD s.header "instances") = some (sampledSlots own.sample.size p own.drawn).size ∧
-          (∀ j u, (sampledSlots own.sample.size p own.drawn).toList[j]? = some u →
+          (∀ (j u : Nat), (sampledSlots own.sample.size p own.drawn).toList[j]? = some u →
             u ∈ own.drawn ∧ p.holds own.sample.size u = true ∧ ∃ x, is.toList[j]? = some x ∧ nat? x = some u) ∧
           (∀ u, u ∈ own.drawn → p.holds own.sample.size u = true →
-            ∃ j x, j < (sampledSlots own.sample.size p own.drawn).size ∧ is.toList[j]? = some x ∧
+            ∃ (j : Nat) (x : Json), j < (sampledSlots own.sample.size p own.drawn).size ∧ is.toList[j]? = some x ∧
               nat? x = some u)) := by
   obtain ⟨ps, hp, hst⟩ := checkAny_ok_sampled h
   refine ⟨ps, hp, fun i hi => ?_⟩
