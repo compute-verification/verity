@@ -1362,7 +1362,9 @@ structure Public where
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
-/-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. -/
+/-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. It is
+the period's error with each tied audit sampled in part read at `tiedDelta` (`charged`), the δ its count there is at;
+the δ of an audit's own answer is in `audits` and, in the rows form, is no term of this sum. -/
 def Public.eps (x : Public) : Core.Ratio :=
   let (n, d) := (x.units.map (·.facts) ++ x.charged).foldl
     (fun (n, d) f => (n * f.delta.den + f.delta.num * d, d * f.delta.den)) (0, 1)
