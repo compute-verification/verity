@@ -292,7 +292,7 @@ answers, which the period's difftest builds and checks against the mirror; `tied
 the answers an honest scan gives. -/
 
 theorem tiedInputChecks_getElem? {p : Params} {e : Evidence} {s : Schedule} {sd : ByteArray} {scan : Scan}
-    (hform : p.form = .rows s sd scan) {i : ℕ} {x : Window} (hx : e.windows[i]? = some x) :
+    (hform : p.form = .rows s sd scan) {i : ℕ} {x : ExecutionPhase} (hx : e.windows[i]? = some x) :
     (tiedInputChecks p e)[i]? = some (tiedInputCheck s (p.first + i) x) := by
   simp [tiedInputChecks, hform, Array.getElem?_zipIdx, hx]
 
@@ -367,7 +367,7 @@ theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows :=
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
-  let x : Window := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], .rows #[]⟩
+  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], .rows #[]⟩
   have hw : tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = true :=
     (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
       rfl rfl).1

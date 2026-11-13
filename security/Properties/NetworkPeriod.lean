@@ -137,7 +137,7 @@ answer names no tied Input but the scan's lanes' `prog<j>` (`tiedInputWired`), a
 audits' slot entries (`wired`). -/
 def RowsTiedInputWiredAt (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-    ∀ (i : ℕ) (reg : Lean.Json) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
+    ∀ (i : ℕ) (reg : Lean.Json) (x : ExecutionPhase), c.windows[i]? = some reg → e.windows[i]? = some x →
       tiedInputWired s x.answer = true ∧ wired p.audits s c.audits reg = true
 
 /-- `RowsTiedInputWired` of the period check `chk`: `RowsTiedInputWiredAt` of every period `chk` accepts. -/
