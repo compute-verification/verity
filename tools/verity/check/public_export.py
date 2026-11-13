@@ -44,7 +44,7 @@ spec whose theorem the export leaves out is listed in the lock as unstated (`pub
 shows to be of nothing in the exported tree goes (`public_lock.STALE`), and the report names each. Any other failure the
 check leaves refuses the export. The commit holds the locks as written.
 
-A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
+A fetched fixture (an entry of `artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
 public tree's tests read it with no store. Each of its files must fit a tracked file (`tests/test_repository.py`'s
 `BLOB_LIMIT`), or the export refuses it by name. The report lists the other public fetched fixtures, which a public test
