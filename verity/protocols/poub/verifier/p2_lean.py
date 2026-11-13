@@ -95,3 +95,6 @@ class Lean:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+__all__ = ["BUILD_LOCK", "PACKAGE", "build"]

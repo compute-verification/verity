@@ -48,9 +48,11 @@ Definition" where it doesn't, so a reader sees which form priced the type. A typ
 that row's Definition the same way.
 
 The Lean verifier's seconds and the proof's bytes a served token are `not measured` with no `lean-verify` run of
-record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is scaled
-from it (`prove`'s rules), and both totals print as `modeled`, each line naming what was measured (the block type, its
-share of the proving time, its statement, the run and its host) and what was scaled, with the scaling's basis. A run
+record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is priced
+from them (`prove`'s rules: its Definition's measured types at its size, else the rate fitted over every measured
+statement), and both totals print as `modeled`, each line naming what was measured (the block type, its share of the
+proving time, its statement, the run and its host) and the share of the figure its own records, its family's and the
+fitted rate price, with the basis. A run
 whose record the Lean verifier refused, that holds no record or whose block type the census doesn't hold measures
 nothing and is listed under "Refused".
 
@@ -515,7 +517,8 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
     types = len({v.definition for v in found})
     return found, [_input(LEAN, workload, [v.run for v in found],
                           f"the Lean verifier (its `verify`) on one statement of each of {types} block type(s); "
-                          "every other type's Lean verifier seconds and proof bytes are scaled from them" if found else
+                          "every other type's Lean verifier seconds and proof bytes are priced from them, its "
+                          "Definition's at its size, else at the rate fitted over them" if found else
                           "none that measures a block type: the Lean verifier's seconds and the proof's bytes are not "
                           "measured")], refused
 
@@ -673,9 +676,10 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
 def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     """The Lean verifier's seconds and the proof's bytes a served token, a line each: `not measured` with no statement
     measured, else the figure with its status, what was measured (the block type with its share of the proving time,
-    its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and what was scaled (the
-    block types, their share of the figure, and the basis). The seconds' line says what the accept holds in the
-    record's own words (its `label`)."""
+    its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and, where it is modeled,
+    how much of it each source prices (own, family, fitted: the block types, their share of the figure, and each
+    one's rate) with the basis. The seconds' line says what the accept holds in the record's own words (its
+    `label`)."""
 
     t = doc["totals"]
     seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
@@ -695,19 +699,26 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
         f"{x['run']})" for x in measured[1:])
     one = "one block type" if len(measured) == 1 else f"{len(measured)} block types, the most proving time first"
 
-    def line(name: str, v: Mapping[str, Any], what: str, unit: str) -> str:
+    def line(name: str, v: Mapping[str, Any], what: str, unit: str, per: str, size: str) -> str:
         status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
-        rate = "the measured statement's" if len(measured) == 1 else "the measured statements' median"
-        scaled = (f" Scaled: the other {v['scaled_block_types']} block types, {1 - v['measured_share']:.1%} of this figure, "
-                  f"each at {rate} {unit} a witness bit times its 2^k_log bits: {v['basis']}." if v["scaled_block_types"] else "")
-        bare = (f" In neither: {v['unpriced_block_types']} block type(s) with no k_log." if v["unpriced_block_types"] else "")
-        return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{scaled}{bare}"
+        how = {P.LEAN_MEASURED: "its own statement's",
+               P.LEAN_FAMILY: f"its Definition's measured statements' {unit} {per} (the dearest where several are) "
+                              f"times its {size}",
+               P.LEAN_FITTED: f"{'—' if v['fitted_rate'] is None else _n(v['fitted_rate'])} {unit} {per} (every "
+                              f"measured statement's {unit} over their {size}) times its {size}"}
+        parts = [f"{P.LEAN_SOURCES[k]} {x['block_types']} block type(s), {x['share'] or 0.0:.1%}"
+                 + ("" if k == P.LEAN_MEASURED else f", each at {how[k]}") for k, x in v["sources"].items() if x["block_types"]]
+        shares = f" Of this figure: {'; '.join(parts)}: {v['basis']}." if v["status"] == "modeled" else ""
+        bare = (f" In none: {v['unpriced_block_types']} block type(s) with no {size}." if v["unpriced_block_types"] else "")
+        return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{shares}{bare}"
 
     return [line("Lean verifier seconds", seconds,
                  f"{block}: {m['label']}, by the Lean verifier's `verify` in {_n(m['statement_seconds'])} s ({runs}; a run is "
-                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
+                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds",
+                 "an AND gate", "AND gates"),
             line("proof bytes", size,
-                 f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes")]
+                 f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes",
+                 "a witness bit", "2^k_log witness bits")]
 
 
 def _record(target: str | None) -> str:
