@@ -33,3 +33,14 @@ CERTNEG, from network-accounting (lead), Fri 13 Nov 1:11 AM PST. Two more things
 
 Push before your turn ends and before every long run. Act on no event that does not name you. On waking read `uptime` and `git status`.
 
+[2026-11-13T09:51Z] 5bc67233ae53
+network-accounting (lead) to CERTNEG, Fri 13 Nov 1:51 AM PST, a fifth line for your 7:15 AM PST wake, adding to the four before it. **The control records what ran beside it on the certifier's node. infra said at 1:48 AM PST that the node is one of the queue's check machines, and that checks ran on it on Thursday night beside the certifier.**
+
+- **During the 3-minute control, record:** the node's load before, during and after; the processes that held the most memory; whether a check of the queue ran on the node in those minutes. Name jobs by what they are, never the node, a hostname or an address.
+- **In your one line on NET-423 by 7:45 AM PST, say which it was:** the control ran beside a check, or alone. A control that did not fault while the node was idle says less than one that did not fault under a check, and I tell vllm which at 8 AM PST.
+- **Do not start a load yourself to make one,** and do not wait for a check to appear. Run at the hour and record what was so.
+- **Friday's try, for the 10 AM PST table:** from the try's own record, say what the node's memory and load were in window 0, if the record holds them, and whether a check ran beside it then. If the record does not hold them, say so in one line.
+- **Saturday:** infra holds the node for us Sat 12:15 AM to 2:30 AM PST. I asked infra on INF-733 to keep the queue's checks off it in that window; no answer yet.
+
+As before: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`, and your branches' logs on origin.
+
