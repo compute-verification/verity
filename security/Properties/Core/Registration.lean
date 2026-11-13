@@ -21,9 +21,10 @@ Two things the code holds are not the spec's, so the denotation takes them as pa
   the compiler itself (`Verity.Registration.Builder.B`). The denotation reads the compiler a builder names (`B`), which
   no check reads.
 * **An entry's digest.** The code names an entry by `SHA-512(format ‖ 0 ‖ canon(entry))` over all its fields, while a
-  spec entry holds fewer (a θ value only its name and root), so no function of a spec entry is the code's digest. The
-  spec's digests (`digests`) name the Site's sheets and the genesis as the code does, and each entry by `E`, which
-  `Names` holds to the code's digest on the entries of the log checked.
+  spec entry holds fewer (a θ value only its name and root), so no function of a spec entry alone is the code's digest.
+  The spec's digests (`digests`) name the Site's sheets and the genesis as the code does, and each entry by the code's
+  digest of the first entry of the log checked that denotes it (`names`). Two entries of a log that denote one spec
+  entry and differ in code register one item twice or declare one day twice, so the log is refused either way.
 
 `Proofs.Properties.Core.Registration` proves it.
 -/
@@ -70,20 +71,21 @@ def digests (E : Verity.Registration.Entry → String) : Verity.Registration.Dig
   ⟨(Properties.Site.digests Core.Site.Registration.sha512).sheet, E,
     fun c => Core.Registration.genesis (Properties.Site.ofComposite c)⟩
 
-/-- **`E` names the log's entries as the code does**: each entry of `l` denotes one `E` names by the entry's digest. -/
-def Names (B : Core.Registration.Builder → Verity.Compiler) (E : Verity.Registration.Entry → String)
-    (l : Core.Registration.Log) : Prop :=
-  ∀ e ∈ l, E (entry B e) = e.digest
+open Classical in
+/-- **The log's names of spec entries**: a spec entry by the code's digest of the first entry of `l` that denotes it,
+and the empty string when none does. -/
+noncomputable def names (B : Core.Registration.Builder → Verity.Compiler) (l : Core.Registration.Log)
+    (e : Verity.Registration.Entry) : String :=
+  ((l.find? fun x => decide (entry B x = e)).map Core.Registration.Entry.digest).getD ""
 
-/-- **The check of a log is the spec's**: for spec digests that name the log's entries as the code does, the code's
-check accepts a log exactly when the log it denotes is valid, and then makes public the spec's view of it. -/
+/-- **The check of a log is the spec's**: the code's check accepts a log exactly when the log it denotes is valid, its
+entries named as the code names them (`names`), and then makes public the spec's view of it. -/
 def Checks : Prop :=
-  ∀ (B : Core.Registration.Builder → Verity.Compiler) (E : Verity.Registration.Entry → String)
-    (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite) (l : Core.Registration.Log),
-    Names B E l →
+  ∀ (B : Core.Registration.Builder → Verity.Compiler) (A : Core.Site.Registration.Auditor)
+    (c : Core.Site.Registration.Composite) (l : Core.Registration.Log),
     (Core.Registration.check A c l).toOption.map (fun s => view B s.view) =
-      if Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B l) then
-        some (Verity.Registration.view (digests E) (composite c) (log B l))
+      if Verity.Registration.Valid (digests (names B l)) (auditor A) (composite c) (log B l) then
+        some (Verity.Registration.view (digests (names B l)) (composite c) (log B l))
       else none
 
 /-! ## The witnesses' instances
@@ -102,11 +104,22 @@ def dayEntry : Core.Registration.Entry := .declaration infoEntry.digest { day :=
 /-- A log the check accepts: `infoEntry`, then `dayEntry`. -/
 def honestLog : Core.Registration.Log := [infoEntry, dayEntry]
 
-/-- The spec's digest of an entry of `honestLog`: each kind by the digest of its one entry there. -/
-def honestNames : Verity.Registration.Entry → String
-  | .information .. => infoEntry.digest
-  | .declaration .. => dayEntry.digest
-  | .site .. => ""
+/-- The compiler with no gates: no circuit, no blocks, and nothing appended in any phase. -/
+def noGates : Verity.Compiler :=
+  .const
+    { D := ⟨0, Fin.elim0, Fin.elim0, Fin.elim0, fun g => g.elim0, fun g => g.elim0, fun g => g.elim0,
+        fun g => g.elim0, ∅⟩
+      θ := ∅
+      θ_input := fun g => g.elim0
+      n := 0
+      𝓘 := ⟨Fin.elim0, fun g => g.elim0⟩
+      m := 0
+      P := ⟨Fin.elim0, fun g => g.elim0⟩
+      refines := ⟨Fin.elim0, fun g => g.elim0⟩
+      pos := Fin.elim0 }
+
+/-- The witnesses' reading of a builder: the compiler with no gates. -/
+def noGatesBuilder : Core.Registration.Builder → Verity.Compiler := fun _ => noGates
 
 /-- A log the spec refuses: one information entry registering the same value twice. -/
 def twiceLog : Core.Registration.Log :=

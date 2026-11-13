@@ -177,7 +177,10 @@ def Says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Compos
 /-- **The check follows the spec one entry at a time**: from a valid prefix `p` and its State, the check of the rest
 says what the spec says of the whole log. -/
 theorem go_says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite) :
-    ∀ (rest p : Core.Registration.Log) (s : Core.Registration.State), Names B E (p ++ rest) → Inv B E c p s →
+    ∀ (rest p : Core.Registration.Log) (s : Core.Registration.State),
+      (∀ q e t, q ++ [e] ++ t = p ++ rest →
+        Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B (q ++ [e])) →
+        E (entry B e) = e.digest) → Inv B E c p s →
       Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B p) →
       Says B E A c (p ++ rest) (rest.foldlM (step A c) s) := by
   intro rest
@@ -204,8 +207,8 @@ theorem go_says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration
       have hv' : Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B (p ++ [e])) := by
         rw [log_append]
         exact Verity.Registration.valid_append_singleton_iff_refusal.mpr ⟨hv, by rw [← hr, h]; rfl⟩
-      have hNe : E (entry B e) = e.digest := hN e (by simp)
-      have := ih (p ++ [e]) (s.add e) (by simpa using hN) (inv_add B E c e hNe hi) hv'
+      have hNe : E (entry B e) = e.digest := hN p e rest (by simp) hv'
+      have := ih (p ++ [e]) (s.add e) (fun q e' t h => hN q e' t (by simpa using h)) (inv_add B E c e hNe hi) hv'
       simpa using this
 
 theorem view_eq (c : Core.Site.Registration.Composite) {l : Core.Registration.Log} {s : Core.Registration.State}
@@ -224,18 +227,78 @@ theorem view_eq (c : Core.Site.Registration.Composite) {l : Core.Registration.Lo
     | nil => rfl
     | cons i is ih => cases i <;> simp [item, builder, ih]
 
+/-- **Two entries of a log denoting one spec entry are one**, when the log up to the later is valid: a declaration
+would declare its day twice and an information entry with items would register them twice, and a site entry or an
+information entry without items is all its denotation says. -/
+theorem denotes_once {D : Verity.Registration.Digests} {A' : Verity.Registration.Auditor}
+    {c' : Verity.Registration.Composite} {q : Core.Registration.Log} {e y : Core.Registration.Entry}
+    (hv : Verity.Registration.Valid D A' c' (log B (q ++ [e]))) (hy : y ∈ q) (h : entry B y = entry B e) : y = e := by
+  rw [log_append] at hv
+  obtain ⟨-, -, hI, hD⟩ := Verity.Registration.valid_append_singleton.mp hv
+  have hmem : entry B e ∈ log B q := h ▸ List.mem_map_of_mem hy
+  cases e with
+  | site x =>
+    cases y with
+    | site z =>
+      have := congrArg Properties.Site.ofRegEntry (show regEntry z = regEntry x from h)
+      rw [Properties.Site.ofRegEntry_regEntry, Properties.Site.ofRegEntry_regEntry] at this
+      rw [this]
+    | information _ _ => cases x; simp [entry, regEntry] at h
+    | declaration _ _ => cases x; simp [entry, regEntry] at h
+  | information p is =>
+    cases y with
+    | site z => cases z; simp [entry, regEntry] at h
+    | declaration _ _ => simp [entry] at h
+    | information p' is' =>
+      simp only [entry, Verity.Registration.Entry.information.injEq] at h
+      obtain ⟨rfl, hm⟩ := h
+      cases is with
+      | nil => simp at hm; rw [hm]
+      | cons i is =>
+        exfalso
+        have hin : item B i ∈ Verity.Registration.items (log B q) :=
+          List.mem_flatMap.mpr ⟨_, hmem, by simp [entry, Verity.Registration.Entry.items]⟩
+        unfold Verity.Registration.Entry.ItemsOnce at hI
+        rw [List.map_append] at hI
+        have hie : item B i ∈ (entry B (.information p' (i :: is))).items := by
+          simp [entry, Verity.Registration.Entry.items]
+        exact (List.nodup_append.mp hI).2.2 _ (List.mem_map_of_mem hin) _ (List.mem_map_of_mem hie) rfl
+  | declaration p d =>
+    exfalso
+    have hday : (declared d).day ∈ Verity.Registration.days (log B q) :=
+      List.mem_filterMap.mpr ⟨_, hmem, by simp [entry, Verity.Registration.Entry.declared?]⟩
+    exact hD _ (by simp [entry, Verity.Registration.Entry.declared?]) hday
+
+/-- **`names` names each accepted entry as the code does**: an entry after which the log is valid is named by its own
+digest. -/
+theorem names_accepted {D : Verity.Registration.Digests} {A' : Verity.Registration.Auditor}
+    {c' : Verity.Registration.Composite} (q t : Core.Registration.Log) (e : Core.Registration.Entry)
+    (hv : Verity.Registration.Valid D A' c' (log B (q ++ [e]))) :
+    names B (q ++ [e] ++ t) (entry B e) = e.digest := by
+  classical
+  unfold names
+  rw [List.find?_append, List.find?_append]
+  cases hq : q.find? (fun x => decide (entry B x = entry B e)) with
+  | some y =>
+    have hy := List.mem_of_find?_eq_some hq
+    have hp := List.find?_some hq
+    rw [denotes_once B hv hy (of_decide_eq_true hp)]
+    rfl
+  | none => simp
+
 theorem checks : Checks := by
-  intro B E A c l hN
-  have hs := go_says B E A c l [] (Core.Registration.State.empty c) (by simpa using hN) (inv_empty B E c)
-    (by simp [log])
+  intro B A c l
+  have hs := go_says B (names B l) A c l [] (Core.Registration.State.empty c)
+    (fun q e t h hv => by rw [List.nil_append] at h; rw [← h]; exact names_accepted B q t e hv)
+    (inv_empty B (names B l) c) (by simp [log])
   simp only [List.nil_append] at hs
   rw [check_eq]
   revert hs
   cases List.foldlM (step A c) (Core.Registration.State.empty c) l with
-  | ok s => rintro ⟨hv, hi⟩; simp [Except.toOption, hv, view_eq B E c hi]
+  | ok s => rintro ⟨hv, hi⟩; simp [Except.toOption, hv, view_eq B (names B l) c hi]
   | error ir =>
     intro hnv
-    have hnv' : ¬Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B l) := hnv
+    have hnv' : ¬Verity.Registration.Valid (digests (names B l)) (auditor A) (composite c) (log B l) := hnv
     simp [Except.toOption, hnv']
 
 /-! ## Witnesses
@@ -244,24 +307,18 @@ The guarantee holds at `honestLog`, an information entry and a declaration for t
 accepts and whose denotation is valid; and its conclusion fails at the check that accepts everything, at a log that
 registers one value twice. -/
 
-theorem honestLog_names (B : Core.Registration.Builder → Verity.Compiler) : Names B honestNames honestLog := by
-  intro e he
-  simp only [honestLog, List.mem_cons, List.not_mem_nil, or_false] at he
-  rcases he with rfl | rfl <;> rfl
-
 theorem check_honestLog :
     (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome := by
   simp [honestLog, infoEntry, dayEntry, Core.Registration.check, Core.Registration.Entry.refusal,
     Core.Registration.State.empty, Core.Registration.State.add, Core.Registration.nodup, Core.Registration.Item.key,
     Except.toOption, bind, Except.bind, pure, Except.pure]
 
-theorem checks_honest (B : Core.Registration.Builder → Verity.Compiler) :
+theorem checks_honest :
     (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome = true ∧
-      Names B honestNames honestLog ∧
-      Verity.Registration.Valid (digests honestNames) (auditor Properties.Site.witnessAuditor) (composite .remote)
-        (log B honestLog) := by
-  refine ⟨check_honestLog, honestLog_names B, ?_⟩
-  have h := checks B honestNames Properties.Site.witnessAuditor .remote honestLog (honestLog_names B)
+      Verity.Registration.Valid (digests (names noGatesBuilder honestLog)) (auditor Properties.Site.witnessAuditor)
+        (composite .remote) (log noGatesBuilder honestLog) := by
+  refine ⟨check_honestLog, ?_⟩
+  have h := checks noGatesBuilder Properties.Site.witnessAuditor .remote honestLog
   have hc := check_honestLog
   revert h hc
   cases Core.Registration.check Properties.Site.witnessAuditor .remote honestLog with
@@ -280,13 +337,13 @@ theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler)
   simp [log, twiceLog, entry, item, theta, Verity.Registration.Entry.ItemsOnce, Verity.Registration.items,
     Verity.Registration.Entry.items, Verity.Registration.Item.key] at this
 
-theorem checks_nontrivial (B : Core.Registration.Builder → Verity.Compiler)
-    (E : Verity.Registration.Entry → String) :
-    ¬((acceptAllCheck .remote twiceLog).toOption.map (fun s => view B s.view) =
-      if Verity.Registration.Valid (digests E) (auditor Properties.Site.witnessAuditor) (composite .remote)
-          (log B twiceLog) then
-        some (Verity.Registration.view (digests E) (composite .remote) (log B twiceLog))
+theorem checks_nontrivial :
+    ¬((acceptAllCheck .remote twiceLog).toOption.map (fun s => view noGatesBuilder s.view) =
+      if Verity.Registration.Valid (digests (names noGatesBuilder twiceLog))
+          (auditor Properties.Site.witnessAuditor) (composite .remote) (log noGatesBuilder twiceLog) then
+        some (Verity.Registration.view (digests (names noGatesBuilder twiceLog)) (composite .remote)
+          (log noGatesBuilder twiceLog))
       else none) := by
-  simp [twiceLog_invalid B E, acceptAllCheck, Except.toOption]
+  simp [twiceLog_invalid, acceptAllCheck, Except.toOption]
 
 end Properties.Registration
