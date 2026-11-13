@@ -81,16 +81,41 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
+
+**The compose gate** (`vy-compose-gate`, this file from `/opt/vy-compose/current`, `COMPOSE_HOST`) is a second service on
+the same host with a root of its own (`/var/lib/vy-compose`), its own append-only `pins.jsonl` and one verb, which no
+other verb shares in either direction:
+
+    vy-compose-gate compose   (a lane's own key; the compose hand-off, a tar, on stdin)
+
+It composes a served run's final record and composite off the served node (`benchmarks/one_stage/served_verdicts.sh`'s
+`compose`), from the hand-off the served node's `served_verdicts.sh gate-compose` sends: the files its
+`private/compose/inputs.txt` lists, `private/compose/inputs.sha256` among them, and nothing else. As `auditor`, in a
+scratch directory of its own under the root's scratch, which it removes however it ends, it takes each regular file of the
+tar (`receive`), refusing the hand-off by a member's name before writing its bytes where the name is a served run's witness
+(`witness`, the rule its sender holds its list to) and refusing any member that isn't a regular file at a relative path,
+a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
+wrote. Then it runs
+`served_verdicts.sh compose` in the pinned tree on that copy (`compose_env`: the tree built at its pin, `COMPOSE_BUILT`, its
+prebuilt sampled proofs Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
+`FOLLOW_ANY_TREE`, the pin line's `on` as the record's `tree_on`) within `COMPOSE_MINUTES`, and answers one JSON line: the
+pin, and its $OUT's files (the final record, the composite's public part and the verdict lines, each in its published
+form), never its serve-dir copy, whose private outputs stay in the removed scratch. One compose runs at a time, none while a
+verifier unit runs (its cores time a session), and each leaves a line in `<root>/composes.jsonl` (who, when, the pin, the
+exit, the SHA-512 of the sums file it held the hand-off to). infra's pin line for this tree may name the branch it is on
+(`host.py pinned COMMIT [ON]`).
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
 import fcntl
+import fnmatch
 import gzip
 import hashlib
 import json
 import os
+import posixpath
 import re
 import secrets
 import shlex
@@ -103,7 +128,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Iterator
+from typing import Any, BinaryIO, Callable, Iterator, Sequence
 
 HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[5]
@@ -153,6 +178,30 @@ connection dropped, never holds its port and lock."""
 UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
+COMPOSE_SUMS = "private/compose/inputs.sha256"
+COMPOSE_MINUTES = 180
+COMPOSE_BYTES = 64 << 30
+"""The most a hand-off may carry, in bytes, over all its files."""
+COMPOSE_ANSWER_BYTES = 64 << 20
+"""The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
+SAMPLED_EXE = Path("verity/protocols/recursion/verifier/recursive/.lake/build/bin/vstar-recursive")
+"""Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
+SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
+WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
+                "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
+"""A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
+with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
+same order and word for word, which `tests/test_host.py` holds them to."""
+WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
+"""... by the serve dir's top directory."""
+WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
+                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
+                 "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
+                 "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
+                 "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
+                 "sampled_replay*.json": "the replay's executed prefixes", "*.npy": "a value array",
+                 "*.npz": "a value array", "*.pt": "a tensor", "*.safetensors": "a checkpoint's weights"}
+"""... by a file's name (`fnmatch`), the first pattern that matches."""
 
 
 class Refused(Exception):
@@ -167,6 +216,7 @@ class Host:
     config: Path = Path("/etc/vy/verifier.json")
     pins: Path = Path("/opt/vy-verifier/pins.jsonl")
     main: Path = Path("/opt/vy-verifier/main-first-parent.txt")
+    compose: bool = False
 
     @property
     def runs(self) -> Path:
@@ -191,6 +241,16 @@ class Host:
         """Where infra keeps each bound role's checkpoint, `<models>/<ROLE>/`: `verifier.json`'s `models`, else
         `root/models`."""
         return Path(settings.get("models") or self.root / "models")
+
+
+COMPOSE_HOST = Host(root=Path("/var/lib/vy-compose"), config=Path("/etc/vy/compose.json"),
+                    pins=Path("/opt/vy-compose/pins.jsonl"), main=Path("/opt/vy-compose/main-first-parent.txt"),
+                    compose=True)
+
+
+def host_of(tree: Path = TREE) -> Host:
+    """The service a pinned tree is: the compose gate's under /opt/vy-compose, else the verifier's."""
+    return COMPOSE_HOST if tree.parent.name == "vy-compose" else Host()
 
 
 def utc(now: datetime) -> str:
@@ -233,17 +293,21 @@ def append_only(path: Path) -> None:
     subprocess.run(["chattr", "+a", str(path)], check=True)
 
 
-def record_pin(log: Path, commit: str, now: datetime, *, seal: Callable[[Path], None] = append_only) -> dict:
-    """pin.sh's last step before it moves `current`, as root: the pin's line (commit, UTC time) appended to `log`, which
-    is root's, 0644, and append-only (`chattr +a`, which only root can lift, as the challenger's ledger) before any line
-    is written. A failure here fails the pin, so `current` never names a tree the log doesn't."""
+def record_pin(log: Path, commit: str, now: datetime, *, on: str | None = None,
+               seal: Callable[[Path], None] = append_only) -> dict:
+    """pin.sh's last step before it moves `current`, as root: the pin's line (commit, UTC time, and ``on``, the branch
+    the commit is on, where infra names it) appended to `log`, which is root's, 0644, and append-only (`chattr +a`, which
+    only root can lift, as the challenger's ledger) before any line is written. A failure here fails the pin, so
+    `current` never names a tree the log doesn't."""
     if not PINNED.fullmatch(commit):
         raise Refused(f"pinned {commit!r}: a commit, 40 lowercase hex digits")
+    if on is not None and not NAME.fullmatch(on):
+        raise Refused(f"pinned on {on!r}: a branch, 1 to 64 of [A-Za-z0-9._:-]")
     if not log.exists():
         log.touch()
         log.chmod(0o644)
     seal(log)
-    line = {"commit": commit, "utc": utc(now)}
+    line = {"commit": commit, "utc": utc(now), **({"on": on} if on else {})}
     with open(log, "a") as f:
         f.write(json.dumps(line, sort_keys=True) + "\n")
     return line
@@ -265,7 +329,7 @@ def pin_of(host: Host, pinned: str) -> dict:
     if last.get("commit") != pinned:
         raise Refused(f"the pin log's last pin is {last.get('commit')}, not this tree's {pinned}: a run starts only "
                       "from the tree pin.sh last pinned")
-    return {"line": len(lines) - 1, "utc": last.get("utc")}
+    return {"line": len(lines) - 1, "utc": last.get("utc"), **({"on": last["on"]} if last.get("on") else {})}
 
 
 # --- the gate (root) ----------------------------------------------------------------------------------------------------------
@@ -725,6 +789,213 @@ def run_keygen(argv: list[str]) -> str:
     return (p.stdout.strip().splitlines() or [""])[-1]
 
 
+def compose_argv(host: Host, scratch: Path, pinned: str, on: str | None) -> list[str]:
+    """The compose's command line: this file's `compose` as `auditor`, on the gate's stdin (the hand-off)."""
+    return ["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1", f"HOME={host.root}",
+            "PATH=/usr/bin:/bin", "/usr/bin/python3", "-I", str(Path(__file__).resolve()), "compose", str(scratch),
+            pinned, *([on] if on else [])]
+
+
+def exec_compose(argv: list[str], scratch: Path) -> tuple[int, dict]:
+    """Run the compose with the gate's stdin; its exit and the one JSON document it printed."""
+    p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=TREE)
+    try:
+        return p.returncode, json.loads(p.stdout.decode().strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        why = (p.stderr.decode(errors="replace").strip().splitlines() or [f"exit {p.returncode}"])[-1]
+        raise Refused(f"the compose answered nothing ({why[-400:]})") from None
+
+
+def gate_compose(rest: list[str], host: Host, *, by: str, now: datetime, token: str, pinned: str,
+                 busy: Callable[[], list[str]], own: Callable[[Path], None],
+                 run: Callable[[list[str], Path], tuple[int, dict]]) -> tuple[int, dict]:
+    """`compose`: the hand-off on stdin composed as `auditor` (`compose_handoff`) in a scratch directory of its own,
+    removed however it ends; one at a time, none while a verifier unit runs. Its exit (0 composed and accepted, 1 composed
+    otherwise, 3 refused) and the gate's answer."""
+    if rest:
+        raise Refused("compose takes no words: the hand-off is its stdin, a tar of the files its "
+                      "private/compose/inputs.txt lists (served_verdicts.sh gate-compose)")
+    if not host.compose:
+        raise Refused("compose runs on the compose gate (vy-compose-gate, its tree /opt/vy-compose/<commit>), not this one")
+    pin = pin_of(host, pinned)
+    if units := busy():
+        raise Refused(f"{', '.join(units)} runs: a compose waits for no verifier unit (its cores time a session)")
+    for p in (host.root, host.scratch):
+        if not p.is_dir():
+            p.mkdir(mode=0o700)
+            own(p)
+    with open(host.root / "compose.lock", "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused("another compose runs; one at a time") from None
+        scratch = host.scratch / f"compose-{utc(now).replace('-', '').replace(':', '')}-{token}"
+        scratch.mkdir(mode=0o700)
+        own(scratch)
+        try:
+            rc, doc = run(compose_argv(host, scratch, pinned, pin.get("on")), scratch)
+        except Refused as e:
+            rc, doc = 3, {"refused": str(e)}
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+        log = host.root / "composes.jsonl"
+        with open(log, "a") as f:
+            f.write(json.dumps({"by": by, "utc": utc(now), "pinned": pinned, "pin": pin, "rc": rc,
+                                "sums_sha512": doc.get("sums_sha512"), "refused": doc.get("refused")},
+                               sort_keys=True) + "\n")
+    if "refused" in doc:
+        raise Refused(doc["refused"])
+    return (0 if rc == 0 else 1), {"compose": doc, "pinned": pinned, "pin": pin, "by": by, "utc": utc(now)}
+
+
+def _member_name(m: tarfile.TarInfo) -> str:
+    name = posixpath.normpath(m.name)
+    if (m.name.startswith("/") or name.startswith("../") or name in (".", "..")
+            or name.startswith("./") or "\\" in name):
+        raise Refused(f"the hand-off's member {m.name!r} isn't a path under the serve dir")
+    return name
+
+
+def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
+    """Each of `paths` (relative to a serve dir) that is a served run's witness, with why (`WITNESS_DIRS`, `WITNESS_TOPS`,
+    `WITNESS_NAMES`, and H1's prover state under ``private/h1``)."""
+    out = []
+    for p in paths:
+        parts = Path(p).parts
+        if not parts:
+            continue
+        why = next((WITNESS_DIRS[x] for x in parts[:-1] if x in WITNESS_DIRS), None)
+        why = why or (WITNESS_TOPS.get(parts[0]) if len(parts) > 1 else None)
+        why = why or ("H1's prover state (its key)" if parts[:2] == ("private", "h1") else None)
+        why = why or next((w for pat, w in WITNESS_NAMES.items() if fnmatch.fnmatchcase(parts[-1], pat)), None)
+        if why:
+            out.append((p, why))
+    return out
+
+
+def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
+    """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
+    the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
+    served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
+    past `cap` in all; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum."""
+    d.mkdir(mode=0o700, parents=True)
+    got: dict[str, str] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=src, mode="r|") as t:
+            for m in t:
+                if m.isdir():
+                    continue
+                name = _member_name(m)
+                if held := witness([name]):
+                    raise Refused(f"the hand-off carries the served run's witness: {name} ({held[0][1]}); a hand-off is "
+                                  "verifier-side files alone, and its sender refuses one too (served_verdicts.sh)")
+                if not m.isreg():
+                    raise Refused(f"the hand-off's member {name} isn't a regular file (a link or a device)")
+                if name in got:
+                    raise Refused(f"the hand-off carries {name} twice")
+                total += m.size
+                if total > cap:
+                    raise Refused(f"the hand-off is over {cap} bytes")
+                f = d / name
+                f.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                h = hashlib.sha256()
+                fin = t.extractfile(m)
+                with open(f, "wb", opener=lambda p, fl: os.open(p, fl, 0o600)) as fout:
+                    while chunk := fin.read(1 << 24):
+                        h.update(chunk)
+                        fout.write(chunk)
+                got[name] = h.hexdigest()
+    except tarfile.TarError as e:
+        raise Refused(f"the hand-off isn't a tar: {e}") from None
+    if COMPOSE_SUMS not in got:
+        raise Refused(f"the hand-off has no {COMPOSE_SUMS}, the sums the served node wrote")
+    listed: dict[str, str] = {}
+    for ln in (d / COMPOSE_SUMS).read_text().splitlines():
+        if not (s := SUM_LINE.fullmatch(ln)):
+            raise Refused(f"{COMPOSE_SUMS} has a line that isn't sha256sum's: {ln[:200]!r}")
+        listed[posixpath.normpath(s.group(2))] = s.group(1)
+    if held := witness(list(listed)):
+        raise Refused(f"the hand-off's sums list the served run's witness: {held[0][0]} ({held[0][1]})")
+    if extra := sorted(set(got) - set(listed) - {COMPOSE_SUMS}):
+        raise Refused(f"the hand-off carries {extra[0]}, which its sums don't list ({len(extra)} such)")
+    if gone := sorted(set(listed) - set(got)):
+        raise Refused(f"the hand-off lacks {gone[0]}, which its sums list ({len(gone)} such)")
+    if bad := sorted(p for p in listed if got[p] != listed[p]):
+        raise Refused(f"{bad[0]} isn't the file the served node hashed: its SHA-256 isn't its sum ({len(bad)} such)")
+    return got
+
+
+def compose_env(host: Host, scratch: Path, pinned: str, on: str | None, tree: Path = TREE) -> dict[str, str]:
+    """`served_verdicts.sh compose`'s environment on the copy in `scratch`: the pinned tree built at its pin (its venv,
+    and its sampled proofs Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
+    pinned it from) whatever tree served, every scratch path under `scratch`."""
+    env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(host.root), "LANG": "C.UTF-8",
+           "D": str(scratch / "serve"), "OUT": str(scratch / "out"), "SERVE_ROOT": str(scratch / "root"),
+           "FLOCK_WORK": str(scratch / "flock-work"), "RESEARCH_SOURCE_SHA": pinned,
+           "GIT_CEILING_DIRECTORIES": str(tree.parent), "FOLLOW_ANY_TREE": "1", "COMPOSE_BUILT": "1"}
+    if on:
+        env["COMPOSE_TREE_ON"] = on
+    if (tree / SAMPLED_EXE).is_file():
+        env["SAMPLED_EXE"] = str(tree / SAMPLED_EXE)
+    return env
+
+
+def run_compose(env: dict[str, str], log: Path, minutes: int = COMPOSE_MINUTES, tree: Path = TREE) -> int:
+    """`served_verdicts.sh compose` in `tree` under `env`, its output to `log`; its whole process group killed after
+    `minutes` (exit 124) and when it ends, so nothing it started outlives it."""
+    with open(log, "wb") as out, subprocess.Popen(["nice", "-n", "10", "bash", "benchmarks/one_stage/served_verdicts.sh",
+                                                   "compose"], cwd=tree, env=env, stdin=subprocess.DEVNULL, stdout=out,
+                                                  stderr=subprocess.STDOUT, start_new_session=True) as p:
+        ran_out = threading.Event()
+
+        def kill() -> None:
+            ran_out.set()
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)
+        timer = threading.Timer(minutes * 60, kill)
+        timer.start()
+        try:
+            rc = p.wait()
+        finally:
+            timer.cancel()
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(p.pid, signal.SIGKILL)
+    return 124 if ran_out.is_set() else rc
+
+
+def answered(out: Path, cap: int = COMPOSE_ANSWER_BYTES) -> dict[str, Any]:
+    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size."""
+    files: dict[str, str] = {}
+    over: dict[str, int] = {}
+    used = 0
+    for f in sorted(p for p in out.rglob("*") if p.is_file()) if out.is_dir() else []:
+        rel, n = str(f.relative_to(out)), f.stat().st_size
+        if used + n > cap:
+            over[rel] = n
+            continue
+        files[rel] = f.read_text(errors="replace")
+        used += n
+    return {"files": files, **({"not_sent": over} if over else {})}
+
+
+def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on: str | None,
+                    env: dict[str, str] | None = None,
+                    run: Callable[[dict[str, str], Path], int] = run_compose) -> tuple[int, dict]:
+    """The compose, as `auditor`: the hand-off from `src` received into ``scratch/serve`` (`receive`), then composed there
+    (`run`, `served_verdicts.sh compose` under `compose_env`, which `env` adds to); its exit (3 refused) and document."""
+    try:
+        if not host.compose:
+            raise Refused("compose runs on the compose gate (vy-compose-gate), not this one")
+        got = receive(src, scratch / "serve")
+    except Refused as e:
+        return 3, {"refused": str(e)}
+    sums = digest_of(scratch / "serve" / COMPOSE_SUMS)
+    rc = run({**compose_env(host, scratch, pinned, on), **(env or {})}, scratch / "compose.log")
+    return rc, {"rc": rc, "pinned": pinned, **({"on": on} if on else {}), "received": len(got), "sums_sha512": sums,
+                **answered(scratch / "out")}
+
+
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
@@ -768,9 +1039,16 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
     own = hooks.get("own") or own_by_auditor
     pinned = hooks.get("pinned")
     try:
-        if verb in ("run", "replay", "stop", "close", *PARTIES) and by is None:
-            raise Refused("this key reads only: a run is started, replayed, stopped or a registration closed with a "
-                          "lane's own gate key, which infra registers for it (send infra the public half)")
+        if verb in ("run", "replay", "stop", "close", "compose", *PARTIES) and by is None:
+            raise Refused("this key reads only: a run is started, replayed, stopped, a registration closed or a hand-off "
+                          "composed with a lane's own gate key, which infra registers for it (send infra the public half)")
+        if host.compose and verb != "compose":
+            raise Refused("the compose gate serves compose alone (vy-compose-gate compose, the hand-off on stdin)")
+        if verb == "compose":
+            rc, doc = gate_compose(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
+                                   pinned=pinned or pinned_commit(), busy=busy, own=own,
+                                   run=hooks.get("compose") or exec_compose)
+            return answer(rc, doc)
         if verb == "run":
             doc = gate_run(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
                            pinned=pinned or pinned_commit(), busy=busy, start=hooks.get("start") or start_unit, own=own,
@@ -985,9 +1263,14 @@ def close(host: Host, node: str, argv: list[str] | None = None) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    host = Host()
+    host = host_of()
     if argv[:1] == ["gate"]:
         return gate(argv[1:], host)
+    if argv[:1] == ["compose"] and len(argv) in (3, 4):
+        rc, doc = compose_handoff(host, Path(argv[1]), sys.stdin.buffer, pinned=argv[2],
+                                  on=argv[3] if len(argv) == 4 else None)
+        print(json.dumps(doc, sort_keys=True))
+        return rc
     clock = lambda: datetime.now(timezone.utc)  # noqa: E731
     try:
         if argv[:1] == ["run"] and len(argv) == 2:
@@ -1003,11 +1286,11 @@ def main(argv: list[str] | None = None) -> int:
         if argv[:1] == ["close"] and len(argv) == 2:
             print(json.dumps(close(host, argv[1])))
             return 0
-        if argv[:1] == ["pinned"] and len(argv) == 2:
-            print(json.dumps(record_pin(host.pins, argv[1], clock())))
+        if argv[:1] == ["pinned"] and len(argv) in (2, 3):
+            print(json.dumps(record_pin(host.pins, argv[1], clock(), on=argv[2] if len(argv) == 3 else None)))
             return 0
-        print("usage: host.py gate VERB ... | run RUN | replay RUN | publish RUN | close NODE_HEX | pinned COMMIT",
-              file=sys.stderr)
+        print("usage: host.py gate VERB ... | run RUN | replay RUN | publish RUN | close NODE_HEX | pinned COMMIT [ON] "
+              "| compose SCRATCH COMMIT [ON] (the hand-off on stdin)", file=sys.stderr)
         return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

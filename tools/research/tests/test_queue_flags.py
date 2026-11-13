@@ -43,7 +43,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                         "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
-                        "bottom_wait_min=45 signed_verdicts=False restack_jobs=3")
+                        "bottom_wait_min=45 signed_verdicts=off restack_jobs=3")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]

@@ -3,7 +3,7 @@
 The proxy is the I/O shell around the reference. It owns a monotonic clock and a ticker per grid, socket reads and
 writes, and the framing of byte streams into B-byte frames. Everything that decides a grid is the reference's:
 `schedule.eligible` and `schedule.run_shaper`'s handing rule, and `grid.Certifier` on egress (at r) and on ingress (at r_in).
-Its records are `grid.Record`s, published raw and through `commitment.commit`, which `audit.Audit.check_link` and
+Its records are `grid.BlockGrid`s, published raw and through `commitment.commit`, which `audit.Audit.check_link` and
 `check_ingress_link` read.
 
 **Topology.** One TCP connection is the boundary link, the wire, between the proxy and the outside peer. Inside, the
@@ -202,7 +202,7 @@ from verity.protocols.certifier.verifier.certificate import PublicKey, Signer, S
 from verity.protocols.certifier.verifier.grid import (
     GridParams,
     Reason,
-    Record,
+    BlockGrid,
     Row,
     Certifier,
     Status,
@@ -879,7 +879,7 @@ class Shaper:
             if self.prover is not None:
                 self.prover.arrive(0, position, frame, ready)
 
-    def tick(self) -> tuple[Row, Record | None]:
+    def tick(self) -> tuple[Row, BlockGrid | None]:
         T = self.certifier.params.buckets
         if self.prover is not None and self.t % T == 0 and self.t // T == len(self.syncs) < self.windows:
             try:
@@ -956,7 +956,7 @@ class Bucketer:
     def arrive(self, frame: bytes, bucket: int) -> None:
         self.waiting.append((bucket, frame))
 
-    def tick(self) -> tuple[Row, Record | None]:
+    def tick(self) -> tuple[Row, BlockGrid | None]:
         c, T = self.certifier, self.certifier.params.buckets
         own = None
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
@@ -1124,7 +1124,7 @@ class _Stream:
     ended: int | None = None  # the ready bucket of its end upstream
 
 
-def _faulted(record: Record, reason: Reason) -> Record:
+def _faulted(record: BlockGrid, reason: Reason) -> BlockGrid:
     """`record` with `reason` as its status, unless it has one already: a window records its first fault."""
     return record if not record.status.complete else replace(record, status=Status(reason))
 
@@ -1189,7 +1189,7 @@ class Proxy:
                  syncs: Sequence[ClockSync], *, origin: float, slack: float = 0.025,
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
-                 publish: Callable[[Record, GridParams], None] | None = None,
+                 publish: Callable[[BlockGrid, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
                  salt: Callable[[int, int], bytes] | None = None, salt_bits: int = SALT_BITS, pouw_window: int = 1,
@@ -1260,15 +1260,15 @@ class Proxy:
         slowest = ClockSync(max(sync_set.deltas), min(sync_set.rhos))
         admission = None if served is None else Admission(
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._fresh_salt, start,
                                  served=admission)
         self.pair, self.paced = pair, paced
         self.releases: list[Report] = []
         self._pacer: Pacer | None = None
         self._reports_task: asyncio.Task | None = None
         self._unwritten: Counter[int] = Counter()
-        self._held: dict[int, Record] = {}
-        self.records: list[Record] = []
+        self._held: dict[int, BlockGrid] = {}
+        self.records: list[BlockGrid] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
         self.requests = Requests()
@@ -1391,12 +1391,14 @@ class Proxy:
 
     def _report(self, report: Report) -> None:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
-        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
-        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
-        is published once the writes of every bucket of it that was handed are reported."""
+        whose release started more than `slack` after it, or released unwritten (its link isn't the pacer's), faults
+        its window `monitor-unavailable`, and one the link refused, `delivery-refused`: the open window's certifier, or
+        the record held for a closed one. A window's record is published once the writes of every bucket of it that
+        was handed are reported."""
         w = report.t // self.egress.buckets
         if report.end is None:
-            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+            faulted = report.arrived > 0 or report.start > self.slack or not report.written
+            reason = Reason.MONITOR_UNAVAILABLE if faulted else None
         else:
             self.releases.append(report)
             reason = None if report.written else Reason.DELIVERY_REFUSED
@@ -1463,7 +1465,7 @@ class Proxy:
 
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
-    def _draw_salt(self, window: int) -> bytes | None:
+    def _fresh_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, sample its salt and give the certifier's own frame, the
         placeholder's."""
         if window % self.pouw_window:
@@ -1864,7 +1866,7 @@ class CertifierClient:
         return revealed.value
 
 
-def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int, salts: Mapping[int, bytes], *,
+def check_salts(audit: Audit, link: str, records: Sequence[BlockGrid], windows: int, salts: Mapping[int, bytes], *,
                 pouw_window: int = 1, salt_bits: int = SALT_BITS) -> list[Verdict]:
     """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
     `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
@@ -1874,9 +1876,9 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
     because the served counts (`served.derive`) take bucket 0's first `own` frames for the salt: the same counts with
     the salt in a later bucket would derive other request ends. The verdicts join `audit`'s. A committed or certified
     record doesn't show its frames, so a proof opens the salt frame there, at bucket 0 slot 0."""
-    by_window: dict[int, list[Record]] = defaultdict(list)
+    by_window: dict[int, list[BlockGrid]] = defaultdict(list)
     for r in records:
-        if not isinstance(r, Record):
+        if not isinstance(r, BlockGrid):
             raise ValueError("the salt check reads raw records")
         if r.link == link:
             by_window[r.window].append(r)

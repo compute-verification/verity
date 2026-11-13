@@ -12,10 +12,11 @@ router-softmax tap acquires it (`acquire.sources.router_softmax_source`, vLLM's 
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
+
+from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"
@@ -120,7 +121,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["router_softmax"] = {"family": FAMILY, "member": MEMBER, "routers": dict(ROUTERS), "layout": "max, ex[E], rcp, p[E] (+ sel[TOPK], scale)",
                              **stats}

@@ -1,4 +1,4 @@
-"""Certified capacity in the tensor–scalar model (FILLER, decision 77).
+"""Certified capacity in the tensor–scalar model (FILLER).
 
 A cell's certified work is a load on Π: n_k warp instructions of class k a SMSP-cycle, counted at the work's floor
 (every MMA it ran and the instructions its mandatory fold costs under FOLD-OPT, never honest's overhead). What it
@@ -7,16 +7,17 @@ certifies is the GPU's capacity: the useful work that any program could still ha
     hidden(n) = max Σ_k μ_k h_k   subject to   Σ_k c_kr (n_k + h_k) ≤ 1 on every row r of Π,  h ≥ 0,
 
 with μ_k the useful work one warp instruction of class k does, in tensor slots (an MMA's 4096 int8 MACs = 1; IDP4A's
-128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_cap = hidden(n) / hidden(0) is the share of the
-empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the certified share. A cell (`Cell`,
-one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's certified load). A
-receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the prover's best placement spreads the certified
-work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g hidden(n_g), which is smaller and would credit a
-placement nobody attests. Each group's own σ is reported beside it as that placement-attested reading.
+128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_capacity = hidden(n) / hidden(0) is the share of
+the empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_capacity is the verified share. A cell
+(`Cell`, one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's
+certified load). A receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the
+prover's best placement spreads the certified work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g
+hidden(n_g), which is smaller and would credit a placement nobody attests. Each group's own σ is reported beside it as
+that placement-attested reading.
 
 Beside σ it reports the time-credit reading B(n) = max_r load_r (the share of the cell the floor program needs, the
-floor credit's reading of decision 74), which is never below σ: B credits a saturated facet whole, while σ asks what a
-second program could still issue on the facets that aren't.
+floor credit's reading), which is never below σ: B credits a saturated facet whole, while σ asks what a second program
+could still issue on the facets that aren't.
 
 A tensor filler a MMA writes `words` committed words (128 for m16n8k32 at L = 32) and folds each `rounds` times with
 FOLDS[fold] lane instructions a word; a lane filler is verified scalar work (FILL-OPT) at `rate` warp instructions a
@@ -25,10 +26,15 @@ SMSP-cycle in its class mix.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from scipy.optimize import linprog
 
-from verity_machine_model.eps import DATA, LANES, MMA, Machine, honest, profiles
+from verity_machine_model.eps import LANES, MMA, Machine, honest, profiles
+from verity_machine_model.model import DATA
+
+__all__ = ["Cell", "Hidden", "TENSOR_CYCLES", "USEFUL", "Work", "cell", "hidden", "lane_filler", "parse", "served",
+           "tensor_filler", "useful_of"]
 
 TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row M)
 
@@ -37,7 +43,7 @@ TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row
 USEFUL = {MMA: 1.0, "IMAD": 128 / 4096, "HFMA2": 64 / 4096, "FFMA": 32 / 4096}
 
 
-def useful_of(data=DATA) -> dict[str, float]:
+def useful_of(data: Path = DATA) -> dict[str, float]:
     """USEFUL with each honest profile's MMA class in `data` at its MACs a warp instruction over 4096. A device whose
     tensor class isn't sm_120's MMA (UTCIMMA_M128_N256 on sm_100, 256 slots; IGMMA_S8_N256 on sm_90, 32) would
     otherwise offer a hidden program no tensor pipe at all."""
@@ -182,11 +188,11 @@ class Cell:
     pooled: Hidden | None = None
     parts: tuple[Hidden, ...] = field(default=())
 
-    def eps_cap(self) -> float:
+    def eps_capacity(self) -> float:
         return self.pooled.hidden / self.empty
 
     def sigma(self) -> float:
-        return 1.0 - self.eps_cap()
+        return 1.0 - self.eps_capacity()
 
     def sigma_placed(self) -> float:
         """σ if each group's placement were attested (Σ w_g hidden(n_g)): an upper reading, not a certificate."""
@@ -199,8 +205,8 @@ class Cell:
         return min(1.0, self.pooled.work.tensor_share())
 
     def record(self) -> dict:
-        return {"vector": self.vector, "sigma": self.sigma(), "eps_cap": self.eps_cap(), "credit": self.credit(),
-                "tensor": self.tensor(), "sigma_placed": self.sigma_placed(),
+        return {"vector": self.vector, "sigma": self.sigma(), "eps_capacity": self.eps_capacity(),
+                "credit": self.credit(), "tensor": self.tensor(), "sigma_placed": self.sigma_placed(),
                 "empty_slots_per_smsp_cycle": self.empty, "n": self.pooled.work.n, "load": self.pooled.load,
                 "mix": self.pooled.mix, "binding": list(self.pooled.binding), "over": list(self.pooled.over),
                 "groups": [{"weight": w, "work": g.name, "n": g.n, "source": g.source, "hidden": h.hidden,

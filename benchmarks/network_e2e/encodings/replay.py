@@ -19,8 +19,8 @@ alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 
 **With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
-classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at its measured
-entropy, or 0 where the audited block derives it).
+classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of its
+own adaptive code, `kept_encode`, or 0 where the audited block derives it).
 """
 
 from __future__ import annotations
@@ -804,12 +804,62 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
+#: the kept count's code's context for a request's first emitting row, which has no count before it
+_FIRST = -1
+
+
+def kept_encode(K: int, requests: Sequence[RequestIO]) -> tuple[list[int], float]:
+    """The drafts each emitting row kept (`RequestIO.kept`) under the adaptive binary code: the requests in order, each
+    one's counts in order. A count c is the bits "c > j" for j = 0, 1, ... until one is 0 or j is the most the row can
+    keep (K, or the outputs the request still lacks after the row's own token), each in the context (the request's count
+    before, j). Returns the bit string and what an ideal coder would spend."""
+    model, enc, ideal = _KT(), _Encoder(), 0.0
+    for i, q in enumerate(requests):
+        done, prev = 0, _FIRST
+        for c in q.kept or ():
+            for j in range(min(K, q.output_len - done - 1)):
+                f0, f1 = model.freqs((prev, j))
+                enc.put(c > j, f0, f1)
+                ideal -= math.log2((f1 if c > j else f0) / (f0 + f1))
+                model.update((prev, j), c > j)
+                if c <= j:
+                    break
+            done, prev = done + 1 + c, c
+        if done != q.output_len:
+            raise ValueError(f"request {i}: its rows and the drafts they kept add up to {done} outputs, not its "
+                             f"{q.output_len}")
+    return enc.finish(), ideal
+
+
+def kept_decode(K: int, output_lens: Sequence[int], bits: Sequence[int]) -> list[tuple[int, ...]]:
+    """Each request's `RequestIO.kept` back from `kept_encode`'s bits, K and the certified output lengths alone: a
+    request's counts end where they and its rows add up to its output."""
+    model, dec, out = _KT(), _Decoder(bits), []
+    for n in output_lens:
+        done, prev, kept = 0, _FIRST, []
+        while done < n:
+            c = 0
+            for j in range(min(K, n - done - 1)):
+                f0, f1 = model.freqs((prev, j))
+                bit = dec.get(f0, f1)
+                model.update((prev, j), bit)
+                if not bit:
+                    break
+                c += 1
+            kept.append(c)
+            done, prev = done + 1 + c, c
+        out.append(tuple(kept))
+    return out
+
+
 def kept_bits(trace: Trace) -> dict[str, Any]:
-    """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the count
-    sent for every row that verified drafts and emitted, at its measured entropy over those rows (`entropy`, bits a
-    row, at most `max`, log2(K + 1)). `derived`: 0, where the audited block computes the count from committed values and
-    nothing is sent. `counts[k]` is the rows that kept k. The rows and the drafts each carried are the replay's, so it
-    refuses a trace the replay doesn't reproduce."""
+    """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the bits of
+    their code (`kept_encode`; `ideal`, what an ideal coder would spend), which `kept_decode` turns back into the
+    trace's counts. `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
+    Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
+    a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
+    each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
     K = trace.engine.num_speculative_tokens
     if not K:
         raise ValueError("the trace's engine serves with no draft, so no row keeps one")
@@ -826,8 +876,11 @@ def kept_bits(trace: Trace) -> dict[str, Any]:
                 counts[em[i] - 1] += 1
     rows = sum(counts)
     entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
-    return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "charged": rows * entropy,
-            "derived": 0}
+    bits, ideal = kept_encode(K, trace.requests)
+    if kept_decode(K, [q.output_len for q in trace.requests], bits) != [q.kept for q in trace.requests]:
+        raise ValueError("the kept count's code decodes to other counts than the trace's")
+    return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "alone": rows * entropy,
+            "charged": len(bits), "ideal": ideal, "derived": 0}
 
 
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
@@ -868,13 +921,19 @@ def load_v0(spec: str | Path | None) -> Any:
     return mod
 
 
-def read_any(p: Path, *, egress: str = "engine", ingress: str = "client") -> Trace:
+def read_any(p: Path, *, egress: str = "engine", ingress: str = "client", within: str | None = None) -> Trace:
+    """The trace at `p`: a trace-corpus directory, or a step trace, of which `within` takes only the span (`span`) of the
+    requests whose id holds it."""
     if p.is_dir():
+        if within is not None:
+            raise ValueError(f"{p}: a span is cut from a step trace, not from a trace-corpus directory")
         return read_corpus_trace(p, egress=egress, ingress=ingress)
     if egress != "engine" or ingress != "client":
         raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine) and its own ingress")
     tok = p.with_suffix(".tokens.json")
-    return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
+    recs = records(p)
+    return load_step_trace(recs if within is None else span(recs, lambda i: within in i),
+                           tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -893,6 +952,9 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
                          "arrival stamp (warden: the floor a server admitting in the warden's release order would "
                          "give; the warden certifies the release order, which a trace's .released view carries)")
+    ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
+                                   "one load of a serve that ran others, begun with the engine drained and its prefix "
+                                   "cache reset")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
@@ -903,7 +965,7 @@ def main(argv: Sequence[str] | None = None) -> None:
           "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
-        tr = read_any(p, egress=a.egress, ingress=a.ingress)
+        tr = read_any(p, egress=a.egress, ingress=a.ingress, within=a.span)
         if tr.engine.num_speculative_tokens:
             # I1 v0 has no row for a draft's, so a trace served with one has its own table
             try:
@@ -916,7 +978,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             k, n = d["kept_count"], max(d["requests"], 1)
             drafted.append(f"| {name} | {d['requests']} | {d['steps']} | {k['K']} | "
                            f"{' / '.join(str(d['arrivals'].get(c, '-')) for c in CONTEXTS)} | {k['rows']} | "
-                           f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']:.0f} | {k['charged'] / n:.2f} | "
+                           f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']} | {k['charged'] / n:.2f} | "
                            f"{k['derived']} |")
             continue
         try:
@@ -947,8 +1009,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("\n".join(per_window))
     if drafted:
         print("\n| trace, served with a draft | requests | steps | K | arrivals: bits (" + " / ".join(CONTEXTS) + ") "
-              "| rows that verified drafts | kept count: entropy, bits a row | at most | charged, bits | a request "
-              "| derived, bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
+              "| rows that verified drafts | kept count: each alone, bits a row (not sent) | at most "
+              "| charged (its code), bits | a request | derived, bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
         print("\n".join(drafted))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))

@@ -51,6 +51,12 @@ def disk_floor_of(opts: Any, usage: Callable[[Any], Any] = shutil.disk_usage) ->
     return DiskFloor(p, int(opts.disk_floor_gb * GB), usage)
 
 
+def disk_record(windows: Any) -> dict[str, Any] | None:
+    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
+    d = windows.disk if windows is not None else None
+    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / GB, "free_gb_at_start": round(d.free() / GB, 1)}
+
+
 class Watchdog:
     """A thread that sleeps ``period_s`` at a time beside the engine: each wake ``min_s`` or more late is a pause, a line of
     ``path`` (pauses.jsonl: when it ended, unix seconds as the step trace's ``t_end``, and how late). The engine's thread waits

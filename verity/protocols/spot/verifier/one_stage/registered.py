@@ -90,6 +90,8 @@ READS = "verity/registered-reads/v0"
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
 READS_V1 = "verity/registered-reads/v1"
 READS_FROM = "reads_from"
+#: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
+BOUND = "bound"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG
@@ -671,10 +673,28 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str, Mapping[str, str]]) -> dict[str, Any]:
+    """``file``, a `READS_V1` ``--registered`` file, with each of the statement's ``ports`` that it names no registered port
+    for bound to the window's committed values (`BOUND`, `Flock.RegBound`): the root and domain of its rows in ``roots``
+    (``{port: {"root", "domain"}}``, the window's registration, which the verifier accepted before any coin), which the
+    Lean verifier holds the public header's to. Lean refuses a bound port the window's registered circuit record declares
+    registered, and a file that binds ports without that record (`--interface`). A file of another format, or one with no
+    other port, is returned as it is: Lean holds it to name every port. ValueError for a port ``roots`` holds no root and
+    domain for."""
+    free = sorted(p for p in ports if p not in file["ports"])
+    if file.get("format") != READS_V1 or not free:
+        return dict(file)
+    missing = [p for p in free if not isinstance(roots.get(p), Mapping) or not {"root", "domain"} <= set(roots[p])]
+    if missing:
+        raise ValueError(f"ports {missing} are neither registered ports of the file nor ports the window's registration "
+                         "holds a root and domain for")
+    return {**file, BOUND: {p: {"root": roots[p]["root"], "domain": roots[p]["domain"]} for p in free}}
+
+
+__all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

@@ -10,6 +10,7 @@ import random
 import numpy as np
 import pytest
 
+from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
@@ -294,8 +295,6 @@ def test_each_word_primitive_is_its_definitions_word_view():
     """A word primitive's operands are one word per leaf, which Flock's lowering hands its Boolean Definition's builder as
     that Definition's elements (`ir_lower._boolean_build`): so its ports are the word view of the Definition's
     (`boolean.word_type`), a dither row `Array<32, Value<1>>` being one `Value<32>`."""
-    from verity.circuits import boolean as BL
-
     for name in D.__all__:
         d = getattr(D, name)
         w = getattr(d, "word", None)

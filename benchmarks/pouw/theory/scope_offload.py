@@ -17,7 +17,7 @@ precomputed words. Which of two bounds applies decides the answer:
     rate on the credited arithmetic does, and the credited s8 path is integer (`PouwSegDot_v1`, acc + sum a_k b_k mod
     2^32 on int8), which host AMX reproduces exactly.
 
-So the word-level numbers are floors on each channel's exposure, not caps. The channel classes:
+So the word-level numbers are floors on each channel's exposure, not upper bounds. The channel classes:
 
   - NETWORK-H: a NIC. The inter-node network certifiers sign its ingress, so it is in H, counted in bytes.
   - PCIE-UNSIGNED: PCIe. It is in `Device.lean`'s `ι` ("PCIe from NVMe"), but no certifier observes it.

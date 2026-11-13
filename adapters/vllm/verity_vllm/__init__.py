@@ -2,7 +2,8 @@
 
 :class:`LLM` (``from verity_vllm import LLM``) is a pinned vLLM engine that is constructed and called like ``vllm.LLM``;
 :class:`EnginePin` is the checkpoint pin it runs, :class:`EngineSpec` the document that describes one (`LLM.from_spec`),
-and :class:`TargetProfile` the declared target it is built for.  The ``verity-vllm`` command
+and :class:`TargetProfile` the declared target it is built for; :func:`target_of` is what the compiler reads of the
+serving device, its target profile and its execution.  The ``verity-vllm`` command
 (:mod:`verity_vllm.pipeline.cli`) runs the Build, Match and Commit stages of a row and every other tool.  Importing the
 package imports neither torch nor vLLM; each name loads its module when it is first used.
 
@@ -19,14 +20,15 @@ if TYPE_CHECKING:
     from verity_vllm.config import EnginePin
     from verity_vllm.engine.spec import EngineSpec
     from verity_vllm.llm import LLM
+    from verity_vllm.pipeline.serve_seal import target_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
 __version__ = "0.1.0"
 
-__all__ = ["EnginePin", "EngineSpec", "LLM", "TargetProfile"]
+__all__ = ["EnginePin", "EngineSpec", "LLM", "TargetProfile", "target_of"]
 
 _HOME = {"EnginePin": "verity_vllm.config", "EngineSpec": "verity_vllm.engine.spec", "LLM": "verity_vllm.llm",
-         "TargetProfile": "verity_vllm.program.frontend.target_profile"}
+         "TargetProfile": "verity_vllm.program.frontend.target_profile", "target_of": "verity_vllm.pipeline.serve_seal"}
 
 
 def __getattr__(name: str) -> Any:

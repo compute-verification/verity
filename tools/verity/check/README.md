@@ -38,7 +38,9 @@ packages it depends on, what it resolves to in `uv.lock`, the paths it lists und
 the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
 `where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
-repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
+repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. It also keeps
+the environment's values out of a failure's text, since a run's log is published: `os.environ` prints as its names, and a
+failing comparison that holds the environment or a copy of it names the variables that differ and prints neither side. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
 
 A long suite runs in parts by test file: `suites.py SUITE --files K/M` (or `SUITE:K/M`, `SUITE:1,3/M`) runs part K of M,
@@ -55,7 +57,8 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run, which compiles what it tests and first imports every pass
+the same way, each keyed on what it reads. circuit-check's binding records travel through the store instead, each once
+under its name, which a pack lists (`records.py`). A nightly uncached run, which compiles what it tests and first imports every pass
 the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
 and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s `OPT_IN` names, by name in runs of their
 own with their variables set, which every other check leaves skipped.
@@ -72,6 +75,7 @@ follows.
 | `suites.py` | every test suite, each run in its own process, with passes cached |
 | `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
 | `verdicts.py` | passes carried between machines as one verdict pack |
+| `records.py` | circuit-check's binding records, put on the store once and named in the packs, fetched before circuit-check runs |
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
@@ -87,6 +91,7 @@ follows.
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it

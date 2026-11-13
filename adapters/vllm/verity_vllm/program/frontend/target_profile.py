@@ -64,7 +64,7 @@ class TargetProfile:
                            2 on cc 9.x = the labelled "forced FA2 on Hopper" execution (`execution_label` -> `bi-eager-fa2`).
                            The builder reads the instantiated layers' version back and refuses on a mismatch; the eager Match
                            resolver and the collector receive the same object (run header `profile.target`).
-    vllm_revision       -> must be a prefix-match of the running `vllm.__version__` (`+g<rev>`), else refused
+    vllm_revision       -> the running vLLM's version with its commit in it (`config.vllm_revision`) must carry `+g<rev>`, else refused
     numerics_profile    -> the derive vocabulary (`--profile`); already part of the Program's `SRC` static
     compilation         -> the EXECUTION the profile declares (`execution_label` -> `bi-compiled`): None = eager
                            (`enforce_eager=True`, every module forward launches its own kernels); `"piecewise"` = vLLM torch.compile

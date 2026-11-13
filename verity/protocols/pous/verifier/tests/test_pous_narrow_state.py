@@ -12,8 +12,15 @@ import random
 from verity.protocols.pous.verifier.labels import salt_value, tag, transpose, w_labels
 from verity.protocols.pous.verifier.oracle import PiQuery, Tweak, run
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.primitives import (CAPACITY_BITS, FeistelP, Primitives, RandomOracleKey, key_query, pad_block,
-                                    reference)
+from verity.protocols.pous.verifier.primitives import (
+    CAPACITY_BITS,
+    FeistelP,
+    Primitives,
+    RandomOracleKey,
+    key_query,
+    pad_block,
+    reference,
+)
 from verity.protocols.pous.verifier.scheme import encode_prog
 
 PARAMS = Params(16, 256, 12)

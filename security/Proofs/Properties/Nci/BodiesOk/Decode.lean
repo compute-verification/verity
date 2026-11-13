@@ -65,16 +65,166 @@ def RefIn (b : Body) (r : Ref) : Prop :=
   (r.p = true → r.i < b.params.size ∧ r.j < (b.params[r.i]!).2.leaves) ∧
   (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
 
+/-- A strided part repeats a pattern of positive length (`parsePartsIn` refuses a pattern of length 0). -/
+def PartInner : Part → Prop
+  | .strided _ _ _ inner _ _ _ => 0 < inner
+  | _ => True
+
+/-- Every part of body `b`'s references is `PartInner`: each argument's, and the return's. -/
+def BodyInner (b : Body) : Prop :=
+  (∀ k < b.nodes.size, ∀ a < (b.nodes[k]!).args.size, ∀ q ∈ ((b.nodes[k]!).args[a]!).seq.parts, PartInner q) ∧
+    ∀ q ∈ b.ret.parts, PartInner q
+
+/-- One unfolding of `parsePartsIn`, as `parsePartsIn_nonneg_step` takes it, for `PartInner`: a strided part is
+parsed only with a pattern of positive length. -/
+theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) (n : Nat)
+    (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
+    (hb : ∀ x ps, b.1 x = .ok ps → ∀ q ∈ ps, PartInner q) (j : Lean.Json) (ps : Array Part)
+    (h : Flock.Program.parsePartsIn._f leaves args (n + 1) b j = .ok ps) : ∀ q ∈ ps, PartInner q := by
+  delta Flock.Program.parsePartsIn._f at h
+  dsimp only at h
+  cases j with
+  | null => exact nomatch h
+  | bool _ => exact nomatch h
+  | num _ => exact nomatch h
+  | str _ => exact nomatch h
+  | arr _ => exact nomatch h
+  | obj kvs =>
+    dsimp only at h
+    split at h
+    · rename_i a _
+      rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+      all_goals try (injection h; done)
+      rcases l with _ | ⟨k, _ | ⟨x, _ | ⟨y, l⟩⟩⟩
+      all_goals try (injection h; done)
+      conv at h => lhs; whnf
+      split at h
+      all_goals try (injection h; done)
+      split at h
+      all_goals try (injection h; done)
+      rename_i s hs
+      injection h with h
+      subst h
+      exact hargs _ _ s hs
+    · split at h
+      · rename_i c _
+        rcases c with _ | _ | _ | _ | cs | _
+        all_goals try (injection h; done)
+        dsimp only at h
+        rcases hm : cs.mapM (fun x => b.1 x) with e | r <;> simp only [hm, bind, Except.bind] at h
+        · exact absurd h (by intro h; injection h)
+        injection h with h; subst h
+        intro q hq
+        rw [← Array.foldl_toList] at hq
+        rcases Walk.mem_foldl_append r.toList #[] q hq with hq | ⟨y, hy, hq⟩
+        · simp at hq
+        · obtain ⟨x, -, hx⟩ := Walk.array_mapM_ok _ cs r hm y (by simpa using hy)
+          exact hb x y hx q hq
+      · split at h
+        · rename_i a _
+          rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+          all_goals try (injection h; done)
+          rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩
+          all_goals try (injection h; done)
+          conv at h => lhs; whnf
+          split at h
+          all_goals try (injection h; done)
+          split at h
+          · injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            trivial
+          · split at h
+            all_goals try (injection h; done)
+            injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            trivial
+        · split at h
+          · rename_i a _
+            rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+            all_goals try (injection h; done)
+            rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨n0, _ | ⟨o0, _ | ⟨j0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩⟩⟩⟩
+            all_goals try (injection h; done)
+            conv at h => lhs; whnf
+            split at h
+            all_goals try (injection h; done)
+            rename_i _ cc inn ost ist c _
+            split at h
+            all_goals try (injection h; done)
+            rename_i hinn
+            have hin : 0 < inn := by simp at hinn; omega
+            try dsimp only at h
+            split at h
+            · injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              exact hin
+            try dsimp only at h
+            split at h
+            all_goals try (injection h; done)
+            injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            exact hin
+          · split at h
+            · rename_i e _
+              rcases e with _ | _ | _ | _ | items | _
+              all_goals try (injection h; done)
+              dsimp only at h
+              obtain ⟨rs, -, h⟩ := Walk.except_bind_ok h
+              injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              trivial
+            · exact absurd h (by intro h; injection h)
+
+/-- **Every parsed strided part repeats a pattern of positive length**, given every part of an argument an alias may
+name does. -/
+theorem parsePartsIn_inner (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) :
+    ∀ fuel j ps, Flock.Program.parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartInner q := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro j ps h
+    delta Flock.Program.parsePartsIn at h
+    exact nomatch h
+  | succ n ih =>
+    intro j ps h
+    delta Flock.Program.parsePartsIn at h
+    exact parsePartsIn_inner_step leaves args hargs n _
+      (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
+
+/-- The width check passes the default body, which has no node and returns no reference. -/
+theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
+    (Widths.bodyBad defs key (default : Body)).run w = .ok none w := by
+  unfold Widths.bodyBad
+  have h0 : (default : Body).nodes.size = 0 := rfl
+  have hp : (default : Body).ret.parts = #[] := rfl
+  simp only [h0, hp, Widths.seqBad]
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [Std.Legacy.Range.size, Nat.sub_self, Nat.zero_add, Nat.zero_div, List.range'_zero, List.forIn_nil]
+  rfl
+
 /-- What the decoder establishes of the body of Definition `i`: each node calls an earlier Definition as `NodeOk`
 says, its arguments and its return are sequences of parts, none naming a negative position, and every reference names a
-leaf. -/
+leaf; every strided part repeats a pattern of positive length (`BodyInner`), and the width check (`Widths.bodyBad`)
+passed the body, on some Definitions for its callees. -/
 def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
   (∀ k < b.nodes.size, (b.nodes[k]!).fn < i ∧ NodeOk defs[(b.nodes[k]!).fn]! (b.nodes[k]!) ∧
     ∀ a < (b.nodes[k]!).args.size,
       (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q) ∧
       ∀ t < ((b.nodes[k]!).args[a]!).seq.count, RefIn b (((b.nodes[k]!).args[a]!).seq.get t)) ∧
   (∀ t < b.ret.count, RefIn b (b.ret.get t)) ∧
-  ∃ ps : Array Part, b.ret = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q
+  ∃ ps : Array Part, b.ret = Seq.ofParts ps ∧ (∀ q ∈ ps, PartNonneg q) ∧ BodyInner b ∧
+    ∃ (defs' : Array Defn) (key : String) (w w' : ℕ), (Widths.bodyBad defs' key b).run w = .ok none w'
 
 def DefOk (defs : Array Defn) (i : ℕ) (c : Defn) : Prop := CalleeOk c ∧ BodyFacts defs i c.body
 
@@ -147,7 +297,9 @@ def StatSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (v : Lean.Json) (s : DecSt
 
 theorem default_bodyFacts (defs : Array Defn) (i : ℕ) : BodyFacts defs i default :=
   ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun _ ht => absurd ht (Nat.not_lt_zero _), #[], rfl,
-    fun _ h => absurd h (by simp)⟩
+    fun _ h => absurd h (by simp),
+    ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun q h => absurd (show q ∈ (#[] : Array Part) from h) (by simp)⟩,
+    #[], "", 0, 0, bodyBad_default _ _ _⟩
 
 theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
   intro desc fid s i s' h hs

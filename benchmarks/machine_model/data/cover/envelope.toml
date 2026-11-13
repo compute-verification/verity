@@ -1,4 +1,4 @@
-# The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
+# The ACCEL ops the opcode table (rows.toml) dominates every instruction by: `Accel.Op`
 # (security/Definitions/Core/Accel/, as drafted when the table was built), its pipes and formats,
 # plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
 # gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
@@ -81,7 +81,7 @@ proposed = "MODEL-MIN item 3 and its correction (RM4: a rate, not an exclusion)"
 key = "-"
 resource = "none"
 unit = "none"
-semantics = "no envelope op: an absent unit (the card has none) or a hole"
+semantics = "no ACCEL op: an absent unit (the card has none) or a hole"
 
 # A lane opcode's pipe: the resource it uses a lane of (`lanes` lanes a unit: fma's lanes are the issue slot's 32), and
 # the register words a lane reads (`Pipe.nIn`). A collective's pipe gives its resource only: its words are the op's.

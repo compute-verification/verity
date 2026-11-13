@@ -4,7 +4,7 @@
   positions) on masks of no member to every key, and its first count slots are the members' positions, ascending, whenever it
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
 * `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
-  and one of the counts, at small statics and at the served one (M 8, K 2,048);
+  and one of the counts, at small statics and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the served one (M 8, K 2,048);
 * `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v1` over its chunk give the merge's element j for every j on the merge's
   own outputs, 0 where it is N or more and at an index out of range, at small statics and the served ones on random rows;
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
@@ -27,6 +27,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity import settings
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
 from verity.circuits.defs import bind
@@ -125,11 +126,7 @@ def test_the_merge_is_merge(M_, K) -> None:
         assert g == R.merge(li, c, K), (li, c, g)
 
 
-@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16),
-                                  pytest.param(8, SERVED_TOPK, marks=pytest.mark.slow, id="served")])
-def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
-    """Against the merge over one port of the M blocks' lists and one of their counts.  The served binding (8 blocks, 2,048
-    slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller binding's trace is its trace."""
+def _ports_are_one_port(M_: int, K: int) -> None:
     S = SimpleNamespace(M=M_, K=K)
     params, ret = R._merge_sig(S)
     assert [n for n, _ in params] == [f"pos_{b}" for b in range(M_)] + [f"count_{b}" for b in range(M_)]
@@ -137,6 +134,22 @@ def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K)
     split = _digest(trace(R._merge(S), [t for _, t in params], ret))
     one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], ret))
     assert split == one
+
+
+@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16)])
+def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
+    """Against the merge over one port of the M blocks' lists and one of their counts.  These cases hold the property in
+    `check`: both traces run one builder over the same input words and differ only in how ports group them, which 8 blocks of
+    16 slots already cover, while circuit-check holds the served binding's trace to its digest pin."""
+    _ports_are_one_port(M_, K)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not settings.VERITY_ML_DEFINITIONS_SLOW,
+                    reason="VERITY_ML_DEFINITIONS_SLOW=1 runs it (about 14 minutes on a node: two traces of about 6M ANDs)")
+def test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate() -> None:
+    """The same at the served binding (8 blocks, 2,048 slots, 12-bit shifts), the one the long row calls."""
+    _ports_are_one_port(8, SERVED_TOPK)
 
 
 def _chunk(K: int, W: int, slots: np.ndarray, cs: list[int]) -> list[list[int]]:
@@ -352,8 +365,9 @@ def _served_units() -> dict[str, list]:
 def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
     """Every unit of the cut at every served class, its rows read off its ports' bits as the composer reads them (a
     parameter a row, then a return field a row, each whole u16 words): at most `interface.MAX_ROWS` rows, one of them past
-    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and rows that alone fit a Flock
-    block of 2^K_MAX bits.  circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
+    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and a proof block that at no
+    logic fits a Flock block of 2^K_MAX bits (`interface.proof_block_k_log` of its input rows and its output rows).
+    circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
     units = _served_units()
     assert set(INDEX_UNITS) <= set(units)
     for us in units.values():
@@ -363,16 +377,17 @@ def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
             rows = [2 * -(-sum(t.leaf_widths()) // 16) for t in [t for _, t in params] +
                     [f[1] if isinstance(f, tuple) else f for f in fields]]
             assert len(rows) <= IF.MAX_ROWS and max(rows) > IF.LAST_BLOCK_BYTES, (u.id, rows)
-            assert IF.rows_k_log(rows) <= IF.K_MAX, (u.id, rows)
+            assert IF.proof_block_k_log(rows[:len(params)], rows[len(params):]) <= IF.K_MAX, (u.id, rows)
 
 
 def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -> None:
     """`interface.check_proof_block`, which vllm's window builder runs on every unit it settles, passes the merge, the
     chunks, the slots and the read at every served class, at the least k_log their rows allow: 2^23 for the chunk and the
-    read, 2^21 for the slot (its chunk's 128 bytes the one row past 111), at most 2^26 for the merge of up to 8 blocks."""
+    read, 2^`interface.PACK_LOG` for the slot (its chunk's 128 bytes the one row past 111: its own block is 2^21 bits,
+    and the composer packs proof blocks into a Flock block of that size), at most 2^26 for the merge of up to 8 blocks."""
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
-    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {21}
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
     assert max(k["DsaPositionsMerge_v1"]) <= 26
 
 

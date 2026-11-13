@@ -19,8 +19,8 @@ def test_hyper_is_the_exact_pmf():
 
 
 @pytest.mark.parametrize("N, n, K", [(30, 7, 12), (2_929_277_932, 2_000_000_000, 27_713), (656_132, 4_150, 27_713)])
-def test_upper_q_is_draw_counts(N, n, K):
-    assert P.upper_q(N, n, K) == U.draw_count(N, n, K)[1]
+def test_upper_q_is_sample_count(N, n, K):
+    assert P.upper_q(N, n, K) == U.sample_count(N, n, K)[1]
 
 
 def test_menu_dp():
@@ -41,10 +41,10 @@ def test_a_tiny_audit_exactly():
     """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 sampled; menu pow2 = {4, 16}; B = 2. Checked against all 20 samples."""
     units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
     pop = [3] * 4 + [10] * 2
-    draws = list(combinations(range(6), 3))
-    actual = Fraction(sum(sum(pop[i] for i in d) for d in draws), len(draws))
+    samples = list(combinations(range(6), 3))
+    actual = Fraction(sum(sum(pop[i] for i in d) for d in samples), len(samples))
     padded = Fraction(sum(2 * 4 * -(-sum(pop[i] == 3 for i in d) // 2) + 2 * 16 * -(-sum(pop[i] == 10 for i in d) // 2)
-                          for d in draws), len(draws))
+                          for d in samples), len(samples))
     assert (actual, padded) == (16, Fraction(176, 5))
     e = P.evaluate(6, 3, units, P.menu_pow2(units), 2)
     assert e["buckets"] == 2 and e["actual_mean"] == pytest.approx(16)

@@ -40,12 +40,15 @@ every product, is a reference, not an answer.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
-one-stage audit, PoUW's credit period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
-inference-only policy's check (`Core.Remote.components` in `verity/protocols/remote/verifier/CoreRemote.lean`, id
-`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
-subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
-names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/protocols/remote/verifier/composition/README.md`). In the remote demo, the vLLM demo
+one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
+`lean/pearlplus`), and the inference-only policy's check (`Core.Remote.V1.components` in
+`verity/protocols/remote/verifier/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
+its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
+record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
+(`Core.Composition.tiedSameB`, `verity/protocols/remote/verifier/composition/README.md`). H1's development executable
+(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
+(`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
+Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
 (`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
@@ -110,9 +113,33 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   replaced by sm_120's FP4 with scale groups, NVFP4 only.
 - **NCP** (`ncp-v1`, `verity/protocols/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
+  on SAK and is no longer the bar or the plan (below).
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+
+## The bar and the next scheme
+
+PoUW's bar holds on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
+(`SAKMatmul`, `SAKHigh`) as the bar.
+
+- **T1**: the gap between honest and adversary is at most 1% of stock, additive, in priced work. The honest program is
+  the best possible, hashing is credited, and every matmul takes fresh noise on every call.
+- **T2**: honest overhead is at most 100×.
+- **T3**: perplexity rises at most 5%.
+
+The next scheme is **the lead**, protocol id `verity/pouw/v2`: NCP-family served
+sparse noise with row tags and three certifier-streamed coin lanes, every k32 word committed. Its defaults:
+
+- ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
+- the copy model is tile grain;
+- hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
+- the certifier is the coin source, on a trusted host;
+- the network term and whole-step coverage are reported beside T1;
+- the fold is exact on |A·Bᵀ| ≤ 2^22;
+- stock's decode price is reported both ways.
+
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window.
 
 ## Security assumptions and guarantees
 

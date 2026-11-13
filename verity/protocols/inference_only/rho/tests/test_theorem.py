@@ -23,7 +23,7 @@ def block(*cuts, layout=None, gates=1000.0, name="s", mfu=1.0):
     return ServerBlock(name, gates, 1.0, cuts, layout, mfu)
 
 
-def test_a_serving_block_contributes_its_least_cut_and_never_more_than_its_capacity():
+def test_a_server_block_contributes_its_least_cut_and_never_more_than_its_capacity():
     a = Cut("a", (Blocks("x", Budget(200, 10), 4),), {"undecl.gpu": 200})
     b = Cut("b", (Blocks("y", Budget(1000, 50), 1),))
     s = local(block(a, b), lambda bud: bud.inputs, W)
@@ -33,7 +33,7 @@ def test_a_serving_block_contributes_its_least_cut_and_never_more_than_its_capac
 
 
 def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_different_cuts():
-    """Two serving blocks: the first's inference cut binds (few prompt bits), the second's serving cut (a small `k_S`).
+    """Two server blocks: the first's inference cut binds (few prompt bits), the second's serving cut (a small `k_S`).
     The local minimum takes each one's own least cut; the aggregate-only bound must pick one cut for both."""
     cap = lambda bud: bud.inputs
     one = block(Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"undecl.gpu": 100}),
@@ -69,7 +69,7 @@ def test_an_attack_takes_the_layout_at_its_mfu_and_ignores_the_cuts():
     assert local(block(cut, mfu=0.4), lambda bud: 0.0, W, side="attack").value == 0.4
 
 
-def test_the_padded_size_ratio_is_the_dark_leaves_plus_the_monitored_weight():
+def test_the_padded_size_ratio_is_the_unregistered_leaves_plus_the_monitored_weight():
     assert padded(0.0, 1.0) == 1.0
     assert math.isclose(padded(0.01, 0.0), 100.0)
     assert math.isclose(padded(0.01, 0.0, efficiency=3.0), 300.0)
@@ -77,11 +77,11 @@ def test_the_padded_size_ratio_is_the_dark_leaves_plus_the_monitored_weight():
 
 
 def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_1():
-    """Under a bound the dark leaves train like the reference and the monitored share converts at `a`
+    """Under a bound the unregistered leaves train like the reference and the monitored share converts at `a`
     (`multiple_bound`): 1 under reference efficiency, so the slowdown is the padded size ratio; `1/MFU₀` without it.
     A construction's padded circuit already holds the capacity it leaves idle, so its slowdown is `MFU₀` times its
     padded size ratio. `rates` splits `1 / slowdown` before the floor."""
-    part = Partition((block(Cut("c", (Blocks("x", Budget(1000, 5), 1),)), mfu=0.4),), 0.01, dark_mfu=0.55)
+    part = Partition((block(Cut("c", (Blocks("x", Budget(1000, 5), 1),)), mfu=0.4),), 0.01, unreg_mfu=0.55)
     def cap(b):
         return b.inputs
 
@@ -103,29 +103,29 @@ def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_
     assert multiple_bound(0.4, 0.0, 0.5) == 2.0 and multiple_bound(0.4, 0.0, 0.5, reference_efficiency=False) == 1.0
 
 
-def test_the_bound_counts_the_dark_leaves_at_capacity_and_an_attack_at_its_mfu():
-    part = Partition((block(mfu=0.4),), 0.01, dark_mfu=0.55)
+def test_the_bound_counts_the_unregistered_leaves_at_capacity_and_an_attack_at_its_mfu():
+    part = Partition((block(mfu=0.4),), 0.01, unreg_mfu=0.55)
     bound, attack = overhead(part, lambda b: 0.0, W), overhead(part, lambda b: 0.0, W, side="attack")
-    assert bound.dark == 0.01 and bound.padded == pytest.approx(1.0)
-    assert attack.dark == pytest.approx(0.0055) and attack.padded == pytest.approx(1 / (0.0055 + 0.99 * 0.4))
+    assert bound.unregistered == 0.01 and bound.padded == pytest.approx(1.0)
+    assert attack.unregistered == pytest.approx(0.0055) and attack.padded == pytest.approx(1 / (0.0055 + 0.99 * 0.4))
 
 
-def test_a_bound_holds_uncertified_and_dark_gates_and_every_block_at_u_and_an_attack_at_w():
-    """`u = ω_max / s_×` against the reference's `w`: the uncertified routes and the dark leaves scale by `u/w`, no
-    block holds more than `u c`, and a serving block at most `u/w` of the reference's weight in it. An attack is a
+def test_a_bound_holds_uncertified_and_unregistered_gates_and_every_block_at_u_and_an_attack_at_w():
+    """`u = ω_max / s_×` against the reference's `w`: the uncertified routes and the unregistered leaves scale by `u/w`, no
+    block holds more than `u c`, and a server block at most `u/w` of the reference's weight in it. An attack is a
     construction of the reference's operations, so `u` doesn't move it."""
     w, u = 0.5, 2.0
     part = Partition((block(Cut("c", (Blocks("x", Budget(200, 1e9), 1),), {"undecl.gpu": 100}), mfu=0.4),), 0.01)
     s = overhead(part, lambda b: b.inputs, w, u=u)
-    # x: min(1e9, u·200) / (w·1000) = 0.8; undecl.gpu: u·100 / 500 = 0.4; dark: (u/w)·0.01
-    assert dict(s.terms) == pytest.approx({"x": 0.8, "undecl.gpu": 0.4}) and s.dark == pytest.approx(0.04)
+    # x: min(1e9, u·200) / (w·1000) = 0.8; undecl.gpu: u·100 / 500 = 0.4; unregistered: (u/w)·0.01
+    assert dict(s.terms) == pytest.approx({"x": 0.8, "undecl.gpu": 0.4}) and s.unregistered == pytest.approx(0.04)
     assert s.padded == pytest.approx(1 / (0.04 + 0.99 * 1.2))
     assert local(block(), lambda b: math.inf, w, u=u).value == pytest.approx(u / w)
     assert overhead(part, lambda b: 0.0, w, side="attack", u=u) == overhead(part, lambda b: 0.0, w, side="attack")
     assert overhead(part, lambda b: b.inputs, w, u=w) == overhead(part, lambda b: b.inputs, w)
 
 
-def test_overhead_weights_serving_blocks_by_their_gates():
+def test_overhead_weights_server_blocks_by_their_gates():
     free = ServerBlock("free", 3000.0, 1.0, ())
     locked = ServerBlock("locked", 1000.0, 1.0, (Cut("c", (Blocks("x", Budget(1000, 0), 1),)),))
     s = overhead(Partition((free, locked), 0.0), lambda bud: bud.inputs, W)
@@ -133,11 +133,11 @@ def test_overhead_weights_serving_blocks_by_their_gates():
     assert math.isclose(sum(s.terms.values()), s.g)
 
 
-def test_with_no_dark_leaves_the_overhead_is_the_inverse_of_the_counted_share_times_the_efficiency():
+def test_with_no_unregistered_leaves_the_overhead_is_the_inverse_of_the_counted_share_times_the_efficiency():
     part = Partition((block(Cut("c", (Blocks("x", Budget(200, 30), 2),), {"undecl.gpu": 100})),), 0.0)
     for efficiency in (1.0, 2.5):
         s = overhead(part, lambda bud: bud.inputs, W, efficiency=efficiency)
-        assert s.dark == 0.0 and math.isclose(s.padded, efficiency / s.g)
+        assert s.unregistered == 0.0 and math.isclose(s.padded, efficiency / s.g)
 
 
 def test_least_takes_the_smallest_cap():

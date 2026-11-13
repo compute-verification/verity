@@ -4,9 +4,10 @@ BlockKey_v1 so that the row's keys are the ones vLLM hits on.
 
 **The snapshot** (`snapshot`) reads a live pool as plain data (`Pool`). It takes each block's reference count and key,
 the free queue from its head, and each key's copies in vLLM's order: one block, or a ``{block_id: block}`` dict in the
-order they were cached, the first being the one ``get_one_block`` hits. A block's ``_block_hash`` is its key followed by
-its KV cache group's id, 4 bytes big-endian (``make_block_hash_with_group_id``). The snapshot refuses (`Refused`)
-anything the row can't hold:
+order they were cached, the first being the one ``get_one_block`` hits (vLLM 0.34's map holds block ids instead: the
+one a hit takes, and the ids of a key cached by several blocks in ``_dup_ids``, in that order). A block's
+``_block_hash`` is its key followed by its KV cache group's id, 4 bytes big-endian
+(``make_block_hash_with_group_id``). The snapshot refuses (`Refused`) anything the row can't hold:
 - a null block other than block 0;
 - a key of a group other than 0, or one that isn't 64 bytes;
 - a key reaching inside a block (``_block_hash_num_tokens``, a partial hit's), or a block cached under two keys
@@ -42,6 +43,7 @@ from typing import Any, NamedTuple
 
 from verity.commitments import pool_row as R
 from verity.definitions.commitments.gates import block_key as BK
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.errors import Refused
 
@@ -95,7 +97,7 @@ def snapshot(pool: Any, block_size: int | None = None) -> Pool:
     if pool.null_block.block_id != 0:
         raise Refused(f"the null block is block {pool.null_block.block_id}, not 0")
     B = pool.hash_block_size
-    if block_size is not None and B != block_size:
+    if block_size is not None and block_size != B:
         raise Refused(f"the pool keys blocks of {B} tokens, not the engine's {block_size}")
     if pool.cached_block_hashes_by_block:
         b = next(iter(pool.cached_block_hashes_by_block))
@@ -108,8 +110,14 @@ def snapshot(pool: Any, block_size: int | None = None) -> Pool:
             raise Refused(f"block {blk.block_id}'s key covers {n} tokens, inside a block of {B}")
         keys.append(None if h is None else _key(h, blk.block_id))
     copies: dict[bytes, tuple[int, ...]] = {}
+    several = getattr(pool.cached_block_hash_to_block, "_dup_ids", {})
     for h, v in pool.cached_block_hash_to_block._cache.items():
-        ids = (v.block_id,) if hasattr(v, "block_id") else tuple(v)
+        if isinstance(v, int):
+            ids = tuple(several.get(h) or (v,))
+            if ids[0] != v:
+                raise Refused(f"block {v} is the one a hit takes, and its key's copies begin with block {ids[0]}")
+        else:
+            ids = (v.block_id,) if hasattr(v, "block_id") else tuple(v)
         k = _key(h, ids[0] if ids else -1)
         if not ids or any(keys[b] != k for b in ids):
             raise Refused(f"key {k[:8].hex()}… lists blocks {list(ids)}, not the blocks cached under it")

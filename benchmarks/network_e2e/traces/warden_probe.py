@@ -83,10 +83,10 @@ class Probe:
             finally:
                 probe.work.append(probe.clock() - start)
 
-        def probed_keep(self, record, grid) -> None:
+        def probed_keep(self, record, *args, **kwargs) -> None:
             start = probe.clock()
             try:
-                keep(self, record, grid)
+                keep(self, record, *args, **kwargs)
             finally:
                 probe.publish.append((start, probe.clock() - start, record.link, record.window))
 
@@ -101,9 +101,9 @@ class Probe:
             if probe.out is not None:
                 (probe.out / PUBLISHER_PID).write_text(str(self.process.pid))
 
-        def probed_call(self, record, grid) -> None:
+        def probed_call(self, record, *args, **kwargs) -> None:
             probe.handoff.append((probe.clock(), record.link, record.window))
-            call(self, record, grid)
+            call(self, record, *args, **kwargs)
 
         def probed_close(self) -> list:
             start = probe.clock()
@@ -140,10 +140,10 @@ def time_keeps(publisher_cls: type, clock=time.monotonic) -> None:
     publisher's `out` as it returns."""
     keep = publisher_cls.keep
 
-    def timed_keep(self, record, grid) -> None:
+    def timed_keep(self, record, *args, **kwargs) -> None:
         start = clock()
         try:
-            keep(self, record, grid)
+            keep(self, record, *args, **kwargs)
         finally:
             with open(self.out / PUBLISHER_KEEPS, "a") as fh:
                 fh.write(json.dumps([start, clock() - start, record.link, record.window]) + "\n")

@@ -254,3 +254,6 @@ def run_json(j: Mapping) -> dict:
         return {"bits": check(schedule, blocks, cap, passes, appends)}
     except Refused as e:
         return {"refused": str(e)}
+
+
+__all__ = ["Refused"]

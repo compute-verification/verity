@@ -258,7 +258,7 @@ def test_the_gate_skips_the_lost_releases_and_schedules_the_tick_replay_of_the_r
         tr, rec, adv = V._trace(str(d), (EOS,))
         assert tr.releases == R.Releases(R.Tick(*TICK), T0, tuple(kept), tuple(a[i] for i in kept))
         assert [q.id for q in rec.requests] == [f"r{i}" for i in kept]
-        assert V.residual(adv, rec, reg) == [CV.Window()] * V.windows(rec, reg.T)
+        assert V.residual(adv, rec, reg) == [CV.Advice()] * V.windows(rec, reg.T)
         data = V.encode(adv, rec, reg)
         assert V.bits_by_window(data, rec, reg) == dict(enumerate(sum(n for _v, n in t) for t in V.length_tails(rec, reg)))
         assert V.decode_full(data, rec, reg).advice == adv
@@ -292,7 +292,7 @@ def test_v1_sends_only_lengths_under_the_tick(asy):
     e, rec, adv, reg = tick_case(asy)
     assert _past_the_bound(e, adv) and any(x.preempted for st in adv.steps for x in st.rows)
     wins = V.residual(adv, rec, reg)
-    assert len(wins) == V.windows(rec, reg.T) > 1 and wins == [CV.Window()] * len(wins)
+    assert len(wins) == V.windows(rec, reg.T) > 1 and wins == [CV.Advice()] * len(wins)
     tails = [sum(n for _v, n in t) for t in V.length_tails(rec, reg)]
     assert sum(tails) == sum(q.max_tokens.bit_length() + 1 for q in rec.requests)
     fit = dataclasses.replace(reg, book=CV.fit_book([wins], V.TICK_TABLE_CAPS))
@@ -370,9 +370,9 @@ def test_a_count_capped_at_0_costs_nothing():
     assert [getattr(V.TICK_CAPS, c) for c in counts] == [0] * 5
     assert (V.CAPS.hits, V.CAPS.resumes, V.CAPS.lag) == (0, 0, 0) and V.CAPS.arrived and V.CAPS.order
     assert V.TABLE_CAPS == dataclasses.replace(V.CAPS, arrived=V.TABLE_CAPS.arrived, order=V.TABLE_CAPS.order)
-    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) == [0, 0, 0]
+    assert list(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) == [0, 0, 0]
     roomy = dataclasses.replace(V.CAPS, hits=1 << 12, resumes=1 << 12, lag=1 << 12)
-    own, more = (sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(c)).lens) for c in (V.CAPS, roomy))
+    own, more = (sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(c)).lens) for c in (V.CAPS, roomy))
     assert 0 < own < more
 
 

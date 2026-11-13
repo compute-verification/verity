@@ -1,5 +1,5 @@
 """The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
-a session runs under, and how the leg starts the challenger's side and talks to it. The challenger's side is the
+a session runs under, and how PoUS starts the challenger's side and talks to it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
@@ -21,11 +21,11 @@ A request that names no audit runs under the id the auditor designates from its 
 `session_id(audit, commitment, salt)`, of the commitment and salt the challenger logged for the audit, which the
 verifier computes from the audit's binding and what setup published, never from the report; it carries setup's published
 outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challenger keeps each session it completes on
-its own host under `SETUPS`, from which the remote bandwidth audit's verifier on the same host builds its registration
-(`remote_bandwidth.p2_party --pous-record`).
+its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
+(`verity.protocols.poub.verifier.p2_party --pous-record`).
 
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
-`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is the leg's: it starts the
+`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
 party and whether `trusted-host`'s premise holds.
 """
@@ -42,16 +42,16 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.commitments.randomness import derive
 from verity.configuration.deploy import stream
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
 from verity.configuration.deploy.stream import Side
 from verity.configuration.wire import Body, Int, Message, Schema
-from verity.commitments.randomness import derive
-
-from . import memory_challenger as mc
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
+
+from . import memory_challenger as mc
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
@@ -111,12 +111,6 @@ class Polled:
 
     def flush(self) -> None:
         pass
-
-    def __enter__(self) -> Polled:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -287,6 +281,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     return s | {"params": p}
 
 
-__all__ = ["AUDIT_BYTES", "CHALLENGER", "END", "ID", "MANIFEST", "MAX_BLOCK", "MODULE", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "SPIN_NS", "VERSION", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
+__all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
            "coin_session_id", "command", "placement", "request_of", "salt", "session", "session_id", "setup_of", "side_of"]

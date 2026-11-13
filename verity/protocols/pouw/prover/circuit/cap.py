@@ -1,8 +1,8 @@
-"""Pearl-C's per-tile cap on a circuit: rev1's ``capOK`` (`DeviceRev1.lean`'s `pearlCTilesDevRev1`) decided in gates on
-public ok words, so the verifier reads the verdict and never the tile's codes, with the row unit `Pc8RowA`'s salt-dead
-counts that the cap reads.  `pc8.Shape.cap` cuts the hiding call into a unit per word, two per tile row (its digests
-and its sums), the tile and its tally (`Pc8CallCap`; the split below); `Pc8TileCap` is the cap in one tile unit, the
-split's reference.
+"""Pearl-C's per-tile inert-work bound on a circuit: rev1's ``capOK`` (`DeviceRev1.lean`'s `pearlCTilesDevRev1`) decided
+in gates on public ok words, so the verifier reads the verdict and never the tile's codes, with the row unit `Pc8RowA`'s
+salt-dead counts that the inert-work bound reads.  `pc8.Shape.cap` cuts the hiding call into a unit per word, two per
+tile row (its digests and its sums), the tile and its tally (`Pc8CallCap`; the split below); `Pc8TileCap` is the
+inert-work bound in one tile unit, the split's reference.
 
     template                          reads                                            computes and returns
     Pc8RowACap{K,DEV}                 `Pc8RowA`'s inputs                               `Pc8RowA`'s outputs, and the
@@ -18,20 +18,20 @@ split's reference.
                                                                                        the later +0 promotions and
                                                                                        good's ok word
     Pc8CapStrip{K,TM,TN,N,RHO,DEV}    its TM A rows' ok words                          their admission bits (padded
-      (one per strip of TM rows)                                                       to 64) and the cap's bound at
-                                                                                       their passing count
+      (one per strip of TM rows)                                                       to 64) and the inert-work bound's
+                                                                                       value at their passing count
     Pc8CapRowDigest{TN}               a tile row's TN words' C̃ and U                   its chunk digests (`leaves`'
       (one per tile row)                                                               D = 0x21 TurboSHAKE128)
     Pc8CapRowTally{K,TN}              a tile row's TN words' flags, counts,            the row's flag count, later +0
       (one per tile row)              promotions and good, its A row's salt-dead       promotions, forming elements
                                       counts                                           and good's ok word
     Pc8CapTile{TM,TN}                 its TM rows' chunk digests                       the tile digest
-    Pc8CapTally{K,TM,TN,N,RHO,DEV}    its TM rows' sums, its strip's admission bits    the cap's verdict (an ok word)
-                                      and bound
+    Pc8CapTally{K,TM,TN,N,RHO,DEV}    its TM rows' sums, its strip's admission bits    the inert-work bound's verdict
+                                      and bound                                        (an ok word)
 
-    the per-row cap (v2; `row_rho`, `served`)
-    Pc8TileCap_v2{...,RHOR,DEV}       v1's                                             v1's, the verdict also capping
-                                                                                       each passing row at ρr = 1/RHOR
+    the per-row inert-work bound (v2; `row_rho`, `served`)
+    Pc8TileCap_v2{...,RHOR,DEV}       v1's                                             v1's, the verdict also holding
+                                                                                       each passing row to ρr = 1/RHOR
     Pc8CapTally_v2{...,RHOR,DEV}      v1's                                             the same verdict from the sums
     Pc8CallCap_v2, Pc8CheckCap_v2     v1's                                             v1's, with the v2 tally
 
@@ -63,7 +63,7 @@ FP32 values compare by value with ±0 one value (`_Cmp`): two signed integer com
 sign and zero of each value computed once.
 
 **The tile** (`Pc8TileCap`) is `Pc8Tile` plus, on its passing rows R (an A row's ok word, `pc4.ok_word`) and every
-column C of the tile, Lean's per-tile cap at the device's prices, ρ = 1/RHO and the unit's n = N:
+column C of the tile, Lean's per-tile inert-work bound at the device's prices, ρ = 1/RHO and the unit's n = N:
 
     (32 + add/G)·atoms + fs·(|C|/N)·elems + add·zeros  <=  ρ · creditDevRev1(m, K, N) · |R|·|C| / (m·N)
 
@@ -77,23 +77,23 @@ column C of the tile, Lean's per-tile cap at the device's prices, ρ = 1/RHO and
   - the verdict: every passing row's words are good, and the inequality holds.
 The certificates (``cert``) are the prover's, from `pearl_c_debit`'s own bisection; any other certificate fails ``good``.
 
-**The per-row cap** (v2 of `Pc8TileCap`, `Pc8CapTally`, `Pc8CallCap` and `Pc8CheckCap`; v1 stays as it is): the verdict
-also holds each passing row's own atoms, zeros and elems to the same inequality on that one row, |R| = 1, at ρr = 1/RHOR
-(`_row_constants`; `pearlCTilesDevRev1RowCapAt` at ρ = 1/RHO and ρr), the clear path's row cap
-(`clear_work.cap_failure`).  `served` binds the scheme's: under a hashing format with the row cap (-h3) ρr is
-`PearlC.row_cap_at(k)`, 4ρ at the device's census ks and ρ elsewhere (`row_rho`); without one (-h0) the served cap is
-v1's, the tile's alone, and the scheme refuses the census ks.
+**The per-row inert-work bound** (v2 of `Pc8TileCap`, `Pc8CapTally`, `Pc8CallCap` and `Pc8CheckCap`; v1 stays as it is):
+the verdict also holds each passing row's own atoms, zeros and elems to the same inequality on that one row, |R| = 1, at
+ρr = 1/RHOR (`_row_constants`; `pearlCTilesDevRev1RowCapAt` at ρ = 1/RHO and ρr), the clear path's per-row inert-work
+bound (`clear_work.cap_failure`).  `served` binds the scheme's: under a hashing format with the per-row inert-work bound
+(-h3) ρr is `PearlC.row_cap_at(k)`, 4ρ at the device's census ks and ρ elsewhere (`row_rho`); without one (-h0) the
+served inert-work bound is v1's, the tile's alone, and the scheme refuses the census ks.
 
-**The split** (`pc8.Shape.cap`, `Pc8CallCap`): a word is the cap's proof block, since a cap word is about 7.8M ANDs at
-K = 8,192 and a 64 × 64 tile of them does not stage.  The root holds the A rows (`Pc8RowACap`) and a strip unit per TM
-of them (`Pc8CapStrip`), then per strip its word units row by row, per tile row its digests (`Pc8CapRowDigest`) and its
-sums (`Pc8CapRowTally`), its tile units and their tallies.  Each value is computed once: a word unit computes its own
-chain (the window's unmasked words, which `Pc8CapWord` promotes into C̃) and its peel, so a row digest reads its row's
-C̃ and U and computes only their chunk digests, and the tile reads its rows' chunk digests and computes only h0; the
-strip reads its rows' ok words and computes their admission bits and the bound at their passing count, once for every
-tile in the strip; a row tally reads its row's words' flags, their count, their later +0 promotions and good, and its
-A row's salt-dead counts, and computes the row's sums; and the tally reads its rows' sums and the strip's bits and
-bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
+**The split** (`pc8.Shape.cap`, `Pc8CallCap`): a word is the inert-work bound's proof block, since a word unit is about
+7.8M ANDs at K = 8,192 and a 64 × 64 tile of them does not stage.  The root holds the A rows (`Pc8RowACap`) and a strip
+unit per TM of them (`Pc8CapStrip`), then per strip its word units row by row, per tile row its digests
+(`Pc8CapRowDigest`) and its sums (`Pc8CapRowTally`), its tile units and their tallies.  Each value is computed once: a
+word unit computes its own chain (the window's unmasked words, which `Pc8CapWord` promotes into C̃) and its peel, so a
+row digest reads its row's C̃ and U and computes only their chunk digests, and the tile reads its rows' chunk digests
+and computes only h0; the strip reads its rows' ok words and computes their admission bits and the bound at their
+passing count, once for every tile in the strip; a row tally reads its row's words' flags, their count, their later +0
+promotions and good, and its A row's salt-dead counts, and computes the row's sums; and the tally reads its rows' sums
+and the strip's bits and bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
   - The tile and the tally are cut per tile row because Flock's composer gives each row a unit reads or writes an
     hm96 slot of 2^18 bits and a unit at most 2^27 bits (`circuit.K_MAX`), so at most 256 rows: a tile reading its
     words' rows directly would need 2^31 at 64 × 64.  Cut per row, no unit of a 64 × 64 tile has more than 66 rows
@@ -103,14 +103,14 @@ bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
     the verifier accepts a sampled tile only when its tile check passes (the digest is the miner's h0) and the verdict is
     ok.
   - A sampled tile's closure holds its A rows, its strip, all TM·TN of its word units, its TM row digests and row
-    tallies, its tile and its tally (`plan.tile_layout`): every cap word is proved, never sampled.
-  - The cap's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags`` (flags ‖ their
-    count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖ zeros) and
-    ``cap-sums`` (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound ‖ zeros) row (`leaves`,
-    which says why the cap-chunks and cap-rows rows are padded to 64 words).  The word unit returns its flags padded to
-    whole 16-bit words with zero bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the row is
-    outside its ports at any k; the row tally reads the first k/32.  A row digest and the strip return their rows' zero
-    words the same way, and the tile and the tally leave them unread.
+    tallies, its tile and its tally (`plan.tile_layout`): every word of the inert-work bound is proved, never sampled.
+  - The inert-work bound's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags``
+    (flags ‖ their count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖
+    zeros) and ``cap-sums`` (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound ‖ zeros) row
+    (`leaves`, which says why the cap-chunks and cap-rows rows are padded to 64 words).  The word unit returns its flags
+    padded to whole 16-bit words with zero bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the
+    row is outside its ports at any k; the row tally reads the first k/32.  A row digest and the strip return their
+    rows' zero words the same way, and the tile and the tally leave them unread.
 """
 from __future__ import annotations
 
@@ -248,8 +248,8 @@ def _finite(e: pc4._Emit, ok, x):
     return _and(e, ok, e.call(F32IsFinite, x))
 
 
-#: the cap templates' advice (`pc8.PORTS`' class): Freeze's certificates, which the prover supplies and nothing binds; in
-#: the split, the word unit's (`PORTS`)
+#: the advice of the inert-work bound's templates (`pc8.PORTS`' class): Freeze's certificates, which the prover supplies
+#: and nothing binds; in the split, the word unit's (`PORTS`)
 ADVICE = ("cert",)
 
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
@@ -367,8 +367,8 @@ Pc8CapWordDef = CompositeDefinition(
 
 @lru_cache(maxsize=64)
 def _cap_constants(k: int, tm: int, tn: int, n: int, rho: int, dev: str) -> tuple[int, int, int, int, int, tuple[int, ...]]:
-    """(atom, zero, n/g, elem/g, L's largest passing value, ⌊|R|·|C|·P/(RHO·g)⌋ for |R| = 0..TM) of the cap's integer
-    form (module docstring), or DomainError where a sum could leave 31 bits."""
+    """(atom, zero, n/g, elem/g, L's largest passing value, ⌊|R|·|C|·P/(RHO·g)⌋ for |R| = 0..TM) of the inert-work
+    bound's integer form (module docstring), or DomainError where a sum could leave 31 bits."""
     d, ng = _promoted(dev, k)
     if not (0 < tn <= n and n % tn == 0 and tm > 0 and rho > 0):
         raise DomainError(f"Pearl-C's cap circuit needs TN | N and ρ = 1/RHO: TM={tm}, TN={tn}, N={n}, RHO={rho}")
@@ -430,8 +430,8 @@ def _bound(e: pc4._Emit, table, rows):
 
 
 def _within(e: pc4._Emit, consts, sums, bound=None):
-    """The cap's inequality on the tile's sums (atoms, zeros, elems and, without ``bound``, rows), in its integer form
-    (module docstring), as a bit."""
+    """The inert-work bound's inequality on the tile's sums (atoms, zeros, elems and, without ``bound``, rows), in its
+    integer form (module docstring), as a bit."""
     atom, zero, n_g, elem_g, l_max, table = consts
     atoms, zeros, elems = sums[:3]
     debit = _add(e, _mul(e, atom, atoms), _mul(e, zero, zeros))
@@ -442,20 +442,22 @@ def _within(e: pc4._Emit, consts, sums, bound=None):
 
 
 def _row_constants(k: int, tn: int, n: int, rhor: int, dev: str) -> tuple[tuple, int]:
-    """The per-row cap's integer form, `_cap_constants` on one row at ρr = 1/RHOR, and its bound at that one row."""
+    """The per-row inert-work bound's integer form, `_cap_constants` on one row at ρr = 1/RHOR, and its bound at that
+    one row."""
     consts = _cap_constants(k, 1, tn, n, rhor, dev)
     return consts, consts[-1][1]
 
 
 def _row_capped(S_, sig):
-    """``sig`` of a v2 template, refusing a per-row cap whose integer form leaves 31 bits."""
+    """``sig`` of a v2 template, refusing a per-row inert-work bound whose integer form leaves 31 bits."""
     _row_constants(S_.K, S_.TN, S_.N, S_.RHOR, S_.DEV)
     return sig(S_)
 
 
 def _row_over(e: pc4._Emit, row_consts: tuple[tuple, int], ok, atoms, zeros, elems):
-    """``ok``, and the row's own atoms, zeros and elements over the per-row cap (the tile's test on one row).  No gate reads
-    ``ok`` alone: a strip's tallies all read its admission bits, so such a gate would be computed in each of them."""
+    """``ok``, and the row's own atoms, zeros and elements over the per-row inert-work bound (the tile's test on one
+    row).  No gate reads ``ok`` alone: a strip's tallies all read its admission bits, so such a gate would be computed
+    in each of them."""
     consts, bound = row_consts
     return _and(e, ok, _not(e, _within(e, consts, (atoms, zeros, elems), bound)))
 
@@ -547,9 +549,10 @@ def _row_rho(row_rho: int | None) -> int | None:
 @lru_cache(maxsize=16)
 def templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n: int | None = None,
               rho: int | None = None, row_rho: int | None = None) -> dict[str, SpecializedDefinition]:
-    """The row of A with its salt-dead counts and the word at depth ``k`` on ``dev``, and the tile with its cap at
-    ``tile``, the unit's ``n`` (the tile's columns by default) and ρ = 1/``rho`` (the device's `cap` by default), and with
-    ``row_rho`` the per-row cap at ρr = 1/``row_rho`` (`Pc8TileCap` v2; v1 caps the tile alone)."""
+    """The row of A with its salt-dead counts and the word at depth ``k`` on ``dev``, and the tile with its inert-work
+    bound at ``tile``, the unit's ``n`` (the tile's columns by default) and ρ = 1/``rho`` (the device's `cap` by
+    default), and with ``row_rho`` the per-row inert-work bound at ρr = 1/``row_rho`` (`Pc8TileCap` v2; v1 bounds the
+    tile alone)."""
     tile_cap = dict(K=k, TM=tile[0], TN=tile[1], N=n or tile[1], RHO=_rho(dev, rho), DEV=dev)
     return {"row_a": bind(Pc8RowACapDef, K=k, DEV=dev), "word": bind(Pc8CapWordDef, K=k, DEV=dev),
             "tile": (bind(Pc8TileCapDef, **tile_cap) if _row_rho(row_rho) is None
@@ -733,7 +736,7 @@ def unit_templates(k: int, dev: str = "sm120", tile: tuple[int, int] = (1, 1), n
     """The split's unit templates by role (`ROLES`): pc8's row of B, the row of A with its salt-dead counts and the word
     unit at depth ``k`` on ``dev``, and the strip, a tile row's digests and sums, the tile and its tally at ``tile``, the
     unit's ``n`` (the tile's columns by default) and ρ = 1/``rho`` (the device's `cap` by default); with ``row_rho`` the
-    tally is `Pc8CapTally` v2, with the per-row cap at ρr = 1/``row_rho``."""
+    tally is `Pc8CapTally` v2, with the per-row inert-work bound at ρr = 1/``row_rho``."""
     tm, tn = tile
     capped = dict(K=k, TM=tm, TN=tn, N=n or tn, RHO=_rho(dev, rho), DEV=dev)
     return {"row_b": pc8.templates(k, pc8.TILE, dev)["row_b"], "row_a": bind(Pc8RowACapDef, K=k, DEV=dev),
@@ -853,8 +856,9 @@ def reads(tile: tuple[int, int]) -> dict[str, dict[str, int]]:
 
 
 def check_shape(shape) -> None:
-    """Refuse a `pc8.Shape` with ``cap`` outside the split: the cap is in the hiding Programs, on a device with a salt-dead
-    bit and a window of 4 atoms, at most 64 rows a tile, and its integer form fits 31 bits at the shape's tile and n."""
+    """Refuse a `pc8.Shape` with ``cap`` outside the split: the inert-work bound is in the hiding Programs, on a device
+    with a salt-dead bit and a window of 4 atoms, at most 64 rows a tile, and its integer form fits 31 bits at the
+    shape's tile and n."""
     if not shape.hidden:
         raise DomainError(f"Pearl-C's cap is in the hiding Programs: {shape} has cap and not hidden")
     if DEVICES[shape.dev].atom.name not in SALT_DEAD:
@@ -873,19 +877,19 @@ def _bind_cap(v1: CompositeDefinition, v2: CompositeDefinition, shape) -> Specia
 
 
 def call(shape) -> SpecializedDefinition:
-    """`Pc8CallCap` at ``shape``: v1, or v2 with its per-row cap (``Shape.row_rho``)."""
+    """`Pc8CallCap` at ``shape``: v1, or v2 with its per-row inert-work bound (``Shape.row_rho``)."""
     return _bind_cap(Pc8CallCapDef, Pc8CallCapDefV2, shape)
 
 
 def check(shape) -> SpecializedDefinition:
-    """`Pc8CheckCap` at ``shape``: v1, or v2 with its per-row cap (``Shape.row_rho``)."""
+    """`Pc8CheckCap` at ``shape``: v1, or v2 with its per-row inert-work bound (``Shape.row_rho``)."""
     return _bind_cap(Pc8CheckCapDef, Pc8CheckCapDefV2, shape)
 
 
 def row_rho(scheme, k: int) -> int | None:
-    """The per-row cap ``scheme``'s tile rule applies at depth ``k``, as RHOR (ρr = 1/RHOR), or None: under a row-capped
-    hashing format (`HashFormat.row_cap`, -h3) `PearlC.row_cap_at(k)`, 4ρ at a census k below k_min and ρ elsewhere, as
-    `clear_work.check_opened` applies it; under -h0, which caps the tile alone, none."""
+    """The per-row inert-work bound ``scheme``'s tile rule applies at depth ``k``, as RHOR (ρr = 1/RHOR), or None: under
+    a hashing format with one (`HashFormat.row_cap`, -h3) `PearlC.row_cap_at(k)`, 4ρ at a census k below k_min and ρ
+    elsewhere, as `clear_work.check_opened` applies it; under -h0, which bounds the tile alone, none."""
     if not C.HASH_FORMATS[scheme.hashing].row_cap:
         return None
     at = Fraction(scheme.row_cap_at(k))
@@ -895,9 +899,9 @@ def row_rho(scheme, k: int) -> int | None:
 
 
 def served(scheme, shape: Shape) -> "pc8.Shape":
-    """``scheme``'s unit ``shape`` as the hiding call with the cap: its device and tile, at its device's ρ, and with
-    `row_rho`'s per-row cap.  Refuses a unit outside the scheme's domain (`PearlC.check`) and a scheme the cap circuit
-    doesn't price (forming v0, or another device's prices)."""
+    """``scheme``'s unit ``shape`` as the hiding call with the inert-work bound: its device and tile, at its device's ρ,
+    and with `row_rho`'s per-row inert-work bound.  Refuses a unit outside the scheme's domain (`PearlC.check`) and a
+    scheme this circuit doesn't price (forming v0, or another device's prices)."""
     d = scheme.device
     if scheme.forming != "v1" or scheme.prices != d.prices or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: the cap circuit prices forming v1 at its device record's own prices")

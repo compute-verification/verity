@@ -25,7 +25,10 @@ The input is each bucket as its index, its time and its parts' count (`HEAD`), t
 length and whether the link closes once it is written (`PART`), then its bytes. The output is a ready byte (`READY`),
 then `REPORT`s: every bucket's release in order, and every bucket's writes in order. A link that refuses a write, or
 holds more than the backlog the pacer was started with, is closed with every part it still holds unwritten, and a part
-for a closed link is unwritten. The pacer ends at its input's end, once every bucket it read is released and written.
+for a closed link is unwritten. The pacer never waits for a link: a part whose link hasn't reached it by its bucket's
+release is unwritten, and that release is reported unwritten, a fault, so a link lost on its way holds no release; it
+is lost for good, every later part for it faults its release too, and its socket, if it comes, is closed. The pacer
+ends at its input's end, once every bucket it read is released and written.
 It shares each socket's open file, non-blocking as the handing process's transport set it, so it never changes the
 file's flags."""
 
@@ -51,7 +54,7 @@ PART = struct.Struct(">II?")
 KEY = struct.Struct(">I")
 #: a report: the bucket's index, whether its writes ended (u8; else it was released), when it reached the pacer, its
 #: release started and its last byte was written (0 at its release), each in seconds after its time (f64be), and whether
-#: every link took its part (u8)
+#: every link took its part (u8; at its release, whether every part's link had reached the pacer)
 REPORT = struct.Struct(">Q?ddd?")
 READY = b"\x01"
 #: how long before a bucket's time the pacer stops waiting in `poll` and spins on the clock: a wait ends a little late
@@ -62,7 +65,8 @@ SPIN_S = 0.002
 class Report:
     """Bucket `t`, when it reached the pacer (`arrived`) and its release started (`start`), each in seconds after the
     bucket's time; then, once its writes ended, when its last byte was written (`end`, None at its release) and whether
-    every link took its part (`written`)."""
+    every link took its part (`written`). At its release, `written` is whether every part's link had reached the
+    pacer: a release unwritten put some part's bytes on no link."""
 
     t: int
     arrived: float
@@ -147,12 +151,12 @@ class Pacer:
 
 
 class _Bucket:
-    __slots__ = ("t", "due", "arrived", "parts", "start", "end", "left", "written")
+    __slots__ = ("t", "due", "arrived", "parts", "start", "end", "left", "written", "lost")
 
     def __init__(self, t: int, due: float, arrived: float, parts: list[tuple[int, bytes, bool]]) -> None:
         self.t, self.due, self.arrived, self.parts = t, due, arrived, parts
         self.start = self.end = 0.0
-        self.left, self.written = 0, True
+        self.left, self.written, self.lost = 0, True, False
 
 
 def _parse(data: bytearray) -> tuple[list[tuple[int, float, list[tuple[int, bytes, bool]]]], int]:
@@ -177,20 +181,31 @@ def _parse(data: bytearray) -> tuple[list[tuple[int, float, list[tuple[int, byte
 
 class _Links:
     """The pacer's links by key, each with its pending bytes: [the part's bytes not yet written, its bucket, whether
-    the link closes after it]."""
+    the link closes after it]. `lost` holds the keys whose link hadn't reached the pacer by a release of a part for
+    it."""
 
     def __init__(self, fds: dict[int, int], backlog: int) -> None:
         self.fds, self.backlog = fds, backlog
         self.pending: dict[int, deque[list]] = {key: deque() for key in fds}
         self.held: dict[int, int] = dict.fromkeys(fds, 0)
         self.closed: set[int] = set()
+        self.lost: set[int] = set()
 
     def add(self, key: int, fd: int) -> None:
+        if key in self.lost:
+            os.close(fd)
+            return
         self.fds[key], self.pending[key], self.held[key] = fd, deque(), 0
         self.closed.discard(key)
 
+    def missing(self, key: int) -> bool:
+        return key not in self.fds and key not in self.closed
+
     def put(self, key: int, data: bytes, bucket: _Bucket, last: bool) -> bool:
         if key not in self.fds:
+            if key not in self.closed:
+                self.lost.add(key)
+                bucket.lost = True
             bucket.written = False
             return False
         if self.backlog and self.held[key] > self.backlog:
@@ -249,7 +264,7 @@ def _done(bucket: _Bucket) -> None:
 
 def _report(bucket: _Bucket, ended: bool) -> None:
     os.write(1, REPORT.pack(bucket.t, ended, bucket.arrived - bucket.due, bucket.start - bucket.due,
-                            bucket.end - bucket.due if ended else 0.0, bucket.written or not ended))
+                            bucket.end - bucket.due if ended else 0.0, bucket.written if ended else not bucket.lost))
 
 
 def _receive(channel: socket.socket, links: _Links) -> bool:
@@ -262,6 +277,16 @@ def _receive(channel: socket.socket, links: _Links) -> bool:
     return True
 
 
+def _drain(channel: socket.socket, links: _Links) -> socket.socket | None:
+    """Take every link the channel holds now, without waiting: the channel, or None once it has ended. `recv_fds`
+    drops its flags, so it can't be told not to wait: each take follows a `select` that doesn't."""
+    while select.select([channel], [], [], 0)[0]:
+        if not _receive(channel, links):
+            channel.close()
+            return None
+    return channel
+
+
 def main(argv: list[str]) -> int:
     channel: socket.socket | None = socket.socket(fileno=int(argv[0]))
     links = _Links({int(key): int(fd) for key, fd in (a.split("=") for a in argv[2:])}, int(argv[1]))
@@ -272,6 +297,8 @@ def main(argv: list[str]) -> int:
         now = time.monotonic()
         if queue and queue[0].due - now <= SPIN_S:
             bucket = queue.popleft()
+            if channel is not None and any(links.missing(key) for key, _, _ in bucket.parts):
+                channel = _drain(channel, links)
             while time.monotonic() < bucket.due:
                 pass
             bucket.start = time.monotonic()
@@ -304,21 +331,9 @@ def main(argv: list[str]) -> int:
                     buckets, used = _parse(data)
                     del data[:used]
                     arrived = time.monotonic()
-                    for t, due, parts in buckets:
-                        for key, _, _ in parts:
-                            while key not in links.fds and key not in links.closed and channel is not None:
-                                if not _receive(channel, links):
-                                    channel.close()
-                                    channel = None
-                        queue.append(_Bucket(t, due, arrived, parts))
+                    queue.extend(_Bucket(t, due, arrived, parts) for t, due, parts in buckets)
                 elif channel is not None and fd == channel.fileno():
-                    # A key wait above may have taken the message this event announced (and `recv_fds` drops its
-                    # flags, so it can't be told not to wait).
-                    if not select.select([channel], [], [], 0)[0]:
-                        continue
-                    if not _receive(channel, links):
-                        channel.close()
-                        channel = None
+                    channel = _drain(channel, links)
                 elif fd in waiting and waiting[fd] in links.fds:
                     links.flush(waiting[fd])
         while flight and not flight[0].left:

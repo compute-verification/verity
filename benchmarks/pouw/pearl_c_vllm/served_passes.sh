@@ -11,7 +11,8 @@
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh verify [--fast]
 # serve builds the cubin (benchmarks/harness/setup/pearl_c.sh), gives $PASSES_ROOT/<run id> a retention record (owned by
 # the benchmark's handle, expiring after KEEP_DAYS, 14 by default) and retains every pass of one served run there,
-# outside the run directory, so custody uploads only served.json.  verify replays each pass that run retained, on the CPU.
+# outside the run directory, so custody uploads only served.json.  verify is the run's one verdict over every pass it
+# retained, on the CPU: verify.json and the core answer, answer.json, in out/.
 set -euo pipefail
 . benchmarks/harness/env.sh
 OUT=${RESEARCH_RUN_DIR:?run this under research run}/out

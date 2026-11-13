@@ -25,6 +25,15 @@ import fill as F
 import numpy as np
 from arm import Buffer, Shape
 
+#: what the harness's modules and the tests read
+__all__ = [
+    "BaselineCall", "Candidate", "EVERY", "FAMILIES", "Family", "LT_CANDIDATES", "LT_ENUMERATED_MAX", "LT_WORKSPACE",
+    "LtPick", "Operands", "PLAIN_WORKSPACE", "SAMPLE_COLS", "SAMPLE_ROWS", "SENTINEL", "ShapeOperands", "allocate",
+    "cutlass_candidates", "cutlass_kernels", "cutlass_swizzles", "cutlass_tile", "expected", "gate", "half_k_call",
+    "hash_seed", "lt_candidates", "lt_enumerated", "lt_key", "lt_splitks", "memory_bytes", "operand_bytes",
+    "release_plans", "sample_indices", "scale_bytes", "set_seed", "weight_bytes",
+]
+
 LT_WORKSPACE = 32 << 20
 #: a verity entry's workspace at least: its two 128-byte CUtensorMaps (cutlass_api.h)
 PLAIN_WORKSPACE = 256

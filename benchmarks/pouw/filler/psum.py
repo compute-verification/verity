@@ -10,6 +10,8 @@ invocation; "sched" adds the phase filler. A point's best is the arm with the la
 is ≤ --limit.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import pathlib
@@ -22,11 +24,11 @@ LM_TOK = H * VOCAB
 ATT_TOK_L = LAYERS * NQ * HD * 2
 
 
-def other_ms(b):
+def other_ms(b: int) -> float:
     return max(1.09, 38.37 / 8192 * b)
 
 
-def rows(dirs):
+def rows(dirs: list[str]) -> list[dict]:
     out = []
     for d in dirs:
         p = pathlib.Path(d) / "pfill.jsonl"
@@ -38,7 +40,7 @@ def rows(dirs):
     return out
 
 
-def cov(r, arm):
+def cov(r: dict, arm: str) -> tuple[float, float, float] | None:
     """(coverage, slowdown, filler share of the GPU's peak) of an arm: none | base | sched."""
     a = r["arms"]
     t0 = (a["full"]["ms"] + a["full2"]["ms"]) / 2
@@ -53,13 +55,13 @@ def cov(r, arm):
         slow, share = r["sched"]["slowdown"], r["sched"]["fill_share"]
     b, l = r["B"], r["L"]
     t1 = t0 * slow + other_ms(b) * slow
-    cap = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
+    window = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
     n = b * (LIN_TOK + LM_TOK + ATT_TOK_L * l)
     f = share * PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
-    return (CERT_SERVING * n + CERT_FILLER * f) / cap, slow, share
+    return (CERT_SERVING * n + CERT_FILLER * f) / window, slow, share
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--limit", type=float, default=1.05)

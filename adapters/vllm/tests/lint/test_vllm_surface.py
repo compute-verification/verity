@@ -7,7 +7,7 @@ import warnings
 
 import pytest
 
-from verity_vllm import config
+from verity_vllm.engine import stock
 
 from . import _ratchet as R
 from .vllm_surface import SURFACE
@@ -47,7 +47,8 @@ def test_every_vllm_import_of_the_library_is_listed():
 
 def test_every_entry_resolves_at_the_installed_vllm():
     vllm = pytest.importorskip("vllm")
-    assert config.VLLM in vllm.__version__, f"vLLM {vllm.__version__} is installed, not the pin {config.VLLM}"
+    assert stock.build() in stock.BUILDS, (f"vLLM {vllm.__version__} ({stock.build()}) is installed, no build of "
+                                           f"engine.stock.BUILDS: {', '.join(stock.BUILDS)}")
     unresolved, unchecked = [], []
     for key in SURFACE:
         module, _, name = key.partition(":")

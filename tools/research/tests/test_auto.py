@@ -15,6 +15,7 @@ import pytest
 
 from research import auto, cores, remote
 from research.cli import main
+from research.pods.nebius import slot_only
 
 REPO = Path(__file__).resolve().parents[3]
 N2, CPU1, CPU5 = auto.AUTO_NODE, "vy-nebius-cpu-1", "vy-nebius-cpu-5"
@@ -30,6 +31,13 @@ def cpu_nodes(monkeypatch):
     monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in NODES))
 
 
+@pytest.fixture(autouse=True)
+def no_slot_py_of_the_machines_own(monkeypatch, tmp_path):
+    """The probe reads a pool by the machine's own slot.py where it has one, and the machine these tests run on may: here it
+    has none unless a test installs one."""
+    monkeypatch.setattr(slot_only, "NODE_SLOT", str(tmp_path / "no-copy" / auto.SLOT_PY))
+
+
 def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = None) -> dict:
     return {"share": {"share": size, "claims": 2, "waiters": waiters, "free": free, "fits": free >= 4 if fits is None else fits}}
 
@@ -38,12 +46,15 @@ def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, block
     return {"name": name, "cpus": cpus, "mem": mem, "trains": trains, "holder": {"pid": 1} if held else None, "blocked": blocked}
 
 
-def pool(*slots: dict, waiters: int = 0, minutes: int = 0, free_gb: int | None = None, asks: tuple[float, ...] = ()) -> dict:
+def pool(*slots: dict, waiters: int = 0, minutes: int = 0, free_gb: int | None = None, asks: tuple[float, ...] = (),
+         passed_gib: int = 0) -> dict:
     """A pool's document as the probe gives it; ``free_gb``: the memory slot.py finds free on its machine, in GiB. Its line is
-    ``waiters`` whose tickets name no ask, then one for each of ``asks``, asking that many GB."""
+    ``waiters`` whose tickets name no ask, then one for each of ``asks``, asking that many GB, each passed by runs that
+    reserve ``passed_gib`` GiB (slot.py's `passed_gb`; 0: nobody passed it)."""
     return {"research": {"file": "/workspace/research/locks/research/slots", "slots": list(slots),
                          "waiters": [{"pid": i, "minutes": minutes} for i in range(waiters)]
-                         + [{"pid": waiters + i, "minutes": minutes, "mem_gb": gb} for i, gb in enumerate(asks)],
+                         + [{"pid": waiters + i, "minutes": minutes, "mem_gb": gb, **({"passed_gib": passed_gib} if passed_gib else {})}
+                            for i, gb in enumerate(asks)],
                          **({} if free_gb is None else {"free_gb": free_gb})}}
 
 
@@ -229,27 +240,34 @@ def test_slots_blocked_on_memory_are_not_capacity_when_ranking_lines():
 
 
 def test_a_pool_whose_line_is_stalled_on_memory_never_takes_the_job():
-    """Twice a job went to a line stalled on memory once another node's probe timed out: cpu-3's head asked 256 GB for hours
-    while its other slots, which declare no mem=, showed free; elsewhere every idle slot waited on memory with none running."""
+    """Twice a job went to a line stalled on memory once another node's probe timed out: one's head waited beside free
+    slots for memory no job could pass it for; elsewhere every idle slot waited on memory with none running. A head holds
+    the line so once it would start if the runs that passed it ended (150 GiB of its 239 here, with 100 free)."""
     mem = "-1 GB of memory free (481 GB more is reserved by live runs that haven't reached it), under the 40 GB a check here may peak at"
     busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
-    stuck = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,), minutes=auto.STALL_MIN, free_gb=100)
+    stuck = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,), minutes=auto.STALL_MIN, free_gb=100, passed_gib=150)
     target, why = auto.choose({N2: share(waiters=56), CPU1: stuck, CPU5: busy}, 4, 64)
     assert target == (CPU5, "research") and (f"{CPU1}'s research pool skipped: its line is stalled: a run has waited 5 min while "
                                              f"slot r0 is free, for more memory than the 100 GB free there") in why
     target, why = auto.choose({N2: "no answer in 30 s", CPU1: stuck, CPU5: "no answer in 30 s"}, 4, 64)
     assert target == (CPU1, "research") and "every pool that fits is stalled" in why, "a stalled line beats refusing the job"
-    longer = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,) * 4, minutes=auto.STALL_MIN, free_gb=100)
+    longer = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,) * 4, minutes=auto.STALL_MIN, free_gb=100, passed_gib=150)
     assert auto.choose({N2: "no answer in 30 s", CPU1: longer, CPU5: stuck}, 4, 64)[0] == (CPU5, "research"), "the shorter"
     assert auto.choose({N2: share(free=48), CPU1: stuck}, 4, 64)[0] is None, "node 2 starting it now beats a stalled line"
     starved = pool(*(slot(f"r{i}", blocked=mem) for i in range(13)))
     target, why = auto.choose({N2: share(waiters=56), CPU1: starved, CPU5: busy}, 4, 16)
     assert target == (CPU5, "research") and "every slot of it that fits waits on memory and none runs" in why
-    fresh = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,), minutes=auto.STALL_MIN - 1, free_gb=100)
+    fresh = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,), minutes=auto.STALL_MIN - 1, free_gb=100, passed_gib=150)
     assert auto.choose({N2: share(waiters=56), CPU1: fresh, CPU5: busy}, 4, 64)[0] == (CPU5, "research"), \
         "not yet stalled: a line like any other, and here the longer one per slot that runs"
-    assert auto.choose({N2: share(waiters=56), CPU1: stuck, CPU5: busy}, 4, 16)[0] == (CPU1, "research"), \
-        "a job small enough to pass the head (slot.py's backfill) has a place there"
+    assert auto.choose({N2: share(waiters=56), CPU1: stuck, CPU5: busy}, 4, 16)[0] == (CPU5, "research"), \
+        "nor does a small job pass a head that waits only for the runs that passed it"
+    kept = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(256,), minutes=600, free_gb=100)
+    for ask in (16, 64):
+        assert auto.choose({N2: share(waiters=56), CPU1: kept, CPU5: busy}, 4, ask)[0] == (CPU1, "research"), \
+            "a head that memory alone keeps, however long, holds no job that fits: it has a place beside it"
+    with pytest.raises(auto.Stalled, match="every slot of it that fits waits on memory and none runs"):
+        auto._pool(kept["research"], 4, 128)                                 # 120 GiB of the 100 free: this job's own wait
     covered = pool(*(slot(f"r{i}", mem=None) for i in range(5)), asks=(64,), minutes=60, free_gb=200)
     assert auto.choose({N2: share(waiters=56), CPU1: covered, CPU5: busy}, 4, 64)[0] == (CPU1, "research"), \
         "a waiter the free memory covers is one between polls, however long it has waited: it takes its slot, and the job the next"
@@ -373,8 +391,10 @@ def test_a_job_with_no_place_waits_behind_every_waiter_that_stays_those_it_would
     assert auto.expect(docs, (CPU1, "research"), 4, 32).minutes == pytest.approx(6 * auto.HOLD_MIN / 11)
     assert auto._pool(pool(*_held(8), asks=(448,), free_gb=100)["research"], 4, 16)[1:3] == (0, 1), \
         "so too behind a head it would pass once a slot frees: with no place, every waiter that stays is counted"
+    assert auto._pool(starved["research"], 4, 64)[:3] == (11, 0, 5), "a run asking more passes the same five, and waits as long"
+    owed = pool(*_held(11, mem=None), slot("r11", mem=None), asks=(32, 32, 32, 32, 60), minutes=15, free_gb=-20, passed_gib=60)
     with pytest.raises(auto.Stalled, match="a run has waited 15 min while slot r11 is free, for more memory than the -20 GB free there"):
-        auto._pool(starved["research"], 4, 64)                               # a run that passes nobody: stalled behind them
+        auto._pool(owed["research"], 4, 16)              # each would start if the runs that passed it ended: no run passes them
 
 
 def test_the_pool_with_the_most_places_takes_the_job_not_the_first_that_has_one():
@@ -408,11 +428,10 @@ def _slot_py():
 
 def test_the_placer_counts_the_line_ahead_as_slot_py_does(tmp_path, monkeypatch):
     """A place is slot.py's to give, so the placer reads a line as slot.py does: who waits is `waiting`'s answer, each with
-    the ask its ticket names, and who a run joining now stays behind is `ahead`'s, with the pass a small run gets
-    (BACKFILL_MAX_GB) over the lane waiters that only memory keeps from starting. What a run reserves in a slot is slot.py's
-    too: `booked`, of the slot as `asking` raised it to the run's ask."""
+    the ask its ticket names and what the runs that passed it reserve, and who a run joining now stays behind is `ahead`'s,
+    whatever the run asks: every waiter but a lane one whose ask is over what is free and what its passers reserve. What a
+    run reserves in a slot is slot.py's too: `booked`, of the slot as `asking` raised it to the run's ask."""
     slot_py = _slot_py()
-    assert auto.BACKFILL_MAX_GB == slot_py.BACKFILL_MAX_GB
     for s in ({"mem": None}, {"mem": 40}, {"mem": 40, "book": 15}, {"mem": 40, "book": 40}):
         for ask in (0, 12, 16, 32, 40, 43, 64):
             monkeypatch.setenv(slot_py.RUN_MEM_ENV, str(ask))
@@ -426,23 +445,57 @@ def test_the_placer_counts_the_line_ahead_as_slot_py_does(tmp_path, monkeypatch)
         return slot_py.join(tmp_path, priority=priority, who=slot_py.asker())
 
     held = [join(ask)[1] for ask in (448, 16, 0, 64)] + [join(900, priority=True)[1]]
-    line = [{**w, "minutes": 0} for w in slot_py.waiting(tmp_path / slot_py.LINE, datetime(2030, 1, 1, tzinfo=UTC))]
-    assert [(w["priority"], w.get("mem_gb")) for w in line] == [(True, 900), (False, 448), (False, 16), (False, None), (False, 64)]
-    for mine in (0, 16, 32, 33, 200):
-        ticket, fd = join(mine)
-        for free in (-5, 0, 10, 15, 60, 100, 418, 1000):
-            ahead = slot_py.ahead(ticket) if mine > slot_py.BACKFILL_MAX_GB else slot_py.ahead(ticket, free_gb=free)
-            assert len(auto._behind(line, mine, free)) == ahead, (mine, free)
-        os.close(fd)
-        ticket.unlink()
+    head = sorted(p.name for p in (tmp_path / slot_py.LINE).iterdir())[1]    # the 448 GB waiter's ticket, behind the priority one
+    for gone in (0, 120, 400):                                               # what the runs that passed the head reserve, in GiB
+        def passed(name: str, gone: int = gone) -> int:
+            return gone if name == head else 0
+
+        line = [{**w, "minutes": 0} for w in slot_py.waiting(tmp_path / slot_py.LINE, datetime(2030, 1, 1, tzinfo=UTC), passed=passed)]
+        assert [(w["priority"], w.get("mem_gb"), w.get("passed_gib")) for w in line] == [
+            (True, 900, None), (False, 448, gone or None), (False, 16, None), (False, None, None), (False, 64, None)]
+        for mine in (0, 16, 32, 33, 200):
+            ticket, fd = join(mine)
+            for free in (-5, 0, 10, 15, 60, 100, 300, 418, 1000):
+                assert len(auto._behind(line, free)) == slot_py.ahead(ticket, free_gb=free, passed=passed), (gone, mine, free)
+            os.close(fd)
+            ticket.unlink()
     for fd in held:
         os.close(fd)
     doc = pool(slot("r0", mem=None), slot("r1", mem=None), free_gb=100)["research"]
-    assert auto._pool({**doc, "waiters": line[1:2]}, 4, 16)[1:3] == (2, 0), "a 448 GB head that 100 GiB can't start is passed"
-    assert auto._pool({**doc, "waiters": line[1:2]}, 4, 64)[1:3] == (0, 1), "not by a run that asks over BACKFILL_MAX_GB"
-    assert auto._pool({**doc, "waiters": line[:2]}, 4, 16)[1:3] == (0, 2), \
+    big = {"pid": 1, "minutes": 0, "priority": False, "mem_gb": 448}
+    assert auto._pool({**doc, "waiters": [big]}, 4, 16)[1:3] == (2, 0), "a 448 GB head that 100 GiB can't start is passed"
+    assert auto._pool({**doc, "waiters": [big]}, 4, 64)[1:3] == (1, 0), "by a run of any size that fits: 60 of the 100 GiB, once"
+    assert auto._pool({**doc, "waiters": [{**big, "passed_gib": 320}]}, 4, 16)[1:3] == (0, 1), \
+        "not once it would start if the runs that passed it ended: 418 GiB asked, 100 free and 320 with them"
+    assert auto._pool({**doc, "waiters": [{"pid": 0, "minutes": 0, "priority": True, "mem_gb": 900}, big]}, 4, 16)[1:3] == (0, 2), \
         "a priority waiter is never passed, and with no place the job waits behind both that stay"
-    assert auto._pool({**doc, "waiters": line[3:4]}, 4, 16)[1:3] == (1, 0), "a waiter with no ask takes the first slot; the next is free"
+    assert auto._pool({**doc, "waiters": [{"pid": 2, "minutes": 0, "priority": False}]}, 4, 16)[1:3] == (1, 0), \
+        "a waiter with no ask takes the first slot; the next is free"
+
+
+def test_a_line_behind_a_head_that_memory_keeps_is_read_as_slot_py_starts_it():
+    """A pool stood with 11 of its 14 slots idle: its head asked 128 GB with 113 GiB free, a run asking 72 GB, which were
+    free, stood behind it, and ten more behind that one, so the pool read as stalled and took a job only as the last resort.
+    slot.py starts each of those runs whose ask is free, so the placer counts six of the eleven as started, five as waiting
+    on memory beside the head, and a place there for a job whose own ask is then free. Once the head would start if the runs
+    that passed it ended, no job is sent to wait behind it."""
+    cpu3, asks = "vy-nebius-cpu-3", (128, 72, None, 16, 2, 16, 32, 32, 32, 48, 32, None)
+    line = [{"pid": i, "minutes": 173 - 10 * i, "priority": False, **({"mem_gb": gb} if gb else {})} for i, gb in enumerate(asks)]
+    slots = (*_held(3, mem=None), *(slot(f"b{i}", cpus="0-15", mem=None) for i in range(3, 14)))
+    doc = {**pool(*slots, free_gb=113)["research"], "waiters": line}
+    assert auto._pool(doc, 4, 2)[:3] == (9, 5, 0), \
+        "the 72, 16, 2 and 16 GB runs and the two with no ask start: 9 slots run, 13 GiB and 5 slots are left, and nobody is ahead"
+    assert auto._pool(doc, 4, 16)[:3] == (9, 0, 6), "15 GiB of the 13 left: it would wait there with the head and the five behind it"
+    busy = pool(*_held(4), waiters=6)
+    target, why = auto.choose({N2: DOWN, CPU1: busy, cpu3: {"research": doc}}, 4, 2)
+    assert target == (cpu3, "research") and why.endswith(f"{cpu3}'s research pool has the most places for it (5): a slot is free there now")
+    target, why = auto.choose({N2: DOWN, CPU1: busy, cpu3: {"research": doc}}, 4, 16)
+    assert target == (cpu3, "research") and why.endswith(f"the shortest line per run that fits is {cpu3}'s research pool"), \
+        "seven runs' wait for nine slots, not a stalled line"
+    owed = [{**line[0], "passed_gib": 100}, *(w for w in line if w.get("mem_gb") in (32, 48))]
+    later = {**pool(*_held(9, mem=None), *(slot(f"b{i}", cpus="0-15", mem=None) for i in range(9, 14)), free_gb=24)["research"], "waiters": owed}
+    with pytest.raises(auto.Stalled, match="a run has waited 173 min while slot b9 is free, for more memory than the 24 GB free there"):
+        auto._pool(later, 4, 2)                         # 120 GiB asked, 24 free and 100 with its passers: the head holds the line
 
 
 def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
@@ -480,6 +533,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(cores, "CLAIMS", claims)
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))         # a held node 2 carries the real one
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
@@ -520,12 +574,34 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
+    """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
+    than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
+    copy is read by the tree's. Here each slot.py is a stand-in that says which it is."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "no-claims")
+    src, own = tmp_path / "src", Path(slot_only.NODE_SLOT)
+    stand_in = "import os\ndef status_doc(now):\n    return {{'copy': {!r}, 'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}}\n"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text(stand_in.format("the tree's"))
+
+    def read() -> dict:
+        return auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+
+    assert read()["copy"] == "the tree's"
+    own.parent.mkdir(parents=True)
+    own.write_text(stand_in.format("the machine's"))
+    assert read() == {"copy": "the machine's", "file": slot_only.POOLS["research"], "slots": [], "waiters": []}
+    own.write_bytes(b"\xff\xfe not text")
+    assert read()["copy"] == "the tree's", "a copy that can't be read is none"
+
+
 def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reservations(tmp_path, monkeypatch, node_2):
     """A pool's `free_gb` is what a lane run would find free there, which `choose` places by. Slots with peaks= count the
     live lane reservations as a crowd reaches them (slot.py's `reserved_gb`), so the probe counts them the same way, with the
     tree's own slot.py: counted whole, a pool whose slots would start the job reads as short of memory and the job goes to
     wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none."""
-    from research.pods.nebius import slot_only
     slots, ramlock, src = tmp_path / "locks" / "research" / "slots", tmp_path / "ramlock", tmp_path / "src"
     slots.parent.mkdir(parents=True)
     ramlock.mkdir()
@@ -604,6 +680,7 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
     monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
     marker = tmp_path / "runs-via-slot"
     marker.write_text("slot only\n")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
@@ -618,6 +695,100 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
     assert target == (CPU1, "research") and f"{N2}'s share wasn't read" in why
     with pytest.raises(auto.Unplaceable):
         auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
+
+
+@pytest.fixture
+def idle(tmp_path, monkeypatch):
+    """`read`: every machine's documents as the probe gives them where each machine is this one, idle: node 2's share whole
+    and unheld, and a free slot in each pool, so nothing but what the probe finds of the machine keeps a job off it."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text(f"def status_doc(now):\n    return {pool(slot('r0'))['research']!r}\n")
+    return lambda **kw: auto.read(src, 4, reach=lambda name: [sys.executable, "-"], **kw)
+
+
+def test_a_machine_whose_read_says_its_null_device_cant_be_written_is_shut_out_with_the_reason(tmp_path, monkeypatch, capsys, idle):
+    """A machine whose null device its user can't open to read and write starts no runner and no git, so its slots stay idle
+    and every launch reads them as places. Its read says so in place of its pool, and it takes no job."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    whole = idle()
+    assert whole[CPU1] == pool(slot("r0")) and whole[N2]["share"]["free"] == 48, "the machine's own null device and git: it is read"
+    assert auto.choose({N2: share(waiters=5), CPU1: whole[CPU1], CPU5: full}, 4, 16)[0] == (CPU1, "research")
+    null = tmp_path / "null"
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    cant = f"{null} can't be opened to read and write"
+    stands = [(lambda: None, f"{cant} (FileNotFoundError: No such file or directory)"),
+              (null.mkdir, f"{cant} (IsADirectoryError: Is a directory)"),
+              (lambda: (null.rmdir(), null.write_text("")), f"{null} is not a character device")]    # a file put in its place
+    if os.geteuid():                                                # root opens a file whatever its mode
+        stands.append((lambda: null.chmod(0), f"{cant} (PermissionError: Permission denied)"))
+    for put, why in stands:
+        put()
+        docs = idle()
+        assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}, "in place of the slots that looked free"
+        target, said = auto.choose({N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full}, 4, 16)
+        assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said
+        assert auto.expect(docs, (CPU1, "research"), 4, 16) == auto.Wait(None, f"{auto.NO_START}: {why}", False)
+        assert auto.smaller({CPU1: docs[CPU1]}, 8, 64) is None, "no smaller request starts there either"
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--", "pytest", "-q"]) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU5], "the launch goes where a runner starts, though it waits there"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in capsys.readouterr().err
+
+
+def test_a_machine_whose_git_gives_no_answer_is_shut_out_with_the_reason(tmp_path, monkeypatch, idle):
+    """A launch ships its tree as a checkout with the machine's git, and a suite is keyed from git's view of it: a machine
+    whose git doesn't run, or runs and fails, refuses those launches one by one."""
+    git = tmp_path / "git"
+    monkeypatch.setattr(auto, "GIT", str(git))
+    gone = idle()[CPU1]["research"]["error"]
+    assert gone.startswith(f"{auto.NO_START}: `{git} --version` gave no answer (FileNotFoundError: ")
+    git.write_text("#!/bin/sh\necho 'git: a warning' >&2\necho \"fatal: could not open '$0' for reading\" >&2\nexit 128\n")
+    git.chmod(0o755)
+    docs = idle()
+    why = f"`{git} --version` exited 128 (fatal: could not open '{git}' for reading)"
+    assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}
+    target, said = auto.choose({N2: share(free=8), CPU1: docs[CPU1]}, 4, 16)
+    assert target is None and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}" in said
+    git.write_text("#!/bin/sh\necho git version 0\n")
+    assert idle()[CPU1] == pool(slot("r0")), "a git that answers: the machine is read as it is"
+
+
+def test_a_node_2_that_can_start_no_run_is_closed_to_every_job_a_gpu_one_included(tmp_path, monkeypatch, capsys, idle):
+    """Node 2's queue starts a run as a pool does, so a node 2 whose read says no run starts there takes no job: a job a pool
+    fits goes to the pool, and a GPU or quiet job, which no other node runs, is refused with the reason."""
+    null = tmp_path / "null"
+    null.write_text("")
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    why = f"{null} is not a character device"
+    n2 = idle(node_only=True)[N2]
+    assert n2 == {"share": {"no_start": why}}
+    said = f"{N2} takes no job: {auto.NO_START}: {why}"
+    assert auto.closed(n2) == auto.off(n2) == said
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    target, told = auto.choose({N2: n2, CPU1: full}, 4, 16)
+    assert target == (CPU1, "research") and told.startswith(said + "; "), "an idle share is no place while nothing starts on its node"
+    assert auto.expect({N2: n2}, None, 4, 16) == auto.Wait(None, said, False)
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job") as refused:
+        auto.choose({N2: n2, CPU1: pool(slot("r0"))}, 64, 300)
+    assert str(refused.value).startswith(said + "; ")
+    placed = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: {N2: n2})
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]) == 2
+    assert placed == [] and f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
 
 
 def _auto_repo(tmp_path: Path) -> Path:
@@ -651,6 +822,74 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+
+
+def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
+    """What `--on auto` says of a placement went only to the launcher's terminal, so nobody could tell afterwards why a job
+    stood in a line that started nothing. The launch carries it: the machine, the pool (none for the queue) and each line
+    printed, which hold what the queue's node and every pool answered and, where the pool was the last resort, that it was."""
+    launched = []
+    stalled = pool(slot("r0", held=True), slot("r1"), asks=(256,) * 3, minutes=88, free_gb=100, passed_gib=150)
+    reads = [{N2: share(waiters=56), CPU1: pool(slot("r0")), CPU5: pool(slot("r0", held=True), waiters=2)},
+             {N2: DOWN, CPU1: stalled, CPU5: "no answer in 30 s"},
+             {N2: share(free=48), CPU1: pool(slot("r0", held=True), waiters=9)}]
+    monkeypatch.setattr(auto, "read", lambda source, cpus: reads.pop(0))
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", lambda src, run_id, spec: {"job": {"cpus": 4}, "machine": N2, "why": "its share", "max_s": 3600})
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    for _ in range(3):
+        assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--", "pytest", "-q"]) == 3
+        printed = capsys.readouterr().err.splitlines()
+        assert all(f"research run --on auto: {line}" in printed for line in launched[-1]["auto"]["said"]), "the words it printed"
+    free, last, queued = (kw["auto"] for kw in launched)
+    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 2
+    assert free["said"][0].startswith(f"spilled to {CPU1}'s research pool, from ")
+    assert f"({N2}'s share: 0 of 48 CPUs free, 2 claim(s), 56 waiting; " in free["said"][0], "what the queue's node answered"
+    assert f"; {CPU5}'s research pool: slots r0 held; 2 waiting: " in free["said"][0], "and each pool"
+    assert free["said"][0].endswith(f": {CPU1}'s research pool has the most places for it (1): a slot is free there now)")
+    assert free["said"][1] == f"it starts now on {CPU1}'s research pool", "and when it should start"
+    assert (last["machine"], last["pool"]) == (CPU1, "research")
+    assert f"({N2} is down: its ssh doesn't answer (Connection timed out); {CPU1}'s research pool skipped: its line is stalled: a run " \
+           f"has waited 88 min while slot r1 is free, for more memory than the 100 GB free there; {CPU5}'s research pool skipped: " \
+           "no answer in 30 s: " in last["said"][0]
+    assert last["said"][0].endswith(f": every pool that fits is stalled and {N2} can't be reached, so the shortest stalled line, "
+                                    f"{CPU1}'s research pool, where it waits until memory frees)"), "the last resort, said as that"
+    assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
+    assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
+    assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
+    assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
+
+
+def test_a_launch_records_an_auto_placement_beside_the_run_and_in_its_request(tmp_path, monkeypatch, capsys):
+    """The placement is kept where a launch is already written about: the launcher's remote.json, which `research inspect`
+    prints, and the request.json staged on the machine, read by whoever asks there why the run stands in that line. A run
+    nothing placed carries none."""
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"root": "/r", "python": "python3"})
+    monkeypatch.setattr(remote, "pod_target", lambda m: {"host": "h", "port": 22, "user": "research", "pod_name": "n1",
+                                                         "cost_per_hr": 0, "rate_observed_utc": "t"})
+    monkeypatch.setattr(remote, "wake", lambda m, ssh: None)
+    monkeypatch.setattr(remote, "ship_tool", lambda *a: "/r/tool/x")
+    staged = []
+
+    def stage(ssh, root, run_id, request, sends, private=None):
+        staged.append(request)
+        raise remote.Refused("staged")
+
+    monkeypatch.setattr(remote, "stage_request", stage)
+    placed = {"machine": CPU1, "pool": "research", "said": [f"spilled to {CPU1}'s research pool, from /src (the shortest stalled line)",
+                                                           "it should start within 10 min"]}
+    runs = tmp_path / "runs"
+    for run_id, auto_ in (("a1", placed), ("a2", None)):
+        with pytest.raises(remote.Refused, match="staged"):
+            remote.launch(run_id=run_id, local_dir=runs / run_id, machine_name=CPU1, project="verity", command=["true"],
+                          harness_args=["--stage", "t"], source=None, sends=[], cwd=None, env={}, exclusive=False, auto=auto_)
+    assert staged[0]["auto"] == placed and "auto" not in staged[1]
+    assert json.loads((runs / "a1" / "remote.json").read_text())["auto"] == placed
+    assert "auto" not in json.loads((runs / "a2" / "remote.json").read_text())
+    assert main(["inspect", "a1", "--runs-dir", str(runs)]) == 0
+    out = capsys.readouterr().out
+    assert all(f"auto      {line}\n" in out for line in placed["said"])
+    assert main(["inspect", "a2", "--runs-dir", str(runs)]) == 0 and "auto  " not in capsys.readouterr().out
 
 
 def test_on_auto_places_a_records_run_by_its_lean_pool_and_says_which(tmp_path, monkeypatch, capsys):
@@ -705,6 +944,21 @@ def _suites_repo(tmp_path: Path) -> Path:
     (repo / auto.SLOT_PY).parent.mkdir(parents=True)
     (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
     return repo
+
+
+def test_a_named_suites_run_lasts_the_bound_its_workers_stretch(tmp_path):
+    """A suite measured on 5 workers (`timeout_workers`) run on 3 has suites.py's bound stretched to 5/3 of its timeout_s; the run
+    sized for it lasts that, not the 14,400 s that would kill it first."""
+    from research import suite_size
+
+    repo = _auto_repo(tmp_path)
+    (repo / "a").mkdir()
+    (repo / "a" / "pyproject.toml").write_text('[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\n'
+                                               "parallel = true\ntimeout_s = 14400\ntimeout_workers = 5\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    run = [suite_size.SUITES_PY, "a", "--jobs"]
+    assert suite_size.size(repo, [*run, "3"], None)["max_s"] == 24000 + suite_size.SYNC_S
+    assert suite_size.size(repo, [*run, "8"], None)["max_s"] == 14400 + suite_size.SYNC_S
 
 
 def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserves(tmp_path, monkeypatch, capsys):
@@ -1013,7 +1267,7 @@ def test_a_wait_nothing_read_bounds_gets_no_estimate_and_only_a_stalled_line_is_
                                                                  "and nothing read says when a claim ends", False)
     docs = {N2: share(free=48, fits=True), CPU1: pool(slot("r0"))}
     assert auto.expect(docs, auto.choose(docs, 32, 300)[0], 32, 300) == auto.Wait(0, "", False), "node 2 starts it now"
-    docs = {N2: DOWN, CPU1: pool(slot("r0", held=True), slot("r1"), asks=(256,) * 3, minutes=88, free_gb=100)}
+    docs = {N2: DOWN, CPU1: pool(slot("r0", held=True), slot("r1"), asks=(256,) * 3, minutes=88, free_gb=100, passed_gib=150)}
     target, why = auto.choose(docs, 4, 64)
     assert target == (CPU1, "research") and "every pool that fits is stalled" in why
     stalled = auto.expect(docs, target, 4, 64)
@@ -1104,8 +1358,6 @@ def test_on_auto_counts_a_runs_limit_from_its_start_and_its_custody_key_outlasts
     slot the limit itself, which slot.py counts from the slot taken (here 40 min after the runner's start, on a clock the test
     gives). The custody key is minted at launch, so by default it outlasts that sum: under the default lifetime a 150-min
     run is refused for a `--timeout 23400` it never passed."""
-    from research.pods.nebius import slot_only
-
     launched = []
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: DOWN, CPU1: pool(*_held(5), waiters=7, minutes=29)})
     monkeypatch.setattr(remote, "launch", _refusing(launched))
@@ -1129,3 +1381,182 @@ def test_on_auto_counts_a_runs_limit_from_its_start_and_its_custody_key_outlasts
     for waited in (40 * 60, 0):
         slot_py.limit_run(limit, "r0", str(run), mono=lambda: 1000.0 + waited)
         assert json.loads((run / slot_py.RUN_TIMEOUT).read_text())["timeout_s"] == waited + limit, "its limit, from the slot taken"
+
+
+#: a runner's process that the machine could not start, in the machine's words
+NOT_STARTED = "the runner could not be started: PermissionError: [Errno 13] Permission denied: '/dev/null'"
+#: marks a refusal the launcher itself raises (`_answering`)
+RAISED = "raised"
+RUN = ["run", "--on", "auto", "--", "pytest", "-q"]
+
+
+def _answering(answers: dict, seen: list):
+    """A `remote.launch` that records each launch and answers it by its machine: None is a launch that starts; (fault, reason)
+    is the machine's refusal, as its answer comes back in the launch's record; (fault, reason, RAISED) is the launcher's own
+    refusal, raised as `remote`'s exception of that name."""
+    def launch(**kw):
+        seen.append(kw)
+        if (got := answers[kw["machine_name"]]) is None:
+            return {"phase": "launched", "pod_id": None, "remote_run_dir": f"/workspace/research/runs/{kw['run_id']}",
+                    "launch": {"claimed": True, "started": True, "runner_pid": 7}}
+        if got[2:] == (RAISED,):
+            raise getattr(remote, got[0])(got[1])
+        return {"phase": "refused", "launch": {"claimed": True, "started": False, "fault": got[0], "refused": got[1]}}
+    return launch
+
+
+def _on_auto(monkeypatch, tmp_path: Path, docs: dict, answers: dict) -> tuple[list, list]:
+    """`research run --on auto` from a checkout in ``tmp_path`` where the machines read as ``docs`` and answer a launch as
+    ``answers`` (`_answering`), with a queue that places every job on node 2: (the launches, the reads), as they come."""
+    launched, asked = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: asked.append(kw) or docs)
+    monkeypatch.setattr(remote, "launch", _answering(answers, launched))
+    monkeypatch.setattr(remote, "queue_placement", lambda source, run_id, spec: {
+        "machine": N2, "why": "its share has the cores", "kind": spec["kind"], "max_s": 3600,
+        "job": {"cpus": spec["cpus"] or 4, "gpus": spec["gpus"] or 0}})
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    return launched, asked
+
+
+@pytest.mark.parametrize("refusal", [
+    ("CannotStart", NOT_STARTED),
+    ("RunnerFailed", NOT_STARTED),
+    ("CannotStart", "could not prepare the launch (OSError: [Errno 30] Read-only file system: 'launcher.log'); not starting r1"),
+    ("CannotStart", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (the line above says why), and "
+                    "tools/verity/check/suites.py needs a git checkout", RAISED)],
+    ids=["its-runner-not-started", "as-an-older-shipped-package-says-it", "its-launch-not-prepared", "no-git-for-a-checkout"])
+def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on_the_second_and_says_so(
+        refusal, tmp_path, monkeypatch, capsys):
+    """A machine whose places look free because nothing starts there is chosen by every launch, and no launcher sees
+    another's refusal. A launch it refuses as a machine that can start no run goes on to the machine it would have chosen
+    next, from the read it already has, and says which machine it passed over and why."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    launched, asked = _on_auto(monkeypatch, tmp_path, docs, {CPU1: refusal, CPU5: None})
+    assert main(RUN) == 0
+    assert [kw["machine_name"] for kw in launched] == [CPU1, CPU5] and len(asked) == 1, "no machine is asked a second time"
+    assert launched[0]["run_id"] != launched[1]["run_id"] and launched[0]["command"] == launched[1]["command"]
+    why = refusal[1]
+    said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
+    assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
+        f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
+        f"research run --on auto: passed over {CPU1}, which can start no run",
+        f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
+        f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+    assert said[2] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[3], "the second placement says why the first is out"
+    assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
+
+
+@pytest.mark.parametrize(("docs", "first", "second", "out"), [
+    ({N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))},
+     (CPU1, "research"), (CPU5, "research"), f"{CPU1}'s research pool skipped: {auto.NO_START}: {NOT_STARTED}; "),
+    ({N2: share(free=48), CPU1: pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)},
+     (N2, None), (CPU1, "research"), f"({N2} takes no job: {auto.NO_START}: {NOT_STARTED}; ")],
+    ids=["a-pool-then-the-next-pool", "the-queue-then-a-pool"])
+def test_a_job_placed_again_past_a_machine_that_starts_no_run_keeps_each_placement_with_its_own_run(
+        docs, first, second, out, tmp_path, monkeypatch, capsys):
+    """A job placed again is a second run, on another machine, for another reason. Each launch carries the placement that
+    sent it there: the refused run's is the first choice, as it was said before the machine refused, and the run that starts
+    carries the second, whose reason says why the first machine is out. Neither carries the other's."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {first[0]: ("CannotStart", NOT_STARTED), second[0]: None})
+    assert main(RUN) == 0
+    refused, started = (kw["auto"] for kw in launched)
+    assert (refused["machine"], refused["pool"]) == first and (started["machine"], started["pool"]) == second
+    assert [kw["machine_name"] for kw in launched] == [first[0], second[0]], "each record names the machine its launch went to"
+    assert NOT_STARTED not in " ".join(refused["said"]) and second[0] not in refused["said"][0].split(" (")[0]
+    assert started["said"][0].startswith(f"spilled to {second[0]}'s research pool, from ") and out in started["said"][0]
+    assert f" on {second[0]}'s research pool" in started["said"][1], "and when it should start there"
+    printed = capsys.readouterr().err.splitlines()
+    assert all(f"research run --on auto: {line}" in printed for kw in launched for line in kw["auto"]["said"]), "the words it printed"
+
+
+@pytest.mark.parametrize("refusal", [
+    ("Refused", "/src has uncommitted changes; commit them (an unpushed commit is fine) or the snapshot would be mislabeled as HEAD", RAISED),
+    ("Refused", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (RESEARCH_SHIP=stream), and "
+                "tools/verity/check/suites.py needs a git checkout", RAISED),
+    ("SourceNotReady", "source tree manifest mismatch after extraction: 1 missing, 0 extra (e.g. ['a.py']); nothing is READY", RAISED),
+    ("Refused", "3 deliveries of the staged request failed; it may or may not have started: Connection reset by peer", RAISED),
+    ("RunnerFailed", "the runner exited 2 before writing job.json: research run: error: unrecognized arguments: --no-such-flag"),
+    ("RunnerFailed", "the runner could not be started: OSError: [Errno 7] Argument list too long: '/usr/bin/python3'"),
+    ("PreflightFailed", "the machine failed the preflight tools/pre.py (exit 1): no model"),
+    ("Refused", "--custody-r2: no staged key under /workspace/research/requests/r1/custody; the run could not publish its custody"),
+    ("Refused", "machine is exclusively held by run r0 (still live); not starting r1"),
+    ("MemoryNotAvailable", "--mem-gb 64: 12 GB free on the machine"),
+    ("ResearchVersionMismatch", "the research package running on this machine is not the one the launcher shipped")],
+    ids=["a-dirty-checkout", "a-stream-the-launcher-chose", "a-source-not-ready", "a-launch-that-may-have-started",
+         "an-argument-the-runner-rejects", "a-command-too-long-to-start", "a-preflight", "a-missing-key", "an-exclusive-run",
+         "memory", "another-research-package"])
+def test_a_refusal_that_is_the_jobs_own_is_tried_on_no_other_machine(refusal, tmp_path, monkeypatch, capsys):
+    """Only a refusal raised where the machine failed to start a run, whatever the job, moves a launch on. One that reads
+    the job (its checkout, its command, its keys), the machine's rules and admission, or a launch that may have started,
+    would be refused wherever it went, or must not run twice: it stays one refusal, where the same launch refused as the
+    machine's goes on to the next."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    answers = {CPU1: refusal, CPU5: None}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, answers)
+    assert main(RUN) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU1]
+    err = capsys.readouterr().err
+    assert "passed over" not in err and refusal[1] in err
+    answers[CPU1] = ("CannotStart", NOT_STARTED)
+    assert main(RUN) == 0 and [kw["machine_name"] for kw in launched[1:]] == [CPU1, CPU5], "the machine's own moves the same launch on"
+
+
+def test_on_auto_gives_up_with_each_reason_once_three_machines_in_turn_can_start_no_run(tmp_path, monkeypatch, capsys):
+    """A fault that is the launcher's own, read as each machine's, would send one job round every machine there is. The
+    machines that may refuse one launch so are counted (auto.TRIES): then it is refused, with each machine and its reason."""
+    nodes = [f"vy-nebius-cpu-{i}" for i in range(1, 6)]
+    docs = {N2: share(free=48), **{m: pool(*(slot(f"r{j}") for j in range(6 - i))) for i, m in enumerate(nodes)}}
+    whys = {m: f"the runner could not be started: OSError: [Errno {70 + i}] fault {i}" for i, m in enumerate(nodes)}
+    launched, asked = _on_auto(monkeypatch, tmp_path, docs, {**{m: ("CannotStart", w) for m, w in whys.items()}, N2: None})
+    assert main(RUN) == 3
+    assert [kw["machine_name"] for kw in launched] == nodes[:3] and len(asked) == 1, "the fourth and fifth, and node 2, are not tried"
+    assert len({kw["run_id"] for kw in launched}) == 3 == auto.TRIES, "each try is a run of its own"
+    err = capsys.readouterr().err
+    assert err.count("research run --on auto: passed over ") == 2 and " launched on " not in err
+    assert (f"research run --on auto: refused: each machine it tried can start no run, and it tries at most 3: "
+            f"{'; '.join(f'{m} ({whys[m]})' for m in nodes[:3])}. Give it a machine that starts runs yourself: "
+            f"`research run --on MACHINE`") in err.splitlines()
+    monkeypatch.setattr(auto, "TRIES", 1)
+    assert main(RUN) == 3 and len(launched) == 4 and "passed over" not in (err := capsys.readouterr().err)
+    assert f"refused: each machine it tried can start no run, and it tries at most 1: {nodes[0]} ({whys[nodes[0]]}). " in err
+
+
+def test_on_auto_with_no_machine_left_to_try_is_refused_with_why_each_was_passed_over(tmp_path, monkeypatch, capsys):
+    """Fewer machines than the count: once each that fits has refused the launch, placement itself refuses it, and its
+    reason names every machine passed over."""
+    docs = {N2: DOWN, CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    why = "the runner could not be started: FileNotFoundError: [Errno 2] No such file or directory: '/usr/bin/python3'"
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: ("CannotStart", NOT_STARTED), CPU5: ("CannotStart", why)})
+    assert main(RUN) == 3 and [kw["machine_name"] for kw in launched] == [CPU1, CPU5]
+    last = capsys.readouterr().err.splitlines()[-1]
+    assert last.startswith(f"research run --on auto: refused: {N2} is down: ") and f"no pool fits and {N2} takes no job" in last
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {NOT_STARTED}; " in last
+    assert f"{CPU5}'s research pool skipped: {auto.NO_START}: {why}: " in last
+
+
+def test_a_node_2_whose_queue_starts_no_run_is_passed_over_for_a_pool_and_refuses_a_gpu_job(tmp_path, monkeypatch, capsys):
+    """Node 2's queue starts a run as a pool does. A job a pool fits goes on to the pool's line; a GPU or quiet job, which no
+    other node runs, is refused once with the reason, and is launched nowhere else."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    launched, asked = _on_auto(monkeypatch, tmp_path, {N2: share(free=48), CPU1: full}, {N2: ("CannotStart", NOT_STARTED), CPU1: None})
+    assert main(RUN) == 0
+    assert [(kw["machine_name"], bool(kw["queue"])) for kw in launched] == [(N2, True), (CPU1, False)] and asked == [{}]
+    err = capsys.readouterr().err
+    said = f"{N2} takes no job: {auto.NO_START}: {NOT_STARTED}"
+    assert f"research run --on auto: passed over {N2}, which can start no run ({NOT_STARTED}); placing the job again without it" in err
+    assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and f" ({said}; " in err
+    assert main([*RUN[:3], "--gpus", "1", "--", "nvidia-smi"]) == 3
+    assert [kw["machine_name"] for kw in launched[2:]] == [N2] and asked[1:] == [{"node_only": True}]
+    assert f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+
+
+def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_again(tmp_path, monkeypatch, capsys):
+    """A second launch needs a run id of its own, and --id gave the one there is to the machine that refused it."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: ("CannotStart", NOT_STARTED), CPU5: None})
+    rid = "r20300101-000000-abcd"
+    assert main([*RUN[:3], "--id", rid, "--", "pytest", "-q"]) == 3 and [kw["run_id"] for kw in launched] == [rid]
+    assert (f"research run --on auto: {CPU1} can start no run, and --id {rid} names the run it refused: without --id the job is "
+            f"placed on another machine") in capsys.readouterr().err

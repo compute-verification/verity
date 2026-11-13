@@ -131,7 +131,7 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
 def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     """A replay grain of fan-out F (`partition.fanout`) is a capped point whose class's N is F: Lean certifies it as the
     point capped at F S with N = 1, at least log2 of that capped count by enumeration and more than at F = 1.  The
-    patterns' form, each request reading in one replay block, refuses F > 1, and the sets' form reads no N.  A served
+    patterns' form, priced only at closed replay blocks, refuses F > 1, and the sets' form reads no N.  A served
     cap has no default fan-out: without the registration verdict's, the point is refused."""
     cells, k = SMALL[1]
     one, three = (P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=f, returned=3) for f in (1, 3))
