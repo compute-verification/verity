@@ -39,7 +39,11 @@ from typing import Any
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
-from verity_vllm.records.schema_ids import BOUNDARY_LINKAGE_SCHEMA, REPLAY_BUNDLE_SCHEMA, SAMPLED_REPLAY_SCHEMA
+from verity_vllm.records.schema_ids import (
+    BOUNDARY_LINKAGE_SCHEMA,
+    REPLAY_BUNDLE_SCHEMA,
+    SAMPLED_REPLAY_SCHEMA,
+)
 
 # The replay driver, the verdict's two checks, the weights of record's pattern and the planner are imported inside the functions
 # that read them, and the two deferred records take their schema ids from `records.schema_ids`: the driver's import puts the
