@@ -31,7 +31,7 @@ hashed. So a period's count charges no bit of an opened row, and its escape boun
   the record rule give, with no probability.
 * `ResetsIn`: where every audit accepts, the restarts serving picks are among registered patterns, whose number a
   period's count charges.
-* `PeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
+* `MonitoringPeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
 * `AccSeqsCarried`, `OpensAtInputs` and `RLeakCarried`: one run. The sequences accepted from an opened row, and the leak
   relation at the rows the trace gives, which the extractor's witness fixes.
 -/
@@ -97,7 +97,7 @@ def PooledGoodCarried {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L 
 /-- **The leak relation from each run's extracted rows**: run `i`'s audit accepts while its observations `obs z ω i` are
 not accepted with a valid run at `W z ω i` from the row `rin z ω i`, leaving `rout z ω i` (`LeakAtCarried`), with
 probability at most `e' i`. -/
-def PeriodLeaksCarried {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
+def MonitoringPeriodLeaksCarried {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (prow nrow : AuditStatement → List ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
     (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z)

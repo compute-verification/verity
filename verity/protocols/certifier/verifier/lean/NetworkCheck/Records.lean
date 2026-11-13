@@ -51,7 +51,7 @@ set_option backward.privateInPublic.warn false
 namespace NetworkCheck.Records
 
 open Lean (Json toJson)
-open NetworkCheck.Check (Grid Certified LinkOpening Evidence LinkWindow Profile)
+open NetworkCheck.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
 open NetworkCertifier (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
@@ -349,18 +349,18 @@ def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArra
 
 /-- Every execution phase's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. -/
 def verdicts (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest ingressDigest : ByteArray) :
-    Array LinkWindow :=
+    Array TransferBlocks :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
       let grids := expectedGridsOfBytes p.grid p.windows link
       (List.range p.windows).map fun w =>
         ({ direction := .egress, link := l, window := w,
-           violation := egressVerdict p c e egressDigest l link (grids.getD w #[]) w } : LinkWindow)) ++
+           violation := egressVerdict p c e egressDigest l link (grids.getD w #[]) w } : TransferBlocks)) ++
     p.ingress.toList.flatMap fun l => (List.range p.windows).map fun w =>
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
-        LinkWindow)).toArray
+        TransferBlocks)).toArray
 
 /-- Every execution phase's verdict, or why the evidence or the parameters can't give them (v4's refusals). -/
-def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
+def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array TransferBlocks) :=
   if e.links.size ≠ p.egress.size then
     .error s!"evidence: {e.links.size} links' frames and syncs for {p.egress.size} egress links"
   else if e.links.any (·.syncs.size ≠ p.windows) then
@@ -374,14 +374,14 @@ def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except Str
 
 /-- `verdicts` with each egress execution phase's verdict `egressVerdictNoGrid`'s, so no Program grid is computed. -/
 def verdictsNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) (ingressDigest : ByteArray) :
-    Array LinkWindow :=
+    Array TransferBlocks :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
       (List.range p.windows).map fun w =>
         ({ direction := .egress, link := l, window := w, violation := egressVerdictNoGrid p c e l link w } :
-          LinkWindow)) ++
+          TransferBlocks)) ++
     p.ingress.toList.flatMap fun l => (List.range p.windows).map fun w =>
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
-        LinkWindow)).toArray
+        TransferBlocks)).toArray
 
 /-- A raw or committed record names an egress link of the unit: nothing holds its grid but a comparison with the
 Program's. -/
@@ -393,7 +393,7 @@ def uncertifiedEgress (p : Check.Params) (c : Commitment) : Bool :=
 /-- Every execution phase's verdict without the egress grid comparison (`check_link(grid=False)`, N2's, whose head check
 holds each certified head's grid), or why not: `evaluate`'s refusals in its order, with a refusal of a raw or committed
 egress record (`uncertifiedEgress`) after the evidence's, and then `verdictsNoGrid`. -/
-def evaluateNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
+def evaluateNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array TransferBlocks) :=
   if e.links.size ≠ p.egress.size then
     .error s!"evidence: {e.links.size} links' frames and syncs for {p.egress.size} egress links"
   else if e.links.any (·.syncs.size ≠ p.windows) then
@@ -411,7 +411,7 @@ def check (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Core.Outcome 
   match evaluate p c e with
   | .error why => .reject why
   | .ok vs =>
-    let named (v : LinkWindow) (why : String) := s!"{v.direction.value} link {v.link} window {v.window}: {why}"
+    let named (v : TransferBlocks) (why : String) := s!"{v.direction.value} link {v.link} window {v.window}: {why}"
     match vs.find? (·.violation.any (· != "no-verdict")) with
     | some v => .reject (named v (v.violation.getD ""))
     | none =>
@@ -438,7 +438,7 @@ def protocol : Core.Protocol where
   publicJson _ := Json.mkObj []
   profileJson := Check.profileJson
 
-def linkWindowJson (v : LinkWindow) : Json :=
+def transferBlocksJson (v : TransferBlocks) : Json :=
   Json.mkObj [("direction", .str v.direction.value), ("link", .str v.link), ("verdict", .str (v.violation.getD "accept")),
     ("window", toJson v.window)]
 
@@ -459,12 +459,12 @@ refusal (`caseOf`'s, or `evaluate`'s). -/
 def verdictsFn (j : Json) : Except String Json := do
   let (p, c, e) ← caseOf j
   let vs ← evaluate p c e
-  pure (Json.mkObj [("link_windows", .arr (vs.map linkWindowJson))])
+  pure (Json.mkObj [("link_windows", .arr (vs.map transferBlocksJson))])
 
 /-- `verdictsFn` without the egress grid comparison: `evaluateNoGrid`'s verdicts on a `serve` case, or its refusal. -/
 def verdictsNoGridFn (j : Json) : Except String Json := do
   let (p, c, e) ← caseOf j
   let vs ← evaluateNoGrid p c e
-  pure (Json.mkObj [("link_windows", .arr (vs.map linkWindowJson))])
+  pure (Json.mkObj [("link_windows", .arr (vs.map transferBlocksJson))])
 
 end NetworkCheck.Records
