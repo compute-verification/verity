@@ -357,6 +357,36 @@ def test_an_evaluator_it_does_not_know_is_refused_and_a_log_without_its_header_i
         _recompute(run, manifest)
 
 
+def test_the_run_loads_the_lane_before_it_reads_its_log_and_the_pool_loads_none_in_its_parent(tmp_path, monkeypatch):
+    """A worker the pool forks starts with the lane's interpreter and Definition loaded because the run loaded both at its
+    opening, under either evaluator; the pool itself loads neither where it is called."""
+    class Loaded(Exception):
+        pass
+
+    def lane():
+        raise Loaded
+
+    monkeypatch.setattr(SR, "_lane", lane)
+    with pytest.raises(Loaded):
+        SR.recompute_run(tmp_path / "no log.jsonl.gz", tmp_path, evaluator="rows")
+    handed = []
+
+    class Pool:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def imap(self, fn, jobs, chunksize):
+            handed.append((fn, list(jobs), chunksize))
+            return [fn.__name__ for _ in jobs]
+
+    monkeypatch.setattr(SR, "fork_pool", lambda workers: Pool())
+    jobs = [(V, S, None), (V, S, None)]
+    assert SR._evaluate_all(jobs, 2) == ["_eval_job", "_eval_job"] and handed == [(SR._eval_job, jobs, 1)]
+
+
 @pytest.mark.parametrize("kw, verdict, code", [({}, "PASS", 0), ({"served_xor": 0}, "FAIL", 1), ({"without_logits": (1,)}, "INCOMPLETE", 1),
                                                ({"without_logits": (0, 1, 2)}, "NOTHING-CHECKED", 2)])
 def test_the_command_writes_the_report_and_its_exit_code_is_the_verdicts(tmp_path, capsys, caplog, kw, verdict, code):

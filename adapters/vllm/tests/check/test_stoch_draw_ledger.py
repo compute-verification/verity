@@ -6,12 +6,14 @@ Python over the SampleEnd rows).  The two B8 records of record are `test_stoch_d
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
 from verity_vllm.check.replay.stoch_recompute import draw_accounting, record_lag_rows
 from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
+from verity_vllm.program import lifting
 from verity_vllm.program.lifting import continuation as CT
 from verity_vllm.records.workload import SCHEMA
 
@@ -202,3 +204,15 @@ def test_a_stop_rule_file_that_cant_be_read_is_a_ledger_problem_not_an_undeclare
     out = draw_accounting(_draws("a", 10, 4, 0), _wl(tmp_path, [("a", 10, 4)]), b, lag_attested=(1, "test"))
     assert len(out["problems"]) == 1 and out["problems"][0].startswith(f"draw ledger: unreadable: the Program's stop rule {b / name} (")
     assert out["stop_rule"]["eos_ids_source"] == str(b / name) and out["stop_rule"]["attested"] is False
+
+
+def test_the_ledger_loads_the_continuation_only_for_a_request_whose_rule_it_reads(tmp_path, monkeypatch):
+    """The continuation registers its Definitions in the core's table as it loads, so a ledger that reads no request's rule
+    leaves the table as it found it."""
+    monkeypatch.delattr(lifting, "continuation")
+    monkeypatch.setitem(sys.modules, CT.__name__, None)                          # an import of it from here on fails
+    assert draw_accounting({}, None, None)["requests"] == {}
+    undeclared = draw_accounting(_draws("a", 10, 4, 0), None, None)              # no manifest: no request's cap, no rule read
+    assert undeclared["requests"]["a"]["cap"] is None and "rule" not in undeclared["requests"]["a"]
+    with pytest.raises(ImportError, match="continuation"):
+        draw_accounting(_draws("a", 10, 4, 0), _wl(tmp_path, [("a", 10, 4)]), None)

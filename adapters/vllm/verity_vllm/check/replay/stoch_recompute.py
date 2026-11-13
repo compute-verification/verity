@@ -112,7 +112,8 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
 
 def _lane() -> tuple[Any, Any]:
     """The interpreter and the module of the lane evaluator's Definition, imported on a call since they load the core `verity`,
-    which importing this module does not; `_evaluate_all` calls this before it forks, so that a worker starts with both loaded."""
+    which importing this module does not; `recompute_run` calls this at its opening, so that a worker it forks starts with both
+    loaded."""
     from verity.definitions.registry import sampling_topp_difftest
 
     from verity_vllm.properties.admission import evaluate_spec
@@ -177,7 +178,6 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
     n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
-    _lane()                                                        # loaded before the fork: a worker starts with both
     with fork_pool(min(n, len(jobs))) as pool:
         return list(pool.imap(fn, jobs, chunksize=1))
 
@@ -311,9 +311,6 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
     (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
-    # continuation loads the core `verity`, which importing this module does not
-    from verity_vllm.program.lifting import continuation
-
     out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
                                "expected draws = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
                  "requests": {}, "problems": [], "lag_slot_exercised": False, "requests_with_eos_before_cap": 0, "requests_at_cap": 0,
@@ -374,6 +371,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
+        # continuation loads the core `verity` and registers its Definitions: only for a request the rule is read for
+        from verity_vllm.program.lifting import continuation
         if any(y is None for y in served[:T]):
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
@@ -668,6 +667,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
     # fold_compare imports torch, which only this function needs
     from verity_vllm.check.fold_compare import SnapshotStore
 
+    _lane()                                                # loaded before a row is read: a worker `_evaluate_all` forks starts with both
     t0 = time.time()
     events = list(read_log(log_path))
     header: Any = events[0]                                # the log's first event, whatever it is
