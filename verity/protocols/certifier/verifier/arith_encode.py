@@ -90,7 +90,7 @@ the composition keeps as a 2-bit counter (C = 3). Async's lag bits take one cont
 that sends only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the
 window's decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing.
 In the replay's proof blocks they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
-`window_code.code_window`'s segment for them:
+`window_code.code_executionPhase`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more
   step, uniform;
@@ -363,7 +363,7 @@ def check_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], segment: Se
     return bool(ok) and pos + n == len(seg)
 
 
-#: the counts a window that sends only decisions codes after them, each 0, in `window_code.code_window`'s order
+#: the counts a window that sends only decisions codes after them, each 0, in `window_code.code_executionPhase`'s order
 ZERO_COUNTS = ("n_hits", "n_resumes", "n_order", "n_lag")
 #: the decisions' contexts, min(run, 2)
 RUNS = 3
