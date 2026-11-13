@@ -20,5 +20,5 @@ if [ -z "${VERITY_BENCH_STEADY_PY:-}" ]; then
 fi
 # the harness, what its settings registry imports (verity_config, and verity.settings from the tree's root), and the
 # store's command, which fetches a statement a row names in the store
-export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/verity/configuration/config:$ROOT:$ROOT/tools/research/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/tools/config:$ROOT:$ROOT/tools/research/src${PYTHONPATH:+:$PYTHONPATH}
 exec "$VERITY_BENCH_STEADY_PY" -m verity_bench.steady_node "$@"
