@@ -447,7 +447,7 @@ def probability(p) -> bool:
 
 
 def rule(law) -> dict:
-    """`OneStage.rule`: the agreed law, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
+    """`OneStage.rule`: the agreed sampling design, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
     kind = law.get("law") if isinstance(law, dict) else None
     if kind == "bernoulli":
         _exactly(law, {"law", "p"}, "the law")
@@ -749,7 +749,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli sampling design refused, at any p
     (`service.bernoulli`)."""
     p = decode_params(j)
     if service.bernoulli(p["law"]):
@@ -1676,7 +1676,7 @@ def agreed_laws(draw, n: int):
 
 
 def _worked(law) -> bool:
-    """Whether an agreed law is expanded over a work table: `work` or a work rate."""
+    """Whether an agreed sampling design is expanded over a work table: `work` or a work rate."""
     return (law.get("law") == "work") if isinstance(law, dict) else str(law).startswith("work-rate:")
 
 
@@ -1695,7 +1695,7 @@ def work_tables(draw, s: Setup):
 
 
 def drawn(draw, law: dict, n: int) -> dict:
-    """The verifier's sample under its expanded law; a work sample's closure, which the audit refuses, one time in four."""
+    """The verifier's sample under its expanded sampling design; a work sample's closure, which the audit refuses, one time in four."""
     kind = law["law"]
     if kind == "subset":
         return {"k": law["k"], "law": "subset", "population": n, "units": sorted(draw(st.permutations(range(n)))[:law["k"]])}
@@ -2345,12 +2345,12 @@ def test_an_accepted_case_is_compared_whole(server):
 def test_an_accept_says_whether_every_verdict_ran(server):
     """An accept's public ``complete``, Lean's and the Python's alike: true when every verdict ran, and false beside
     one that is not of record and did not run (its ``accepted`` null or absent), which the accept does not wait on."""
-    s, law = SETUPS[3], {"k": 2, "law": "subset"}
-    mine = DR.derive(s.program, s.query, law, None)
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    s, design = SETUPS[3], {"k": 2, "law": "subset"}
+    mine = DR.derive(s.program, s.query, design, None)
+    rec = R.record(s.program, s.query, design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=None)
     d = {**mine, "population": s.population, "units": [0, 3]}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [], "partition": None,
+    params = {"anchors": [], "delta": "1/20", "law": design, "leaf_layer": LEAF, "log": [], "partition": None,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
               "work_table": None}
     for other, complete in (({}, True), ({"upstream": {"accepted": True, "of_record": False}}, True),

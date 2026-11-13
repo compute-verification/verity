@@ -32,9 +32,9 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The draw samples replay blocks.
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
-verifier draws the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
+verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
