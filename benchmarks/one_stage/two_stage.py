@@ -159,6 +159,8 @@ from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity import device as ST
+from verity.hardware import registration as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
@@ -397,29 +399,45 @@ class First:
         return IR.history(self.record, names, BT.WORDS, BT.class_rows(L.prompt, L.outputs, L.capacity), published, bodies)
 
 
+def declared_of(program: str, day: int = 0, composite: str = "remote") -> dict[str, Any]:
+    """The verifier's declared day for a class served outside a deployment's registration log: a development log of
+    ``composite`` that declares ``program`` on ``day`` and nothing else, as `registration.check_log` views it under an
+    auditor of no sheets or keys, with the head that names it (`Stream.register`'s ``declared``). The two-stage
+    verifier refuses a boundary whose parameters name no head (`SampledTwo.NO_HEAD`)."""
+    log = G.chain(composite, [G.Declaration(day, program)])
+    got = G.check_log((composite, ST.Auditor()), (composite, log))
+    if got[0] != "accept":
+        raise ValueError(f"the development log declaring {program} on day {day}: core's check refuses it, {got[1]}")
+    return {"day": day, "declarations": got[1]["declarations"], "head": got[1]["head"]}
+
+
 def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coins: CC.ChallengerCoins, *,
           previous: str | None = None, window: Mapping[str, Any] | None = None, delta: float = 0.5,
-          window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
+          window_root: str | None = None, stop: BS.Stop | None = None, declared: Mapping[str, Any] | None = None,
+          **kwargs: Any) -> First:
     """One class's first stage on ``coins``, laid out under the verifier's own check template and stop rule (``stop``):
     its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage rate over its spans,
-    chained after ``previous``, its window naming ``window``'s items), the coins commit to the registration's digest,
-    and the stream samples once. Raises `service.Refused` as the stream does."""
+    chained after ``previous``, its window naming ``window``'s items) under ``declared``, the verifier's declared day
+    and head (by default `declared_of` the record's program), the coins commit to the registration's digest, and the
+    stream samples once. Raises `service.Refused` as the stream does."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
     rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window, stop=stop)
-    reg = stream.register(rec, layout.ports(), **({} if window_root is None else {"window_root": window_root}))
+    reg = stream.register(rec, layout.ports(), declared=declared_of(rec["program"]) if declared is None else declared,
+                          **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
     sample = stream.select(reg)
     return First(dict(pub), rule, layout, stream, rec, reg, sample, coins, bytes(coins.read))
 
 
 def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.ChallengerCoins | None = None, *,
-           delta: float = 0.5, window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
+           delta: float = 0.5, window_root: str | None = None, stop: BS.Stop | None = None,
+           declared: Mapping[str, Any] | None = None, **kwargs: Any) -> First:
     """A class's stream again at the end of its first stage, from its ``stage1.json``, under the verifier's own check
-    template and stop rule: the record registered again and sampled again on the bytes the sample read, then on ``then``
-    once the interior registration's digest is committed (`Staged.commit`). ValueError when the Spec, the registration
-    or the sample isn't ``stage1.json``'s."""
+    template and stop rule: the record registered again under ``declared`` as `first` registers it and sampled again on
+    the bytes the sample read, then on ``then`` once the interior registration's digest is committed (`Staged.commit`).
+    ValueError when the Spec, the registration or the sample isn't ``stage1.json``'s."""
     if stage1.get("format") != FORMAT:
         raise ValueError(f"not a {FORMAT} hand-off")
     pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
@@ -429,7 +447,9 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     coins.family = stage1.get("family")
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
-    reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
+    reg = stream.register(stage1["record"], layout.ports(),
+                          declared=declared_of(stage1["record"]["program"]) if declared is None else declared,
+                          **({} if window_root is None else {"window_root": window_root}))
     if reg.digest != stage1["registration"]:
         raise ValueError("the record registers to another digest than its first stage's")
     sample = stream.select(reg)
