@@ -42,7 +42,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
-  check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
+  check and code that refuse it), `leak_guard.py` (the record's leak guard, below) and `released_keys.py` (the keys a
+  record releases, each declared public by name, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
   runbook (below).
@@ -381,6 +382,22 @@ the gate's list of published counts and no other key (`warden_chain.COUNTS`). Th
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
+
+**The keys a record releases** (`released_keys.py`, `released_keys.json`). The guard's pieces find a private value
+copied into the record; they can't find a value the witness never held as bytes (a count, a length, a time). So the
+guard reads each JSON file bound for `out/` by key as well (`--keys`, which `chain_record.sh` passes): a file holds only
+keys its list in `released_keys.json` declares public by name, each with its kind, which is one of the four things
+that may be public: protocol structure, a protocol output, a challenge or sample of the verifier's, or a hiding
+commitment. A list is declared data beside the writers, one for each form of file, wherever a step copies it. A key
+is named by its path in the file; `*` stands for a list's index, or, where the list's `maps` says so, for a map's own
+keys, which are public ids of the form given there. No entry excuses a key: a key of none of the four kinds is not
+declared, and its writer stops writing it. A file with a key its list doesn't name goes to the quarantine with the
+guard's other finds and fails the record (exit 3). `out/leak-guard.json` names the file and how many keys; the key's
+path and the fix are in the quarantine's report (and in `released_keys.py OUT_DIR`'s output, on a record already
+made), since a writer may have made a key's name from a value. The report's `keys` counts the files checked by key,
+the JSON files whose lists aren't written yet (`not_yet` in the declared data) by step, and the files with no keys by
+extension. A JSON file under no list and no `not_yet` glob fails as an undeclared key does. A file with no keys (a
+binary, a log, free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come

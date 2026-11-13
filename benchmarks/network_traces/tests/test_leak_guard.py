@@ -461,6 +461,39 @@ def test_chain_record_moves_a_sent_gate_out_and_the_guard_refuses_the_run(tmp_pa
     assert list((tmp_path / "tmp").iterdir()) == []
 
 
+def test_chain_record_fails_on_a_released_file_with_an_undeclared_key(tmp_path):
+    """chain_record.sh's guard reads by key what it releases (released_keys.py): the record's files with declared
+    keys alone pass it (the job itself still fails, at the gate that isn't there), counted beside the files whose
+    lists aren't written yet and those with no keys; with one undeclared key in one of them the guard refuses the
+    record, the file in the quarantine and named in the job's log with how many keys, the key's own name in the
+    quarantine's report alone."""
+    run = _sent(tmp_path)
+    (run / "out" / "n2" / "leak.json").unlink()
+    certs = "out/gates/c0/r0/out/certificates.jsonl"
+    line = {"certificate": {"key_id": "k", "link": 0, "direction": "ingress", "window": 0, "digest": "0", "signature": "1"}}
+    _put(run, {certs: (json.dumps(line) + "\n").encode(), "out/n2/outcome.json": b'{"verdict": "accept"}'})
+    p = _chain(tmp_path, "gate.tgz absent.tgz")
+    out, _ = p.communicate()
+    assert "leak guard: clean" in out and (run / certs).is_file(), out
+    assert "1 files checked by key, 0 with a key not declared public; 2 not yet checked ((top level) 1, n2 1)" in out
+    assert json.loads((run / "out" / "leak-guard.json").read_text())["keys"]["no_keys"] == {".log": 2}
+    for f in ("job.log", "stdout.log", "leak-guard.json"):
+        (run / "out" / f).unlink()
+    _tar(run / "inputs" / "gate.tgz", {f"{GATE}/{p.relative_to(tmp_path / 'src' / GATE).as_posix()}": p.read_bytes()
+                                       for p in sorted((tmp_path / "src" / GATE).rglob("*")) if p.is_file()})
+    line["certificate"]["undeclared_key"] = 7
+    _put(run, {certs: (json.dumps(line) + "\n").encode()})
+    p = _chain(tmp_path, "gate.tgz absent.tgz")
+    out, _ = p.communicate()
+    q = tmp_path / "quarantine" / "r1"
+    assert p.returncode == 3, out
+    assert "leak guard: refused" in out and f"{certs}: 1 key not declared public (--keys)" in out
+    assert (q / "files" / certs).is_file() and not (run / certs).exists()
+    assert "undeclared_key" not in out + (run / "out" / "leak-guard.json").read_text()
+    [found] = json.loads((q / "leak-guard.json").read_text())["found"]
+    assert [b["key"] for b in found["keys_undeclared"]] == ["certificate/undeclared_key"]
+
+
 def test_chain_record_withholds_the_record_when_the_guard_cant_run(tmp_path):
     """A guard that can't run (here its interpreter fails) withholds out/, inputs/ and the logs whole: none is left for
     custody, all are in the quarantine, and the run fails."""
