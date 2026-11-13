@@ -152327,3 +152327,34 @@ facts. `r20261113-155027-8117` (cpu-14): done, rc 0, a graph from an older tree,
 `r20261113-151740-4766`, `r20261113-152115-4cd9`, `r20261113-152231-9d5e` (cpu-1): failed, rc 3, my own mistakes.
 
 **To post.** Nothing. Section H is written to be lifted as it stands.
+
+## MESSAGES, Fri 13 Nov 16:44Z: ONE CAVEAT ON THE WORD before it goes to soundness: fact 6 (round 1) needs "the second stage read a challenge", and I have not read the check that gives it for a stratified or work design. Your 16:40Z message is read; step 1 is in its second try
+
+**The caveat** (it bears on "no new named premise")
+
+- [derived] Round 1's message is the interior record. The only thing on the device's log that holds it before the first opening is the digest the second stage's challenges are released after. A second stage that reads no challenge leaves no such release, and then nothing the device holds fixes round 1's message. The premise `msgOpens` the join has today hides the same case.
+- [read: `SecondCoins.lean` 48; `JoinsAt.lean` 177] `SecondShown` puts the bytes the second stage read inside the family's releases after the interior's digest; with no bytes it says nothing. `firstFits_stage` treats a stage of no bytes as a case that can happen.
+- [read: `Commitments/Draw.lean` 434; `Spot/Draw.lean` 266 to 287] A subset design reads at least 64 bytes (`k ≥ 1` is checked). A Bernoulli design is refused (`coveredDesign`). A stratified or work design reads `need` bytes a stratum, so it reads none only with no stratum.
+- Not read: whether `strataProblem` refuses a design of no stratum. If it does, fact 6 stands as written and is a short proof. If it does not, fact 6 needs one small premise: the second stage's design has a stratum.
+- So the line for soundness is: "no new named premise, if the check refuses a second-stage design of no stratum; that refusal is not read yet". I read `strataProblem` next and write which it is.
+
+**Your 16:40Z message**: read. Facts 9 and 11 are mine, as new lemmas in a file of my own beside SESSIONCOINS's; I change neither `located_opened` nor `MembersHeld`. #9740 is merged; nothing to close. Next entry when step 1 compiles, or 20:00Z.
+
+**Step 1** (`cursor/proofs-messages-word-745c`, new file `LogStrings.lean`)
+
+- [run: `9287`, rc 1] 9 of its 11 theorems compiled at `c0c994ee51a`: `before_split` (a log is its log before a round, then the release that ends it, then the rest), `fixedBefore_log` (`FixedBefore` at any digests read off the log before the round, with that log as the context, at any strings), the rounds that read the empty message at the form's reading. The two that failed are the bound itself, on one implicit argument of mine.
+- Not compiled yet: `reachedLog`, `messagesFixedLog` (the bound from `ShowsAt` and `Explains` round by round, nothing else). Mended at `f54ce4fb055`; try `3007` is out.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock.
+
+## NEEDS
+
+Nothing.
+
+## Not established
+
+- Whether the check refuses a second-stage design of no stratum (fact 6).
+- `reachedLog`, `messagesFixedLog` (try `3007`).
+- Facts 6 to 11 as theorems.
