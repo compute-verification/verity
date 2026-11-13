@@ -7,9 +7,9 @@ import hashlib
 
 import pytest
 
-from verity.configuration.wire import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema,
+from verity.channel import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema,
                               Str, canonical, frame, frames, parse, split)
-from verity.configuration.wire import handshake as H
+from verity.runtime import handshake as H
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
 
