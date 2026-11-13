@@ -5,7 +5,7 @@ right after W, each of Pearl+'s values an output value of W's).
 **The toy** (`toy`): a one-layer bf16 Llama of hidden 128 (two heads of 64, one KV head) and vocabulary 512 on the H200, at
 class (1 slot, prompts of 27, 2 outputs), cut at its linears (`window_class.PearlTables`, each y handed on in rows of 64
 words). So the window has 2 rounds, round 0 the prompt's 27 rows and round 1 one decode row, of 4 calls each (q/k/v, o,
-gate/up and down), and its 895 units of 58 templates are proof blocks C-Flock's composer takes.
+gate/up and down), and its 895 units of 58 templates are proof blocks Flock's composer takes.
 
 * **Pearl+'s passes**, a pass a round: each call's A rows (its x widened to FP32, then zero rows up to m₁₆) and y (its value
   widened) as the circuit's proof blocks make them (`window_rows.Rows.value`), committed as Pearl+'s reference commits them
@@ -24,11 +24,11 @@ accepts W, and `reuse` makes each value W's entry.
 one bit flipped, differs from W at that value's root alone. The verdict's W check refuses it on the honest passes and
 `reuse` refuses it. On the flipped passes the verdict accepts W' (it is their record), and `reuse` still refuses it: the
 proof blocks don't make that row. Its reader is the one proof block of a template of its own, which `stratified:1` always
-draws, and its Definition on its input gives the honest row, so a prover who records W''s row instead has a proof block
+samples, and its Definition on its input gives the honest row, so a prover who records W''s row instead has a proof block
 whose proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take a minute): R registers the
-circuit's values at W's entries and nothing else, chained right after W, and its sampling design draws a reader of every
+circuit's values at W's entries and nothing else, chained right after W, and its sampling design samples a reader of every
 value, each value's readers templates of their own. `records_audit.tie_of` with no prefix ties the audit to W (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
@@ -39,7 +39,7 @@ a5's v1 case of R with the tie's params accepts R on [W], refuses its registrati
 case's verdict of record is an accepting stand-in reporting R's values' roots as their readers opened them; the proofs of
 a sample of R's proof blocks, through both one-stage verifiers, are `records_audit.py audit --tie W`'s.
 
-Pearl+'s verdict is the prover's development verifier: it reads the prover's salt key and opens drawn rows in the clear,
+Pearl+'s verdict is the prover's development verifier: it reads the prover's salt key and opens sampled rows in the clear,
 values the one-stage proof hides once tied.
 """
 from __future__ import annotations
@@ -320,7 +320,7 @@ def _check(written, W: dict, R: dict):
 @RECORDS
 def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_another_root(toy, written):
     """R registers the 16 values at W's entries and nothing else, chained right after W; its sampling design (R1 holds it to
-    the verifier's own) draws a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
+    the verifier's own) samples a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W

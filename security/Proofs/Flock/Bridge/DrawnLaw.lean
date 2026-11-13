@@ -20,7 +20,7 @@ work table `tb`, at the population `n`:
 * `notBernoulli_sampledDesign`, `notBernoulli_drawsUnder`: it is no Bernoulli law (`NotBernoulli`);
 * `lawK law`: the units a sampling design samples, a subset sampling design's `k` or its strata's `k`s summed;
 * `DrawsUnder desc q lj tb n law kd`: the verifier samples `kd` units under `law`: `law` is `drawnLaw`'s, and `kd` its
-  `lawK`; it holds at every sample the one-stage verifier draws (`drawsUnder_of_drawnFrom`);
+  `lawK`; it holds at every sample the one-stage verifier samples (`drawsUnder_of_drawnFrom`);
 * `drawnLaw_cases`: `drawnLaw` is a subset sampling design within the population, a Bernoulli law, or the stratified or work sampling design
   `Flock.Draw.derive` or `deriveWork` expands over the registration's strata;
 * `strata_pos`, `strata_nodup`: those strata each hold a unit, and their slots hold each unit once;
@@ -30,7 +30,7 @@ work table `tb`, at the population `n`:
 * `lawOn_drawnLaw`, `lawOn_drawsUnder`: at `PopMatches`, it is on the registration's strata (`LawOn` at `nsOf`), sampling
   `lawK` units;
 * `designAt desc q lj tb n`: `drawnLaw`'s sampling design, or `subset 0` where it errs (`designAt_cases`), under which every sample
-  `drawnFrom` draws is drawn (`drawnFrom_designAt`), no Bernoulli law (`notBernoulli_designAt`) and sized (`sized_designAt`).
+  `drawnFrom` samples is sampled (`drawnFrom_designAt`), no Bernoulli law (`notBernoulli_designAt`) and sized (`sized_designAt`).
 -/
 
 @[expose] public section
@@ -93,7 +93,7 @@ def DrawsUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n
     Prop :=
   drawnLaw desc q lj tb n = .ok law ∧ lawK law = kd
 
-/-- **Every sample the one-stage verifier draws is under a sampling design `DrawsUnder` names**: where `drawnFrom` samples,
+/-- **Every sample the one-stage verifier samples is under a sampling design `DrawsUnder` names**: where `drawnFrom` samples,
 at a verifier whose program the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes,
 its sample is `drawUnits` under a `law` with `DrawsUnder desc v.query v.law v.workTable n law (lawK law)`. -/
 theorem drawsUnder_of_drawnFrom {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
@@ -280,7 +280,7 @@ theorem lawOn_drawsUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lea
   exact lawOn_drawnLaw hpop h hb
 
 /-- **The sampling design the verifier samples under at a registration**: `drawnLaw`'s, and `subset 0`, which samples no
-proof block, at a registration whose law `drawnLaw` refuses, where `drawnFrom` refuses every sample
+proof block, at a registration whose sampling design `drawnLaw` refuses, where `drawnFrom` refuses every sample
 (`drawnFrom_drawnLaw`). -/
 def designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Flock.Draw.Law :=
   match drawnLaw desc q lj tb n with
@@ -296,7 +296,7 @@ theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.
   | ok law => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
-/-- **Every sample the one-stage verifier draws is under `designAt`**: where `drawnFrom` samples, at a verifier whose program
+/-- **Every sample the one-stage verifier samples is under `designAt`**: where `drawnFrom` samples, at a verifier whose program
 the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `drawUnits` under
 `designAt desc v.query v.law v.workTable n`. -/
 theorem drawnFrom_designAt {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
