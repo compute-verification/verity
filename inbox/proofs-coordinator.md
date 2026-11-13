@@ -111912,3 +111912,38 @@ Runs:
 To post: nothing.
 
 Not established: that `Projection`, `Reading`, `Claim`, `Refused`, `DevAgrees` and `Leg` compile (next run); that the `sampled-two` executable builds and the new test passes (`5d2d`).
+
+## GATHER, Fri 13 Nov 01:17Z: the second try's branch now holds serving's `c201ac0dcb59`: head `5ad83c84ef5e`, pushed; its rehearsals with a prover are in line, none has started
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `5ad83c84ef5efe9a65082c3da087cf7ce38e753d`.** No rehearsal with a prover has run at this head yet: `7b90` (V = 2,560) and `b025` (Friday's shape, `--replay rate:1/1 --k 4`) are in line on vy-nebius-2. Its parent `957d763fb5` is the head `3ba5` and `b032` ran at, all exit 0. The merge adds 14 lines to what a serve refuses as it starts and one test; nothing in the audit's two commands changed. On the VM, without a prover, the merged head passes the logits port's test file and my probe of the port. **This is the head I would have serving run for the second try, on the condition that `7b90` ends exit 0**; I confirm or withdraw it when it ends.
+
+### What moved
+
+- [run: `git merge --no-ff c201ac0dcb59fa5dd7b408f5aa40c2af093060ae` in the branch's worktree, 01:12Z; `git push`, 01:14Z] One commit of serving's, no conflict: `957d763fb5..5ad83c84ef`.
+- [run: `git diff --stat 957d763fb5 5ad83c84ef`] Two files, 25 lines added and 1 removed:
+  - `adapters/vllm/verity_vllm/pipeline/boundary_windows.py`: a serve that asks to commit the select's inputs is refused unless the Definition its check names is the greedy select. Before, the test was how the check's name starts.
+  - `adapters/vllm/tests/pipeline/test_boundary_logits.py`: one test of that, three cases.
+- [run: `git merge-base` of the head with `origin/main`, before and after] The merge base with `main` is `b39caa2b3e01` both times: no commit of `main` came in.
+- [run: `git merge-base --is-ancestor 9d4aec0111fb HEAD`] `9d4aec0111fb` is still an ancestor.
+
+### What ran at the merged head, on the VM, no prover
+
+- [run: `pytest adapters/vllm/tests/pipeline/test_boundary_logits.py`, 01:13Z] 21 passed.
+- [run: `logits-port-probe.py` at the worktree, plain and with `stop`, 01:13Z] The interior registers no value; the second stage's check is ok with no code; a logits read at the interior's own ports is refused (`second-read`, `second-values`); an altered kept row is refused by name.
+
+### Runs, all on vy-nebius-2, pool `proofs`
+
+| Run | What | Head | Asked | In line since |
+|---|---|---|---|---|
+| `r20261113-011523-7b90` | V = 2,560 at the merged head: stop rule and committed logits with every span sampled; history tables and committed logits; three test files | `5ad83c84ef` | 32 GB, 2 h | 01:15Z |
+| `r20261113-011443-b025` | Friday's shape at the merged head: 8 spans of 64 tokens, stop rule, committed logits, `rate:1/1 --k 4` | `5ad83c84ef` | 96 GB, 5 h | 01:14Z |
+| `r20261113-005324-c6bd` | Friday's shape, serving's `rate:1/2 --k 1` | first try's `496aa18354` | 72 GB, 3 h | 00:53Z |
+| `r20261113-005510-240a` | V = 2,560, 8 of 8 and 32 a cell: 256 inner blocks a session | first try's `496aa18354` | 40 GB, 3 h | 00:55Z |
+
+- [run: `research cancel`, 01:14Z] `1237`, the Friday-shape run at the old head, never started (6 minutes in line, 8 ahead); `b025` replaces it at the merged head.
+- [guess] `7b90` takes about 40 minutes once it starts, `b025` about 2 hours 30 minutes.
+
+### Not established
+
+- Any run with a prover at `5ad83c84ef`.
+- The changed start check under a serve. [run: a search of `two_stage.py`, `two_stage_small.py`, `boundary_rows.py` and `interior_rows.py` for `boundary_windows`, 01:16Z] Neither the driver nor the stand-in serve imports the changed file, so my rehearsals cannot show it. The engine's own start does, and serving's quick tier at `c201ac0dcb59` covers it [relayed: your 01:10Z message].
