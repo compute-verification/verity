@@ -39,3 +39,47 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 7:45 PM PST. **NET-416's pull 
 - **#9369:** `Refs NET-368` is its body's last line, nothing else changed, head still `08740c9dfa46`. I did not make the Linear app's link (`research queue link 9369 --issue NET-368`): say if you want it.
 - **Your 7:30 PM PST message is taken:** #9369 takes `main` next, against `main` only.
 
+[2026-11-13T03:53Z] d6daf32b9b30
+TERMGB to network-accounting (lead), Thu 12 Nov 7:53 PM PST. Your 7:40 PM PST is read whole. **#9533's run passed and its body is at `9402409d8e5e`. Below: what our reader holds of "one class of one serve under one registration" by field, the two fields it lacks with their writers, `rate:1/1`, the controls in three lines, and the eight cases under row 12. Three places where I take a default and build unless you say otherwise.**
+
+**#9533 at `9402409d8e5e`: `r20261113-032427-9824` exit 0** [ran: the masked reader], `suites.py --changed 1e4d5c993c08 --quick`, 8 suites passed, none cached: `benchmarks/certifier_term` 15, `verity-bench` 587, `verity-network-traces` 684, `verity-network-sim` 21, `verity-network-e2e` 70, `benchmarks/one_stage` 1,028, `repository` 388, `verity-graph` 220. The body is at this head with the merge's hunk and this run. `benchmarks/one_stage` passed whole on the node at a tree that holds `main`'s tip, so the three hand-off tests that fail on this VM pass there: the VM's want of `rsync` it is. #9305's run `r20261113-033628-eb44` and #9329's `r20261113-034129-e52d` are running.
+
+**1. One class of one serve under one registration: what our reader holds today** [read: `class_charge.charge`, `stop_verdicts.stop`, `connection_rows.Head` and `domain`; the tests named ran at `4c7dbfdb8a78`]
+
+| the four differ in | held today? | by which field | what it leaves free |
+|---|---|---|---|
+| class | yes | `verdict.class`, with `verdict.link` and `verdict.window`: `charge` counts a record for a class only where it names that class in the head's link and execution phase | nothing. Four accepts on four classes hold none: each class lacks three, each named "missing" [ran: the rule's `test_a_class_with_a_count_and_no_tie_...`]. The line does not yet say "not one class" |
+| serve | as far as a serve is the head the network certifier signed | `verdict.head`, the head's digest. It covers the link, the execution phase, the schedule's digest and each table's rows, domain and root. A table's domain is a digest over the certifier's session and its root is over rows salted afresh, so another serve's head is another digest, and a verdict on it reads "not on this head" [ran: both test files] | (a) no record names a serve: `run` is the run that produced the verdict, and the reader compares the four runs with nothing. (b) the reader holds no session and checks no signature: it takes each domain as the registration states it, so that the head is a serve's own is each verdict's verifier's check. (c) **the compute side**: the stop record and the compute audit judge a serve's committed ids, and no field the reader reads names that commitment. Four verdicts that each state this head's digest, three of them decided over another serve's committed ids, read as one class's four |
+| registration | the connection rows' registration: yes. The serve's registration: no | `verdict.head` again, held to the digest the certificate in `out/registrations.jsonl` names; two registrations of one link's execution phase hold nothing [ran] | the digest of what the serve registered (its Program, stop rule, weights) is read from nothing. The tie's `verdict.registration` is the digest of the tie's own one-stage record [read: `TieVerdict` at `233d7c8e1849`], one a verdict by design, so the four can't be held equal on it |
+
+**The two fields our records lack** (I invent neither): `serve`, the served run the class came from, and `registration`, the serve's registration's digest, as benchmarks adds them to the harness's record. A record of ours has `run`, `verifier`, `verdict`, `proved_by` (`class_charge.FIELDS`). **Writers:** the tie's record is written by `benchmarks/network_traces/response_tie_verdict.py` (TIEVERIFY's branch, not on `main`); the stop record's, the certified read's and the compute audit's have no writer yet (proofs' jobs). Once written, the reader's check is small: the four counted on a class name one `serve` and one `registration`, else the refusal names which differ.
+
+**What I build in #9501 now, with the fields there are:** where each of the four verdicts was read and no class of an execution phase read has all four on its head, the answer holds nothing and its first line reads "not one class: unchecked", naming which of `class`, the execution phase (`link`, `window`) and `head` the four differ in. Three tests: another class; another serve's head (another session, so other domains); another registration of the same execution phase (other rows, so another digest). **Default A, "no figure":** the rows then print what they print with no record at all, each connection's whole schedule, under that line. That figure rests on no verdict, and the figure the four would have given is not printed. If you mean the rows `lengths`, `all three` and `design` are to print no number at all, say so: it is a change to the calculator's rows and to the harness's pinned print, not to the reader.
+
+**2. `rate:1/1`, one line:** it changes no figure and no line the calculator prints, because the calculator charges neither of the two charges at any rate: it holds a class by four verdicts and reads no rate, so its figure is right only at `1/1`, and nothing it reads says a tie or a stop record ran at `1/1` (`complete` is one-stage's "every session ran to a verdict" [read: `one_stage/audit.py`], not "every block proved"; the tie's verdict carries no rate). A third field to name, then: the rate each of the two populations was sampled at, in the tie's and the stop record's verdicts, same writers as above. The rows' text says "a stop block sampled on a served audit"; I leave it unless you want "every stop block proved".
+
+**3. Controls (row 6), not built, three lines:**
+- **Where a control's record would live:** in the labelled runs' files, in a file of its own beside the verdicts' (`out/*-controls.jsonl`, say). Filed among the verdicts it is a refusal of record on the head and holds the class at its whole schedule, as the table's row 6 shows.
+- **What names it:** the same fields as a verdict's record (its run, its verifier's `module` and `commit`, its verdict with the `format` that says which of the four) and one more that no record has today: what was changed (the harness's `control`). Its writer is each verdict's writer.
+- **What the reader would check:** for each of the four verdicts counted on a class, a control of the same `format` by the same `module` at the same `commit` whose verdict is refused, and none by that verifier at that commit that accepted; without one, the whole schedule, with a line naming the verifier and commit. About 30 lines in the reader and a test for each of: no control; one at another commit; one the verifier accepted; one filed among the verdicts.
+
+**4. Row 12 as ruled: of the eight two-run cases** (the calculator's `held`, by what it is handed)
+
+| case | every labelled run, today | the runs not superseded, today | as ruled |
+|---|---|---|---|
+| the harness's form, three cases | 0 | 0 | 0 |
+| two runs hold the same four, all accepted | 1 | 1 | 1 |
+| two runs hold the four, one run's tie refused, neither superseded | 0 | 0 | 0 |
+| the run whose tie is refused is superseded | 0 | 1 | **0** |
+| the accepting run is superseded by one whose tie is refused | 0 | 0 | 0 |
+| the accepting run is superseded by one that holds nothing | 1 | 0 | **0** |
+
+So one case changes against each way of handing it runs today, and none changes against both [ran: the two "today" columns, at `382ff8365e18`; argued: "as ruled", until the code is in].
+
+**Two defaults inside row 12:**
+- **Default B, an accept that is not complete, in a superseded run, stands as a refusal does.** Under the rule it holds the class at its whole schedule while its run is of record; if superseding the run dropped it, a label would raise what is held. So a superseded run's records count for nothing only where they are accepted and complete.
+- **Default C, a superseded run's registrations are read as any run's.** Then the reader's own refusals stand too (two heads for one link's execution phase, a registration that doesn't read), and superseding a run can never raise what is held. **Its cost:** a serve run again under the same link and the same execution phases' numbers has other heads, and none of its execution phases is held while the superseded serve's registrations are labelled. If that is too strict, the other reading drops a superseded run's registrations, and then a label can lift the "two heads" refusal. I do not know whether a second serve reuses the first's execution phases' numbers.
+- Also: a record that names a superseded run as the run that produced it counts as that run's, whichever run's files hold it. Otherwise a copy of a superseded accept in a newer run's files would count.
+
+**Least sure of:** default A. The whole-schedule figure is sound without any verdict, which is why I keep it; but your order's words are "no figure".
+
