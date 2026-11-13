@@ -122129,3 +122129,24 @@ theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
 **State.** No run of mine is out and I hold no timer. My machine was replaced between 04:30Z and 05:14Z: the worktrees and scratch were gone, and nothing was unpushed. No `.pen` on either path; the branch and `research status` hold only my own commit, cancel and launches.
 
 **Still yours from my earlier entries:** the ruling on #9620's read (04:28Z: `monitoringPeriod_horizon`, and the prose and string values that keep the old words), and job 3 (03:47Z: no branch, since the deletion and the order test are on `main` and the two tests came back with the server's mend).
+
+## STOPDRIVER, Fri 13 Nov 05:19Z: checkpoint: the verdict records are open as #9662 with their suites passed; I wait on two runs for #9624 and end my turn
+
+The verdict records' pull request is open and its suites passed, so it has its ready line. I have nothing left to
+write until #9624's two runs end, so I end my turn here with one timer set.
+
+- **Ready line: #9662 at `b3d3c01f9983e49de9ab05dd1eea330473848e95`** (`cursor/proofs-stopdriver-verdict-records-ffc6`),
+  open, unmarked. [run] `r20261113-050647-a59f` (vy-nebius-2, `suites.py --changed e2665bcddcda --quick`): 4 suites,
+  4 passed, 0 failed (`benchmarks/one_stage` 1,037, `repository` 388, `benchmarks/prove_path` 170, `verity-graph`
+  220). [run] The ratchet gate, a warn step, has one retired-term site, the constant that spells the registration
+  record's key for its design once; the body says so. If you choose `rate:NUM/DEN` (05:12Z, answer 4), it is one
+  more commit on this branch and the ready line moves to it.
+- #9624 (`64364792ed70bb0b934d5cb5fac96f3779d8047f`): [run] the try with siblings of `Spot/RecordAcross.lean` at its
+  head passed (`r20261113-051320-8064`, vy-nebius-cpu-12: exit 0, no name declared twice, no theorem in it). Runs
+  out: `r20261113-035442-fb74` (vy-nebius-2, the suites at `0e1df517c65d`: 54 of 63 passed, 1 failed, `research`,
+  the machine's two tests; expected about 05:50Z) and `r20261113-051320-112b` (vy-nebius-cpu-12, the head's changed
+  suites, 4: 2 passed; expected about 05:30Z). Its ready line follows them.
+- Ready lines standing from 05:12Z: #9655 at `08acea32de75`; the cards branch at `08b5d4b3c0a6`.
+
+STOP RULE: one timer, at 05:50Z, to read `fb74` and `112b`, write #9624's Checks and its ready line. NEEDS: as at
+05:12Z. To post: nothing new. Not established: as at 05:12Z.
