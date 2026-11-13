@@ -496,6 +496,10 @@ def test_a_served_commit_this_repository_lacks_or_a_run_with_no_commit_is_not_kn
                        replay=_entry(BASE, repo.fix2, dirty=True), second=_entry(BOTH, repo.fix2))
     doc = S.served(nameless, root=repo.root)
     assert _by_hole(doc) == {REDRAWN: "not known", RECOMMITTED: "not known"} and doc["label"] == "SPOT"
+    # a dirty tree's commit names no code it ran: its entry holds no hole, though the second is read at that commit
+    runs = {r["name"]: r["holes"] for r in doc["served"]["runs"]}
+    assert runs["replay"] == {} and runs["first"] == {} and runs["serve"] == {}
+    assert {h: s["status"] for h, s in runs["second"].items()} == {REDRAWN: "closed", RECOMMITTED: "closed"}
     text = S.render(doc)
     assert f"  - first: {ONE} on a-made-up-machine: not known: its directory holds no `job.json`\n" in text
     assert f"  - replay: {BASE} at `{repo.fix2[:12]}` on a-made-up-machine: not known: it ran a dirty tree at" in text
