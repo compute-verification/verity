@@ -146,7 +146,8 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     _lean_answering(monkeypatch, "registration", lambda got: {"codes": ["R1-format"]})
     v = V.check(_record(), P.population_program(PAIR, 6), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
     assert v == Verdict(False, (V.DISAGREE,), {V.DISAGREE: {"lean": {"ok": False, "codes": ["R1-format"]},
-                                                         "python": {"ok": True, "codes": [], "detail": {}}}})
+                                                         "python": {"ok": True, "codes": [], "detail": {},
+                                                                    "fanout": 1}}})
     assert v.verifiers["lean"] == {"ok": False, "codes": ["R1-format"]} and v.verifiers["python"] == {"ok": True, "codes": []}
     with pytest.raises(S.Refused) as e:
         _stream().register(_record(), _ports(6))

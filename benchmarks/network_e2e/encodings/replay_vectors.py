@@ -12,7 +12,7 @@ circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks
 
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
-candidates whose `BlockPool.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
+candidates whose `BlockPool.hit` it called), each of whose hits past the pool bound is the pool's; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
 (`verity/protocols/certifier/verifier/tests/fixtures/replay_step_vectors.json`).
 

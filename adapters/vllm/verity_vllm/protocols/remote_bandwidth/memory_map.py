@@ -1,6 +1,6 @@
 """memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's record of the blocks each serving step
-wrote and freed beside its registered store, as `Lines` builds it: the integration's one builder, which the Commit's map
-(`commit_map.record`, from the circuit) and a `NodeMemory`'s (`MemoryMap`, from its KV events) both drive.
+wrote and freed beside its registered store, as `Lines` builds it: the integration's one builder, which a `NodeMemory`'s
+map (`MemoryMap`, from its KV events) drives.
 
 ~~~text
 slot      a block's store index, a `NodeMemory`'s in the registry's numbering: region ``first`` plus its region block, a KV

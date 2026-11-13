@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# flock_rows.py on a CPU node: build flock-rows from BEFORE ("before": a tar of the Lean package before a change, `git
-# archive BASE verity/protocols/flock/verifier`, sent as an input; `-` for none) and at the checkout ("after"), then time them on
-# flock_rows.py's units. Run from a clone (the builds write .lake):
-#   git archive -o /tmp/before.tar BASE verity/protocols/flock/verifier
+# flock_rows.py on a CPU node: build flock-rows from BEFORE ("before": a tar of the Lean package before a change with the
+# base packages it requires by path, where BASE has them, `git archive BASE verity/protocols/flock/verifier
+# verity/circuits/base verity/circuits/lean verity/commitments/lean`, sent as an input; `-` for none) and at the checkout ("after"), then
+# time them on flock_rows.py's units. Run from a clone (the builds write .lake):
+#   git archive -o /tmp/before.tar BASE verity/protocols/flock/verifier \
+#     verity/circuits/base verity/circuits/lean verity/commitments/lean
 #   research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone --send /tmp/before.tar -- \
 #     bash benchmarks/verifier_cost/flock_rows.sh before.tar --fanout 125,250,500,1000 --cap-bin before=1500
 # Arguments after BEFORE go to flock_rows.py; its flock_rows.json lands in $OUT.

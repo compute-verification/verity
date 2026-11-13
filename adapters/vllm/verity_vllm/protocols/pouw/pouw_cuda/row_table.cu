@@ -95,3 +95,71 @@ extern "C" int rt_step(void* stream, const Tab* tabs, const uint32_t* perm, uint
   k_step<<<1, 128, 0, st>>>(*a, step, out);
   return (int)cudaGetLastError();
 }
+
+// ---- history tables: one thread a leaf, a node or a path's node ----------------------------------------------------------
+
+__global__ void k_hist_pad(Hist t, uint64_t* tree) {
+  const uint64_t p = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (p < t.cap) hist_pad_leaf(t, p, tree + 8 * p);
+}
+
+__global__ void k_hist_nodes(Hist t, uint64_t* tree, uint32_t l, uint64_t lo, uint64_t n) {
+  const uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (i < n) hist_node(t, tree, l, lo + i);
+}
+
+__global__ void k_hist_rows(Hist t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm, const uint64_t* ms,
+                            uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
+  const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= k) return;
+  uint64_t m[16], bc[16];
+  uint32_t y[48];
+  for (int q = 0; q < 16; ++q) m[q] = ms[q];
+  for (int q = 0; q < 48; ++q) y[q] = salts[48 * (size_t)i + q];
+  hist_row(t, at + i, rows + (size_t)i * t.L, hm, m, y, bc, tree + 8 * (at + i));
+  for (int q = 0; q < 16; ++q) bcs[16 * (size_t)i + q] = bc[q];
+}
+
+__global__ void k_hist_paths(Hist t, const uint64_t* tree, const uint32_t* pos, uint32_t n, uint64_t* out) {
+  const uint64_t i = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
+  if (i >= (uint64_t)n * t.depth) return;
+  const uint64_t* s = hist_sibling(t, tree, pos[i / t.depth], (uint32_t)(i % t.depth));
+#pragma unroll
+  for (int q = 0; q < 8; ++q) out[8 * i + q] = s[q];
+}
+
+// The nodes above leaves [lo, hi], level by level.
+static void hist_up(cudaStream_t st, const Hist& t, uint64_t* tree, uint64_t lo, uint64_t hi) {
+  for (uint32_t l = 0; l < t.depth; ++l) {
+    lo >>= 1;
+    hi >>= 1;
+    k_hist_nodes<<<blocks(hi - lo + 1, 128), 128, 0, st>>>(t, tree, l, lo, hi - lo + 1);
+  }
+}
+
+// Table ``t``'s empty tree into ``tree`` ((2 cap - 1) x 8 words, a device pointer), enqueued on ``stream``; ``t`` is host memory.
+extern "C" int rt_hist_init(void* stream, const Hist* t, uint64_t* tree) {
+  if (!hist_ok(*t)) return -1;
+  cudaStream_t st = (cudaStream_t)stream;
+  k_hist_pad<<<blocks(t->cap, 128), 128, 0, st>>>(*t, tree);
+  hist_up(st, *t, tree, 0, t->cap - 1);
+  return (int)cudaGetLastError();
+}
+
+// ``k`` rows (``rows``, k x L bytes) at positions ``at`` .. ``at + k - 1`` under their salts ``salts`` (k x 48 u32): their leaves
+// and the nodes above them, and their strings into ``bcs`` (k x 16 words), all device pointers but ``t``.
+extern "C" int rt_hist_append(void* stream, const Hist* t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm,
+                              const uint64_t* ms, uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
+  if (!hist_ok(*t) || k == 0 || at + k > t->cap) return -1;
+  cudaStream_t st = (cudaStream_t)stream;
+  k_hist_rows<<<blocks(k, 64), 64, 0, st>>>(*t, at, k, rows, hm, ms, tree, bcs, salts);
+  hist_up(st, *t, tree, at, at + k - 1);
+  return (int)cudaGetLastError();
+}
+
+// The paths of positions ``pos`` (n) into ``out`` (n x depth x 8 words), leaf level first.
+extern "C" int rt_hist_paths(void* stream, const Hist* t, const uint64_t* tree, const uint32_t* pos, uint32_t n, uint64_t* out) {
+  if (!hist_ok(*t) || n == 0) return -1;
+  k_hist_paths<<<blocks((uint64_t)n * t->depth, 128), 128, 0, (cudaStream_t)stream>>>(*t, tree, pos, n, out);
+  return (int)cudaGetLastError();
+}

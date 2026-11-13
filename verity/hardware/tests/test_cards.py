@@ -4,14 +4,15 @@ others."""
 from __future__ import annotations
 
 import copy
+import math
 import re
 from fractions import Fraction
 
 import pytest
 
-import verity.hardware as hardware
 from verity.errors import InvalidArtifact
-from verity.hardware import KINDS, MARKS, load, skus
+from verity.hardware import cards
+from verity.hardware.cards import KINDS, MARKS, load, skus
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -46,9 +47,22 @@ def test_every_number_is_sourced_and_marked(sku: str) -> None:
 @pytest.mark.parametrize("sku", skus())
 def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
     """Evidence is cited by its `art:` id, and a node by its kind, never by a run id or a host name."""
-    text = (hardware.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
+    text = (cards.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
     assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
         "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
+
+
+def test_a_measurement_cites_the_run_that_measured_it() -> None:
+    """A measured number nobody can check: an entry marked `measurement` whose source names a probe program, a census or
+    a document and no run's record, so a reader of the card cannot reach the output that holds its figure."""
+    measured = {f"{sku}: {key}": entry["source"] for sku in skus() for key, entry in entries(load(sku)).items()
+                if entry["mark"] == "measurement"}
+    assert measured, "no card marks a number `measurement`, so this test checks nothing"
+    uncited = sorted(at for at, source in measured.items() if not re.search(r"\bart:[0-9a-f]{12}", source))
+    assert not uncited, (
+        f"marked `measurement` with no run cited: {uncited}; add the record of the run that measured each to its "
+        "source as art:<12 hex> (`research data show RUN`: outputs.run_record), or mark it `placeholder` until a run "
+        "measures it")
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -66,6 +80,31 @@ def test_derived_gpu_numbers(sku: str) -> None:
                                                * value(card, "memory.bus") / 8)
 
 
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
+    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers (63
+    a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in 32-bit words."""
+    card = load(sku)
+    warps = value(card, "sm.warps")
+    assert value(card, "store.reg_extra") >= 63 * warps + 7 * warps + math.ceil(7 * warps / 32)
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
+    """`store.smem_carveout` is the most of `store.smem`, the pool of L1 and shared memory, that a kernel can make
+    shared memory, so it is no larger than the pool."""
+    card = load(sku)
+    assert 0 < value(card, "store.smem_carveout") <= value(card, "store.smem")
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
+    """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
+    ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
+    card = load(sku)
+    assert value(card, "price.fp32_loop") >= value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+
+
 @pytest.mark.parametrize("sku", skus("host"))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
@@ -81,6 +120,15 @@ def test_derived_host_numbers(sku: str) -> None:
     per_socket = value(card, "store.l3") + value(card, "store.uncore")
     per_core = sum(value(card, f"store.{k}") for k in ("l2", "l1d", "l1i", "core"))
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
+
+
+@pytest.mark.parametrize("sku", skus("host"))
+def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
+    """`cpu.vm_cores`, the cores a GPU that a node's VM gives, is a measured share of the server's cores, so it is a
+    measurement and no larger than them."""
+    card = load(sku)
+    assert card["cpu"]["vm_cores"]["mark"] == "measurement"
+    assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
 
 
 def test_the_quoted_numbers() -> None:
@@ -106,29 +154,29 @@ def test_the_rates_readers_quote() -> None:
     without a `clock.tensor`, and at a clock a reader names; every other resource at the SM clock, and device memory's
     words a second."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
-    assert hardware.rate(server) == 188 * 1024 * 2430 * 10 ** 6
-    assert hardware.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
-    assert hardware.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
-    assert hardware.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
+    assert cards.rate(server) == 188 * 1024 * 2430 * 10 ** 6
+    assert cards.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
+    assert cards.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
+    assert cards.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
     untimed = copy.deepcopy(h200)
     del untimed["clock"]["tensor"]
-    assert hardware.rate(untimed) == 132 * 4096 * 1980 * 10 ** 6
-    assert hardware.rate(untimed, "issue") == 132 * 4 * 1980 * 10 ** 6
-    assert hardware.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
-    assert hardware.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
-    assert hardware.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
-    for call, refusal in ((lambda: hardware.rate(load("xeon-6776p-2s")), "is a host card"),
-                          (lambda: hardware.rate(h200, "dram", mhz=1500), "no SM clock"),
-                          (lambda: hardware.rate(h200, "tensr"), "no rate.tensr"),
-                          (lambda: hardware.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
-                          (lambda: hardware.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
+    assert cards.rate(untimed) == 132 * 4096 * 1980 * 10 ** 6
+    assert cards.rate(untimed, "issue") == 132 * 4 * 1980 * 10 ** 6
+    assert cards.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
+    assert cards.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
+    assert cards.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
+    for call, refusal in ((lambda: cards.rate(load("xeon-6776p-2s")), "is a host card"),
+                          (lambda: cards.rate(h200, "dram", mhz=1500), "no SM clock"),
+                          (lambda: cards.rate(h200, "tensr"), "no rate.tensr"),
+                          (lambda: cards.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
+                          (lambda: cards.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
         with pytest.raises((KeyError, ValueError), match=refusal):
             call()
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    cards = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
-    with pytest.raises(KeyError, match=re.escape(f"the cards are {cards}")):
+    every = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
 
 
@@ -147,6 +195,6 @@ def test_an_unknown_sku_names_the_cards() -> None:
 ])
 def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
-    monkeypatch.setattr(hardware, "CARDS", tmp_path)
+    monkeypatch.setattr(cards, "CARDS", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
         load("x")

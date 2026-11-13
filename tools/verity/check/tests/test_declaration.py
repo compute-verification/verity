@@ -41,9 +41,9 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "flock-rust-tests", "circuit-check"],
-                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
+                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-suites"],
                     ["ratchet-gate"]]
-    assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
+    assert CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
     assert CHECK.AFTER == {"lean-suites": "lean-build"}
 
 
@@ -52,7 +52,7 @@ def test_what_a_merge_requires_matches_tool_py():
 
 
 def test_moving_a_job_in_the_declaration_moves_it_in_check(tmp_path, monkeypatch):
-    moved = [D.Job(j.name, j.owner, 9 if j.name == "circuit-check" else j.group, j.halts, j.halts_on, j.merge_requires, j.after)
+    moved = [D.Job(j.name, j.owner, 9 if j.name == "circuit-check" else j.group, j.halts_on, j.merge_requires, j.after)
              for j in CHECK.JOBS]
     monkeypatch.setattr(CHECK, "JOBS", moved)
     gs = CHECK.groups(tmp_path, 2)
@@ -112,10 +112,9 @@ def test_drive_s_policy_takes_circuit_check_and_ratchet_gate_off_the_gate():
     a, b = D.parse('schema = "ci/v0"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n',
                    HANDLES, off=("a",))
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
-    assert D.off_gate() == ("circuit-check", "ratchet-gate")
-    assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
-    assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
-    assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
+    off = ("circuit-check", "ratchet-gate")
+    assert D.off_gate() == off and tuple(j.name for j in D.load() if not j.gate) == off == CHECK.OFF_GATE
+    assert not any(j in shard for j in off[1:] for plan in D.plans().values() for shard in plan)
 
 
 def test_without_a_policy_every_job_gates(tmp_path):
@@ -198,7 +197,7 @@ def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_jo
     jobs = CHECK.JOBS
     assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate"}
     assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
-    assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit", "lean-changed"}
+    assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit"}
     assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}
 
 

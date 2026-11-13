@@ -12,7 +12,7 @@ from fractions import Fraction
 from itertools import combinations, product
 import random
 from decimal import Decimal, localcontext
-from math import comb, exp, inf, log, sqrt
+from math import comb, exp, inf, log, prod, sqrt
 
 import pytest
 
@@ -20,7 +20,8 @@ from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
 from verity.definitions.ops import gemm
-from verity.protocols.spot.verifier.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
+                                                    Stratum, Subset, neg_log_escape)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -525,6 +526,166 @@ def test_the_count_bound_is_the_unit_harm_bound_rounded_down():
     for delta in (2.0 ** -10, 2.0 ** -20, 2.0 ** -40):
         K = law.count_bound(delta)
         assert K <= law.harm_bound({s.name: 1 for s in law.strata}, delta) < K + 1 + 1e-6 * K
+
+
+def _exact_risk(n: int, k: int, m: int) -> Decimal:
+    """-ln(C(n - m, k) / C(n, k)) from exact integers: the ratio is the product of (n - s - i) / (n - i) over
+    i < min(m, k), s = max(m, k), taken 512 factors at a time, each run's numerator and denominator an exact integer
+    and its logarithm at 50 digits."""
+    t, s = min(m, k), max(m, k)
+    with localcontext() as ctx:
+        ctx.prec = 50
+        total = Decimal(0)
+        for lo in range(0, t, 512):
+            hi = min(t, lo + 512)
+            total += Decimal(prod(range(n - hi + 1, n - lo + 1))).ln()
+            total -= Decimal(prod(range(n - s - hi + 1, n - s - lo + 1))).ln()
+        return total
+
+
+def test_the_exact_risk_reference_is_the_escape():
+    for n, k, m in ((40, 7, 12), (2000, 600, 1400), (5000, 1100, 900)):
+        e = Stratum("s", n, k).escape(m)
+        with localcontext() as ctx:
+            ctx.prec = 50
+            assert abs(_exact_risk(n, k, m) - (Decimal(e.denominator).ln() - Decimal(e.numerator).ln())) < Decimal(10) ** -40
+
+
+#: (n, k, m) with min(m, k) past `ESCAPE_TERMS`, where the risk is the closed form: a population a year of the world
+#: serves and one a thousand times it, at the risk a delta of 2^-40 asks; small populations; and m + k = n, the last m
+#: with a positive escape
+PAST_THE_SUM = [(10 ** 15, 10 ** 5, 277_297_316_934), (10 ** 18, 10 ** 5, 277_258_872_223_978),
+                (3348 * 10 ** 18, 70_000, 10 ** 18), (10 ** 9, 30_000, 900_000), (400_000, 17_000, 17_500),
+                (10 ** 6, 20_000, 30_000), (40_000, 17_000, 23_000), (40_000, 23_000, 17_000)]
+
+
+@pytest.mark.parametrize("n, k, m", PAST_THE_SUM)
+def test_the_risk_past_the_summed_terms_is_just_under_the_exact_value(n, k, m):
+    """`neg_log_escape`'s closed form against exact integers: never above the exact risk by more than 2^-40 of it
+    (`harm_bound`'s margin is 2^-20), below it by at most 2^-35 of it where the risk is one a delta can ask, and by
+    1e-5 of it anywhere."""
+    assert min(m, k) > ESCAPE_TERMS
+    exact, got = _exact_risk(n, k, m), Decimal(neg_log_escape(n, k, m))
+    assert got == Decimal(Stratum("s", n, k)._risk(m)) == Decimal(neg_log_escape(n, m, k))
+    assert got <= exact * (1 + Decimal(2) ** -40)
+    assert got >= exact * (1 - (Decimal(2) ** -35 if exact < 745 else Decimal("1e-5")))
+
+
+def test_the_risk_is_continuous_where_the_closed_form_takes_over():
+    """One more incorrect proof block across `ESCAPE_TERMS` adds its own increment, to the closed form's slack."""
+    s = Stratum("s", 10 ** 7, 20_000)
+    assert s._risk(ESCAPE_TERMS + 1) - s._risk(ESCAPE_TERMS) == pytest.approx(s._step(ESCAPE_TERMS), rel=1e-6)
+    assert s._risk(ESCAPE_TERMS + 1) == pytest.approx(float(_exact_risk(s.size, s.k, ESCAPE_TERMS + 1)), rel=1e-12)
+
+
+@pytest.mark.parametrize("n, k, m", [(9, 2, 0), (9, 2, 6), (4096, 100, 2000), (10 ** 21, 7, 10 ** 20), (10 ** 21, 10 ** 9, 123),
+                                     (3348 * 10 ** 18, 6_974_586, 13_311_000_000_000_000), (2 ** 60, 5, 2 ** 60 - 6)])
+def test_the_step_is_the_risks_increment_at_any_size(n, k, m):
+    """`_step(m)` is -ln(1 - k / (n - m)), the exact escapes' ratio, where a difference of two float risks is rounding."""
+    with localcontext() as ctx:
+        ctx.prec = 60
+        exact = -(1 - Decimal(k) / (n - m)).ln()
+    assert Decimal(Stratum("s", n, k)._step(m)) == pytest.approx(exact, rel=Decimal("1e-14"))
+    if n < 10 ** 4:
+        s = Stratum("s", n, k)
+        assert s._step(m) == pytest.approx(-log(s.escape(m + 1) / s.escape(m)), rel=1e-12)
+
+
+def test_a_risk_outside_the_population_is_refused():
+    for n, k, m in ((10, 6, 5), (10, -1, 2), (10, 2, -1)):
+        with pytest.raises(ValueError, match="neg_log_escape needs"):
+            neg_log_escape(n, k, m)
+    assert neg_log_escape(10, 0, 10) == neg_log_escape(10, 10, 0) == 0.0 and Stratum("s", 10, 6)._risk(5) == inf
+
+
+def _optimum_bracket(rows, delta: float) -> tuple[Decimal, Decimal]:
+    """(lower, upper) around the relaxation's optimum for strata `rows` = (n, k, harm a unit), from closed forms in
+    50-digit decimals, with no search of the risks.  Each of a stratum's k terms -ln(1 - m / (n - i)) is between
+    -ln(1 - m / n) and -ln(1 - m / (n - k + 1)), so its risk is between k ln(n / (n - m)) and that at n - k + 1 for n.
+    Under either form the most harm within the budget leaves stratum i its n_i - m_i = lam k_i / v_i (where under n_i),
+    lam set by the budget: the first form's value, m real, is at or above the optimum (it is convex, and under the
+    risk), and the second's, each m rounded down, is the harm of a set that escapes."""
+    with localcontext() as ctx:
+        ctx.prec = 50
+        budget = -Decimal(delta).ln()
+
+        def counts(sizes, lam):
+            kept = [min(Decimal(size), lam * k / Decimal(v)) for (_, k, v), size in zip(rows, sizes)]
+            return sum(k * (size / keep).ln() for (_, k, _), size, keep in zip(rows, sizes, kept)), \
+                [size - keep for size, keep in zip(sizes, kept)]
+
+        def solve(sizes):
+            lo, hi = Decimal(0), max(Decimal(v) * size / k for (_, k, v), size in zip(rows, sizes))
+            for _ in range(240):
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if counts(sizes, mid)[0] > budget else (lo, mid)
+            return counts(sizes, lo)[1], counts(sizes, hi)[1]
+
+        over, _ = solve([n for n, _, _ in rows])
+        _, under = solve([n - k + 1 for n, k, _ in rows])
+        assert all(m <= n - k for (n, k, _), m in zip(rows, under))
+        return (sum(Decimal(v) * int(m) for (_, _, v), m in zip(rows, under)),
+                sum(Decimal(v) * m for (_, _, v), m in zip(rows, over)))
+
+
+#: one stratum sampled k of n, each unit 262,144 bits: sizes where the risk's terms are summed (k <= `ESCAPE_TERMS`),
+#: the last two past 2^53 units, and sizes where they are not, up to a world year's proof blocks
+LARGE = [(10 ** 9, 10 ** 5), (10 ** 12, 10 ** 5), (10 ** 15, 10 ** 5), (10 ** 18, 10 ** 6), (10 ** 18, 10 ** 7),
+         (3348 * 10 ** 18, 6_974_586), (17_784 * 10 ** 12, 2_512_000_000), (10 ** 15, 100), (10 ** 18, 100), (10 ** 21, 1)]
+
+
+@pytest.mark.parametrize("n, k", LARGE)
+@pytest.mark.parametrize("delta", [0.01, 2.0 ** -40])
+def test_harm_bound_holds_at_large_populations(n, k, delta):
+    """The search at the populations a monitoring period has, through the profile a consumer reads: at or above the
+    harm of a set that escapes, and within its margins of a closed-form bound on the optimum."""
+    lower, upper = _optimum_bracket([(n, k, 262_144)], delta)
+    bound = Decimal(IntegrityProfile(("unit",), (n,), {"unit": Subset(k)}, delta).harm_bound(262_144.0))
+    assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
+    assert upper - lower <= (Decimal(k) / n + Decimal(10) ** -12) * upper + 262_144
+
+
+def test_harm_bound_holds_over_several_large_strata():
+    """Strata of unequal rates and harms at a large population: the units left under the search's last threshold are
+    spent across them, most of them at once."""
+    rows = [(7 * 10 ** 18, 900_000, 16.0), (3 * 10 ** 17, 1_500, 262_144.0), (10 ** 19, 40_000_000, 4096.0),
+            (10 ** 16, 300, 64.0)]
+    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    for delta in (0.01, 1e-6, 2.0 ** -40):
+        lower, upper = _optimum_bracket(rows, delta)
+        bound = Decimal(law.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
+        assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
+        assert upper - lower <= Decimal("1e-9") * upper
+
+
+#: strata past 2^53 units, where the search's last float threshold leaves more than `HARM_WHOLE` proof blocks
+AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10 ** 19, 300, 3.0)],
+           [(10 ** 20, 2, 1.0), (10 ** 20, 10 ** 9, 1e6)], [(10 ** 19, 7, 1e-30), (10 ** 19, 100_000, 3e-28)]]
+
+
+@pytest.mark.parametrize("rows", AT_ONCE)
+def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
+    """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
+    (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
+    from verity.protocols.spot.verifier import profile
+
+    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}
+    at_once = law.harm_bound(harm, 2.0 ** -40)
+    monkeypatch.setattr(profile, "HARM_WHOLE", 10 ** 30)
+    assert at_once == pytest.approx(law.harm_bound(harm, 2.0 ** -40), rel=1e-9)
+
+
+@pytest.mark.parametrize("rows, delta", [([(20_000, 1, 1e-30)], 0.5), ([(20_000, 1, 1e-30), (5_000, 2, 3e-30)], 0.3),
+                                         ([(30_000, 3, 1e80), (9_000, 1, 4e79)], 0.01)])
+def test_harm_bound_holds_where_the_search_cannot_close(rows, delta):
+    """Harms so small or so large that the threshold lies outside the search's range: it stops short of the optimum by
+    thousands of proof blocks, which are then taken one by one, in order, never at once at the first one's ratio."""
+    lower, upper = _optimum_bracket(rows, delta)
+    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    bound = Decimal(law.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
+    assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
+    assert upper - lower <= Decimal("2e-3") * upper
 
 
 @pytest.mark.parametrize("strata", [(), (Stratum("a", 3, 1), Stratum("a", 2, 1)), ("a",)])

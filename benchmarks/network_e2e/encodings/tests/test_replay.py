@@ -252,19 +252,44 @@ def test_arrivals_into_a_quiet_engine_cost_nothing():
 
 
 def test_admission_steps_round_trip_through_decide():
-    rng = random.Random(7)
-    for asy in (False, True):
-        e = R.Engine(max_num_seqs=3, max_num_batched_tokens=48, max_model_len=256, num_gpu_blocks=12, async_scheduling=asy)
-        reqs = []
-        for _ in range(25):
-            out = rng.randint(1, 30)
-            reqs.append(R.RequestIO(prompt_len=rng.randint(4, 90), max_tokens=out + rng.randint(0, 2), output_len=out,
-                                    eos=rng.random() < 0.7))
-        reqs = [R.RequestIO(r.prompt_len, r.max_tokens, r.output_len if r.eos else r.max_tokens, r.eos) for r in reqs]
-        a = R.replay(e, reqs, decide=lambda i, k, _: rng.random() < 0.4)
-        b = R.replay(e, reqs, admit=a.admitted)
-        assert R.compare(a.steps, b.steps).ordered == len(a.steps)
-        assert any(s.preempted for s in a.steps)
+    """`replay(admit=r.admitted, passed=r.passed)` reproduces its decide run `r`, step for step, over 100 seeds of four
+    small engines (24 requests, 4-token blocks), sync and async, prefix caching off and on. Under async scheduling the
+    engine core can call `schedule` again, scheduling nothing, at the same step count while a step is in flight, and
+    `admitted` alone can't say whether a request arrived before that call or after it: some of these async runs
+    schedule differently without `passed`, which the test also requires."""
+    engines = [(False, 16, 32, 4), (True, 16, 32, 4), (False, 24, 48, 4), (False, 16, 32, 2)]
+    split = preempted = 0
+    for seed in range(100):
+        for asy in (False, True):
+            for caching, blocks, budget, seqs in engines:
+                rng = random.Random(seed)
+                e = R.Engine(max_num_seqs=seqs, max_num_batched_tokens=budget, max_model_len=64, num_gpu_blocks=blocks,
+                             block_size=4, enable_prefix_caching=caching, async_scheduling=asy)
+                reqs = []
+                for _ in range(24):
+                    p, out, eos = rng.randint(2, 20), rng.randint(1, 12), rng.random() < 0.7
+                    toks = tuple(rng.randint(0, 3) for _ in range(p + out)) if caching else None
+                    reqs.append(R.RequestIO(prompt_len=p, max_tokens=out + (rng.randint(0, 2) if eos else 0),
+                                            output_len=out, eos=eos, tokens=toks))
+                a = R.replay(e, reqs, decide=lambda i, k, _: rng.random() < 0.4)
+                b = R.replay(e, reqs, admit=a.admitted, passed=a.passed)
+                assert b.steps == a.steps, (seed, asy, caching, blocks, budget, seqs)
+                assert (b.admitted, b.passed, b.finish) == (a.admitted, a.passed, a.finish)
+                preempted += any(s.preempted for s in a.steps)
+                if asy and any(a.passed):
+                    split += R.replay(e, reqs, admit=a.admitted).steps != a.steps
+    assert split and preempted
+
+
+def test_passed_is_checked():
+    e = R.Engine(max_num_seqs=2, max_num_batched_tokens=32, max_model_len=64, num_gpu_blocks=16, block_size=4)
+    reqs = [R.RequestIO(prompt_len=8, max_tokens=2, output_len=2, eos=False) for _ in range(2)]
+    with pytest.raises(ValueError, match="only with admit"):
+        R.replay(e, reqs, decide=lambda i, k, _: True, passed=[0, 0])
+    with pytest.raises(ValueError, match="one int ≥ 0"):
+        R.replay(e, reqs, admit=[0, 0], passed=[0])
+    with pytest.raises(ValueError, match="nondecreasing"):
+        R.replay(e, reqs, admit=[0, 0], passed=[1, 0])
 
 
 def test_coder_round_trips_within_two_bits_of_ideal():

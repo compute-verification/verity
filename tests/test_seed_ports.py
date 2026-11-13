@@ -63,8 +63,6 @@ KEY_COUNTS = {
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
     "verity/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
-    "archive/examples/h200/e2e_h200/program.py::program":
-        "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {
     "verity/definitions/ops/boolean/shared_row.py::WINDOW":

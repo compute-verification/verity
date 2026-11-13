@@ -4,8 +4,9 @@ lowering of the Definition TARGET, which `verity_flock.ir_lower.lower` lowers fl
 **Syntactic.** Both sides are read into one table of canonical gates: a bit is a GF(2) form over the inputs and the table's
 AND nodes, and an AND of two forms is one node, keyed by its operands with their constants taken out and its pair chosen
 from the three its operands span, so a gate is the same node whichever way round, or through whichever of the three pairs,
-it is written. The template's rows are its unroll (`tmpl.unroll`, which mirrors ``Flock.Tmpl.unroll``) in column order:
-an input column is its input, the constant column one, and any other row the AND of its two forms; the lowering's ANDs are
+it is written. The template's rows are its unroll's (placed as `tmpl.unroll` places them, which mirrors
+``Flock.Tmpl.unroll``) in column order, read off its Definitions copy by copy so the unrolled rows are never held: an input
+column is its input, the constant column one, and any other row the AND of its two forms; the lowering's ANDs are
 `forms.Circuit`'s. The template is its lowering's gates when each of its output bits is the same form as the lowering's.
 That holds exactly when the two are one circuit up to XORs moved across rows, committed forms (a row ``A·1``, which the
 template adds past a call's support), constants folded or carried as inputs, dead and duplicated rows, and the order of an
@@ -29,8 +30,10 @@ probability (1 − ε)^vectors. An exhaustive pass is a proof too; a random one 
 those ports
 (`class_statement.unit_circuit`), so the class a pin names is accepted as its Definition's lowering on its ports.
 
-Refused by name, since neither comparison covers them: a template one of whose rows reads a column at or past its own that
-is no input and not the constant (so some column is not a function of the inputs), whose input columns' rows are not their
+Refused by name, since neither comparison covers them: a template one of whose rows, read or not, reads a column at or past
+its own that is no input and not the constant (so some column is not a function of the inputs), that writes a column twice
+or writes the constant, one of whose rows writes a column a row read before it copy by copy (a callee's column its caller
+writes past the copy's first column, an input whose row comes after a reader), whose input columns' rows are not their
 own ``(c)·(c)``, whose port groups overlap, reach the constant or are not the Definition's input leaves and output bits, or
 hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts, which rows
 carry as more than gates. A table read is read as the rows the flat layout writes it as (`ir_lower._Read`), so a template
@@ -39,6 +42,7 @@ carrying those rows, as `struct_lower`'s does, is compared gate for gate.
 from __future__ import annotations
 
 import math
+import operator
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -62,6 +66,16 @@ class Canon:
         self.next = 0
         self.inputs = [self._node() for _ in range(inputs)]
         self.ands: dict[tuple[int, int], tuple[int, int]] = {}
+        self.reads: dict[tuple, list[int]] = {}
+
+    def READ(self, table: str, idx: Sequence[int], bits: int) -> list[int]:
+        """The ``bits`` low bits of ``table``'s word at the index whose bits are ``idx``, uninterpreted: one node a bit per
+        table and index, so two reads at one index are one value whatever the table holds."""
+        key = (table, tuple(idx))
+        w = self.reads.get(key)
+        if w is None:
+            w = self.reads[key] = [self._node() for _ in range(bits)]
+        return w
 
     def _node(self) -> int:
         self.next += 1
@@ -146,64 +160,151 @@ def ports(groups: Sequence[str]) -> tuple[list[list[int]], list[list[int]], list
     return out[0], out[1], pad
 
 
-def _live(n: int, row, roots: Sequence[int], skip: set) -> list[int]:
-    seen = np.zeros(n, bool)
-    stack = [c for c in roots]
-    while stack:
-        c = stack.pop()
-        if seen[c]:
-            continue
-        seen[c] = True
-        if c in skip:
-            continue
-        a, b = row(c)
-        stack.extend(a)
-        stack.extend(b)
-    return np.flatnonzero(seen).tolist()
+def _side(refs: Sequence[int], cols: int, ins: int) -> tuple[tuple[int, ...], tuple[int, ...], int]:
+    """A row side of a Definition of ``cols`` columns and ``ins`` inputs, each reference named an odd number of times
+    (`tmpl.canon`): its own columns, ascending; its inputs; and whether it holds the constant, which any reference past its
+    inputs is (as `tmpl.unroll` reads one)."""
+    par: dict[int, int] = {}
+    for x in refs:
+        if x < 0:
+            raise Refused("malformed", f"a row reads column {x}")
+        x = min(x, cols + ins)
+        par[x] = par.get(x, 0) ^ 1
+    odd = sorted(x for x, p in par.items() if p)
+    return (tuple(x for x in odd if x < cols), tuple(x - cols for x in odd if cols <= x < cols + ins),
+            int(cols + ins in odd))
 
 
-def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
-    """The canonical bit of each of the unrolled template's output port bits, in port order, its inputs read as nodes
-    ``0 ..`` in port order; and what it took."""
-    k = flat.const
-    n = len(flat.na)
-    ins, outs, pad = ports(flat.head[4:])
+def _walk(t: Any, inputs: Sequence[int], one: int, AND) -> tuple[list, dict]:
+    """The value of each of the unrolled template's columns, its rows placed as `tmpl.unroll` places them
+    (``Flock.Tmpl.unroll``: each call's copies at their offsets, a reference past a Definition's columns the caller column
+    its input is bound to, past its inputs the constant) and evaluated in column order, each AND by ``AND``, the constant
+    ``one`` and input port bit ``i`` ``inputs[i]``; and what it took. A Definition's rows are read once however many copies
+    place them, so the unrolled rows are never held. Every row is evaluated, read or not, so each is a function of the
+    inputs: a row reading a column at or past its own that is no input and not the constant is refused, as is a column
+    written twice or the constant written; a column no row writes is zero. A copy's rows are evaluated where the copy
+    starts, so a row that writes a column some row read before it in that order (a column a callee leaves to its caller
+    past the copy's first column, an input whose own row comes after a row reading it) is refused: that read saw zero
+    where column order sees the row's value, and refusing it leaves every read the column's final value, so the walk's
+    values are column order's."""
+    try:
+        n = t.defs[t.root].cols
+    except IndexError:
+        raise Refused("malformed", f"no root Definition {t.root}") from None
+    k = n - 1
+    ins, outs, pad = ports(t.groups)
     cols = [c for p in ins for c in p]
     roots = [c for p in outs for c in p]
     if any(c >= k for c in cols + roots + pad):
         raise Refused("ports", f"a port group's words reach the constant's column {k} or past it")
-    if len(flat.refs) and not 0 <= int(flat.refs.min()) <= int(flat.refs.max()) < n:
-        raise Refused("malformed", f"a row reads a column outside the unit's {n}")
-    node = {c: i for i, c in enumerate(cols)}
-    for c in cols:
-        if flat.row(c) != ((c,), (c,)):
-            raise Refused("ports", f"input column {c}'s row is {flat.row(c)}, not its own (c)·(c)")
-    free = np.zeros(n, bool)
-    free[cols] = True
-    free[k] = True
-    at = np.repeat(np.arange(n), np.diff(flat.ptr))
-    late = np.flatnonzero((flat.refs >= at) & ~free[flat.refs] & ~free[at])
-    if len(late):
-        raise Refused("order", f"row {at[late[0]]} reads column {flat.refs[late[0]]}, at or past its own")
-    val: dict[int, int] = {k: 1, **{c: K.inputs[i] for c, i in node.items()}}
-    ands = copies = 0
-    live = _live(n, flat.row, roots + pad, set(val))
-    for c in live:
-        if c in val:
-            continue
-        a, b = flat.row(c)
-        val[c] = K.AND(_xor(val[r] for r in a), _xor(val[r] for r in b))
-        copy = (k,) in (a, b)
-        copies += copy
-        ands += bool(a and b) and not copy
-    held = [c for c in pad if val[c] != ZERO]
+    given = dict(zip(cols, inputs))
+    free = {*given, k}
+    val: list = [None] * n
+    val[k] = one
+    prepared: dict[int, tuple] = {}
+    early: dict[int, int] = {}
+    st = {"evaluated_rows": 0, "ands": 0, "copies": 0}
+
+    def written(C: int) -> None:
+        if val[C] is not None:
+            raise Refused("malformed", "the constant is written by a row" if C == k else f"column {C} written twice")
+        if early and C in early:
+            raise Refused("order", f"column {C} is read by the row at column {early[C]} before its own row: a copy's rows "
+                                   f"are evaluated where the copy starts, so write the column before its first reader (as "
+                                   f"a row of the callee that reads it, or below the copy's first column), and put each "
+                                   f"input's row below every row that reads it")
+
+    def prepare(d: int) -> tuple:
+        df = t.defs[d]
+        sides = [(col, _side(a, df.cols, df.ins), _side(b, df.cols, df.ins)) for col, a, b in df.rows]
+        late = [any(x >= col for x in sa[0] + sb[0]) for col, sa, sb in sides]
+        order = sorted([(col, 0, i) for i, (col, _a, _b) in enumerate(df.rows)]
+                       + [(c.base + j * c.stride, 1, (ci, j)) for ci, c in enumerate(df.calls) for j in range(c.count)])
+        return df, sides, late, order, min((col for col, _a, _b in df.rows), default=df.cols)
+
+    def side(s: tuple, o: int, inp: list[int], C: int, checked: bool) -> int:
+        loc, ix, cst = s
+        v = one if cst else 0
+        if checked:
+            for r in [o + x for x in loc] + [inp[i] for i in ix]:
+                if r >= C and r not in free:
+                    raise Refused("order", f"row {C} reads column {r}, at or past its own")
+                w = val[r]
+                if w:
+                    v ^= w
+                elif w is None:
+                    early.setdefault(r, C)
+            return v
+        for x in loc:
+            w = val[o + x]
+            if w:
+                v ^= w
+            elif w is None:
+                early.setdefault(o + x, C)
+        for i in ix:
+            w = val[inp[i]]
+            if w:
+                v ^= w
+            elif w is None:
+                early.setdefault(inp[i], C)
+        return v
+
+    def place(d: int, o: int, inp: list[int]) -> None:
+        rec = prepared.get(d)
+        if rec is None:
+            rec = prepared[d] = prepare(d)
+        df, sides, late, order, lo = rec
+        c0, c1 = df.cols, df.cols + df.ins
+        safe = max((r for r in inp if r not in free), default=-1) < o + lo
+        for start, kind, p in order:
+            if kind:
+                ci, j = p
+                c = df.calls[ci]
+                bound = [o + x if x < c0 else inp[x - c0] if x < c1 else k
+                         for ln, at, step, reps, rs in c.segs for r in range(reps)
+                         for x in range(at + r * rs + j * step, at + r * rs + j * step + ln)]
+                place(c.e, o + start, bound)
+                continue
+            col, sa, sb = sides[p]
+            C = o + col
+            if not 0 <= C < n:
+                raise Refused("malformed", f"a row at column {C}, outside the unit's {n}")
+            written(C)
+            if C in given:
+                row = tuple(tuple(sorted([o + x for x in s[0]] + [inp[i] for i in s[1]] + [k] * s[2])) for s in (sa, sb))
+                if row != ((C,), (C,)):
+                    raise Refused("ports", f"input column {C}'s row is {row}, not its own (c)·(c)")
+                val[C] = given[C]
+                continue
+            checked = late[p] or not safe
+            va, vb = side(sa, o, inp, C, checked), side(sb, o, inp, C, checked)
+            val[C] = AND(va, vb)
+            copy = va == one or vb == one
+            st["evaluated_rows"] += 1
+            st["copies"] += copy
+            st["ands"] += bool(va and vb) and not copy
+
+    try:
+        place(t.root, 0, [])
+    except (IndexError, TypeError) as e:
+        raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
+    unwritten = [c for c in cols if val[c] is None]
+    if unwritten:
+        raise Refused("ports", f"input column {unwritten[0]}'s row is ((), ()), not its own (c)·(c)")
+    return val, {"rows": n, **st, "input_ports": len(ins), "input_bits": len(cols), "output_bits": len(roots),
+                 "input_widths": [len(p) for p in ins], "roots": roots, "pad": pad}
+
+
+def template_bits(t: Any, K: Canon) -> tuple[list[int], dict]:
+    """The canonical bit of each of the template's output port bits (`_walk`), in port order, its inputs read as nodes
+    ``0 ..`` in port order; and what it took."""
+    val, rec = _walk(t, K.inputs, 1, K.AND)
+    roots, pad = rec.pop("roots"), rec.pop("pad")
+    held = [c for c in pad if val[c]]
     if held:
         raise Refused("ports", f"column {held[0]} is in a port group's words but no port's bit, and is not zero "
                                f"({len(held)} such)")
-    return [val[c] for c in roots], {"rows": n, "live_rows": len(live), "live_ands": ands, "live_copies": copies,
-                                     "input_ports": len(ins),
-                                     "input_bits": len(cols), "output_bits": len(roots),
-                                     "input_widths": [len(p) for p in ins]}
+    return [val[c] or ZERO for c in roots], rec
 
 
 def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
@@ -249,9 +350,13 @@ def _read_bits(C: Any, g: int, bits: list[int], K: Canon, ev) -> tuple[dict[int,
     return out, r.rows
 
 
-def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple[list[tuple], dict]:
+def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon,
+                  slots: dict[str, tuple[int, int]] | None = None) -> tuple[list[tuple], dict]:
     """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order; a table read
-    as its rows (`_read_bits`)."""
+    as its rows (`_read_bits`), or, of a table ``slots`` maps to ``(index bits, most value bits)`` at those widths, as a
+    lookup slot's word (`Canon.READ`), a library table's bits constant over it constants."""
+    from verity_flock import ir_lower as IL
+
     if C.asserts:
         raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions, which a template's rows do not carry "
                                      "as gates")
@@ -272,7 +377,8 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
         if C.kind[v] == "lookup":
             value_bits.setdefault(C.data[v][0], []).append(C.data[v][1])
     reads: dict[int, dict[int, int]] = {}
-    ands = read_rows = 0
+    consts: dict[tuple, dict[int, int]] = {}
+    ands = read_rows = slot_reads = index_bits = 0
     for v in live:
         if C.kind[v] == "and":
             a, b = C.data[v]
@@ -281,12 +387,25 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
         elif C.kind[v] == "lookup":
             g, j = C.data[v]
             if g not in reads:
-                reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
-                read_rows += n
+                table, idx, width = C.lookups[g]
+                slot = (slots or {}).get(table)
+                if slot is not None and slot[0] == len(idx) and width <= slot[1]:
+                    word = K.READ(table, [ev(f) for f in idx], slot[1])
+                    reads[g] = {j2: word[j2] for j2 in value_bits[g]}
+                    ck = (table, tuple(value_bits[g]))
+                    if ck not in consts:
+                        consts[ck] = IL.table_const_bits(table, value_bits[g])
+                    reads[g].update((j2, 1 if c else ZERO) for j2, c in consts[ck].items())
+                    slot_reads += 1
+                    index_bits += len(idx)
+                else:
+                    reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
+                    read_rows += n
             val[v] = reads[g][j]
         elif C.kind[v] != "in":
             raise Refused("unsupported", f"the lowering's bit {v} is a {C.kind[v]}")
     return [ev(b) for w in words for b in w], {"live_ands": ands + read_rows, "reads": len(reads),
+                                                 **({"slot_reads": slot_reads, "index_bits": index_bits} if slots else {}),
                                                  "input_ports": len(ins), "input_bits": sum(map(len, ins)),
                                                  "output_bits": sum(map(len, words))}
 
@@ -301,24 +420,10 @@ def _lanes(n: int, exhaustive: bool, T: int, seed: int) -> list[int]:
     return [int.from_bytes(np.packbits(b, bitorder="little").tobytes(), "little") for b in bits]
 
 
-def evaluate_template(flat: Any, lanes: list[int], T: int) -> list[int]:
-    """The unrolled template's output port bits on ``lanes`` (a T-bit int per input port bit, in port order)."""
-    k = flat.const
-    ins, outs, _pad = ports(flat.head[4:])
-    cols = [c for p in ins for c in p]
-    roots = [c for p in outs for c in p]
-    z = {k: (1 << T) - 1, **dict(zip(cols, lanes))}
-    for c in _live(len(flat.na), flat.row, roots, set(z)):
-        if c in z:
-            continue
-        a, b = flat.row(c)
-        x = y = 0
-        for r in a:
-            x ^= z[r]
-        for r in b:
-            y ^= z[r]
-        z[c] = x & y
-    return [z[c] for c in roots]
+def evaluate_template(t: Any, lanes: list[int], T: int) -> list[int]:
+    """The template's output port bits (`_walk`) on ``lanes`` (a T-bit int per input port bit, in port order)."""
+    val, rec = _walk(t, lanes, (1 << T) - 1, operator.and_)
+    return [val[c] or 0 for c in rec["roots"]]
 
 
 def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[int], T: int) -> list[int]:
@@ -330,9 +435,11 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
 
 def error_bound(rec: dict) -> dict:
     """The bound on a wrong verdict, over the check's own coins (the labels): ``M`` counts the forms whose equality it tests
-    (each AND's two operands, their sum and its result; the output bits; the empty form), at most 4 · (template live rows +
-    lowering live ANDs) + output bits + 1, and two distinct ones share a fingerprint with probability at most M² / 2^513."""
-    M = 4 * (rec["template"]["live_rows"] + rec["lowering"]["live_ands"]) + rec["lowering"]["output_bits"] + 1
+    (each AND's two operands, their sum and its result; the output bits; each slot read's index bits on the lowering's
+    side, the template's being its rows'; the empty form), at most 4 · (template evaluated rows + lowering live ANDs) +
+    output bits + index bits + 1, and two distinct ones share a fingerprint with probability at most M² / 2^513."""
+    M = (4 * (rec["template"]["evaluated_rows"] + rec["lowering"]["live_ands"]) + rec["lowering"]["output_bits"]
+         + rec["lowering"].get("index_bits", 0) + 1)
     return {"M": M, "log2": round(2 * math.log2(M) - 513, 1), "statement": "Pr[wrong verdict] <= M^2 / 2^513"}
 
 
@@ -372,34 +479,51 @@ def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tm
                   vectors, seed)
 
 
-def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], exhaustive_bits: int, vectors: int,
-           seed: int) -> dict:
-    """`check`'s verdict on ``tmpl`` against ``reference()``'s ``(C, input words, output words)``, built once the
-    template's side is read and its unroll dropped; ``theirs`` names the reference's side and its inputs in a refusal."""
-    from verity_flock import tmpl as TM
+class _Template:
+    """The template side of a check: its counts, its inputs, its canonical output bits and its evaluation."""
 
-    F = CK.Findings()
-    rec = {**rec, "labels": {"source": "os.urandom", "bits": 512}}
-    try:
+    slots = None
+
+    def __init__(self, tmpl: Any) -> None:
+        from verity_flock import tmpl as TM
+
         if not isinstance(tmpl, TM.Tmpl):
             try:
                 tmpl = TM.parse(tmpl)
             except (AssertionError, IndexError, ValueError) as e:
                 raise Refused("malformed", f"not a {TM.FORMAT} text: {type(e).__name__} {e}") from None
-        rec |= {"defs": len(tmpl.defs), "template_rows": sum(len(d.rows) for d in tmpl.defs),
-                "template_calls": sum(len(d.calls) for d in tmpl.defs)}
-        try:
-            flat = TM.unroll(tmpl)
-        except (AssertionError, IndexError, ValueError) as e:
-            raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
-        K = Canon(sum(map(len, ports(flat.head[4:])[0])))
-        mine, rec["template"] = template_bits(flat, K)
-        del flat
+        self.t = tmpl
+        self.inputs = sum(map(len, ports(tmpl.groups)[0]))
+
+    def counts(self) -> dict:
+        t = self.t
+        return {"defs": len(t.defs), "template_rows": sum(len(d.rows) for d in t.defs),
+                "template_calls": sum(len(d.calls) for d in t.defs)}
+
+    def bits(self, K: Canon) -> tuple[list[int], dict]:
+        return template_bits(self.t, K)
+
+    def evaluate(self, lanes: list[int], T: int) -> list[int]:
+        return evaluate_template(self.t, lanes, T)
+
+
+def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], exhaustive_bits: int, vectors: int,
+           seed: int) -> dict:
+    """`check`'s verdict on ``tmpl`` (a template, its text, or a function making a side as `_Template` is one) against
+    ``reference()``'s ``(C, input words, output words)``, built once the template's side is read and its unroll dropped;
+    ``theirs`` names the reference's side and its inputs in a refusal."""
+    F = CK.Findings()
+    rec = {**rec, "labels": {"source": "os.urandom", "bits": 512}}
+    try:
+        side = tmpl() if callable(tmpl) else _Template(tmpl)
+        rec |= side.counts()
+        K = Canon(side.inputs)
+        mine, rec["template"] = side.bits(K)
         widths = rec["template"].pop("input_widths")
         C, ins, words = reference()
         if widths != [len(w) for w in ins]:
             raise Refused("ports", f"input ports of widths {widths}, {theirs[0]} {theirs[1]} {[len(w) for w in ins]}")
-        bits, rec["lowering"] = lowering_bits(C, ins, words, K)
+        bits, rec["lowering"] = lowering_bits(C, ins, words, K, side.slots)
         if len(mine) != len(bits):
             raise Refused("ports", f"{len(mine)} output bits, {theirs[0]} {len(bits)}")
     except Refused as e:
@@ -412,7 +536,6 @@ def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], 
     if not differ:
         rec["verdict"] = "syntactic"
         return {"failures": F.failures, "warnings": F.warnings, "structural": rec}
-    flat = TM.unroll(tmpl)
     rec["differing_output_bits"] = len(differ)
     d = differ[0]
     rec["why_not_syntactic"] = (f"{len(differ)} of {len(mine)} output bits are other forms (the first is bit {d}): not one "
@@ -421,7 +544,7 @@ def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], 
     exhaustive = n <= exhaustive_bits
     T = 1 << n if exhaustive else vectors
     lanes = _lanes(n, exhaustive, T, seed)
-    got = evaluate_template(flat, lanes, T)
+    got = side.evaluate(lanes, T)
     want = evaluate_lowering(C, ins, words, lanes, T)
     bad = [j for j, (a, b) in enumerate(zip(got, want)) if a != b]
     rec["semantic"] = {"inputs": n, "exhaustive": exhaustive, "vectors": T, **({} if exhaustive else {"seed": seed}),
@@ -444,6 +567,11 @@ def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], 
 
 
 def check_file(target: Any, path: Path, **kw) -> dict:
+    """`check` on the template at ``path``, or, a directory, `structural_slots.check` on the split it holds."""
+    if Path(path).is_dir():
+        from . import structural_slots as SS
+
+        return SS.check(target, path, **kw)
     return check(target, Path(path).read_text(), **kw)
 
 

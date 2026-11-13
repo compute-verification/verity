@@ -22,8 +22,8 @@ from verity.protocols.pouw.verifier import coins as EC
 
 # the sample keys are the clear audit's, a reference tool (verity/protocols/pouw/clear) imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-import clear_audit as CA  # noqa: E402
-import clear_work as CW  # noqa: E402
+import clear_audit as CA
+import clear_work as CW
 
 OUT = Path(__file__).with_name("vectors") / "epoch_coins_v1.json"
 #: (case, the challenger's seed, execution phase)

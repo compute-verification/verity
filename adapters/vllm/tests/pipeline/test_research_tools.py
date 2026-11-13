@@ -1,5 +1,5 @@
-"""`research_tools.CLOSURE` is the integration's import closure: `source_identity.code_identity` over it keys the hot Commit worker and
-names the TP Commit's tree, so a Verity core file outside it would be code those keys never see."""
+"""`research_tools.CLOSURE` is the integration's import closure: `source_identity.code_identity` over it names the TP Commit's tree,
+so a Verity core file outside it would be code that key never sees."""
 from __future__ import annotations
 
 from pathlib import Path

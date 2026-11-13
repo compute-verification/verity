@@ -173,10 +173,11 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
-def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_it(tmp_path, monkeypatch):
-    """The agreement's pass is kept under the verifier's directory only (`agreement_closure`), and `research merge` asks for
-    it only for changes there, so a requirement from outside it, by the manifest or the lakefile, fails the step whether or
-    not the upstream build was sent; one inside the directory doesn't, and this tree's verifier has none."""
+def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_the_tree(tmp_path, monkeypatch):
+    """The agreement's pass is kept under the verifier's package and the packages of the tree it requires by path
+    (`agreement_closure`), and `research merge` asks for it for changes there, so a requirement from outside the tree, a
+    fetched package or a path that leaves the repository, by the manifest or the lakefile, fails the step whether or not
+    the upstream build was sent; one inside the tree doesn't, and this tree's verifier has none from outside."""
     import json
 
     out, sent = _pinned(tmp_path, monkeypatch)
@@ -186,11 +187,18 @@ def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_
     assert not isinstance(CHECK.lean_steps(out, agreement_urls=urls)[3][1], str)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "identity"\npath = "../identity"\n')
     assert CHECK.lean_steps(out, agreement_urls=urls)[3][1].startswith(
-        "the verifier's Lean package requires identity from outside its directory")
+        "the verifier's Lean package requires identity from outside the tree")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    assert not isinstance(CHECK.lean_steps(out, agreement_urls=urls)[3][1], str), \
+        "a package of the tree, required by path, is keyed with the verifier"
+    monkeypatch.setattr(CHECK, "ROOT", ROOT)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
     assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
-    assert CHECK.requires_outside(ROOT / "verity" / "protocols" / "flock" / "verifier") == []
+    flock = ROOT / "verity" / "protocols" / "flock" / "verifier"
+    assert CHECK.requires_outside(flock) == []
+    assert CHECK.required_in_tree("verity/protocols/flock/verifier/") == (
+        "verity/circuits/base/", "verity/circuits/lean/", "verity/commitments/lean/")
 
 
 def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
@@ -369,8 +377,9 @@ def test_the_rule_the_gate_reads(monkeypatch):
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/",
-                                                           "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/", "!README.md",
-                                                           "!PROTOCOL.md"]
+                                                           "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/",
+                                                           "verity/circuits/base/", "verity/circuits/lean/",
+                                                           "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/protocols/flock/verifier/VStar/In.lean", "verity/protocols/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "protocols" / "flock" / "agreement" / "upstream.json").read_text())
@@ -487,7 +496,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -620,14 +629,16 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
 
-def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unless_no_cache(tmp_path, monkeypatch):
+def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them(tmp_path, monkeypatch):
     """A launch sends the newest recorded checks' packs as URLs the run fetches, never the packs: fetching and combining them on
     the launcher held each shard's launch some ten minutes.  `--verdicts-in` travels beside them, never in their place: a stale
-    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes."""
+    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes.  An
+    uncached launch sends them too, with the commit's own recorded checks' first (`commit_packs`): its fresh suites are
+    compared with every pass the commit was recorded with, not only those its slot holds."""
     import subprocess
     import sys
 
-    real, launched, listed = subprocess.run, [], []
+    real, launched, listed, commits = subprocess.run, [], [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -636,8 +647,9 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def url_file(d: Path) -> Path:
+    def url_file(d: Path, commit: str | None = None) -> Path:
         listed.append(d / CHECK.VERDICT_URLS)
+        commits.append(commit)
         listed[-1].write_text("[]")
         return listed[-1]
 
@@ -663,16 +675,17 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
     [(tail, sends, env, _)] = launched
     assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 3
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 4      # the nightly `audit-main`
     [(_, sends, env, head)] = launched
-    assert sends == [] and CHECK.VERDICT_URLS_ENV not in env
+    assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
         "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs)
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 4
+    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs and the suites')
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 5
     [(tail, sends, _, _)] = launched
     assert tail[-2:] == ["--no-cache", "--circuit-cache"] and str(listed[-1]) in sends
+    assert commits == [None, None, None, CHECK._rev("HEAD"), CHECK._rev("HEAD")] and commits[-1]
     (bad := tmp_path / "bad.tar.gz").write_bytes(b"not a pack")
     for given, why in ((bad, "refused"), (tmp_path / "absent.tar.gz", "no such pack")):
         with pytest.raises(SystemExit, match=why):
@@ -736,7 +749,7 @@ def test_a_launch_that_needs_the_agreement_sends_its_urls_and_fetches_nothing(tm
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(research.store.local, "LocalStore", Store)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
     _remote(monkeypatch, remote := _Remote())
     pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
@@ -811,7 +824,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
@@ -1011,9 +1024,9 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     lean = gs[2]
     assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
     assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/verity/lean/lean_audit.py")
-    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
+    assert [n for n, _, _ in gs[4]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = gs[5][0][1]
+    argv = gs[4][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
@@ -1294,18 +1307,6 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    changed = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(1)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["lean-changed"]["status"] == "failed"
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
-
-
 def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
     gate = _gate(tmp_path, monkeypatch)
@@ -1450,8 +1451,8 @@ def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_
     steps.end({"step": "pytest", "status": "failed"})
     steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
-    steps.end({"step": "lean-changed", "status": "failed"})
-    assert steps.stopping and steps.halted == "lean-changed"
+    steps.end({"step": "flock-circuit-build", "status": "failed", "halts": True})
+    assert steps.stopping and steps.halted == "flock-circuit-build"
     steps = CHECK.Steps(tmp_path)
     steps.end({"step": "pytest", "status": "failed"})
     assert steps.stopping and steps.halted == "pytest"
@@ -1541,15 +1542,12 @@ def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_
     assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
 
 
-def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
+def test_the_audit_is_a_group_of_its_own_and_a_tree_without_the_verifier_has_no_lean_group_but_a_skip(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 7 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
-    argv, audit = gs[4][0][1], gs[3][0][1]
-    assert argv[1].endswith("tools/verity/lean/lean_changed.py")
-    assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
-    assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
-    assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
+    assert len(gs) == 6 and [n for n, _, _ in gs[3]] == ["lean-audit"]
+    assert not any(str(a).endswith("lean_changed.py") for g in gs for _, argv, _ in g if not isinstance(argv, str) for a in argv), \
+        "no step runs the fast path's file: without a mode it runs nothing"
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 4
 
@@ -1569,7 +1567,22 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert "--cache" not in cold["circuit-check"]
     for s in ("pytest", "lean-suites", "lean-audit"):
         assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
-    assert after["lean-changed"].startswith("skipped: --no-cache")
+
+
+def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):
+    """`--no-cache` compiles what it tests: its steps (the verifier's `lake build`, and the Lean steps and suites after it,
+    which build and run Lean too) run with Lake's local artifact cache off, where Lake would unpack what an earlier build on
+    the node left there instead of compiling it.  A cached check's steps get no Lake setting, the caller's neither."""
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "true")
+    names = ("lean-build", "lean-suites", "pytest")
+    for cache, want in ((False, "false"), (True, "unset")):
+        out = tmp_path / f"cache-{cache}"
+        out.mkdir()
+        probe = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('LAKE_ARTIFACT_CACHE', 'unset'))"
+        _fake_run(monkeypatch, [[(s, _py(probe, out / f"{s}.said"), tmp_path)] for s in names])
+        ok, done = CHECK.run(out, 2, cache)
+        assert ok, done
+        assert {s: (out / f"{s}.said").read_text() for s in names} == dict.fromkeys(names, want)
 
 
 def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_other_check_does(tmp_path, monkeypatch):
@@ -1592,13 +1605,15 @@ def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_othe
 
 
 def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
-    """Each suite's named tests in a `suites.py` run of its own with its variable set and no other's.  A named test that skipped
-    (its mark reads another variable) or that its suite lacks (pytest's "not found") ran nowhere, so it fails the step."""
+    """Each suite's named tests in one `suites.py` run of its own with its variables set, every one of them, and no other
+    suite's.  A named test that skipped (its mark reads a variable its suite doesn't list) or that its suite lacks (pytest's
+    "not found") ran nowhere, so it fails the step."""
     from collections import namedtuple
 
     suite = namedtuple("suite", "name path")
-    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": ("VERITY_A_SLOW", ("tests/test_a.py::test_x", "tests/test_a.py::test_y")),
-                                          "b/two": ("VERITY_B_SLOW", ("tests/test_b.py::test_z",))})
+    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": {"VERITY_A_SLOW": ("tests/test_a.py::test_x",),
+                                                    "VERITY_A_E2E": ("tests/test_a.py::test_y",)},
+                                          "b/two": {"VERITY_B_SLOW": ("tests/test_b.py::test_z",)}})
     monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
     monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
     ran: list = []
@@ -1607,7 +1622,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     def run(cmd, cwd, env):
         suite = cmd[2]
-        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_B_SLOW") if env.get(v) == "1"], cmd[cmd.index("--") + 1:]))
+        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_A_E2E", "VERITY_B_SLOW") if env.get(v) == "1"],
+                    cmd[cmd.index("--") + 1:]))
         rc, counts = outcome[suite]
         if counts is not None:
             Path(cmd[cmd.index("--json") + 1]).write_text(json.dumps([{"suite": suite, "status": "passed", "counts": counts}]))
@@ -1615,7 +1631,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     monkeypatch.setattr(CHECK.subprocess, "run", run)
     assert CHECK.opt_in(tmp_path, "pytest", ["--fresh"]) == 0
-    assert ran == [("a/one", ["VERITY_A_SLOW"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], "pytest's suites alone"
+    assert ran == [("a/one", ["VERITY_A_SLOW", "VERITY_A_E2E"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], \
+        "pytest's suites alone, each in one run"
     ran.clear()
     assert CHECK.opt_in(tmp_path, "lean-suites", []) == 0 and ran == [("b/two", ["VERITY_B_SLOW"], ["tests/test_b.py::test_z"])]
     capsys.readouterr()
@@ -1623,7 +1640,7 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
     outcome["b/two"] = (4, None)
     assert CHECK.opt_in(tmp_path, "all", []) == 1
     said = capsys.readouterr().out
-    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1 passed (1 skipped)" in said
+    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1, VERITY_A_E2E=1 passed (1 skipped)" in said
     assert "b/two: 0 of the 1 tests named with VERITY_B_SLOW=1 passed (suites.py exited 4)" in said
     assert CHECK.opt_in(tmp_path, "circuit-check", []) == 2
 
@@ -1817,13 +1834,14 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
 
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
     assert ("check: changes under verity/protocols/flock/prover/, verity/protocols/flock/pod/, verity/protocols/flock/agreement/, verity/protocols/flock/tool.py, "
-            "verity/protocols/flock/verifier/ against main: sending presigned URLs for the pinned upstream build and inputs") \
+            "verity/protocols/flock/verifier/, verity/circuits/base/, verity/circuits/lean/, "
+            "verity/commitments/lean/ against main: sending presigned URLs for the pinned upstream build and inputs") \
         in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)

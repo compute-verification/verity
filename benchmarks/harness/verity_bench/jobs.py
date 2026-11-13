@@ -19,6 +19,7 @@ from typing import Any
 from verity_config import dumps, sha256, value
 
 from verity_bench import settings
+from verity_bench.steady_spec import SteadyPoint, SteadySpec
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
 
 
@@ -31,16 +32,23 @@ class Toolchain:
 
 @dataclass(frozen=True)
 class PlannedPoint:
-    point: SweepPoint
+    """A point of a spec with its identity and its passing run. `why`: for a point with none, why the runs that could
+    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found)."""
+
+    point: SweepPoint | SteadyPoint
     identity: str
     passing_run: str | None
+    why: str | None = None
 
 
 @dataclass(frozen=True)
 class Plan:
-    spec: ResolvedSpec
+    """A spec's points, each with its passing run. `toolchain`: what a point's identity pins beside its spec, a vLLM
+    spec's `Toolchain` or a steady-state spec's files (`steady_plan.Sources`)."""
+
+    spec: ResolvedSpec | SteadySpec
     spec_sha256: str
-    toolchain: Toolchain
+    toolchain: Any
     points: tuple[PlannedPoint, ...]
 
 
@@ -222,7 +230,8 @@ def plan_json(plan: Plan) -> dict[str, Any]:
         "resolved_spec": value(plan.spec),
         "toolchain": value(plan.toolchain),
         "points": [
-            {"point": item.point.to_json(), "identity": item.identity, "passing_run": item.passing_run}
+            {"point": item.point.to_json(), "identity": item.identity, "passing_run": item.passing_run,
+             **({"why": item.why} if item.why else {})}
             for item in plan.points
         ],
     }
@@ -256,14 +265,14 @@ def queue_kind(gpu_count: int) -> str:
         ) from None
 
 
-def point_environment(spec: ResolvedSpec) -> dict[str, str]:
+def point_environment(spec: ResolvedSpec | SteadySpec) -> dict[str, str]:
     """What a point's job must run under: the spec's `env`, and its `setup` script (`run_point.sh` sources it before the
     point's Python starts) as VERITY_BENCH_SETUP."""
 
     return {**spec.env, **({"VERITY_BENCH_SETUP": spec.setup} if spec.setup else {})}
 
 
-def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> None:
+def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[str, str]) -> None:
     expected = point_environment(spec)
     wrong = sorted(name for name, want in expected.items() if environ.get(name) != want)
     if "VERITY_BENCH_SETUP" not in expected and environ.get("VERITY_BENCH_SETUP"):
@@ -320,7 +329,7 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
     return [*command, *_env_flags(spec), "--", *_point_command(source, item, root)]
 
 
-def direct_minutes(spec: ResolvedSpec, node: str) -> float:
+def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
     """The spec's admission max_minutes, which bounds a direct point's run, slot and lease, once `node` is a GPU node."""
 
     if node not in DIRECT_NODES:

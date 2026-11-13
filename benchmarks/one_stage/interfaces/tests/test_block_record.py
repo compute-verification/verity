@@ -46,8 +46,11 @@ def test_period0_is_five_real_legs_and_a_wipe_elsewhere() -> None:
 
 def test_integrity_bounds_are_the_profiles_count_bound() -> None:
     """The integrity line at δ is `profile.Stratified`'s count bound (Lean's `countBound`): the largest K with
-    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units sampled, 99 wrong) it is 99, where the copy this replaced said 98."""
-    at = _load("block-record-r1-window10")["legs"]["integrity"]["at"]
+    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units sampled, 99 wrong) it is 99, where the copy this replaced said 98.
+    A quantity with no strata, as the fixture's, is bounded as a uniform sample of its checked level."""
+    integrity = _load("block-record-r1-window10")["legs"]["integrity"]
+    at = integrity["at"]
+    assert "strata" not in integrity["quantity"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
     q = {"symbol": "integrity bound", "value": 0, "unit": "wrong units", "of": 100, "drawn": 1}
     assert R.at_deltas("integrity", q, Fraction(1, 2))["1/100"] == {"holds": True, "value": 99, "epsilon": "99/100",
@@ -59,6 +62,40 @@ def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
     (core's `Stratified.count_bound`: the largest K whose sampling term is at least δ), not 1."""
     assert R.integrity_bound(4, 2, Fraction(1, 6)) == 2
     assert R.integrity_bound(4, 2, Fraction(1, 6) + Fraction(1, 10**9)) == 1
+
+
+def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one() -> None:
+    """An answer whose profile samples each stratum on its own is bounded by that sampling design. The fixture profile
+    is a served run's: all 160 units of one template and 2 of another's 4. An incorrect proof block among the 160 is
+    always caught; among the 4, one escapes with C(3, 2)/C(4, 2) = 1/2, two with C(2, 2)/C(4, 2) = 1/6 and three never.
+    So at most 2 of the 164 are incorrect at δ = 1/100 and at 1/10^6, 1 only for δ above 1/6 and none above 1/2. Read
+    as a uniform sample of 162 of 164, where one escapes with 1/82 and two with 1/13,366, the same counts gave 1 at
+    1/100.
+    The quantity carries the strata, so `check` recomputes the stratified bound, and refuses a record that dropped
+    them. Strata that are not the quantity's own counts are refused."""
+    profile = json.loads((FIXTURES / "integrity-profile-stratified.json").read_text())
+    report, wipe = _accepting_report()
+    row = report["protocols"][R.RUNNER_KEYS["integrity"]]
+    row["answer"] = {**row["answer"], "profile": profile}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    integrity = rec["legs"]["integrity"]
+    strata = [{"name": "RoPEHead_v1{D=64}", "size": 160, "k": 160}, {"name": "SiluMul_v2{I=8192}", "size": 4, "k": 2}]
+    assert integrity["quantity"]["strata"] == strata and integrity["quantity"]["of"] == 164
+    assert {d: (at["value"], at["epsilon"]) for d, at in integrity["at"].items()} == {
+        "1/100": (2, "1/82"), "1/1000000": (2, "1/82")}
+    sixth = Fraction(1, 6)
+    assert [R.integrity_bound(164, 162, d, strata) for d in (sixth, sixth + Fraction(1, 10**9), Fraction(1, 2),
+                                                               Fraction(1, 2) + Fraction(1, 10**9))] == [2, 1, 1, 0]
+    assert [R.integrity_bound(164, 162, d) for d in (Fraction(1, 100), Fraction(1, 10**6))] == [1, 2]
+    del integrity["quantity"]["strata"]
+    assert list(R.check(rec).values()) == ["its certificates at the deltas are not its quantity's at its error"]
+    with pytest.raises(ValueError, match="the strata hold 164 units and sample 162 of them, not the 161 of 164"):
+        R.integrity_bound(164, 161, Fraction(1, 100), strata)
+    row["answer"]["profile"] = {**profile, "levels": [{**profile["levels"][-1], "size": 165}]}
+    with pytest.raises(ValueError, match="the strata hold 164 units and sample 162 of them, not the 162 of 165"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
 
 
 def test_a_flipped_leg_verdict_is_refused() -> None:
@@ -140,6 +177,25 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
                                    "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
     assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
+
+
+def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
+    """PoUS's quantity is written as `S0`, the verifier's `s_bits`, in a record built here as in the fixtures, and no
+    other quantity has that symbol. The same record under `S_cert`, the quantity's older name, fits the schema and
+    checks clean, and a symbol the schema doesn't list is refused."""
+    row = {"answer": {}, "quantity": {"s_bits": 7, "certified": True, "eps": "1/8"}}
+    assert R._quantity("pous", row) == ({"symbol": "S0", "value": 7, "unit": "bits", "certified": True},
+                                        Fraction(1, 8), "quantity.eps")
+    report, wipe = _accepting_report()
+    built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    for written in (built, _load("block-record-r2-period0"), _load("block-record-b71a-w30")):
+        text, new = json.dumps(written), '"symbol": "S0"'
+        assert text.count(new) == 1 and "S_cert" not in text
+        older = json.loads(text.replace(new, '"symbol": "S_cert"'))
+        validator.validate(older)
+        assert R.check(older) == {}
+        assert not validator.is_valid(json.loads(text.replace(new, '"symbol": "S"')))
 
 
 def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_answers() -> None:

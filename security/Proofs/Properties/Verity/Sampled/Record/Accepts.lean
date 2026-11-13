@@ -267,7 +267,8 @@ theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
         (_root_.Spot.OneStageZk.coinKeyOf record
           (_root_.Spot.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))) =
         .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at hacc
+  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at hacc
   dsimp only at hacc
   split at hacc
   case h_1 => cases hacc
@@ -349,7 +350,8 @@ theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
       (∀ t ∈ A.I.tables, t.1.toUTF8.size < 2 ^ 64 ∧ t.2.size < 2 ^ 64) ∧ (∀ b ∈ A.I.program, b.size < 2 ^ 64) ∧
       _root_.Spot.OneStageZk.printedSize p.own.partition < 2 ^ 64 ∧
       (∀ j ∈ p.own.registered, _root_.Spot.OneStageZk.printedSize j < 2 ^ 64) := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at hacc
+  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at hacc
   dsimp only at hacc
   split at hacc
   case h_1 => cases hacc

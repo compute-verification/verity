@@ -356,7 +356,8 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ (out : Array (String × Lean.Json)) (pub' : _root_.Spot.OneStage.Public) (prof' : Core.Integrity),
       _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := out } = .accept pub' prof' := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h

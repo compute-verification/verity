@@ -8,8 +8,9 @@
 * ``generate`` returns vLLM's outputs unchanged and records the call;
 * ``engine_class="G"`` builds at class G's settings, which reach ``vllm.LLM``'s keyword arguments (its ``EngineArgs``) and are
   read back from the built engine's scheduler config, under its environment, which the build sets and records; an option, a
-  checkpoint or a built engine the class contradicts is refused by name, and the built engine's admission refuses a prompt over
-  the class's limit and a window closed in flight;
+  checkpoint or a built engine the class contradicts is refused by name, and so is a launch that states no context limit; the
+  class serves at the launch's ``max_model_len``, a length or the one vLLM fits (-1), and the built engine's admission refuses a
+  prompt over the engine's limit and a window closed in flight;
 * ``import verity_vllm`` imports neither torch nor vLLM.
 """
 from __future__ import annotations
@@ -31,8 +32,10 @@ from verity_vllm.errors import Refused
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
-CLASS_G_ARGS = {"tensor_parallel_size": 8, "max_num_batched_tokens": 2048, "max_model_len": 131072, "long_prefill_token_threshold": 256,
+CLASS_G_ARGS = {"tensor_parallel_size": 8, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256,
                 "enable_prefix_caching": False, "moe_backend": "triton"}
+#: a class-G launch's context limit, which the class leaves to it
+CTX = 401408
 
 
 def test_the_package_exports_llm_and_what_it_is_built_from():
@@ -148,6 +151,8 @@ def test_prefix_caching_stays_off_unless_the_caller_turns_it_on(built, monkeypat
     from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr(B.served, "apply", lambda execution: {})
+    # unloaded for the test: one imported before the engine's pin, by another test in the same worker, is refused (`require_inductor`)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     assert B.engine_kwargs_for(cps, case="M")[0]["enable_prefix_caching"] is False
@@ -236,12 +241,29 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
 
 def test_an_engine_class_fills_its_settings():
-    assert L.class_options({"engine_class": "G"}) == {"engine_class": "G", "execution": "eager", "max_num_seqs": 256, **CLASS_G_ARGS}
+    assert L.class_options({"engine_class": "G", "max_model_len": CTX}) == {
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS}
     assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072}) == {
-        "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, **CLASS_G_ARGS}
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
     assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
     assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
+
+
+@pytest.mark.parametrize("limit", [4032, 131072, CTX, 1048576, -1])
+def test_an_engine_class_serves_at_the_context_limit_its_launch_states(limit):
+    """The class fixes no context limit: the launch's reaches the engine args as stated, a length or -1 (vLLM's
+    ``--max-model-len auto``), and neither `CLASS_G_SERVED` nor the class's options hold one."""
+    assert L.class_options({"engine_class": "G", "max_model_len": limit})["max_model_len"] == limit
+    assert "max_model_len" not in {**EC.CLASS_G_SERVED, **EC.options("G")}
+
+
+@pytest.mark.parametrize("options,stated", [({}, None), ({"max_model_len": 0}, 0), ({"max_model_len": -2}, -2)])
+def test_an_engine_class_launch_that_states_no_context_limit_is_refused(options, stated):
+    with pytest.raises(Refused, match=rf"engine class G refused: max_model_len={stated}: the class serves at its launch's context "
+                                      r"limit, so state one \(a length, or -1 for the longest request the engine's KV pool holds, "
+                                      r"vLLM's --max-model-len auto\)"):
+        L.class_options({"engine_class": "G", **options})
 
 
 def test_class_g_serves_compiled_at_its_breakable_graphs():
@@ -249,20 +271,34 @@ def test_class_g_serves_compiled_at_its_breakable_graphs():
     compiled engine that ran other graphs is refused by name."""
     sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
     graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": sizes}
-    assert L.class_options({"engine_class": "G", "execution": "compiled"}) == {
-        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, **CLASS_G_ARGS, "compilation_config": graphs}
+    assert L.class_options({"engine_class": "G", "execution": "compiled", "max_model_len": CTX}) == {
+        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS,
+        "compilation_config": graphs}
     assert EC.compilation("G", "compiled") == "breakable" and EC.compilation("G", None) is None
     with pytest.raises(Refused, match="execution 'bi-compiled' \\(class G serves eager, compiled\\)"):
         EC.compilation("G", "bi-compiled")
     with pytest.raises(Refused, match="compilation_config=.*where the class serves"):
-        L.class_options({"engine_class": "G", "execution": "compiled", "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
-    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **EC.CLASS_G_SERVED,
+        L.class_options({"engine_class": "G", "execution": "compiled", "max_model_len": CTX,
+                         "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
+    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **EC.CLASS_G_SERVED, "max_model_len": CTX,
            "enforce_eager": False, "breakable_cudagraph": True, "capture_sizes": sizes}
-    assert EC.effective_refusals("G", eff, EC.env("G")) == []
-    assert EC.effective_refusals("G", {**eff, "breakable_cudagraph": False, "capture_sizes": [1, 2, 4]}, EC.env("G")) == [
+    assert EC.effective_refusals("G", eff, EC.env("G"), CTX) == []
+    assert EC.effective_refusals("G", {**eff, "breakable_cudagraph": False, "capture_sizes": [1, 2, 4]}, EC.env("G"), CTX) == [
         "the built engine's breakable_cudagraph is False, not the class's True",
         f"the built engine's capture_sizes is [1, 2, 4], not the class's {sizes}"]
-    assert EC.effective_refusals("G", {**eff, "enforce_eager": True, "breakable_cudagraph": False}, EC.env("G")) == []
+    assert EC.effective_refusals("G", {**eff, "enforce_eager": True, "breakable_cudagraph": False}, EC.env("G"), CTX) == []
+
+
+def test_a_built_engine_runs_at_its_launchs_context_limit_or_at_one_vllm_fitted():
+    """A launch that states a length is served at it; one that leaves the limit to vLLM (-1) at whatever positive length the
+    built engine reads back, and an engine still holding -1 wasn't fitted."""
+    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **EC.CLASS_G_SERVED, "enforce_eager": True}
+    for built, launch, bad in ((CTX, CTX, []), (4032, -1, []), (1048576, -1, []),
+                               (4032, CTX, [f"the built engine's max_model_len is 4032, not the launch's {CTX}"]),
+                               (-1, -1, ["the built engine's max_model_len is -1, not a length vLLM fitted"]),
+                               (None, -1, ["the built engine's max_model_len is None, not a length vLLM fitted"]),
+                               (None, CTX, [f"the built engine's max_model_len is None, not the launch's {CTX}"])):
+        assert EC.effective_refusals("G", {**eff, "max_model_len": built}, EC.env("G"), launch) == bad, (built, launch)
 
 
 def test_an_option_the_class_contradicts_is_refused_by_name():
@@ -274,7 +310,7 @@ def test_an_option_the_class_contradicts_is_refused_by_name():
     for part in ("tensor_parallel_size=4, where the class serves 8", "long_prefill_token_threshold=512, where the class serves 256",
                  "enable_prefix_caching=True, where the class serves False", "execution='bi-eager', where the class serves 'eager'",
                  "attention_backend='FLASH_ATTN': the class serves the engine profile's",
-                 "max_num_seqs=257, over the class's 256"):
+                 "max_num_seqs=257, over the class's 256", "max_model_len=None: the class serves at its launch's context limit"):
         assert part in msg, part
     with pytest.raises(Refused, match=r"engine class 'H' is not registered \(registered: G\)"):
         L.class_options({"engine_class": "H"})
@@ -283,9 +319,11 @@ def test_an_option_the_class_contradicts_is_refused_by_name():
 
 
 class _Scheduler:
-    """vLLM V1's scheduler as the admission reads it: ``add_request`` and ``requests``, from which it deletes a freed request."""
+    """vLLM V1's scheduler as the admission reads it: its ``max_model_len``, ``add_request`` and ``requests``, from which it
+    deletes a freed request."""
 
-    def __init__(self):
+    def __init__(self, max_model_len=None):
+        self.max_model_len = max_model_len
         self.requests = {}
 
     def add_request(self, request):
@@ -296,7 +334,8 @@ class _Scheduler:
 def built_g(monkeypatch):
     """`build_engine` stood in, with the built engine's read-back (`effective`) what vLLM's config holds of the engine args,
     overridden by ``seen["effective"]``, its ``env_flags`` the ``env`` it was given (``seen["env_flags"]`` when set), and an
-    in-process scheduler."""
+    in-process scheduler at the read-back's ``max_model_len``: the launch's, or ``seen["effective"]``'s, standing in for the
+    length vLLM fits where the launch states -1."""
     from verity_vllm.engine import vllm_adapter as va
     seen = {"effective": {}}
 
@@ -308,7 +347,8 @@ def built_g(monkeypatch):
                      **{k: args.get(k) for k in ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold")},
                      **seen["effective"]}
         llm = _FakeVllm()
-        llm.llm_engine = SimpleNamespace(engine_core=SimpleNamespace(engine_core=SimpleNamespace(scheduler=_Scheduler())))
+        llm.llm_engine = SimpleNamespace(engine_core=SimpleNamespace(engine_core=SimpleNamespace(
+            scheduler=_Scheduler(effective["max_model_len"]))))
         return SimpleNamespace(llm=llm, kwargs={"max_num_seqs": kw["max_num_seqs"], **args},
                                env_flags=seen.get("env_flags", dict(kw.get("env") or {})), execution=kw["execution"],
                                effective=effective, build_s=1.0)
@@ -318,8 +358,8 @@ def built_g(monkeypatch):
 
 
 def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(built_g):
-    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
-    assert built_g["engine_args"] == CLASS_G_ARGS
+    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=CTX)
+    assert built_g["engine_args"] == {**CLASS_G_ARGS, "max_model_len": CTX}
     assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 256, "eager")
     assert built_g["env"] == llm.engine_record["env_flags"] == {"VERITY_DSA_TOPK": "canonical"}
     assert llm.engine_record["engine_class"] == "G" and llm.engine_record["engine_overrides"] == {"moe_backend": "triton"}
@@ -331,16 +371,31 @@ def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(b
         sched.add_request(SimpleNamespace(request_id="b", num_prompt_tokens=8))
 
 
-def test_class_g_refuses_a_prompt_over_its_limit(built_g):
-    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+@pytest.mark.parametrize("launch,fitted,limit", [(CTX, None, CTX), (131072, None, 131072), (-1, 4032, 4032), (-1, 1048576, 1048576)])
+def test_class_g_refuses_a_prompt_over_its_engines_limit(built_g, launch, fitted, limit):
+    """The window's limit is the engine's: the length the launch states, or under -1 the one vLLM fitted to the engine's KV pool,
+    a few thousand tokens on a small pool. The launch's -1 reaches vLLM as stated."""
+    built_g["effective"] = {} if fitted is None else {"max_model_len": fitted}
+    llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=launch)
+    assert built_g["engine_args"]["max_model_len"] == launch and llm.admission.limit == limit
     sched = handle.scheduler(llm)
-    sched.add_request(SimpleNamespace(request_id="long", num_prompt_tokens=257))
+    sched.add_request(SimpleNamespace(request_id="long", num_prompt_tokens=limit))
     sched.requests.clear()
-    with pytest.raises(Refused, match="request r0: a prompt of 131073 tokens, over the 131072 a class-G window admits"):
-        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=131073))
+    with pytest.raises(Refused, match=f"request r0: a prompt of {limit + 1} tokens, over the {limit} a class-G window admits"):
+        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=limit + 1))
     assert sched.requests == {}
-    with pytest.raises(Refused, match="a prompt of 131073 tokens"):
+    with pytest.raises(Refused, match=f"a prompt of {limit + 1} tokens"):
         llm.close_window()
+
+
+@pytest.mark.parametrize("launch,built,fact", [
+    (CTX, 131072, f"the built engine's max_model_len is 131072, not the launch's {CTX}"),
+    (-1, -1, "the built engine's max_model_len is -1, not a length vLLM fitted")])
+def test_class_g_refuses_a_built_engine_that_doesnt_run_at_its_launchs_context_limit(built_g, launch, built, fact):
+    built_g["effective"] = {"max_model_len": built}
+    with pytest.raises(Refused) as e:
+        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=launch)
+    assert str(e.value) == f"engine class G refused: {fact}"
 
 
 def test_without_an_engine_class_nothing_is_held(built):
@@ -352,14 +407,14 @@ def test_without_an_engine_class_nothing_is_held(built):
 def test_class_g_refuses_another_model_before_the_build(built_g):
     with pytest.raises(Refused, match=rf"engine class G refused: {LLAMA[0]}@{LLAMA[1]} is a 'llama' checkpoint, not the class's "
                                       r"'glm_moe_dsa'"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], engine_class="G")
+        L.LLM(LLAMA[0], revision=LLAMA[1], engine_class="G", max_model_len=CTX)
     assert "engine_args" not in built_g
 
 
 def test_class_g_refuses_a_built_engine_whose_config_doesnt_carry_its_settings(built_g):
     built_g["effective"] = {"long_prefill_token_threshold": 0, "enable_prefix_caching": None}
     with pytest.raises(Refused) as e:
-        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=CTX)
     assert str(e.value) == ("engine class G refused: the built engine's long_prefill_token_threshold is 0, not the class's 256; "
                             "the built engine's enable_prefix_caching is None, not the class's False")
 
@@ -369,7 +424,7 @@ def test_class_g_refuses_a_built_engine_without_its_environment(built_g):
     row serves a row past INDEX_TOPK in the kernels' own order, which its registration doesn't read, and is refused by name."""
     built_g["env_flags"] = {"VERITY_DSA_TOPK": "0"}
     with pytest.raises(Refused) as e:
-        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
+        L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=CTX)
     assert str(e.value) == "engine class G refused: the built engine's environment sets VERITY_DSA_TOPK='0', not the class's 'canonical'"
 
 
@@ -377,7 +432,9 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     """The real `build_engine` at class G's settings: they reach ``vllm.LLM(**kw)`` (which makes its ``EngineArgs`` of them), and
     the read-back takes them from the configs the pinned vLLM makes of those args (``EngineArgs.create_engine_config``: the
     scheduler config's ``long_prefill_token_threshold`` is the arg's), here stood in.  At TP8 no in-process model runner is read.
-    The class's environment is set over an operator's export, so every rank vLLM spawns inherits it, and recorded."""
+    The class's environment is set over an operator's export, so every rank vLLM spawns inherits it, and recorded.  Inductor's
+    config is unloaded for the test: another test in the same worker may have imported it before the engine's pin, which
+    `engine.env.require_inductor` refuses."""
     import os
 
     from verity_vllm.engine import build as B
@@ -405,15 +462,17 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     vllm.LLM, vllm.envs, envs.VLLM_BATCH_INVARIANT = _VllmLLM, envs, False
     monkeypatch.setitem(sys.modules, "vllm", vllm)
     monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
-    args = {k: v for k, v in L.class_options({"engine_class": "G"}).items() if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
-    assert args == CLASS_G_ARGS
+    args = {k: v for k, v in L.class_options({"engine_class": "G", "max_model_len": CTX}).items()
+            if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
+    assert args == {**CLASS_G_ARGS, "max_model_len": CTX}
     eng = B.build_engine(cps, case="M", max_num_seqs=EC.max_num_seqs("G"), engine_args=args, execution="eager", env=EC.env("G"))
     assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 256)
     assert eng.runner is None and eng.model is None
     assert eng.env_flags == {"VERITY_DSA_TOPK": "canonical"} == {"VERITY_DSA_TOPK": os.environ["VERITY_DSA_TOPK"]}
-    assert EC.effective_refusals("G", eng.effective, eng.env_flags) == []
+    assert EC.effective_refusals("G", eng.effective, eng.env_flags, CTX) == []
     assert eng.effective["long_prefill_token_threshold"] == 256 and eng.effective["batch_invariant"] is False
     target = SimpleNamespace(env=lambda: {}, engine_args=lambda: {})
     with pytest.raises(RuntimeError, match="at tensor_parallel_size 8 the model is in the ranks' processes: declare none"):

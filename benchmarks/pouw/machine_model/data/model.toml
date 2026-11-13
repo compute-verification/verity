@@ -7,6 +7,10 @@
 current = "VF3r-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
+# The card file (verity/hardware/cards/) θ and the opcode table read this device's ceilings from.
+card = "rtx-pro-6000-server"
+# The card file of the host the device sits in, which θ's host rates read (`host:PATH`).
+host = "xeon-6776p-2s"
 
 # Each epoch is a state of the census and the attacks, named after the vector that introduced it, in order. A census
 # line or an attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last); a line

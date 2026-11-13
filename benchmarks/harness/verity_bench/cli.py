@@ -10,7 +10,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, overhead, overhead_records, prove_records, served_table, settings
+from verity_bench import (
+    breakdown,
+    jobs,
+    lean_verify,
+    overhead,
+    overhead_records,
+    prove_records,
+    served_table,
+    settings,
+    steady_plan,
+    steady_spec,
+)
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -27,7 +38,11 @@ def _spec_argument(parser: argparse.ArgumentParser) -> None:
 
 
 def _make_plan(args: Any) -> jobs.Plan:
+    """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's."""
+
     root = jobs.repository_root()
+    if steady_spec.is_steady(args.spec):
+        return steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
     return jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
 
 
@@ -41,12 +56,15 @@ def _check(args: Any) -> int:
     done = sum(item.passing_run is not None for item in plan.points)
     print(f"{plan.spec.id}: {done}/{len(plan.points)} points have a passing result")
     for item in plan.points:
-        print(f"{item.point.id}\t{item.identity}\t{item.passing_run or 'missing'}")
+        print(f"{item.point.id}\t{item.identity}\t{item.passing_run or 'missing'}" + (f"\t{item.why}" if item.why else ""))
     return 0 if done == len(plan.points) else 1
 
 
 def _run(args: Any) -> int:
-    return jobs.dispatch(_make_plan(args), args.spec, direct=args.direct)
+    plan = _make_plan(args)
+    if isinstance(plan.spec, steady_spec.SteadySpec):
+        return steady_plan.dispatch(plan, args.spec, direct=args.direct)
+    return jobs.dispatch(plan, args.spec, direct=args.direct)
 
 
 def _point(args: Any) -> int:
@@ -224,7 +242,9 @@ def _overhead_parser(commands: Any) -> None:
 
 def _prove(args: Any) -> int:
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
-                              local_only=args.local_only)
+                              cores=args.cores, local_only=args.local_only)
+    if args.steady_rows:
+        args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
@@ -243,11 +263,23 @@ def _prove_parser(commands: Any) -> None:
     prove.add_argument("--provers", type=int, default=1, metavar="N",
                        help="the prover count each type is priced at: only steady-state rows at N provers measure a "
                             "type (default: 1)")
+    prove.add_argument("--cores", type=int, default=prove_records.P.HOST_CORES, metavar="N",
+                       help="the CPU cores a card's provers hold on the host each type is priced for: a type is priced "
+                            "from steady-state rows timed at N cores, else from those timed at the fewest above N, and "
+                            f"never from one timed at fewer (default: {prove_records.P.HOST_CORES}{prove_records.HOST_CORES_ARE})")
     prove.add_argument("--rows", type=int, metavar="N", help="show the N block types that take the most proving time, "
                                                              "the rest in one row (default: every block type)")
     prove.add_argument("--json", action="store_true", help="the table as JSON, every row whole")
+    prove.add_argument("--steady-rows", type=Path, metavar="FILE",
+                       help="also write FILE: the block types measured at steady state, a row each as the break-even "
+                            "planner reads them (benchmarks/spot_figures/breakeven: `--steady FILE`)")
     prove.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     prove.set_defaults(run=_prove, command_parser=prove)
+
+    timed = commands.add_parser("lean-verify", help="the Lean verifier's seconds on one kept proof and the proof's bytes, "
+                                                    "as the record `prove` reads")
+    lean_verify.add_arguments(timed)
+    timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
 
 def _parser() -> argparse.ArgumentParser:

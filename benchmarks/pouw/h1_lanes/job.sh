@@ -47,7 +47,7 @@ if [ -z "${H1L_J10R:-}" ]; then
 fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(tree_key verity/protocols/flock/verifier verity/protocols/flock/prover/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(lean_key "$SRC/verity/protocols/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"
@@ -96,7 +96,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect regrec prodrec desc
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
   "$OWN" "$desc" "$rounds" "$regrec" "$prodrec" "$reg" "$unit" "$stmt" $s > "$OUT/lean/$tag.own" 2>&1
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
-  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt \
+  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement $fstmt --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 done < "$WK/plan.tsv"

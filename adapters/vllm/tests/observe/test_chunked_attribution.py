@@ -9,17 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.engine import arrivals
+from verity_vllm.engine import arrivals, handle
 from verity_vllm.engine import chunks as CA
 from verity_vllm.pipeline import coverage_workloads as gw
 from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
 PROF = REPO / "workloads"
-# which `run_requests_arrivals` is present: the original loop measures the output lag from the first returned output (wrong under
-# chunked prefill; `attribute()` corrects it), the current one derives the forwards from the scheduler / clamps
-# the lag and exposes `scheduler_of`; the attribution's RESULT is the same on both, only the `corrections` record differs
-_OLD_LOOP = not hasattr(arrivals, "scheduler_of")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -184,20 +180,20 @@ def _R(rid: str, plen: int, n: int, a: int = 0):
 
 def _run(eng, reqs, *, with_scheduler: bool = True):
     llm = types.SimpleNamespace(llm_engine=eng)
-    sched = CA.scheduler_of(llm) if with_scheduler else None
+    sched = handle.scheduler_or_none(llm) if with_scheduler else None
     col = CA.Collector(sched)
     outs, timing = arrivals.run_requests_arrivals(llm, reqs, lambda r: types.SimpleNamespace(max_tokens=r.max_tokens), on_step=col.on_step)
     rep = CA.attribute(timing, col, {r.request_id: len(r.prompt_token_ids) for r in reqs})
     return outs, timing, rep
 
 
-def test_scheduler_of_finds_the_in_process_scheduler_or_none():
+def test_the_stub_engines_give_their_scheduler_where_they_have_one():
     eng = _ChunkedLaggedStubEngine(64)
-    assert CA.scheduler_of(types.SimpleNamespace(llm_engine=eng)) is eng.scheduler
+    assert handle.scheduler_or_none(types.SimpleNamespace(llm_engine=eng)) is eng.scheduler
     nested = types.SimpleNamespace(llm_engine=types.SimpleNamespace(engine_core=types.SimpleNamespace(engine_core=eng.engine_core)))
-    assert CA.scheduler_of(nested) is eng.scheduler
-    assert CA.scheduler_of(types.SimpleNamespace(llm_engine=_LaggedStubEngine())) is None
-    assert CA.scheduler_of(types.SimpleNamespace()) is None
+    assert handle.scheduler_or_none(nested) is eng.scheduler
+    assert handle.scheduler_or_none(types.SimpleNamespace(llm_engine=_LaggedStubEngine())) is None
+    assert handle.scheduler_or_none(types.SimpleNamespace()) is None
 
 
 def test_b1_chunked_prefill_three_chunks_and_the_lag_correction():
@@ -218,13 +214,7 @@ def test_b1_chunked_prefill_three_chunks_and_the_lag_correction():
     assert (rec["first_step"], rec["finish_step"], rec["arrive_step_realized"]) == (0, 16, 0)
     assert rep["steps_scheduled_tokens"][:3] == [{"x": 64}, {"x": 64}, {"x": 27}] and len(rep["steps_scheduled_tokens"]) == 17
     assert rep["chunked_prefill_observed"] and rep["max_prefill_chunks"] == 3 and rep["partial_prefill_steps_total"] == 2
-    c = rep["corrections"]
-    if _OLD_LOOP:
-        # the loop's own inference is on record: lag 3, 15 forwards, finish at 14 (what the control run 0917T213719-880581 said)
-        assert c["loop"] == {"engine_steps": 15, "output_lag_steps": 3, "requests": {"x": {"arrive_step_realized": 0, "first_step": 0, "finish_step": 14}}}
-        assert c["corrected"] == {"engine_steps": 17, "output_lag_steps": 1}
-    else:
-        assert c is None, c                    # the current loop derives the forwards itself and agrees: nothing to correct
+    assert rep["corrections"] is None, rep["corrections"]      # the loop derives the forwards itself and agrees: nothing to correct
     # every existing key is still there
     for k in ("arrive_step", "arrive_step_realized", "first_step", "finish_step", "finish_reason", "n_generated", "admit_iter", "finish_iter"):
         assert k in rec
@@ -234,11 +224,7 @@ def test_outputs_fallback_without_a_scheduler_infers_the_chunks_from_first_step_
     eng = _ChunkedLaggedStubEngine(64)
     outs, timing, rep = _run(eng, [_R("x", 155, 15)], with_scheduler=False)
     assert rep["source"] == "outputs" and rep["corrections"] is None
-    if _OLD_LOOP:
-        # nothing to correct with: the loop's mis-measured lag stands, and the record says what it can (documented limitation)
-        assert timing["engine_steps"] == 15 and timing["output_lag_steps"] == 3
-    else:
-        assert timing["engine_steps"] == 17 and timing["output_lag_steps"] == 1    # the loop clamps / reads the scheduler itself
+    assert timing["engine_steps"] == 17 and timing["output_lag_steps"] == 1    # the loop clamps / reads the scheduler itself
     rec = timing["requests"]["x"]
     assert rec["prefill_chunks"] is None and rec["first_token_step"] == rec["prefill_steps"][-1] and rec["token_steps"][0] == rec["first_token_step"]
     assert len(rec["token_steps"]) == 15
@@ -279,7 +265,7 @@ def test_a_waiting_request_is_not_credited_with_a_chunk_by_the_scheduler_source(
 def test_unchunked_lagged_engine_records_one_chunk_per_request_and_consecutive_token_steps():
     eng = _LaggedStubEngine()
     llm = types.SimpleNamespace(llm_engine=eng)
-    col = CA.Collector(CA.scheduler_of(llm))
+    col = CA.Collector(handle.scheduler_or_none(llm))
     reqs = [_R("r0", 3, 5, 0), _R("r1", 3, 3, 2), _R("r3", 3, 9, 9)]
     outs, timing = arrivals.run_requests_arrivals(llm, reqs, lambda r: types.SimpleNamespace(max_tokens=r.max_tokens), on_step=col.on_step)
     before = json.dumps(timing, sort_keys=True, default=str)
@@ -313,10 +299,7 @@ def test_an_idle_gap_between_arrivals_does_not_inflate_the_corrected_lag():
     assert (a["first_step"], a["finish_step"], a["token_steps"]) == (0, 2, [0, 1, 2])
     assert (b["arrive_step_realized"], b["first_step"], b["finish_step"]) == (3, 3, 8)
     assert b["prefill_steps"] == [3, 4, 5] and b["partial_prefill_steps"] == [3, 4] and b["token_steps"] == [5, 6, 7, 8]
-    if _OLD_LOOP:
-        assert rep["corrections"]["loop"]["engine_steps"] == 7        # the loop missed b's two partial chunks
-    else:
-        assert rep["corrections"] is None, rep["corrections"]
+    assert rep["corrections"] is None, rep["corrections"]
 
 
 def test_external_id_strips_vllms_internal_suffix_only_for_ids_we_know():
@@ -417,7 +400,7 @@ class _SyncStubEngine(_ChunkedLaggedStubEngine):
 def _run_sync(reqs, *, resolved_lag):
     eng = _SyncStubEngine(64)
     llm = types.SimpleNamespace(llm_engine=eng)
-    col = CA.Collector(CA.scheduler_of(llm))
+    col = CA.Collector(handle.scheduler_or_none(llm))
     outs, timing = arrivals.run_requests_arrivals(llm, reqs, lambda r: types.SimpleNamespace(max_tokens=r.max_tokens), on_step=col.on_step)
     loop = {"engine_steps": timing["engine_steps"], "output_lag_steps": timing["output_lag_steps"],
             "requests": {rid: {k: rec.get(k) for k in ("arrive_step_realized", "first_step", "finish_step")} for rid, rec in timing["requests"].items()}}
@@ -450,7 +433,7 @@ def test_f_r17_16_without_a_resolved_lag_the_same_record_reverts_the_correction_
 def test_f_r17_16_an_async_record_with_the_matching_resolved_lag_is_unchanged():
     eng = _ChunkedLaggedStubEngine(64)
     llm = types.SimpleNamespace(llm_engine=eng)
-    col = CA.Collector(CA.scheduler_of(llm))
+    col = CA.Collector(handle.scheduler_or_none(llm))
     reqs = [_R("x", 155, 15)]
     outs, timing = arrivals.run_requests_arrivals(llm, reqs, lambda r: types.SimpleNamespace(max_tokens=r.max_tokens), on_step=col.on_step)
     rep = CA.attribute(timing, col, {"x": 155}, resolved_lag=1)

@@ -4,14 +4,16 @@ the training formalism counts |C|, c and w in.
     python -m training_slowdown.gates           # the table
     python -m training_slowdown.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
 
-Each price is one of the circuits' own Definitions (`verity.definitions.ops.boolean`), at its whole gate count:
-AND + XOR + NOT as `verity.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
+Each price is one of the circuits' own Definitions (`verity.definitions.ops.boolean`, and the TF32 step's in
+`verity.definitions.registry.boolean_mhc`), at its whole gate count: AND + XOR + NOT as
+`verity.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
 `<module>.circuit-check.json` pins (`test_gates` holds both). A counted MAC is one multiply and one accumulate:
 
 - a GEMM MAC is a tensor-core dot product's gates over its K: bf16 (and f16, which has no Definition) at
   `HopperBF16WgmmaDot16_v2` / 16, the 26-bit-adder model sm_120's BF16 pipeline shares (`ml.circuits.targets.target`);
   FP8 at `BlackwellE4m3QmmaDot32_v2` / 32 or `BlackwellE5m2QmmaDot32_v2` / 32, NVFP4 at `BlackwellNvf4OmmaDot64_v2` /
-  64, f32 at `F32Fma_v4`;
+  64, f32 at `F32Fma_v4`, and an f32 GEMM under TF32 (cuda.matmul.allow_tf32, which a row names as the dtype `tf32`) at
+  `HopperTf32WgmmaDot8_v2` / 8, the k8 step cuBLAS's unsplit TF32 GEMM takes K/8 of a dot product (`GemmTf32_v1`);
 - an elementwise MAC (training_slowdown.flops's `mul`, `div`, `addcmul`, a scaled `add`, a counted forward op) is a bf16 multiply
   then a bf16 add (`Bf16MulBf16_v2` + `Bf16Add_v2`), or one `F32Fma_v4` in f32;
 - an optimizer's MAC (phase `other`/`optimizer`, role `param`) and dense linear algebra's are f32 (`F32Fma_v4`);
@@ -19,8 +21,11 @@ AND + XOR + NOT as `verity.circuits.evaluation.bits.compile(D).counts` gives the
 
 A record names each op's dtype from training_slowdown 4.0's capture on. A record without one (v2.3's `macs_log`) is priced by
 `ASSUMED`: GEMMs and forward or backward elementwise ops in bf16 (the lf model trains under bf16 autocast), the
-optimizer in f32; `of_log` lists every assumption it made. The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts)
-are in no record, so |C| here is the counted ops' gates.
+optimizer in f32; `of_log` lists every assumption it made. A torch dtype doesn't say whether a run set
+cuda.matmul.allow_tf32, so a float32 GEMM row is priced as the exact f32 one, and only a row whose dtype reads `tf32`
+as the TF32 one: whoever reads a record of a run that set it names its f32 GEMMs' rows so.
+The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts) are in no record, so |C| here is the counted
+ops' gates.
 """
 from __future__ import annotations
 
@@ -30,20 +35,23 @@ import sys
 
 from .opnames import GATHER_NAMES, LINALG_NAMES, gemm_like
 
-#: (module, AND, XOR, NOT) per Definition, from `compile(D).counts`; the AND count is circuit-check's pin
+#: (module, AND, XOR, NOT) per Definition, from `compile(D).counts`; the AND count is circuit-check's pin. A module is
+#: `verity`'s, its sidecar `<module>.circuit-check.json` beside it
 DEFINITIONS = {
-    "HopperBF16WgmmaDot16_v2": ("gemm", 7872, 15049, 761),
-    "BlackwellE4m3QmmaDot32_v2": ("gemm", 9128, 17402, 1025),
-    "BlackwellE5m2QmmaDot32_v2": ("gemm", 8931, 17231, 1251),
-    "BlackwellNvf4OmmaDot64_v2": ("gemm", 6864, 13949, 616),
-    "F32Fma_v4": ("elementwise", 4485, 7863, 289),
-    "Bf16MulBf16_v2": ("elementwise", 799, 1155, 99),
-    "Bf16Add_v2": ("elementwise", 717, 1061, 116),
+    "HopperBF16WgmmaDot16_v2": ("definitions.ops.boolean.gemm", 7872, 15049, 761),
+    "BlackwellE4m3QmmaDot32_v2": ("definitions.ops.boolean.gemm", 9128, 17402, 1025),
+    "BlackwellE5m2QmmaDot32_v2": ("definitions.ops.boolean.gemm", 8931, 17231, 1251),
+    "BlackwellNvf4OmmaDot64_v2": ("definitions.ops.boolean.gemm", 6864, 13949, 616),
+    "HopperTf32WgmmaDot8_v2": ("definitions.registry.boolean_mhc", 6524, 12120, 439),
+    "F32Fma_v4": ("definitions.ops.boolean.elementwise", 4485, 7863, 289),
+    "Bf16MulBf16_v2": ("definitions.ops.boolean.elementwise", 799, 1155, 99),
+    "Bf16Add_v2": ("definitions.ops.boolean.elementwise", 717, 1061, 116),
 }
 #: the Python names of `DEFINITIONS` in their modules
 PYTHON_NAMES = {"HopperBF16WgmmaDot16_v2": "HopperBF16WgmmaDot16", "BlackwellE4m3QmmaDot32_v2": "BlackwellE4m3QmmaDot32",
                 "BlackwellE5m2QmmaDot32_v2": "BlackwellE5m2QmmaDot32", "BlackwellNvf4OmmaDot64_v2": "BlackwellNvf4OmmaDot64",
-                "F32Fma_v4": "F32FmaV4", "Bf16MulBf16_v2": "Bf16MulBf16", "Bf16Add_v2": "Bf16Add"}
+                "HopperTf32WgmmaDot8_v2": "HopperTf32WgmmaDot8V2", "F32Fma_v4": "F32FmaV4", "Bf16MulBf16_v2": "Bf16MulBf16",
+                "Bf16Add_v2": "Bf16Add"}
 MUX_GATES_PER_BIT = 3
 
 
@@ -60,12 +68,14 @@ PRICES = {
     "gemm/e5m2": (("BlackwellE5m2QmmaDot32_v2", 32),),
     "gemm/fp4": (("BlackwellNvf4OmmaDot64_v2", 64),),
     "gemm/f32": (("F32Fma_v4", 1),),
+    "gemm/tf32": (("HopperTf32WgmmaDot8_v2", 8),),
     "elementwise/bf16": (("Bf16MulBf16_v2", 1), ("Bf16Add_v2", 1)),
     "elementwise/f16": (("Bf16MulBf16_v2", 1), ("Bf16Add_v2", 1)),
     "elementwise/f32": (("F32Fma_v4", 1),),
 }
+#: a row's dtype as `PRICES` names it; `tf32` is no torch dtype: it names an f32 GEMM the run computed under TF32
 DTYPES = {"bfloat16": "bf16", "bf16": "bf16", "float16": "f16", "f16": "f16", "float32": "f32", "f32": "f32",
-          "float8_e4m3fn": "e4m3", "float8_e5m2": "e5m2", "float4_e2m1fn_x2": "fp4"}
+          "tf32": "tf32", "float8_e4m3fn": "e4m3", "float8_e5m2": "e5m2", "float4_e2m1fn_x2": "fp4"}
 #: what a record without dtypes is priced as (module docstring)
 ASSUMED = {"gemm": "bf16", "elementwise": "bf16", "optimizer": "f32", "linalg": "f32"}
 OPTIMIZER_PHASES = {"other", "optimizer"}
@@ -164,7 +174,7 @@ def recompute() -> dict[str, tuple[int, int, int]]:
 
     out = {}
     for name, (module, *_) in DEFINITIONS.items():
-        mod = importlib.import_module(f"verity.definitions.ops.boolean.{module}")
+        mod = importlib.import_module(f"verity.{module}")
         c = compile_bits(getattr(mod, PYTHON_NAMES[name])).counts
         out[name] = (c.get("and", 0), c.get("xor", 0), c.get("not", 0))
     return out
@@ -181,7 +191,7 @@ def main(argv=None) -> int:
         print(json.dumps(bad or "every Definition's counts match", indent=1))
         return 1 if bad else 0
     for r in table():
-        print(f"{r['kind']:18} {r['gates_per_mac']:10.1f}  {r['from']}")
+        print(f"{r['kind']:18} {r['gates_per_mac']:12.3f}  {r['from']}")
     return 0
 
 

@@ -34,7 +34,8 @@
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
 #      each as soon as its session ends)  H1S_KEEP_CIRCUIT (a node directory each lowered circuit is kept in after prepare,
 #      as SHA512.txt, a hard link where it can be: the scratch, the circuit's other name, goes at exit)
-#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/protocols/flock/verifier`: the ZK server frame built from REV's
+#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/protocols/flock/verifier
+#      verity/circuits/base verity/circuits/lean verity/commitments/lean`, the last three where REV has them: the ZK server frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
 #      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each ZK server session: the session runs
 #      the frame of the last *.tgz by name, so a later frame dropped in mid-share serves the lanes after it. Move a tarball
@@ -54,10 +55,10 @@ setup
 fw_frame() {   # fw_frame TGZ: the ZK server frame built from TGZ, cached by the tarball's hash; its binary's path on stdout
   local fd
   fd=$HZ_CACHE/firewall-$(sha256sum "$1" | cut -c1-16)
-  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
-    && tar -xzf "$1" -C "$fd" --strip-components=4 && cd "$fd" && lake build flock-firewall; }) \
+  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
+    && tar -xzf "$1" -C "$fd" --strip-components=1 && cd "$fd/protocols/flock/verifier" && lake build flock-firewall; }) \
     < /dev/null >> "$OUT/build-firewall.log" 2>&1
-  echo "$fd/.lake/build/bin/flock-firewall"
+  echo "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall"
 }
 fw_last() { ls "${H1S_FIREWALL_TGZ_DIR:?}"/*.tgz 2>/dev/null | LC_ALL=C sort | tail -1; }
 FWDIR=${H1S_FIREWALL_TGZ_DIR:-}
@@ -230,7 +231,7 @@ lean_check() {   # lean_check TAG CAP: the plan's Lean check of TAG, in the fore
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return 0; }
   env -u FC_FIREWALL -u FC_HOST_WITNESS -u FC_FIREWALL_STATEMENT -u FC_FIREWALL_HELLO_ARGS \
-    $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $LEAN verify --zk --circuit $D/circuit.txt \
+    $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err"
 }
@@ -303,7 +304,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect; do
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
-  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt \
+  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 done < "$WK/plan.tsv"

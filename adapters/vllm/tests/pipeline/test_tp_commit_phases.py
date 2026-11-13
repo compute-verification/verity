@@ -67,7 +67,9 @@ def timeline(tmp_path, monkeypatch) -> Path:
 
 def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_failed_step_was_in(timeline, tmp_path, monkeypatch):
     """The first instrumented run's finalize fails on a rank: every span before it ended ok, the run's span ended not ok with the
-    error on its way out, and nothing is left open (the reader would run an open span on to `now`)."""
+    error on its way out, and nothing is left open (the reader would run an open span on to `now`).  Inductor's config is unloaded
+    for the test: another test in the same worker may have imported it before the engine's pin, which
+    `engine.env.require_inductor` refuses."""
     pytest.importorskip("torch")
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
@@ -87,6 +89,7 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
     vllm = ModuleType("vllm")
     vllm.LLM = llm
     monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
                                (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),

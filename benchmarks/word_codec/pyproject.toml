@@ -1,7 +1,6 @@
 # The word codec's benchmarks and their tests. Not a package: `kv.cu` and `kv_bench.py` run on a GPU node (`run.sh`), and
-# the byte-exact references (`codec.py`, `wide.py`, `kv.py`) with the kernels' arithmetic twins (`twin.py`, `kv_twin.py`),
-# and the rate audit's γ bound as arithmetic (`model/gamma.py`) with its frontier at the squaring floor
-# (`model/frontier.py`), run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
+# the byte-exact references (`codec.py`, `wide.py`, `kv.py`) with the kernels' arithmetic twins (`twin.py`, `kv_twin.py`)
+# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -13,5 +12,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/hardware",
-          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]  # model/gamma.py and kv_bench.py read the RTX PRO 6000's card
+          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]

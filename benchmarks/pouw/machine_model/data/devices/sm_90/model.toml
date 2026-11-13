@@ -6,6 +6,10 @@
 # 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was optimistic). `current` stays DC-90; the refit is the vector DC-90-ri (read it with `eps --vector DC-90-ri`).
 current = "DC-90"
 epochs = ["DC-90", "DS-90", "DC-90-ri"]
+# The card file (verity/hardware/cards/) θ and the opcode table read this device's ceilings from.
+card = "h200-sxm-141gb"
+# The card file of the host the device sits in, which θ's host rates read (`host:PATH`).
+host = "xeon-platinum-8468-2s"
 
 # The CUDA lane classes a word on lanes may use: every lane class the census prices. LOP3, SHF and LEA.HI share ALU's
 # pipe row A; FFMA has only the issue rows. No IDP4A or LDS kind is measured on sm_90. The uniform datapath (UNI, on

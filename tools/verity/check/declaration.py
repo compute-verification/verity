@@ -4,7 +4,6 @@ A job is a `[[job]]` table:
 - `name`: unique;
 - `owner`: a handle in the Slack registry (`.agents/skills/using-slack/registry.json`), the agent to ask about the job;
 - `group`: check.py's group, numbered from 1; the groups run at once, and a group's jobs run in file order;
-- `halts`: optional, its failure stops the run;
 - `halts_on`: optional, a line in its output that stops the run;
 - `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
@@ -49,7 +48,7 @@ PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
 #: drive's policy (`research.policy`), whose `off_gate` takes jobs off the merge gate
 POLICY = ROOT / "tools" / "verity" / "check" / "policy.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
-FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
+FIELDS = {"name": str, "owner": str, "group": int, "halts_on": str, "merge_requires": list, "needs": list,
           "after": str, "part": str, "shards": int}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
@@ -72,7 +71,6 @@ class Job:
     name: str
     owner: str
     group: int
-    halts: bool = False
     halts_on: str | None = None
     merge_requires: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
@@ -129,7 +127,7 @@ def parse(text: str, handles: set[str], source: str = "ci.toml", off: tuple[str,
         if bad := [n for n in t.get("needs", []) if n not in earlier]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
-        jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
+        jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts_on"),
                         tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part"),
                         t["name"] not in off, t.get("shards")))
     if not jobs:

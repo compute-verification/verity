@@ -18,6 +18,7 @@ from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.engine.arrivals import run_requests_arrivals  # step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.engine import chunks as _chunks  # prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine.handle import scheduler_or_none
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
                                       effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
                                       parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
@@ -184,7 +185,7 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
     # after every step() (pure reads; nothing patched, nothing on the device), the returned tokens are counted per iteration; after
     # the run `chunks.attribute` adds prefill_steps / prefill_chunks / partial_prefill_steps / first_token_step /
     # token_steps to every `timing["requests"][rid]` and `timing["chunk_attribution"]` run-wide.  Every existing key is unchanged.
-    chunks = _chunks.Collector(_chunks.scheduler_of(engine.llm))
+    chunks = _chunks.Collector(scheduler_or_none(engine.llm))
 
     def _collect(outs) -> None:
         for o in outs:

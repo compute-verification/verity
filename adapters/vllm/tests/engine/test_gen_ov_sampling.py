@@ -126,7 +126,7 @@ def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
 
 def _oracle(V: int, seed: int, pos: int, words: list[int]) -> int:
     import numpy as np
-    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
+    from tests.engine.gumbel_oracle import gumbel_noise_exact
     logits = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
     y = logits + gumbel_noise_exact(seed, pos, V)      # f32 add, round-to-nearest (the kernel's `logits + gumbel`)
     return int(np.argmax(y))                            # lowest index on ties, like the kernel's block-max scan
@@ -275,7 +275,7 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     from verity.circuits.evaluation.reference import evaluate_region
     from verity.definitions.registry import prims as P
     from verity.definitions.registry.sampling import GumbelArgmaxTempBf16
-    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
+    from tests.engine.gumbel_oracle import gumbel_noise_exact
     V, seed, pos = 80, 11, 5
     for T in (0.7, 1.3):
         tb = int(np.float32(T).view(np.uint32))

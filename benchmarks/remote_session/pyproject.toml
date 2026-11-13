@@ -1,7 +1,6 @@
 # The remote bandwidth audit's sessions end to end: the verifier's process (`verifier_process.py`, which runs
 # `verity/protocols/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
-# (`prover.py`, its GPU backend `device.py` and `session.cu`, and `inplace.py`, its pass over vLLM's tensors where they
-# are). Not a package: `run.sh` runs both on a GPU node (`inplace.sh` gates the in-place pass), and the suite
+# (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
 # (`uv run tools/verity/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
 # `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are. `sampling_inputs.py`
@@ -26,6 +25,7 @@ untraced = [
     "tests/test_challengers.py",
     "tests/test_gate.py",
     "tests/test_gate_lease.py",
+    "tests/test_gate_run.py",
     "tests/test_gate_whatif.py",
     "tests/test_lease.py",
     "tests/test_session.py",
@@ -42,6 +42,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           # path requires
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/difftest/python",

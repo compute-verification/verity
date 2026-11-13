@@ -199,10 +199,10 @@ def serve(a: argparse.Namespace) -> int:
     cap = out / "capacity"
     real_site = S.plugin_site
 
-    def plugin_site(site: Path, tick: bool) -> Path:
+    def plugin_site(site: Path, arm: S.Arm) -> Path:
         """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write, and the route capture's
         plugin when LADDER_ROUTE_CAPTURE names it (serve_tax builds the server's environment after its site)."""
-        d = P.site(real_site(site, tick), pin=pin() == "pinned",
+        d = P.site(real_site(site, arm), pin=pin() == "pinned",
                    tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
         if ENV.LADDER_ROUTE_CAPTURE:
             route_capture_site(d, Path(ENV.LADDER_ROUTE_CAPTURE))

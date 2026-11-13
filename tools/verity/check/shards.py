@@ -3,7 +3,7 @@ allows, where ci.toml's `[[plan]]`s are written by hand (they stay, as fallbacks
 
 Its tasks are the check's parts with the test steps split by suite: each suite of pytest and of lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`), each Lake package's audit (`lean-audit:PKG`), circuit-check's `circuit-check:K/M` (its ci.toml
-`shards`), and every other job whole (the builds, lean-changed, ratchet-gate).  A suite that declares `[tool.verity.tests]
+`shards`), and every other job whole (the builds, ratchet-gate).  A suite that declares `[tool.verity.tests]
 parts = P` is its P parts by test id, `JOB:SUITE:K/P`, each at 1/P of its seconds; another measured past `SPLIT_S` is split by test
 file into M = ceil(seconds / `SPLIT_S`) parts (`split_m`, at most one per file), `pytest:SUITE:K/M`, each `suites.py SUITE:K/M`
 (`suites.partition`: its files packed longest first by their recorded seconds) and priced at its share of the suite's seconds.
