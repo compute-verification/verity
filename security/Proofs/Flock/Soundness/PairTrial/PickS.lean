@@ -38,7 +38,8 @@ theorem pickOf_isColl {W : Type} {ws : List W} {p : W → Prop} {pr : W → List
   obtain ⟨w, hw, hp⟩ := h
   have hs : (ws.find? fun w => decide (p w)).isSome := List.find?_isSome.2 ⟨w, hw, decide_eq_true hp⟩
   obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 hs
-  have hv' : p v := of_decide_eq_true (List.find?_some hv)
+  have h1 := List.find?_some hv
+  have hv' : p v := of_decide_eq_true h1
   refine ⟨(pr v).1, (pr v).2, ?_, hpr v hv'⟩
   unfold pickOf
   rw [hv]
