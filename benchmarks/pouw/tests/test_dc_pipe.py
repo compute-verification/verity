@@ -3,25 +3,15 @@ registers a block of its warps can't launch with, and the adversary's two bounds
 the round trip. The kernels themselves need a B200 (dc/pipe.sh)."""
 from __future__ import annotations
 
-import importlib.util
 import types
 from pathlib import Path
 
-import pytest
+import pipe
 
-DC = Path(__file__).resolve().parents[1] / "dc"
 #: pgemm.cu's 38 kernels (NB, LW, MODE, MI): four (NB, LW) in four modes and (4, 4) without the honest mode, each with
 #: one MMA warp and with one a tile
 KERNELS = [(nb, lw, mode, mi) for nb, lw in ((2, 1), (2, 2), (4, 1), (4, 2), (4, 4)) for mode in range(4)
            for mi in (0, 1) if (lw, mode) != (4, 2)]
-
-
-@pytest.fixture(scope="module")
-def pipe():
-    spec = importlib.util.spec_from_file_location("dc_pipe_under_test", DC / "pipe.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def _build(out: Path, registers: dict[tuple[int, int, int, int], int]) -> None:
@@ -40,7 +30,7 @@ def _build(out: Path, registers: dict[tuple[int, int, int, int], int]) -> None:
     (out / "sass" / "pgemm.sass").write_text("\n".join(sass) + "\n")
 
 
-def test_gate_build_holds_each_kernel_to_the_registers_its_block_launches_with(pipe, tmp_path, capsys):
+def test_gate_build_holds_each_kernel_to_the_registers_its_block_launches_with(tmp_path, capsys):
     """An SMSP's 16,384 registers over the warps it holds, in threads of 32, rounded down to 8 and at most 255: 12 warps
     (NB = 4, LW = 2, an MMA warp a tile) launch with 168 registers and 5 warps (NB = 2, LW = 1) with 255."""
     assert len(KERNELS) == pipe.KERNELS
@@ -56,7 +46,7 @@ def test_gate_build_holds_each_kernel_to_the_registers_its_block_launches_with(p
     assert refused.err == "REFUSED pg100<4,2,2,1>\n"
 
 
-def test_eps_tensor_l32_bounds_the_adversary_by_the_balance_and_by_the_round_trip(pipe, monkeypatch):
+def test_eps_tensor_l32_bounds_the_adversary_by_the_balance_and_by_the_round_trip(monkeypatch):
     """With ρ_T5 = 256, honest's TMEM stage at 128 words/SM/clk and the best of the pipeline and self-wait arms at 160
     slots/SM/clk: T1 is 1/2; the adversary at the load balance (0.9) keeps 230.4 tcgen05 words, and held to the round
     trip min(0.9, 160/256) = 0.625 of ρ_T5, each with the shared pipe's slack at its t in mma.sync (here 64 (1 − t))."""

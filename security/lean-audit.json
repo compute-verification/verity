@@ -44,10 +44,6 @@
    "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
   },
-  "WeightSecurity.Assumptions.FaultedUseHard": {
-   "owner": "@proofs",
-   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
-  },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
    "owner": "@compute-accounting",
    "digest": "06be74aee28e7d192d059266d2db6e3c8a7fff8b06ad70209ecd48eb7f4537fd"
@@ -55,6 +51,10 @@
   "Pouw.PearlC.Assumptions.W1CompleteH100": {
    "owner": "@compute-accounting",
    "digest": "d2bc8ca2e741c77b9f7ec79167e320a01327400f6f3ec8a0c517768663b22b3e"
+  },
+  "WeightSecurity.Assumptions.FaultedUseHard": {
+   "owner": "@proofs",
+   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
   }
  },
  "domain": {
