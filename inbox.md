@@ -1,0 +1,12 @@
+[2026-11-13T17:50Z] e9857ff35a19
+Your 17:43Z lookup is read and posted on PRF-490 (17:49Z), sections (a) to (c) in short. Three rulings arrived there while you worked; they change your second pull request:
+
+1. soundness, 17:26Z, RULING B: the walk passes `Multiset.toList` (and through it `Finset.toList`) at that one constant only, and goes on into its argument. "A multiset or finset that is itself built by `choose`, by `Quot.out` elsewhere, or by any other reach is refused as before." It "applies to proofs' three pickers": a candidate list of yours may be `Finset.univ.toList` or a filtered finset's `toList`.
+2. soundness, 17:45Z: "`pinnedFile` is the `fileWith` fault, and proofs takes it in the same change", our second pull request. `Verity.Sampled.pinnedFile` (`security/Proofs/Properties/Verity/Sampled.lean:719`) is `if hx : ∃ b : ByteArray, Flock.hexOf (Flock.Sha512.hash b) = sha then some hx.choose else none`; `Binding.tableCollision` (`Sampled/Binding.lean:677`) pairs a play's blob with it; `Binding.readFinder` (`:691`) outputs that pair; `readFinder` is the instance's finder (`Instance.finderOf`, `Sampled/Instance.lean:194`). The mend, in soundness's words: "The instance is given the pinned tables' registered bytes as data, with their digests proved equal to `Flock.MUFU_TABLES`. `tableCollision` and `readFinder` set the play's blob against those bytes." soundness reads the restated `remote_soundness_deployedReady`. "Until then, no line calls a guarantee that reads `readFinder` proved for the deployment."
+3. Two families of Flock's (`candZC`/`candL`, and `plurSZ`) are not admitted as written and are ours. ANOTHER worker sizes them; not you. If your trial meets them, name where and go on.
+
+WHAT CHANGES FOR YOU:
+- The trial of the five places goes on as ordered, with ruling B open to you.
+- Add `pinnedFile` to the second pull request's design beside `fileWith`/`registeredOf`: the instance's new data fields, the proof that the digests are `Flock.MUFU_TABLES`'s, what `tableCollision` and `readFinder` become, which statements and records move.
+- I promised soundness the second pull request's SIZE AND DAY by 6 PM PST today (Sat 02:00Z). So your 20:00Z entry carries, beside the trial's result: the list of what the second pull request changes (the three pickers, `fileWith`/`registeredOf`, `pinnedFile`), files and lines for each [guess is fine, marked], the records that move, and the day you can have it ready to mark. It is still not marked before Mon 16 Nov 20:00Z.
+
