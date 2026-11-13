@@ -31,24 +31,24 @@ and return to the coordinator.
 
 ## 3. Launch: ONE lease tonight, on node A (from /agent/repos/verity, shipping the worktree)
 
-Tonight is one lease, the first kernel first. The card script takes one lease per capture, so tonight runs `eh_norm` only;
-`eh_proj` and `indexer_logits` go to Friday's row (15:45Z, card 0), which holds the capture of record.
+Tonight is one lease, the first kernels first: `jobs/card_row.sh` (shipped with `--send`) takes ONE `gpu-lease` on card 0
+with `--cores 0-9` and runs the captures in order under it, each pinned with `taskset -c 0-9`. It starts nothing before
+NOT_BEFORE (exit 75 on the node, nothing touched), nothing when card 0 holds a compute process or 1 GiB or more (exit 75),
+and nothing with under 5 minutes of lease left. The lease ends by END less 2 minutes (03:43Z), each capture is ended at END
+less 3 minutes (03:42Z), and none starts with under 4 minutes to that. What does not finish goes to Friday's row, which
+holds the capture of record (there: the pull request's `glm53_mtp_capture_card.sh`, one lease a capture).
 
 - Launch at or after 03:15:00Z by `date -u` read in its own command (read it twice: the first read after a wait is stale).
-  Every launch carries `NOT_BEFORE=2026-11-13T03:15:00Z`; the guard in front of the card script refuses on the node before
-  it (exit 75, nothing touched).
-- MAX_MIN = the whole minutes left before 03:43Z at launch, at most 28; launch nothing with under 5 left.
-- The card script checks card 0 holds no compute process and under 1 GiB (else exits 75, touching nothing), then takes ONE
-  `gpu-lease` on card 0 with `--cores 0-9` and `--max-min $MAX_MIN`, the job pinned with `taskset -c 0-9`.
 - Card 0 busy at 03:15Z (exit 75 from the start check) means vllm's serve overran: wait (the waiting tool), launch again,
   last start 03:25Z; say in the return how many minutes it cost. A lease refused at the quota: no retry; read who holds
   what (`gpu-lease` prints it) and write one checkpoint line with the refusal's text.
 
-    cd /agent/repos/verity && uv run -q --project tools/research research run --on vy-spot-glm53 --project verity --source /tmp/cir263-pr --cwd source --timeout 1800 --wait --env NOT_BEFORE=2026-11-13T03:15:00Z --env CARD=0 --env CORES=0-9 --env GPU_LEASE_WHO=circuits-draftkernels --env MAX_MIN=28 -- bash -c 'nb=$(date -u -d "$NOT_BEFORE" +%s); if [ "$(date -u +%s)" -lt "$nb" ]; then echo "before NOT_BEFORE=$NOT_BEFORE: starting nothing"; exit 75; fi; exec bash adapters/vllm/tests/properties/glm53_mtp_capture_card.sh "$0"' eh_norm
+    cd /agent/repos/verity && uv run -q --project tools/research research run --on vy-spot-glm53 --project verity --source /tmp/cir263-pr --cwd source --timeout 1740 --wait --send /tmp/cir263-scratch/scratch/cir263/jobs/card_row.sh --env NOT_BEFORE=2026-11-13T03:15:00Z --env END=2026-11-13T03:45:00Z --env CARD=0 --env CORES=0-9 --env GPU_LEASE_WHO=circuits-draftkernels -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/card_row.sh" eh_norm eh_proj indexer_logits'
 
 Friday's row (15:45Z-17:45Z, card 0, cores 0-9; CIR-264 from 17:45Z), one capture a lease, each after the previous ended,
-NOT_BEFORE=2026-11-13T15:45:00Z and MAX_MIN the whole minutes left before 17:43Z (at most 30): `eh_proj`, then
-`indexer_logits`, then `eh_norm` again if tonight's did not finish; the same line with the name changed.
+with the card script (`--env MAX_MIN=30 ... -- bash adapters/vllm/tests/properties/glm53_mtp_capture_card.sh NAME`), not before
+15:45:00Z and MAX_MIN the whole minutes left before 17:43Z (at most 30): each capture tonight's lease did not finish,
+`eh_proj` first (`--scans DIR` reuses an earlier run's finished scan chunks on the node), then the three of record.
 
 `--wait` stops after 20 minutes; then read `research status RUN --refresh` between waits (the waiting tool, never a shell
 sleep), and `research fetch RUN --all` when done.
