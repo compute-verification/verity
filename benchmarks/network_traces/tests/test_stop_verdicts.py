@@ -1218,13 +1218,16 @@ def stands_against(kind: str, x: object, stays: list[tuple[str, object]], contro
     return None if its and all(_counts(c) for c in its) else STANDS[9]
 
 
-def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[str, str]]) -> tuple[int, set[str]]:
+def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[str, str]]
+             ) -> tuple[int, set[str], int]:
     """Leaves one thing at a time out of what the reader is handed of a run `old` beside a run `new`, over each
     pair of their files and with neither, the one or the other superseded: one record of each file, each whole
     file, and the run itself, of the runs handed. Asserts that what is held goes up only where a thing left out
-    stands against one that stays (`stands_against`), and returns how many cases it saw and the ways those that
-    raised it stood. The runs' names are symmetric, so leaving out of `old` covers both."""
-    seen, ways = 0, set()
+    stands against one that stays (`stands_against`), and that such things are the cause: with them alone put
+    back, of a file or a run left out, what is held is not raised. Returns how many cases it saw, the ways those
+    that raised it stood, and how many files and runs raised it. The runs' names are symmetric, so leaving out of
+    `old` covers both."""
+    seen, ways, files = 0, set(), 0
     for a, old in olds.items():
         for b, new in news.items():
             runs = {"old": old, "new": new}
@@ -1243,7 +1246,15 @@ def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[st
                     stood = {why for kind, x in gone if (why := stands_against(kind, x, stays, controls))}
                     assert stood, (a, b, superseded, what, before, after)
                     ways |= stood
-    return seen, ways
+                    # of a file or a run left out, the records that stand against what stays, alone put back
+                    if whole := old.keys() - (less or {}).keys():
+                        back = {path: "".join(line for line in old[path].splitlines(keepends=True)
+                                              for kind, x in things({path: line})
+                                              if stands_against(kind, x, stays, controls)) for path in whole}
+                        only = SV.of_runs(Store(tmp, runs | {"old": (less or {}) | back}), ["old", "new"], superseded)
+                        assert only.held <= before, (a, b, superseded, what, before, only.held)
+                        files += 1
+    return seen, ways, files
 
 
 def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one_that_stays(tmp_path):
@@ -1256,13 +1267,13 @@ def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one
     # the things one run's files can be left without: the run, each file and each record, over the kinds
     cases = sum(1 + len(list(less_by_one(files))) for files in kinds.values())
     assert (len(kinds), cases) == (25, 337)
-    seen, ways = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
-    assert (seen, ways) == (2 * 3 * cases, set(STANDS))
+    seen, ways, files = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
+    assert (seen, ways) == (2 * 3 * cases, set(STANDS)) and files
 
 
 @pytest.mark.slow
 def test_leaving_a_thing_out_of_any_two_runs_raises_what_is_held_only_where_it_stood_against_one_that_stays(tmp_path):
     """The same over every pair of the kinds of run files, with neither, the one or the other superseded."""
     kinds = run_files()
-    seen, ways = left_out(tmp_path, kinds, kinds)
-    assert (seen, ways) == (3 * 337 * len(kinds), set(STANDS))
+    seen, ways, files = left_out(tmp_path, kinds, kinds)
+    assert (seen, ways) == (3 * 337 * len(kinds), set(STANDS)) and files
