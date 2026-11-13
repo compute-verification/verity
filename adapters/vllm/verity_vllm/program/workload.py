@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.codec import _spec_id, decode_program, encode_program, program_digest
-from verity.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
+from verity.circuits.defs import Body, CompositeDefinition, BodyNode, SpecializedDefinition
 from verity.definitions.circuits.constants import REGISTRATION
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
@@ -40,7 +40,7 @@ from verity_vllm.program.shared_definitions import canonicalize
 SCHEMA = "verity/workload-program/v1"
 
 
-def _is_input_node(n: Node) -> bool:
+def _is_input_node(n: BodyNode) -> bool:
     return n.form == "batch" and is_input(n.fn)
 
 
@@ -210,7 +210,7 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
     logs: dict = {}
-    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
+    nodes = [BodyNode(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
                   name=n.name) for n in body.nodes[K:]]
     offsets = [0]
     for n in nodes:
