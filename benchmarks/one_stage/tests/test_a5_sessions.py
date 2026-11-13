@@ -2,7 +2,7 @@
 ``--session-jobs`` takes only 1, kept so the commands that pass it still run, and the proof server an audit proves its
 members on behind the ZK server (`a5.proof_server`) verifies none ahead and starts every member's Lean session loop on
 the one environment its members agree on. Its verifiers take their sessions' coin trees through the audit's relay where
-there is one."""
+there is one, and a TP rank's row carries the audit's word for where they came from (``coin_trees``)."""
 
 from __future__ import annotations
 
@@ -64,6 +64,20 @@ def test_on_the_windows_challenger_session_the_proof_servers_verifiers_take_thei
     own = a5.proof_server(args(loop), tmp_path, [dict(window)])
     assert own.challenger and own.tree_from == []
     own.close()
+
+
+@pytest.mark.parametrize("word", ["window", "own"])
+def test_a_tp_ranks_row_carries_the_audits_word_for_where_its_sessions_coin_trees_came_from(tmp_path, monkeypatch, word):
+    """`a5.tp_rank`'s row of the step's summary copies the audit's ``coin_trees``. The rank's window of record and its
+    audit are stand-ins: the audit itself sets the word (`test_audit_two_members`)."""
+    from verity_vllm.pipeline.tp import serving_rows
+
+    monkeypatch.setattr(serving_rows, "window_of_record", lambda *_: (None, {"tp": 2}))
+    monkeypatch.setattr(a5, "audit", lambda *_, **__: ({"coin_trees": word}, True))
+    a = argparse.Namespace(windows=str(tmp_path), advice_opening=None, tp_commit=None, partition=None, build_root=None,
+                           workload=None, port=0, coins=None)
+    row = a5.tp_rank(a, {}, tmp_path, 1, 0)
+    assert (row["ok"], row["coin_trees"]) == (True, word)
 
 
 def test_with_no_zk_server_the_proof_server_is_spot_flocks(tmp_path):
