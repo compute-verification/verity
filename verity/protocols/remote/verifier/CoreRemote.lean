@@ -90,14 +90,14 @@ def policyRecord (k : Case) : Option (List ByteArray) :=
 /-- The digests of the window records a period's case names, in its close's order: each window's Commit record as the
 period's credit reads it (`PouwCheck.Credit.commitOf?`, under the auditor's ledger); `none` when the evidence doesn't
 decode or a window names no Commit record, which the period refuses. -/
-def windowRecords (k : Case) : Option (List ByteArray) := do
+def executionPhaseRecords (k : Case) : Option (List ByteArray) := do
   let e ← (PouwCheck.Period.evidenceOf k.evidence).toOption
   let .arr ws := e.windows | none
   ws.toList.mapM fun w => (PouwCheck.Credit.commitOf? (PouwCheck.get w "commit")).map (·.1)
 
 /-- Every window of the period on the policy's record. -/
 def windows : Tie :=
-  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.Period.protocolId, windowRecords)]⟩
+  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.Period.protocolId, executionPhaseRecords)]⟩
 
 def protocol : BlobProtocol := tiedSameB "verity/remote/v0" tied [windows] components
 
@@ -164,14 +164,14 @@ private def recordsOf (policy period sampled : String) : Answer :=
 
 -- a period's windows name records by their Commit records' digests, which are the policy's and sampled proofs' digests
 -- of one record; a window on another record is a stray
-private def windowOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
-private def periodOn (rs : List String) : Case :=
+private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
+private def monitoringPeriodOn (rs : List String) : Case :=
   { refused PouwCheck.Period.protocol with
-    evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map windowOn) ++ "]}").toUTF8 }
+    evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
 private def strayOf (policy : String) (rs : List String) : Option String :=
-  windows.strays [committing NciCheck.Protocol.protocol policy, periodOn rs]
-#guard (windowRecords (periodOn [record 0, record 0])).map (·.length) == some 2
-#guard windowRecords (periodOn [record 0]) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
+  windows.strays [committing NciCheck.Protocol.protocol policy, monitoringPeriodOn rs]
+#guard (executionPhaseRecords (monitoringPeriodOn [record 0, record 0])).map (·.length) == some 2
+#guard executionPhaseRecords (monitoringPeriodOn [record 0]) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
 #guard policyRecord (committing NciCheck.Protocol.protocol (record 0)) ==
   (VStar.Recursive.Sampled.protocol.commitment (record 0).toUTF8).toOption.map
     fun c => [VStar.Recursive.Sampled.protocol.digest c]
@@ -206,12 +206,12 @@ private def tableEntry (value root domain : String) (leaves : Nat) : Json :=
   Json.mkObj [("domain", domain), ("leaves", leaves), ("root", root), ("value", value), ("words", 1)]
 
 /-- The window's round-0 A table at K = 64, one call of M = 4 rows of one chunk, and its round-0 input-ids table. -/
-private def windowA : Json := tableEntry "pouw/h1/a/64@0" (rep "ab") (rep "a1") 4
-private def windowIds : Json := tableEntry "pouw/h1/ids@0" (rep "ba") (rep "a2") 8
+private def executionPhaseA : Json := tableEntry "pouw/h1/a/64@0" (rep "ab") (rep "a1") 4
+private def executionPhaseIds : Json := tableEntry "pouw/h1/ids@0" (rep "ba") (rep "a2") 8
 
 private def recW : Json := Json.mkObj [("format", "verity/registration/v2"), ("previous", Json.null),
   ("program", rep "11"), ("protocol", Spot.Registration.PROTOCOL),
-  ("registered", Json.arr #[windowA, windowIds]),
+  ("registered", Json.arr #[executionPhaseA, executionPhaseIds]),
   ("window", Json.mkObj [("entry", 0), ("kind", "served"), ("open_root", rep "0e"), ("refused", Json.arr #[])])]
 
 /-- The audited circuit: one `CoreSpotPair` instance over `x`, beside the window's two tables as registered
@@ -244,8 +244,8 @@ private def runRecord (previous : Json) (registered : Array Json) : Json := Json
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window", Json.mkObj [("kind", "served"), ("run", "r-1")])]
 
 /-- `W`'s tables under the Commit's names: its entries, root and domain included. -/
-private def reused : Array Json := #[windowA.setObjVal! "value" (PouwCheck.Credit.commitRows 0 64),
-  windowIds.setObjVal! "value" (PouwCheck.Credit.commitIds 0)]
+private def reused : Array Json := #[executionPhaseA.setObjVal! "value" (PouwCheck.Credit.commitRows 0 64),
+  executionPhaseIds.setObjVal! "value" (PouwCheck.Credit.commitIds 0)]
 
 private def recR : Json := runRecord (digestOf recW) reused
 
@@ -301,7 +301,7 @@ private def sampledOn (log : Array Json) (outputs : Option Json) (rec : Json) : 
     commitment := (textOf rec).toUTF8, evidence := (textOf (sampledEvidence rec)).toUTF8 }
 
 /-- A period of one window per record of `recs`, each naming it as its Commit record, under an empty ledger. -/
-private def periodNaming (recs : List Json) : Case :=
+private def monitoringPeriodNaming (recs : List Json) : Case :=
   { id := PouwCheck.Period.protocolId, params := r#"{"key":null,"main":[],"name":"p"}"#, commitment := "[]".toUTF8,
     evidence := (textOf (Json.mkObj [("pins", Json.arr #[]), ("windows", Json.arr (recs.map fun r =>
       Json.mkObj [("commit", Flock.hexOf (textOf r).toUTF8)]).toArray)])).toUTF8 }
@@ -317,9 +317,9 @@ private def boundOn (cs : List Core.Protocol) (xs : List Case) : ByteArray :=
 -- every reader of remote reads one record, `R`: the policy's, sampled proofs' and the window's Commit record
 #guard (policyRecord (policyOn #[recW] recR)).map (·.map Flock.hexOf) == some [digestOf recR]
 #guard committedBy VStar.Recursive.Sampled.protocol.id (components.map noBlobs)
-  [policyOn #[recW] recR, periodNaming [recR], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR] ==
+  [policyOn #[recW] recR, monitoringPeriodNaming [recR], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR] ==
     (policyRecord (policyOn #[recW] recR)).bind List.head?
-#guard windowRecords (periodNaming [recR]) == policyRecord (policyOn #[recW] recR)
+#guard executionPhaseRecords (monitoringPeriodNaming [recR]) == policyRecord (policyOn #[recW] recR)
 #guard (PouwCheck.Credit.commitOf? (.str (Flock.hexOf (textOf recR).toUTF8))).map (Flock.hexOf ·.1) ==
   some (digestOf recR)
 
@@ -393,19 +393,19 @@ private def rounds : Array Json := #[Json.mkObj [("request_table", rep "cd"), ("
 private def layout : Json := jsonOf r#"{"calls":[["q",0]],"linears":[["q",64,64]],"m":4,"tile":[4,64]}"#
 private def arowOn (rec : Json) : Option (Except (String × String) Unit) :=
   (PouwCheck.Credit.commitOf? (.str (Flock.hexOf (textOf rec).toUTF8))).map fun (_, reg) =>
-    PouwCheck.Credit.Internal.arow rounds (Json.arr #[windowA, windowIds]) reg layout "pouw/h1/"
+    PouwCheck.Credit.Internal.arow rounds (Json.arr #[executionPhaseA, executionPhaseIds]) reg layout "pouw/h1/"
 #guard (arowOn recR).map (·.toOption.isSome) == some true
 #guard (arowOn recW).map (fun r => match r with | .error (c, _) => c | .ok _ => "ok") == some "arow"
 
 -- the tie: the period's one window on `R` holds it, a window on `W` is a stray
-#guard windows.strays [policyOn #[recW] recR, periodNaming [recR]] == none
-#guard windows.strays [policyOn #[recW] recR, periodNaming [recW]] ==
+#guard windows.strays [policyOn #[recW] recR, monitoringPeriodNaming [recR]] == none
+#guard windows.strays [policyOn #[recW] recR, monitoringPeriodNaming [recW]] ==
   some s!"record: {NciCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
 
 -- remote on the three cases: the policy accepts `R` and the window names it, so remote's refusals are the period's own,
 -- whose credit reads an auditor's ledger, here empty, and sampled proofs', whose coins no challenger signed
 private def remoteOn (window : Json) : Answer :=
-  let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
+  let xs := [policyOn #[recW] recR, monitoringPeriodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
   Cases.answerCases (protocol.on #[]) xs (boundOn (components.map noBlobs) xs)
 #guard (remoteOn recR).verdict == .reject
 #guard (remoteOn recR).reason.map (·.startsWith s!"{PouwCheck.Period.protocolId} reject: period: ") == some true
@@ -435,7 +435,7 @@ private def crediting : Core.Protocol :=
   tiedSame "verity/remote/v0" tied [windows] [NciCheck.Protocol.protocol, credited, proved]
 
 private def creditingOn (window : Json) : Answer :=
-  let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
+  let xs := [policyOn #[recW] recR, monitoringPeriodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
   let cs := [NciCheck.Protocol.protocol, credited, proved]
   Cases.answerCases crediting xs (boundOn cs xs)
 
