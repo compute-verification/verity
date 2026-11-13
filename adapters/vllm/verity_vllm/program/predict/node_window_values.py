@@ -252,12 +252,13 @@ class Values:
 
 # ---- the tables
 
-_TABLE = re.compile(r"^weights/(?P<label>.+)@(?P<words>\d+)/b(?P<b>\d+)/table$")
+_TABLE = re.compile(r"^weights/(?P<label>.+)@(?P<words>\d+)/b(?P<b>\d+)/(?P<kind>table|vocab)$")
 
 
 class Tables:
-    """Each table the circuit declares, committed on first use from the made-up weights (`expert_rows.table_words`) under a
-    run-local key, by parameter."""
+    """Each table the circuit declares, committed on first use from the made-up weights (an expert table's rows by
+    `expert_rows.table_words`, an embedding shard's column block's by `node_window_embed.table_words`) under a run-local key,
+    by parameter."""
 
     def __init__(self, circuit: IF.Circuit, values: Values, w: NodeWindow, program: str):
         self.by = {t.name: t for t in circuit.registered.tables}
@@ -278,23 +279,40 @@ class Tables:
         t = self.by[name]
         m = _TABLE.match(t.param)
         if m is None:
-            raise ValueError(f"table {name}: parameter {t.param} is not an expert table's (`expert_rows.table_param`)")
+            raise ValueError(f"table {name}: parameter {t.param} is not an expert table's (`expert_rows.table_param`) or an "
+                             "embedding shard's (`node_window_embed.shard_param`)")
         label, H, b = m["label"], int(m["words"]), int(m["b"])
         first, words = self.fields[label]
-        ft = self.types[label]
-        (bits,) = ft.width_set()
-        E, A, Bd = _shape(ft)
         stack = self.values.inputs[WEIGHTS][first:first + words]
-        if bits == 8:
-            n = 2 * H // Bd
-            rows = XR.table_words(stack.view(np.uint8), "w", E, A, Bd, 1, n, b)
+        if m["kind"] == "vocab":
+            rows = self._vocab(name, stack, H, b, t.rows)
         else:
-            rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
+            ft = self.types[label]
+            (bits,) = ft.width_set()
+            E, A, Bd = _shape(ft)
+            if bits == 8:
+                n = 2 * H // Bd
+                rows = XR.table_words(stack.view(np.uint8), "w", E, A, Bd, 1, n, b)
+            else:
+                rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
         got = self.held[name] = H1R.commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
                                            schema=G.SCHEMA_SEG)
         return got
+
+    def _vocab(self, name: str, stack: np.ndarray, width: int, b: int, V: int) -> np.ndarray:
+        """Column block ``b`` of the embedding shard's rows, padded to ``V`` rows at the shard's START: the shard whose
+        table is this field, by its VS×H words."""
+        from . import node_window_embed as NE
+
+        shards = {tuple(int(n.fn.bindings[k]) for k in ("VS", "H", "START")) for n in self.values.fn.body.nodes
+                  if _family(n) in NE.FAMILIES}
+        hit = [S for S in shards if S[0] * S[1] == len(stack)]
+        if len(hit) != 1:
+            raise ValueError(f"table {name}: {len(hit)} embedding shards of {len(stack)} words, not one")
+        ((VS, H, START),) = hit
+        return NE.table_words(stack.reshape(VS, H)[:, b * width:(b + 1) * width], START, V)
 
 
 # ---- the check

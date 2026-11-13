@@ -274,3 +274,28 @@ def test_values_boolean(window, tables):
     for i, tok in enumerate((7, 100000)):
         words = [int(sum(int(got[i, 16 * k + j]) << j for j in range(16))) for k in range(NE.WIDTH)]
         assert (words, int(got[i, -1])) == (_expected(cols, b, tok), 1)
+
+
+class _Weights:
+    """The weights record's words where a test reads only the shard's field: its words at the field's first word."""
+
+    def __init__(self, first: int, words: np.ndarray):
+        self.first, self.words = first, words
+
+    def __getitem__(self, s: slice) -> np.ndarray:
+        assert (s.start, s.stop) == (self.first, self.first + len(self.words)), s
+        return self.words
+
+
+def test_values_tables(window, program):
+    """The value check's `Tables` commits a column block's table from the made-up weights as the window declares it: the
+    block's 192 columns of the shard's VS x 6,144 words, padded to V rows at START (`node_window_embed.table_words`)."""
+    circuit, w = window
+    first, words = {label: (f, n) for label, f, n in w.b.weights}[LABEL]
+    assert words == VS * WIDTH
+    stack = np.random.default_rng(274).integers(0, 0x7F80, words, dtype=np.uint16)
+    tables = NV.Tables(circuit, NV.Values(program, {NW.WEIGHTS: _Weights(first, stack)}, w), w, PROGRAM)
+    name = NE.shard_param(LABEL, NE.WIDTH, 1)
+    tb = tables(name)
+    want = NE.table_words(stack.reshape(VS, WIDTH)[:, NE.WIDTH:2 * NE.WIDTH], 0, V)
+    assert tb.leaves == V and np.array_equal(np.asarray(tb.rows), want) and tables(name) is tb
