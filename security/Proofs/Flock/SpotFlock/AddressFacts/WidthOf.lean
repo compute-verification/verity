@@ -71,17 +71,25 @@ theorem widthAt_of_target (hP : PortsMember h) (hr : r.Ok h) (hω : ∀ j, wireM
   show (addressOf h i).place.1 = 16 * (r.sts[0]!.c.ports[(addressOf h i).port r.u]!).words
   rw [addressOf_eq h hω, addressAt_of_bitOf hb hw]
   show (placeAt h tw rq).1 = 16 * (r.sts[0]!.c.ports[portNamed h (templateOf h.ms r.u) rp.row]!).words
-  rw [placeAt, dite_cond_eq_true (eq_true hbit)]
+  rw [placeAt, dite_eq_left hbit]
   show 16 * ((memberCircuit h tw).ports[portNamed h tw rq.row]!).words = _
   rw [hwords, hP r hr]
 
-/-- **The width at every gate a checked unit needs**, at the address map. -/
-theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : ℕ}
-    (hi : r.s.prog.Needs r.b i) : r.WidthAt h (addressOf h i) := by
+/-- **Where a needed gate's bit is sent, at an accepted run** (`holds_of_wiring`'s cases): the wiring map is
+idempotent, the gate is a bit `rp` of the unit, and the gate the wiring map sends it to is at row position `rq` of a
+member `tw`, at `rp`'s own bit, inside its port's row, of a port as wide as `rp`'s. -/
+theorem target_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : ℕ}
+    (hi : r.s.prog.Needs r.b i) :
+    (∀ j, wireMap h (wireMap h j) = wireMap h j) ∧ ∃ rp tw rq,
+      BitOf h (templateOf h.ms r.u) (r.u - Properties.Spot.unitBase h.ms (templateOf h.ms r.u)) i rp ∧
+      bitAtGate h (wireMap h i) = some (tw, rq) ∧ rq.bit = rp.bit ∧
+      rq.bit < 16 * ((memberCircuit h tw).ports[portNamed h tw rq.row]!).words ∧
+      ((memberCircuit h tw).ports[portNamed h tw rq.row]!).words =
+        ((memberCircuit h (templateOf h.ms r.u)).ports[portNamed h (templateOf h.ms r.u) rp.row]!).words := by
   obtain ⟨st, rec, draw, hR⟩ := reads_of_ok hr
   obtain ⟨d, h2⟩ := hR.design
-  have hω : ∀ j, wireMap h (wireMap h j) = wireMap h j := (rewires_of_two h2 W.first).idem
   have htop := topological_of_two h2
+  refine ⟨(rewires_of_two h2 W.first).idem, ?_⟩
   obtain ⟨rp, hb⟩ := W.needed r hr i hi
   rcases hb.2 with ⟨hs, -⟩ | ⟨hs, hw, -, -⟩
   · -- a source bit
@@ -89,7 +97,8 @@ theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i :
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
     | some l =>
       have hfix : wireMap h i = i := wireMap_of_no_target h (wireTarget_of_linked hs hl)
-      exact widthAt_of_target W.ports hr hω hb (by rw [hfix]; exact bitAtGate_of_bitOf hb) (hB.1 _ hsm) rfl
+      exact ⟨rp, templateOf h.ms r.u, rp, hb, by rw [hfix]; exact bitAtGate_of_bitOf hb, rfl, hB.1 _ hsm,
+        rfl⟩
     | none =>
       obtain ⟨y, hxy⟩ := wireTarget_of_sourcesNamed h W.named W.move hsm hl
       obtain ⟨tw, wport, u', hwu, -, hym, -⟩ := wireTarget_at hs hxy
@@ -100,12 +109,18 @@ theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i :
       have hbit : bitAtGate h (wireMap h i) = some (tw, Spot.Bits.RowPos.mk w.wport u' rp.bit) := by
         rw [wireMap_of_target h hxy]
         simp only [bitAtGate, source_none_of_written htop hym, written_find W.once hym, Option.map_some]
-      exact widthAt_of_target W.ports hr hω hb hbit (hB.2 _ hym)
-        (wiresAlike_spec W.alike hR.lt hwire htw').1.symm
+      exact ⟨rp, tw, Spot.Bits.RowPos.mk w.wport u' rp.bit, hb, hbit, rfl, hB.2 _ hym,
+        (wiresAlike_spec W.alike hR.lt hwire htw').1.symm⟩
   · -- a written bit
     have hwm : (i, templateOf h.ms r.u, rp) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hw
-    exact widthAt_of_target W.ports hr hω hb (by rw [wireMap_of_not_source h hs]; exact bitAtGate_of_bitOf hb)
-      (hB.2 _ hwm) rfl
+    exact ⟨rp, templateOf h.ms r.u, rp, hb, by rw [wireMap_of_not_source h hs]; exact bitAtGate_of_bitOf hb, rfl,
+      hB.2 _ hwm, rfl⟩
+
+/-- **The width at every gate a checked unit needs**, at the address map. -/
+theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : ℕ}
+    (hi : r.s.prog.Needs r.b i) : r.WidthAt h (addressOf h i) := by
+  obtain ⟨hω, rp, tw, rq, hb, hw, -, hbit, hwords⟩ := target_of_wiring W hB hr hi
+  exact widthAt_of_target W.ports hr hω hb hw hbit hwords
 
 end CheckedRun
 
