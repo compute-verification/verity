@@ -15,8 +15,8 @@ import hashlib
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.pouw.verifier.serving import PassCommitment
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 
 from tests.protocols._needs_torch import torch
 from verity_vllm import protocols as PO
