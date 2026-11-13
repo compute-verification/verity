@@ -32,7 +32,7 @@ theorem srcPos_row {c : _root_.Flock.Circuit} {u : ℕ} {s : Spot.Bits.Src} {rp 
   have key : ∀ v, (Spot.Bits.srcPos c v s).map (fun x : Spot.Bits.RowPos => x.row) =
       (Spot.Bits.srcPos c u s).map (fun x : Spot.Bits.RowPos => x.row) := by
     intro v
-    cases s <;> rfl
+    cases s <;> first | rfl | simp [Spot.Bits.srcPos]
   exact (key 0).trans (congrArg (Option.map fun x : Spot.Bits.RowPos => x.row) hs)
 
 /-- **A source gate's row is one its circuit's units read at.** -/
@@ -45,9 +45,10 @@ theorem row_mem_sourceRows {c : _root_.Flock.Circuit} {n g : ℕ} {rp : Spot.Bit
   · rename_i hc
     have hB : ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn ≠ 0 := by
       intro h0
-      exact hc (by simp [h0])
+      apply hc
+      first | simp [h0] | (rw [h0]; simp)
     unfold sourceRows
-    dsimp only
+    try dsimp only
     exact List.mem_filterMap.2 ⟨(g - 2) % ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn,
       List.mem_range.2 (Nat.mod_lt _ (Nat.pos_of_ne_zero hB)), srcPos_row hr⟩
 
