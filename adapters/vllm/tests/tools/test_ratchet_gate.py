@@ -50,12 +50,31 @@ P02 = "adapters/vllm/tests/lint/allowlists/p02_more.json"
 LINT = "adapters/vllm/tests/lint/test_p01_core.py"
 REPO_RUFF_LINT = "tests/lint/test_repo_ruff.py"
 REPO_RUFF_JSON = "tests/lint/allowlists/repo_ruff.json"
-#: a stand-in for move_check: certified when every change is a 100% rename
+#: a stand-in for move_check: certified when every change is a 100% rename. Like move_check, it finds the root by where its
+#: own file is and loads the move script and the pins list from there
 MOVE_CHECK = """\
-import subprocess, sys
+import importlib.util, subprocess, sys
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[3]
+for path in ("tools/move/rename.py", "tools/verity/check/pins.py"):
+    spec = importlib.util.spec_from_file_location(Path(path).stem, ROOT / path)
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
 out = subprocess.run(["git", "diff", "--name-status", "-M100%", sys.argv[1], sys.argv[2]], capture_output=True, text=True).stdout
 sys.exit(0 if out and all(line.startswith("R100") for line in out.splitlines()) else 1)
 """
+#: what the stand-in loads, each at its path: the move script loads the one beside it, as `rename.py` imports `layout`
+MOVE_SCRIPTS = {
+    "tools/move/rename.py": """\
+import importlib.util
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("layout", Path(__file__).resolve().parent / "layout.py")
+layout = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(layout)
+""",
+    "tools/move/layout.py": "ROWS = ()\n",
+    "tools/verity/check/pins.py": "PINS = ()\n",
+}
 #: a toy lint in the real ones' shape: a library file matching WORD is a violation, keyed by its file
 TOY_LINT = '''\
 import json
@@ -135,7 +154,7 @@ def repo(tmp_path, monkeypatch) -> Repo:
     r = Repo(tmp_path / "repo")
     r.commit("base", {"adapters/vllm/verity_vllm/a.py": "A = 1\n", "adapters/vllm/verity_vllm/b.py": "B = 1\n",
                       P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B")),
-                      "tools/verity/check/move_check.py": MOVE_CHECK})
+                      "tools/verity/check/move_check.py": MOVE_CHECK, **MOVE_SCRIPTS})
     monkeypatch.chdir(r.root)
     return r
 

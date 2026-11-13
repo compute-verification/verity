@@ -1,14 +1,16 @@
 """machine-model list                        the named vectors: epoch, rows, credits and published τ"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model.model import vector, vectors
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     sub.add_parser("list")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     print(f"{'vector':16s} {'epoch':16s} {'rows':>4s} {'credits':>7s} {'τ':>7s} {'margin':>6s}  summary")
     for n in vectors(args.data):
         v = vector(n, args.data)
