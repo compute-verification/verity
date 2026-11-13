@@ -398,7 +398,9 @@ def test_every_held_entry_is_an_entry_of_the_library_with_its_record_named():
     runs = of_record.held()
     assert set(runs) <= {p.stem for p in library.entries()}
     for h in runs.values():
-        assert set(h) - {"record_only", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert set(h) - {"record_only", "record_only_steps", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert all(set(s) == {"number", "why"} and isinstance(s["number"], int) and s["number"] >= 1
+                   for s in h.get("record_only_steps", []))
         assert "step" not in h or (set(h["step"]) == {"counted", "why"} and h["step"]["counted"] > of_record.STEPS)
         assert len(h["sha256"]) == 64 and h["art"].startswith("art:")
         assert "partial" not in h or as_math.parse(h["partial"])  # an ask `as_math` reads
