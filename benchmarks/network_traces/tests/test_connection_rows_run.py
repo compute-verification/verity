@@ -8,9 +8,9 @@ execution phase has one line, its registration or the network certifier's word t
 included, and the check holds each to the one that is due, also past an execution phase that isn't complete; the
 request words as a schedule flag, a run's kept words tables, which the check holds to the records, and their cost;
 the head's tick as two schedule flags, under which the publisher hands each line back and the network certifier's
-tick writes it: at its due tick, at the first tick a late one is back by, or never, with a note in its place, each
-of which the check holds to the schedule; and the cost's load and its measurement at a small schedule, with the
-heads it counts as late or missed."""
+tick writes it: at its due tick, at the first tick a late one is back by, or never, with a note in its place; the
+tick a line says it left at, which no check and no verifier reads, and the note, which can only take a head away;
+and the cost's load and its measurement at a small schedule, with the heads it counts as late or missed."""
 
 from __future__ import annotations
 
@@ -425,7 +425,7 @@ def test_with_a_head_offset_the_tick_writes_each_execution_phases_line_at_its_du
     line back in time: the network certifier's tick writes each execution phase's line at the tick the schedule
     gives it, with the tick, and the run ticks on past its last window until its last two lines have left. Every
     line is a registration, as without the offset, and no tick is late. The check accepts the run and counts four
-    of four registered, none late and none missed."""
+    of four registered and none missed."""
     out = tmp_path / "run"
     device, _ = served(out, tmp_path / "key", process=process, params=TIMED)
     assert device.heads == list(zip(range(4), DUE)) and device.awaited == []
@@ -437,7 +437,7 @@ def test_with_a_head_offset_the_tick_writes_each_execution_phases_line_at_its_du
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (4, 4)
-    assert s["heads"] == {"offset": 3, "wait": 0, "late": [], "missed": []}
+    assert s["heads"] == {"offset": 3, "wait": 0, "missed": []}
 
 
 @pytest.mark.parametrize("wait, at, order", [(1, DUE[0] + 1, [0, 1, 2, 3]), (T + 1, DUE[1] + 1, [1, 0, 2, 3])])
@@ -445,8 +445,8 @@ def test_a_line_back_late_is_written_at_the_first_tick_it_is_back_by_within_the_
     """Execution phase 0's line is handed back just before tick `at`, past its due tick and within the schedule's
     wait: that tick writes it, one tick late at a wait of 1, and after the next execution phase's line at a wait
     longer than an execution phase. `rows.jsonl` then holds the lines in the order they left, which `read` takes by
-    execution phase, as the salts were kept; the check accepts the run, four of four registered, and names the
-    late one."""
+    execution phase, as the salts were kept; the check accepts the run, four of four registered. It reads no tick,
+    so it says nothing of the late one: the network certifier's own log does (`heads`)."""
     out, params = tmp_path / "run", dataclasses.replace(TIMED, head_wait=wait)
     device, _ = served(out, tmp_path / "key", params=params, back={0: at})
     ticks = {**dict(enumerate(DUE)), 0: at}
@@ -457,7 +457,7 @@ def test_a_line_back_late_is_written_at_the_first_tick_it_is_back_by_within_the_
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (4, 4)
-    assert s["heads"] == {"offset": 3, "wait": wait, "late": [0], "missed": []}
+    assert s["heads"] == {"offset": 3, "wait": wait, "missed": []}
 
 
 @pytest.mark.parametrize("wait, at", [(0, DUE[1] + 1), (1, DUE[1] + 2), (0, None)])
@@ -480,66 +480,130 @@ def test_a_line_not_back_by_its_last_tick_is_never_written_and_its_execution_pha
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (3, 4)
-    assert s["heads"] == {"offset": 3, "wait": wait, "late": [], "missed": [1]}
+    assert s["heads"] == {"offset": 3, "wait": wait, "missed": [1]}
 
 
-def test_the_check_refuses_a_line_one_bucket_late_at_a_wait_of_zero_and_takes_one_at_the_waits_last_tick(tmp_path):
-    """The tick a kept run's line says it left at, changed, against the schedule's. At a wait of 0 a line that left
-    one bucket after its due tick is refused, naming its execution phase and the ticks: the network certifier
-    never writes one, so a run that holds one isn't the schedule's. At a wait of 2 the same line passes one bucket
-    late and at the last tick the wait allows, counted late, and is refused one bucket past that."""
-    strict, patient = tmp_path / "strict", tmp_path / "patient"
-    served(strict, tmp_path / "key", params=TIMED)
-    served(patient, tmp_path / "key-2", params=dataclasses.replace(TIMED, head_wait=2))
-
-    def at(run, tick: int) -> tuple[bool, list[str], list[int]]:
-        def edit() -> None:
-            lines = left(run)
-            lines[1][crr.TICK] = tick
-            (run / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
-
-        result = checked(run, edit)
-        return (result["accepted"], [p for p in result["problems"] if "execution phase" in p],
-                result["summary"]["connection_rows"]["heads"]["late"])
-
-    past = "execution phase 1's line left at tick {}, and it is due at tick {} or within the {} after it"
-    assert at(strict, DUE[1]) == (True, [], [])
-    assert at(strict, DUE[1] + 1) == (False, [past.format(DUE[1] + 1, DUE[1], 0)], [])
-    assert at(patient, DUE[1] + 1) == (True, [], [1])
-    assert at(patient, DUE[1] + 2) == (True, [], [1])
-    assert at(patient, DUE[1] + 3) == (False, [past.format(DUE[1] + 3, DUE[1], 2)], [])
+#: a line's tick as each of these leaves it, given the tick it is due at and the schedule's wait; None: no tick
+TICKS = {"removed": lambda due, wait: None, "one below the due tick": lambda due, wait: due - 1,
+         "one past the last": lambda due, wait: due + wait + 1, "a string": lambda due, wait: str(due),
+         "a bool": lambda due, wait: True}
 
 
-def test_the_check_holds_each_line_to_its_tick_and_only_a_schedule_with_a_head_offset_hands_lines_back(tmp_path):
-    """A run at a wait of 1 whose lines all left at their due ticks, its lines changed: the check refuses a line
-    that left before its due tick, one past the wait, one without a tick, and a note that a line missed at a tick
-    before its last, each by its execution phase. In a schedule without a head offset the note stands for no
-    line: the execution phase isn't registered. The keeper hands lines back in a schedule with a head offset
-    and in no other, and so does the publisher process."""
+def retick(out, params: WardenParams, tick, windows: int = 4) -> None:
+    """Every line of the run's `rows.jsonl` with its `tick` as `tick(its due tick, the wait)` leaves it, and the
+    network certifier's own log of the same ticks (`warden.json`'s `heads`) likewise."""
+    lines = left(out)
+    for doc in lines:
+        doc.pop(crr.TICK)
+        if (t := tick(params.head_tick(crr._phase(doc), windows), params.head_wait)) is not None:
+            doc[crr.TICK] = t
+    (out / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
+    log = json.loads((out / "warden.json").read_text())
+    log["heads"] = [[w, tick(params.head_tick(w, windows), params.head_wait)] for w, _ in log["heads"]]
+    (out / "warden.json").write_text(json.dumps(log))
+
+
+@pytest.mark.parametrize("run", ["in time", "late", "missed", "the word"])
+def test_no_check_and_no_verifier_reads_a_lines_tick(tmp_path, run):
+    """A line's `tick` is the network certifier's own note of when the line left, beside the signed registration and
+    not under its signature, so nothing that checks may read it. Four runs in a schedule with a head offset: every
+    line in time; one late within the wait, written after the next execution phase's; one that missed; and one
+    whose first two execution phases end in the word that they have no head. In each, every line's tick is
+    rewritten five ways (removed, one below its due tick, one past its last, a string, a bool), with the device's
+    own log of the same ticks: the run's check gives the result it gave, summary, problems and verdict. The
+    verifier's two readers of a line, `connection_rows.check_registration` of its registration and
+    `connection_rows.check_no_head` of its word, are handed those documents and no tick: each gives the head, or
+    the pass, it gave, and each refuses by name a document that holds a tick, since it holds its document to its
+    keys and no other."""
+    out = tmp_path / "run"
+    params, kw = {"in time": (TIMED, {}),
+                  "late": (dataclasses.replace(TIMED, head_wait=T + 1), {"back": {0: DUE[1] + 1}}),
+                  "missed": (TIMED, {"back": {1: None}}),
+                  "the word": (dataclasses.replace(TIMED, queue=5),
+                               {"prompts": (*PROMPTS, (14,), (15, 16)), "answers": (*ANSWERS[:5], (3,), (4, 5)),
+                                "arrive": {6: T + 2, 7: 2 * T + 2}})}[run]
+    device, _ = served(out, tmp_path / "key", params=params, **kw)
+    # the network certifier's own log, as `serve` writes what the check reads of it and the ticks beside
+    (out / "warden.json").write_text(json.dumps({"connections": device.log, "heads": [list(h) for h in device.heads]}))
+    key, session = device_key(out)
+
+    def verifier() -> list:
+        got = []
+        for doc in left(out):
+            w = crr._phase(doc)
+            if "registration" in doc:
+                got.append(CR.check_registration(doc["registration"], key, session, params, ws.LINK, w))
+            elif crr.NO_HEAD in doc:
+                got.append(CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, w))
+            else:
+                got.append(doc[crr.MISSED])
+        return got
+
+    def both() -> tuple[dict, list]:
+        return ws.check(out), verifier()
+
+    result, read = both()
+    kinds = [next(k for k in ("registration", crr.NO_HEAD, crr.MISSED) if k in doc) for doc in left(out)]
+    assert sorted(set(kinds)) == {"in time": ["registration"], "late": ["registration"],
+                                  "missed": [crr.MISSED, "registration"],
+                                  "the word": [crr.NO_HEAD, "registration"]}[run]
+    assert result["accepted"] == (run != "the word") and all(type(doc[crr.TICK]) is int for doc in left(out))
+    assert [crr._phase(doc) for doc in left(out)] == ([1, 0, 2, 3] if run == "late" else [0, 1, 2, 3])
+    ticks = [doc[crr.TICK] for doc in left(out)]
+    for name, tick in TICKS.items():
+        saved = {p: p.read_bytes() for p in (out / crr.ROWS, out / "warden.json")}
+        retick(out, params, tick)
+        try:
+            assert all(doc.get(crr.TICK) != t for doc, t in zip(left(out), ticks)), name
+            assert both() == (result, read), name
+        finally:
+            for p, data in saved.items():
+                p.write_bytes(data)
+    for doc in left(out):
+        w, t = crr._phase(doc), doc[crr.TICK]
+        if "registration" in doc:
+            with pytest.raises(ValueError, match="a registration holds the keys .* and no other"):
+                CR.check_registration(doc["registration"] | {crr.TICK: t}, key, session, params, ws.LINK, w)
+        elif crr.NO_HEAD in doc:
+            with pytest.raises(ValueError, match="the word holds the keys .* and no other"):
+                CR.check_no_head(doc[crr.NO_HEAD] | {crr.TICK: t}, key, session, params, ws.LINK, w)
+
+
+def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_a_head_offset_hands_lines_back(
+        tmp_path):
+    """A run at a wait of 1 whose lines all left at their due ticks, one line changed to the network certifier's
+    note that it missed, with any tick or none: the check, which reads the note and no tick, takes that execution
+    phase as one with no head, three of four registered, and refuses nothing. The note can only take a head away:
+    beside a line of the same execution phase it is a second line, and without a blob of salts of its own the rows
+    don't read; of an execution phase outside the run it is refused; and in a schedule without a head offset it
+    stands for no line, so the execution phase isn't registered. The keeper hands lines back in a schedule with a
+    head offset and in no other, and so does the publisher process."""
     out = tmp_path / "run"
     served(out, tmp_path / "key", params=PATIENT)
 
-    def edited(run, change) -> list[str]:
-        def edit() -> None:
-            lines = left(run)
-            change(lines)
-            (run / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
+    def edited(run, change) -> tuple[list[str], tuple]:
+        result = checked(run, lambda: edit_rows(run, change))
+        s = result["summary"]["connection_rows"]
+        return [p for p in result["problems"] if "execution phase" in p or "connection rows" in p], \
+            (s["registered"], s["of"], s.get("heads", {}).get("missed"))
 
-        return [p for p in refused(run, edit) if "execution phase" in p]
-
-    assert edited(out, lambda lines: None) == []
-    left_at = "execution phase {}'s line left at tick {}, and it is due at tick {} or within the 1 after it"
-    assert edited(out, lambda lines: lines[0].update(tick=DUE[0] - 1)) == [left_at.format(0, DUE[0] - 1, DUE[0])]
-    assert edited(out, lambda lines: lines[1].update(tick=DUE[1] + 2)) == [left_at.format(1, DUE[1] + 2, DUE[1])]
-    assert edited(out, lambda lines: lines[3].pop("tick")) == [left_at.format(3, None, DUE[3])]
+    assert edited(out, lambda lines, salts: None) == ([], (4, 4, []))
     note = {crr.MISSED: [ws.LINK, "egress", 2]}
-    assert edited(out, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2]})) == \
-        [f"execution phase 2's line is marked missed at tick {DUE[2]}, before its last, {DUE[2] + 1}"]
-    assert edited(out, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2] + 1})) == []
+    for tick in ({}, {crr.TICK: DUE[2]}, {crr.TICK: DUE[2] + 1}, {crr.TICK: "never"}):
+        assert edited(out, lambda lines, salts: lines.__setitem__(2, note | tick)) == ([], (3, 4, [2]))
+    assert edited(out, lambda lines, salts: (lines.insert(3, note), salts.insert(3, b""))) == \
+        (["execution phase 2 has two lines of connection rows"], (3, 4, [2]))
+    problems, counts = edited(out, lambda lines, salts: lines.append(note))
+    assert len(problems) == 5 and "rows.jsonl has 5 lines and rows.salts 4 blobs" in problems[0] and \
+        counts == (0, 4, [])
+    outside = {crr.MISSED: [ws.LINK, "egress", 4]}
+    assert edited(out, lambda lines, salts: (lines.append(outside), salts.append(b""))) == \
+        (["execution phase 4 has neither connection rows nor the network certifier's word that it has none"],
+         (4, 4, []))
     plain = tmp_path / "plain"
     served(plain, tmp_path / "key-2", params=ENDS)
-    assert edited(plain, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2]})) == \
-        ["execution phase 2's connection rows aren't registered"]
+    assert edited(plain, lambda lines, salts: lines.__setitem__(2, note | {crr.TICK: DUE[2]})) == \
+        (["execution phase 2's connection rows aren't registered"], (3, 4, None))
     for params, back in ((TIMED, None), (ENDS, lambda window, line: None)):
         with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
                                              "certifier's tick writes each execution phase's line"):

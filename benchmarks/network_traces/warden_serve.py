@@ -124,8 +124,9 @@ beside `--lengths` (`warden`'s "The head's tick") the publisher process writes n
 and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets after
 the close that handed its execution phase or up to W ticks later, with that tick. A line not back by then is
 never written, and the tick writes its note that the line missed. The run ticks on past its last window until
-its last line has left or missed, `warden.json` lists each execution phase's tick (`heads`), and `check` holds
-each line to its ticks and counts the late and the missed.
+its last line has left or missed, and `warden.json` lists each execution phase's tick (`heads`). A line's tick is
+the network certifier's own note of when it left: no check and no verifier reads it, and the head's time is held
+on the auditor's side. `check` counts the execution phases whose line missed, which have no head.
 """
 
 from __future__ import annotations
