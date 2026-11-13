@@ -178,6 +178,19 @@ def test_moe_census(moe_window):
         IF.check_proof_block(fn, circuit.cuts.get(tid))
 
 
+def test_moe_tokens():
+    """At two MoE layers the first layer's prefill routes all 32 prompt tokens, a pair row of 256 members (a token's 8 slots
+    in turn): its reads' keys and its blocks' routed weights are one wire a slot over the tokens' slots units."""
+    circuit, w = NW.node_window(glm_request(LP, 2, moe=True).program.fn, families=FAMILIES)
+    slots = _tid(circuit, r"MoeRouterSigmoidBiasSlots_v1\{.*\}")
+    assert circuit.units[slots] == LP + 3
+    w2 = _tid(circuit, r"MoeExpertFp8BlockGemmW_v3\{K=256,N=32,.*SWAP=true.*\}")
+    assert circuit.units[w2] == (LP + 1) * TOPK * 192
+    g = [x for x in circuit.wires if x.writer == slots and x.reader == w2 and x.port == "g"]
+    assert {x.out for x in g} == {f"o{k}" for k in range(TOPK)}
+    assert not [f for f in w.free if re.match(r"(MoeExpert|EmbeddingRead|MoeRouter)", f.tid)]
+
+
 def test_moe_reads_free(moe_program):
     """With the router left unlowered, every expert read's key and every w2 block's routed weight are free inputs under it."""
     circuit, w = NW.node_window(moe_program, families={k: v for k, v in FAMILIES.items() if k != "MoeRouterSigmoidBias"})

@@ -165,8 +165,10 @@ def _slots(rows: list[tuple[Row, ...]] | _Free, M: int) -> tuple[list[Row], int]
     one router row ``rows``: each slot's row of the first token and the unit step between tokens; none where they are free."""
     if isinstance(rows, _Free):
         return [], 0
-    first = list({r[0].out: r[0] for r in rows}.values())
-    K = len(first)
+    by_out: dict[str, Row] = {}
+    for r in rows:
+        by_out.setdefault(r[0].out, r[0])
+    first, K = list(by_out.values()), len(by_out)
     step = rows[K][0].unit - first[0].unit if M > K else 0
     if M % K or any(rows[m] != (Row(first[0].tid, first[m % K].unit + m // K * step, first[m % K].out, first[0].words),)
                     for m in range(M)):
