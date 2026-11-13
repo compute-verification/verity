@@ -22,15 +22,15 @@ from __future__ import annotations
 import math
 
 import torch
-
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 
@@ -175,6 +175,7 @@ class BitNotRule(OpRule):
 
     def emit(self, node, ctx):
         x = _bit_value(ctx, node.args[0])
+        assert x is not None  # `applies` refused any other operand
         shp = tuple(shape_of(x.type)[0])
         n = _numel(shp)
         flat = x.reshape(Array(n, Value(1)))
@@ -218,8 +219,8 @@ class BitAndRule(OpRule):
         flats = []
         consts = []
         for a in node.args[:2]:
-            if _static_bit(ctx, a) is not None:
-                consts += [int(bool(b)) for b in _static_bit(ctx, a).flat()]
+            if (sb := _static_bit(ctx, a)) is not None:
+                consts += [int(bool(b)) for b in sb.flat()]
             o = _materialize_bits(ctx, a, self, node)
             m = _numel(tuple(shape_of(o.type)[0]))
             f = o.reshape(Array(m, Value(1)))
@@ -250,7 +251,11 @@ class SelectRule(OpRule):
         cond, a, b = node.args[:3]
         c = _bit_value(ctx, cond)
         sc = _static_bit(ctx, cond)
-        if c is None and sc is None:
+        if c is not None:
+            cshape = tuple(shape_of(c.type)[0])
+        elif sc is not None:
+            cshape = tuple(sc.shape)
+        else:
             return "condition is neither a bool value collection nor a statically known bool tensor"
         av = ctx.val(a) if isinstance(a, torch.fx.Node) else None
         if not isinstance(av, Coll):
@@ -258,7 +263,6 @@ class SelectRule(OpRule):
         out_shape = tuple(ctx.shape_of_node(node))
         if tuple(shape_of(av.type)[0]) != out_shape:
             return f"`a` shape {shape_of(av.type)[0]} is not the output shape {out_shape} (broadcast of `a` is not bound)"
-        cshape = tuple(shape_of(c.type)[0]) if c is not None else tuple(sc.shape)
         if _numel(cshape) != 1 and _numel(cshape) != _numel(out_shape):
             return f"condition shape {cshape} is neither one element nor the output's {out_shape}"
         dt = ctx.dtype_of(a)
@@ -318,7 +322,7 @@ class SelectRule(OpRule):
         fn = ctx.kind("select_bf16", node)
         if cflat.type.n == n:
             out = ctx.B.batch(fn, cflat, aflat, brow, axes=(0, 0, 0), name=ctx.hint_name(node))
-            axes = (0, 0, 0)
+            axes: tuple[int | None, ...] = (0, 0, 0)
         else:
             out = ctx.B.batch(fn, _scalar_of(cflat), aflat, brow, axes=(None, 0, 0), name=ctx.hint_name(node))
             axes = (None, 0, 0)
@@ -390,6 +394,8 @@ class CacheRowWriteRule(StateRule):
                    emitted="(state) history row rebound; no gates")
 
 
-PADDING_RULES = [ConstScalarRule(), EqScalarRule(), BitNotRule(), BitAndRule(), SelectRule(), CacheRowWriteRule()]
+PADDING_TORCH_RULES = [ConstScalarRule(), EqScalarRule(), BitNotRule(), BitAndRule(), SelectRule()]
+PADDING_VLLM_RULES = [CacheRowWriteRule()]
+PADDING_RULES = PADDING_TORCH_RULES + PADDING_VLLM_RULES
 
-__all__ = ["PADDING_RULES"]
+__all__ = ["PADDING_RULES", "PADDING_TORCH_RULES", "PADDING_VLLM_RULES"]

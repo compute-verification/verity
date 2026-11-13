@@ -22,7 +22,7 @@
 # machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
 # debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
 # every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), by default exactly while the
-# verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap (`served_passes.py volunteer-needed
+# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
 # exit 2; otherwise to 0, none), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
@@ -40,7 +40,7 @@ O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
+export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 MODEL=${MODEL:-glm53}
 case $MODEL in
   glm53) NKS="2624x6144 2048x2048 6144x2048 4096x2048 3072x6144 6144x1536 512x6144 6144x256 4096x6144"; LAYERS=${LAYERS:-1} ;;

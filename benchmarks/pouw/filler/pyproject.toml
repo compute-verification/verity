@@ -12,20 +12,20 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_pfill_r9.py", "tests/test_pfill_ref.py"]
 # The scorer refuses an arm whose record the attempt ledger (harness/ledger.py) or the evidence store's canonical form, ids
 # and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
-# schema from verity.protocols.pouw.verifier.serving, which it imports outright. pfill.cuh and pfill_ref.py take
+# schema from verity.protocols.accounting.pouw.verifier.serving, which it imports outright. pfill.cuh and pfill_ref.py take
 # their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
-inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/configuration/config/verity_config",
-          "verity/protocols/pouw/receipts", "benchmarks/machine_model/verity_machine_model",
+inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/config/verity_config",
+          "verity/protocols/accounting/pouw/verifier/receipts", "benchmarks/machine_model/verity_machine_model",
           "benchmarks/machine_model/data", "tools/research/src/research/__init__.py",
-          "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", 
-          "verity/protocols/pouw/verifier/__init__.py",
-          "verity/protocols/pouw/verifier/serving.py",
+          "tools/research/src/research/store", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", 
+          "verity/protocols/accounting/pouw/verifier/__init__.py",
+          "verity/protocols/accounting/pouw/verifier/serving.py",
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains
           "verity/errors.py", "verity/commitments", "verity/commitments/crypto",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
-          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/definitions/kernels/sha512.cuh",
-          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/definitions/kernels/__init__.py", "verity/protocols/pouw/__init__.py"]
+          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/circuits/kernels/sha512.cuh",
+          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/circuits/kernels/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

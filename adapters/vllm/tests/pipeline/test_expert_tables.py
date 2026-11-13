@@ -12,14 +12,14 @@ import json
 import numpy as np
 import pytest
 
+from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.records import expert_tables as XT
-from tests.check.test_weights_of_record import write_safetensors
 
-G, I, H, E, WORLD = 128, 256, 256, 8, 2
+G, INTER, H, E, WORLD = 128, 256, 256, 8, 2
 LAYERS = (1, 2)
 BLOCKS = {"w13": 1, "w2": 32}
 REPO, REV = "test/fp8-moe-tables", "abc"
@@ -36,7 +36,7 @@ def _ty(shape, bits):
 
 def _fields() -> list[tuple[str, list[int], int]]:
     """The rank Program's weight fields, named under the export wrapper's prefix as a Build names them."""
-    I_r = I // WORLD
+    I_r = INTER // WORLD
     out = [(WRAP + "model.embed_tokens.weight", [64, H], 16)]
     for L in LAYERS:
         c = f"{WRAP}model.layers.{L}.mlp.experts"
@@ -52,7 +52,7 @@ def ckpt(tmp_path_factory):
     t: dict[str, tuple[str, np.ndarray]] = {}
     for L in LAYERS:
         for e in range(E):
-            for part, (n, k) in (("gate_proj", (I, H)), ("up_proj", (I, H)), ("down_proj", (H, I))):
+            for part, (n, k) in (("gate_proj", (INTER, H)), ("up_proj", (INTER, H)), ("down_proj", (H, INTER))):
                 name = f"model.layers.{L}.mlp.experts.{e}.{part}"
                 t[name + ".weight"] = ("F8_E4M3", rng.integers(0, 256, size=(n, k), dtype=np.uint8))
                 t[name + ".weight_scale_inv"] = ("F32", rng.random((n // G, k // G), dtype=np.float32))
@@ -60,7 +60,7 @@ def ckpt(tmp_path_factory):
     d = root / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    cfg = {"hidden_size": H, "moe_intermediate_size": I, "num_experts": E, "tie_word_embeddings": False,
+    cfg = {"hidden_size": H, "moe_intermediate_size": INTER, "num_experts": E, "tie_word_embeddings": False,
            "quantization_config": {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "dynamic", "weight_block_size": [G, G]}}
     (d / "config.json").write_text(json.dumps(cfg))
     man = root / "checkpoints.json"
@@ -95,7 +95,7 @@ class _Plan:
 
     def __init__(self, blocks: dict[str, int], wrap: str):
         self.what, self.of, self.family, self.units, self._tables = {}, {}, {}, {}, {}
-        I_r = I // WORLD
+        I_r = INTER // WORLD
         for L in LAYERS:
             for proj, family, (N, K) in (("w13", "MoeExpertFp8Gemm_v1", (2 * I_r, H)), ("w2", "MoeExpertFp8GemmW_v1", (H, I_r))):
                 c = f"{wrap}model.layers.{L}.mlp.experts.{proj}"
@@ -122,7 +122,7 @@ def _commit(served: dict[str, np.ndarray], doc, key=KEY, wrap=WRAP):
 def test_registered_entries_are_the_committers(ckpt, regs):
     """Every table the windows read (weights in blocks of `BLOCKS` rows, scales a G-block a table) is registered, at the root the
     committer commits for the rank's served weights, and nothing else is."""
-    I_r = I // WORLD
+    I_r = INTER // WORLD
     per_layer = 2 * I_r // BLOCKS["w13"] + 2 * I_r // G + H // BLOCKS["w2"] + H // G
     for rank, doc in enumerate(regs):
         assert (doc["schema"], doc["repo"], doc["revision"], doc["world"], doc["rank"]) == (XT.SCHEMA, REPO, REV, WORLD, rank)
@@ -145,7 +145,7 @@ def test_a_table_served_otherwise_has_another_root(ckpt, regs):
 
 
 def test_ranks_and_keys_are_distinct_values(ckpt, regs):
-    """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key draws other salts."""
+    """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key samples other salts."""
     assert regs[0]["program"] != regs[1]["program"]
     n0, n1 = (set(d["nonces"].values()) for d in regs)
     assert len(n0) == len(regs[0]["values"]) and not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE
@@ -175,7 +175,8 @@ def test_stacks_and_refusals(ckpt, regs):
 
 
 def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
-    man = json.loads(open(ckpt["man"]).read())
+    with open(ckpt["man"]) as f:
+        man = json.load(f)
     man["checkpoints"][0]["files"]["model.safetensors"]["sha256"] = "00" * 32
     (tmp_path / "checkpoints.json").write_text(json.dumps(man))
     with pytest.raises(ValueError, match="shards not pinned"):

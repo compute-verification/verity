@@ -11,11 +11,11 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.circuits import library
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops import mufu as MU
+from verity.circuits import library
 from verity.definitions.numerics import dsv4_moe_twin as T
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import prims as P
 
@@ -174,7 +174,7 @@ def test_the_clamp_rows_reach_the_limits(rows):
     for path, d in zip(S.PATHS[2:], S.WIDTHS):
         gu = rows[path]["gu"]
         assert gu.shape[1] == 2 * d
-        g, u = gu[:, :d], gu[:, d:]
+        u = gu[:, d:]
         f = S.MC.f32(S.DR.bf16_to_f32_words(gu))
         nan = S.MC.is_nan(S.DR.bf16_to_f32_words(gu))
         lim = U32(S.LIMIT_BF16)
@@ -193,7 +193,7 @@ def test_the_clamp_rows_reach_the_limits(rows):
 def test_the_clamp_inputs_are_the_definitions_clamps():
     """`clamp_inputs` is `SiluMulClampBf16_v1`'s ``bf16(fminf(g, LIMIT))`` and ``bf16(fmaxf(fminf(u, LIMIT), -LIMIT))`` on every
     word, as each half of an I = 1 row."""
-    every = np.arange(1 << 16, dtype=np.uint16)
+    every: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
     gc = T.clamp_inputs(np.stack([every, every], 1), S.LIMIT)
     f, lim = S.MC.f32(S.DR.bf16_to_f32_words(every)), np.float32(S.LIMIT)
     g, u = np.fmin(f, lim), np.fmax(np.fmin(f, lim), -lim)
@@ -221,7 +221,7 @@ def test_the_mufu_probes_expectations_are_the_models():
 
 def test_the_rows_file_round_trips(rows, tmp_path):
     got = {p: S.expect(p, P_) for p, P_ in rows.items()}
-    np.savez_compressed(tmp_path / S.ROWS_FILE, **S._flat(rows, got))
+    np.savez_compressed(tmp_path / S.ROWS_FILE, allow_pickle=False, **S._flat(rows, got))
     r2, g2 = S._unflat(np.load(tmp_path / S.ROWS_FILE))
     assert set(r2) == set(g2) == set(S.PATHS)
     for p in S.PATHS:
@@ -234,7 +234,7 @@ def test_check_finds_a_changed_output(tmp_path):
     rows = S.all_rows(7, 64, 8)
     got = {p: S.expect(p, P_) for p, P_ in rows.items()}
     got["hash"]["w"][1, 0] ^= 1
-    np.savez_compressed(tmp_path / S.ROWS_FILE, **S._flat(rows, got))
+    np.savez_compressed(tmp_path / S.ROWS_FILE, allow_pickle=False, **S._flat(rows, got))
     rec = S.check(str(tmp_path), workers=1, limit=2)
     assert rec["hash"] == {"rows": 2, "mismatch": 1, "first": [1]} and rec["ok"] is False
     assert all(rec[p] == {"rows": 2, "mismatch": 0, "first": []} for p in S.PATHS if p != "hash")

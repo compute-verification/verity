@@ -1033,7 +1033,7 @@ wheels = [
 [[package]]
 name = "memory-challenger-lean"
 version = "0.0.0"
-source = { virtual = "verity/protocols/pous/device/lean" }
+source = { virtual = "verity/protocols/accounting/pous/device/lean" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1044,7 +1044,7 @@ dependencies = [
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
 ]
 
 [[package]]
@@ -1468,7 +1468,7 @@ wheels = [
 [[package]]
 name = "pous-check"
 version = "0.1.0"
-source = { virtual = "verity/protocols/pous/verifier/check" }
+source = { virtual = "verity/protocols/accounting/pous/verifier/check" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -2331,9 +2331,9 @@ dev = [
     { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
     { name = "verity-cli", editable = "tools/verity/cli" },
-    { name = "verity-config", editable = "verity/configuration/config" },
-    { name = "verity-difftest", editable = "verity/difftest" },
-    { name = "verity-flock", editable = "verity/protocols/flock/prover" },
+    { name = "verity-config", editable = "tools/config" },
+    { name = "verity-difftest", editable = "tools/difftest" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
@@ -2352,7 +2352,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
 
@@ -2373,7 +2373,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "verity", editable = "." },
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
 ]
 
 [[package]]
@@ -2403,7 +2403,7 @@ dependencies = [
 requires-dist = [
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/protocols/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
@@ -2460,7 +2460,7 @@ requires-dist = [
 [[package]]
 name = "verity-config"
 version = "0.1.0"
-source = { editable = "verity/configuration/config" }
+source = { editable = "tools/config" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2471,23 +2471,23 @@ requires-dist = [{ name = "verity", editable = "." }]
 [[package]]
 name = "verity-core-composition"
 version = "0.0.0"
-source = { virtual = "verity/protocols/remote/verifier/composition" }
+source = { virtual = "verity/protocols/compose/verifier/lean" }
 dependencies = [
     { name = "verity-difftest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest", editable = "verity/difftest" }]
+requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 
 [[package]]
 name = "verity-core-evaluate"
 version = "0.0.0"
-source = { virtual = "verity/definitions/evaluate" }
+source = { virtual = "verity/circuits/evaluate" }
 
 [[package]]
 name = "verity-core-firewall"
 version = "0.1.0"
-source = { virtual = "verity/protocols/recursion/verifier/firewall" }
+source = { virtual = "verity/protocols/proofs/recursion/verifier/firewall" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity-difftest" },
@@ -2497,8 +2497,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity-difftest", editable = "verity/difftest" },
-    { name = "verity-flock", editable = "verity/protocols/flock/prover" },
+    { name = "verity-difftest", editable = "tools/difftest" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
 ]
 
 [[package]]
@@ -2515,13 +2515,13 @@ dependencies = [
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
 ]
 
 [[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
-source = { virtual = "verity/protocols/spot/verifier/lean" }
+source = { virtual = "verity/protocols/proofs/spot/verifier/lean" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2532,7 +2532,7 @@ requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 [[package]]
 name = "verity-difftest"
 version = "0.1.0"
-source = { editable = "verity/difftest" }
+source = { editable = "tools/difftest" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2560,7 +2560,7 @@ requires-dist = [
 [[package]]
 name = "verity-flock"
 version = "0.1.0"
-source = { editable = "verity/protocols/flock/prover" }
+source = { editable = "verity/protocols/proofs/flock/prover" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2735,7 +2735,7 @@ requires-dist = [
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "scipy", specifier = "==1.18.1" },
     { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity-difftest", editable = "tools/difftest" },
     { name = "verity-exact-kit", marker = "extra == 'exact-kit'", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "adapters/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
@@ -2745,12 +2745,12 @@ provides-extras = ["research", "exact-kit"]
 [[package]]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/pouw/verifier/lean/check" }
+source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/pouw/verifier/lean/window" }
+source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"
@@ -2769,7 +2769,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/protocols/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 
@@ -2867,7 +2867,7 @@ requires-dist = [
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
 ]
 provides-extras = ["torch", "research"]
 

@@ -41,17 +41,21 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
 from verity.circuits.codec import canonical_json
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
-from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR
+from verity_vllm.protocols.pouw.h1 import names as NM
+from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
@@ -83,13 +87,6 @@ class Sites(dict):
 
     def get(self, key: Any, default: Any = None) -> Any:
         return site(key[1]) if key[1] in self.modules else default
-
-
-class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        return self[0] if 0 in self else default
 
 
 def _host(t: Any) -> np.ndarray:
@@ -358,8 +355,8 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
         return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
                 "right after the registration whose tables it reuses")
     theirs: dict[Any, list[Mapping[str, Any]]] = {}
-    for e in got[1]:
-        theirs.setdefault(e.get("value"), []).append(e)
+    for entry in got[1]:
+        theirs.setdefault(entry.get("value"), []).append(entry)
     for s, mine, name, calls in _tables(run):
         table = f"A table {served.a_table(calls[0])}" if calls is not None else "input-ids table"
         if mine is None:
@@ -503,7 +500,7 @@ def record_of(run: Any) -> str | None:
 def bind(run: Any) -> str | None:
     """Bind the window's Commit record into ``run``'s commitment at its close (`pouw_h1.H1Run.finish`, before its
     `calls_root`): ``commit_record``'s (`named`, what the run records of it in ``details.commit_record``), else its
-    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no draw coin and,
+    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no sampling coin and,
     once its transcript is written, raises it as ValueError. Else None."""
     if run.commit_record is not None:
         run.commits["commit"], run.details["commit_record"] = named(run)

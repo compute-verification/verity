@@ -1,6 +1,6 @@
 # network_traces
 
-The network certifier (`verity/protocols/certifier/`) on real served traffic: per-token timing traces for its
+The network certifier (`verity/protocols/accounting/certifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
 record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
@@ -27,10 +27,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.certifier.verifier.warden`, the network certifier
+- **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
-  `connection_rows_run.py` is a run's connection rows (`--lengths 1|2 [--content P,O,ROWS ...]`: the schedule's flags,
+  `connection_rows_run.py` is a run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags,
   the publisher's keep of each execution phase's tables, or under `--lengths 2` of the network certifier's word that
   it has none, their check, and `cost`, which measures a close);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
@@ -83,7 +83,7 @@ when asked, and fetches the run's bundle: with `witness/` into a 0700 directory 
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
 one of those execution phases is certified. The record is all the script writes: what the wipe's reader does with one is
-its own function, `wipe_monitoring.counted` (`verity/protocols/pous/verifier/wipe_monitoring.py`), and is stated there.
+its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
 
 ## The served session
 
@@ -346,7 +346,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| certificates | each execution phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
+| certificates | each execution phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
@@ -404,9 +404,9 @@ one link, one network certifier on one uplink, certifying a request rate of one 
 or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
-`NetTiming.Guarantees.PeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`, proved in
 `security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.periodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/PeriodSum.lean`); the
+failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
 (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
@@ -430,7 +430,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
 - No term for incorrect proof blocks with every proof block sampled.
-- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
+- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
   one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The certifier hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
@@ -461,15 +461,15 @@ The two forms:
 - The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
   Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
-- The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block sampled.
-- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
+- The per-period form (`MonitoringPeriodLeakAccepted`) has no δ term with every proof block sampled.
+- Both are proved: `NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
 - Beside either, ε = m·δ_scan is the scans' δ summed over the period's m execution phases and the links
   (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
   (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
-  machines: the world is rho's world fleet (`verity/protocols/inference_only/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  machines: the world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`), the census's
   inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate
@@ -490,7 +490,7 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
-- The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
+- The jitter term is T bits an execution phase, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.

@@ -32,7 +32,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
-[ -d "$CORE/verity/protocols/spot" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/protocols/spot beside $ROOT" >&2; exit 3; }
+[ -d "$CORE/verity/protocols/proofs/spot" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/protocols/proofs/spot beside $ROOT" >&2; exit 3; }
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
@@ -207,11 +207,11 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
-SPOT = "verity.protocols.spot.verifier.one_stage.partition"   # the program tests import it; held to the directory its name gives
+SPOT = "verity.protocols.proofs.spot.verifier.one_stage.partition"   # the program tests import it; held to the directory its name gives
 check("spot_from_tree", lambda: under(SPOT, os.path.join(core, *SPOT.split(".")[:-1])))
 def distributions_from_tree():
     # the catalog and the kernels, distributions of their own before the platform layout, and the verifiers, now in verity
-    mods = {"catalog": "verity.definitions.ops", "kernels": "verity.definitions.kernels", "core": "verity.protocols.spot.verifier"}
+    mods = {"catalog": "verity.circuits.ops", "kernels": "verity.circuits.kernels", "core": "verity.protocols.proofs.spot.verifier"}
     return {d: under(m, os.path.join(core, *m.split("."))) for d, m in mods.items()}
 check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)

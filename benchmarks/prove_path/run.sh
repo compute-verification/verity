@@ -35,9 +35,10 @@
 #     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
 #     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
 #     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's
-#     SHA-512, the run root, the registered entries and its supplied values, every unit as the output class), audits the
-#     window against it under PP_LAW (default work:1) in
-#     members of PP_TIE_CAP units (default 16), and pins the roots only on an accepting audit. Two refused arms: a
+#     SHA-512, the run root, the registered entries and its supplied values), audits the window against it under the
+#     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
+#     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
+#     accepting audit whose sample holds every unit. Two refused arms: a
 #     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
 #     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},
@@ -85,22 +86,22 @@ REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"'
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 LROW=llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
 
-(cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${PP_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 
@@ -128,7 +129,7 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
   esac
 fi
 PLAIN=(); LAW=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified-rate
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node; its own worker and verifier threads take 64 MiB
@@ -244,14 +245,14 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     fi
   fi
 elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
-  TLAW=${PP_LAW:-work:1} TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
+  TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
   (cd adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
     || { tail -20 $O/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
            # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
            # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own
-    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run rc pinned; shift
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run units rc pinned; shift
     for x in "$@"; do
       case $x in
         --served) forged=--forged; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
@@ -260,16 +261,17 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     done
     local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
                   --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
-                  --law $TLAW --cap $TCAP --run-id $id)
+                  --cap $TCAP --run-id $id)
     mkdir -p $O/$name
     $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
       "${commit[@]}" | tee $O/$name/commit.json || return 1
     $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
     c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
+    units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
-    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW --circuit $c --run $run \
-      --registered $O/$name/verifier/registered.json --outputs $O/$name/verifier/outputs.json \
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law work:$units --circuit $c --run $run \
+      --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
     rc=$?

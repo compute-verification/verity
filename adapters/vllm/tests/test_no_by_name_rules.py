@@ -45,6 +45,7 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, TypeGuard
 
 import pytest
 
@@ -55,12 +56,16 @@ REPO = ROOT.parents[1]
 #: list as it stood), each file keyed by its path from its base; and the packages scanned at the directory's top, where only
 #: some are (the Definitions' directory holds core's packages beside the ones that moved from the package)
 SCAN = ((ROOT, "verity_vllm", None), (REPO, "verity/definitions", frozenset({"registry"})))
-SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/kernels/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
+# relayout: program/kernels/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
+SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"})
+SKIP_FILES = frozenset({"engine_profile.py"})
 #: program/kernels/ (`numerics/` in `verity.definitions`), and its modules that stay in the package, skipped wherever they go
 SKIP_FILES |= {"relations.py", "sampling_rng.py", "gemm_target_correspondence.py",
                "compiled_relations.py", "compiled_norm_literal.py"}
 #: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name
 SKIP_PATHS = frozenset({"verity_vllm/engine/profiles/cases.py"})
+#: the modules at the Definitions' top that stay with core when the served ones leave it, not scanned as its other packages
+CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 
@@ -102,7 +107,14 @@ def _vocab(s: str) -> bool:
     return bool(MODEL_NAME_RE.search(s) or LEAF_RE.search(s) or FAMILY_RE.search(s) or CLASS_RE.search(s) or PLANE_RE.search(s))
 
 
-def _is_str(node: ast.AST) -> bool:
+if TYPE_CHECKING:
+    class _StrConstant(ast.Constant):
+        """What ``_is_str`` narrows a node to: a constant whose value is a ``str``."""
+
+        value: str
+
+
+def _is_str(node: ast.AST | None) -> TypeGuard[_StrConstant]:
     return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
@@ -128,16 +140,18 @@ class _Finder(ast.NodeVisitor):
         self.tables: set[str] = set()
 
     # --- helpers ---
-    def _seg(self, node: ast.AST) -> str:
+    def _seg(self, node: ast.expr) -> str:
         try:
-            l0, c0, l1, c1 = node.lineno - 1, node.col_offset, node.end_lineno - 1, node.end_col_offset
+            l0, c0, end, c1 = node.lineno - 1, node.col_offset, node.end_lineno, node.end_col_offset
         except AttributeError:
             return ""
+        assert end is not None, "a parsed expression has its end line"
+        l1 = end - 1
         if l0 == l1:
             return self.lines[l0][c0:c1]
         return " ".join([self.lines[l0][c0:]] + self.lines[l0 + 1:l1] + [self.lines[l1][:c1]])
 
-    def _emit(self, kind: str, node: ast.AST, detail: str, symbol: str | None = None) -> None:
+    def _emit(self, kind: str, node: ast.expr | ast.stmt, detail: str, symbol: str | None = None) -> None:
         self.out.append(Offender(self.rel, kind, node.lineno, symbol or (self.scope[-1] if self.scope else "<module>"), detail))
 
     def _in_msg(self, fn) -> None:
@@ -211,16 +225,16 @@ class _Finder(ast.NodeVisitor):
             elif isinstance(right, (ast.Tuple, ast.List, ast.Set)):
                 strs = [e.value for e in right.elts if _is_str(e)]
                 hit = bool(strs) and any(_vocab(s) for s in strs)
-            if _is_str(left) and isinstance(right, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)):
-                if _vocab(left.value) and PATHY_RE.search(rs) and not NOT_PATHY_RE.search(rs):
-                    hit = True                                        # `"proj" in leaf`
+            if (_is_str(left) and isinstance(right, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)) and _vocab(left.value)
+                    and PATHY_RE.search(rs) and not NOT_PATHY_RE.search(rs)):
+                hit = True                                            # `"proj" in leaf`
             if hit:
                 op = "in" if isinstance(node.ops[0], ast.In) else "not in"
                 self._emit("path-predicate", node, f"{ls} {op} {rs}")
         self.generic_visit(node)
 
     # --- (c) tables ---
-    def _table(self, target: ast.AST, value: ast.AST, node: ast.AST) -> None:
+    def _table(self, target: ast.expr, value: ast.expr, node: ast.stmt) -> None:
         name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else None
         if not name or not TABLE_NAME_RE.match(name):
             return
@@ -278,7 +292,8 @@ def iter_files() -> list[Path]:
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS
                                  and (packages is None or Path(dirpath) != base / top or d in packages))
             out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES
-                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS)
+                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS
+                       and not (packages is not None and Path(dirpath) == base / top and fn in CORE_TOPS))
     return out
 
 
@@ -367,8 +382,8 @@ def _report(offenders: list[Offender], entries: list[dict]) -> str:
         by_file_kind.setdefault(o.file, Counter())[o.kind] += 1
     points = {(o.file, o.symbol) for o in offenders}
     by_class = Counter(e["class"] for e in entries)
-    lines = [f"{len(offenders)} by-name sites in {len(by_file)} files; {len(points)} (file, symbol) decision points; "
-             f"allowlist {len(entries)} entries (S {by_class['S']}, L {by_class['L']}, P {by_class['P']})",
+    lines = [(f"{len(offenders)} by-name sites in {len(by_file)} files; {len(points)} (file, symbol) decision points; "
+              f"allowlist {len(entries)} entries (S {by_class['S']}, L {by_class['L']}, P {by_class['P']})"),
              "by kind: " + ", ".join(f"{k} {by_kind[k]}" for k in KINDS), ""]
     for f, n in by_file.most_common():
         kinds = ", ".join(f"{k} {c}" for k, c in sorted(by_file_kind[f].items()))

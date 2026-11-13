@@ -11,9 +11,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_slowdown_code.py"]
 # `verity`: the circuits' codec, census and Boolean prices the grader reads with; `adapters/vllm/verity_vllm`: the
 # training-step frontend that derives the steps (`step_program`, `primitives`); its tests' lf model (`train_step_lf.py`),
-# the step the tests derive, loaded by path; `verity/configuration/config/verity_config`: settings.py's registry;
+# the step the tests derive, loaded by path; `tools/config/verity_config`: settings.py's registry;
 # `benchmarks/training_slowdown/training_slowdown`: training's slowdown code, which the cross-check reads where it sits when
 # VERITY_GRADER_SLOWDOWN_CODE names this tree's.
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
-          "verity/configuration/config/verity_config", "benchmarks/training_slowdown/training_slowdown",
+          "tools/config/verity_config", "benchmarks/training_slowdown/training_slowdown",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py"]

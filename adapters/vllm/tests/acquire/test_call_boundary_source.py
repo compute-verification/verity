@@ -10,23 +10,39 @@ from __future__ import annotations
 import json
 import os
 import types
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-
-from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF, T, V, build_dir, dense_program
 from verity.circuits.evaluation import evaluate, evaluate_batch
+from verity.circuits.call_scope import specialization
+
+from tests.acquire.call_boundary_programs import (
+    DENSE,
+    EMB,
+    EPS,
+    IL,
+    LP,
+    PF,
+    H,
+    T,
+    V,
+    build_dir,
+    dense_program,
+)
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
-from verity.definitions.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import call_boundary_plan as CP  # noqa: E402
-from verity_vllm.acquire.sources import call_boundary_source as CB  # noqa: E402
-from verity_vllm.acquire.sources import taps  # noqa: E402
+from verity_vllm.acquire.sources import call_boundary_plan as CP
+from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources import taps
 
 #: bf16 embedding rows the prompt selects: NaN payloads (quiet, negative, signalling), +-inf, +-0, subnormals, the largest finite, mixed
 EDGE = [[0x7FC0, 0xFFC1, 0x7F81, 0x3F80, 0xBF80, 0x4000, 0x3F00, 0x0000],
@@ -42,9 +58,9 @@ TORCH_OF = {"bf16": torch.bfloat16, "f32": torch.float32, "w8": torch.uint8}
 
 class Recorder:
     def __init__(self, model=None) -> None:
-        self._cur = None
+        self._cur: types.SimpleNamespace | None = None
         self.errors: list[str] = []
-        self.acquired: list[tuple[int, str, object]] = []
+        self.acquired: list[tuple[int, str, torch.Tensor]] = []
         self.sources: list = []
         self.name = "rec"
         self.model = model
@@ -59,6 +75,19 @@ class Recorder:
 class Probe(torch.nn.Module):
     def forward(self, *args, **kwargs):
         return None
+
+
+#: the sources a test installed, which `_uninstalled` takes off at its end
+INSTALLED: list = []
+
+
+@pytest.fixture(autouse=True)
+def _uninstalled():
+    """A source comes off at the end of the test that installed it: its forward hooks are entries of `engine.hooks.live()`, which a
+    later test of the process reads."""
+    yield
+    while INSTALLED:
+        INSTALLED.pop().uninstall()
 
 
 def _bf16(rng, n, scale=1.0):
@@ -147,6 +176,7 @@ def _dense_source(world, man=None, root=None, plan=None):
                           programs=(None, root or os.path.dirname(world.pdir)), call_boundary_plan=plan)  # under the root
     assert classes == ("instance_outputs", CB.FAMILY) and len(com.sources) == 1
     com.sources[0].install()
+    INSTALLED.append(com.sources[0])
     return com, com.sources[0]
 
 
@@ -260,7 +290,8 @@ def test_a_body_that_reads_a_program_input_or_another_step_is_refused_by_name(tm
 # ------------------------------------------------------------------------------------------------------------------------------ FP8
 @pytest.fixture(scope="module")
 def fp8(tmp_path_factory):
-    from tests.check.test_sampled_replay_fp8 import G, H as HF, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import G, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import H as HF
 
     inst, woff, wbits = _program_fp8()
     rng = np.random.default_rng(23)
@@ -281,7 +312,9 @@ def _fp8_rows(rng, rows, n, edges):
 
 
 def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(fp8):
-    from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
+    from verity_vllm.check.replay import evaluate as EV
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.check.replay import opening as OP
 
     rng = np.random.default_rng(5)
     model = runtime(["model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"])
@@ -289,6 +322,7 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
     classes, src = CB.attach(com, True, fp8.man, ("instance_outputs",), programs=(fp8.pdir,))
     assert classes == ("instance_outputs", CB.FAMILY)
     src.install()
+    INSTALLED.append(src)
     mods = dict(model.named_modules())
     quant = specialization("Fp8GroupQuant_v1", {"K": fp8.H, "G": fp8.G})
     served: dict[tuple[int, str], np.ndarray] = {}
@@ -419,7 +453,7 @@ def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
     for e in range(3):
         live = [r for r in order if e < pair.worlds[r].steps]
 
-        def pack(key, last=False):
+        def pack(key, last=False, *, live=live, e=e):
             cs = [(r, c) for r in live for c in pair.worlds[r].at[(e, key)][-1 if last else 0:]]
             return _tensor(np.array([pair.worlds[r].vals[c][:H] for r, c in cs], dtype=np.uint16), torch.bfloat16)
 
@@ -524,7 +558,12 @@ def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_noth
     _drive_pair(pair, com, src, ["r1", "r0"])
     ref = [(s, n, tuple(t.shape), t.dtype, CB.words(torch, t).tobytes()) for s, n, t in com.acquired]
     calls, real = [], CP.evaluate_template
-    monkeypatch.setattr(CP, "evaluate_template", lambda *a, **k: calls.append(a[2]) or real(*a, **k))
+
+    def counted(*a, **k):
+        calls.append(a[2])
+        return real(*a, **k)
+
+    monkeypatch.setattr(CP, "evaluate_template", counted)
     warm, wsrc = _dense_source(pair, pair.man, pair.root)
     taps.warmup(warm, True)
     _drive_pair(pair, warm, wsrc, ["r1", "r0"], lambda e, rows: [(f"warmup-{rid[3]}", lo, hi) for rid, lo, hi in rows])

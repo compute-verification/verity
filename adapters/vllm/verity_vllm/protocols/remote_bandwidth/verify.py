@@ -5,9 +5,15 @@ from __future__ import annotations
 import bisect
 from collections.abc import Callable, Sequence
 
-from verity.protocols.poub.verifier import receipts as rb
-from verity.protocols.poub.verifier.receipts import PER_LEAF
-from verity_vllm.protocols.remote_bandwidth.interface import BlockOpening, PassCommitment, Receipt, RegionInfo
+from verity.protocols.accounting.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF
+
+from verity_vllm.protocols.remote_bandwidth.interface import (
+    BlockOpening,
+    PassCommitment,
+    Receipt,
+    RegionInfo,
+)
 from verity_vllm.protocols.remote_bandwidth.registry import canonical, plan_of, runs_of
 
 

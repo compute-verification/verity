@@ -169,7 +169,7 @@ CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs
 #: in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
 STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
-          "TokenSelect_v1": ("GreedyChunk_v1", "GreedyCombine_v1")}
+          "TokenSelect_v1": ("GreedyChunk_v2", "GreedyCombine_v2")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
 _TOPP_PLAN = "verity.definitions.registry.topp_stages"
 #: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are
@@ -239,7 +239,7 @@ def template(t: str) -> Template:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions import boolean as BB
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not

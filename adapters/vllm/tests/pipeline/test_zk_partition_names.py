@@ -22,19 +22,18 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-
-from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits import evaluation as E
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as BS
 from verity.definitions import boolean as BB
 from verity.definitions.numerics import deepgemm_twins as DT
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity_flock.class_statement import UnitStager
+
+from tests.pipeline import test_serving_rows_splits as SPL
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.program_view import spec_statics
-
-from tests.pipeline import test_serving_rows_splits as SPL
 
 ROUTER = 'E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"'
 #: GLM-5.3's unit templates of the five families as its rows hold them (`serving_templates.unit_templates`), at its statics:
