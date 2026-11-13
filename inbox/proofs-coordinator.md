@@ -134272,3 +134272,113 @@ Nothing.
 - That `a37f2bb519` compiles: `1fe7` decides. The last compiled head of the join is `0df461b1b2`.
 - That the records run or the quick tier passes at `0df461b1b2`.
 - HONEST2's `SampleBelow.lean` is not merged: HONEST2 has not named it compiled to me.
+
+## TWOLEG, Fri 13 Nov 10:01Z: the 09:14Z question, answered: the form refuses the wired play of twenty at TWO rules, one after the other; neither is HELDOF's line, the merge, the files' order or how `inputAt` hands a session its statement; with both rules read as the run of record reads them, a scratch copy of the check ACCEPTS the kept case; nothing in the form's Lean is changed
+
+**The sentence to post (item 4).** On Friday's twenty files as the wired class registers them today, the two-stage
+form's check with its switch on REFUSES: on two honest plays of twenty members (HELDOF's kept case, and one I made on the
+join's tree) 19 of 20 sessions accept and the combining member's one session is refused at "public file: not the
+registration's: roots", because its public file names the roots of the 19 values it reads from the other members and
+the interior's registration names each of those roots only under the member that produces it; in a scratch copy of the
+check with that one rule set aside the interior's audit then refuses `registered`, and with both set aside the same
+case is accepted, so those two rules are all that stands between this play and an accept.
+
+**1. Which session, and which line.** The kept case (`r20261113-082445-b1b3`'s `out/form`; an interior of twenty members; its
+`params.json`, `evidence.json` and 20 circuit files were evicted from the node at 09:16Z, so I read it from the run's
+artifact, `art:c4f55898833347255b48a0031526c10391ba9d3ff2f108726bdd23adfbc71135`, 100 blobs, each held to `blobs.txt`), checked at the scratch head `654e34d42b` in `r20261113-092755-9e84`
+(vy-nebius-cpu-9, rc 0):
+
+- `FORM_ON rc=1`, reason "two-stage: proofs: a session's verifier did not accept" (the form's summary, as HELDOF had it).
+- A scratch executable that calls `OneStageZk.membersRun` with exactly `inputAt`'s arguments and prints each session's
+  own verdict: `DIAG all=false sessions=20`, `ACCEPTED 19 of 20`, and the one refusal
+  `REFUSED flock-verify/27b8861d7a9a… accepted=false why="public file: not the registration's: roots"`.
+  The evidence's `interior.proofs.statements` names that session as the one session of the member
+  `GreedyCombine_v2{V=2560,N=128}`, the twentieth.
+- The line: `headerHeld` (`Spot/OneStageZk.lean` 1002 to 1005), which `Member.population` calls last in a session's
+  verdict; its code `roots` is `Record.matchesPublic`'s `if !sameDict regRoots (entries roots)` (`Spot/Record.lean` 77).
+  A second scratch executable prints that comparison's codes for each member: the 19 `GreedyChunk_v2{…}` `codes=[]`,
+  the combine `codes=[roots]`, and no `scheme`, `domains` or `population` for any.
+- What the two sides hold. The member's slice of the interior's registration (`Member.slice`, the roots `rootsOf`
+  gives it: those the record names `GreedyCombine_v2{V=2560,N=128}/<port>`) holds 2 roots, `logits` and `o0`. Its
+  public file's `frame_v3.roots` names 21: those two, and `r0` to `r18`. Each `r<i>` is the root, the domain and the
+  leaves of the record's root at `GreedyChunk_v2{N=128,OFF=…}/o0`, the value the member's registered file names for
+  that port (19 of 19, read off the case's `params.json` and `evidence.json`). The record holds 40 roots, a `logits`
+  and an `o0` for each of the 20 members, and none named `GreedyCombine_v2{V=2560,N=128}/r<i>`.
+
+**2. The play or the form.** Neither of the three things on the play's side, and not `inputAt`'s handing:
+
+- Not HELDOF's one line: it only chooses which ports the play's own `--registered` file of a member binds at the
+  record's roots, and the session's proof is not what is refused (the refusal is the population check, after the
+  session's verifier). Not the merge: my own play at `654e34d42b` refuses the same way (item 3). Not the files' order:
+  19 sessions accept on the files as handed, and the twentieth is one comparison of one header.
+- Not how `inputAt` hands a session its statement, registered reads or challenges: it calls `membersRun` on the
+  interior's own parameters, members, evidence and statements, and 19 sessions accept on them.
+- **Rule A, Spot's per-member form (`Spot.OneStageZk`, main's, not `SampledTwo`).** It gives each root of the
+  registration to exactly one member, the one its name begins with, and holds a member's public file to exactly those.
+  A wired port names another member's root, so the file is "not the registration's". Main's Python has the same rule in
+  the same place: `a5.audit` (`a5.py` 894) asks the record for `roots[m.port(p)]` for every port of a member's header,
+  which is the `KeyError` HELDOF's line steps around. So the stand-in made the play's Python take what the Lean
+  per-member form does not; the play's "second rc=0" is under the stand-in.
+- **Rule B, the form's own step 5 (mine), found only once A is set aside.** `SampledTwo.secondChecked` decides the
+  interior's audit by v1's `OneStage.recordChecks`: a session's read of a value the registration itself names is held
+  to the record's `registered` list (`Record.ownRegistered`, then `Record.checks`'s `registered`). The wired class makes
+  each chunk's `o0` a registered read of the value `GreedyChunk_v2{…}/o0`, which is one of the record's own ports, and
+  the record lists no `registered`. The run of record in the form's step 4 (`Spot.Run.audit`, `own_reads` under a
+  two-stage rule, `Record.lessOwnReads`) and the stream's Python (`service.py` 2475 to 2477, and `a5.audit` 1118 to
+  1120 when it is handed the draw) decide the same record with those reads taken out: a read of the registration's own
+  port at its own root is no registered read, its rows being the second stage's statement check's to hold. So the
+  form's step 5 and step 4 read one record two ways, and with the reads named as they are no `registered` list meets
+  both: listed, step 4 finds 19 values registered and none opened; not listed, step 5 finds 19 opened and none
+  registered. A play of one member never reads one of the registration's own ports this way: in `9fa6`'s
+  case the member's registered file names the values `logits` and `o0`, and the record's ports are
+  `GreedyCombine_v2{V=128,N=128}/logits` and `…/o0`. That is why every play of mine so far passed.
+
+The evidence for B and for "nothing else" is two what-ifs, scratch executables in no branch that prove nothing and
+propose nothing: each is the form's check at the switch on with `inputAt`, `prepare` and `secondChecked` copied and
+one or two lines changed, run on the kept case at `654e34d42b`.
+
+| run | changed | verdict |
+|---|---|---|
+| `r20261113-093629-8148`, and again `r20261113-094725-9096` (vy-nebius-cpu-9, rc 0) | A only: a member's slice also holds, for each port its registered file reads from a value the record names a root at, that root under the reading port's name | all 20 sessions accept; `WHATIF_ROOTS rc=1` "two-stage: the interior's audit: the audit's checks failed: registered", detail `opened` the 19 `GreedyChunk_v2{…}/o0`, `registered` `[]`, `wrong` `[]`; the run of record's symbol is `accept` |
+| `r20261113-094725-9096` | A, and B: step 5's record checks take the reads `Record.lessOwnReads` takes out | `WHATIF_ROOTS_OWN rc=0`, verdict `accept`: 40 units drawn, 40 proved, 40 strata of one unit in four, bound 2 |
+
+So past those two rules every other step of the check takes the play of twenty: the sessions in order, the trees and
+the log's order, `popHeld`, `laidHeld`, `classHeld`, the stamps, both digests read back, `stagesFit`, the run of
+record with the second stage's statement check at the switch on, `sourceRead`, `interiorUnshown`, `stagesOrdered`,
+`firstTreeless`, the second stage's law, the challenges of the interior's draw, R1 to R8, and the verdicts.
+
+**3. The same play on my scratch head.** `r20261113-092534-04b4` (vy-nebius-cpu-4, rc 0), `654e34d42b` with HELDOF's
+one line applied in the clone (`STAND_IN rc=0`, the diff kept as `out/stand-in.diff`),
+`SMALL_ARGS="--inline --units 20 --v 2560 --logits"`, an interior of twenty members: `second rc=0`; `INTERIOR` 19
+`GreedyChunk_v2{N=128,OFF=…}` and `GreedyCombine_v2{V=2560,N=128}`, `n` 8 each;
+`ROUND_TWO {"codes": [], "detail": {}, "ok": true}`; `FORM_ON rc=1` and `FORM_OFF rc=1`, both "two-stage: proofs: a
+session's verifier did not accept"; `PLAY rc=1`. The same two executables on its `out/form`: `ACCEPTED 19 of 20`,
+`REFUSED flock-verify/47648b16a841… why="public file: not the registration's: roots"`, and `codes=[roots]` for the
+combine alone. So the refusal is the tree's and the class's, not HELDOF's case's. The case is whole in my fetched copy
+of the run (1.2 GB); the run is not yet preserved, and I put the case in the store if it is not by my next entry.
+
+**What each rule would take. I have changed neither, and B needs your ruling before I touch it (STOP RULE: it makes
+the form accept a play it refuses today).**
+
+- A, on the play's side, is what GATHER's mend of `a5.audit` for a wired port's root has to deliver for the Lean to
+  take it: the interior's registration names a root `<reading member>/<wired port>` for every port of every member's
+  public file, with the producing port's root, leaves and domain. Then `rootsOf` gives the combine its 21 roots, the
+  slice is the file's, and main's `a5.audit` line needs no stand-in. Not tested by anyone: whether R1 to R8 and the
+  first stage take a registration that names one tree at two ports; the registration's digest changes, so it needs a
+  new play, which I make at GATHER's head the hour it is named. The other way, the per-member form's slice learning a
+  wire, is a change to `Spot.OneStageZk` and to what its guarantee says a member's file is held to; I would not start
+  there.
+- B cannot be met from the play's side while the reads keep the names the second stage's statement check reads as the
+  registration's own ports. In the form it is one line of `SampledTwo.secondChecked` (the checks of
+  `OneStage.recordChecks` on `Record.lessOwnReads` of the same reads; v1's `recordChecks` untouched), and with it what
+  an accepted interior audit says about registered reads (`UnitsProved`'s last clause, through `recordChecks_nil`:
+  `security/Proofs/Properties/Spot.lean` and `security/Proofs/Properties/Verity/Sampled/Held.lean`) becomes the
+  statement less the own reads, which the second stage's statement check must then be shown to hold (`SpotFlock`'s
+  `OwnReads` lemmas, `ownReads_form` among them, are the nearest proved thing; I have not checked that they are about
+  these reads). That is a statement change, so it is Lean's and yours to rule, not a mend I make quietly.
+- HELDOF's two-template wired play (`be6b`) should show the same two rules; I have not read it.
+
+**Standing.** GATHER's yes on the fourteen places and ASSEMBLY's merge of `654e34d42b` (the join `0df461b1b2`) are
+read; I move nothing at the public boundary. The tier of record at `654e34d42b`, `r20261113-090457-0daf`, is still
+running: 61 suites passed and one failed so far, repository "386 passed, 2 failed", the join's two. #9574 stays at `b7949765a0`. The
+three scratch executables' sources are in the inputs of `9e84`, `8148` and `9096`.
