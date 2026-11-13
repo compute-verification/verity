@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shlex
 import sys
 import tarfile
@@ -239,12 +240,27 @@ def rehearsal(source: str, seen: list | None = None):
     return command
 
 
+#: what a tunnel's `ssh` says when the peer's port refuses a forwarded connection: free text, a line a connection
+TUNNEL_LINE = "channel 2: open failed: connect failed: Connection refused"
+
+
+def speaking_tunnel(said: Path) -> list[str]:
+    """A stand-in for a tunnel's `ssh` that says `TUNNEL_LINE` on its stderr and then opens the FIFO `said`."""
+    return [sys.executable, "-c", f"import signal, sys\ntry:\n    print({TUNNEL_LINE!r}, file=sys.stderr, flush=True)\n"
+                                  f"finally:\n    open({str(said)!r}, 'w').close()\nsignal.pause()"]
+
+
 def run_warden(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str, dict]:
+    """The rehearsal run through a tunnel that has said its line before the rehearsal starts: `up` waits on the
+    tunnel's opening of the FIFO."""
     rc, out = gate(host, REQUEST, started=[], token=token)
     assert rc == 0, out
     run = json.loads(out)["run"]
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
-                          command=rehearsal(source, seen), wait=lambda proc, s: proc.wait())
+    said = host.peers.parent / f"said-{token}"
+    os.mkfifo(said)
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: speaking_tunnel(said),
+                          up=lambda t, p: Path(said).read_text() == "", command=rehearsal(source, seen),
+                          wait=lambda proc, s: proc.wait())
     return run, end
 
 
@@ -268,17 +284,19 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert "registrations" not in end
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
         "deployment.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts", "requests.records",
-        "client.json", "check.json", "rehearse.log")}
+        "client.json", "check.json", "rehearse.log", "tunnel.log")}
     assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
-                                 "rows-certificates.jsonl", "tunnel.log"}
+                                 "rows-certificates.jsonl"}
     assert sorted((d / A.WITNESS / "rehearse.log").read_text().splitlines()) == sorted([STDERR, LAST_LINE])
+    assert (d / A.WITNESS / "tunnel.log").read_text().splitlines() == [TUNNEL_LINE]
     out = d / "out"
     assert json.loads((out / "deployment.json").read_text())["upstream"] == url
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"digest": "cd" * 64, "signature": "ef"}}, {"refused": ["warden-fails", "egress", 1]}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     for secret in (SALT_C.encode(), b"77" * 64, CELL_SALTS[:16], CELL_SALTS[:16].hex().encode(), b"prompt",
-                   b"completion_tokens", b"data_bytes", b"text_bytes", STDERR.encode(), LAST_LINE.encode()):
+                   b"completion_tokens", b"data_bytes", b"text_bytes", STDERR.encode(), LAST_LINE.encode(),
+                   TUNNEL_LINE.encode(), b"open failed"):
         assert secret not in public
 
 
@@ -328,13 +346,14 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
     assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells-certificates.jsonl",
                         f"{run}/out/rows-certificates.jsonl", f"{run}/out/certificates.jsonl",
                         f"{run}/out/deployment.json"} <= names
-    assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl", f"{run}/out/rehearse.log"} & names
+    assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl", f"{run}/out/rehearse.log",
+                f"{run}/out/tunnel.log"} & names
     hidden = {n for n in names if n == f"{run}/witness" or n.startswith(f"{run}/witness/")}
     assert bool(hidden) == witness
     if witness:
         assert {f"{run}/witness/cells.jsonl", f"{run}/witness/rows.jsonl", f"{run}/witness/cells.salts",
                 f"{run}/witness/certified.jsonl", f"{run}/witness/check.json",
-                f"{run}/witness/rehearse.log"} <= hidden
+                f"{run}/witness/rehearse.log", f"{run}/witness/tunnel.log"} <= hidden
 
 
 def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
@@ -343,8 +362,8 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
                           up=lambda t, p: False, command=lambda *a: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in end["ended"]
-    assert end["verdict"] is None and "registrations" not in end and end["witness"] == {}
-    assert set(end["files"]) == {"tunnel.log"}
+    assert end["verdict"] is None and "registrations" not in end and end["witness"] == {"tunnel.log": 0}
+    assert end["files"] == {}
 
     run, end = run_warden(host, "raise SystemExit(1)", token="cd34")
     assert end["rc"] == 1 and end["ended"] == "the rehearsal exited 1" and end["verdict"] is None

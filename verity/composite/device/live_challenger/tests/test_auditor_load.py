@@ -231,9 +231,9 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "certificates.jsonl",
-                                 "load-relay.json", "tunnel.log"}
+                                 "load-relay.json"}
     assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
-    assert {"load.json", "load-heads.json", "rehearse.log"} <= set(end["witness"])
+    assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= set(end["witness"])
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert not any(x.encode() in public for x in (SALT, ROOT, DIGEST, SIGNATURE))
 
@@ -247,7 +247,8 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
                           command=lambda *a, **k: pytest.fail("ran without its sink's tunnels"))
     assert end["rc"] == 2 and end["ended"] == \
         "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
-    assert len(ups) == 3 and end["verdict"] is None and "load" not in end and set(end["files"]) == {"tunnel.log"}
+    assert len(ups) == 3 and end["verdict"] is None and "load" not in end
+    assert end["files"] == {} and end["witness"] == {"tunnel.log": 0}
 
 
 def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):

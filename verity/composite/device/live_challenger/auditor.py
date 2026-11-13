@@ -240,9 +240,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
   the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
-  (each link-window's rows' and wiring's), the traffic, the client's log, the check and the rehearsal's own output
-  (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost), all the
-  prover's. Its unit publishes to `out/` only what isn't:
+  (each link-window's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
+  (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
+  tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
+  all the prover's. Its unit publishes to `out/` only what isn't:
   `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
   alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
   `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or layout,
@@ -443,11 +444,11 @@ WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`);
-#: everything else `warden_serve.py rehearse` writes, and what it prints (`rehearse.log`), is witness and stays in
-#: `witness/`, which `fetch` gives the run's own lane alone. `groups.json` (a `--window-per-group` run's) is each
-#: group's request indices and link-windows, the request's public counts and the scan's schedule alone. Of a load,
-#: `load-relay.json` alone: its registrations (`load.json`, each value's whole) stay in `witness/`, as the row
-#: registrations do
+#: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
+#: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
+#: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
+#: public counts and the scan's schedule alone. Of a load, `load-relay.json` alone: its registrations (`load.json`,
+#: each value's whole) stay in `witness/`, as the row registrations do
 WARDEN_PUBLIC = ("deployment.json", "groups.json", "load-relay.json")
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
@@ -2569,9 +2570,9 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
     load"), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) with it, and its public
-    outcome (`warden_outcome`) to `out/` and the end. A store's write opens no tunnel: it runs `weights_command`
-    (`command(req, out, store)`) and its end carries the store's record."""
+    `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
+    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end. A store's write opens
+    no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
@@ -2594,7 +2595,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     ssh = serve.peer_ssh(host.peers, req["peer"])
     argv = (tunnel_argv or (lambda ssh, local: forward_argv(ssh, local, req["port"])))(ssh, local)
     rc, why, tunnels = 2, None, []
-    with open(out / "tunnel.log", "wb") as log:
+    with open(work / "tunnel.log", "wb") as log:
         tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         for s in sinks:
             tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
