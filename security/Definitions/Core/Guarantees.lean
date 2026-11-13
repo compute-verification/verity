@@ -2,6 +2,7 @@ module
 
 public import Definitions.Core.Guarantees.Circuit
 public import Definitions.Core.Guarantees.DeviceFigures
+public import Definitions.Core.Guarantees.Registration
 public import Definitions.Core.Guarantees.Game
 public import Definitions.Core.Guarantees.Challenger
 public import Definitions.Core.Guarantees.NaiveStrassen

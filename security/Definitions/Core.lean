@@ -22,6 +22,7 @@ public import Definitions.Core.Expand
 public import Definitions.Core.Expand.Instances
 public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Site
+public import Definitions.Core.Registration
 public import Definitions.Core.ValueSalts
 public import Definitions.Core.MemCheck
 
@@ -39,7 +40,7 @@ the ones here.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
   `Formalism` (`(c, k)`-partitions and local description length).
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
-  (the registered hardware and its registration).
+  (the registered hardware and its registration), `Registration` (what an accepted registration gives the theorems).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core

@@ -21,18 +21,23 @@ the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf's host is reached
   by a memory challenger (`View.Onsite`); and θ registers each value once and the log declares each day once
   (`View.Once`), so a lookup by name or by day reads the one registered value or circuit.
-* **The guarantee** (`Verity.Guarantees.RegistrationSound`): a valid log's view holds the registered facts.
-* **The parts of the registered hardware** (`Site.Part`, `Site.parts`): each device's compute, each memory leaf's memory
-  held and memory read, and each boundary link's egress, by the id that holds it.
+* **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Core.Guarantees.Registration`): a valid log's
+  view holds the registered facts.
+* **The parts of the registered hardware** (`Site.Accountable`, `Site.parts`): each device's compute, each memory leaf's
+  memory held and memory read, the device model's resources (`Accounting.Resource`) at the leaf's tier, and each
+  boundary link's egress, by the id that holds it.
 * **What each protocol accounts for** (`Registration.Lists`): the composite's protocols, and for each the parts it
   accounts for at each id. Its values come from each protocol's account in code (`Core.Account`: each amount's `part`
   and `place`, whose leaves `Core.Account.Part.leaves` names). `Registration.AccountedFor` holds when every part of the
   registered hardware is accounted for by some protocol of the composite.
+* **The parameters' circuit** (`Registration.DeclaredIsParams`): the circuit the parameters name is the one the log
+  declares for the day. It is stated and read by no guarantee: no code checks it yet.
 
 **Not covered.** `RegistrationSound` reads the spec's check (`Registration.Valid`); that the code's check decides it is a
 property of the code (`Properties.Site.Checks` for a log of site entries; none yet for information entries and
-declarations). Nothing here ties a builder's digest to the compiler it holds, or a declaration's program digest to a
-circuit file: the spec's builder holds its compiler (`Registration.Builder.B`), while the code's holds a digest and a cap.
+declarations). Nothing here ties a builder's digest to the compiler it holds: the spec's builder holds its compiler
+(`Registration.Builder.B`), while the code's holds a digest and a cap. That the parameters' circuit is the day's declared
+one is stated (`Registration.DeclaredIsParams`) and nothing proves it.
 `Registration.Valid` doesn't check `AccountedFor`, so no guarantee here concludes it. Hardware outside the Site
 (unregistered hardware) and a host's own compute, which the Site registers no rate for, are parts of no Site.
 -/
@@ -43,23 +48,21 @@ namespace Verity
 
 namespace Site
 
-/-- **A part of the registered hardware** a protocol can account for, at one registered id: a device's compute, a memory
-leaf's memory held or its memory read (at the leaf's tier), or a boundary link's egress. The code's `Core.Account.Part`
-groups the memory and read parts by tier; the device model's resources (`Accounting.Resource`: compute, bandwidth,
-capacity) are compute, and the read and memory parts of a device's HBM. -/
-inductive Part
-  | compute
-  | memory
-  | read
+/-- **What a part of the registered hardware is of**, at one registered id: one of the device model's resources
+(`Accounting.Resource`), a device's compute or a memory leaf's bits read (`bandwidth`) or memory held (`capacity`) at the
+leaf's tier, or a boundary link's egress. Egress is no resource of the device model: a resource there is what a joint
+audit certifies by an audit of its own, and a joint run (`Accounting.Run`) carries an account, a window and a verdict for
+each. The code's `Core.Account.Part` is the same parts, its memory and read parts by tier. -/
+inductive Accountable
+  | resource (r : Accounting.Resource)
   | egress
-  deriving DecidableEq, Repr
 
 /-- **The parts the Site holds to account for**, by the id of the location or link that holds each: each device's compute,
 each memory leaf's memory held and memory read, and each boundary link's egress (`Site.Boundary`). The site, a host and
 the auditor's devices hold none of their own: a host has no compute rate, and its memory is its memory leaves'. -/
-def parts (S : Site) : Set (String × Part) :=
-  {xr | (∃ x ∈ S.locs, x.kind = .device ∧ xr = (x.id, .compute)) ∨
-    (∃ x ∈ S.locs, x.kind = .memory ∧ (xr = (x.id, .memory) ∨ xr = (x.id, .read))) ∨
+def parts (S : Site) : Set (String × Accountable) :=
+  {xr | (∃ x ∈ S.locs, x.kind = .device ∧ xr = (x.id, .resource .compute)) ∨
+    (∃ x ∈ S.locs, x.kind = .memory ∧ (xr = (x.id, .resource .capacity) ∨ xr = (x.id, .resource .bandwidth))) ∨
     ∃ k ∈ S.links, S.Boundary k ∧ xr = (k.id, .egress)}
 
 end Site
@@ -139,7 +142,7 @@ part `r` at `x` when one of its amounts' parts is of `r`'s kind and its leaves a
 hold `x`. -/
 structure Lists (P : Type) where
   protocols : Composite → Finset P
-  accounts : Composite → P → Site → String → Set Site.Part
+  accounts : Composite → P → Site → String → Set Site.Accountable
 
 /-- **The registered hardware is accounted for** by composite `k`'s protocols: every part the view's Site holds
 (`Site.parts`) is accounted for by some protocol on `k`'s list. It is about the list, before any challenge: whether a
@@ -148,20 +151,18 @@ covers. -/
 def AccountedFor {P : Type} (L : Lists P) (v : View) (k : Composite) : Prop :=
   ∀ x r, (x, r) ∈ v.site.parts → ∃ p ∈ L.protocols k, r ∈ L.accounts k p v.site x
 
+/-- **The parameters name the circuit the log declares for day `j`**: the program digest the parameters `θ` name
+(`programDigest`, as the soundness game's vocabulary reads it), written as the log writes digests (`hex`), is the
+program the log declares for day `j` (`Registration.declared`). The log declares no digest of the public file, so this
+ties only the program's; a declaration naming the public file's digest would let it tie that one too.
+
+No code checks it yet, and no guarantee reads it: the theorems read the circuit the parameters name, and registration
+the circuit the log declares. It becomes a lemma when the registration check reads the parameters and refuses a day
+whose declared program is not theirs, or when the parameters are derived from the log. -/
+def DeclaredIsParams (hex : Digest → String) (programDigest : ByteArray → Option Digest) (θ : ByteArray)
+    (log : Registration) (j : ℕ) : Prop :=
+  ∃ d ∈ declared log j, ∃ h, programDigest θ = some h ∧ hex h = d.program
+
 end Registration
 
 end Verity
-
-namespace Verity.Guarantees
-
-open Verity
-
-/-- **What registration establishes.** For all digests `D`, auditors `A`, composites `c` and logs: if the log is valid
-(`Registration.Valid`: each entry passes its checks against the log before it), its view holds the registered facts the
-theorems read (`Registration.View.Holds`): every registered device has accepted figures, onsite every boundary link is
-certified and every memory leaf reached, and θ's values and the declared days are each registered once. -/
-def RegistrationSound : Prop :=
-  ∀ (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (log : Registration),
-    Registration.Valid D A c log → (Registration.view D c log).Holds D A c
-
-end Verity.Guarantees
