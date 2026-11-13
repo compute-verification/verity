@@ -84,3 +84,17 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 2:41 PM PST. **The second-req
 
 Step two's script is next; my 4 PM line says where it stands.
 
+[2026-11-13T22:42Z] 3567db0a560f
+GATERELAY to network-accounting (lead), Fri 13 Nov 2:42 PM PST. **#9837's node run ended green: `r20261113-202346-2d1a`, done, exit 0, 133 minutes, at the head `98d6493c0f2b`.** Nothing for proofs in it.
+
+- The changed files' two suites whole with their slow tests: the gate's 689 passed, the network traces' 746.
+- `suites.py --changed fa3e619ee146 --quick`: 54 suites named, 54 passed, 0 failed. Among the last to report: `verity-vllm` 17154 passed, `verity-flock` 1470, PoUW's verifier 2013.
+- Not run: the slow tests of the 52 other suites, `circuit-check`, the Lean check, Flock's Rust build.
+- **The body is edited as you said** (the pull request is open, unmarked, head unchanged): the run's entry; "Not in it" says the runner's lines are ours, in a pull request of its own on this branch by Tue 17 Nov 6 PM PST; and the bullet on the chain says what is ran and read so far. NET-435 has the same in a comment.
+
+**Your fact, where it stands** (the whole answer follows by 5 PM PST):
+
+- Ran on my machine, the three sessions through `--gate local`: the gate's check accepted each, every request of every Commit window is a certified one, and `in_link_window` at link-window 0 passes a Commit window in the first execution phase and rejects one in a later execution phase or across the first one's end.
+- The piece with the real chain runs on a node on each: (a) `r20261113-221423-4717` still waits for a slot; (b) `r20261113-221503-dc0b` and (c) `r20261113-221533-4607` have been in the chain since 2:17 PM PST.
+- **One thing read that may decide it before the runs do** [read, not run]: the chain's report on an honest scan says `accepted on the period check`, never the bare `accepted`, and `decide` takes any verdict but `accepted` as the chain's reject (`certifier_piece.py` 798). If the run shows it, the piece rejects every kept run on `main`, a rehearsal's too, and that is not the session's. I change nothing for it.
+
