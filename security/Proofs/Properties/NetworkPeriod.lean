@@ -319,21 +319,21 @@ theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stat
 
 /-- A registration whose units read their state off the chain: unit 1's `sin` at leaf 2, a leaf no unit registered,
 and unit 0's `o1` at leaf 0, the empty state's, at the state's root and domain all the same. -/
-def misindexedWindow : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 2) (stateRun 0 0 1)
+def misindexedExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 2) (stateRun 0 0 1)
 
-theorem misindexedWindow_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedWindow = false := by
+theorem misindexedExecutionPhase_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedExecutionPhase = false := by
   decide +kernel
 
 /-- **The rows form refuses a scan whose units read their state off the chain**: a period whose one link-window's scan
 is wired to the slot audit, its state that audit's `SCAN_STATE` by root and domain, but its registration's reads
-misindexed (`misindexedWindow`), is accepted by no evidence (`rowsStateTied`). -/
+misindexed (`misindexedExecutionPhase`), is accepted by no evidence (`rowsStateTied`). -/
 theorem rowsStateTied_misindexed {p : Params} {sd : ByteArray} {scan : Scan} (e : Evidence) (pub : Public)
     (prof : Profile) (hform : p.form = .rows slotSchedule sd scan) (ha : p.audits = #[slotAudit]) :
-    check p ⟨#[stateReg "s"], #[misindexedWindow], .empty⟩ e ≠ .accept pub prof := by
+    check p ⟨#[stateReg "s"], #[misindexedExecutionPhase], .empty⟩ e ≠ .accept pub prof := by
   intro hacc
-  have hs : stateTied p.audits slotSchedule #[stateReg "s"] misindexedWindow = true :=
-    rowsStateTied p _ e pub prof hacc slotSchedule sd scan hform 0 misindexedWindow rfl
-  rw [ha, misindexedWindow_untied] at hs
+  have hs : stateTied p.audits slotSchedule #[stateReg "s"] misindexedExecutionPhase = true :=
+    rowsStateTied p _ e pub prof hacc slotSchedule sd scan hform 0 misindexedExecutionPhase rfl
+  rw [ha, misindexedExecutionPhase_untied] at hs
   cases hs
 
 /-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
@@ -425,12 +425,12 @@ theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
   cases hh
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the period check accepts a period in the rows form whose parameters name a
-class circuit, `heldPeriod` with nothing registered. A period with an execution phase needs the network certifier's
+class circuit, `heldMonitoringPeriod` with nothing registered. A period with an execution phase needs the network certifier's
 LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 tied audit registered under the class circuit; `tiedExecutionPhase_held` is `held` of such a phase's registrations. -/
 theorem rowsCircuitHeld_honest :
-    ∃ (pub : Public) (prof : Profile), check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
-  have hb : (match check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    ∃ (pub : Public) (prof : Profile), check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
       | .accept _ _ => true
       | _ => false) = true := by
     decide +kernel
