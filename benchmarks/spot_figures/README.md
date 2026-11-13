@@ -1,7 +1,7 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.protocols.spot.prover.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
 (`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
