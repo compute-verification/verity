@@ -148,6 +148,17 @@ def test_a_workload_of_up_to_64_requests_or_of_none_stated_takes_the_geometry(tm
     assert BS.sampler_geometry(sampling, L40S) is None and sampling["geometry"] == GEOMETRY and sampling["splits"] == 32
 
 
+def test_a_stochastic_policy_that_states_no_top_k_has_none():
+    sampling = {k: v for k, v in STOCH.items() if k != "top_k"}
+    assert BS.sampler_geometry(sampling, L40S) is None
+    assert sampling == {**{k: v for k, v in STOCH.items() if k != "top_k"}, "splits": 32, "geometry": GEOMETRY}
+
+
+def test_the_builder_binds_a_greedy_and_a_stochastic_sampler_each_to_a_named_rule():
+    assert list(BS.SAMPLERS_BOUND) == ["greedy", "stochastic"]
+    assert [rule.split(" ")[0] for rule in BS.SAMPLERS_BOUND.values()] == ["ArgmaxTokenSelect_v1", "GumbelTopPTokenSelect[vllm]_v4"]
+
+
 @pytest.mark.parametrize("top_k", [50, "50"])
 def test_a_top_k_is_refused_first_as_a_sampler_with_no_definition(top_k):
     sampling = {**STOCH, "top_k": top_k, "seeded": False, "workload": "/no/such/workload.json"}
