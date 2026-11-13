@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate, evaluate_batch
-from verity.definitions.call_scope import specialization
+from verity.circuits.call_scope import specialization
 
 from tests.acquire.call_boundary_programs import (
     DENSE,
