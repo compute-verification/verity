@@ -118,7 +118,12 @@ theorem unitIndices_of_units {pub : _root_.Flock.Public} {c : _root_.Flock.Circu
     simp [_root_.Flock.J.get, h]
   have ha : _root_.Flock.J.arr (_root_.Flock.HmRow.unitsEntry c xs) "indices" "public file" =
       .ok (xs.map fun x => Lean.toJson x) := by
-    simp [_root_.Flock.J.arr, _root_.Flock.J.get, hi, bind, Except.bind, _root_.Flock.J.asArr, Json.getArr?]
+    have hgi : _root_.Flock.J.get (_root_.Flock.HmRow.unitsEntry c xs) "indices" "public file" =
+        .ok (.arr (xs.map fun x => Lean.toJson x)) := by
+      simp [_root_.Flock.J.get, hi]
+    unfold _root_.Flock.J.arr
+    rw [hgi]
+    rfl
   unfold _root_.Flock.Registered.unitIndices
   simp only [hg, ha, bind, Except.bind]
   exact FlockSoundness.Discharge.Composed.mapM_asNat_toJson _ xs
