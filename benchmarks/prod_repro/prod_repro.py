@@ -81,6 +81,7 @@ import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import ModuleType
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -922,23 +923,58 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
 def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
-    cost (`UNLIKE`). None otherwise."""
+    cost (`UNLIKE`). None otherwise. The run, the commit and the host it was measured on are the writer's to stamp
+    (`record`)."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
     life = c["lifetimes"]
     return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
-            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
-            "run": r["run"]}
+            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"]}
+
+
+def kit() -> ModuleType:
+    """The benchmark kit (`verity_bench.kit`), by the serving cost benchmark's door to the harness (`serve_tax.kit`):
+    its writer of a measurement in a run's result.json. Loaded where a measurement is recorded."""
+    S.kit()
+    from verity_bench import kit as bench_kit
+
+    return bench_kit
+
+
+def _write(f: Path, doc: dict) -> None:
+    tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(tmp, f)
+
+
+def record(f: Path, run: str, m: dict) -> dict:
+    """``m`` (`measurement`) as the result ``f`` of the run ``run`` holds it, which it returns. The kit's writer
+    (`verity_bench.kit.Writer.measurement`) appends it: its value, unit, interval, target and verdict, stamped with
+    the run, the commit and the host (the GPUs and their clocks as the report is written), and naming what it was
+    computed from, the report it is a line of. ``m``'s other keys, which the kit's entry has no place for, are then
+    added beside the kit's: which way is better, the load, the two arms and the lifetimes an arm. The entry's run and
+    commit are the kit's. What the writer refuses (a value that is no finite number, a verdict with no target, a name
+    the result already holds) raises here too."""
+    k = kit()
+    entry = k.Writer(f.parent, run, k.host_stamp()).measurement(
+        m["name"], m["value"], m["unit"], interval=m["ci95"], target=m["target"], verdict=m["verdict"],
+        inputs=["out/prod_repro.json"])
+    doc = json.loads(f.read_text())
+    held = next(x for x in doc["measurements"] if x.get("name") == m["name"])
+    held.update({key: m[key] for key in m if key not in entry})
+    _write(f, doc)
+    return held
 
 
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
     artifacts, so a reader finds them as the run's files without listing its record, and holds the cost under its
-    metric id where it stands (`measurement`), and no entry under that id where it does not. A result the benchmark's
-    cost wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose
-    validation is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
+    metric id where it stands (`measurement`, which `record` writes), and no entry under that id where it does not. A
+    result the benchmark's cost wrote stays as it is with them added; a job that has none, one that served ours alone,
+    gets one whose validation is the tokens line's. None for an out/ that is not the run's, which is another job's
+    read again."""
     run_dir = SHARED.RESEARCH_RUN_DIR
     if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
         return None
@@ -951,12 +987,10 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
                        "detail": next(x for x in text(r).splitlines() if x.startswith("tokens:"))},
         "measurements": [], "measurement_files": [], "artifacts": []}
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
-    m = measurement(r)
-    doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in METRICS.values()),
-                           *([m] if m else [])]
-    tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
-    tmp.write_text(json.dumps(doc, indent=1) + "\n")
-    os.replace(tmp, f)
+    doc["measurements"] = [x for x in doc.get("measurements") or () if x.get("name") not in METRICS.values()]
+    _write(f, doc)
+    if m := measurement(r):
+        record(f, doc["run_id"], m)
     return f
 
 

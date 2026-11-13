@@ -1196,11 +1196,18 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
 
 
+#: a host's stamp as the kit's writer holds one (`verity_bench.kit.host_stamp`), which the suite gives it: no test asks
+#: nvidia-smi
+STAMP = {"card": "a card", "gpus": [{"uuid": "GPU-0", "sm_mhz": 1000, "mem_mhz": 2000}], "driver": "1.2", "cuda": "3.4",
+         "node": "a-node", "commit": "d" * 40}
+
+
 def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
     """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
     where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
+    monkeypatch.setattr(P.kit(), "host_stamp", lambda: dict(STAMP))
     (tmp_path / "out").mkdir(exist_ok=True)
     (tmp_path / "result.json").write_text(json.dumps({
         "schema": P.RESULT, "run_id": "r-1", "validation": {"status": "passed"},
@@ -1215,17 +1222,27 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/metrics.toml names, the
     figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
-    and the arms are at the same settings. Where it does not, the result holds no entry under the id."""
+    and the arms are at the same settings. Where it does not, the result holds no entry under the id. The entry is
+    the benchmark kit's writer's (`prod_repro.record`), with the keys the report adds to it."""
     theirs = {"name": S.AGENTIC, "value": 0.5}
     # three lifetimes an arm whose costs agree: the cost stands and is under the target
     c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
     assert (c["stands"], c["metric"], c["verdict"]) == (True, "vllm/prod-serving-cost-glm53", "under")
     got = declared(tmp_path, monkeypatch, c)
+    # the entry is the kit's writer's, in its keys and their order, stamped with the run, the tree's commit (the
+    # stamp's, not the one the arms recorded) and the host, and naming the report as what it was computed from; the
+    # five keys the kit's entry has no place for follow them
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
-        "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1"}]
+        "commit": "d" * 40, "run": "r-1", "ci95": own["ci95"], "target": 1.0, "verdict": "under",
+        "inputs": ["out/prod_repro.json"], "host": STAMP,
+        "better": "lower", "load": S.AGENTIC, "stock": "prod", "ours": "prod-record", "lifetimes": 3}]
+    assert list(got[1]) == ["name", "value", "unit", "commit", "run", "ci95", "target", "verdict", "inputs", "host",
+                            "better", "load", "stock", "ours", "lifetimes"]
     assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
+    # a figure the kit's writer does not take as a measurement is refused, not written whole
+    with pytest.raises(ValueError, match="finite number"):
+        declared(tmp_path, monkeypatch, c | {"value": float("nan")})
     # one lifetime an arm: the benchmark's own cost stands as a value with no interval, and so does the line's
     ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
     by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-record": sessions_arm("prod-record", ours)}
