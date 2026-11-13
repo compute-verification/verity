@@ -3,16 +3,17 @@ it was built with (`index_key`), so no index is ever served for another Program 
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import pytest
 
 from tests.check import test_sampled_replay as T
 from verity_vllm.check.replay import index as IX
 
-BASE = {"attention_paths": ["model.model.layers.0.self_attn.attn"], "tp": {"rank": 1, "world": 2}, "program_dir": None}
-OTHER = {"attention_paths": {"attention_paths": []}, "rank": {"tp": {"rank": 0, "world": 2}}, "world": {"tp": {"rank": 1, "world": 4}},
-         "no tp": {"tp": None}, "program_dir": {"program_dir": "/another/build"}, "query": {"query": T.Q_MODULE_BODY_ID},
-         "norm_scales": {"norm_scales": True}, "prefix": {"prefix": "model."}}
+BASE: dict[str, Any] = {"attention_paths": ["model.model.layers.0.self_attn.attn"], "tp": {"rank": 1, "world": 2}, "program_dir": None}
+OTHER: dict[str, dict[str, Any]] = {"attention_paths": {"attention_paths": []}, "rank": {"tp": {"rank": 0, "world": 2}}, "world": {"tp": {"rank": 1, "world": 4}},
+                                    "no tp": {"tp": None}, "program_dir": {"program_dir": "/another/build"}, "query": {"query": T.Q_MODULE_BODY_ID},
+                                    "norm_scales": {"norm_scales": True}, "prefix": {"prefix": "model."}}
 
 
 @pytest.fixture(scope="module")

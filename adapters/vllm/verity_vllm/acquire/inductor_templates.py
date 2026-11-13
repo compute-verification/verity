@@ -30,15 +30,25 @@ from __future__ import annotations
 import ast
 import hashlib
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.acquire.inductor_texts import (ADD2_NORM, ADD2_NORM_FINAL, ADD_NORM, ADD_NORM_COPY, EMBED_NORM, QK_NORM_ROPE, ROPE_QK,
-                                                SILU_MUL)
 from verity.definitions.registry import b1
 from verity.definitions.registry import inductor as IR
+
+from verity_vllm.acquire.inductor_texts import (
+    ADD2_NORM,
+    ADD2_NORM_FINAL,
+    ADD_NORM,
+    ADD_NORM_COPY,
+    EMBED_NORM,
+    QK_NORM_ROPE,
+    ROPE_QK,
+    SILU_MUL,
+)
 
 
 class Unmodelled(ValueError):
@@ -125,7 +135,7 @@ def _norm_relations(lit: dict[str, Any]) -> bool:
 
 def _rope_relations(lit: dict[str, Any]) -> bool:
     D, H, KVH = lit["D"], lit["H"], lit["KVH"]
-    return (all(isinstance(lit[k], int) and lit[k] > 0 for k in ("D", "H", "KVH", "HALF", "P")) and D == 2 * lit["HALF"]
+    return (all(isinstance(lit[k], int) and lit[k] > 0 for k in ("D", "H", "KVH", "HALF", "P")) and 2 * lit["HALF"] == D
             and lit["QLEN"] == H * D and lit.get("KLEN", KVH * D) == KVH * D and lit["KHI"] == H * D + lit["HALF"]
             and lit["QKV"] == (H + 2 * KVH) * D)
 
@@ -207,7 +217,8 @@ def launch_config(record: dict[str, Any] | None, source: str) -> dict[str, Any]:
     rec = (record or {}).get(source_sha256(source))
     if rec is None:
         raise Unmodelled(f"no launch config recorded for kernel source {source_sha256(source)[:16]}")
-    cands, ran = rec.get("candidates") or [], rec.get("executed") or []
+    cands, ran = rec.get("candidates"), rec.get("executed")
+    cands, ran = cands if cands else [], ran if ran else []
     if len(ran) != 1 or (cands and ran[0] not in cands):
         raise Unmodelled(f"kernel source {source_sha256(source)[:16]}: {len(cands)} candidate configs, its autotuners hold {ran}; one "
                          f"config every instance ran is required")
@@ -218,7 +229,7 @@ def _function_text(rest: str) -> str:
     """The jit function's text: its lines up to the first one at column 0 (a combo kernel's module goes on with its benchmark
     harness, host code that never runs in the served process)."""
     lines = rest.split("\n")
-    end = next((i for i, l in enumerate(lines[1:], 1) if l and not l[0].isspace()), len(lines))
+    end = next((i for i, line in enumerate(lines[1:], 1) if line and not line[0].isspace()), len(lines))
     return "\n".join(lines[:end]).rstrip()
 
 
@@ -231,9 +242,10 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None, *, c
     if m is None:
         raise Unmodelled(f"{name}: no @triton.jit def")
     head, body = source[:m.start()], "def KERNEL(" + _function_text(source[m.end():])
-    t, got = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), (None, None))
-    if t is None:
+    found = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), None)
+    if found is None:
         raise Unmodelled(f"{name}: its source is none of the templates {[t.name for t in TEMPLATES]}")
+    t, got = found
     heur = re.search(r"^@triton_heuristics\.(\w+)\(", head, re.M)
     sig = re.search(r"'signature': (\{[^{}]*\})", head)
     if heur is None or heur.group(1) != t.heuristic:
@@ -260,7 +272,8 @@ def instantiate(name: str, t: Template, lit: dict[str, Any], config: dict[str, A
     if t.config:
         if config is None:
             raise Unmodelled(f"{name} ({t.name}): its launch config is a static and none was given")
-        kw = config.get("kwargs") or {}
+        kw = config.get("kwargs")
+        kw = kw if kw else {}
         lit.update(XBLOCK=kw.get("XBLOCK"), R0_BLOCK=kw.get("R0_BLOCK"), NUM_WARPS=config.get("num_warps"))
     calls = []
     for c in t.calls:
@@ -297,3 +310,7 @@ def numel(ty: Any) -> int:
     if isinstance(ty, Value):
         return 1
     raise Unmodelled(f"type {ty} is not an array of values")
+
+
+__all__ = ["FLAGS", "TEMPLATE", "Template", "Unmodelled", "bound", "holes", "instantiate", "kernel_sources", "launch_config", "recognize",
+           "source_sha256"]

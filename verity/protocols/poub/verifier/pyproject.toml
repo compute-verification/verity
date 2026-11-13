@@ -20,7 +20,8 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "verity/protocols/spot/verifier/one_stage/verdict.py",
           "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
-          # the core's monitoring periods, which `monitoring` reads through PoUS's `wipe_monitoring`
+          # the core's `block_count`, the blocks a monitoring period holds, which `monitoring` reads through PoUS's
+          # `wipe_monitoring`
           "verity/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/pous",

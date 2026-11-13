@@ -691,16 +691,18 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_t
     of it a record states, while its op log names a GEMM float32 has its products at a price that isn't its job's:
     the grade stops, and says which record, which ops and the way out, the job run again with the switch off.
 
-    A Shampoo job's float32 GEMMs are its optimizer's, outside M. With those rows named `tf32` the same record
+    A Shampoo job's float32 GEMMs on a CPU are its optimizer's and attention's, which a job on a CPU runs under the
+    math kernel, in float32 (`run.cpu_attention`); M holds none of them. With those rows named `tf32` the same record
     grades, its ρ too, at the TF32 GEMM's price; with the switch off it grades at the exact one; and counted as if
     its log named no dtype it is one that names none."""
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": preconditioned}
-    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["other mm"]
+    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["bwd bmm", "fwd bmm", "other mm"]
     assert not [r for r in preconditioned["trace"]["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     with pytest.raises(ValueError, match=r"^grade: the record at seed 0, search states torch's TF32 switch on, and "
-                                         r"its op log names GEMM ops float32, the exact product \(other mm\): ") as e:
+                                         r"its op log names GEMM ops float32, the exact product "
+                                         r"\(bwd bmm, fwd bmm, other mm\): ") as e:
         G.grade(config, starts, [stating(run, on)], [run])
     assert str(e.value).endswith(f"at another price. {G.TF32_FIX}") and "`tf32`" not in str(e.value)
     assert "fp32_precision = 'ieee'" in G.TF32_FIX and "allow_tf32 = False" in G.TF32_FIX
@@ -728,7 +730,7 @@ def test_a_product_of_m_named_tf32_is_priced_apart_from_its_trace(adapted):
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": adapted}
     with pytest.raises(ValueError, match=r"states torch's TF32 switch on, and its op log names GEMM ops float32, "
-                                         r"the exact product \(other mm\)") as e:
+                                         r"the exact product \(bwd bmm, fwd bmm, other mm\)") as e:
         G.grade(config, starts, [stating(run, ON[0])], [run])
     assert str(e.value).endswith(G.TF32_FIX)
     renamed = stating(as_tf32(run), ON[0])
@@ -790,8 +792,8 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
 
     With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
     token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
-    The products the two sides differ on are attention's, float32 in the trace and bf16 in the rows the counter
-    writes for a fused kernel, and M leaves them out for their two token dims.
+    Attention's products, which M leaves out for their two token dims, are float32 on both sides: the trace runs
+    them under the math kernel, and so does a job on a CPU (`run.cpu_attention`).
 
     With the same rows under an earlier capture, whose rule prices those float32 products at bf16: `work.repriced`
     lists them and nothing else, so over the trace's own circuit there is no slowdown, with that reason, and the
@@ -811,7 +813,7 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     attentions = [r for r in tr["rows"] if sum(x in r["token_dims"] for x in "mkn") >= 2]
     others = [r for r in tr["rows"] if r not in attentions]
     assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
-    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"bfloat16"})
+    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"float32"})
                               for r in attentions)
 
     earlier = products.READS[0]

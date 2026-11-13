@@ -30,6 +30,8 @@ import inspect
 import textwrap
 from typing import Any
 
+__all__ = ["MOE_COLLECTIVE_CLASSES", "MOE_COLLECTIVE_MODULES", "mid_module_site_census", "patch_targets"]
+
 #: (module-level name a model class may import, collective kind)
 COLLECTIVE_NAMES = (("tensor_model_parallel_all_reduce", "all_reduce"), ("tensor_model_parallel_all_gather", "all_gather"))
 _KIND_OF = dict(COLLECTIVE_NAMES)

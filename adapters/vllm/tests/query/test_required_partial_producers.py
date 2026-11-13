@@ -24,7 +24,9 @@ def _program() -> tuple[ProgramView, dict[str, int]]:
                               tuple(Port(p, 0, n, n, w) for p, n, w in ports), tuple(reads)))
         return len(calls) - 1
 
-    w = lambda path: R(-1, path)
+    def w(path: str) -> R:
+        return R(-1, path)
+
     x = R(-2, "x")
     ids = {"linear": call(f"DeepGemmFp8Linear_v1{{K={K},N={N}}}", f"{WO_B}/dynamic_flashinfer_deepgemm_blockscale_gemm[0]",
                           [x, w(f"{WO_B}.weight"), w(f"{WO_B}.weight_scale_inv")], (("0", K, 8), ("1", 1, 32), ("2", N, 16)))}
