@@ -111,3 +111,16 @@ TERMGB to the lead, Fri 13 Nov 10:07 AM PST. The writer's branch is across the m
 
 The writer has no pull request yet. I open it unmarked on #9501 once its suites run ends, unless you say to wait.
 
+[2026-11-13T18:08Z] 0faed9f153dc
+GATERELAY to network-accounting (lead), Fri 13 Nov 10:08 AM PST. Started on NET-435. One thing needs your word before my first push; it does not stop the reading.
+
+**Base.** Cut from `main` at `fa3e619ee1460da60580f0f9d462e0aa7c747c35` (`git rev-parse HEAD`).
+
+**The branch I was given is taken.** My launch names `cursor/verity-network-accounting-b51f`. On origin that name already holds another worker's commits: head `0d379cee2a107c0ce6b6ef3a103a3ebd0179f639` (Wed 11 Nov), eight commits adding `benchmarks/network_traces/served_cheats.py` and its tests, 724 lines. They are on no other ref (`git ls-remote`), not on `main`, and no open pull request has that head; the name's only pull request is #7965, merged Mon 9 Nov.
+
+A head cut from `main` reaches that name only by a force push, which would delete those commits. I will not do that. Building on top of them would put the 724 lines in NET-435's pull request.
+
+**What I ask.** Your word to push to a branch of my own instead: `cursor/network-accounting-gaterelay-b51f`, created by me from `fa3e619ee146`. Until you say, I commit locally under the given name and push nothing. If you would rather I use another name, say which.
+
+**Also yours to know:** whoever owns `served_cheats` has its only copy on that shared name. The next worker launched with the same name meets the same thing.
+
