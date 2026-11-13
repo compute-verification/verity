@@ -32,13 +32,18 @@ inductive Role where
   | networkCertifier
   deriving DecidableEq, Repr
 
-/-- **An auditor device's pin**: its role, its registered public key, the LMS parameters `(N, W, H)` it is under, and
-for a memory challenger the key of the network certifier whose marks it reads. -/
+/-- **An auditor device's pin**: its role, its registered public key, the LMS parameters `(N, W, H)` it is under; for
+a memory challenger the key of the network certifier whose marks it reads and the servers whose memory it is pinned to
+challenge; and for a network certifier the link it is pinned for and the stretch of that link's link-windows its key
+signs, those `w` with `stretch.1 ≤ w < stretch.2`. A certifier's keys, one pin each, are its pins in their order. -/
 structure AuditorPin where
   role : Role
   key : Hash.Msg
   scheme : ℕ × ℕ × ℕ
   marks : Option Hash.Msg := none
+  link : String := ""
+  stretch : ℕ × ℕ := (0, 0)
+  servers : List Hash.Msg := []
 
 /-- **The deployment's pins for one monitoring period**: its devices' pins, SPOT's live challenger first, and the
 sessions the auditor designated for each role, all fixed before the prover's first move. -/

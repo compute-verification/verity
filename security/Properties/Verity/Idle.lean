@@ -84,7 +84,7 @@ def finder : Claims.Finder where
   cost _ := 0
 
 /-- **The challenger's pin**: the empty key, under no LMS parameters, with no marks. -/
-def pin : AuditorPin := ⟨.challenger, [], (0, 0, 0), none⟩
+def pin : AuditorPin := { role := .challenger, key := [], scheme := (0, 0, 0) }
 
 /-- **The deployment's pins**: the challenger's alone, with no designated session. -/
 def pins : AuditorPins := ⟨[pin], fun _ => []⟩

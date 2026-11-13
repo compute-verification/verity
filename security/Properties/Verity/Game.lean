@@ -241,35 +241,50 @@ def Designated (P : AuditorPins) (r : Role) (w : String) : Prop := w.toUTF8.data
 def HoldsChallenger (P : AuditorPins) (k : _root_.Spot.Challenger.ChallengerKey) : Prop :=
   ∃ q ∈ P.keys.head?, q.role = .challenger ∧ k.pub.data.toList = q.key ∧ (k.params.N, k.params.W, k.params.H) = q.scheme
 
-/-- **The public key `t` is the pinned memory challenger's**: the first memory challenger's pin. -/
+/-- **The public key `t` is a pinned memory challenger's.** -/
 def HoldsMemory (P : AuditorPins) (t : ByteArray) : Prop :=
-  ∃ q ∈ P.keys.find? (fun p => decide (p.role = .memoryChallenger)), t.data.toList = q.key
+  ∃ q ∈ P.keys, q.role = .memoryChallenger ∧ t.data.toList = q.key
 
-/-- **The LMS key `k` is a pinned network certifier's**: some certifier's pin has `k`'s public key under `k`'s LMS
-parameters. -/
-def HoldsCertifier (P : AuditorPins) (k : _root_.Spot.Challenger.ChallengerKey) : Prop :=
-  ∃ q ∈ P.keys, q.role = .networkCertifier ∧ k.pub.data.toList = q.key ∧ (k.params.N, k.params.W, k.params.H) = q.scheme
+/-- **The public key `t` is the key of a memory challenger pinned for the server `server`.** -/
+def HoldsMemoryFor (P : AuditorPins) (server t : ByteArray) : Prop :=
+  ∃ q ∈ P.keys, q.role = .memoryChallenger ∧ t.data.toList = q.key ∧ server.data.toList ∈ q.servers
+
+/-- **The LMS key `k` signs the link-windows `first … first + windows − 1` of `link` for a pinned network
+certifier**: a certifier's pin for `link` has `k`'s public key under `k`'s LMS parameters, and its stretch holds those
+link-windows. -/
+def HoldsCertifier (P : AuditorPins) (link : String) (first windows : ℕ) (k : _root_.Spot.Challenger.ChallengerKey) :
+    Prop :=
+  ∃ q ∈ P.keys, q.role = .networkCertifier ∧ q.link = link ∧ k.pub.data.toList = q.key ∧
+    (k.params.N, k.params.W, k.params.H) = q.scheme ∧ q.stretch.1 ≤ first ∧ first + windows ≤ q.stretch.2
+
+/-- **The session `s` is one the auditor designated for role `r`.** -/
+def HoldsSession (P : AuditorPins) (r : Role) (s : ByteArray) : Prop := s.data.toList ∈ P.sessions r
 
 /-- **The pins whose signed logs subprotocol `a`'s check reads**, by their places in `keys`: SPOT's live challenger's
-(the first) for sampled proofs and PoUW, the first memory challenger's for PoUS and the wipe, every network
-certifier's for the network certifier, and none for PoUB-P2 and the inference-only policy, which read no device's
+(the first) for sampled proofs and PoUW, every memory challenger's for PoUS and the wipe, every network certifier's
+for the network certifier, and none for PoUB-P2 and the inference-only policy, which read no device's
 signature. -/
 def reads (P : AuditorPins) : Subprotocol → List ℕ
   | .sampled | .pouw => [0]
-  | .pous | .wipe => (P.keys.findIdx? fun p => decide (p.role = .memoryChallenger)).toList
+  | .pous | .wipe =>
+    (List.range P.keys.length).filter fun i => decide ((P.keys[i]?.map (·.role)) = some .memoryChallenger)
   | .network => (List.range P.keys.length).filter fun i => decide ((P.keys[i]?.map (·.role)) = some .networkCertifier)
   | .poub | .inferenceOnly => []
 
 /-- **The pins as the compiled verifier reads them** (`Core.Composites.Pins`, `product IDS --pins`): the first
-pin's key and LMS parameters, when it is a challenger's, the sessions designated for the challenger, the first memory
-challenger's key, and every network certifier's key and LMS parameters. -/
+pin's key and LMS parameters, when it is a challenger's, and the sessions designated for the challenger; every memory
+challenger's key with its servers, and the sessions designated for the memory challengers; and every network certifier's
+link with its key, LMS parameters and stretch, and the sessions designated for the certifiers. -/
 def compiled (P : AuditorPins) : Core.Composites.Pins where
   challenger := (P.keys.head?.filter fun q => decide (q.role = .challenger)).map fun q =>
     ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
   sessions := (P.sessions .challenger).map fun m => ⟨m.toArray⟩
-  memory := (P.keys.find? fun q => decide (q.role = .memoryChallenger)).map fun q => ⟨q.key.toArray⟩
+  memory := (P.keys.filter fun q => decide (q.role = .memoryChallenger)).map fun q =>
+    ⟨⟨q.key.toArray⟩, q.servers.map fun m => ⟨m.toArray⟩⟩
+  memorySessions := (P.sessions .memoryChallenger).map fun m => ⟨m.toArray⟩
   certifiers := (P.keys.filter fun q => decide (q.role = .networkCertifier)).map fun q =>
-    ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
+    ⟨q.link, [⟨⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩, q.stretch.1, q.stretch.2⟩]⟩
+  certifierSessions := (P.sessions .networkCertifier).map fun m => ⟨m.toArray⟩
 
 end AuditorPins
 
@@ -291,23 +306,35 @@ def PouwPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ componentsAt Core.Composites.pouwAt θ, ∀ k,
     _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k
 
-/-- **PoUS's parameters trust only the pinned memory challenger**: every key a PoUS run trusts is its pin's. -/
+/-- **PoUS's parameters name only pinned memory challengers and a designated session**: every key a PoUS run trusts
+is a pinned memory challenger's, and its session is one the auditor designated for the memory challengers. A run's
+parameters name no server or store, so the key is any pinned memory challenger's, not one pinned for the run's
+server. -/
 def PousPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
-  ∀ p ∈ componentsAt Core.Composites.pousAt θ, ∀ t ∈ p.trusted, P.HoldsMemory t
+  ∀ p ∈ componentsAt Core.Composites.pousAt θ,
+    (∀ t ∈ p.trusted, P.HoldsMemory t) ∧ P.HoldsSession .memoryChallenger p.sessionId
 
-/-- **The wipe's parameters trust only the pinned memory challenger**: every key a wipe trusts is its pin's. -/
+/-- **The wipe's parameters name only the memory challengers pinned for its server, and a designated session**: every
+key a wipe trusts is that of a memory challenger pinned for the wipe's server, and its session is one the auditor
+designated for the memory challengers. -/
 def WipePinned (P : AuditorPins) (θ : ByteArray) : Prop :=
-  ∀ p ∈ componentsAt Core.Composites.wipeAt θ, ∀ t ∈ p.trusted, P.HoldsMemory t
+  ∀ p ∈ componentsAt Core.Composites.wipeAt θ,
+    (∀ t ∈ p.trusted, P.HoldsMemoryFor p.server t) ∧ P.HoldsSession .memoryChallenger p.session
 
-/-- **The network certifier's parameters name only pinned certifiers**: each period's key, under its LMS parameters,
-is a pinned network certifier's. -/
+/-- **The network certifier's parameters name only the keys pinned for the period's link, and designated
+sessions**: every key a period lists, under its LMS parameters, is one a certifier pinned for the period's link signs
+all of the period's link-windows under, and every session it lists is one the auditor designated for the
+certifiers. -/
 def NetworkPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
-  ∀ p ∈ componentsAt Core.Composites.networkAt θ, P.HoldsCertifier ⟨p.lms, p.key⟩
+  ∀ p ∈ componentsAt Core.Composites.networkAt θ,
+    (∀ k ∈ p.keys, P.HoldsCertifier p.link p.first p.windows ⟨p.lms, k⟩) ∧
+      ∀ s ∈ p.sessions, P.HoldsSession .networkCertifier s
 
 /-- **Subprotocol `a`'s pin check on the parameters `θ`**, each of the device keys its check verifies signatures
 under, as its own decoder reads them from its parameters, which the compiled verifier checks (`pinnedVerifier`):
-sampled proofs' challenger key and window (`SpotPinned`), PoUW's challenger key (`PouwPinned`), the keys PoUS and the
-wipe trust, the memory challenger's (`PousPinned`, `WipePinned`), and the network certifier's key (`NetworkPinned`).
+sampled proofs' challenger key and window (`SpotPinned`), PoUW's challenger key (`PouwPinned`), the memory
+challengers' keys PoUS and the wipe trust, with their sessions (`PousPinned`, `WipePinned`), and the network
+certifiers' keys for the period's link and their sessions (`NetworkPinned`).
 PoUB-P2's and the inference-only policy's checks read no device's signature, and `True` is theirs. -/
 def PinnedFor (P : AuditorPins) : Subprotocol → ByteArray → Prop
   | .sampled, θ => SpotPinned P θ
