@@ -90,8 +90,8 @@ def formOf {α β γ : Type} : α ⊕ (β ⊕ γ) → String
 /-- The refusal of evidence of the form `ef` under parameters of the form `pf`. -/
 def MISMATCH (pf ef : String) : String := s!"the evidence's form is {ef}, and the parameters' is {pf}"
 
-/-- That form's check; evidence of another form than the params' rejects (`MISMATCH`). The forms are matched outside
-in, so that each mismatch rejects on the outer forms alone. -/
+/-- That form's check; evidence of another form than the params' rejects (`MISMATCH`). The outer forms are matched
+first, so that a mismatch of outer forms rejects without the inner ones read. -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
