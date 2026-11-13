@@ -448,6 +448,34 @@ theorem treesKept_eq {ts : Array Challenger.LoggedTree} {log : List String} {S :
       | none => rfl
       | some sk => cases sk.trees <;> rfl
 
+/-- Each member's files' verdict in turn is `membersFiles`' first refusal. -/
+theorem files_forM {slice : Member → Json} {bs : Core.Blobs} :
+    ∀ ms : List Member, (ms.map fun m => m.files (slice m) bs >>= fun _ => pure ()).forM id =
+      (membersFiles slice bs ms >>= fun _ => pure ())
+  | [] => rfl
+  | m :: ms => by
+    have ih := files_forM (slice := slice) (bs := bs) ms
+    simp only [List.map_cons, List.forM_cons, membersFiles, id]
+    cases m.files (slice m) bs with
+    | error e => rfl
+    | ok a =>
+      simp only [ok_bind]
+      rw [show ∀ l : List (V Unit), (pure () :: l).forM id = l.forM id from fun _ => rfl, ih]
+      cases membersFiles slice bs ms <;> rfl
+
+/-- What the stream kept of the members' files, as a list, where it kept each by its place. -/
+theorem files_toList {C : Ctx} {full : Core.Blobs} {S : State} (h : FilesKept C full S) :
+    S.files.toList = C.ms.toList.map fun m => m.files (C.slice m) full >>= fun _ => pure () := by
+  apply List.ext_getElem?
+  intro i
+  rw [Array.getElem?_toList, List.getElem?_map, Array.getElem?_toList]
+  cases hm : C.ms[i]? with
+  | none =>
+    have hi : C.ms.size ≤ i := Array.getElem?_eq_none_iff.1 hm
+    simp only [Option.map_none]
+    exact Array.getElem?_eq_none_iff.2 (h.1 ▸ hi)
+  | some m => simp only [Option.map_some, h.2 i m hm]
+
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
 def StepsKept : Prop :=
