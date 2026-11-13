@@ -21,6 +21,8 @@ object only through `view`, and every reader there returns the same on alike obj
 * `strat_same`, `work_same`: a stratified and a work sample's design;
 * `view_same`: so two alike objects have one view.
 
+An object that passes the binding check has a canonical text (`canon_of_chkPart`): the check hashes it.
+
 `PartSame x y` is what a session's two readings of the partition may be: one partition, or two alike objects. On
 both, `Stmt.setupTables` is the same (`setupTables_same`).
 
@@ -311,6 +313,38 @@ theorem chkPart_same {a b : Json} (h : Same a b) (c : Circuit) :
     HmRow.checkPartition c (some a) = HmRow.checkPartition c (some b) := by
   rw [chkPart_view c a, chkPart_view c b, chkObj_same h, digest_same h, asStr_same h "program"]
   exact chkPartV_obj c a b _ _ _
+
+/-- The binding check passes at an object only where the object's tagged digest returned. -/
+private theorem chkPartV_dig {c : Circuit} {o : Json} {chk : V (String × Nat)} {dig : V ByteArray}
+    {prog : Option String} {f : HmRow.PartitionFinding} (h : chkPartV c (some o) chk dig prog = .ok f) :
+    ∃ d, dig = .ok d := by
+  cases dig with
+  | ok d => exact ⟨d, rfl⟩
+  | error e =>
+    exfalso
+    unfold chkPartV at h
+    dsimp only at h
+    split at h
+    · cases h
+    · cases chk with
+      | error e' => cases h
+      | ok nv => cases h
+    · cases h
+    · rename_i hn hx
+      cases hn
+
+/-- **A partition object that passes the binding check has a canonical text**: the check passes at an object only
+under a `verity/partition/v1` binding, where it hashes the object's canonical text (`HmRow.partitionDigest`). -/
+theorem canon_of_chkPart {c : Circuit} {o : Json} {f : HmRow.PartitionFinding}
+    (h : HmRow.checkPartition c (some o) = .ok f) : ∃ s, Flock.canon o = .ok s := by
+  rw [chkPart_view] at h
+  obtain ⟨d, hd⟩ := chkPartV_dig h
+  cases hc : Flock.canon o with
+  | ok s => exact ⟨s, rfl⟩
+  | error e =>
+    unfold HmRow.partitionDigest at hd
+    rw [hc] at hd
+    cases hd
 
 theorem derive_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveTemplateUnits c a program indices = HmRow.deriveTemplateUnits c b program indices := by
