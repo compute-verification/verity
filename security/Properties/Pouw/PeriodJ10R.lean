@@ -49,10 +49,10 @@ sample size is the block's `k s_T`, read from the block's sample, not chosen her
   the sampling design is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's sample at a permutation of the stratum, the units of its first
   `k s_T` images.
-* `TileStratumEscape`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
+* `TileStratumAcceptProb`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
   which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
-  the per-stratum projection of the joint sample; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
+  the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
   is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
   permutation uniformly, needs no premise to be about that sample.
 * `PreDraw`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
@@ -163,12 +163,12 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
 `m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
-`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the sampling design's side is
+`SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the sampling design's side is
 `Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
-`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
+`SecurityProofs.tileStratumAcceptProb_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
 stratum. -/
-def TileStratumEscape : Prop :=
+def TileStratumAcceptProb : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
     prob (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
@@ -342,7 +342,7 @@ abbrev Noise : Type := List (List ℕ × List (List ℕ)) × List (List ℕ × L
 namespace Place
 
 /-- The unit's tile at its call's contraction, `r × c` at `K`. -/
-def layout (p : Place) : J10R.Layout := ⟨p.r, p.c, p.K⟩
+def layout (p : Place) : J10R.NoiseLayout := ⟨p.r, p.c, p.K⟩
 
 /-- The unit's first row block and first column block, the verifier's (`Credit.j10rBlocks`). -/
 def blocks (p : Place) : ℕ × ℕ := PouwCheck.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J
