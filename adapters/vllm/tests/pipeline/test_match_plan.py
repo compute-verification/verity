@@ -145,6 +145,13 @@ def test_snapshot_steps_are_a_comma_list_from_0_or_every_step_of_the_workload(tm
     assert RC.Plan(_options(_workload(tmp_path), "--snapshot-steps", given)).steps == steps
 
 
+@pytest.mark.parametrize("given, processes", [
+    ((), 4), (("--parallel", "8"), 8), (("--parallel", "2"), 2), (("--parallel", "1"), 1), (("--parallel", "0"), 1), (("--parallel", "-2"), 1),
+    (("--laptop",), 1), (("--laptop", "--parallel", "8"), 1)])
+def test_a_run_replays_in_four_processes_or_as_many_as_asked_and_in_one_on_a_laptop(tmp_path, given, processes):
+    assert RC.Plan(_options(_workload(tmp_path), *given)).parallel == processes
+
+
 def test_a_dry_run_prints_each_stage_s_line_in_the_phase_s_order_and_writes_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(RC, "profile_config", lambda name: None)
     run, wl = tmp_path / "run", _workload(tmp_path)

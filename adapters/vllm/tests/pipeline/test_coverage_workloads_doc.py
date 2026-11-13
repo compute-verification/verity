@@ -2,7 +2,8 @@
 one id a character.  It states the cell's draws, each prompt as the corpus from its own paragraph on, the schedule if every
 request runs to its end and the engine arguments that keep a prefill in one step.  A replicate keeps the lengths and changes the
 prompts; the sampled column, the format column and the chunked column each add their own keys to the same requests.  The command
-prints a dry run's draws and reads no tokenizer for it, and writes each cell under its variant's name."""
+prints a dry run's draws and reads no tokenizer for it, and writes each cell under its variant's name, for the model named or
+else the role's."""
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +15,7 @@ import pytest
 
 from tests.pipeline import tokenizers_stand_in
 from verity_vllm.config import VLLM
+from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
 from verity_vllm.pipeline import coverage_workloads as gw
 
 GREEDY, T1 = {"temperature": 0.0, "top_p": 1.0, "top_k": 0}, {"temperature": 1.0, "top_p": 1.0, "top_k": 0}
@@ -190,6 +192,23 @@ def test_a_dry_run_prints_each_cell_s_draws_and_schedule_and_reads_no_tokenizer(
     assert capsys.readouterr().out.splitlines() == [line(profile, lambda draws: gw.simulate_schedule_chunked(draws, 64))
                                                     for profile in ("B1", "B8-mixed")]
     assert not (tmp_path / "out").exists()
+
+
+def test_the_model_written_is_the_one_named_else_the_role_s_in_the_checkpoints_file_else_the_role_s_own_else_unknown(tmp_path, monkeypatch):
+    tokenizers_stand_in.install(monkeypatch)
+    (tmp_path / "tokenizer.json").write_bytes(TOKENIZER)
+    listed = tmp_path / "checkpoints.json"
+    listed.write_text(json.dumps({"checkpoints": [{"role": "B0", "repo": "org/listed"}]}))
+
+    def model(case, **given):
+        assert gw.main(gw.Options(case=case, tokenizer=str(tmp_path), profiles="B1", ctx="C256", out_dir=str(tmp_path / "out"), **given)) == 0
+        return json.loads((tmp_path / "out" / f"workload_cov_{case.lower()}_b1_c256.json").read_text())["model"]
+
+    assert model("B0", model="org/named", checkpoints=str(listed)) == "org/named"
+    assert model("B0", checkpoints=str(listed)) == "org/listed"
+    assert model("B1", checkpoints=str(listed)) == ROLE_REPOS["B1"] != "org/listed"         # a role the file does not list
+    assert model("B0", checkpoints=str(tmp_path / "none.json")) == ROLE_REPOS["B0"]
+    assert model("B9", checkpoints=str(listed)) == "unknown"
 
 
 def test_the_command_writes_each_cell_s_document_under_its_variant_s_name_its_text_not_escaped(tmp_path, monkeypatch):
