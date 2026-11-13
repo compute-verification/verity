@@ -82,8 +82,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/pouw/clear", "benchmar
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_pearl_c_hash_decode.py",
           "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
-          "benchmarks/pouw/settings.py", "verity", "verity/protocols/spot/verifier/lean/lakefile.toml",
-          "verity/protocols/compose/device/live_challenger",
+          "benchmarks/pouw/settings.py", "verity", "hardware/cards",
+          "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/compose/device/live_challenger",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
