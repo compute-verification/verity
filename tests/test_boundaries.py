@@ -74,16 +74,17 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 DEPENDENCIES = {"numpy"}
 #: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
-#: the hardware's cards, record and registration log, SPOT's planning beside its verifier, and the reporting
-#: grid.  Within them, what may use numpy.
+#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
+#: reporting grid.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/hardware", "verity/protocols/spot", "verity/protocols/reporting.py")
+               "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/spot",
+               "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
-NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_only/nci",
-                     "verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
-                     "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
+NO_DATE_OR_REASON = ("verity/protocols/inference_only/nci", "verity/composite/device/live_challenger",
+                     "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
+                     "verity/protocols/pouw/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
@@ -946,7 +947,7 @@ NAMING = ("python import", "python string")
 class Listing(NamedTuple):
     """``ORDER`` as the tests read it."""
 
-    steps: dict[str, int]                               # each listed directory's step: the bottom row's 0, one a row
+    steps: dict[str, int]                               # each listed directory's or file's step: the bottom row's 0
     distributions: dict[str, dict[str, str]]            # each distribution of its own under ``verity/``, by directory
     against: dict[tuple[str, str], set[str]]            # each excepted pair of rows: the first's files that load the second
     #: each place of ``verity``'s own Python, by its first path: its ``paths``, whether the listing marks it ``trusted``,
@@ -964,14 +965,15 @@ def _listing(text: str | None = None) -> Listing:
     """The listing (``ORDER``, or ``text``)."""
     doc = tomllib.loads(ORDER.read_text(encoding="utf-8") if text is None else text)
     steps = {d: n for n, row in enumerate(doc["order"]) for d in row}
-    assert "." in steps and len(steps) == sum(map(len, doc["order"])), "the order lists `.` and each directory once"
+    assert "." in steps and len(steps) == sum(map(len, doc["order"])), "the order lists `.` and each path once"
     return Listing(steps, {e["directory"]: {k: v for k, v in e.items() if k != "directory"} for e in doc.get("distribution", [])},
                    {(e["loader"], e["loaded"]): set(e["files"]) for e in doc.get("against", [])}, _places(doc.get("place", [])))
 
 
 def _row(path: str, steps: dict[str, int]) -> str:
-    """The listed directory ``path`` belongs to: the deepest one above it, ``.`` for the rest."""
-    d = posixpath.dirname(path)
+    """The row entry ``path`` belongs to: itself where the order lists it, else the deepest listed directory above it,
+    ``.`` for the rest."""
+    d = path if path in steps else posixpath.dirname(path)
     while d and d not in steps:
         d = posixpath.dirname(d)
     return d or "."
@@ -1408,17 +1410,18 @@ def _hold_distributions(dirs: Set[str], loads: Iterable[Load], listing: Listing,
 
 def test_a_file_loads_only_its_own_row_or_an_earlier_one() -> None:
     """The import order.  ``tests/import_order.toml`` lists the tree's directories bottom first; a file belongs to the
-    deepest listed directory above it, and loads only files of its own row or an earlier one: in Python (an import at
-    load or inside a function, a module named in a string, the packages above the imported module, a bare import under a
-    directory the file puts on ``sys.path``), in Lean (an import) and in Lake (a package required by path).  The ties
+    deepest listed directory above it, or to itself where the listing names it, and loads only files of its own row or
+    an earlier one: in Python (an import at load or inside a function, a module named in a string, the packages above
+    the imported module, a bare import under a directory the file puts on ``sys.path``), in Lean (an import) and in
+    Lake (a package required by path).  The ties
     against it are the listing's ``against``: for a pair of rows, each file of the first that loads the second.  It only
     shrinks: a file it doesn't list fails, and so does a listed file that no longer loads the later row, naming the pair to
     delete once its last file is gone.  Reading every tracked Python and Lean file is most of this file's time, which
     nothing cheaper replaces: an order over the whole tree is only held by reading the whole tree."""
     listing = _listing()
-    dirs, loads, _ = _tree_loads()
-    empty = sorted(d for d in listing.steps if d != "." and d not in dirs)
-    assert not empty, f"directories tests/import_order.toml lists that hold no tracked file; delete their rows: {empty}"
+    dirs, loads, files = _tree_loads()
+    empty = sorted(d for d in listing.steps if d != "." and d not in dirs and d not in files)
+    assert not empty, f"paths tests/import_order.toml lists that the tree doesn't hold; delete them: {empty}"
     _hold_order(loads, listing)
 
 
@@ -1465,7 +1468,7 @@ def test_a_place_loads_only_the_places_the_listing_names() -> None:
 
 def test_a_file_in_no_place_imports_the_standard_library_alone() -> None:
     """Python of ``verity`` in no place of the listing is a file directly under ``verity/`` (``verity/__init__.py``
-    re-exports nothing; ``errors`` and ``settings`` are shared by every place) or an ``__init__.py`` that only groups
+    re-exports nothing; ``errors`` is shared by every place) or an ``__init__.py`` that only groups
     packages, and imports the standard library and nothing else, ``verity`` included.  So a new package is given its
     place before it loads anything, and every place may load these files.  The ``__init__.py`` that makes a
     distribution of its own a package of ``verity`` (one in every directory from ``verity/`` down to it) is held as
@@ -1532,7 +1535,7 @@ ORDER_TREE = {
                                             '[[require]]\nname = "spot"\npath = "../../spot/lean"\n'),
     "verity/protocols/flock/verifier/Flock/V.lean": "import Spot.X\nimport Mathlib.Y\nimport Flock.W\n",
     "verity/protocols/flock/verifier/Flock/W.lean": "",
-    "verity/configuration/package_above.py": "import verity.protocols.flock.verifier.interface\n",
+    "verity/hardware/package_above.py": "import verity.protocols.flock.verifier.interface\n",
     "verity/protocols/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
     "verity/protocols/spot/lean/Spot/X.lean": "",
     "verity/protocols/spot/by_path.py": ("import sys\nfrom pathlib import Path\n"
@@ -1567,7 +1570,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     module named in a string, the package above a module of an earlier row, a bare import under a directory put on
     ``sys.path``, a Lean import from a package required by path and that requirement, and a test's import of the last
     row, by its path and by the name of a package one of its distributions ships, whatever module of it is named; not a
-    load with the order, a test's of another row, a sidecar's, or a module no tracked file holds.  From a place: the
+    load with the order, a listed file's load of its own step, a test's of another row, a sidecar's, or a module no
+    tracked file holds.  From a place: the
     places its files name, and not the package above a named module, a file of its own place or what a distribution
     inside it loads.  From a verifier besides: its import of its prover inside a function and that of a distribution
     inside it, and the place it reaches only through another file; not its prover's import of it, its test's or its
@@ -1586,12 +1590,12 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     steps = _listing().steps
     places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/definitions"]}, {"paths": ["verity/commitments/crypto"]},
                       {"paths": [verifier]}, {"paths": [device]}, {"paths": [prover]}, {"paths": ["verity/protocols/flock/verifier"]},
-                      {"paths": ["verity/configuration"]}, {"paths": ["verity/protocols/spot"]}])
+                      {"paths": ["verity/hardware"]}, {"paths": ["verity/protocols/spot"]}])
     listing = Listing(steps, own, {}, places)
     found = {pair: sorted(files) for pair, files in _against(loads, steps).items()}
     assert found == {
         ("verity/circuits", "verity/definitions"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
-        ("verity/configuration", "verity/protocols/flock"): ["verity/configuration/package_above.py"],
+        ("verity/hardware", "verity/protocols/flock"): ["verity/hardware/package_above.py"],
         ("verity/protocols/flock/verifier", "verity/protocols/spot"): ["verity/protocols/flock/verifier/Flock/V.lean", "verity/protocols/flock/verifier/lakefile.toml"],
         ("verity/protocols/flock", "verity/protocols/pouw"): ["verity/protocols/flock/prover/stage.py"],
         ("verity/protocols/spot", "demos"): ["verity/protocols/spot/by_path.py"],
@@ -1599,8 +1603,12 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("tools", "infra"): ["tools/tests/test_console.py"],
         ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
     }, found
-    assert _row("verity/settings.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
+    assert _row("verity/errors.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
         and _row("verity/protocols/flock/verifier/Flock/V.lean", steps) == "verity/protocols/flock/verifier"
+    listed = steps | {"verity/circuits/at_load.py": steps["verity/definitions"]}
+    assert _row("verity/circuits/at_load.py", listed) == "verity/circuits/at_load.py"
+    assert sorted(_against(loads, listed)["verity/circuits", "verity/definitions"]) == [
+        "verity/circuits/in_function.py", "verity/circuits/in_string.py"]
     assert [_below(f, steps) for f in ("verity/commitments/crypto/lms.py", "verity/commitments/merkle.py", "verity/errors.py",
                                        f"{prover}/circuit/words.py", "examples/a/b.py", "conftest.py")] == [
         "verity/commitments/crypto", "verity/commitments", "verity", prover, "examples", "."]
@@ -1619,10 +1627,10 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
         (f"{check}/interop.py", 1, "verity/protocols/flock/prover/stage.py")]
     assert [str(x) for x in _into_distributions(loads, listing)] == [
-        "verity/configuration/package_above.py:1: python package verity.protocols.flock.verifier.interface loads "
+        "verity/hardware/package_above.py:1: python package verity.protocols.flock.verifier.interface loads "
         "verity/protocols/flock/__init__.py"]
     found = _place_loads(loads, listing)
-    assert list(found) == ["verity/circuits", "verity/configuration", "verity/definitions", "verity/protocols/flock/verifier",
+    assert list(found) == ["verity/circuits", "verity/definitions", "verity/hardware", "verity/protocols/flock/verifier",
                            device, prover, verifier, "verity/protocols/spot"], list(found)
     assert [sorted(x) for x in found["verity/circuits"]] == [["verity/definitions"], [], []], found["verity/circuits"]
     assert [sorted(x) for x in found["verity/definitions"]] == [["verity/circuits"], [], []], found["verity/definitions"]
@@ -1634,7 +1642,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/ops.py"]
     assert sorted(loaders) == ["verity/protocols/flock/prover/stage.py", f"{prover}/build.py"], loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
-    assert [sorted(x) for x in found["verity/protocols/flock/verifier"]] == [[], [], ["verity/configuration/package_above.py"]]
+    assert [sorted(x) for x in found["verity/protocols/flock/verifier"]] == [[], [], ["verity/hardware/package_above.py"]]
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/definitions"], "trusted": True}])))
     assert [sorted(x) for x in marked["verity/definitions"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",

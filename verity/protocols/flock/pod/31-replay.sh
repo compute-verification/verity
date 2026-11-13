@@ -18,7 +18,7 @@ TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python
 if [ "$REL" = bf16-ampere ]; then
-  BI=$W/bench-instances/v1; FZ=$REPO/fixtures/bench-instances/v1
+  BI=$W/bench-instances/v1; FZ=$REPO/benchmarks/numerical/bench-instances/v1
   [ -f $BI/vu-k1536.x.u16 ] || python3 -m verity_numerical.bench.instances build --out $BI --seeds $FZ/seeds --procs $TH 2>&1 | tail -3
   python3 - $BI $FZ <<'PYEOF' | tee $O/bench-instances.txt || exit 4
 import json, sys
