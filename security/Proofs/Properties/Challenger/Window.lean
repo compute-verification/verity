@@ -139,6 +139,12 @@ theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array Monito
     mvcgen [-Spec.throw_Except, throw_spec, ledgerMessage_eq_spec, join_spec]))
   all_goals refine ⟨_, rfl, sig_step hI ‹_› ‹_›⟩
 
+/-- A signed entry's message reads under the key's identifier, and the LMS verifier accepts its signature over it. -/
+theorem sig_lms {pre : List LedgerEntry} (hI : SigInv key pre) {x : LedgerEntry} (hx : x ∈ pre) :
+    ∃ m, ledgerMessage (ident key.pub) x.entry = .ok m ∧ LmsVerifies key m x.sig := by
+  obtain ⟨m, hm, hv⟩ := hI x hx
+  exact ⟨m, hm, Session.lms_of_check hv⟩
+
 -- `mvcgen` splits `sessionNamed` into one goal per check it makes of the session's files
 set_option maxHeartbeats 1000000 in
 /-- **The session `sessionNamed` reads is the one the audited open names.** -/
