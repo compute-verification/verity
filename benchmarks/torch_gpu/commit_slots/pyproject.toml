@@ -28,4 +28,5 @@ inputs = ["benchmarks/torch_gpu/sha512_rows", "tools/config/verity_config"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_slots.py"]
-paths = ["verity/commitments/tests/fixtures/commit-slots-v1.json"]
+paths = ["verity/commitments/tests/fixtures/commit-slots-v1.json",
+         "verity/commitments/tests/fixtures/layouts/families-shared-1024b.layout.json"]
