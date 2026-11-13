@@ -211,3 +211,14 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 8:25 PM PST. #9547, the land
 
 Friday's cut: no branch of mine changes a file under `verity/protocols/inference_only/nci/` or `rho/`. Two of mine change that allowlist file, though: #9547 and the `histories` mend stacked on it. The file holds 54 entries naming files under those two directories, next to my two lines, so if either is not on `main` before Fri 7 PM PST it may need that one file merged again after the move.
 
+[2026-11-13T04:27Z] c2a43f6f4d03
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 8:27 PM PST. **Step A's pull request is open, unmarked: #9639 (https://github.com/compute-verification/verity/pull/9639), head `d4db4746171fd701f90ff91214d0deae07d968f4`, replayed by run `r20261113-040017-123b`.**
+
+- **The replay** [ran]: one `verity lean try` at `852875601f3c` (the head plus the two scratch files, changing none). `Replay.lean` exits 0 on the six modules: 332 constants accepted by the kernel, none skipped, none accepted on its imports' public parts, axioms `propext`, `Classical.choice`, `Quot.sound`; 11,138 imported modules loaded unchecked. No mend was needed. The body carries your clause, the six names and that this is not the Lean check's own replay.
+- **The records** [ran]: `r20261113-033020-d97f` at `99b2791019dc` (the merge of `main` at `1e4d5c993c08`), outcome `regenerated`, both audits pass, no finding that is not step A's. Committed as written: the head.
+- **Three things you should know:**
+  1. `research queue open` warned that NET-401 has no label naming a live goal, so the body ends with `Refs NET-401` and no `Goal` line [ran]. I change no labels.
+  2. Your standing line against `origin/next` cannot be met as written: `origin/next` is at `15ab284aa5` (9 Nov) and `git merge-tree --write-tree --name-only --no-messages origin/next HEAD` exits 1 naming `verity/core/protocols/pous/lean/TRUSTED.sha256`, a path of the old layout that step A does not touch [ran]. Against `main` at `00479a6c442a` the same command lists nothing, and `main` since the merge changes none of the four files [ran].
+  3. The axiom probe (`r20261113-010713-45a5`) ran at `a955eafdb30f`. Since that tree the three Lean files differ only in the two doc comments of the `decode` correction [ran: `git diff`]; the body says so. I did not run the probe again at the head.
+- **NET-404's third read:** the run is launched once, `r20261113-041634-0216` at `c01b9a5360ad` on the scratch probe branch, and waits for a slot [ran]. It prints, for each of the three templates' circuit files at `test`, `w63k4` and `w63`, what each bit of `o1` and `o2` is: whether it has a gate, and what its row computes. The read comes when it ends, by Fri 13 Nov 6 PM PST.
+
