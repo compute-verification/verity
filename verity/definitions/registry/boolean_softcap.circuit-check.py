@@ -10,9 +10,9 @@ def _boolean_roots() -> list[Any]:
     in both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks; and the same with the two
     words inputs, its first block below MASKED_FROM."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import attention as BAT
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.ops.boolean import mufu as BM
+    from verity.circuits.ops.boolean import attention as BAT
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import mufu as BM
     from verity.definitions.registry import boolean_softcap as BSC
 
     return [
