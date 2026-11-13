@@ -5,3 +5,4 @@
 - 09:16Z DENSE: value check passed at bc1841a446 (4l d5b0, tie 0328; 1l 32bf, tie 61b1). Head c3f66d06e5 (test evaluates by reference); tests, gate and full-V reference runs launched at it.
 - 09:20Z DENSE: piece 5 done at select c3f66d06e5; a-d met; select.md written; CIR-274 commented; returning.
 - 10:17Z DENSE: join trial: select 026c3f93d4 (merge of join 95784be3d2, tree fe07c882dedb). Value check r20261113-101643-b602 running (diff applied, sha df893243); census refused under --cwd source (shared tree), relaunched with --cwd clone.
+- 10:22Z DENSE: census r20261113-101728-9378 (026c3f93d4 + hunk): six sets digest 04fcba3603a6c805, only StopCheck unlowered, the three facts hold. Test fixed at 8830d95095, rerunning. Value check b602 evaluating.
