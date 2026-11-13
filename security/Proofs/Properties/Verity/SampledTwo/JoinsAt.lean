@@ -12,6 +12,7 @@ public import Proofs.Properties.Verity.SampledTwo.SessionCut
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
+public import Proofs.Properties.Verity.SampledTwo.DrawRoots
 
 /-!
 # The two-stage leg's projection at the form's accept, from the coin map's law
@@ -48,7 +49,8 @@ STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form
 there: the cut reads no log where a session's record carries a break, and a family's coins follow one root only on a
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageDraws` is asked only of those
-plays (`draws₁`, `draws₂`). What the pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`
+plays. There each stage's one root is CUT's (`oneRoot_first`, `oneRoot_second`, at `otherRoots`), so `StageDraws`
+takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`
 and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' premise for either stage.
 
 **Not established**, each a field of `JoinsAt`:
@@ -59,8 +61,9 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
   pull request (PRF-490). The model's device takes its ledger lines as given, so nothing here proves it, and it is a
   field by that name, not a part of `JoinGood`.
 * **The two families distinct** (`distinctFamilies`), until the form refuses equal labels (TWOLEG).
-* **Each stage's draw is its family after one root** (`draws₁`, `draws₂`): the family is the form's to show (TWOLEG);
-  one root on the play's log is the cut's with the device's history.
+* **Each stage's draw names its family** (`family₁`, `family₂`): the form's to show (TWOLEG).
+* **On two windows each session shows the other stage's family after that stage's digest alone** (`otherRoots`,
+  CUT's `OtherRoots`): the form's accept does not give it.
 * **The first stage read the cut's draw** (`firstDrawn`) and **the check's first session is the cut's**
   (`sessionMatches`). That the first stage's coins are read under the parameters' key and that an accepted play on two
   windows shows its sessions' order are theorems of the form's accept (`firstReads`, `orderShown`, CUT's
@@ -228,10 +231,13 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
-  /-- The first stage's draw is `ℓ₁` after one root, on the accepted plays `JoinGood` holds of. -/
-  draws₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ JoinGood o) (fun o => (C o).bind firstDraw) ℓ₁
-  /-- The second stage's draw is `ℓ₂` after one root, on the accepted plays `JoinGood` holds of. -/
-  draws₂ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ JoinGood o) (fun o => (C o).bind secondDraw) ℓ₂
+  /-- The first stage's draw names `ℓ₁`, on the accepted plays `JoinGood` holds of. -/
+  family₁ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind firstDraw = some (label, after) → label = ℓ₁
+  /-- The second stage's draw names `ℓ₂`, on the accepted plays `JoinGood` holds of. -/
+  family₂ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind secondDraw = some (label, after) → label = ℓ₂
+  /-- On two windows each session shows the other stage's family after that stage's digest alone (CUT's
+  `OtherRoots`), on the accepted plays `JoinGood` holds of. -/
+  otherRoots : ∀ o, FormAccepts C o ∧ JoinGood o → OtherRoots o.sent
   /-- The first stage read the draw the cut reads. -/
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
@@ -312,10 +318,16 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
   have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_goodCase h.firstDrawn
   have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase h.sessionMatches
+  have hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) :=
+    fun o k p c e hk hd => (h.caseIsSent o k p c e hk hd).1
+  have hA : ∀ o, FormAccepts C o ∧ JoinGood o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent :=
+    fun o ho => ⟨ho.1, ho.2.1, h.otherRoots o ho⟩
   have hDraw₁ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
-      (fun o => (goodCase C JoinGood o).bind firstDraw) ℓ₁ := stageDraws_goodCase h.draws₁
+      (fun o => (goodCase C JoinGood o).bind firstDraw) ℓ₁ :=
+    stageDraws_goodCase (stageDraws_first hcase hA h.family₁)
   have hDraw₂ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
-      (fun o => (goodCase C JoinGood o).bind secondDraw) ℓ₂ := stageDraws_goodCase h.draws₂
+      (fun o => (goodCase C JoinGood o).bind secondDraw) ℓ₂ :=
+    stageDraws_goodCase (stageDraws_second hcase hA h.family₂)
   have hShow₁ : FirstShown (goodCase C JoinGood) LogIsDevice := firstShown_of _ hC' hR' hD'
   have hShow₂ : SecondShown (goodCase C JoinGood) LogIsDevice :=
     secondShown_of _ hC' hR' (secondAlone_of_matches _ hC' hM')
