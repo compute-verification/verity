@@ -41,7 +41,7 @@ def _renamed(planes: list[tuple[str, int]], plane: str, name: str) -> list[tuple
     (GEOMETRY, [3, 1], [("s0/g4x3x2/bot", 1), ("s1/g4x1x2/bot", 1)], "no M1 stream tensor committed"),
     (GEOMETRY, [3, 1], [("8x3x2", WHOLE), ("s0/4x3x2/S", 4 * 3 * 256), ("s0/g4x3x2/T", 1)], "no M1 stream tensor committed"),
     (GEOMETRY, [3, 1], _renamed(_planes([3, 1]), "s0/g4x3x2/P", "s0/g4x4x2/P"), "s0: its planes name 2 geometries"),
-    (GEOMETRY, [3, 1], [(m, w - (m == "s1/g4x1x2/ROW")) for m, w in _planes([3, 1])], "s1/ROW: 63 words committed, g4x1x2 declares 64"),
+    (GEOMETRY, [3, 1], [(m, w - (m == "s0/g4x3x2/ROW")) for m, w in _planes([3, 1])], "s0/ROW: 191 words committed, g4x3x2 declares 192"),
     (GEOMETRY, [3, 1], _planes([3]) + [(m.replace("s0/", "s1/"), w) for m, w in _planes([1], h=2)],
      "the sequences of one launch name 2 different (slabs, NB, BN, D)"),
     (GEOMETRY, [3, 1], _planes([3, 2]), "sequence rows [2, 3] committed, [1, 3] scheduled"),
