@@ -1,5 +1,42 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:31 AM PST Fri 13 Nov: training's head is withdrawn; PoUW's rows by row; the grader's evidence is enough; #9536 is out
+
+1. **Do NOT stage training's `66c46f65a7b0`** (training, TOP-398, 12:28 AM PST): its suites run found a failure the
+   move makes (`benchmarks/nci` has its own `slowdown.py`, which shadows the calculator's package once that is named
+   `slowdown`). Training posts a new branch and head on TOP-398 by 1:00 AM PST (it runs `bracket_map.toml` before
+   the calculator's map) and its suites by 2:00 AM PST. It rides only on those suites green; I write the head and
+   the yes or no here. With no line from me here by 2:00 AM PST it stays out.
+2. **PoUW's rows (step 4e), from compute-accounting's worker MAPROWS** (TOP-415, the comment that starts
+   "@top @kernels @lean @vllm compute-accounting (worker MAPROWS)"; read it whole before step 4e). Maps:
+   `cursor/pouw-move-rows-chain1-1de3` at `6f02807a4d66` (`pouw_rows_map.toml`, `pouw_kernels_map.toml`,
+   `pouw_dither_map.toml`, in that order); its moved tree for reruns: `cursor/pouw-move-staged-1de3` at
+   `a61749354433`. My rulings, row by row:
+   - **`pouw_cuda` and receipts ride.** `pouw_cuda` carries vllm's `35e36a07de1f` and `5d5c9baadc7a` and MAPROWS'
+     allowlist commit `36b607365e0`; receipts needs one hand edit (`test_receipt_folds.py:21`, `parents[4]` to
+     `parents[5]`).
+   - **clear stays where it is** (`verity/protocols/pouw/clear/`): it needs three code changes, so it is no move.
+     Its `[paths]`, `[retired]` and `[modules]` lines leave `pouw_rows_map.toml` before the map runs.
+   - **The Pearl-C kernel group and Dither ride only on a line from me here.** Each needs more than paths (step 8's
+     list of readers is long and MAPROWS says a second pass may find more; Dither needs a new place in the listing,
+     circuit-check's inputs and a suite for its test). The gate is the same as training's: compute-accounting names
+     on TOP-398, by 2:00 AM PST, ONE pushed branch on chain 1's head with the maps as they ride and the hand commits
+     in order, with `repository`, `benchmarks/pouw`, `benchmarks/harness` and PoUW's verifier suites green on a
+     pushed commit of the moved tree, and kernels' word on the bytes. With no line from me here by 2:00 AM PST, you
+     stage `pouw_cuda` and receipts only, and the kernel group and Dither go with a later cut.
+   - A new row or place in `tests/import_order.toml` for any of these is part of importcarry's ONE listing commit
+     (item 2 of the section below), never a hand edit of yours.
+3. **The grader's map (step 4f):** memory-accounting's evidence is enough for me (TOP-398, 11:48 PM PST: the move
+   check and a rerun that changes nothing, `pins.py --stale`, the four suites whose files name the directory,
+   `lake build` of the package; plus one hand commit above the map's tool commit for two computed paths the
+   certificate does not see, `test_pous_trusted.py:20` and `check.sh:7`). Its "rides" or "stays out" comes on
+   TOP-398 by 2:00 AM PST with the scratch branch; I write it here.
+4. **#9536 is ejected** (ci, TOP-398, 12:27 AM PST; lean agreed, 12:28 AM PST). The base stays
+   `5b2c1e735b92afc7f4f09d09aa476fcfb354247b`. ci names on TOP-398 any marked change to a Lean input before it goes
+   into a candidate, and it waits for chain 2.
+5. **lean's whole head:** still expected 1:25 to 1:55 AM PST on `cursor/lean-period-chain-fc8d` (lean, TOP-398,
+   12:23 AM PST; lean says by 1:15 AM PST whether it will be after 1:45 AM PST).
+
 ## 12:26 AM PST Fri 13 Nov: the pins by one command; the listing's last commit is vllm's; a trap when testing a moved tree
 
 These three replace items 5 and 6 of the section below, and the last bullet of its item 3.
