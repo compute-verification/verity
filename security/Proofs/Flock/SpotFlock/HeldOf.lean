@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Statement
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import VStarRecursive.SampledTwo
+public import Proofs.Flock.SpotFlock.ScopeDesc
 
 /-!
 # The held copies, built from what the two-stage form's check holds
@@ -23,9 +24,12 @@ session statement, the code the frame is built from, and the rounds past round 1
 * `xS₀`: template `t`'s reference statement (`refStmt`), each in Flock's masked scope (`zkOk`), decided;
 * `frame`: SPOT's own frame at the wired program, from `Unread.c₀` (`withFrame`), as HONEST2's instance sets it.
 
-`heldOf` is `none` unless the design evaluates (`two`), the templates' names are distinct, and the interior
-registration registers no value: so a held copy it builds discharges RUNCOINS's `TwoHolds` (`twoHolds_of`) and
-`NamesDistinct` (`namesDistinct_of`), and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
+`heldOf` is `none` unless the descriptor's checks pass (`descCore`: each member fits, the design is well formed on the
+layout's strata, the second stage has a cell and a count of at least `1` for each template, and each template's
+reference statement reads as a member's), the templates' names are distinct, and the interior registration registers
+no value. Each check takes a step per template or stratum, none per unit or gate. A held copy it builds discharges
+`NamesDistinct` (`namesDistinct_of`), with the run's population check RUNCOINS's `TwoHolds` (`HeldOfRun.twoHolds_of`),
+and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
 the second two-stage try's design, whose interior registration registers none; the first try's registers `logits`,
 and there `heldOf` is `none`.
 
@@ -155,15 +159,23 @@ noncomputable def withFrame (h : Held) (c₀ : Code) : Held :=
     frame := frameAt (slotsOf (addressMapWired h (wireMap h) (returned h)))
       (revealCodeWired h (wireMap h) (returned h) (addressMapWired h (wireMap h) (returned h)) c₀) }
 
-/-- A statement `two` may be read at; it reads none. -/
-def anyStatement (h : Held) : AuditStatement :=
-  ⟨h.desc, bitsProgs h.ms, h.query, (replayDesign h).getD ⟨[]⟩, []⟩
+/-- **The descriptor's checks `heldOf` makes**: at the replay layout and the first stage's design, every member fits
+(`memberOk`), the design is well formed on the layout's strata (`designOk`), the second stage has a count of at least
+`1` and a cell for each member, and every template's reference statement reads as a member's (`templateOk`). It is
+`descOk` and `two`'s `templateOk` without the steps per unit (`filesOk`, `fillOk`), which the run's population check
+gives (`HeldOfRun.filesOk_held₀`, `HeldOfRun.fillOk_held₀`), and without `scopeOk`'s pass over every gate, which
+`memberOk` gives (`two_of_descOk`). -/
+def descCore (h : Held) : Bool :=
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some d => h.ms.all memberOk && designOk d l && h.k.length == h.ms.length && h.k.all (1 ≤ ·) &&
+      h.reg.ns.size == h.ms.length && (List.range h.ms.length).all (templateOk h)
+  | _, _ => false
 
 /-- **What `heldOf` decides of the copies it builds**: as many reference statements as templates, the templates'
-names distinct, an interior registration that registers no value, and the design evaluates (`two`). -/
+names distinct, an interior registration that registers no value, and the descriptor's checks (`descCore`). -/
 def decided (u : Unread) (it : Spot.Run.Interior) (h : Held) : Bool :=
   u.xs.length == it.circuits.size && decide ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup &&
-    h.interiorNames.values.isEmpty && (two h (anyStatement h)).isSome
+    h.interiorNames.values.isEmpty && descCore h
 
 /-- `h` where `decided` holds of it. -/
 def keep (u : Unread) (it : Spot.Run.Interior) (h : Held) : Option Held := if decided u it h then some h else none
@@ -212,16 +224,6 @@ theorem ms_length_held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unr
 theorem ms_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).ms = h.ms := by
   unfold withFrame Held.ms
   dsimp only
-
-/-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds: `heldOf` decides it, and `two`
-reads no statement. -/
-theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
-    (hh : heldOf i it u = some h) : TwoHolds h := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, hd⟩ := heldOf_spec hh
-  unfold decided at hd
-  simp only [Bool.and_eq_true] at hd
-  intro s
-  exact hd.2
 
 /-- **The templates' names are distinct** (`NamesDistinct`) at a held copy `heldOf` builds. -/
 theorem namesDistinct_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}

@@ -21,6 +21,8 @@ the run refuses a boundary registration whose population is not its `n` units in
   naming one count per template.
 * `built_of_templates`: every member's unit net is built where every template's reference statement reads as a
   member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
+* `twoHolds_of`, `twoHolds_of_files`: a held copy `heldOf` builds, or the form's check of them, gives RUNCOINS's
+  `TwoHolds` where the run's population check passes.
 -/
 
 @[expose] public section
@@ -244,5 +246,75 @@ theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
     (two (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) s).isSome := by
   rw [two_eq, ms_withFrame, reg_withFrame, k_withFrame, xS₀_withFrame, ← two_eq _ s]
   exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+
+/-- **The boundary registration `heldOf` hands the first stage reads the params' program and query.** -/
+theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = some first) :
+    first.program = i.params.verifier.program ∧ first.query = i.params.verifier.query := by
+  unfold firstOf at hf
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
+  obtain ⟨n, hn, rule, hrule, law, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
+  exact ⟨rfl, rfl⟩
+
+/-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds, where the run's population check
+passes (`Slots.popOk` at the params' program and query, which `Run.run` refuses without: `population-order`): `heldOf`
+decides the descriptor's checks (`descCore`), and the population gives the layout's fit to the members' files. -/
+theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {n : ℕ}
+    (hh : heldOf i it u = some h)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) : TwoHolds h := by
+  obtain ⟨first, ns, ks, l, hz, hf, -, hl, rfl, hd⟩ := heldOf_spec hh
+  obtain ⟨hpr, hq⟩ := firstOf_program hf
+  rw [← hpr, ← hq] at hp
+  unfold decided at hd
+  simp only [Bool.and_eq_true] at hd
+  have hcore := hd.2
+  rw [descCore_eq, reg_withFrame, ms_withFrame, k_withFrame, xS₀_withFrame,
+    ← descCore_eq (held₀ i it u first ns ks (requests l) hz)] at hcore
+  have hlen := ms_length_held₀ i it u first ns ks (requests l) hz
+  have e1 : (Spot.Slots.layout (held₀ i it u first ns ks (requests l) hz).reg.first.program
+      (held₀ i it u first ns ks (requests l) hz).reg.first.query).toOption = some l := by
+    show (Spot.Slots.layout first.program first.query).toOption = some l
+    rw [hl]
+    rfl
+  unfold descCore at hcore
+  rw [e1] at hcore
+  rcases hdz : replayDesign (held₀ i it u first ns ks (requests l) hz) with _ | d
+  · rw [hdz] at hcore
+    simp at hcore
+  rw [hdz] at hcore
+  dsimp only at hcore
+  simp only [Bool.and_eq_true, beq_iff_eq] at hcore
+  obtain ⟨⟨⟨⟨⟨hm, hdes⟩, hk⟩, hk1⟩, hT⟩, ht⟩ := hcore
+  have hd' : (slotDesign first.rule first.program first.query first.table).toOption = some d := hdz
+  have hk' : ks.size = it.circuits.size := by
+    rw [← hlen, ← Array.length_toList]
+    exact hk
+  have hT' : ns.size = it.circuits.size := by
+    rw [← hlen]
+    exact hT
+  intro s
+  exact two_held₀ s hl (ok_of_toOption hd') hp hT' hm hdes hk'
+    (fun x hx => of_decide_eq_true (List.all_eq_true.1 hk1 x hx))
+    (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl))
+
+theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (u : Unread)
+    (hk : heldOk i it u.xs = true)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+    ∃ h, heldOf i it u = some h ∧ TwoHolds h := by
+  obtain ⟨h, hh⟩ := heldOf_of_ok u hk
+  exact ⟨h, hh, twoHolds_of hh hp⟩
+
+/-- **The form's check of the held copies gives `TwoHolds`** where the run's population check passes. -/
+theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
+    {it : Spot.Run.Interior} {n : ℕ} (desc : Msg) (query : Query) (c₀ : Code) (more : ℕ)
+    (hk : heldOkFiles p bs i it = true)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+    ∃ u h, unreadOf p bs desc query c₀ more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
+  unfold heldOkFiles at hk
+  cases hx : refStmtsOf p bs with
+  | none => rw [hx] at hk; simp at hk
+  | some xs =>
+    rw [hx] at hk
+    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok ⟨desc, query, xs, c₀, more⟩ hk hp
+    exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
 
 end SpotFlock.HeldOf
