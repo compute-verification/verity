@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Core.Digest
 public import Definitions.Core.Site
 
 /-!
@@ -32,16 +31,14 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   accounts for at each id. Its values come from each protocol's account in code (`Core.Account`: each amount's `part`
   and `place`, whose leaves `Core.Account.Part.leaves` names). `Registration.AccountedFor` holds when every part of the
   registered hardware is accounted for by some protocol of the composite.
-* **The parameters' circuit** (`Registration.DeclaredIsParams`): the circuit the parameters name is the one the log
-  declares for the day. It is stated and read by no guarantee: no code checks it yet.
 
 **Not covered.** `RegistrationSound` reads the spec's check (`Registration.Valid`); that the code's check decides it is
-a property of the code (`Properties.Site.Checks` for a log of site entries; none yet for information entries and
-declarations). Nothing here ties a builder's digest to the compiler it holds: the spec's builder holds its compiler
-(`Registration.Builder.B`), while the code's holds a digest and a cap. That the parameters' circuit is the day's
-declared one is stated (`Registration.DeclaredIsParams`) and nothing proves it. `Registration.Valid` doesn't check
-`AccountedFor`, so no guarantee here concludes it. Hardware outside the Site (unregistered hardware) and a host's own
-compute, which the Site registers no rate for, are parts of no Site.
+a property of the code (`Properties.Registration.Checks`). Nothing here ties a builder's digest to the compiler it
+holds: the spec's builder holds its compiler (`Registration.Builder.B`), while the code's holds a digest and a cap.
+What another protocol names of the registration (the circuit its parameters name, a network certifier's links and key)
+joins two protocols, so it is stated in the composition's area (`Properties.Verity.Ties`), and nothing proves it.
+`Registration.Valid` doesn't check `AccountedFor`, so no guarantee here concludes it. Hardware outside the Site
+(unregistered hardware) and a host's own compute, which the Site registers no rate for, are parts of no Site.
 -/
 
 @[expose] public section
@@ -153,18 +150,6 @@ protocol's answer then certifies the part is the accounting's, which charges at 
 covers. -/
 def AccountedFor {P : Type} (L : Lists P) (v : View) (k : Composite) : Prop :=
   ∀ x r, (x, r) ∈ v.site.parts → ∃ p ∈ L.protocols k, r ∈ L.accounts k p v.site x
-
-/-- **The parameters name the circuit the log declares for day `j`**: the program digest the parameters `θ` name
-(`programDigest`, as the soundness game's vocabulary reads it), written as the log writes digests (`hex`), is the
-program the log declares for day `j` (`Registration.declared`). The log declares no digest of the public file, so this
-ties only the program's; a declaration naming the public file's digest would let it tie that one too.
-
-No code checks it yet, and no guarantee reads it: the theorems read the circuit the parameters name, and registration
-the circuit the log declares. It becomes a lemma when the registration check reads the parameters and refuses a day
-whose declared program is not theirs, or when the parameters are derived from the log. -/
-def DeclaredIsParams (hex : Digest → String) (programDigest : ByteArray → Option Digest) (θ : ByteArray)
-    (log : Registration) (j : ℕ) : Prop :=
-  ∃ d ∈ declared log j, ∃ h, programDigest θ = some h ∧ hex h = d.program
 
 end Registration
 
