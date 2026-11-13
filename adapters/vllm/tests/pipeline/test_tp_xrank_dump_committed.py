@@ -2,7 +2,7 @@
 nothing else.  Each member is opened from the rank's own committer and verified against its run root
 (`verity_vllm.commit.opened.OpenedReader`) before a pick holds it; a member that does not verify, that the rank did not
 retain, or that a rank with no run commitment would read is a pick without bytes whose ``why`` names it, which the
-driver's check fails.  CPU-only: the commitment is the production CPU core's over a few small tensors
+driver's check fails.  CPU-only: the commitment is the library's own CPU core's over a few small tensors
 (`tests.check.opened.commit_steps`), and the engine is one module that is a vocabulary shard."""
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def test_a_ranks_picks_are_its_committed_bytes_opened_and_verified_against_its_r
         assert p["part"].dtype == p["recv"].dtype == torch.bfloat16
         assert torch.equal(p["part"], part) and torch.equal(p["recv"], recv)
     assert picks[EMB]["emb"] == {"ok": True, "n_diff": 0, "vocab_range": [LO, HI], "masked_rows": 2, "rows": 5, "why": None}
-    assert picks[MLP]["emb"] is None and picks[HEAD]["emb"] is None        # the leg is the embedding site's all-reduce's alone
+    assert picks[MLP]["emb"] is None and picks[HEAD]["emb"] is None        # the check is the embedding site's all-reduce's alone
     src = wrote["value_source"]
     # two reads a pick and the embedding's ids, each verified, and both steps' roots held to the run root
     assert (src["source"], src["run_root"], src["reads"], src["failed"], src["not_retained"], src["steps_bound"]) == (
@@ -133,7 +133,7 @@ def test_a_reason_that_names_a_long_member_is_cut_to_200_characters(tmp_path):
     assert len(received) == 200 and not received.endswith("root")
 
 
-def test_ids_changed_after_the_commitment_leave_the_embedding_leg_unanswered_by_name(tmp_path):
+def test_ids_changed_after_the_commitment_leave_the_embedding_check_unanswered_by_name(tmp_path):
     st = _state()
     _change(st, 0, f"{EMB}/in")
     wrote, picks = _dump(st, tmp_path)
