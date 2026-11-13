@@ -46,6 +46,11 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
+- **A step of the record's own program.** A step the record holds with no backward (a probe of the model before or
+  after training) is the config's to take only where the route takes it too: the entry names it (`record_only_steps`:
+  its number in the record and why), the record's steps less the named ones are its steps, and the verdict says how
+  many are named and their tokens. A named step with a backward, or a record's step with no backward the entry doesn't
+  name, is a difference.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
@@ -102,8 +107,9 @@ NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 def held(path: Path = HELD) -> dict:
     """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`; where its record holds fused
     attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); where
-    its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`); and where
-    its config's trained weights leave θ after the second step, `"step"`, the step compared and why (`steps`)."""
+    its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`); where its
+    record holds steps of its program's alone, `"record_only_steps"`, those steps (`steps_alone`); and where its
+    config's trained weights leave θ after the second step, `"step"`, the step compared and why (`steps`)."""
     return tomllib.loads(Path(path).read_text())["held"]
 
 
@@ -218,35 +224,49 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The norm: CUDA runs it as one fused kernel, which the counter has no price for and counts only where its gain
     is an updated weight, one MAC an element; a CPU runs it as elementwise ops, each counted. Fires on the record's
     `fwd/updated _fused_rms_norm` over a row's residual stream and a gain beside the config's `fwd/updated mul` over
-    the same shapes with its count and MACs. It then covers the norm's other products on a CPU, none of which the
-    record may have: the gain's multiply where the gain is θ's (`fwd/theta`), the normalisation (`fwd/act`, the
-    stream by a scalar a token), which must be one for each gain's multiply, and the backward's multiplies and
-    quotients over those three shapes alone. A step that trains no gain has neither of the first two, a record with
-    nothing of the kernel beside a config with no updated gain's multiply: the rule then fires on the config's
-    multiplies by θ's gains, and covers the same products."""
+    the same shapes with its count and MACs. It then covers the norm's other products on a CPU: the gain's multiply
+    where the gain is θ's (`fwd/theta`), the normalisation (`fwd/act`, the stream by a scalar a token), which must be
+    one for each gain's multiply, and the backward's multiplies and quotients over those three shapes alone. A step
+    that trains no gain has neither of the first two, a record with nothing of the kernel beside a config with no
+    updated gain's multiply: the rule then fires on the config's multiplies by θ's gains, and covers the same
+    products. The record may hold the normalisation and the backward's products only beside plain normalisations of
+    its own, a step's ops outside any norm (`fwd/act` with no gain): of each such product the config then holds at
+    least the record's count at the same MACs an op, the record's share is the same on both sides, and the rule
+    covers only the config's excess, each backward product the record holds in whole numbers for each normalisation
+    that passes a gradient to its input, after one product of the stream by itself for each updated gain."""
     x, s, g = [1, shape["ctx"], shape["d_model"]], [1, shape["ctx"], 1], [shape["d_model"]]
     gain = json.dumps([x, g])
     fused, mul = ("fwd", "updated", "_fused_rms_norm", gain), ("fwd", "updated", "mul", gain)
     frozen, scale = ("fwd", "theta", "mul", gain), ("fwd", "act", "mul", json.dumps([x, s]))
     trained = fused in rec
-    if cfg.get(mul) != rec.get(fused) or not trained and frozen not in cfg:
+    if cfg.get(mul) != rec.get(fused) or not trained and frozen not in cfg or frozen in rec:
         return None
     updated = rec[fused] if trained else [0, 0]
     inside = [k for k in cfg if k in (frozen, scale) or k[:2] == ("bwd", "grad") and k[2] in ("mul", "div")
               and k[3] != "[]" and all(o in (x, s, g) for o in json.loads(k[3]))]
-    if cfg.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
+    held = {k: rec[k] for k in inside if k in rec}
+    if held and scale not in held or any(cfg[k][0] < n or cfg[k][1] * n != macs * cfg[k][0]
+                                         for k, (n, macs) in held.items()):
+        return None
+    excess = {k: [cfg[k][0] - held.get(k, [0, 0])[0], cfg[k][1] - held.get(k, [0, 0])[1]] for k in inside}
+    if excess.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0]:
+        return None
+    passed, own = excess.get(("bwd", "grad", "mul", gain), [0])[0], ("bwd", "grad", "mul", json.dumps([x, x]))
+    rest = {k: excess[k][0] - (updated[0] if k == own else 0) for k in held if k[0] == "bwd"}
+    if any(r % passed if passed else r for r in rest.values()):
         return None
     gains = (f"{updated[0]} multiplies by an updated gain, the same on both sides" if trained else
              "no gain is updated, so the record has nothing of the kernel")
-    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(cfg[k][1] for k in inside),
+    plain = f", beside {held[scale][0]} plain normalisations on both sides" if held else ""
+    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(e[1] for e in excess.values()),
              "what": f"the norm as the CPU's elementwise ops for CUDA's fused kernel: {gains}, and on the config's "
-                     f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {cfg[scale][0]} normalisations and "
-                     f"{sum(cfg[k][0] for k in inside if k[0] == 'bwd')} products of the backward's, none of which "
-                     "CUDA's kernel shows the counter"}
+                     f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {excess[scale][0]} normalisations and "
+                     f"{sum(e[0] for k, e in excess.items() if k[0] == 'bwd')} products of the backward's, none of "
+                     f"which CUDA's kernel shows the counter{plain}"}
     for k in (*((mul,) if trained else ()), *inside):
         del cfg[k]
-    if trained:
-        del rec[fused]
+    for k in (*((fused,) if trained else ()), *held):
+        del rec[k]
     return found
 
 
@@ -423,6 +443,32 @@ class Tokens:
         return torch.randint(0, self.vocab, (n // self.rows, self.ctx + 1), generator=self.generator)
 
 
+def steps_alone(rec: dict, h: dict) -> tuple[list[dict], list[str]]:
+    """The record's steps that its entry names as its program's alone (`record_only_steps`: each by its `number` in
+    the record, from 1, and `why`), which the config's steps don't count, each with its tokens; and the differences.
+    A named step the record doesn't have, or one with a backward, is a difference: a step that trains is the run's.
+    So is a step of the record's with no backward that the entry doesn't name: a forward-only step may be an attack's
+    own compute, so none is left out unsaid."""
+    trains = [any(e[0] == "bwd" for e in rec["structures"][s["struct"]]["log"]) for s in rec["steps"]]
+    said = {int(s["number"]): s["why"] for s in h.get("record_only_steps", [])}
+    alone, differences = [], []
+    for k, why in sorted(said.items()):
+        if not 1 <= k <= len(trains):
+            differences.append(f"{HELD.name} names the record's step {k} as its program's alone, and the record has "
+                               f"{_plural(len(trains), 'step')}")
+        elif trains[k - 1]:
+            differences.append(f"{HELD.name} names the record's step {k} as its program's alone, and it has a "
+                               "backward: a step that trains is the run's")
+        else:
+            alone.append({"number": k, "tokens": rec["steps"][k - 1].get("tokens", 0), "why": why})
+    if unsaid := [i + 1 for i, t in enumerate(trains) if not t and i + 1 not in said]:
+        shown = ", ".join(map(str, unsaid[:5])) + (f" and {len(unsaid) - 5} more" if len(unsaid) > 5 else "")
+        differences.append(f"the record's {_plural(len(unsaid), 'step')} {shown} with no backward, which "
+                           f"{HELD.name} doesn't name: name each in the entry's `record_only_steps` with a `why`, or "
+                           "find why the record's program takes it")
+    return alone, differences
+
+
 def steps(h: dict) -> int:
     """How many of an entry's config's steps are counted, the last compared: its `step`'s `counted`, else `STEPS`."""
     return int((h.get("step") or {}).get("counted", STEPS))
@@ -458,7 +504,8 @@ def refusal(rec: dict) -> str | None:
 
 def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     """An entry beside its run of record `rec`: `facts` (what was read, as printed), the `expected` differences, the
-    `named` lines of the record's own program, the `differences`, and `refused`, why nothing else was compared: the
+    `named` lines of the record's own program, its steps of the program's `alone`, the `differences`, and `refused`,
+    why nothing else was compared: the
     record's fused attention rows can't be written as the counter writes them (`as_counted`), or the entry's count
     stands for no run (`refusal`)."""
     route, shape = config.route(cfg.route), cfg.start.shape
@@ -485,8 +532,12 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     if start["digest"] != cfg.start.digest:
         r["differences"].append(f"the start: the config's is {cfg.start.name} ({cfg.start.digest[:12]}), the "
                                 f"record's {start['name']} ({start['digest'][:12]})")
-    if len(rec["steps"]) != cfg.budget["steps"]:
-        r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
+    alone, unsaid = steps_alone(rec, h)
+    r["alone"], trained = alone, len(rec["steps"]) - len(alone)
+    r["differences"] += unsaid
+    if trained != cfg.budget["steps"]:
+        r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {trained}"
+                                + (f", its {len(rec['steps'])} less the {len(alone)} named" if alone else ""))
     found = compare(per_row(mine["structures"][mine["steps"][n_counted - 1]["struct"]], shape), theirs, shape,
                     h.get("record_only", []), rec.get("script_args") or [])
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
@@ -496,9 +547,12 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     r["differences"] += found["differences"]
     r["facts"] = [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
-        ("steps", f"{cfg.budget['steps']}"),
+        ("steps", f"{cfg.budget['steps']}" + (
+            f"; the record's {len(rec['steps'])} less {_plural(len(alone), 'step')} of its program's alone, "
+            f"{sum(a['tokens'] for a in alone):,} tokens, that {HELD.name} names: "
+            + "; ".join(f"step {a['number']}, {a['why']}" for a in alone) if alone else "")),
         ("step", f"the config's step {n_counted}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
-                 f"beside the record's modal structure, which {n} of its {len(rec['steps'])} steps have, "
+                 f"beside the record's modal structure, which {n} of its {trained} steps have, "
                  f"{_plural(rows, 'row')} a forward divided out"
                  + (f"; {HELD.name} states step {n_counted}: {h['step']['why']}" if "step" in h else "")),
         ("updated", f"{found['uses']} of the record's {len(theirs['updated'])} uses of an updated weight, by MACs a "
@@ -506,7 +560,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
         *([("attention", attention)] if attention else []),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
                 "shapes, count and MACs"),
-        ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"]), n_counted))]
+        ("E", e_sizes(kinds, cp["e_bytes"], last, trained, n_counted))]
     return r
 
 
@@ -533,11 +587,14 @@ def e_kind(kinds: list[str], fmt: str) -> list[str]:
 def verdict(r: dict) -> str:
     if r["refused"]:
         return f"refused: {r['refused']}"
+    alone = r.get("alone") or []
+    steps = [f"{_plural(len(alone), 'named step')} of the record's program alone, "
+             f"{sum(a['tokens'] for a in alone):,} tokens"] if alone else []
     if r["differences"]:
-        return f"differs, {_plural(len(r['differences']), 'difference')}"
+        return ", ".join([f"differs, {_plural(len(r['differences']), 'difference')}", *steps])
     also = [_plural(len(r["expected"]), "expected difference")] if r["expected"] else []
     also += [f"{_plural(len(r['named']), 'named line')} of the record's program alone"] if r["named"] else []
-    return ", ".join(["equal", *also])
+    return ", ".join(["equal", *also, *steps])
 
 
 def text(rows: list[dict]) -> str:

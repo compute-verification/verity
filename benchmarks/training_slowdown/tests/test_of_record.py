@@ -142,14 +142,18 @@ def test_a_records_fused_attention_is_compared_as_the_counter_writes_it_under_an
     assert of_record.RULES == (of_record.norm, of_record.loss, of_record.average)
 
 
-def norms(updated: int, frozen: int, scales: int) -> tuple:
-    """The norm's products on a CPU: `updated` gains' multiplies, `frozen` of θ's gains, `scales` normalisations and
-    a backward through each."""
-    n = CTX * D
-    return (("fwd", "updated", "mul", [X, G], updated, updated * n),
-            ("fwd", "theta", "mul", [X, G], frozen, frozen * n), ("fwd", "act", "mul", [X, S], scales, scales * n),
-            ("bwd", "grad", "div", [X], scales, scales * n), ("bwd", "grad", "mul", [X, X], 2 * scales, 2 * scales * n),
-            ("bwd", "grad", "mul", [S, S], scales, scales * CTX))
+def norms(updated: int, frozen: int, scales: int, still: int = 0) -> tuple:
+    """The norm's products on a CPU, those it has: `updated` gains' multiplies, `frozen` of θ's gains, `scales`
+    normalisations, `still` of them on an input that needs no gradient, and autograd's backward: through each other
+    normalisation, through each gain's multiply on one of those, and each updated gain's own gradient."""
+    n, passed, through = CTX * D, scales - still, updated + frozen - still
+    return tuple(e for e in (
+        ("fwd", "updated", "mul", [X, G], updated, updated * n), ("fwd", "theta", "mul", [X, G], frozen, frozen * n),
+        ("fwd", "act", "mul", [X, S], scales, scales * n), ("bwd", "grad", "div", [X], passed, passed * n),
+        ("bwd", "grad", "mul", [X, X], 2 * passed + updated, (2 * passed + updated) * n),
+        ("bwd", "grad", "mul", [X, S], passed, passed * n), ("bwd", "grad", "mul", [X], passed, passed * n),
+        ("bwd", "grad", "mul", [S, S], passed, passed * CTX), ("bwd", "grad", "mul", [S], passed, passed * CTX),
+        ("bwd", "grad", "mul", [X, G], through, through * n)) if e[4])
 
 
 def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation_a_gain():
@@ -158,7 +162,7 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
     got = of_record.compare(step(log(*BOTH, *norms(3, 2, 5))), step(cuda), SHAPE)
     assert got["differences"] == []
     assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
-        ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+        ("norm", 3 * n, sum(e[5] for e in norms(3, 2, 5)))]
     assert "3 multiplies by an updated gain" in got["expected"][0]["what"]
     # a normalisation with no gain's multiply, another count of updated gains, a product of the backward's the
     # record has too: none is the norm's exact case, so each side's entries are differences
@@ -174,19 +178,75 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
     assert got["differences"] == ["log, the config's step only: fwd/act mul [[1,1024,16] x2] x1, 16,384 MACs"]
 
 
+def added(*logs: dict) -> dict:
+    """The logs of one step's parts: each entry's count and MACs summed."""
+    return {k: [sum(lg.get(k, [0, 0])[i] for lg in logs) for i in (0, 1)] for k in set().union(*logs)}
+
+
+def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_too():
+    """A step with plain normalisations of its own, outside any norm (the stream by a scalar a token, no gain): the
+    record has them and their backward's products, the config those and the norm's. The rule covers the config's
+    excess alone, with one normalisation a gain, and the record's share is the same on both sides. Not where the
+    config has one plain normalisation more than the record, nor where the record has more of a product than the
+    config."""
+    n = CTX * D
+    plain = log(*norms(0, 0, 2))
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), plain)
+    cpu = added(log(*BOTH, *norms(3, 2, 5)), plain)
+    got = of_record.compare(step(cpu), step(cuda), SHAPE)
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
+        ("norm", 3 * n, sum(e[5] for e in norms(3, 2, 5)))]
+    what = got["expected"][0]["what"]
+    assert "5 normalisations" in what and what.endswith("beside 2 plain normalisations on both sides")
+    for mine, record in ((added(cpu, log(*norms(0, 0, 1))), cuda),
+                         (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 14, 14 * n))))):
+        got = of_record.compare(step(mine), step(record), SHAPE)
+        assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
+def test_the_cpus_norm_beside_plain_normalisations_with_no_backward_on_the_configs_side_is_a_difference():
+    """The record has plain normalisations and their backward's products, the config the same normalisations
+    forward with no backward (their scale detached), and the norm's: of each backward product the config's excess
+    over the record is then no whole number for each normalisation that passes a gradient to its input, so the rule
+    doesn't fire and the config's step is not read as the record's."""
+    n = CTX * D
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), log(*norms(0, 0, 2)))
+    detached = added(log(*BOTH, *norms(3, 2, 5)), log(("fwd", "act", "mul", [X, S], 2, 2 * n)))
+    got = of_record.compare(step(detached), step(cuda), SHAPE)
+    assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
+def test_the_cpus_norm_beside_plain_normalisations_counts_its_backward_by_the_normalisations_that_pass_a_gradient():
+    """A norm whose input needs no gradient (one on a frozen embedding) has no backward through its normalisation,
+    only its gain's own gradient: beside the record's plain normalisations the rule fires, the backward counted in
+    whole numbers for each normalisation that passes a gradient. Where none passes one, each backward product's
+    excess past the gains' own gradients must be none."""
+    n = CTX * D
+    plain = log(*norms(0, 0, 2))
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), plain)
+    for still in (1, 5):
+        got = of_record.compare(step(added(log(*BOTH, *norms(3, 2, 5, still)), plain)), step(cuda), SHAPE)
+        assert got["differences"] == [] and [e["rule"] for e in got["expected"]] == ["norm"]
+        assert "5 normalisations" in got["expected"][0]["what"]
+    stray = added(log(*BOTH, *norms(3, 2, 5, 5)), plain, log(("bwd", "grad", "div", [X], 1, n)))
+    got = of_record.compare(step(stray), step(cuda), SHAPE)
+    assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
 def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_has_nothing_of_it():
     """A step that trains no gain: CUDA's counter is shown nothing of the fused kernel, so the record has no entry of
     the norm, and the CPU's side has every gain's multiply as θ's. Expected, with one normalisation a gain; not where
     a normalisation has no gain's multiply, where the record has one of the backward's products too, or where the
     config multiplies by an updated gain the record never counted."""
     n = CTX * D
-    frozen = norms(0, 5, 5)[1:]
+    frozen = norms(0, 5, 5)
     got = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH)), SHAPE)
     assert got["differences"] == [] and got["products"] == len(BOTH)
     assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
-        ("norm", 0, 5 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+        ("norm", 0, sum(e[5] for e in norms(0, 5, 5)))]
     assert "no gain is updated" in got["expected"][0]["what"] and "5 by θ's gains" in got["expected"][0]["what"]
-    for cpu, record in ((norms(0, 5, 6)[1:], log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
+    for cpu, record in ((norms(0, 5, 6), log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
                         (frozen, log(*BOTH, ("bwd", "grad", "mul", [X, X], 1, n)))):
         got = of_record.compare(step(log(*BOTH, *cpu)), step(record), SHAPE)
         assert got["expected"] == [] and len(got["differences"]) >= 5
@@ -338,7 +398,9 @@ def test_every_held_entry_is_an_entry_of_the_library_with_its_record_named():
     runs = of_record.held()
     assert set(runs) <= {p.stem for p in library.entries()}
     for h in runs.values():
-        assert set(h) - {"record_only", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert set(h) - {"record_only", "record_only_steps", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert all(set(s) == {"number", "why"} and isinstance(s["number"], int) and s["number"] >= 1
+                   for s in h.get("record_only_steps", []))
         assert "step" not in h or (set(h["step"]) == {"counted", "why"} and h["step"]["counted"] > of_record.STEPS)
         assert len(h["sha256"]) == 64 and h["art"].startswith("art:")
         assert "partial" not in h or as_math.parse(h["partial"])  # an ask `as_math` reads
@@ -408,16 +470,19 @@ def as_cuda(struct: dict, rows: int) -> dict:
     return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
-def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None):
+def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None,
+            alone=()):
     """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it, the
-    gradients `partial` says its attention backward asked for, the lines `record_only` of its program and the step
-    `step` says is compared."""
+    gradients `partial` says its attention backward asked for, the lines `record_only` of its program, its steps
+    `alone` of its program and the step `step` says is compared."""
     run, path = "r-made-up", "out/run/run.json"
     (root / "records" / run / "out" / "run").mkdir(parents=True)
     raw = json.dumps(rec).encode()
     (root / "records" / run / path).write_bytes(raw)
     lines = "".join(f'[[held."{entry}".record_only]]\n' + "".join(f"{k} = {json.dumps(v)}\n" for k, v in line.items())
                     for line in record_only)
+    lines += "".join(f'[[held."{entry}".record_only_steps]]\nnumber = {a["number"]}\nwhy = {json.dumps(a["why"])}\n'
+                     for a in alone)
     (root / "held.toml").write_text(f'[held."{entry}"]\nrun = "{run}"\nart = "art:{"0" * 64}"\npath = "{path}"\n'
                                     f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n'
                                     + (f'partial = "{partial}"\n' if partial else "")
@@ -584,3 +649,51 @@ def test_a_record_that_is_missing_or_another_file_is_refused_with_its_fetch_line
         of_record.main([*argv, str(records)])
     with pytest.raises(SystemExit, match="held.toml holds b to no run"):
         of_record.main([str(write_config(tmp_path / "b.toml")), *argv[1:], str(records)])
+
+
+def test_the_steps_of_the_records_program_alone_are_named_by_its_entry_and_left_out_of_its_steps(tmp_path, capsys,
+                                                                                                  monkeypatch):
+    """A record whose program took a forward-only step before training and one after (a probe of the model): with both
+    named, the record's steps less them are the config's and the entry is equal, its verdict saying how many are named
+    and their tokens. A forward-only step the entry doesn't name is a difference, and so is a named step that trains."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    mine = count()
+    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    n, why = cfg.budget["steps"], "a probe of the model's loss, forward only"
+    probe = {"updated": [], "log": [["fwd", "theta", "matmul", json.dumps([[CTX, D], [D, D]]), 1, CTX * D * D]]}
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest},
+           "structures": dict(mine["structures"]) | {"probe": probe},
+           "steps": [{"struct": "probe", "tokens": 4 * CTX}, *[{"struct": "s"}] * n, {"struct": "probe", "tokens": CTX}],
+           "checkpoints": [{"format": "full", "e_bytes": 20}]}
+
+    def compare(root, alone) -> tuple[int, str]:
+        records, held = held_to(root, "a", rec, alone=[{"number": k, "why": why} for k in alone])
+        code = of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)])
+        return code, capsys.readouterr().out
+
+    code, out = compare(tmp_path / "both", [1, n + 2])
+    assert code == 0 and "DIFFERS" not in out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 2 named steps of the record's program "
+                          "alone, 5,120 tokens\n")
+    assert (f"  steps     {n}; the record's {n + 2} less 2 steps of its program's alone, 5,120 tokens, that "
+            f"of_record.toml names: step 1, {why}; step {n + 2}, {why}\n") in out
+    assert f"which {n} of its {n} steps have" in out and f"the record's full, 20 B after {n}\n" in out
+
+    code, out = compare(tmp_path / "unsaid", [1])
+    assert code == 1 and out.startswith("a, held to r-made-up (out/run/run.json): differs, 2 differences, 1 named "
+                                        "step of the record's program alone, 4,096 tokens\n")
+    assert (f"  DIFFERS   the record's 1 step {n + 2} with no backward, which of_record.toml doesn't name: name each in "
+            "the entry's `record_only_steps` with a `why`, or find why the record's program takes it\n") in out
+    assert f"  DIFFERS   the steps: the config's {n}, the record's {n + 1}, its {n + 2} less the 1 named\n" in out
+
+    code, out = compare(tmp_path / "trains", [1, 2, n + 2])
+    assert code == 1 and out.startswith("a, held to r-made-up (out/run/run.json): differs, 1 difference, 2 named "
+                                        "steps of the record's program alone, 5,120 tokens\n")
+    assert ("  DIFFERS   of_record.toml names the record's step 2 as its program's alone, and it has a backward: a step "
+            "that trains is the run's\n") in out
+
+    code, out = compare(tmp_path / "beyond", [1, n + 2, n + 3])
+    assert code == 1 and (f"  DIFFERS   of_record.toml names the record's step {n + 3} as its program's alone, and the "
+                          f"record has {n + 2} steps\n") in out

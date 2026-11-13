@@ -63,3 +63,24 @@ def pack_bits(idx: torch.Tensor, bits: int) -> torch.Tensor:
 def unpack_bits(b: torch.Tensor, bits: int, count: int) -> torch.Tensor:
     flat = ((b.to(torch.int64)[:, None] >> torch.arange(8, dtype=torch.int64)) & 1).reshape(-1)[: count * bits]
     return (flat.reshape(count, bits) << torch.arange(bits, dtype=torch.int64)).sum(1)
+
+
+def pack_codes(codes: torch.Tensor, bits: int) -> torch.Tensor:
+    """`pack_bits` row by row on the codes' own device: each row of the last dimension, integers below 2**bits, as
+    `bits` bytes for every eight of them (uint8), the last dimension `bits` / 8 bytes an entry."""
+    if not 1 <= bits <= 8 or codes.shape[-1] % 8:
+        raise ValueError(f"pack_codes: {bits} bits over a last dimension of {codes.shape[-1]}: bits is 1 to 8 and the "
+                         "last dimension a multiple of 8, so that each row is whole bytes")
+    lanes, octets = (torch.arange(n, device=codes.device, dtype=torch.int64) for n in (8, bits))
+    word = (codes.to(torch.int64).reshape(*codes.shape[:-1], -1, 8) << (bits * lanes)).sum(-1)
+    return ((word.unsqueeze(-1) >> (8 * octets)) & 255).to(torch.uint8).reshape(*codes.shape[:-1], -1)
+
+
+def unpack_codes(packed: torch.Tensor, bits: int) -> torch.Tensor:
+    """`pack_codes`'s inverse: each row's integers (int64), eight for every `bits` bytes."""
+    if not 1 <= bits <= 8 or packed.shape[-1] % bits:
+        raise ValueError(f"unpack_codes: {bits} bits over a last dimension of {packed.shape[-1]} bytes: bits is 1 to "
+                         "8 and the last dimension a multiple of it")
+    lanes, octets = (torch.arange(n, device=packed.device, dtype=torch.int64) for n in (8, bits))
+    word = (packed.to(torch.int64).reshape(*packed.shape[:-1], -1, bits) << (8 * octets)).sum(-1)
+    return ((word.unsqueeze(-1) >> (bits * lanes)) & (2 ** bits - 1)).reshape(*packed.shape[:-1], -1)

@@ -163,6 +163,8 @@ LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha"
 #: the tiny start's one block grown to three, the two copies of it with their output projections zero, trained whole
 GROW = {"depth": 3, "lr": 1e-2, "adam_lr": 2e-3, "embed_lr": 3e-3, "weight_decay": 0.05, "warmup": 1,
         "micro_batches": 2}
+#: the tiny start grown by two top blocks, trained whole while the top's output crosses as a code
+TOPCODE = {"grow": 2, "lr": 1e-2, "norm_lr": 2e-3, "weight_decay": 0.05, "warmup": 1, "micro_batches": 2}
 #: the whole model, one block, LoRA's adapters, one block's average, one block under Muon in two micro-batches, and
 #: the model grown by copies of its block
 JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},

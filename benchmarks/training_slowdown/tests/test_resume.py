@@ -11,7 +11,7 @@ import signal
 
 import pytest
 import torch
-from synthetic import GROW, SCORE_REL, tiny_registry, write_config
+from synthetic import GROW, SCORE_REL, TOPCODE, tiny_registry, write_config
 
 from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data
@@ -211,6 +211,52 @@ def test_a_stopped_job_of_a_grown_model_starts_from_its_map_again_and_continues_
     both = run.joined(run.joined(None, cut["record"]), rest)
     assert both["invalid"] == [] and both["origin"] == whole["origin"]
     assert_continues(whole, both, at=2)
+
+
+def test_a_stopped_job_of_topcode_draws_its_codes_rounding_again_and_continues_as_the_unbroken_job(tmp_path):
+    """The harness alone, in one process. A job of route `topcode` rounds its gradient's code stochastically from
+    torch's global generator and holds R, built once, outside the state dict; the segment that continues builds R
+    again, puts the kept state and generators back, and ends at the unbroken job's outputs bit for bit."""
+    reg = tiny_registry(tmp_path / "reg")
+    budget = BUDGET | {"batch": 4}
+    tiny = tmp_path, reg, write_config(tmp_path / "a.toml", route="topcode", budget=budget, dials=TOPCODE)
+    whole = run.joined(None, segment(tiny))
+    assert whole["invalid"] == [] and whole["origin"]["blocks"] == 3
+    assert len({cp["output_sha256"] for cp in whole["checkpoints"]}) == 4
+    cut = segment(tiny, stop_after=1)
+    assert sorted(cut["state"]["buffers"]) == ["cos", "rotation", "sin"]
+    rest = segment(tiny, {"step": 2}, cut["state"])
+    assert_continues(whole, run.joined(run.joined(None, cut["record"]), rest), at=2)
+
+
+@pytest.mark.slow
+def test_a_stopped_job_of_topcode_with_its_trace_continues_and_writes_the_unbroken_jobs_record(tmp_path, monkeypatch):
+    """The job as a node runs it, twice, each two processes, so slow: what the quick test above doesn't reach is the
+    trace each job takes after its last step and the generators on their way through the job's own process. An
+    unbroken job, and the same job told to stop (SIGTERM) once it has kept its state after step 1 and run again:
+    every step's count, every checkpoint's state bit for bit and the trace are the unbroken job's. The route's
+    process runs torch on one thread, as the suite's does (`conftest.one_thread`): on several, torch's CPU attention
+    in bf16 now and then gives another value for one tile of the same input, and two jobs then differ."""
+    monkeypatch.setenv("OMP_NUM_THREADS", "1")
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml", route="topcode", budget=BUDGET | {"batch": 4}, dials=TOPCODE)
+
+    def job(out, state):
+        return run.main(["--config", path, "--seed", 0, "--split", "final", "--out", tmp_path / out, "--starts", reg,
+                         "--device", "cpu", "--state", tmp_path / state])
+
+    assert job("whole", "state-whole") == 0
+    whole = json.loads((tmp_path / "whole" / "run.json").read_text())
+    assert whole["invalid"] == [] and "failed" not in whole["trace"] and "refused" not in whole["trace"]
+    with pytest.MonkeyPatch.context() as stopping:
+        stop_once_kept(stopping, 1)
+        assert job("cut", "state") == run.STOPPED
+    assert job("cut", "state") == 0
+    cut = json.loads((tmp_path / "cut" / "run.json").read_text())
+    assert cut["invalid"] == [] and cut["trace"] == whole["trace"]
+    assert_continues(whole, cut, at=2, keyed=False)
+    states = [(cp["output_sha256"], cp["e_sha256"]) for cp in whole["checkpoints"]]
+    assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
 
 
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():

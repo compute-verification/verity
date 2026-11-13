@@ -10,9 +10,10 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant, SparseTernary
+from training_slowdown.codecs.wire import pack_bits, pack_codes, unpack_codes
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
-from training_slowdown.routes import ema, grow, qat, subset
+from training_slowdown.routes import ema, grow, qat, subset, topcode
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -170,6 +171,157 @@ def test_an_origin_may_stack_its_copies_above_the_starts_blocks():
         assert torch.equal(model(rows), theta(rows))
     assert torch.equal(model.blocks[blocks].wq.weight, theta.blocks[0].wq.weight)
     assert not model.blocks[blocks].wo.weight.any() and not model.blocks[blocks + n - 1].w_down.weight.any()
+
+
+def test_topcodes_new_blocks_stack_copies_above_the_starts_with_their_output_projections_zero():
+    """8 blocks grown by 10 new top blocks: new block i, at 8 + i, copies the start's block ⌊8i/10⌋ with `wo` and
+    `w_down` zero, and the start's blocks and every tensor outside the blocks keep their own. No new block is refused
+    by name."""
+    dials = topcode.DIALS | {"grow": 10}
+    shape = SHAPE | {"n_layer": 8}
+    assert topcode.sources(shape, dials) == [0, 0, 1, 2, 3, 4, 4, 5, 6, 7]
+    origin = topcode.origin(shape, dials)
+    assert sorted({int(k.split(".")[1]) for k in origin}) == list(range(8, 18))
+    assert {k for k, v in origin.items() if v is None} == {f"blocks.{j}.{t}" for j in range(8, 18)
+                                                            for t in topcode.ZEROED}
+    assert origin["blocks.8.wq.weight"] == "blocks.0.wq.weight" and origin["blocks.17.w_up.weight"] == (
+        "blocks.7.w_up.weight") and origin["blocks.13.attn_norm"] == "blocks.4.attn_norm"
+    with pytest.raises(ValueError, match="grow is the new top blocks, at least 1"):
+        topcode.plan(topcode.DIALS)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
+def test_topcodes_grown_model_gives_the_starts_logits_bit_for_bit_at_its_first_step(dtype):
+    """Each new block adds an exact zero to the residual stream, its two output projections being zero, so the grown
+    model's start, built from θ by `origin` as the harness builds it, gives θ's logits bit for bit, in float32 and
+    under bf16 autocast, at one new block and at more new blocks than the start has."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE)
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    for n in (1, 2 * SHAPE["n_layer"] + 1):
+        dials = topcode.DIALS | {"grow": n}
+        model, _ = topcode.build(SHAPE, dials)
+        model.load_state_dict(run.start_state(theta.state_dict(), model.state_dict(), topcode.origin(SHAPE, dials)))
+        with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16, enabled=dtype == torch.bfloat16):
+            assert torch.equal(model(rows), theta(rows)), n
+
+
+def test_topcodes_rotation_is_orthogonal_and_the_same_at_every_build():
+    """R is orthogonal to float32's rounding, and `build` makes the same R bit for bit wherever it runs, from the
+    shape and the dials alone: the seed is 1000 plus the grown depth, so another depth has other signs. It is a buffer
+    outside the state dict, which neither E nor the output holds."""
+    dials = topcode.DIALS | {"grow": 2}
+    (a, _), (b, _) = topcode.build(SHAPE, dials), topcode.build(SHAPE, dials)
+    r = a.rotation
+    assert r.shape == (SHAPE["d_model"],) * 2 and torch.equal(r, b.rotation) and "rotation" not in a.state_dict()
+    assert torch.allclose(r @ r.T, torch.eye(len(r)), rtol=0, atol=1e-6)
+    assert torch.equal(r, topcode.rotation(SHAPE["d_model"], topcode.SEED + SHAPE["n_layer"] + 2))
+    other = topcode.build(SHAPE, dials | {"grow": 3})[0].rotation
+    assert torch.equal(other.abs(), r.abs()) and not torch.equal(other, r)
+
+
+@pytest.mark.parametrize("bits", range(1, 9))
+def test_codes_cross_as_bytes_row_by_row_in_pack_bits_layout_and_come_back(bits):
+    """`pack_codes` lays each row out as `pack_bits` does, `bits` bytes for every eight codes, and `unpack_codes`
+    gives the codes back; a row that isn't whole bytes, or a width past a byte, is refused."""
+    codes = torch.randint(0, 2 ** bits, (3, 5, 24), generator=torch.Generator().manual_seed(bits))
+    packed = pack_codes(codes, bits)
+    assert packed.dtype == torch.uint8 and packed.shape == (3, 5, 3 * bits)
+    assert torch.equal(packed.reshape(-1), pack_bits(codes.reshape(-1), bits))
+    assert torch.equal(unpack_codes(packed, bits), codes)
+    with pytest.raises(ValueError, match="the last dimension a multiple of 8"):
+        pack_codes(codes[..., :20], bits)
+    with pytest.raises(ValueError, match="bits is 1 to 8"):
+        pack_codes(codes, 9)
+
+
+@pytest.mark.parametrize("bits", topcode.FORWARD_BITS)
+def test_topcodes_forward_code_survives_its_round_trip_through_bytes(bits):
+    """Each token's coordinates rounded on 2^bits levels over its largest magnitude: the codes that cross as bytes
+    come back as they went, so the value is the level's own, the largest magnitudes reach the top and the bottom
+    level, and no coordinate is more than a step from its level."""
+    z = torch.randn(4, 7, 64, generator=torch.Generator().manual_seed(bits)) * torch.linspace(0.1, 10, 64)
+    got = topcode.nearest(z, bits)
+    step = (z.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)).to(torch.bfloat16).float()
+    half = 2 ** (bits - 1)
+    assert torch.equal(got, (torch.floor(z / step).clamp(-half, half - 1) + 0.5) * step)
+    levels = got / step - 0.5
+    assert torch.equal(levels, levels.round()) and set(levels.unique().tolist()) <= set(range(-half, half))
+    assert levels.amin().item() == -half and levels.amax().item() == half - 1
+    assert ((got - z).abs() <= step).all()
+
+
+def test_topcodes_backward_rounds_the_gradient_stochastically_on_its_grid_and_unbiased():
+    """The gradient's code: each coordinate on one of 2^bits − 1 steps from −top to top, top the token's largest
+    magnitude rounded up a bf16 unit, and on average the coordinate itself; the draws are torch's global generator's,
+    so a seed gives them again."""
+    g = torch.randn(2, 3, 16, generator=torch.Generator().manual_seed(0))
+    bits = 3
+    top = (g.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float()
+    step = 2 * top / (2 ** bits - 1)
+    torch.manual_seed(5)
+    draws = torch.stack([topcode.stochastic(g, bits) for _ in range(4000)])
+    torch.manual_seed(5)
+    assert torch.equal(topcode.stochastic(g, bits), draws[0])
+    j = (draws + top) / step
+    assert torch.allclose(j, j.round(), rtol=0, atol=1e-4) and j.round().min() >= 0 and j.round().max() <= 7
+    assert torch.allclose(draws.mean(0), g, rtol=0, atol=4 * step.max().item() / 4000 ** 0.5)
+
+
+def test_topcodes_step_passes_the_code_both_ways_through_one_autograd_function():
+    """The value the final norm reads is the forward's code of the top block's output over its root mean square, and
+    the gradient the blocks below read is the backward's code of the gradient at the cut, in R's basis both ways."""
+    torch.manual_seed(0)
+    model, _ = topcode.build(SHAPE, topcode.DIALS | {"grow": 1})
+    x = torch.randn(2, 5, SHAPE["d_model"], requires_grad=True)
+    up = torch.randn(2, 5, SHAPE["d_model"])
+    r = model.rotation
+    y = topcode.Code.apply(topcode.unit(x), r, 4, 3)
+    assert torch.equal(y, topcode.nearest(topcode.unit(x) @ r.T, 4) @ r)
+    torch.manual_seed(1)
+    y.backward(up)
+    torch.manual_seed(1)
+    coded = topcode.stochastic(up @ r.T, 3) @ r
+    want, = torch.autograd.grad(topcode.unit(x), x, coded)
+    assert torch.equal(x.grad, want)
+
+
+def test_topcode_trains_every_matrix_of_the_blocks_under_muon_and_every_gain_under_adamw_the_embedding_frozen():
+    """The grown model's every matrix of the blocks under Muon at `lr` with its decay, its scalar-normed Newton-Schulz
+    (no stack); its gains, the final norm's among them, at `norm_lr` under one undecayed fused AdamW; the embedding
+    frozen."""
+    dials = topcode.DIALS | {"grow": 2, "lr": 0.01, "norm_lr": 0.002, "weight_decay": 0.05}
+    model, (muon, adamw) = topcode.build(SHAPE, dials)
+    blocks = range(SHAPE["n_layer"] + 2)
+    assert len(model.blocks) == 3 and not model.embed.requires_grad and "stack" not in muon.defaults
+    gains = ["norm"] + [f"blocks.{j}.{n}" for j in blocks for n in ("attn_norm", "mlp_norm")]
+    matrices = [f"blocks.{j}.{w}.weight" for j in blocks for w in ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")]
+    assert [(r, sorted(n)) for r, n in grouped(model, muon)] == [(0.01, sorted(matrices))]
+    assert muon.defaults["weight_decay"] == 0.05
+    assert [(r, sorted(n)) for r, n in grouped(model, adamw)] == [(0.002, sorted(gains))]
+    assert adamw.defaults["fused"] is True and adamw.defaults["weight_decay"] == 0.0
+    assert adamw.defaults["betas"] == (0.9, 0.95)
+    for bad, says in (({"forward_bits": 3}, "forward_bits is 4 to 8"),
+                      ({"backward_bits": 17}, "backward_bits 1 to 16")):
+        with pytest.raises(ValueError, match=says):
+            topcode.plan(dials | bad)
+
+
+@pytest.mark.parametrize("bits", [4, 8])
+def test_topcodes_trace_sees_the_forward_code_as_bytes_at_the_cut(tmp_path, bits):
+    """What a job's trace sees at the cut: the forward's codes as a uint8 plane, `bits` bytes for every eight
+    coordinates, beside each token's step in bf16, so the narrowest forward cut is d · bits + 16 bits a token; the
+    step is refused nothing, reads no token's data and carries no Python number. Two rows a forward, as every
+    config has more than one."""
+    dials = {"grow": 2, "forward_bits": bits, "warmup": 1, "micro_batches": 2}
+    cfg = config.load(write_config(tmp_path / "a.toml", route="topcode", budget={"steps": 3, "batch": 4},
+                                   dials=dials), starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route("topcode")
+    torch.manual_seed(0)
+    model, optimizers = route.build(cfg.start.shape, cfg.dials)
+    tr = trace_step(cfg, route, model, optimizers, "cpu")
+    assert [tr.get(k) for k in ("refused", "data_dependent", "carried_scalars")] == [None, [], []]
+    assert tr["circuit"]["a_bits"] == SHAPE["d_model"] * bits + 16
 
 
 def test_muon_takes_the_matrices_and_adamw_the_gains():
