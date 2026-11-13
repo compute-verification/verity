@@ -7927,6 +7927,77 @@
    "type_hash": "e824841bab9a5e2fabbd9e4bf6fd13362a8d2c96b6dc3100f09cee5da41e417d",
    "unfolded_hash": "1871ba9848ff5cae772c627b9d3d5550364c9422dca39faae76161205bc03fcd"
   },
+  "Properties.Registration.checks": {
+   "owner": "@proofs",
+   "signature": ["Properties.Registration.checks : Properties.Registration.Checks"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6ccfe513aaa8b6ebcca0c14faf12a9701743ce2cf6628daa6f82bbd356ed2d2c",
+   "unfolded_hash": "3271faf37795507e9be4a7fdaaf577e384a89ffb3c995b3a1b628cb9cfad52bf"
+  },
+  "Properties.Registration.checks_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Registration.checks_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Registration.check Properties.Site.witnessAuditor Core.Site.Registration.Composite.remote",
+    "            Properties.Registration.honestLog).toOption.isSome",
+    "      Bool.true)",
+    "    (Verity.Registration.Valid",
+    "      (Properties.Registration.digests",
+    "        (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.honestLog))",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.honestLog))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Verity.Site.Boundary"],
+    "reads": []
+   },
+   "type_hash": "c59c0291effe32d3a7ff8ee7181aa1bb9c8ebae726f14f4381e973ee49d126a2"
+  },
+  "Properties.Registration.checks_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Registration.checks_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Option.map (fun s => Properties.Registration.view Properties.Registration.noGatesBuilder s.view)",
+    "        (Properties.Registration.acceptAllCheck Core.Site.Registration.Composite.remote",
+    "            Properties.Registration.twiceLog).toOption)",
+    "      (ite",
+    "        (Verity.Registration.Valid",
+    "          (Properties.Registration.digests",
+    "            (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))",
+    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))",
+    "        (Option.some",
+    "          (Verity.Registration.view",
+    "            (Properties.Registration.digests",
+    "              (Properties.Registration.names Properties.Registration.noGatesBuilder Properties.Registration.twiceLog))",
+    "            (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "            (Properties.Registration.log Properties.Registration.noGatesBuilder Properties.Registration.twiceLog)))",
+    "        Option.none))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "08e326f1c0fe809eab2092e2ab253b172989bd9d6f2c504bf8fbb657f0290daa"
+  },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "owner": "@soundness",
    "signature": ["Properties.Remote.SecurityProofs.acceptComplies : Properties.Remote.AcceptComplies"],
@@ -9388,15 +9459,6 @@
    },
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5",
    "unfolded_hash": "d54ce5e55b0eb1169fa600b83cb1082b8a79773f6cbacd24e520c08181762100"
-  },
-  "Properties.Registration.checks": {
-   "owner": "@proofs"
-  },
-  "Properties.Registration.checks_honest": {
-   "owner": "@proofs"
-  },
-  "Properties.Registration.checks_nontrivial": {
-   "owner": "@proofs"
   },
   "Properties.Site.checks": {
    "owner": "@lean",
@@ -14736,8 +14798,72 @@
     "Core.Record.unsigned": "5a138ffdf24fa411b313c2408db5acec51624d9423645c91eb4c5a61fce3be34"
    }
   },
+  "CoreProtocol.Registration": {
+   "digest": "223f00908686db2cb332787bce2bb0ab115dab24832fd27984817a3501693ccb",
+   "definitions": {
+    "Core.Registration.Builder": "b438270d457108e29d32015e3bb5798840d881bc6c092de17bc8d0beee87eae3",
+    "Core.Registration.Builder.advice": "f74254652f83808930212e175d2a7a99b956ab3f2ac512f52cf841bdc8a17126",
+    "Core.Registration.Builder.cap": "cd4aac849c356d2d9e8d02a158a4be1265f89f801ed7eedd19861dfb9f90db5f",
+    "Core.Registration.Builder.digest": "0bae5d774ba7a57e27e6e1ea2ad806054e91c64c657e44224784b591c61bcfd7",
+    "Core.Registration.DECLARATION": "7dc13c09bf066b7721ed8c4437ff968c3522ea338e0f7bd792a2746c44d67d6f",
+    "Core.Registration.Declared": "7ff5aa386e031efa91da0e9037d92cfee5919ecfa3dcaf2a04c30794b1d7e8a5",
+    "Core.Registration.Declared.blocks": "1d6047e10f9a71990ec320e9d1f75535d3568373d61b6e39520083db45553410",
+    "Core.Registration.Declared.day": "0cc7f7a594504923dab190766b618e3bba29ed8e4f17c9c8dcb8b2fa823a7196",
+    "Core.Registration.Declared.program": "3310e57456b43d484a09925861914ae2aeb1c0c5c5277ac3ca48af8294396024",
+    "Core.Registration.Entry": "67898b311858f535020857555f9632c2967bba9db2820717840e4c1f154c1efd",
+    "Core.Registration.Entry.casesOn": "396bd912461acb1873f884283a71751645d4d3afecff67da35c87e8dc82bfbbb",
+    "Core.Registration.Entry.declaration": "da5ca7f4b10722f1038c5ee33ea2fe813aa1a578a17a6059897bcc91fd3bbd00",
+    "Core.Registration.Entry.digest": "c5ce161a599ecb55198dd90322d3c4303bc7843a2a38fba8f73b8c476203088a",
+    "Core.Registration.Entry.format": "c25b124538ed78a31e11e390fb3a285c31cf4c399c07b1c3c735dfb9fd0492f0",
+    "Core.Registration.Entry.information": "97dc11e7f61876fc8e6f4eedcd296f872c3b79974b4dc88a6d85d4b274e52772",
+    "Core.Registration.Entry.rec": "3eef27631945e3d906fc3ec1ded0400c55b37440067d709831478ccfcaba4dd4",
+    "Core.Registration.Entry.refusal": "58b4c9bd595a734fb3536e010b1bc33d96c673cee731de3c2550a1a8513551f3",
+    "Core.Registration.Entry.site": "f13d3121db7fa3cdb05fab74b091d8cdc6c7b29fd128075f15fb24aa4ec0db9e",
+    "Core.Registration.Entry.toJson": "e9796b938ee38d34ba6826305226a29a7e2d0bab532a458f1b6cdc8a7f494bb7",
+    "Core.Registration.INFORMATION": "5913113794a4dd3d827660aea721dbe57210ac46c71a41bae91c3e673afaf68f",
+    "Core.Registration.Item": "166780dabd2d85f085dd3b0f3942cd1bd5a8a8dead1dc1ffc19dc54ac26f6b10",
+    "Core.Registration.Item.builder": "43a0f0607c7fb38a256211126c615217fce3e0046a36d740650919893d862407",
+    "Core.Registration.Item.casesOn": "105d778467b439cbcf6ced22cdb6b73340f3ccfe1d9468df5166d8e773fa1e01",
+    "Core.Registration.Item.ctorIdx": "9fe59645d7ccff72efd1d74bcb66faeea48eac7c2a6dc8448429dbafea8d2174",
+    "Core.Registration.Item.key": "ca40a73daffb904047b12d1cec0fa025d334838defea9b3ba6b5ff7051dd07fc",
+    "Core.Registration.Item.rec": "e74068072da5b27d44946060a41a656c54a1777789387109ccbe37e4f2b9c1d0",
+    "Core.Registration.Item.theta": "a2af89e77f9ab826722ab0a2acd06554dbb2c49955f85a6fc0cb46a9e1c0ce00",
+    "Core.Registration.Item.toJson": "fc7edf1f6c357927d2714ba86646cce4934d9c05dd09e75dd3d4e1ed0e409edf",
+    "Core.Registration.Log": "402a1a71eebce7ad991212bebd4ad58ce9995e744d095b2e90a3e39c09968907",
+    "Core.Registration.Refusal": "59c7dbcfe6903c38ec16cfbb3cfa33aa8d3834d772504d82a3e6765cf5d08e89",
+    "Core.Registration.Refusal.duplicateDeclaration": "9d3868e404bab83defecd1a8e072be2f461734d095863c792c140443834944c7",
+    "Core.Registration.Refusal.duplicateInformation": "ab7cd34be5df8153f12bf449cab92490a6e74c5b6a65f35eb8d2e2c50bd94579",
+    "Core.Registration.Refusal.site": "200982366ff3974f6f0bcea5135f5079d1e14662477b6a0515680a83447d0efd",
+    "Core.Registration.State": "2d8fd8d50754babf0e75819e218ba41dd38b380ace69899f0420deb60cb06d8a",
+    "Core.Registration.State.add": "495a148bafdb55978b16ad7418f7fe1d701226f5ee53f1145d071874be41d2e6",
+    "Core.Registration.State.declared": "4237e221bd744c464f2dd7ccce717565ef4fc73b429104461324c83edb425a1c",
+    "Core.Registration.State.empty": "941b8fa4297561804ef6ed92bcbb3ed1aa9af44f5d87f837a114bd0b5649031a",
+    "Core.Registration.State.entries": "8f3f58ca5418a1748784388fdd6722448ba0fcc2c9ae71d75b016dd9314db228",
+    "Core.Registration.State.head": "5db646aaec271ddc9ad9cf609645507037fc43cae112e9d34954d519008cd39c",
+    "Core.Registration.State.items": "9a7d1542b4787cc8627284715a098bbd9a5e3fd5efd3548c6bbb360b9c9c54ca",
+    "Core.Registration.State.site": "770283e16cccef23aca8c788800cf04e4b92080ec0de4f8b0748ef984d2c1754",
+    "Core.Registration.State.view": "ca18a5c08b4c88a7e138e6f68fa9552decda6e6360df8e30a8bc300660e3f289",
+    "Core.Registration.Theta": "c549edfc5e7d8aa77f303420eb748e9b55ed8c7586067e587d96f7252dd712c5",
+    "Core.Registration.Theta.checkpoint": "2baec0ea8820874a92007737f21bf77f027ced4e3fc611947ea587be96250f93",
+    "Core.Registration.Theta.domain": "9380954b49b72aa7d6706d095c8ce2f6aeacba041066227f032f647f67cd3db5",
+    "Core.Registration.Theta.leaves": "e307a0412a60233ff2fdf2f249352e66ec4724de8a219cb8a2b2ab557dcc0933",
+    "Core.Registration.Theta.root": "0c830e49fbf0650769d2ddd6f5105da3e10ca3ffc88a450b2507809ca81249ca",
+    "Core.Registration.Theta.value": "43a246bc870be1e768e0e0b31b7a6b80057ecfab72db57a8beee7595a43f77cc",
+    "Core.Registration.Theta.wordBits": "7bb2480febdc2eb7979b141922feef388fd25479b8110b81f17aae5b4ac4d1a9",
+    "Core.Registration.Theta.words": "c995fb3267d51ee25c2116f63d6f6126d78c56d771a532763d342d9d540af166",
+    "Core.Registration.View": "9b5c1e85ee07ed5b420e55913da6f165af287b56545f304453dcded8726aab8e",
+    "Core.Registration.View.builder": "4ef352721bd0f7987e2f3f5aef307ef0cacb3d72151f77c1844982f1edeba66d",
+    "Core.Registration.View.declarations": "44c20303020713aff409323584a430f30ab692a9c32c2b691db753fb893cd9cb",
+    "Core.Registration.View.head": "aa33e30e252adbe7b94995382ff6567ede6dd600fb9b022ddb925381f4feb1f9",
+    "Core.Registration.View.site": "83b5bb629d6cfe862feab1a3c74bfe2bb7728cfaa64427fcecd7e414a8801f9f",
+    "Core.Registration.View.theta": "a2fe63c155e18065eeb2a992abbd8deaf22aa7e9919f6e9517a24a4cd3d96d18",
+    "Core.Registration.check": "639410d1c1d65e3103503e0e8101e07e79fdfedaa96af64ae51f02f6e006ee1c",
+    "Core.Registration.genesis": "d3af23f3679ac3f9fa7f227afafc1bdf32f15223c4df8b3ec6c03db9d7681efe",
+    "Core.Registration.nodup": "f1d65169b4b2d8694339904dfe6992fa7ac1600ece5ed19c0175040265904bf0"
+   }
+  },
   "CoreProtocol.Site": {
-   "digest": "42437a31ed27b7ff7fd4f104157b4007abe4e6fa955ac3bd9e51b3e4dda808bd",
+   "digest": "0b15ce517bd10767d122dd41ac1a135f27daa6d2d2d0f8b6aba01571a68aad56",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
     "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
@@ -14751,6 +14877,7 @@
     "Core.Site.DeviceFigures.instDecidableAccepted": "d82ab405eece2bc84cc94f569654a5e8161df14838b986288643060fc57b2036",
     "Core.Site.DeviceFigures.peakRate": "0140a67566472485bdf721c7005057b70dcefcfea9746002fd19e1841832fa92",
     "Core.Site.DeviceFigures.sku": "3d65eac9783e88c7c746f71f1fdd35de64e8c3639372d3a5db5a983b372ff697",
+    "Core.Site.DeviceFigures.toJson": "0d15d376f46903c665b0dca081e5065e1d6b374a0f0b7ed1e3e09cfafa241833",
     "Core.Site.Entry": "4e97b5176e20ee062afe5ea3202b8f59f37d9de5633665d886e2eed44474339a",
     "Core.Site.Entry.Capacity": "bba34cf27c6226633b340820391ee9bb0e13ff662ca97f2b9e7a887c79fb4020",
     "Core.Site.Entry.Covered": "a92c0c6b44a61b04631fd3c16594004a2c6cc10a0b648c6a8c2f6d1da72e5ce6",
@@ -14775,6 +14902,8 @@
     "Core.Site.Entry.refusal": "a1b86c227203fb2fe6b66c01c77eaa84bb1f0d0f6b0352eb3c902f183e2c6ad6",
     "Core.Site.Entry.sheets": "ef76fa2eb513b46590640bfbd4ef6e1377ab2cd882c9160ce32d19212c77be00",
     "Core.Site.Figure": "6a3f0eb2f71a62d1deb80c627804598e3c029f1e81e9fc76519f46eae0143b4b",
+    "Core.Site.Figure.toJson": "4a58ec02bfddd1d99bc331ff774a9d897cb7528e486563b84016acba9e4cd770",
+    "Core.Site.GENESIS": "21a5f8a02086e537b92e12d9d7486c4b3df3f2c711f9ecef023b9dee3ff59991",
     "Core.Site.Joins": "9861181c44f080a4ba9b8ee912f2f610102c3122abe9b992acd7057731a26d71",
     "Core.Site.Kind": "e5204e6064f27a1ff2f751666e07cccf8e703a26a3763df15d8de4270615b9d0",
     "Core.Site.Kind.auditor": "a4f774370a3ddfd0f1d3d666646adae6d2ffcb727255e0884c3ac049f539d345",
@@ -14786,6 +14915,7 @@
     "Core.Site.Kind.host": "27473062baf097271633f89a6469edac23d7f02346028551809fe2624afd683f",
     "Core.Site.Kind.links": "1273f117676c503e9d93cf0cb092373301a46302b217393833b9bde3860669d7",
     "Core.Site.Kind.memory": "64d2ae628cf0ede94a483142ed6e6d0b35a68e94693924b79e9435232ecf7548",
+    "Core.Site.Kind.name": "fd9d0a3be161581070957919d74bb9cd8e8edba02dfe9ff45215ab8f8776a39e",
     "Core.Site.Kind.outside": "58e3895edab1521b871cfbcc44ae62f1dc74ea93c983e41fdf387ace327bf637",
     "Core.Site.Kind.parents": "fe4f750810c5d43ca31b8b617f2e43d3d5ff14522d9bb558c44b5cbc9a998609",
     "Core.Site.Kind.rec": "c4f9a9e82e6028086c90f746393dd66548a06e015a6aa2843063bcd6c6c694b0",
@@ -14795,6 +14925,7 @@
     "Core.Site.Link.ends": "0b81172a53f374a3eb7e9ff4ab93825c22cbd1168add85c77c0669ad870011f1",
     "Core.Site.Link.id": "33802d901f3e1f186ca5d778089a4558a6f089162b26222ceafd4a3a5cf410fb",
     "Core.Site.Link.latency": "0c237e1764c2a89bf6f15a82d2f4cd3dc5f8769145dd96767cb3ca72c6f0fd91",
+    "Core.Site.Link.toJson": "f502b4cb497c047269861b13a17176cc3fc67c600e6f2cdc3f25ae9f63f7a255",
     "Core.Site.Link.β": "4761f72f0b30d60983146651e19444f35c9a92e18365638cdc2d69afdaa05864",
     "Core.Site.Loc": "b98d6e3985b2d9bb30398ecf9e575184d2cd8f21e7679c944a987b725a022708",
     "Core.Site.Loc.bytes": "6dd1ef1904e9f45e745eaff479f4a6de3917d6f9480f7196a5bc49b8634e53b2",
@@ -14805,9 +14936,11 @@
     "Core.Site.Loc.parent": "d60f05d23ca3a8af47134730ad81d130153bbe455bea8426ec7f8b8c0fc5c298",
     "Core.Site.Loc.sheet": "bcf5ec05902b0b2872b5b3afd3527cbc4ae11c153b6797c6117c2adc8c783326",
     "Core.Site.Loc.tier": "51d5ef935bcb18f10cc5d34871cc5bdd6b631ea3b9e1801798e5fcd5f0140a65",
+    "Core.Site.Loc.toJson": "1969ef419785016bfda5edad35f729035c54bda74faf7a583df7366bb5c722db",
     "Core.Site.OperandClass": "57c86e0c8e04eea7460bf69b23cec0ebbf5768da34b406cd6fd3d1f44c5ab205",
     "Core.Site.OperandClass.all": "fcc22e56f90f33836fd11ae15928c9a35b4a359919f6bf7adb3d6d311ec0f2ae",
     "Core.Site.OperandClass.casesOn": "c44aad1f96098ce9335e22d20a65d121d280a2bde6b6f074051744ae5850ddc2",
+    "Core.Site.OperandClass.name": "404f0840dee50e48ca5482babc6e1325734e63c926d404af28065507821f33ea",
     "Core.Site.OperandClass.rec": "25265bc98243da6771e56909f0eee97bdb8ab4117d5e618fc1d14bceb1f0e737",
     "Core.Site.OperandClass.uniformS2": "b6616241adf973e07e752961949df671f64d16e0071549ae6f22d3b2084b93c0",
     "Core.Site.OperandClass.uniformS8": "046a984728500d37f93cb0d82384c8fa40d33333d3b54ccb8e27e5b69ed6a3a6",
@@ -14818,6 +14951,7 @@
     "Core.Site.Owner.auditor": "48fa5bdc5ded6ed6ef455c18af5fa6871ceea92af82822b0b0b89b522a81ea85",
     "Core.Site.Owner.casesOn": "cc31676ebe1655a83a4110f5ce5aba0bc41519361e18e5d132a5e9bb88a71580",
     "Core.Site.Owner.ctorIdx": "27d478cb882d78b0ca51ea7dd7be94cfae1057cdad6c0ca4aa601566ae80d33e",
+    "Core.Site.Owner.name": "70fe6e3e89cba90545a037c8226a920731053e2925c2fa3f79350d35ef3761cd",
     "Core.Site.Owner.prover": "ab82ff60ce72645461c38244f1ae4cdfc1fdec3abc8ceaa7c194239d7360974a",
     "Core.Site.Owner.rec": "0604ad13c05d690647c828ed6500a9771bad9459b501615bc0316616ba627edf",
     "Core.Site.Registration": "c04323afda3cf5edd91807b72cb9788cea3f51c2739e7c44efb57938f978b9b3",
@@ -14829,6 +14963,7 @@
     "Core.Site.Registration.Composite": "2e1b980aa1cd8d9ea32c8bf9e11bf6ddfa895b2afe722ea1d337f56f97699c7b",
     "Core.Site.Registration.Composite.casesOn": "306d9c222f0c04fafee53b7e18f37f277502b2c2f1c72bb2a0bf583fd8354b2c",
     "Core.Site.Registration.Composite.ctorIdx": "246b1561575a4b7554e221d6dfb381f550da655ec49133d179c661127cd2aa14",
+    "Core.Site.Registration.Composite.name": "61aea423ec603ed9389ac1ca5252306006d730d8dc833da30ae1a0e4cccf5555",
     "Core.Site.Registration.Composite.onsite": "453704984c647f9a9c46228352560528f28cbdc204381693f4ab8e0d5cdfde75",
     "Core.Site.Registration.Composite.rec": "a4ec01098e93079812a006e03423f1228b937477f586ef23102ecc801369b7d9",
     "Core.Site.Registration.Composite.remote": "9a14ca5183140b67e7444f1c54d48eff099dc6d25a51594773a2b5c905d0912b",
@@ -14844,6 +14979,7 @@
     "Core.Site.Registration.Entry.rec": "5ecb870d0161f83864804cc40f502f0a2919b2b675f9db73085b2702e9675741",
     "Core.Site.Registration.Entry.refusal": "6fa193534a45d5b23acbc3a0046f084baf7f0f88a5188c46b2536a4efec60efa",
     "Core.Site.Registration.Entry.site": "7ec35a62a78063415c8310d24517c0c1b5942baa0c946f9d11881cc97156732c",
+    "Core.Site.Registration.Entry.toJson": "7f2e5c0b3c067db83e4a913221284c7b808fa587e5f3f6aac24663969b875007",
     "Core.Site.Registration.Refusal": "6a9b2a8164083eb44df06404c4618c5499ba524bc4748fb8cc2f61f804084f7c",
     "Core.Site.Registration.Refusal.capacity": "54fd170e680204ea3051b1a89cff800b2e44016a96e5d3f1e748515f9315ad9f",
     "Core.Site.Registration.Refusal.casesOn": "499bf5def62a825361935bf6422e9aa7ab6b5dc2669e61f00bafb56d0298bf9f",
@@ -14860,17 +14996,22 @@
     "Core.Site.Registration.check": "83abccc2c75db1d1420894c1ffb9d276ded050362080c2741f1810b6bc40a4a5",
     "Core.Site.Registration.check.go": "2fce0bc715f338f769d915724ebe93bc7fd316fdd4769378985a86c724a704a5",
     "Core.Site.Registration.instDecidableEqComposite": "2942366c16fb0a63de34c5fbccf7788d869f6a6bdb5758114d6b019fcd069fcc",
+    "Core.Site.Registration.sha512": "701575833fcb6b180991280675c02d26900c592dbe57ef29a5664dc19c5e2ad9",
+    "Core.Site.SHEET": "4809bb0da2b4efb0c5bf1980b5e1263505a7b7f2d5dfb441f2001279e867b489",
+    "Core.Site.SITE": "5ccfaea5a8ed5fc98e3bc9e7ed462aa3698f5e9c18f716328c01b7ee4034b0e5",
     "Core.Site.Sheet": "ecb222e8e6e5298832a9b49d7d5d44df2565806b28c750ecb0341afb4a331fd8",
     "Core.Site.Sheet.bw": "111bc1727fbf8cc78af49b074b5b5f005efd63538bae4e2caac37defaa6eac0b",
     "Core.Site.Sheet.chip": "ddded7c77056855baa24060a0261a6f28f20eb3177410bd7735ea1f2f7515359",
     "Core.Site.Sheet.figures": "f8d55fd2f21d9e37b1f0e5a7a4dbdc373e26e56a73118c036ac0cdae59b6a056",
     "Core.Site.Sheet.mem": "287ff844e0ff147decd1b9f5e923d9f61e1a50a589b8319f8a629fafb0ba5221",
     "Core.Site.Sheet.sku": "8c1a12341316010bd5aecdf7d5e280e5c7e0ef06c5c93b2e3a6be68d3693c296",
+    "Core.Site.Sheet.toJson": "a6723de9a4c3256015b9977a87fa4561fede62606684024c3abfbbaaf1d45da9",
     "Core.Site.Tier": "cd9f6d8bfda3e96fc3784ff320478bf7c9753523d2aa47708748eef972d567e7",
     "Core.Site.Tier.casesOn": "f95c9f1aded1e037168112ae46be4e8aefbfeed0756c1e06c6f48d1a32ada01d",
     "Core.Site.Tier.disk": "9f5f48f3ba0d06f46312ea2ea101e8d60258b4090b87db7bbe8f14c7614d1d48",
     "Core.Site.Tier.dram": "ba4bdc02dfe64fc812b5c96e46f3510321d3909ddec3e75ea5e6e1cee20e421e",
     "Core.Site.Tier.hbm": "06ad6bd4e2b2eaab93f606155c83306e93bb5e359d3b0e200cce038c7ccb4d37",
+    "Core.Site.Tier.name": "b9eba3443e3247c5b9e86b01e48063b3353b9f6e2006a2eca35951cfdeb58e91",
     "Core.Site.Tier.rec": "58e3d5cbad31aacad330fac27b9e7876f2f98f50f30ccd04a3c2fa1ac340587a",
     "Core.Site.WithinTolerance": "3525f4bd5f39b946be24ecb65ed73a8b94ce04eefb8e2cd7f325e27eb738d323",
     "Core.Site.add": "377cd3e4679f0f12e3562c0b003c369497f1b6920821ad042b0c628103ae5f9f",
@@ -14893,7 +15034,9 @@
     "Core.Site.outside": "03acc86b31808ec5595250c20c4c51890e8ba8fc2035f9b745f44a92c59ca9b6",
     "Core.Site.reached": "41de08b6fac4b2a4202377c9cbed4bd057f4c6f58dfcc09288712bf512bb241b",
     "Core.Site.sheet?": "bcb332733317635e34b2c58b20a6f186944cb94f8dbe5861c3b796e06119c9f7",
-    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1"
+    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1",
+    "Core.Site.tagged": "afffbe600dff338d4371297f75436f08f708ef85c4472979f06c1f56a9c41608",
+    "_private.CoreProtocol.Site.0.Core.Site.optJson": "093be559002754f8258a8337964e6bdc54dcc0a49cba7cd742e03cb9825cd129"
    }
   },
   "CoreRemote": {
@@ -16360,6 +16503,13 @@
     "Verity.RegisteredCircuit.out": "749577acf06909a426de4bf41cfcc4dc5353e69ba9b8cf2385c9f166595889ff",
     "Verity.RegisteredCircuit.θ": "d14c26dd29fbbae51a1e041908492d07949b6e0b0d55effa535fc3caf025045c",
     "Verity.RegisteredCircuit.𝓘": "aba61d57f4d8260e4a1cd7b888b9264f789fd3070636876b7efd9ef1a76f35f1"
+   }
+  },
+  "Definitions.Core.Registration": {
+   "digest": "a1d2541aef12d31c6ee5c8c67573a80c1579bd96d69c4b43eff7f3e5f2401046",
+   "definitions": {
+    "Verity.Registration.View": "526299db2a7fa7c4719db784e97d443cb719028d0f7d68e9c5d820ea92478ec9",
+    "Verity.Registration.view": "98225078dd64822792f9757809fedfbec15193552d956969a6697925140f4a50"
    }
   },
   "Definitions.Core.Requirement": {
@@ -23920,6 +24070,28 @@
     "Properties.Period.boundaries": "7fe05c5430ee827d6f5cff7f5bddff0de2a684c998f2c0aa5e2751049c87c592",
     "Properties.Period.code": "f8da8be770bb1bc6d6ce88923775ace1aaac61bfa7da2bc549ebc53c59dc2727",
     "Properties.Period.spec": "7ea08605ed01e8af886d1b0a6e4e39666218b83a60ee01407d57b06e8068b614"
+   }
+  },
+  "Properties.Core.Registration": {
+   "digest": "d7712fc14cc8bd4e8a7cb33bfb77ece14ab65693031b4245882fbb24cb194bcf",
+   "definitions": {
+    "Properties.Registration.Checks": "d409f431c404d27fe64f64c550b6819e9f6899e30c5eb613b83c6815532df2dc",
+    "Properties.Registration.acceptAllCheck": "a2f4345e91bea4a179f38c3417f4f64d5c0d36141bcedfb2ac02cda92d7dca66",
+    "Properties.Registration.builder": "6247a45515c223943f1127daa54cadf62afe3aa1b09e0eba031d236d9614d989",
+    "Properties.Registration.dayEntry": "4f053ccfc8f9ef3057c305f3f465ee54073a8ba77bc766e70f5f7bf25e43c76e",
+    "Properties.Registration.declared": "077b56889f6fba4a66a0645b7aa1704f65489278aa775241a8f2d5face8a339b",
+    "Properties.Registration.digests": "39f95e8f331381520203e03148e3ac28a3a7cb56c16e5187e1cd5d60bdce74ba",
+    "Properties.Registration.entry": "d3812703d7d801b24beb9e0310e5979d7246f512d61241e2b96e55bdf1401d76",
+    "Properties.Registration.honestLog": "0ff01083c5d38c7fb41ae6d5d43cf81a916c12ee395b699626b18f621b642852",
+    "Properties.Registration.infoEntry": "7d840db93d9423307434585033be341204c81dfbcf05fe1a70435ee034fe6ad0",
+    "Properties.Registration.item": "ce5a373341f2ad68dc7ed448d44878a05659fd0329ddb716005cc297aa58fe05",
+    "Properties.Registration.log": "24cbeddddb1aaa1b4866bf414df403a672d5a3b57ea13e8e7ea0566a49e9d919",
+    "Properties.Registration.names": "4cb4235e7be6a061d75f42e4d876e550fbdd86807947fbf0113f6065e53f4e43",
+    "Properties.Registration.noGates": "f2886becddd9678b9dd407f8bcff4061fafa7adb486d7163bdebb2d9f406205e",
+    "Properties.Registration.noGatesBuilder": "fa1a418732b9138958713ac6c1e0b81d5da100cf9d4d854ace5c194e572e17fb",
+    "Properties.Registration.theta": "21ef79b6987dece483dbc69e8c36e2a2cf882cb47fb9688f9c3618ffee4e040c",
+    "Properties.Registration.twiceLog": "2bf45855134ae8819e6919ef2a4917c5e51e59fc17376d71347c02e138a28758",
+    "Properties.Registration.view": "6c1a1a2f2440636aea6e6ae5f5fc6f66b6997bbfded07608c99bb3918f169716"
    }
   },
   "Properties.Core.Site": {
