@@ -118,7 +118,8 @@ def fleets() -> list[dict]:
 def _min_cut():
     """The calculator's module for the bound, its `min_cut`, loaded by its path: it is standard library only and
     imports nothing of its package, so reading it loads no registry and leaves the import path as it was."""
-    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", CALCULATOR / "rho" / "min_cut.py")
+    path = CALCULATOR / CALCULATOR.name / "min_cut.py"
+    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

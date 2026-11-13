@@ -3,7 +3,7 @@ request count and split, and leaves the planner as it found it; the figure reads
 import hashlib
 import json
 from dataclasses import astuple
-from math import isclose
+from math import ceil, isclose
 from pathlib import Path
 
 import cards
@@ -180,6 +180,22 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isinstance(phase["sampled"], int) and 1 <= phase["sampled"] <= phase["replay_blocks"]
     assert p["replay_sample"] == pytest.approx(phase["sampled"] * got["requests"] / phase["replay_blocks"])
     assert phase["sessions"] > len(p["cells"]) and phase["limit"]
+    bound = phase["binding"]
+    taken = sum(c["taken"] for c in p["cells"] + p["left_out"])
+    assert bound["status"] == "modeled" and bound["proof_blocks"] == pytest.approx(phase["sampled"] * taken)
+    assert f"is {bound['tables']} of its type" in phase["limit"]
+    assert [(a["input"], a["value"]) for a in bound["assumed"]] == [
+        ("classes of gates a sampled proof block", 4130), ("symbols of a table's level-0 codewords", 2 ** 23),
+        ("one commitment, one sample; every committed window is presented", None)]
+    assert bound["design"]["sessions"] == ceil(phase["sessions"])
+    assert bound["design"]["classes"] == 4130 * ceil(bound["proof_blocks"] - 1e-6)
+    assert bound["design"]["k"] == P.binding.queries(bound["tables"] * 2 ** 23)
+    assert bound["design"]["phases"] == ceil(got["gpu_seconds"] / (phase["machines"] * 8 * H.RUN_S) - 1e-9)
+    assert bound == H.binding_bound(P, {"tables": bound["tables"], "draws": taken, "replay_sample": 1.0},
+                                    phase["sampled"], phase["sessions"], bound["design"]["phases"])
+    for counted in P.binding.COUNTED:
+        cell = bound["counted"][counted]
+        assert 0 < cell["phases"]["centibits"] < cell["phase"]["centibits"] and "theorem" in cell["lean"]
     measured = {b["block"]: b for b in cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]}
     held = [c for c in p["cells"] if c["block"] in measured]
     assert held and all(c["table"] == P.tc.table_blocks(measured[c["block"]]["k_log"]) for c in held)
@@ -463,6 +479,79 @@ def test_row_ii_at_the_control_s_table_on_the_units_cut_prices_the_units_at_the_
     assert tabled and tabled <= set(table["cells"]) and not tabled & H.replaced(H.UNITS)
     assert not any(x["block"].startswith("SparseMlaHeadBlock_v1{") for x in reads["strata"])
     assert {"own row", "family row", H.PLANNER} <= set(got["split"]["sources"])
+
+
+HEAD_V1 = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+           'SCALE={"f64":"0x1.0000000000000p-4"}}')
+END_V1 = 'SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}'
+#: the head's Definitions and their nested ones, each as its Boolean version names it
+V2 = {"SparseMlaHeadBlock_v1{": "SparseMlaHeadBlock_v2{", "SparseMlaHeadEnd_v1{": "SparseMlaHeadEnd_v2{",
+      "HopperBF16WgmmaDot16_v1": "HopperBF16WgmmaDot16_v2", "Fa3InvSum_v1": "Fa3InvSum_v2"}
+
+
+def as_v2(block: str) -> str:
+    """A head block or end as its Boolean version names it; any other block as it is."""
+    if not block.startswith(("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{")):
+        return block
+    for a, b in V2.items():
+        block = block.replace(a, b)
+    return block
+
+
+def control_rows(name=lambda b: b) -> dict:
+    """The control's table as `verity bench prove --json` writes it, a row a block, each named by `name`."""
+    return {"rows": [r | {"block": name(b)} for b, r in json.loads((CONTROL / "bench_prices.json").read_text())["cells"].items()]}
+
+
+def test_a_table_of_the_head_s_boolean_versions_prices_the_head_as_its_own_rows():
+    """Row (ii) at the control's table with every head block and end row under its Boolean version's name (`_v2`, its
+    `fn` static's too; about 4 s): each such row prices its census block (`_v1`) at the same seconds as under the census
+    names, so the bound and every block's price are the same, each named its Boolean version, which the split's
+    sources say. Catches a table of the Boolean versions pricing nothing, as the head's overhead rows are timed."""
+    P = H.planner()
+    v1, v2 = H.prices(control_rows()), H.prices(control_rows(as_v2))
+    assert set(v1["cells"]) == set(v2["cells"]) and HEAD_V1 in v2["cells"] and END_V1 in v2["cells"]
+    paired = {b: x["boolean"] for b, x in v2["cells"].items() if x.get("boolean")}
+    assert len(paired) == 66 and paired[HEAD_V1] == as_v2(HEAD_V1) and paired[END_V1] == as_v2(END_V1)
+    assert all(b.startswith(("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{")) for b in paired)
+    got = []
+    for table in (v1, v2):
+        spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table)
+        row, reads = H.evaluate(spec, P)
+        got.append((H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"]),
+                    reads["pricing"]))
+    (own, by_own), (boolean, by_boolean) = got
+    assert boolean["bound_bits"] == own["bound_bits"]
+    keys = ("block", "seconds_per_block", "fixed_seconds", "statement_blocks", "table")
+    assert [[x[k] for k in keys] for x in by_boolean] == [[x[k] for k in keys] for x in by_own]
+    assert {x["block"]: x["boolean"] for x in by_boolean if x.get("boolean")} == paired
+    head = next(x for x in by_boolean if x["block"] == HEAD_V1)
+    assert head["table"] == "steady" and head["basis"].endswith(f"({H.BOOLEAN}, `{as_v2(HEAD_V1)}`)")
+    mine, theirs = boolean["split"]["sources"], own["split"]["sources"]
+    assert not any(H.BOOLEAN in s for s in theirs) and mine[f"own row, {H.BOOLEAN}"] > 0
+    assert H.VERIFIER_SOURCE in theirs and set(mine) - set(theirs) == {f"{s}, {H.BOOLEAN}" for s in H.TABLE_SOURCES.values()}
+    for source, share in theirs.items():
+        assert isclose(mine.get(source, 0.0) + mine.get(f"{source}, {H.BOOLEAN}", 0.0), share, rel_tol=1e-12), source
+    assert boolean["split"]["priced"].keys() == own["split"]["priced"].keys()
+    for way, share in own["split"]["priced"].items():
+        assert isclose(boolean["split"]["priced"][way], share, rel_tol=1e-12), way
+
+
+def test_a_boolean_name_that_pairs_with_no_block_without_a_row_is_refused_by_name():
+    """A `_v2` name whose `fn` static isn't its Boolean version pairs with no census block and stays a row for no
+    block of the line, refused by its name as before; so does a Boolean version's row beside its block's own row,
+    which the own row prices."""
+    unpaired = HEAD_V1.replace("SparseMlaHeadBlock_v1{", "SparseMlaHeadBlock_v2{")
+    row = {"source": "steady", "seconds": 1.0, "record": "art:head"}
+    line = [LINE[0] | {"block": HEAD_V1}]
+    for rows in ([{"block": unpaired} | row], [{"block": HEAD_V1} | row, {"block": as_v2(HEAD_V1)} | row]):
+        table = H.prices({"rows": rows})["cells"]
+        name = rows[-1]["block"]
+        assert name in table and not any(x.get("boolean") for x in table.values())
+        with pytest.raises(ValueError) as refused:
+            H.pricing(planner_price, {}, 2.0, [], table=table)(line)
+        assert str(refused.value) == (f"1 rows of the table price no block of this line: `{name}`. It is another "
+                                      "cut's table, or the line names those blocks otherwise (`FUSED`)")
 
 
 @pytest.mark.slow

@@ -21,10 +21,10 @@ open Flock.Program
 
 /-! ## The residues of a stride -/
 
-/-- **Every multiple of a stride is among its residues**: `Widths.residues stride count L cap` holds `k · stride mod L`
-for each `k < count`. -/
-theorem residues_mem (stride : ℤ) (count L cap : ℕ) (A : List ℕ) (hL : 0 < L)
-    (h : Widths.residues stride count L cap = some A) (k : ℕ) (hk : k < count) :
+/-- **Every multiple of a stride is among its residues**: `Widths.residues stride count L bound` holds
+`k · stride mod L` for each `k < count`. -/
+theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0 < L)
+    (h : Widths.residues stride count L bound = some A) (k : ℕ) (hk : k < count) :
     ((k : ℤ) * stride % (L : ℤ)).toNat ∈ A := by
   have hLz : (0 : ℤ) < L := by exact_mod_cast hL
   have hs : ((stride % (L : ℤ)).toNat : ℤ) = stride % L := Int.toNat_of_nonneg (Int.emod_nonneg _ (by omega))
@@ -41,8 +41,8 @@ theorem residues_mem (stride : ℤ) (count L cap : ℕ) (A : List ℕ) (hL : 0 <
   have hg : 0 < Nat.gcd s L := Nat.gcd_pos_of_pos_right _ hL
   by_cases hc : count ≥ L / Nat.gcd s L
   · rw [ite_eq_left hc] at h
-    by_cases hcap : L / Nat.gcd s L ≤ cap
-    · rw [ite_eq_left hcap] at h
+    by_cases hbound : L / Nat.gcd s L ≤ bound
+    · rw [ite_eq_left hbound] at h
       injection h with h
       subst h
       rw [List.mem_map]
@@ -50,16 +50,16 @@ theorem residues_mem (stride : ℤ) (count L cap : ℕ) (A : List ℕ) (hL : 0 <
       · exact Nat.div_lt_div_of_lt_of_dvd (Nat.gcd_dvd_right s L) (Nat.mod_lt _ hL)
       · exact Nat.div_mul_cancel
           ((Nat.dvd_mod_iff (Nat.gcd_dvd_right s L)).2 (Dvd.dvd.mul_left (Nat.gcd_dvd_left s L) k))
-    · rw [ite_eq_right hcap] at h
+    · rw [ite_eq_right hbound] at h
       exact absurd h (by simp)
   · rw [ite_eq_right hc] at h
-    by_cases hcap : count ≤ cap
-    · rw [ite_eq_left hcap] at h
+    by_cases hbound : count ≤ bound
+    · rw [ite_eq_left hbound] at h
       injection h with h
       subst h
       rw [List.mem_eraseDups, List.mem_map]
       exact ⟨k, List.mem_range.2 hk, rfl⟩
-    · rw [ite_eq_right hcap] at h
+    · rw [ite_eq_right hbound] at h
       exact absurd h (by simp)
 
 /-! ## The sources a body's check reads -/
