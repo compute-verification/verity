@@ -177,8 +177,9 @@ def priced_dtype(row: dict, capture: str | None) -> str | None:
     row's `attention`), refusing a call that returns in another. A float32 job's call stays float32, and so does a
     float32 product a step computes outside a call, under autocast or not.
 
-    The premise (`ATTENTION_PREMISE`): each of a 16-bit call's six matrix products is a 16-bit tensor-core dot
-    product on sm_120. Its edges:
+    The premise (`ATTENTION_PREMISE`): each of the six matrix products the count holds of a 16-bit call is a 16-bit
+    tensor-core dot product on sm_120. The card's backward computes the scores again, a seventh product no count
+    holds (`flops.Counter._attention`). Its edges:
     - the trace is taken under the math kernel and cannot see the card's choice, so a call the card serves on its
       math path (fused kernels turned off, or a call none of them takes) is computed in float32 and priced low by
       the trace; the job's count sees it, since on that path its rows name the float32 the math kernel's ops return
