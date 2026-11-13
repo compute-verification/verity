@@ -122150,3 +122150,30 @@ write until #9624's two runs end, so I end my turn here with one timer set.
 
 STOP RULE: one timer, at 05:50Z, to read `fb74` and `112b`, write #9624's Checks and its ready line. NEEDS: as at
 05:12Z. To post: nothing new. Not established: as at 05:12Z.
+
+## ADDRWC, Fri 05:20Z: both tries failed in `CopyOut.lean` (r20261113-040149-1f53, r20261113-042843-dc99); fixed at head 3d9c327d80, and both files are in tries again on vy-nebius-cpu-3 (r20261113-051652-626b, r20261113-051652-ae0d); nothing new compiled
+
+**In plain words.** Lean refused three of the lemmas in the file that proves the written half of the copy, and the second run never reached the file above it. Two of the three were my own restatements of lemmas the base already has compiled, so I deleted them and the third now reads the base's. The file's other theorems had no error on their lines. I also found and fixed one more error in the file above it before a run could, by checking its core-only steps on the VM. Both files are being tried again. HONEST2 read the two runs before I did and reported them correctly.
+
+- [run r20261113-040149-1f53] `CopyOut.lean: lean exit 1 in 2290 s`; "axiom probe: 3 of its 14 theorems failed": `wire_comp_uniform`, `keyProg_wire_comp`, `outGate_wire`. Lean had no error on the lines of `outGate_spec`, `outPos_lt`, `outRowBit_ref`, `scopeOkH_member`, `member_commit`, `rowsFit_member`, `writtenBits_mem`, `copiesRef_out`, `copiesAt_of_two`, `widthFact_of_two` or `copyFact_of_two`. None has an axiom line, because the probe prints none for a file Lean refuses.
+- [run r20261113-042843-dc99] `lake build …PortsOnceOf:deps exit 1 in 1346 s`, on `CopyOut`. `PortsOnceOf.lean` was not elaborated.
+- [read] `CopyOut.lean`, the fix. `gates_eq`, `wire_comp_uniform` and `keyProg_wire_comp` are gone: the base has them compiled in `Bridge/BitsKeyProg.lean` as `Flock.Bridge.gates_val`, `rowsWireC_uniform_comp` and `rowsWireC_keyProg_comp`. `outGate_wire` now reads `rowsWireC_keyProg_comp` and follows the base's own `outGate_mem`. Its statement is unchanged, so nothing above it changes. Its fourth error was a name: `X` is a token under ArkLib's notation, so the column is `xv`. The file has 12 theorems now.
+- [read] `PortsOnceOf.lean`, three changes, 9 theorems as before.
+  - `ports_names`: `congr 1` closes the first half by `rfl` (`List.extract` is an abbreviation), so the two-bullet proof would have stopped at "No goals". It now cancels the shared prefix.
+  - `nodup_of_sorted` and `nodup_of_sort` (was `nodup_of_qsort`) take the relation with its reflexivity and antisymmetry. `Period.Sort` is core-only and my file imports Mathlib, so this way my file elaborates no order on `String` that could differ from the one `qsort_sorted` was proved with.
+  - `not_not` is `Classical.not_not`.
+- [run: the VM's `lean`, core only, seconds each, no project build] On a copy with a mock `Circuit` and the three imported lemmas as axioms, `ports_names`, `nodup_of_sorted`, `nodup_of_sort`, `unrolled_rows` and the arithmetic of `outGate_wire` elaborate. That is not a verdict on the files: only the runs give one.
+- [read] No probe covers `checkRows_names`' unfolding of `HmOut.checkRows` (its steps are those of the compiled `Hidden.checkRows_out`), `nodup_of_checkRows`, `portsOnce_of_rows`, `widthFact_of_design` or `copyFact_of_design`.
+- [run r20261113-051652-626b, started 05:17Z] `verity lean try …/CopyOut.lean --on auto`, tree `3d9c327d80`, vy-nebius-cpu-3.
+- [run r20261113-051652-ae0d, started 05:17Z] the same for `…/PortsOnceOf.lean`, same tree and node.
+- [derived] Expected end about 06:00Z: `1f53` took 2290 s on that node cold, and its cache now holds the modules below `CopyOut`.
+
+For HONEST2: the head to merge is `3d9c327d80`. The statements `Design.lean` reads (`portsOnce_of_rows`, `copiesAt_of_two`) are unchanged. `nodup_of_qsort` is renamed, in case you grep for it.
+
+GAP: none. Neither the width nor the copy is false of what the verifier accepts, by what I have read and written so far.
+
+NEEDS: nothing of you. The 04:32Z NEEDS for FRAME stands, and still waits on `PortsOnceOf` compiling.
+
+Not established: neither `CopyOut` nor `PortsOnceOf` has compiled. `Wiring h` and `RowFact` stay inputs. Every theorem here takes `two h s = some d`, so each is empty until an honest play is accepted. The base's move to `e033bfc14b` (its merge of `main`, 2540 files) is not merged into my branch; I merge it after these two tries, since it makes every tree cold.
+
+To post: nothing.
