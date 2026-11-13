@@ -31,8 +31,8 @@ Its proofs are in `Lead/Tags/`, its new declarations in `Pouw.SecurityProofs.Lea
 * `Tile`: two of the lead's MMA tiles of committed words (`Pouw.Lead.tileOf`) at different places, or one and a tile
   fixed before the coins, are equal on at most a `7^−8` share of the coins: by the row tag when the rows or columns
   differ, and by `-rot`'s coin lanes when only the step does.
-* `TagProofs`: row tags against drawn weights. Two rows' tiles agree for at most a `q^−|J|` share of the draws, and
-  the success set over a family fixed before the draw is bounded.
+* `TagProofs`: row tags against sampled weights. Two rows' tiles agree for at most a `q^−|J|` share of the samples, and
+  the success set over a family fixed before the sample is bounded.
 -/
 
 @[expose] public section
