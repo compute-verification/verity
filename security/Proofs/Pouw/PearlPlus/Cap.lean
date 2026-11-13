@@ -28,7 +28,9 @@ filler rows are zero and fail the rules, and its excluded rows fail them, so the
   The check's element count covers the game's forming elements (`formingElems_le`, `row_forming`): an element the game
   finds salt-dead the check finds salt-dead (`saltDeadP_iff_ends_hopper` and the check's float arithmetic,
   `saltDead_of_ends`), and an element whose block every column's word flags the check counts by those flags. The
-  forming is the rest of the game's inert work (`tileDebitRev1_split`), and the check's credit per credited row,
+  check's mends cover the game's (`MendSim.wordMend_le`, `MendSim.row_ends`): its end codes are the game's `endRow`
+  (`endCodes_eq`), and its cut flags on them the game's `chainCuts` (`MendSim.wordCuts_eq`). The forming and the mends
+  are the rest of the game's inert work (`tileDebitRev1_split`), and the check's credit per credited row,
   `creditOf(1, kKept, n)`, is at most `creditDevRev1`'s (`credit_le`), with equality at `kKept = k`.
 * `tilePassGivesTheChainCap`: the chain's part of the game's inert work (`tileChainDebit`) is within the bound.
 -/
@@ -74,13 +76,23 @@ noncomputable def tileFormingDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : P
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   (d.prices.costs.fs : ℚ) * (cols.card / (U.layout.shape u).n) * formingElems sem d H s U u rows cols act
 
-/-- A tile's replayed inert work is its chain's and its forming's. -/
+open Classical in
+/-- The mend part of `tileDebitRev1`: its words' `wordMend` at one MAC each. -/
+noncomputable def tileMendDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (U : Pouw.PearlC.Workload)
+    (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
+  let sh := U.layout.shape u
+  ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
+    (wordMend d sem.alpha sem.beta (wordsVal sh.m sh.k act e.1)
+      (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) e.2) : ℚ)
+
+/-- A tile's replayed inert work is its chain's, its forming's and its mends'. -/
 theorem tileDebitRev1_split {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) :
     sem.tileDebitRev1 d H s U u rows cols act =
-      tileChainDebit sem d H s U u rows cols act + tileFormingDebit sem d H s U u rows cols act := by
-  unfold PearlCSem.tileDebitRev1 PearlCSem.tileDebitDev tileChainDebit tileFormingDebit formingElems
-  exact add_right_comm _ _ _
+      tileChainDebit sem d H s U u rows cols act + tileFormingDebit sem d H s U u rows cols act +
+        tileMendDebit sem d U u rows cols act := by
+  unfold PearlCSem.tileDebitRev1 PearlCSem.tileDebitDev tileChainDebit tileFormingDebit formingElems tileMendDebit
+  exact congrArg (· + _) (add_right_comm _ _ _)
 
 /-- **(c) A passed tile's chain is within the inert-work bound**: a tile as in `TilePassGivesTheCap` has the chain's
 part of its replayed inert work (`tileChainDebit`) within the game's bound at `ρ = 1/400`. -/
@@ -354,6 +366,36 @@ theorem encode_stats {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k :
   rw [getElem!_pos aRows x (by omega)]
   exact this
 
+/-- The B rows `encode` forms are the parsed openings, and their ρ, α and β are `s5_stats`' of them. -/
+theorem encode_stats_b {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k : ℕ} {rows : List ℕ}
+    {aRows : List ByteArray} {cols : List ℕ} {bRows : List ByteArray} {ops : Words.Ops}
+    (hb : bRows.length = cols.length) (h : Words.encode salt rootB wn index k rows aRows cols bRows = .ok ops) :
+    ∀ z < cols.length, Words.parseRow bRows[z]! k = .ok ops.b.x[z]! ∧
+      ∃ s, Words.s5Stats ops.b.x[z]! = .ok (s, ops.b.rho[z]!, ops.b.alpha[z]!, ops.b.beta[z]!) := by
+  unfold Words.encode at h
+  obtain ⟨ea, -, h⟩ := Assembly.bind_ok h
+  obtain ⟨xa, -, h⟩ := Assembly.bind_ok h
+  obtain ⟨a, -, h⟩ := Assembly.bind_ok h
+  obtain ⟨eb, heb, h⟩ := Assembly.bind_ok h
+  obtain ⟨xb, hxb, h⟩ := Assembly.bind_ok h
+  obtain ⟨b, hfb, h⟩ := Assembly.bind_ok h
+  obtain ⟨pa, -, h⟩ := Assembly.bind_ok h
+  obtain ⟨pb, -, h⟩ := Assembly.bind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  intro z hz
+  have seb := (Assembly.array_mapM_ok _ _ _ heb).1
+  obtain ⟨sxb, gxb⟩ := Assembly.array_mapM_ok _ _ _ hxb
+  simp only [List.size_toArray] at seb sxb
+  have hz' : z < (xb.zip eb).size := by simp only [Array.size_zip]; omega
+  obtain ⟨h1, h2⟩ := formV1_stats hfb z hz'
+  refine ⟨?_, h2⟩
+  rw [h1, getElem!_pos (xb.zip eb) z hz', Array.getElem_zip]
+  have := gxb z (by simp; omega)
+  rw [getElem!_pos _ z (by simp; omega), List.getElem_toArray, getElem!_pos xb z (by omega)] at this
+  rw [getElem!_pos bRows z (by omega)]
+  exact this
+
 /-! ## The check's replayed inert work, summed -/
 
 theorem mapM_ok_zip {ε α β : Type} {f : α → Except ε β} :
@@ -442,6 +484,49 @@ theorem rowDebit_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : Li
         foldl_map_eq (fun v : Array Bool × ℕ => v.2)]
       ring
 
+/-- The check's inert work with its mends, as `TileKeepsTheCap` sums it: `rowDebit_sum` and `n` times every credited
+word's `wordMend`. -/
+theorem rowDebit_sum_mend (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ)
+    (eA eB : List (Array ℕ × Array ℕ × Array Bool)) (h : ws.length = es.length) (h' : es.length = eA.length) :
+    (((ws.zip es).zip eA).map fun (we : (List (Array Bool × ℕ) × ℕ) × (Array ℕ × Array ℕ × Array Bool)) =>
+      Rule.debitUnits n c (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+        (we.1.1.foldl (fun t w => t + w.2) 0) we.1.2 + n * eB.foldl (fun t eb => t + Rule.wordMend we.2 eb) 0).foldl
+        (· + ·) 0 =
+      n * (ws.map fun w => 40 * (w.map fun v => (v.1.filter id).size).sum + 32 * (w.map fun v => v.2).sum).sum +
+        64 * c * es.sum + n * (eA.map fun ea => (eB.map (Rule.wordMend ea)).sum).sum := by
+  rw [foldl_add_eq, Nat.zero_add]
+  induction ws generalizing es eA with
+  | nil =>
+    cases es with
+    | nil =>
+      cases eA with
+      | nil => simp
+      | cons _ _ => simp at h'
+    | cons _ _ => simp at h
+  | cons w ws ih =>
+    cases es with
+    | nil => simp at h
+    | cons e es =>
+      cases eA with
+      | nil => simp at h'
+      | cons ea eA =>
+        simp only [List.zip_cons_cons, List.map_cons, List.sum_cons]
+        rw [ih es eA (by simpa using h) (by simpa using h'), debitUnits_eq,
+          foldl_map_eq (fun v : Array Bool × ℕ => (v.1.filter id).size), foldl_map_eq (fun v : Array Bool × ℕ => v.2),
+          foldl_map_eq (Rule.wordMend ea)]
+        ring
+
+theorem sum_le_zip {α β : Type} (g : α → ℕ) (h : β → ℕ) :
+    ∀ (L : List α) (L' : List β), L.length = L'.length → (∀ q ∈ L.zip L', g q.1 ≤ h q.2) →
+      (L.map g).sum ≤ (L'.map h).sum
+  | [], [], _, _ => le_rfl
+  | [], _ :: _, hl, _ => by simp at hl
+  | _ :: _, [], hl, _ => by simp at hl
+  | a :: L, b :: L', hl, hq => by
+    simp only [List.map_cons, List.sum_cons]
+    exact Nat.add_le_add (hq (a, b) (by simp))
+      (sum_le_zip g h L L' (by simpa using hl) fun q hq' => hq q (by simp [hq']))
+
 /-- Over distinct rows and columns, per-row sums of `40·F + 32·Z` are its sum over the cells. -/
 theorem cells_sum (cr cc : List ℕ) (hcr : cr.Nodup) (hcc : cc.Nodup) (F Z : ℕ → ℕ → ℕ) :
     (cr.map fun i => 40 * (cc.map (F i)).sum + 32 * (cc.map (Z i)).sum).sum =
@@ -512,6 +597,26 @@ theorem tileChainDebit_cells {Q R S : Type} (sem : PearlCSem Q R S) (H : Q → R
   simp only [cellF, cellZ, dite_eq_left h]
   push_cast
   ring
+
+open Classical in
+/-- Cell `(i, j)`'s mends at the H100 record, `0` off the unit. -/
+noncomputable def cellM {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes)
+    (i j : ℕ) : ℕ :=
+  if h : i < (U.layout.shape u).m ∧ j < (U.layout.shape u).n then
+    wordMend devH100 sem.alpha sem.beta (wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, h.1⟩)
+      (wordsVal (U.layout.shape u).n (U.layout.shape u).k (U.fixed (U.layout.fixedId u)) ⟨j, h.2⟩)
+  else 0
+
+/-- A tile's mends are its cells'. -/
+theorem tileMendDebit_cells {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes)
+    (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m) (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
+    Bridge.tileMendDebit sem devH100 U u P C act = ((∑ i ∈ P, ∑ j ∈ C, cellM sem U u act i j : ℕ) : ℚ) := by
+  simp only [Bridge.tileMendDebit]
+  rw [sum_fin_filter P C hP hC]
+  push_cast
+  refine Finset.sum_congr rfl fun i hi => Finset.sum_congr rfl fun j hj => ?_
+  have h : i < (U.layout.shape u).m ∧ j < (U.layout.shape u).n := ⟨hP i hi, hC j hj⟩
+  simp only [cellM, dif_pos h]
 
 /-! ## The game's forming elements, row by row -/
 
@@ -668,14 +773,24 @@ theorem endsAgree_of {c d : Code} (h : c = d ∨ (c.val % 128 = 0 ∧ d.val % 12
     have h2 : d.val = 0 ∨ d.val = 128 := by omega
     rcases h1 with h1 | h1 <;> rcases h2 with h2 | h2 <;> rw [h1, h2] <;> decide
 
-/-- **An element the game finds salt-dead the check finds salt-dead**: on a row whose α and β are step words, β
-positive, where `flat_code` and `salt_dead` are values, the support's two ends agree in the game
-(`saltDeadP_iff_ends_hopper`'s `EndsAgree`) only where the check's `ends_agree` holds. -/
-theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumProofs.StepWord αw)
+/-- The game's step at one end of the support (`minus` clear: `F` at `+11/4`; set: at `−11/4`) for an element `y` of a
+row at scales `αw` and `βw`. -/
+def endStep (αw βw : ℕ) (y : ℚ) (minus : Bool) : ℕ :=
+  hopperE4m3K32.step (f32Word (PearlC.wordVal αw * y))
+    (List.ofFn (lineCodes (PearlC.wordVal βw) (Pouw.PearlC.SaltDead.flatLine fun _ => false)))
+    (List.ofFn (Pouw.PearlC.SaltDead.flatLineF fun _ => minus))
+
+/-- The check's code `c` is the cast of the step word `P`, a finite code. -/
+def CastOf (c P : ℕ) : Prop :=
+  c = (e4m3Word P).val ∧ e4m3 (PearlC.wordVal P) = e4m3Word P ∧ (e4m3Word P).isNaN = false
+
+/-- **The check's end codes are the game's**: on a row whose α and β are step words, β positive, where `flat_code` and
+`end_codes` are values, the check's codes at the support's two ends are the casts of the game's steps there. -/
+theorem endCodes_eq {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw)
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
-    (hd : Rule.saltDead αw cb w = .ok d)
-    (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) : d = true := by
+    (hc : Rule.endCodes αw cb w = .ok c) :
+    CastOf c.1 (endStep αw βw y false) ∧ CastOf c.2 (endStep αw βw y true) := by
   have eMul : Evaluate.Fp32.f32MulV2 = Verity.Fp32.f32MulV2 := Properties.Evaluator.Fp32.f32MulV2
   have eWid : Evaluate.Casts.e4m3ToF32 = Verity.Prims.e4m3ToF32 := Properties.Evaluator.Casts.e4m3ToF32
   have eCast : Evaluate.Casts.f32ToE4m3Sat = Verity.Prims.f32ToE4m3Sat := Properties.Evaluator.Casts.f32ToE4m3Sat
@@ -732,27 +847,44 @@ theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumP
           (F.map TileCircuit.code) := atomIsTheStep _ _ _
     rw [h1, hEl, hF, eMul]
     exact step_acc _ hacc _ _
-  unfold Rule.saltDead at hd
-  obtain ⟨acc, hacc', hd⟩ := WordsSim.bind_ok hd
+  unfold Rule.endCodes at hc
+  obtain ⟨acc, hacc', hc⟩ := WordsSim.bind_ok hc
   obtain ⟨rfl, -⟩ := WordsSim.finite_ok hacc'
-  try dsimp only at hd
-  obtain ⟨Dp, hDp, hd⟩ := WordsSim.bind_ok hd
-  obtain ⟨cp, hcp, hd⟩ := WordsSim.bind_ok hd
-  obtain ⟨Dm, hDm, hd⟩ := WordsSim.bind_ok hd
-  obtain ⟨cm, hcm, hd⟩ := WordsSim.bind_ok hd
-  obtain rfl := WordsSim.pure_ok hd
-  obtain ⟨hcp', hEp, hnp⟩ := step_code _ (hstep _ _ hFp) ⟨_, _, _, rfl⟩ hDp hcp
-  obtain ⟨hcm', hEm, hnm⟩ := step_code _ (hstep _ _ hFm) ⟨_, _, _, rfl⟩ hDm hcm
-  have hE' : codeVal (e4m3Word (hopperE4m3K32.step (f32Word (PearlC.wordVal αw * y))
-      (List.ofFn (lineCodes (PearlC.wordVal βw) (Pouw.PearlC.SaltDead.flatLine fun _ => false)))
-      (List.ofFn (Pouw.PearlC.SaltDead.flatLineF fun _ => false)))) =
-      codeVal (e4m3Word (hopperE4m3K32.step (f32Word (PearlC.wordVal αw * y))
-        (List.ofFn (lineCodes (PearlC.wordVal βw) (Pouw.PearlC.SaltDead.flatLine fun _ => false)))
-        (List.ofFn (Pouw.PearlC.SaltDead.flatLineF fun _ => true)))) := by
+  try dsimp only at hc
+  obtain ⟨Dp, hDp, hc⟩ := WordsSim.bind_ok hc
+  obtain ⟨cp, hcp, hc⟩ := WordsSim.bind_ok hc
+  obtain ⟨Dm, hDm, hc⟩ := WordsSim.bind_ok hc
+  obtain ⟨cm, hcm, hc⟩ := WordsSim.bind_ok hc
+  obtain rfl := WordsSim.pure_ok hc
+  exact ⟨step_code _ (hstep _ _ hFp) ⟨_, _, _, rfl⟩ hDp hcp, step_code _ (hstep _ _ hFm) ⟨_, _, _, rfl⟩ hDm hcm⟩
+
+/-- Where the support's two ends agree in the game (`saltDeadP_iff_ends_hopper`'s `EndsAgree`), the check's end codes
+agree (`ends_agree`). -/
+theorem endsAgree_of_endCodes {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : AccumProofs.StepWord αw)
+    (hβ : AccumProofs.StepWord βw)
+    (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
+    (hc : Rule.endCodes αw cb w = .ok c)
+    (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) :
+    Rule.endsAgree c.1 c.2 = true := by
+  obtain ⟨⟨hcp', hEp, hnp⟩, ⟨hcm', hEm, hnm⟩⟩ := endCodes_eq hα hβ hβpos hw hy hcb hc
+  have hE' : codeVal (e4m3Word (endStep αw βw y false)) = codeVal (e4m3Word (endStep αw βw y true)) := by
     rw [← hEp, ← hEm]
     exact hE
   rw [hcp', hcm']
   exact endsAgree_of ((Pouw.PearlC.Cap.codeVal_eq_iff _ _ hnp hnm).1 hE')
+
+/-- **An element the game finds salt-dead the check finds salt-dead**: on a row whose α and β are step words, β
+positive, where `flat_code` and `salt_dead` are values, the support's two ends agree in the game
+(`saltDeadP_iff_ends_hopper`'s `EndsAgree`) only where the check's `ends_agree` holds. -/
+theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumProofs.StepWord αw)
+    (hβ : AccumProofs.StepWord βw)
+    (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
+    (hd : Rule.saltDead αw cb w = .ok d)
+    (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) : d = true := by
+  unfold Rule.saltDead at hd
+  obtain ⟨c, hc, hd⟩ := WordsSim.bind_ok hd
+  obtain rfl := WordsSim.pure_ok hd
+  exact endsAgree_of_endCodes hα hβ hβpos hw hy hcb hc hE
 
 /-- `row_elements` counts at least every element of a property each of whose elements is in an atom block every word
 flags or is salt-dead in the check. -/
