@@ -620,8 +620,9 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
     which the nodes can't): one incident per node and kind.  A whole tree's stale files (deploy.toml's `whole = true`: a copy
     of main's code a node runs, installed in deploy rounds and so behind main between them) are not among the node's stale
-    ones: they are one finding per node and tree, an incident only once every reading for a week has found the copy behind,
-    with the command that installs main's.  A node whose null device isn't the character device 1,3 with mode
+    ones: they are one finding per node, tree and installed directory (`copy`: each install makes a new one, so its week
+    starts at the install), an incident only once every reading for a week has found that copy behind, with the command
+    that installs main's.  A node whose null device isn't the character device 1,3 with mode
     666 is a page of its own, with the command that repairs it: every redirect to /dev/null fails there for a user who isn't
     root.  A node ssh can't connect to (a stopped VM) is skipped; any other read that fails, or every node unreachable, is the
     monitor's error."""
@@ -630,7 +631,7 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
-    behind: dict[tuple[str, str], int] = {}
+    behind: dict[tuple[str, str, str], int] = {}
     broken = []
     for n, rep in sorted(reps.items()):
         if "error" in rep:
@@ -641,17 +642,18 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
                                                            "mode 666 again."))
         for e in rep["entries"]:
             if e["state"] == "stale" and e.get("whole"):
-                behind[n, e["tree"]] = behind.get((n, e["tree"]), 0) + 1
+                copy = (n, e["tree"], e.get("copy") or "")
+                behind[copy] = behind.get(copy, 0) + 1
             elif e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
                 groups.setdefault((n, e["state"]), []).append(e["path"])
             if e.get("restart"):
                 groups.setdefault((n, "restart"), []).append(e["path"])
         for p in rep["strays"]:
             groups.setdefault((n, "stray"), []).append(p)
-    broken += [Finding(f"{n}:copy-behind:{t}", f"*{n}: the copy of main's code at `{t}` is behind main*: {k} of its files "
+    broken += [Finding(f"{n}:copy-behind:{t}" + (f"@{c}" if c else ""), f"*{n}: the copy of main's code at `{t}` is behind main*: {k} of its files "
                        f"{'is' if k == 1 else 'are'} not main's (an incident once every reading for a week has found it behind). "
                        f"Install main's: `research deploy install {n} --by WHO --apply {t}`.", for_s=COPY_BEHIND_S,
-                       cleared=f"*Cleared:* {n}'s copy at `{t}` is main's again.") for (n, t), k in sorted(behind.items())]
+                       cleared=f"*Cleared:* {n}'s copy at `{t}` was installed again.") for (n, t, c), k in sorted(behind.items())]
     return broken + [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                              + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".")
                      for (n, kind), ps in sorted(groups.items())]

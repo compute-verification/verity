@@ -135,6 +135,7 @@ for pat in req["globs"]:
     found.update(p for p in glob.glob(pat) if os.path.isfile(p))
 for t in req["trees"]:
     found.update(tree_files(t))
+links = {t: os.readlink(t) for t in req["trees"] if os.path.islink(t)}
 btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
 hz, want, procs, running = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}, {}
 for pid in filter(str.isdigit, os.listdir("/proc")):
@@ -173,7 +174,7 @@ try:
     null = [st.st_mode, os.major(st.st_rdev), os.minor(st.st_rdev)]
 except OSError as e:
     null = f"{type(e).__name__}: {e}"
-print(json.dumps({"files": files, "found": sorted(found), "procs": procs, "running": running, "record": record,
+print(json.dumps({"files": files, "found": sorted(found), "links": links, "procs": procs, "running": running, "record": record,
                   "distrusted": distrusted, "null": null}))
 '''
 
@@ -534,7 +535,8 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     entries = []
 
     def of(e: Entry) -> dict:
-        return {"tree": e.path, **({"whole": True} if e.whole else {})} if e.tree else {}
+        copy = os.path.basename(seen.get("links", {}).get(e.path, ""))      # the directory the link names: one per install
+        return {"tree": e.path, **({"whole": True, **({"copy": copy} if copy else {})} if e.whole else {})} if e.tree else {}
 
     for path in sorted({*want, *generated}):
         got = seen["files"].get(path)

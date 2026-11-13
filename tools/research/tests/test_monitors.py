@@ -634,7 +634,7 @@ def test_the_stale_files_of_a_whole_tree_are_a_finding_of_their_own_and_the_node
     assert copy.text == (f"*vy-nebius-cpu-9: the copy of main's code at `{CLEAN_UP}` is behind main*: 3 of its files are not main's "
                          "(an incident once every reading for a week has found it behind). Install main's: `research deploy "
                          f"install vy-nebius-cpu-9 --by WHO --apply {CLEAN_UP}`.")
-    assert copy.cleared == f"*Cleared:* vy-nebius-cpu-9's copy at `{CLEAN_UP}` is main's again."
+    assert copy.cleared == f"*Cleared:* vy-nebius-cpu-9's copy at `{CLEAN_UP}` was installed again."
     two = [*COPY[:1], {"path": "/opt/other/a.py", "state": "stale", "tree": "/opt/other", "whole": True, "restart": None}]
     got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(two)))}
     assert set(got) == {f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}", "vy-nebius-cpu-9:copy-behind:/opt/other"}       # one per tree
@@ -663,6 +663,21 @@ def test_a_node_whose_only_stale_files_are_a_whole_trees_has_no_stale_incident_a
     out = M.step(state, [drift], lambda memo: M.Ctx(now=t + hour, run=drift_of(PLAIN), memo=memo), t + hour, M.AlertDir(tmp_path), by="test")
     assert sorted((e["event"], e["key"]) for e in out) == [("clear", f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"),
                                                           ("open", "drift|vy-nebius-cpu-9:stale")]       # an ordinary one opens at once
+
+
+def test_an_install_starts_the_copys_week_again_though_no_reading_found_the_copy_current(tmp_path):
+    """Main changes the copy's source in most hours, so the first reading after an install may find the new copy behind
+    already. The finding is of the directory the link names, which each install makes anew: its week starts at the install."""
+    drift = next(m for m in M.MONITORS if m.id == "drift")
+    state, hour, opened = M.new_state(), 3600, []
+    names = ("aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "bbbbbbbbbbbb.20261006T204000Z.y2y2y2y2")
+    for i in range(10 * 24 + 1):
+        t = T0 + i * hour
+        copy = [{**e, "copy": names[i >= 3 * 24]} for e in COPY]        # installed on the third day, behind again within the hour
+        out = M.step(state, [drift], lambda memo, t=t, copy=copy: M.Ctx(now=t, run=drift_of(copy), memo=memo), t, M.AlertDir(tmp_path),
+                     by="test")
+        opened += [(i, e["key"]) for e in out if e["event"] == "open"]
+    assert opened == [(10 * 24, f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{names[1]}")]
 
 
 def test_drift_pages_on_a_node_whose_null_device_is_broken_with_the_command_that_repairs_it():
