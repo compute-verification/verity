@@ -62,6 +62,7 @@
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
+  "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -2182,8 +2183,19 @@
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.PeriodGame"],
+   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.PeriodGame",
+    "Properties.Pous.MemoryChallenger.Session"],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "imports": [
+    "Mathlib",
+    "Properties.Pous.MemoryChallenger",
+    "MemoryChallenger",
+    "Definitions.Accounting.Assumptions.Parties"
+   ],
+   "except": [],
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   },
   "Properties.Pous.Period": {
    "imports": [
@@ -3109,6 +3121,9 @@
    },
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
+  },
+  "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+   "owner": "@memory-accounting"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -12732,6 +12747,10 @@
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
     "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+    "function": "MemoryChallenger.Session.Properties.code",
     "outcome": "none"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
