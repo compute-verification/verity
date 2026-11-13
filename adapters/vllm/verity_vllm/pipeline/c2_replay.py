@@ -291,7 +291,8 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     run root)[:8], else the run root's first 8 bytes.  That last form has no coin: a prover steers the sample by committing again, in about
     the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
     replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
-    from verity_vllm.check.replay import driver as SR, replay_codes as RC
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.check.replay import replay_codes as RC
 
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
@@ -363,8 +364,8 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     the `executed_prefix=` kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
-    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import executed_prefix as EPX
 
     _sr_kw: dict[str, Any] = {}
     binding = s.row["commit"].get("binding")
@@ -433,9 +434,9 @@ def serving_rows(s: ReplaySources) -> None:
 def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
-    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import executed_prefix as EPX
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
