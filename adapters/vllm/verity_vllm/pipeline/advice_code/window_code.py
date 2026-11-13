@@ -45,6 +45,11 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
 - A window may carry a tail after its segment: plain fixed-width fields whose widths the reader knows before it reads
   them (`encode`'s ``tails``, `decode_tailed`), charged to the window. Every value of a width is a distinct string of
   it, so the string stays prefix-free; a window with no tail codes as before, bit for bit.
+- A window may carry a second coded segment after its tail (`Encoder.segment`; `encode`'s and `decode_tailed`'s
+  ``coded``): symbols a reader codes with contexts of its own (`kept`), under the same adaptive estimates, whose number
+  the reader knows from what it has decoded. It ends as the first does, so the string stays prefix-free and canonical,
+  and its bits, the termination's 2 among them, are charged to the window; a window with none codes as before, bit
+  for bit.
 
 **The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces, never on the
 run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
@@ -187,15 +192,24 @@ class Encoder:
         self.book, self.w, self.kt = book, C.BitWriter(), KT(book.priors)
         self.seg: C.ArithEncoder | None = None
         self.lens: list[int] = []
+        self.base = 0               # the open window's bits before its open segment, when that is its second
 
     def window(self) -> None:
         self._close()
         self.seg = C.ArithEncoder(self.w)
 
+    def segment(self) -> None:
+        """Opens the open window's second segment, after its first and its tail: `value` and `bit` code its symbols, and
+        its bits are charged to that window."""
+        self._close()
+        if not self.lens:
+            raise ValueError("a second segment outside any window: call window() first")
+        self.base, self.seg = self.lens.pop(), C.ArithEncoder(self.w)
+
     def _close(self) -> None:
         if self.seg is not None:
-            self.lens.append(self.seg.finish())
-            self.seg = None
+            self.lens.append(self.base + self.seg.finish())
+            self.base, self.seg = 0, None
 
     def _open(self) -> C.ArithEncoder:
         if self.seg is None:
@@ -243,19 +257,27 @@ class Decoder:
         self.r = C.BitReader.from_bytes(bits, nbits)
         self.seg: C.ArithDecoder | None = None
         self.lens: list[int] = []
+        self.base = 0               # as `Encoder.base`
 
     def window(self) -> None:
         self._close()
         self.seg = C.ArithDecoder(self.r)
 
+    def segment(self) -> None:
+        """`Encoder.segment`'s mirror: the open window's second segment, read from where its tail ends."""
+        self._close()
+        if not self.lens:
+            raise ValueError("a second segment outside any window: call window() first")
+        self.base, self.seg = self.lens.pop(), C.ArithDecoder(self.r)
+
     def _close(self) -> None:
         if self.seg is None:
             return
         try:
-            self.lens.append(self.seg.finish())
+            self.lens.append(self.base + self.seg.finish())
         except ValueError as e:
             raise ValueError(f"window {len(self.lens)}: {e}") from None
-        self.seg = None
+        self.base, self.seg = 0, None
 
     def _open(self) -> C.ArithDecoder:
         if self.seg is None:
@@ -341,15 +363,20 @@ def code_window(c: Any, win: Window | None, st: CoderState) -> Window:
 # ------------------------------------------------------------------------------------------------------------ API
 
 
-def encode(windows: Sequence[Window], book: Book, tails: Sequence[Sequence[tuple[int, int]]] | None = None) -> Encoded:
+def encode(windows: Sequence[Window], book: Book, tails: Sequence[Sequence[tuple[int, int]]] | None = None,
+           coded: Any = None) -> Encoded:
     """The run's residual, window by window; `lens[w]` is window w's charge. `tails[w]`, (value, width) pairs, follow
-    window w's segment as plain fixed-width fields (`Encoder.raw`), charged to it."""
+    window w's segment as plain fixed-width fields (`Encoder.raw`), charged to it. `coded(encoder, w)`, where given,
+    then codes window w's second segment (`Encoder.segment`), charged to it too."""
     e, st = Encoder(book), CoderState()
     for w, win in enumerate(windows):
         e.window()
         code_window(e, win, st)
         for v, n in tails[w] if tails else ():
             e.raw(v, n)
+        if coded is not None:
+            e.segment()
+            coded(e, w)
     return e.finish()
 
 
@@ -358,15 +385,18 @@ def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
     return decode_tailed(bits, nbits, book, [()] * n_windows)[0]
 
 
-def decode_tailed(bits: bytes, nbits: int, book: Book,
-                  widths: Sequence[Sequence[int]]) -> tuple[list[Window], list[list[int]]]:
+def decode_tailed(bits: bytes, nbits: int, book: Book, widths: Sequence[Sequence[int]],
+                  coded: Any = None) -> tuple[list[Window], list[list[int]]]:
     """`decode` of a string `encode` wrote with tails of these widths, one list a window: the windows and the tails'
-    values."""
+    values. `coded(decoder, w)`, where given, then reads window w's second segment, as `encode`'s wrote it."""
     d, st = Decoder(bits, nbits, book), CoderState()
     out, tails = [], []
-    for ws in widths:
+    for w, ws in enumerate(widths):
         d.window()
         out.append(code_window(d, None, st))
         tails.append([d.raw(n) for n in ws])
+        if coded is not None:
+            d.segment()
+            coded(d, w)
     d.finish()
     return out, tails
