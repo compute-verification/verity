@@ -226,8 +226,8 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     products. The record may hold the normalisation and the backward's products only beside plain normalisations of
     its own, a step's ops outside any norm (`fwd/act` with no gain): of each such product the config then holds at
     least the record's count at the same MACs an op, the record's share is the same on both sides, and the rule
-    covers only the config's excess, of each backward product the record holds a whole number for each of the
-    excess's normalisations, so a config whose plain normalisations have no backward is not the record's step."""
+    covers only the config's excess, each backward product the record holds in whole numbers for each normalisation
+    that passes a gradient to its input, after one product of the stream by itself for each updated gain."""
     x, s, g = [1, shape["ctx"], shape["d_model"]], [1, shape["ctx"], 1], [shape["d_model"]]
     gain = json.dumps([x, g])
     fused, mul = ("fwd", "updated", "_fused_rms_norm", gain), ("fwd", "updated", "mul", gain)
@@ -245,7 +245,9 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     excess = {k: [cfg[k][0] - held.get(k, [0, 0])[0], cfg[k][1] - held.get(k, [0, 0])[1]] for k in inside}
     if excess.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0]:
         return None
-    if any(excess[k][0] % excess[scale][0] for k in held if k[0] == "bwd"):
+    passed, own = excess.get(("bwd", "grad", "mul", gain), [0])[0], ("bwd", "grad", "mul", json.dumps([x, x]))
+    rest = {k: excess[k][0] - (updated[0] if k == own else 0) for k in held if k[0] == "bwd"}
+    if any(r % passed if passed else r for r in rest.values()):
         return None
     gains = (f"{updated[0]} multiplies by an updated gain, the same on both sides" if trained else
              "no gain is updated, so the record has nothing of the kernel")

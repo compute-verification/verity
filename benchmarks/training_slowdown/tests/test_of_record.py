@@ -142,14 +142,18 @@ def test_a_records_fused_attention_is_compared_as_the_counter_writes_it_under_an
     assert of_record.RULES == (of_record.norm, of_record.loss, of_record.average)
 
 
-def norms(updated: int, frozen: int, scales: int) -> tuple:
-    """The norm's products on a CPU: `updated` gains' multiplies, `frozen` of θ's gains, `scales` normalisations and
-    a backward through each."""
-    n = CTX * D
-    return (("fwd", "updated", "mul", [X, G], updated, updated * n),
-            ("fwd", "theta", "mul", [X, G], frozen, frozen * n), ("fwd", "act", "mul", [X, S], scales, scales * n),
-            ("bwd", "grad", "div", [X], scales, scales * n), ("bwd", "grad", "mul", [X, X], 2 * scales, 2 * scales * n),
-            ("bwd", "grad", "mul", [S, S], scales, scales * CTX))
+def norms(updated: int, frozen: int, scales: int, still: int = 0) -> tuple:
+    """The norm's products on a CPU, those it has: `updated` gains' multiplies, `frozen` of θ's gains, `scales`
+    normalisations, `still` of them on an input that needs no gradient, and autograd's backward: through each other
+    normalisation, through each gain's multiply on one of those, and each updated gain's own gradient."""
+    n, passed, through = CTX * D, scales - still, updated + frozen - still
+    return tuple(e for e in (
+        ("fwd", "updated", "mul", [X, G], updated, updated * n), ("fwd", "theta", "mul", [X, G], frozen, frozen * n),
+        ("fwd", "act", "mul", [X, S], scales, scales * n), ("bwd", "grad", "div", [X], passed, passed * n),
+        ("bwd", "grad", "mul", [X, X], 2 * passed + updated, (2 * passed + updated) * n),
+        ("bwd", "grad", "mul", [X, S], passed, passed * n), ("bwd", "grad", "mul", [X], passed, passed * n),
+        ("bwd", "grad", "mul", [S, S], passed, passed * CTX), ("bwd", "grad", "mul", [S], passed, passed * CTX),
+        ("bwd", "grad", "mul", [X, G], through, through * n)) if e[4])
 
 
 def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation_a_gain():
@@ -158,7 +162,7 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
     got = of_record.compare(step(log(*BOTH, *norms(3, 2, 5))), step(cuda), SHAPE)
     assert got["differences"] == []
     assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
-        ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+        ("norm", 3 * n, sum(e[5] for e in norms(3, 2, 5)))]
     assert "3 multiplies by an updated gain" in got["expected"][0]["what"]
     # a normalisation with no gain's multiply, another count of updated gains, a product of the backward's the
     # record has too: none is the norm's exact case, so each side's entries are differences
@@ -186,17 +190,17 @@ def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_to
     config has one plain normalisation more than the record, nor where the record has more of a product than the
     config."""
     n = CTX * D
-    plain = log(*norms(0, 0, 2)[2:])
+    plain = log(*norms(0, 0, 2))
     cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), plain)
     cpu = added(log(*BOTH, *norms(3, 2, 5)), plain)
     got = of_record.compare(step(cpu), step(cuda), SHAPE)
     assert got["differences"] == []
     assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
-        ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+        ("norm", 3 * n, sum(e[5] for e in norms(3, 2, 5)))]
     what = got["expected"][0]["what"]
     assert "5 normalisations" in what and what.endswith("beside 2 plain normalisations on both sides")
-    for mine, record in ((added(cpu, log(*norms(0, 0, 1)[2:])), cuda),
-                         (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 11, 11 * n))))):
+    for mine, record in ((added(cpu, log(*norms(0, 0, 1))), cuda),
+                         (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 14, 14 * n))))):
         got = of_record.compare(step(mine), step(record), SHAPE)
         assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
 
@@ -204,12 +208,29 @@ def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_to
 def test_the_cpus_norm_beside_plain_normalisations_with_no_backward_on_the_configs_side_is_a_difference():
     """The record has plain normalisations and their backward's products, the config the same normalisations
     forward with no backward (their scale detached), and the norm's: of each backward product the config's excess
-    over the record is then no whole number for each of the excess's normalisations, so the rule doesn't fire and
-    the config's step is not read as the record's."""
+    over the record is then no whole number for each normalisation that passes a gradient to its input, so the rule
+    doesn't fire and the config's step is not read as the record's."""
     n = CTX * D
-    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), log(*norms(0, 0, 2)[2:]))
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), log(*norms(0, 0, 2)))
     detached = added(log(*BOTH, *norms(3, 2, 5)), log(("fwd", "act", "mul", [X, S], 2, 2 * n)))
     got = of_record.compare(step(detached), step(cuda), SHAPE)
+    assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
+def test_the_cpus_norm_beside_plain_normalisations_counts_its_backward_by_the_normalisations_that_pass_a_gradient():
+    """A norm whose input needs no gradient (one on a frozen embedding) has no backward through its normalisation,
+    only its gain's own gradient: beside the record's plain normalisations the rule fires, the backward counted in
+    whole numbers for each normalisation that passes a gradient. Where none passes one, each backward product's
+    excess past the gains' own gradients must be none."""
+    n = CTX * D
+    plain = log(*norms(0, 0, 2))
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), plain)
+    for still in (1, 5):
+        got = of_record.compare(step(added(log(*BOTH, *norms(3, 2, 5, still)), plain)), step(cuda), SHAPE)
+        assert got["differences"] == [] and [e["rule"] for e in got["expected"]] == ["norm"]
+        assert "5 normalisations" in got["expected"][0]["what"]
+    stray = added(log(*BOTH, *norms(3, 2, 5, 5)), plain, log(("bwd", "grad", "div", [X], 1, n)))
+    got = of_record.compare(step(stray), step(cuda), SHAPE)
     assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
 
 
@@ -219,13 +240,13 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
     a normalisation has no gain's multiply, where the record has one of the backward's products too, or where the
     config multiplies by an updated gain the record never counted."""
     n = CTX * D
-    frozen = norms(0, 5, 5)[1:]
+    frozen = norms(0, 5, 5)
     got = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH)), SHAPE)
     assert got["differences"] == [] and got["products"] == len(BOTH)
     assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
-        ("norm", 0, 5 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+        ("norm", 0, sum(e[5] for e in norms(0, 5, 5)))]
     assert "no gain is updated" in got["expected"][0]["what"] and "5 by θ's gains" in got["expected"][0]["what"]
-    for cpu, record in ((norms(0, 5, 6)[1:], log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
+    for cpu, record in ((norms(0, 5, 6), log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
                         (frozen, log(*BOTH, ("bwd", "grad", "mul", [X, X], 1, n)))):
         got = of_record.compare(step(log(*BOTH, *cpu)), step(record), SHAPE)
         assert got["expected"] == [] and len(got["differences"]) >= 5
