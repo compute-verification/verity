@@ -11,8 +11,7 @@ import pytest
 
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import global_match as gm
-from verity_vllm.check.match import per_request
-from verity_vllm.check.match import rank_match
+from verity_vllm.check.match import per_request, rank_match
 from verity_vllm.pipeline import cli
 
 
