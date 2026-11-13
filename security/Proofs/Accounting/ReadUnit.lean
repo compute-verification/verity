@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.ReadUnit
 public import Proofs.Core.Circuit
+public import Proofs.Flock.Claims.Finder
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Hash.EmbeddingRead
 import Mathlib.Algebra.Order.Floor.Extended
@@ -196,11 +197,19 @@ theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg →
     unfold Claims.Finder.Pr
     apply Claims.Pr_mono
     intro ω h
-    obtain ⟨x, hx, y, hy, hxy⟩ := h
-    have h' : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
-        Hash.Collision (fun m => (H m).bytes) x y := ⟨x, hx, y, hy, hxy⟩
-    refine ⟨h'.choose, h'.choose_spec.2.choose, ?_, h'.choose_spec.2.choose_spec.2⟩
-    simp [Reads.finder, h']
+    obtain ⟨x, hx, y, hy, hne, hxy⟩ := h
+    have hev : ∀ p ∈ (R.drawnHashed P H key drawn X ω).map (fun m => (m, (H m).bytes)),
+        (fun m => (H m).bytes) p.1 = p.2 := by
+      intro p hp
+      obtain ⟨m, -, rfl⟩ := List.mem_map.1 hp
+      rfl
+    cases hf : Claims.findColl ((R.drawnHashed P H key drawn X ω).map fun m => (m, (H m).bytes)) with
+    | none =>
+      exact absurd (Claims.findColl_none _ hf (x, (H x).bytes) (List.mem_map_of_mem hx) (y, (H y).bytes)
+        (List.mem_map_of_mem hy) hxy) hne
+    | some uv =>
+      obtain ⟨u, v⟩ := uv
+      exact ⟨u, v, hf, Claims.findColl_spec _ _ hev u v hf⟩
   exact (Claims.Pr_mono hsplit).trans ((pr_or_le _ _).trans
     (add_le_add (readUnitDrawn H key consts P R acc drawn X ε hgates hcommitted below) (hfind.trans hcr)))
 

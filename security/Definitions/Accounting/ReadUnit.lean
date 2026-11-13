@@ -236,19 +236,14 @@ noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.M
     (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
   (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
-open Classical in
 /-- **The table reads' collision finder**: on the outcome `ω`, two messages the sampled reads hashed that `H` maps to one
-digest, if there are two, at the cost `cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its
-sampled reads hashed. -/
+digest, if there are two, found by `Claims.findColl` over what they hashed, each message hashed once, at the cost
+`cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its sampled reads hashed. -/
 noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Partition C n)
     (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace)
     (cost : Ω → ℕ) : Claims.Finder where
   S := Ω
-  out ω :=
-    if h : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
-        Hash.Collision (fun m => (H m).bytes) x y then
-      some (h.choose, h.choose_spec.2.choose)
-    else none
+  out ω := Claims.findColl ((R.drawnHashed P H key drawn X ω).map fun m => (m, (H m).bytes))
   cost := cost
 
 end Reads
