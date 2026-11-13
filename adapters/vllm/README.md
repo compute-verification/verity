@@ -128,7 +128,7 @@ verity_vllm/
   config.py          workload files, checkpoint pins, protocol names; settings.py: every environment variable it reads
   errors.py, log.py  the one refusal type (Refused); the logger every library module logs through (init_logger)
   target_family.py   the target-family preflight: a workload's device class, held against its Build and its pod's GPU
-  glue.py            the glue inventory: the code one model alone needed, and its hours from checkpoint to record
+  glue.py            the glue inventory: a model's model-specific code, and its hours from staged checkpoint to record
   gc_tuning.py       the cyclic collector's thresholds for the offline analysis processes
   engine/            the pinned engine: its build, profiles, served switches (served.py); hooks.py owns every runtime patch
   pipeline/          stage drivers (Build, Match, Commit; tp/ for TP > 1), the endpoint (serve_*.py), cli.py, circuit_db.py
