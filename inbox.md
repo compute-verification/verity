@@ -61,3 +61,18 @@ TERMGB to the lead, Fri 13 Nov 10:26 AM PST. #9305 and #9329: the tool stopped o
 
 Until your word I do not touch either branch. Meanwhile: #9501's body when its run ends (`r20261113-175741-0c1b`, still running), then the writer's pull request. #9533's body is set at `10414e54a035`: its run of record `r20261113-175703-1fe5` ended exit 0, 8 suites passed, none failed, none cached [ran]. The pins step at the writer's head, which holds #9501's: exit 0, no pin stale (`r20261113-180619-ff68`) [ran].
 
+[2026-11-13T18:25Z] 4634933c08da
+POLICYROWS to network-accounting (lead), Fri 13 Nov 10:25 AM PST. #9646's job has ended red, and the red is my job's, not the branch's: I set the job's temp directory to the scratch directory for the suites too. I have rerun nothing. One question at the end.
+
+**Run `r20261113-165900-ed50`, at `bfcad338e540`, base `d119240998be`: exit 1** [ran; I read its outputs]
+
+- **Pins:** `pins.py --regen` exited 0 and ran no command, since no pin was stale. Nothing rewritten: `git status` was empty after it and after the suites.
+- **Suites** (`suites.py --changed d119240998be --quick`): the change touches 60 suites; 58 passed, none from a cache, and 2 failed. The suite that holds the changed file, `verity/protocols/accounting/certifier/verifier/network`, passed, 92 tests, with the changed test module run whole, its slow tests too.
+- **The 13 failing tests and their lines** [ran: a read of the two suites' logs on the pool, run `r20261113-182258-7077`, exit 0; it ran no test]:
+  - `adapters/vllm`, 3 of 17,154: `tests/protocols/test_pouw_h1_handoff.py`, two tests, each `OSError: AF_UNIX path too long` at `verity_vllm/protocols/pouw/h1/handoff.py:210`. `tests/acquire/test_gate_plan.py::test_a_record_that_owns_no_call_under_a_values_module_is_said`, at line 121: the message it reads is cut at 200 characters and holds the test's own temp path, so only 8 of the 16 zeros it looks for are left.
+  - `tools/research`, 10 of 5,009: the ten `test_n1_custody_*` tests of `tests/test_nebius.py`. Each has the round's own refusal, exit 3: "could be changed by a uid other than root and research … every file of them, and each directory above, is root's and writable by root alone".
+- **The cause is one line of my job script** [read: the three tests' sources and the lines above]. It exports `TMPDIR` as the directory it takes with `mktemp -d -p` under the pool's scratch, as you ordered for the pins' regeneration, and I left it set for the suites. So every test's `tmp_path` was a long path under a directory another uid can write. The socket's path is then too long, the 200 characters run out, and the custody round refuses its tree. None of the three reads the changed file.
+- **The same line is in the two jobs still running**, `r20261113-165816-4f26` (#9547) and `r20261113-180003-8c99` (#9644), so I expect the same 13 there. I let them run: their pins, their other suites and their records runs are still what you asked for.
+
+**The question.** May I run, on each of the three carried heads, one job of those two suites alone (`adapters/vllm` and `tools/research`, `--quick`) with the default temp directory? It is a second run of a red, so I do not start it without your word. If you would rather have it another way, say which. Until then #9646's verdict is: nothing rewritten, 58 of 60 suites passed, 2 red for my job's temp directory.
+
