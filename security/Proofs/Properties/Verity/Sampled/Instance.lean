@@ -592,17 +592,6 @@ def SessionAt (k : Verity.Registration.Composite) : Prop :=
     (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent) →
       SetsUp I.base θ F A ∧ A.OpensReady
 
-/-- A play that some strategy wins with nonzero probability is won on some tape. -/
-theorem exists_tape_of_prob_ne {β : Type} {p : β → Prop} {g : Verity.Game β} {σ : Verity.Game.Strategy g}
-    (h : Verity.Game.prob p g σ ≠ 0) : ∃ t : Verity.Game.Tape g σ, p (Verity.Game.Tape.out g σ t) := by
-  by_contra hn
-  simp only [not_exists] at hn
-  refine h (le_antisymm ?_ zero_le)
-  calc Verity.Game.prob p g σ = Verity.Game.prCoin fun t => p (Verity.Game.Tape.out g σ t) :=
-        Verity.Game.prob_eq_prCoin _ _ σ
-    _ ≤ Verity.Game.prCoin fun _ : Verity.Game.Tape g σ => False := Verity.Game.prCoin_mono fun t ht => hn t ht
-    _ = 0 := Verity.Game.prCoin_false
-
 /-- **`Covers` at the deployed vocabulary**: where the deployment runs no session, the published δ is `⊤`
 (`deltaOf`); where it runs one that v2 doesn't set up on the committed files, an accepting play's files pass the file
 check, so under the further finders' premises they name the registered files (`namedFile_eq`), where v2 sets the
@@ -629,20 +618,18 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     have hs := hSa θ F A hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv, ht⟩
     rw [I.sessions_of hA hs.1 hs.2] at hS
     cases hS
-  rw [Verity.Game.prob_eq_prCoin]
-  calc Verity.Game.prCoin (fun t => (I.vocab K).Verdict k .sampled (Verity.Game.Tape.out _ σ t))
-      ≤ Verity.Game.prCoin (fun t => ∃ u v, (Binding.readFinder I.base I.dev θ F c σ).out t = some (u, v) ∧
-          Claims.Collision Verity.sha512Msg u v) :=
-        Verity.Game.prCoin_mono fun t hv => Binding.finder_of_tables I.base I.dev θ F c σ t (hno t hv)
-    _ = ENNReal.ofReal ((Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
-        Verity.Game.prCoin_eq_ofReal_pr _
-    _ ≤ ENNReal.ofReal (I.sampledBound θ ((I.vocab K).cost θ F c σ)) :=
-        ENNReal.ofReal_le_ofReal ((I.vocab K).finderPr_le_crBound hFC)
-    _ ≤ (I.vocab K).delta θ .sampled ((I.vocab K).cost θ F c σ) := by
-        show _ ≤ I.deltaOf θ .sampled _
-        rw [I.deltaOf_some hA]
-        unfold Live.delta
-        exact le_add_self
+  have hb : Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
+      ENNReal.ofReal ((Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
+    Binding.verdict_le_of_tables I.base k I.dev θ F c σ hno
+  have hfin : (Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+      I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
+    (I.vocab K).finderPr_le_crBound hFC
+  have hδ : ENNReal.ofReal (I.sampledBound θ ((I.vocab K).cost θ F c σ)) ≤
+      I.deltaOf θ .sampled ((I.vocab K).cost θ F c σ) := by
+    rw [I.deltaOf_some hA]
+    unfold Live.delta
+    exact le_add_self
+  exact hb.trans ((ENNReal.ofReal_le_ofReal hfin).trans hδ)
 
 /-! ## The other subprotocols' targets are the base's -/
 
