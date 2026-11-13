@@ -11,7 +11,7 @@ one commitment, so a prover that reads a sample and commits again finds its seco
 openings are exactly the coins the family released, from its first, so the prover picked none of them and the segment's
 `start` is 0. `readReason` is `read_reason`: the bytes the sample read are the start of that stream, and they read every
 coin opened (`startReason`). The commitment and the roots it is given come from the code that already trusts them
-(`trustedSessionOf`, through `drawCoins` and `coinsReason`, `ChallengerDraw.lean`). A session `withheldOn` passes is a
+(`trustedChallengePhaseOf`, through `drawCoins` and `coinsReason`, `ChallengerDraw.lean`). A session `withheldOn` passes is a
 withheld one: every ledger open of the window says `withheld: true`, so its challenger released no root, salt or path
 before it closed.
 
