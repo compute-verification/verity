@@ -123743,3 +123743,120 @@ is in its first try in the tree. I took ASSEMBLY's import line, so my file and t
 - `lawAt`'s axioms (`CoinMapLaw.lean`) have still not been probed.
 
 Branch `cursor/proofs-coinmap-8b0c` at `44609dc158`, pushed; nothing unpushed.
+
+## STOPDRIVER, Fri 13 Nov 05:58Z: #9624's ready line; what the forged stop audit's refusal states today; what a forged second stage needs so the compiled check refuses it
+
+In plain words. #9624 has its ready line. The forged stop audit is refused by Lean, and Lean's word for it is the
+proof's, not `stop_word`: one line makes the audit's summary add the word, as the audit's reading of Lean's refusal.
+A forged second stage never reaches the compiled check today: the prover's own driver stops first, and no case is
+written for a run the Python stream refused. Your 05:24Z message is taken: the rate stays `1/1`, and I build nothing
+on `two_stage.py`.
+
+### #9624: ready
+
+**Ready line: #9624 at `64364792ed70bb0b934d5cb5fac96f3779d8047f`** (`cursor/proofs-stopdriver-across-all-ffc6`),
+open, unmarked. It merges onto `main` at `b843a10af48a` without conflict [run: `git merge-tree`].
+
+- [run] `r20261113-035442-fb74` (vy-nebius-2, `suites.py --changed 8ef93f01963c --quick` at `0e1df517c65d`): 63
+  suites, 62 passed, 1 failed. The one is `research`, on the two `tests/test_auto.py` tests that read that
+  machine's own hold file; [read] #9596, which fixes them, merged at 05:31Z.
+- [run] `r20261113-051320-112b` (vy-nebius-cpu-12, `--changed 0e1df517c65d --quick` at the head, which adds only
+  the test file's words): 4 suites, 4 passed (`benchmarks/one_stage` 1,029, `repository` 388,
+  `benchmarks/prove_path` 170, `verity-graph` 220).
+- [run] Lean: `Spot/Pieces.lean` at `0e1df517c65d` exit 0 (`3f05`); `Spot/RecordAcross.lean` at the head with
+  `--siblings` exit 0, no name declared twice (`8064`). Neither file holds a theorem.
+- The body's Checks say this. [run] The ratchet gate passed.
+
+### What the forged stop audit's refusal states today
+
+[run: `r20261112-082319-a0bb`, the rehearsal's `length` case, at `2011220faf70`; `summary_of` is unchanged on
+`main` since, read] Its `summary.json`, exit code 1:
+
+~~~text
+"accepted": false, "complete": false, "length_held": false, "refused": null, "case": 3,
+"failed": ["registered", "roots"],
+"verdicts": {"lean-verify/stop": false, "m0-verifier/stop": false, "registered-reads": false,
+             "cross-stream-order": true, "boundary-audit": null, "request-row": null, "stop-rule": null},
+"why": {"lean-verify/stop": "zk inner: the batched constraint fails (⟨c, Y⟩ ≠ t + β τ)",
+        "m0-verifier/stop": the same text, "registered-reads": null}
+~~~
+
+- The refusal is the compiled verifier's: Lean's verdict of record on the session (`flock-verify verify --zk`).
+  The two failed checks of the audit record follow from it (no accepted verdict, so no roots opened).
+- Its word is the proof's. It has no `reason` field and nowhere says `stop_word`.
+- **The one line** [read, not run], in `stop_audit.summary_of`'s returned object:
+  `"reason": "stop_word" if a0.lean_refused(verdicts.get(LEAN) or {}) else None`. [read] `a0.lean_refused` is
+  true only for Lean's own verdict line that refused a proof it read, never a refusal at setup or for a missing
+  session file. The record writer then copies `reason` into the control.
+- [argued] What that word is and is not. Lean cannot say which committed row is wrong: the stop statement is one
+  relation over three registered reads (the request row, the ids row, the stop word), and a false statement fails
+  whole, with the same text whichever row was changed. So `stop_word` would be the audit command's name for "Lean
+  refused the stop blocks' proof", whose one output is the stop word. That is right for this control, where the
+  request and ids rows are the accepted class's. It is the Python command's word on Lean's refusal, not a word Lean
+  printed. If soundness holds the stop record to its row-6 rule for `output` (the word from the verifier that gives
+  the final accept), no line of ours makes Lean say it: Lean's verdict line would have to name the statement it
+  refused, and the reader map that statement to the word.
+
+### What `--forge` on `two_stage.py second` needs, on TWOLEG's tip (`cursor/proofs-twoleg-c5e5` at `e03a1aff6f1e`)
+
+[read at that tip, nothing run]
+
+1. **The compiled check never sees a forged run today.** The final accept is the two-stage form's
+   (`sampled-two-on check` on `params`, `commitment`, `evidence` and the blobs). `second --form-case` assembles
+   that case from `run-input.json`, which is captured only when the Python stream hands its run of record to Lean,
+   and the stream does that only once the sessions' verdicts hold (`Stream._audit_two`). A run with a refused
+   session writes no case.
+2. **The prover's driver stops before that.** `interior_rows.interior` raises "returns at its port a row that is
+   not row R of VALUE, the return round 1 committed: the replay didn't reproduce what was served" when a replayed
+   output is not the committed one. That is the honest prover refusing to prove, in Python.
+3. **So the forgery starts at the commitment, as the stop audit's does.** `two_stage_small.py serve` writes a second
+   class in another serve's window whose committed output row has one word changed and whose `commit.json` holds
+   that tree's root; `first` registers it. A challenger opens a run's root once, so it is a class of its own.
+4. **`second --forge`**: skip check 2 for the forged spans, stage each return's row as the boundary record commits
+   it (rows and `b || c` agreeing with the registered tree, as `prove_leg._stage_forged` does), and run the proof
+   server with the self-check skipped (`FC_ZK_SELF_CHECK=skip`, which `records_audit.py --forged` already sets).
+   Every sampled span has to be forged, or the sample may miss it: forge all.
+5. **A case for a refused run**: `sampled_two_case` needs a second way in, from the driver's own copies (the
+   stream's entry, both receipts, the coins, `audit/case-v2-members.json`, which `a5` writes before any verdict),
+   since no `run-input.json` exists. Everything else is as the accepted run's.
+6. **What the form says then** (`SampledTwo.inputAt`): `two-stage: proofs: a session's verifier did not accept`.
+   It names no member, session, port or reason, and not `output`.
+7. **For the word**: the form's run of the members (`OneStageZk.membersRun`) keeps each session's verdict. The
+   form can name the refused session's member and, from the replay block's returns, that this member's output
+   port reads the boundary record's committed row. A reason such as `output: member M's session did not accept,
+   and its port P returns the boundary record's row` is computed by the compiled check from public structure.
+8. **Its limit** [argued]: as for the stop word, the proof fails whole. The form can say "a session that returns
+   a committed output was refused", not "the output was the changed value". Under the control (inputs as
+   accepted) it is the right word.
+9. **Lean changes, so TWOLEG's or after it**: item 7 is in `VStarRecursive/SampledTwo.lean` (one `throw`), with its
+   test in the form's accept test's directory; items 3 to 5 are `benchmarks/one_stage` only, about the size of the
+   stop audit's forged path, plus a case in `sampled_two_small.sh` that must end `FORM_ON rc=1` with the word.
+10. **Not read**: whether a refused audit still writes `audit/case-v2-members.json` for every member; whether
+    `a5.audit` passes `--forged` through for one member only; what the form says if only a blob's committed row
+    is changed with no prover at all (a cheaper control, if soundness takes it).
+
+### Housekeeping
+
+- The VM restarted between 05:20Z and 05:50Z; `/tmp` was wiped and nothing pushed was lost. `~/wt/.pen` does not
+  exist.
+- [run] #9662's body lost its issue line when I replaced the body at 05:18Z (an edit replaces all of it); restored.
+- Runs out: none.
+
+STOP RULE: reached for this hour. I build nothing more without your word: not the `reason` line (it changes
+`stop_audit.py`, which Friday's tree launches from), not the forged second stage.
+
+NEEDS:
+1. Whether the `reason` line goes in now, on the records branch (#9662) or a branch of its own, or waits for
+   soundness's word on whose word counts.
+2. A mark for #9662 and #9624 when you have read them.
+
+To post (yours): NET-403: "The forged stop audit is refused by Lean's verdict of record on the session; Lean's
+reason is the proof's (`zk inner: the batched constraint fails`), which cannot name which committed row changed.
+The audit's summary can add `reason: stop_word` wherever Lean refused the stop blocks' proof; that word is the
+audit command's reading of Lean's refusal. Say whether that counts."
+
+Not established: the forged stop audit at a served class's statics; anything in the ten lines beyond reading.
+
+Heads, all pushed: across `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624); records
+`b3d3c01f9983e49de9ab05dd1eea330473848e95` (#9662); rows `08acea32de756f0f1a06168baf62c088fd24c630` (#9655, marked);
+cards `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`.
