@@ -364,6 +364,57 @@ theorem holdsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release 
   · rw [runs_two S₁ S₂ cut h2]
     exact List.mem_append.2 (.inr (mem_runsAt hf₂ e₂ (ht₂ l₂ e₂)))
 
+theorem coinsOf_append (label : String) :
+    ∀ l₁ l₂ : List Release, Verity.Sampled.Device.coinsOf label (l₁ ++ l₂) =
+      Verity.Sampled.Device.coinsOf label l₁ ++ Verity.Sampled.Device.coinsOf label l₂
+  | [], _ => rfl
+  | ⟨.fresh l, b, cs⟩ :: l₁, l₂ => by
+    simp only [List.cons_append, Verity.Sampled.Device.coinsOf]
+    by_cases h : l = label <;> simp [h, coinsOf_append label l₁ l₂]
+  | ⟨.hello spec, ν, cs⟩ :: l₁, l₂ => by
+    simp only [List.cons_append, Verity.Sampled.Device.coinsOf]
+    exact coinsOf_append label l₁ l₂
+  | ⟨.opening i s n, b, cs⟩ :: l₁, l₂ => by
+    simp only [List.cons_append, Verity.Sampled.Device.coinsOf]
+    exact coinsOf_append label l₁ l₂
+
+/-- **Each part of a log that fits a layout fits it.** -/
+theorem fits_parts {fs : List (String × ℕ)} {log : List Release} (h : Fits fs log) (n : ℕ) :
+    Fits fs (log.take n) ∧ Fits fs (log.drop n) := by
+  have hl : ∀ label, (Verity.Sampled.Device.coinsOf label log).length =
+      (Verity.Sampled.Device.coinsOf label (log.take n)).length +
+        (Verity.Sampled.Device.coinsOf label (log.drop n)).length := by
+    intro label
+    rw [← List.length_append, ← coinsOf_append, List.take_append_drop]
+  refine ⟨fun label => ?_, fun label => ?_⟩
+  · have := h label
+    have := hl label
+    omega
+  · have := h label
+    have := hl label
+    omega
+
+/-- **A play's log fits its layout** (`Sampled.Device.coins_fit`). -/
+theorem fits_play {fs : List (String × ℕ)} {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} {o : Exchange} (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) : Fits fs o.log := by
+  obtain ⟨a, ha⟩ := h
+  obtain ⟨log, hlog, hf⟩ := Verity.Game.reaches_bind ha
+  obtain ⟨b, ρ, e, he⟩ := hf
+  subst he
+  exact Verity.Sampled.Device.coins_fit _ fs [] log hlog
+
+/-- **On two windows the history holds both runs, at setups of the play's layout**: `holdsTwo_dev₂`, each part fitting
+the layout as the play's log does (`fits_play`, `fits_parts`). -/
+theorem holdsTwo_play (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {fs : List (String × ℕ)}
+    {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
+    (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
+    (h2 : oneWindow o.params = false) (hno : NoHello (o.log.take (cut o.log)))
+    (ht₁ : TreesRead (S₁ o) (o.log.take (cut o.log))) (ht₂ : TreesRead (S₂ o) (o.log.drop (cut o.log))) :
+    ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (cut o.log)) lines₁ ∈ (dev₂ S₁ S₂ cut o).runs (S₁ o).key ∧
+      runOf (S₂ o) (o.log.drop (cut o.log)) lines₂ ∈ (dev₂ S₁ S₂ cut o).runs (S₂ o).key := by
+  obtain ⟨hf₁, hf₂⟩ := fits_parts (fits_play h) (cut o.log)
+  exact holdsTwo_dev₂ S₁ S₂ cut h h2 hno (hfs.1 ▸ hf₁) (hfs.2 ▸ hf₂) ht₁ ht₂
+
 /-! ## What the device signs -/
 
 /-- The public key of the parameters' challenger key (`keyOf`), the empty string where they name none. -/
