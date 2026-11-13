@@ -32,9 +32,13 @@ import subprocess
 import sys
 
 import pytest
-
 import verity.circuits
-from verity_vllm.program.frontend.target_profile import ArtifactIdentity, TargetProfile, reuse_mismatches
+
+from verity_vllm.program.frontend.target_profile import (
+    ArtifactIdentity,
+    TargetProfile,
+    reuse_mismatches,
+)
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # adapters/vllm
 CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.circuits.__file__)))  # the repository root
@@ -52,7 +56,8 @@ def _dump_results():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "guards_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "guards_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -68,7 +73,9 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
     for rel in files:
         p = os.path.join(INTEGRATION, rel)
         assert os.path.exists(p), f"{rel} moved: point G4c at the file that now holds it"
-        for i, line in enumerate(open(p).read().splitlines(), 1):
+        with open(p) as f:
+            lines = f.read().splitlines()
+        for i, line in enumerate(lines, 1):
             # applied / declared VALUES only (the hard-coded literals): not prose that names the architecture in a docstring
             if re.search(r"DeviceCapability\(major=\d", line) or '"8.9 (sm_89' in line or re.search(r'"NUM_SMS":\s*\d', line) \
                     or re.search(r"=\s*\(8,\s*9\)", line):
@@ -84,8 +91,8 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
 
 def test_G6_program_digest_carries_input_shape_and_dtype():
     torch = pytest.importorskip("torch")
-    from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.derive import derive_report
     torch.manual_seed(0)
     m = ex.MLP2(8, 16, 8)
     r3 = derive_report(m, (torch.empty(3, 8),), mode="reference", name="MLP2")

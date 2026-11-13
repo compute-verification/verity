@@ -19,13 +19,17 @@ import pytest
 import torch
 from torch import nn
 
-from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile, vllm_ruleset
 from tests.pipeline import tp_toy
 from tests.program import test_dsa_derive as DSA
 from tests.program import test_sigmoid_moe_fp8_derive as MOE
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
+from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    observe_target_profile,
+    vllm_ruleset,
+)
 
 PINS = Path(__file__).with_name("derive_neutrality.json")
 REPIN = os.environ.get("VERITY_REPIN") == "1"
@@ -65,8 +69,12 @@ def _dsa():
     return DSA._derive(model, DSA._inputs(model))
 
 
+def _tp_toy(w: int, r: int):
+    return lambda: tp_toy.derive_rank(w, r)[0]
+
+
 STANDINS = {
-    **{f"tp-toy-w{w}-r{r}": (lambda w=w, r=r: tp_toy.derive_rank(w, r)[0]) for w, r in ((2, 0), (2, 1), (8, 0), (8, 7))},
+    **{f"tp-toy-w{w}-r{r}": _tp_toy(w, r) for w, r in ((2, 0), (2, 1), (8, 0), (8, 7))},
     "dsa-indexer-indexshare-h200": _dsa,
     "moe-experts-fp8-ue8m0-h200": _moe,
     "rmsnorm-6144-h200": lambda: _norm(False),

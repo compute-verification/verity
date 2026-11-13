@@ -6,30 +6,27 @@ extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each
 `xfail(strict=True)` documents an OPEN finding: it flips to a failure the moment the finding is fixed, so the marker must then
 be removed.
 
-Skips cleanly on a tree without `verity.definitions.registry.lifted`; needs the in-tree MUFU
-tables like `test_serve3.py` for the LServe_v1 cases.
+Needs the in-tree MUFU tables like `test_serve3.py` for the LServe_v1 cases.
 """
 
 from __future__ import annotations
 
 import itertools
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits import Program
+from verity.circuits.types import Array, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.registry.b1 import weights_type
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-L = pytest.importorskip("verity.definitions.registry.lifted")
-
-from verity.circuits import Program  # noqa: E402
-from verity.definitions.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
-from verity.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.definitions.registry.b1 import weights_type  # noqa: E402
-from tests.program import test_lifted_tiny as T  # noqa: E402  (`test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
-from verity.circuits.types import Array, Value  # noqa: E402
+# `test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...
+from tests.program import test_lifted_tiny as T
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
 
 RNG = np.random.default_rng(20260920)
 
@@ -189,10 +186,9 @@ def test_lgatherrow_equals_the_spec_letter_and_oor_equals_the_registered_origina
                 got = lg.evaluate(idx, *rows)
                 want = _Ref.lgatherrow(16, idx, rows)
                 assert got == want, (pos, name, idx)
-                if L.valid(32, idx) and idx != _Ref.bot(32) and all(L.valid(16, r) for r in rows):
-                    # payload agreement with the original wherever both are defined (Active index, no ⊥/INV row)
-                    if all(r < (1 << 16) for r in rows):
-                        assert got == orig.evaluate(idx, *rows)
+                # payload agreement with the original wherever both are defined (Active index, no ⊥/INV row)
+                if L.valid(32, idx) and idx != _Ref.bot(32) and all(L.valid(16, r) for r in rows) and all(r < (1 << 16) for r in rows):
+                    assert got == orig.evaluate(idx, *rows)
     for oor in (N, N + 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF):  # Active out-of-range: the registered original's value, tag 0
         got = lg.evaluate(oor, *base)
         assert got == orig.evaluate(oor, *base) == 0x7FFF and L.tag(16, got) == 0

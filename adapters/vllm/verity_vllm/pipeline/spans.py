@@ -20,9 +20,11 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
+
+__all__ = ["Spans"]
 
 COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
 

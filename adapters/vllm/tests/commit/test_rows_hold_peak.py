@@ -24,10 +24,14 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")

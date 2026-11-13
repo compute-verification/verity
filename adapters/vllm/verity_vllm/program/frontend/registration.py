@@ -1,31 +1,15 @@
 """A `registered_values` derivation's registered inputs: the `values` record, whose fields are allocated as the Definitions read
 them, and the tables the rules declare (`Rule.registered_tables`).  They follow the user inputs and precede `weights`, which the
 Build's consumers read as the last parameter.  `RunInputs` is the `run` record a rule declares (`Rule.run_inputs`): values the
-served run binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters.
-`declare_weights` appends `weights` and refuses an input that has the name of a parameter added here."""
+served run binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType, Type, Value
-
 from verity.definitions.registry.tables import table_type
-from verity_vllm.program.frontend.outcomes import refuse
+
 from verity_vllm.program.inputs import run_field
-
-
-def declare_weights(params: list[tuple[str, Type]], weights: Type | None, inputs: Mapping[str, object]) -> None:
-    """Append the `weights` record, when the module owns a tensor, and refuse (`shape`) an input named as a parameter that follows
-    the inputs: a Definition's parameter names are distinct.  `inputs`: each input's placeholder by name, in parameter order."""
-    if weights is not None:
-        params.append(("weights", weights))
-    names = [n for n, _ in params]
-    for un, node in inputs.items():
-        if names.count(un) > 1:
-            refuse("shape", node, None, f"input {un!r} has the name of a parameter this function gets beside its inputs "
-                                        f"({', '.join(names[len(inputs):])}): a Definition's parameter names are distinct")
 
 
 class RegisteredInputs:
@@ -119,3 +103,6 @@ class RunInputs:
         return {"param": self.param, "name": "run",
                 "fields": [{"name": f["name"], "type": repr(f["type"]), "offset": f["offset"], "leaves": f["type"].leaves}
                            for f in self.fields]}
+
+
+__all__ = ["RegisteredInputs", "RunInputs"]

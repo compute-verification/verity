@@ -69,10 +69,24 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
-from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
+from verity.circuits.refs import (
+    Affine,
+    Concat,
+    Explicit,
+    Refs,
+    Strided,
+    broadcast,
+    concat,
+    runs,
+)
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
-from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
+from verity_vllm.observe.fold.views import (
+    byte_extent,
+    collapsed_dims,
+    element_runs,
+    row_view,
+)
 
 
 class Unresolved(Exception):
@@ -141,8 +155,6 @@ def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strid
 def access_runs(refs: Refs | list | None) -> list | None:
     """An access journal entry's refs as `runs()` lists: the fold keeps the `Refs` it read (shared with the instances, where a
     transposed weight's runs would be one per element); a list is already runs."""
-    from verity.circuits.refs import runs
-
     return runs(refs) if isinstance(refs, Refs) else refs
 
 
@@ -539,14 +551,14 @@ class MemoryModel:
             for n, st in zip(view.shape, view.strides):
                 if n == 1:
                     continue
-                d = next((d for d in axes if d not in used and rv.strides[d] == st), None)
-                if d is None or coord[d] + n > rv.shape[d]:
+                ax = next((d for d in axes if d not in used and rv.strides[d] == st), None)
+                if ax is None or coord[ax] + n > rv.shape[ax]:
                     break
-                used.add(d)
+                used.add(ax)
                 shape.append(n)
-                strides.append(leaf[d])
+                strides.append(leaf[ax])
             else:
-                return geometry_refs(space, idx, base + sum(c * l for c, l in zip(coord, leaf)), tuple(shape), tuple(strides))
+                return geometry_refs(space, idx, base + sum(c * s for c, s in zip(coord, leaf)), tuple(shape), tuple(strides))
         return None
 
     def _compatible(self, x: _Interval, view: ViewDesc) -> bool:
