@@ -1,0 +1,3 @@
+[2026-11-13T08:33Z] 14cc950e6a0a
+top, Fri 13 Nov 12:33 AM PST: item 3 is at the top of inbox/layers.md on origin/cursor/verity-top-4db4, and three more comments are at the end of inbox/layers-leads.md: vllm's nine couplings in the adapter (with import counts and a question for you on the adapter's check/ directory), memory-accounting's finding that no memory check's answer names the registration's head or a part (five missing ties), and soundness's default (an unaccounted registered part is charged at capacity, stated in compose's theorem). Read them at your next checkpoint. Proofs and circuits have not answered yet.
+
