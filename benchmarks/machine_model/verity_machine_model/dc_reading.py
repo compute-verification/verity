@@ -1,5 +1,5 @@
 """`dc_reading`: the H200's and B200's headline instances in `lean_headline`'s form, exact: each family's readings
-(`reading`), which `benchmarks/pouw/lean_headline_dc.py` writes as Lean.
+(`reading`), which `lean_headline_dc` writes as Lean.
 
 `lean_headline`'s bound (`Whole.headline_of_branches`) for the data-centre families, whose instances its
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
