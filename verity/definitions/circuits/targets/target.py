@@ -13,11 +13,11 @@ multiple of 16.
   row), each in ascending ``k`` order.  Weights are incoming values of the subcircuit.
 * **Instruction semantics.** Each step is one accumulator coordinate of Ampere
   ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` as modelled by
-  :data:`verity.definitions.silicon.models.AMPERE_BF16_M16N8K16`: the sixteen exact BF16 x BF16 products are summed in
+  :data:`verity.circuits.silicon.models.AMPERE_BF16_M16N8K16`: the sixteen exact BF16 x BF16 products are summed in
   **two groups of eight** (``k = 0..7``, then ``8..15``); the incoming FP32 accumulator joins the first group and the
   first group's result joins the second; each grouped sum is a **25-bit truncating** fixed-point adder aligned at the
   group's maximum exponent, with the exponent **floor** ``-132`` (terms below it flush); the result is repacked as an
-  FP32 word (round-toward-zero through the 25-bit window).  :func:`verity.definitions.silicon.models.tc_dot` is the
+  FP32 word (round-toward-zero through the 25-bit window).  :func:`verity.circuits.silicon.models.tc_dot` is the
   executable definition.
 * **Chaining and order.** Step ``0`` is ``tc_dot16_0(x[0:16], W[0:16])`` -- no incoming accumulator (``acc = +0``);
   step ``s`` for ``1 <= s < K/16`` is ``tc_dot16(acc_{s-1}, x[16s:16s+16], W[16s:16s+16])``.  The steps are chained
@@ -65,11 +65,11 @@ Outside FIRST
 * **Hardware NaN word.** The production epilogue's ``cvt.rn.bf16.f32`` produces ``0x7FFF`` for NaN, not ``0x7FC0``;
   that is version ``@2`` of :data:`TC_AMPERE_BF16_NAME` (vector ``accept--tc-store-cast-nan-hw``).  The two agree on
   every non-NaN word, and NaN is outside the finite domain, so the choice is immaterial for this target.
-* **Total semantics.** :mod:`verity.definitions.silicon.total` defines the step on every encoding -- NaN, infinities,
+* **Total semantics.** :mod:`verity.circuits.silicon.total` defines the step on every encoding -- NaN, infinities,
   saturation -- as measured on A100/RTX 4090; no registered gate family binds it, and declaring it, under a fresh id,
   is a protocol decision, not a proof-system optimisation.
 * **Hopper.** ``wgmma`` on the H100 is one group of sixteen, a 26-bit adder, floor ``-133``
-  (:data:`verity.definitions.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
+  (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
   chain is a frontend binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured case where
@@ -80,11 +80,11 @@ Draft targets
 
 A :class:`Target`'s ``status`` is ``"frozen"`` (:data:`FIRST`: it changes only by re-versioning) or ``"draft"`` (a
 relation stated precisely enough to generate vectors against, bound to no registered family digest a verifier checks).
-Each target names its ``instruction`` in :data:`verity.definitions.silicon.instructions.INSTRUCTIONS`; the instruction's
+Each target names its ``instruction`` in :data:`verity.circuits.silicon.instructions.INSTRUCTIONS`; the instruction's
 status (pinned / hypothesis / unprobed) says how much hardware stands behind the model the target computes with.
 
 * :data:`FP8_HOPPER_WGMMA` -- ``sm90.wgmma.m64n8k32.e4m3`` (pinned: H100, 144,543,744 words), model
-  :data:`verity.definitions.silicon.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).
+  :data:`verity.circuits.silicon.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).
   Program ``GemmAccumulator<K>``, ``K`` a multiple of 32: ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in
   ascending ``k``, the FP32 accumulator word **public** (the bare dot).  Domain: finite E4M3 operands (every byte but
   ``0x7F``/``0xFF``; 448 is finite) and finite FP32 accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2``
@@ -92,22 +92,22 @@ status (pinned / hypothesis / unprobed) says how much hardware stands behind the
   Note the lossy step: the incoming accumulator keeps only its top 14 significand bits, even through a group of zero
   products (D10).
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: RTX 4090, 24,898,304 elements), model
-  :data:`verity.definitions.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same
+  :data:`verity.circuits.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same
   program, same domain, same absent epilogue; a different grouping and so a different function.
 * :data:`FP8_SM120_MMA` -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its conformance device, 25,041,024
   elements / 0 mismatches; one QMMA.16832 per tile), model
-  :data:`verity.definitions.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in the 26-bit adder of the
+  :data:`verity.circuits.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in the 26-bit adder of the
   sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent epilogue as the other two.
 * The FP8 families are cast-free (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are
   recorded here, and no ``typed-obligation/v0`` lowering of them exists.
 * :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured 25.7M elements / 0 mismatches;
-  the ``wgmma`` BF16 path runs the same pipeline), model :data:`verity.definitions.silicon.models.HOPPER_BF16_M16N8K16`
+  the ``wgmma`` BF16 path runs the same pipeline), model :data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`
   (one group of 16, the 26-bit adder, floor -133; exact BF16 products).  FIRST's program and epilogue --
   ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the table is the same function as the Ampere row up
   to the step; its family is FIRST's vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5
   dense BF16 rate (989.4 TFLOPS).
 * :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090), model
-  :data:`verity.definitions.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots
+  :data:`verity.circuits.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots
   over four groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on
   the leading participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation
   toward zero, every zero result +0).  Program ``GemmAccumulator<K>``, ``K`` a multiple of 64 (K = 1536 is 24 steps =
@@ -139,7 +139,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from verity.definitions.silicon.models import (ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4,
+from verity.circuits.silicon.models import (ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4,
                                   HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, BlockScaledAlignAdd, GroupSum)
 
 __all__ = [
@@ -175,8 +175,8 @@ TC_BF16_VERSION = "1"
 TC_AMPERE_BF16_VERSION = "1"
 
 #: Repository-relative paths of the pinned source-close reference and of the discrepancy log.
-HAWKEYE_PIN = "verity/definitions/silicon/hawkeye/PIN.json"
-DISCREPANCY_LOG = "verity/definitions/silicon/discrepancy_log.json"
+HAWKEYE_PIN = "verity/circuits/silicon/hawkeye/PIN.json"
+DISCREPANCY_LOG = "verity/circuits/silicon/discrepancy_log.json"
 
 #: FIRST's gate family.
 FAMILY = f"{TC_AMPERE_BF16_NAME}@{TC_AMPERE_BF16_VERSION}"
@@ -205,7 +205,7 @@ class Target:
     """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
     conformance device its overhead is measured against -- and its ``status`` (``frozen``: every proof system proves it; ``draft``: stated,
     bound to nothing yet) with the id of the instruction class it is a relation over
-    (``verity.definitions.silicon.instructions.INSTRUCTIONS``)."""
+    (``verity.circuits.silicon.instructions.INSTRUCTIONS``)."""
 
     name: str
     family: str
@@ -368,5 +368,5 @@ FP8_SM120_MMA = _target(
     instruction="sm120.mma.m16n8k32.e4m3",
 )
 
-#: Every target by name; ``verity/definitions/silicon/discrepancy_log.json`` entries name one of these (or an instruction id).
+#: Every target by name; ``verity/circuits/silicon/discrepancy_log.json`` entries name one of these (or an instruction id).
 TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA, NVFP4_SM120, FP8_SM120_MMA)}

@@ -10,7 +10,7 @@ import pytest
 from verity.circuits.defs import Builder, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 from verity.definitions.registry import b1_tp2 as TP
 from verity.definitions.registry.prims import BF16
 

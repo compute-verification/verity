@@ -30,9 +30,9 @@ from __future__ import annotations
 import numpy as np
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops import scalar as SC
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16, ZERO32, const
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16, ZERO32, const
 from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
