@@ -4,6 +4,7 @@ module names `ModuleNamer` keeps for a call's hint."""
 from __future__ import annotations
 
 import functools
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -34,6 +35,13 @@ def reentry(monkeypatch):
     return monkeypatch
 
 
+def test_an_ops_name_is_its_namespace_its_name_and_its_overload_and_default_where_it_names_none():
+    assert O.op_name(torch.ops.aten.add.Tensor) == "aten.add.Tensor" and O.op_name(torch.ops.aten.mm.default) == "aten.mm.default"
+    schema = SimpleNamespace(name="vllm::unified_kv_cache_update")
+    for unnamed in (SimpleNamespace(namespace="vllm", _schema=schema), SimpleNamespace(namespace="vllm", _schema=schema, _overloadname="")):
+        assert O.op_name(unnamed) == "vllm.unified_kv_cache_update.default"
+
+
 def test_the_ops_that_are_reentered_are_the_two_named_and_every_moe_forward():
     names = ["vllm.unified_attention_with_output", "vllm.unified_kv_cache_update", "vllm.moe_forward", "vllm.moe_forward_shared",
              "vllm.unified_attention", "aten.mm", "_C.moe_forward"]
@@ -51,25 +59,30 @@ def test_an_ops_implementation_is_the_first_of_its_paths_that_imports_and_is_loo
 
 
 def test_an_implementations_name_is_the_function_it_wraps_and_none_where_no_path_is_known(reentry):
-    reentry.setitem(O._REENTER_IMPL, "verity.wrapped", functools.wraps(O.op_name)(lambda *a: None))
-    assert O.reenter_impl_name("verity.wrapped") == "verity_vllm.observe.observer.op_name"
+    def body(*args):
+        return None
+
+    reentry.setitem(O._REENTER_IMPL, "verity.wrapped", functools.update_wrapper(body, O.op_name, assigned=()))
+    assert body.__qualname__.endswith(".body") and O.reenter_impl_name("verity.wrapped") == "verity_vllm.observe.observer.op_name"
     assert O.reenter_impl_name("verity.unknown") is None
     assert O._REENTER_IMPL["verity.unknown"] is None and O._REENTER_MISSING["verity.unknown"] == []
 
 
 def test_a_reentered_ops_registered_body_runs_in_its_place_and_its_calls_are_the_ops_children(reentry):
     rec, events = _rec()
-    reentry.setattr(O, "REENTER_OPS", {"aten.mm"})
-    reentry.setitem(O._REENTER_IMPL, "aten.mm", lambda a, b: torch.add(a, b))
+    reentry.setattr(O, "REENTER_OPS", {"aten.mm", "aten.mul"})
+    reentry.setitem(O._REENTER_IMPL, "aten.mm", lambda a, b: torch.mul(a, b))
+    reentry.setitem(O._REENTER_IMPL, "aten.mul", lambda a, b: torch.add(a, b))
     a = torch.full((2, 2), 3.0)
     with O.Observer(rec):
         out = torch.mm(a, a)
-    assert out.tolist() == [[6.0, 6.0], [6.0, 6.0]], "the body's sum, not the op's product"
-    outer, inner = _enters(events)
-    assert (outer.op, outer.parent, inner.op, inner.parent) == ("aten.mm.default", None, "aten.add.Tensor", outer.id)
+    assert out.tolist() == [[6.0, 6.0], [6.0, 6.0]], "the innermost body's sum: a body's own re-entered op runs its body too"
+    outer, middle, inner = _enters(events)
+    assert (outer.op, middle.op, inner.op) == ("aten.mm.default", "aten.mul.Tensor", "aten.add.Tensor")
+    assert (outer.parent, middle.parent, inner.parent) == (None, outer.id, middle.id), "a call's parent is the innermost open call"
     exits = [e for e in events if isinstance(e, DispatchExit)]
-    assert [e.id for e in exits] == [inner.id, outer.id] and exits[0].outs == exits[1].outs == rec.storage.view_of(out)
-    assert rec.counts == {"dispatch": 2, "triton": 0, "notes": 0, "reentered": 1} and rec.open == []
+    assert [e.id for e in exits] == [inner.id, middle.id, outer.id] and all(e.outs == rec.storage.view_of(out) for e in exits)
+    assert rec.counts == {"dispatch": 3, "triton": 0, "notes": 0, "reentered": 2} and rec.open == []
 
 
 def test_a_mode_told_not_to_reenter_runs_the_op_itself(reentry):
@@ -219,6 +232,20 @@ def test_a_calls_module_is_the_innermost_submodule_running_and_a_shared_one_is_n
         ("tanh", "layers.1.attn.rotary"), ("tanh", "layers.0.attn.rotary"), ("neg", "layers.1"),
         ("sigmoid", "head")]
     assert rec.module_stack == []
+
+
+def test_a_module_outside_the_layers_keeps_its_name_and_a_shared_one_is_named_under_the_outermost_layer_calling_it():
+    rec, _ = _rec()
+    namer = O.ModuleNamer(rec, torch.nn.Identity())
+    assert namer.handles == [], "a model with no submodule has no hook"
+    for caller, registered, named in (
+            ("layers.1.attn", "head", "head"),
+            ("head", "layers.0.attn.rotary", "layers.0.attn.rotary"),
+            ("model.layers.0.attn", "model.layers.0.attn.rotary", "model.layers.0.attn.rotary"),
+            ("model.layers.1.blocks.layers.3.attn", "model.layers.0.blocks.layers.0.rotary", "model.layers.1.blocks.layers.0.rotary")):
+        rec.module_stack[:] = [caller]
+        namer._pre(registered, None, ())
+        assert rec.module_stack == [caller, named]
 
 
 def test_a_removed_namer_leaves_no_hook_and_a_post_hook_on_an_empty_stack_does_nothing():

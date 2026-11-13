@@ -40,10 +40,12 @@ def test_a_machine_with_no_cuda_runtime_is_asked_once_and_device_backed_is_false
     assert pinned._runtime() is None and len(tried) == 2, "a runtime that did not load is not looked for again"
 
 
-def test_device_backed_asks_the_runtime_about_a_cpu_tensor_alone(monkeypatch):
+def test_device_backed_asks_the_runtime_about_a_cpu_tensor_alone_and_only_where_cuda_is(monkeypatch):
+    monkeypatch.setattr(pinned, "_runtime", lambda: pytest.fail("the runtime was asked"))
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(pinned, "_runtime", lambda: pytest.fail("the runtime was asked about a tensor that is not on the CPU"))
-    assert pinned.device_backed(torch.zeros(2, device="meta")) is False
+    assert pinned.device_backed(torch.zeros(2, device="meta")) is False, "a tensor that is not on the CPU"
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert pinned.device_backed(torch.zeros(2)) is False, "a CPU tensor on a machine without CUDA"
 
 
 @pytest.fixture

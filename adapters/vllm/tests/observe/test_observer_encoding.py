@@ -51,6 +51,7 @@ def test_encode_scalars_and_containers():
     assert encode_arg(torch.strided, st) == "torch.strided"
     other = encode_arg(object(), st)
     assert isinstance(other, dict) and set(other) == {"$repr"} and len(other["$repr"]) <= 200
+    assert encode_arg(type("Wide", (), {"__repr__": lambda self: "w" * 300})(), st) == {"$repr": "w" * 200}, "a repr is cut at 200 characters"
 
 
 def test_encode_symbolic_scalars():
