@@ -51,6 +51,10 @@ parallel = true
 # Built whole in each worker instead, the catalog takes a worker past 50 GB. A circuit-check a test starts
 # keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 8
+# each worker builds that catalog before any test runs, so the workers' count bounds the suite's run: at least this many,
+# beside whatever runs with it (`suites.py`'s `held_workers`), where a short last run or a longer suite beside it would leave
+# it a few
+workers = 14
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
