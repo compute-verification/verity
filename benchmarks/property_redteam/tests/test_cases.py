@@ -10,7 +10,7 @@ import pytest
 import run as R
 
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.silicon.integer import S32_MAX, S32_MIN
+from verity.circuits.silicon.integer import S32_MAX, S32_MIN
 
 CASES_JSON = Path(__file__).resolve().parents[1] / "cases.json"
 
