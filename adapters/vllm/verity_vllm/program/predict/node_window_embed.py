@@ -79,7 +79,7 @@ def table_words(columns: np.ndarray, start: int, V: int) -> np.ndarray:
     a = np.ascontiguousarray(columns, np.uint16)
     if a.ndim != 2 or a.shape[1] != WIDTH or not 0 <= start <= V - a.shape[0]:
         raise ValueError(f"a shard's block of {a.shape} words at row {start}: {WIDTH} columns within {V} rows")
-    out = np.zeros((V, WIDTH), np.uint16)
+    out: np.ndarray = np.zeros((V, WIDTH), np.uint16)
     out[start:start + a.shape[0]] = a
     return out
 
