@@ -214,6 +214,13 @@ means = "the inference-only policy's check"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/accounting/registration/"
+means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
+protocol = true
+owner = "proofs"
+day = "2026-11-14"
+
+[[tree]]
 path = "verity/protocols/compose/"
 means = "the protocol on top of the audits that holds several quantities on one registration, their named values tied by key; remote's and onsite's lists of protocols inside it"
 protocol = true
@@ -288,7 +295,7 @@ day = "2026-11-15"
 
 [[not_yet]]
 path = "verity/hardware/registration.py"
-to = "into the hardware file"
+to = "verity/protocols/accounting/registration/"
 owner = "top"
 day = "2026-11-15"
 
