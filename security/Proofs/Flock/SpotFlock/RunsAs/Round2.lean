@@ -39,11 +39,9 @@ theorem jeq_self_of {a b : Json} (h : Spot.jeq a b = true) : Spot.jeq b b = true
 /-- What a statement names of itself (`Stmt.checked`) sets its session up as one table. -/
 theorem checked_tables {s : Spot.SecondStage.Stmt} {c : Spot.SecondStage.Checked} (h : s.checked = some c) :
     c.tables = Spot.SecondStage.ONE_TABLE := by
-  simp only [Spot.SecondStage.Stmt.checked, Option.bind_eq_bind, Option.pure_def, Option.bind_eq_some_iff,
-    Option.some.injEq] at h
-  obtain ⟨_, _, _, _, hc⟩ := h
-  subst hc
-  rfl
+  simp only [Spot.SecondStage.Stmt.checked, Option.bind_eq_bind, Option.pure_def, Option.bind_eq_some_iff] at h
+  obtain ⟨_, _, h⟩ := h
+  split at h <;> (obtain ⟨_, _, h⟩ := Option.bind_eq_some_iff.1 h; cases h; rfl)
 
 /-- **Round 2's per-statement checks read nothing `core` resets**: the reported reads, the block's return and the
 supplied and fixed values. -/
@@ -71,7 +69,7 @@ theorem find?_first {α : Type} (p : α → Bool) :
   | [], _, hi, _, _ => absurd hi (Nat.not_lt_zero _)
   | a :: l, 0, _, hp, _ => by
     simp only [List.getElem_cons_zero] at hp ⊢
-    simp [List.find?_cons, hp]
+    simp [hp]
   | a :: l, i + 1, hi, hp, hj => by
     have ha : p a = false := hj 0 (Nat.succ_pos i)
     rw [List.find?_cons, ha]
@@ -143,8 +141,9 @@ theorem interiorOrder_of_check : InteriorOrderOfCheck := by
 
 theorem namesOk_of_check : NamesOkOfCheck := by
   intro h own ss st rec draw c₀ hA hc
+  have hn := Spot.SecondStage.interiorFailures_names (Spot.SecondStage.check_ok_interior hc)
   rw [← show core own = ownOf h st rec draw c₀ from hA]
-  exact Spot.SecondStage.interiorFailures_names (Spot.SecondStage.check_ok_interior hc)
+  exact hn
 
 theorem codesOk_of_check : CodesOkOfCheck := by
   intro h own ss st rec draw c₀ hA hc t ht S hS
@@ -175,7 +174,7 @@ theorem codesOk_of_check : CodesOkOfCheck := by
       show (h.names.getD j "" == s.template) = false
       rw [hnj]
       exact beq_false_of_ne hne
-    have key := find?_first _ _ t hl hat hbefore
+    have key := find?_first (fun x : Spot.SecondStage.Part => x.template == s.template) _ t hl hat hbefore
     rw [List.getElem_map, List.getElem_range] at key
     exact Option.some.inj (hf.symm.trans ((List.find?_toArray _ _).trans key))
   -- the statement's own verdict passes what round 2's verdicts of record pass
@@ -269,10 +268,8 @@ theorem inputsNone_of_registersNone {own : Spot.SecondStage.Own} (hR : Registers
 are emptied, which is all of `core` that `inputsFailure` reads. -/
 theorem inputsNone_of_emptied {own : Spot.SecondStage.Own}
     (hI : Spot.SecondStage.inputsFailure { own with fixed := #[], supplied := #[], reads := #[] } = none) :
-    InputsNone own := by
-  first
-  | exact hI
-  | (unfold InputsNone core Spot.SecondStage.inputsFailure at *; exact hI)
+    InputsNone own :=
+  hI
 
 theorem readsOk_of_check : ReadsOkOfCheck := by
   intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t ht
