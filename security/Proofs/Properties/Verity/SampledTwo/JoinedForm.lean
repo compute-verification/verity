@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.GoodCase
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 public import Proofs.Properties.Verity.SampledTwo.CoinBytes
 public import Proofs.Properties.Verity.SampledTwo.StageAlone
-public import Proofs.Properties.Verity.SampledTwo.DeviceRead
+public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.Reached
 
@@ -22,9 +22,10 @@ premises, each in its owner's words. A witness of the theorem at an accepted pla
 
 **What `joinedForm` discharges** from the fields:
 
-* the cut at the deployed two-session history (`Sessions.cutRead_dev₂`), with the composite's wiring in the cut's
-  words (`Wired`, from `wiring` and `caseIsSent`: `accepts_of_form`), and `FreshWide` joined to its event at no cost,
-  since every play of the game has it (`CoinMap.freshWide_play`, `cutBound_and`);
+* the cut at the deployed two-session history, where the device's ledger orders the two sessions
+  (`Sessions.cutOrder_dev₂`), with the composite's wiring in the cut's words (`Wired`, from `wiring` and `caseIsSent`:
+  `accepts_of_form`), and `FreshWide` joined to its event at no cost, since every play of the game has it
+  (`CoinMap.freshWide_play`, `cutBound_and`);
 * the coin map's law (`CoinMap.coinMapHolds`);
 * the stages' bytes within their releases (`firstFits_stage`, `secondFits_stage`, at the run's locator by
   `firstFits_congr`, `secondFits_congr`) and the first and the second stage's coins (`coinsAgree_first_of`,
@@ -44,15 +45,17 @@ and `secondFits_goodCase`. So `joinedForm` takes no `CutReads` and no coins' pre
 
 **Not established**, each a field of `JoinsAt`:
 
-* **The device's ledger** (`apart`): the ledger opens neither session's run on the other's window. It is the premise
-  of the cut on the join today (`PrintsTwo` at the two-session history). CUT's cut over the ledger's order
-  (`CutOrder.lean`) replaces it by HISTORY's `LedgerInOrder`, which is not provable from the model's device as
-  defined; when both are on the join it is this field, by that name, and not a part of `JoinGood`.
+* **The device's ledger** (`ledgerInOrder`, HISTORY's `Sessions.LedgerInOrder` at the deployment's two setups): each
+  session opens its own run once on one window, no line opens another run, and the second session's `end` is not
+  before the first session's `reserve`. Taken as a hypothesis; a lemma of the modelled device after soundness's device
+  pull request (PRF-490). The model's device takes its ledger lines as given, so nothing here proves it, and it is a
+  field by that name, not a part of `JoinGood`.
 * **The two families distinct** (`distinctFamilies`), until the form refuses equal labels (TWOLEG).
 * **Each stage's draw is its family after one root** (`draws₁`, `draws₂`): the family is the form's to show (TWOLEG);
   one root on the play's log is the cut's with the device's history.
-* **The first stage's coins are read under the parameters' key** (`firstReads`: CUT derives it from the form's accept
-  but for `null` coin evidence), `firstDrawn`, `sessionMatches`, `sourcesFit`.
+* **The first stage's coins are read under the parameters' key** (`firstReads`) and **an accepted play on two windows
+  shows its sessions' order** (`orderShown`): CUT derives both from the form's accept (`CutAccept.lean`, not on the
+  join yet); `firstDrawn`, `sessionMatches`, `sourcesFit`.
 * **The interior's log on the play's** (`interiorLogged`), **the messages** (`msgOpens`, `digestBefore`) and **the
   accept** (`playAccepts`, `sessionMsgs`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
@@ -211,10 +214,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg)
     (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) : Prop where
-  /-- The device's ledger opens neither session's run on the other's window (the cut's premise at the two-session
-  history; to become HISTORY's `LedgerInOrder`). -/
-  apart : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
-    Sessions.Apart (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) w₁ w₂
+  /-- On two windows, the two setups' ledger lines are two sessions' in the device's order (`Sessions.LedgerInOrder`).
+  Taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490). -/
+  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+    Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
   /-- The first stage's draw is `ℓ₁` after one root, on the accepted plays `JoinGood` holds of. -/
@@ -223,6 +226,8 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   draws₂ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ JoinGood o) (fun o => (C o).bind secondDraw) ℓ₂
   /-- The first stage's coins are read under the parameters' key. -/
   firstReads : FirstReads θ
+  /-- An accepted play on two windows shows its two sessions' order in the ledger its second stage carries. -/
+  orderShown : OrderShown θ
   /-- The first stage read the draw the cut reads. -/
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
@@ -329,7 +334,7 @@ theorem joinedForm (V : Vocab d α) (k : Verity.Registration.Composite) (A : Liv
   have hCut : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
-      (Sessions.cutRead_dev₂ V k P fs₁ fs₂ cut θ F c σ hw h.firstReads h.apart h.signer)
+      (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw h.firstReads h.orderShown h.ledgerInOrder h.signer)
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
     ((CoinMap.coinMapHolds (d := d) (α := α)) V A x θ F c σ _ _ (readsAt A.h))
