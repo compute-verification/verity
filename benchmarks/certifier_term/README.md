@@ -195,8 +195,10 @@ The reader holds what the rule charges below to two more things, which the rule 
   says in `rate` that it ran at the registered rate. A rate's text is `NUM/DEN` in lowest terms with no prefix, so
   a registration that states `2/2` or `rate:1/1` registers another rate. The rate is the registration's and never
   the verdict's own word, so a verdict that states `1/1` under a registration that says otherwise is refused by
-  name, as is a registration that was not handed or states no rate. Where a registration states the two rates is its writer's to
-  name; the reader holds it in one constant (`stop_verdicts.RATES`).
+  name, as is a registration that was not handed or states no rate. A failure is final for what its verdict speaks
+  for, one execution phase's class at `1/1`; a rate below `1/1` widens the failure to the whole registered
+  population, for when the reader takes one. Where a registration states the two rates is its writer's to name;
+  the reader holds it in one constant (`stop_verdicts.RATES`).
 
 The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
 accept and takes away no refusal: its records that are accepted and complete fill no verdict, its controls that
@@ -225,8 +227,10 @@ enough for the runs of record here; in a deployment the order comes from the aud
 the prover cannot write.
 
 A verdict that doesn't count, refused or not complete, counts against the execution phase it names by its serve,
-its link, its number and its class, whatever head it names: refused under one head, registered again under
-another and accepted would be a second try at a verdict. An accept under another head counts for nothing.
+its link and its number, whatever head it names: refused under one head, registered again under another and
+accepted would be a second try at a verdict. It keeps every class of that phase at its whole schedule, since two
+heads need not sort a phase's rows into the same classes; under the head read a verdict stays its class's. An
+accept under another head counts for nothing.
 
 An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's

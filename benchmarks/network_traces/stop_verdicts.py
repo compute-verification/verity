@@ -60,10 +60,12 @@ deployment it comes from the auditor's own ledger, from something the prover can
 counts as not later, which is the safe side.
 
 **Another head.** A verdict that doesn't count, refused or not complete, counts against the execution phase it
-names by its serve, its link, its number and its class, whatever head it names: where the phase's head was read
-and its records name that serve, the phase is charged its whole schedule, with a line that names the verdict, its
-class and its run. Refused under one head, registered again under another and accepted would be a second try at a
-verdict. The class must hold a row under the head read: one with a count of 0 owes no verdict there.
+names by its serve, its link and its number, whatever head it names: where the phase's head was read and its
+records name that serve, the phase is charged its whole schedule, every class of it, with a line that names the
+verdict, the class it names and its run. Refused under one head, registered again under another and accepted
+would be a second try at a verdict. It holds every class and not the one it names because two heads need not sort
+an execution phase's rows into the same classes, so a refusal on one class under the other head can speak for
+rows the head read puts in another. Under the head read a verdict stays its class's, as the rule has it.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
@@ -134,7 +136,9 @@ reader is handed the registration itself (`SERVES_FILE`), finds it by the digest
 (`digest_of`) and reads both rates from it. A registration that was not handed, one that states no rate for a
 population, one that registers another rate, and a verdict that names no rate or another than the registered one
 each leave the class at its whole schedule, with a line that names which; so a verdict that states `EVERY_BLOCK`
-under a registration that says otherwise is refused by name. A verdict's ``complete`` says that every session ran
+under a registration that says otherwise is refused by name. A failure is final for what its verdict speaks for,
+which at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the whole
+registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran
 to a verdict and holds no class to a rate. Where a registration states the two rates is its writer's to name, and
 `RATES` is the one place that holds it. A serve's registration that doesn't read holds no execution phase at all,
 in a run that is not superseded."""
@@ -371,12 +375,12 @@ def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[st
     return f"; its verifiers refused their negative controls: {'; '.join(dict.fromkeys(said))}" if said else ""
 
 
-def _elsewhere(failed: Read, serves: Sequence[str], head: C.Head, digest: str, cls: int) -> Read:
-    """The verdicts that don't count which are on class ``cls`` of the execution phase of ``head``, one of the
-    ``serves`` its records name, its link and its number, under another head than its own, ``digest`` (the module
-    docstring's "Another head")."""
+def _elsewhere(failed: Read, serves: Sequence[str], head: C.Head, digest: str) -> Read:
+    """The verdicts that don't count which are on the execution phase of ``head``, one of the ``serves`` its
+    records name, its link and its number, under another head than its own, ``digest``, whatever class they name
+    (the module docstring's "Another head")."""
     return [(kind, r) for kind, r in failed if r[CC.SERVE] in serves and r[CC.VERDICT].get(CC.HEAD) != digest
-            and [r[CC.VERDICT].get(k) for k in (CC.LINK, CC.WINDOW, CC.CLASS)] == [head.link, head.window, cls]]
+            and [r[CC.VERDICT].get(k) for k in (CC.LINK, CC.WINDOW)] == [head.link, head.window]]
 
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -501,9 +505,10 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
         rows = [(c, read) for c, read in its if c.count]
         named = sorted(serves[digest])
         tried = [f"the {kind} is {CC.NOT_COMPLETE if r[CC.VERDICT].get(CC.ACCEPTED) is True else CC.REFUSED} on "
-                 f"class {c.cls} ({r[CC.RUN]})"
-                 for c, _ in rows for kind, r in _elsewhere(failed, named, head, digest, c.cls)]
-        again = [f"{at}: held to its whole schedule by a verdict under another head: {'; '.join(tried)}"] * bool(tried)
+                 f"class {r[CC.VERDICT].get(CC.CLASS)} ({r[CC.RUN]})"
+                 for kind, r in _elsewhere(failed, named, head, digest)]
+        again = [f"{at}: held to its whole schedule, every class of it, by a verdict under another head: "
+                 f"{'; '.join(tried)}"] * bool(tried)
         elsewhere += len(tried)
         if not rows or not all(c.below for c, _ in rows):
             lines += again

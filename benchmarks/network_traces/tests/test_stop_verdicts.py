@@ -1334,52 +1334,71 @@ def test_a_run_has_no_accept_on_a_serve_launched_after_it(tmp_path):
 def test_a_verdict_that_doesnt_count_counts_against_its_execution_phase_whatever_head_it_names(tmp_path):
     """Refused under one head, registered again under another and accepted would be a second try at a verdict. So
     a verdict that is refused, or accepted and not complete, counts against the execution phase it names by its
-    serve, its link, its number and its class, whatever head it names, where that phase's head was read: the
-    phase is charged its whole schedule, with a line that names the verdict, its class and its run. An accept
-    under another head counts for nothing, as does a verdict that names another serve, link, number or class."""
+    serve, its link and its number, whatever head it names, where that phase's head was read: the phase is
+    charged its whole schedule, every class of it, with a line that names the verdict, the class it names and its
+    run. It holds whatever class it names, one with a count of 0 under the head read too: two heads need not sort
+    a phase's rows into the same classes. An accept under another head counts for nothing, as does a verdict that
+    names another serve, link or number."""
     first, second, other = head(3, 5, 0), head(4, 2, 0), head(3, 6, 0)
     registrations, records = [registration(first), registration(second)], four(first) + four(second)
     assert stop(registrations, records).held == 2
     at = f"the link {LINK}, execution phase 3"
+    by = "held to its whole schedule, every class of it, by a verdict under another head: "
     nothing = ("1 verdict record(s) read are on no head read, or on no class of one that holds a row, and count for "
                "nothing")
     tie = four(other)[1] | {CC.RUN: "an earlier run"}
-    refused = tie | {CC.VERDICT: tie[CC.VERDICT] | {CC.ACCEPTED: False}}
+    refusal = tie | {CC.VERDICT: tie[CC.VERDICT] | {CC.ACCEPTED: False}}
+
+    def on(**verdict: object) -> dict:
+        return refusal | {CC.VERDICT: refusal[CC.VERDICT] | verdict}
+
     for word, over in ((CC.REFUSED, {CC.ACCEPTED: False}), (CC.REFUSED, {CC.ACCEPTED: None}),
                        (CC.REFUSED, {CC.ACCEPTED: "true"}), (CC.NOT_COMPLETE, {CC.COMPLETE: False})):
         got = stop(registrations, [*records, tie | {CC.VERDICT: tie[CC.VERDICT] | over}])
         assert got.held == 1 and len(got.verdicts) == 8 and nothing not in got.why, over
-        assert (f"{at}: held to its whole schedule by a verdict under another head: the response tie is {word} on "
-                "class 0 (an earlier run)") in got.why, over
+        assert f"{at}: {by}the response tie is {word} on class 0 (an earlier run)" in got.why, over
         assert not any("execution phase 4: held" in line for line in got.why)
+    # whatever class it names: one with a count of 0 under the head read, and one that head doesn't list
+    for cls in (1, 2):
+        got = stop(registrations, [*records, on(**{CC.CLASS: cls})])
+        assert got.held == 1 and nothing not in got.why, cls
+        assert f"{at}: {by}the response tie is refused on class {cls} (an earlier run)" in got.why, cls
+    # so it keeps every class of the phase whole: two classes that hold a row, each with its four, and a refusal
+    # under another head on a third, whose count under the head read is 0
+    wide = head(3, 5, 4, 0)
+    both = four(wide) + four(wide, cls=1)
+    assert stop([registration(wide)], both).held == 1
+    got = stop([registration(wide)], [*both, on(**{CC.CLASS: 2})])
+    assert got.held == 0 and got.why[0] == held_back(1, 1, head=1)
+    assert got.why[2:6] == (
+        f"{at}, {BELOW}{refused()}", f"{at}, {BELOW.replace('class 0', 'class 1')}{refused()}",
+        f"{at}, class 2: a count of 0, so no connection is charged and no verdict is owed",
+        f"{at}: {by}the response tie is refused on class 2 (an earlier run)")
     # an accept under another head counts for nothing
     got = stop(registrations, [*records, tie])
     assert got.held == 2 and nothing in got.why
-    # nor does a refusal of another serve, link, number or class, of a class that holds no row under the head read,
-    # or of a format listed for none of the four
+    # nor does a refusal of another serve, link or number, or of a format listed for none of the four
     for record, verdict in (({CC.SERVE: "another serve"}, {}), ({}, {CC.LINK: "requests"}), ({}, {CC.WINDOW: 5}),
-                            ({}, {CC.CLASS: 1}), ({}, {CC.CLASS: 2}), ({}, {SV.FORMAT: "another's"})):
-        got = stop(registrations, [*records, refused | record | {CC.VERDICT: refused[CC.VERDICT] | verdict}])
+                            ({}, {SV.FORMAT: "another's"})):
+        got = stop(registrations, [*records, on(**verdict) | record])
         assert got.held == 2 and not any("under another head" in line for line in got.why), (record, verdict)
         assert (nothing in got.why) == (SV.FORMAT not in verdict), (record, verdict)
     # it counts against the phase it names and no other
-    fourth = refused | {CC.VERDICT: refused[CC.VERDICT] | {CC.WINDOW: 4}}
-    got = stop(registrations, [*records, fourth])
-    assert got.held == 1 and any(line.startswith(f"the link {LINK}, execution phase 4: held to its whole schedule by "
-                                                 "a verdict under another head: ") for line in got.why)
+    got = stop(registrations, [*records, on(**{CC.WINDOW: 4})])
+    assert got.held == 1 and any(line.startswith(f"the link {LINK}, execution phase 4: {by}") for line in got.why)
     # the first line counts it, beside what another rule holds back
-    assert stop(registrations[:1], [*four(first), refused]).why[0] == held_back(1, 1, head=1)
-    got = stop(registrations, [*four(first), *at_rate(CC.RESPONSE_TIE, "1/8", four(second)), refused])
+    assert stop(registrations[:1], [*four(first), refusal]).why[0] == held_back(1, 1, head=1)
+    got = stop(registrations, [*four(first), *at_rate(CC.RESPONSE_TIE, "1/8", four(second)), refusal])
     assert got.why[0] == held_back(2, 2, rate=1, head=1)
     # an execution phase that lacks a verdict is named with it too
-    got = stop(registrations[:1], [*four(first)[1:], refused])
-    assert got.held == 0 and got.why[0] == LACK and nothing not in got.why and got.why[4].startswith(
-        f"{at}: held to its whole schedule by a verdict under another head: ")
+    got = stop(registrations[:1], [*four(first)[1:], refusal])
+    assert got.held == 0 and got.why[0] == LACK and nothing not in got.why and got.why[4] == (
+        f"{at}: {by}the response tie is refused on class 0 (an earlier run)")
     # with the other head's registration handed too, the phase is given two heads, which holds nothing at all
-    got = stop([*registrations, registration(other)], [*records, refused])
+    got = stop([*registrations, registration(other)], [*records, refusal])
     assert got.held == 0 and got.why[0] == TWO_HEADS + ONE_SERVE
     # a superseded run's refusal stands under another head as it does on the one read
-    store = Store(tmp_path, {"old": {"out/the-verdicts.jsonl": jsonl([refused])},
+    store = Store(tmp_path, {"old": {"out/the-verdicts.jsonl": jsonl([refusal])},
                              "new": held_files(first, four(first))})
     assert SV.of_runs(store, ["new"]).held == 1
     for superseded in ((), ["old"]):
