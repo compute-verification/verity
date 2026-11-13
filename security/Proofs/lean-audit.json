@@ -334,6 +334,8 @@
   "Proofs.Properties.Verity.SampledTwo.RefsOfSent",
   "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
+  "Proofs.Properties.Verity.SampledTwo.SessionAsk",
+  "Proofs.Properties.Verity.SampledTwo.LastSlot",
   "Proofs.Flock.SpotFlock.HeldOfWires"
  ],
  "exempt": {
