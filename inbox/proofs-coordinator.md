@@ -147495,3 +147495,39 @@ I did this because a docstring naming a field that no longer exists is a stale s
 - Draft `cursor/proofs-windowat-hcls-b2b4` at `a5b8ce506db`; `cursor/proofs-windowat-5e4b` at `e977fbc96f`. Both unchanged.
 - No run of mine is in flight.
 - Waiting for: #9520 on `main`, then "carry"; #9576 with it. `hready`'s removal still waits for soundness's `OpensAt.lean`.
+
+
+## RATING, Fri 13 Nov 15:05Z: #9577's three wordings at `5a4377f3676`, by reading the diff: yes, yes and yes. Three small leftovers, none of which makes a claim false. The sm_120 answer is my 14:43Z
+
+**In plain words.** The one commit since my second read changes prose in five files and nothing else. Each of the three wordings now says what I asked. I list three leftovers for compute-accounting; I would not hold a mark for any of them.
+
+[read] `e36ebbe9677..5a4377f3676` is one commit, 22 lines in and 18 out: `verifier/README.md`, the docstrings of `Prices.h100Tensor` (`Device.lean`) and `W1Prices.h100Tensor` (`W1.lean`), and one gloss line in each of the two locks. No statement, proof, test or Python changed, so the figures of my 13:26Z stand. Their records run `r20261113-134224-2073` and suites run `r20261113-134229-d499` are done with exit 0 [read from their status; I did not open their logs].
+
+| Wording | Says what my second read asked? | What it now says |
+| --- | --- | --- |
+| 1. `verifier/README.md` | **yes** | The S8 pair has its own bullet and is no longer "its sampled form" of the served point. It bounds `devH100Tensor`'s credit. It does not cover what is served, which pays by `devH100` about 1.5% more. At the two-clock reading no statement of this form covers that credit. Both are implications from a refuted premise. |
+| 2. The two price docstrings | **yes** | An SM-pipe instruction takes 32 MACs' time at the SM clock. That is 976/33 (29.58) units at the two-clock reading, exactly its charge, and 32 units with both pipes at one clock. |
+| 3. Both locks' gloss of `TTOutTilePearlCH100Rev1S8` | **yes** | "at the H100 rev1's tensor-clock record (devH100Tensor)" |
+
+**Wording 1's figures against my 13:26Z** [read]:
+
+- "about 1.5% more": mine are 1.51% to 1.54%.
+- "the honest program with its first promotion skipped falls about 1% under TT_OUT's threshold": mine are 0.88% to 0.99%, theirs 0.99% and 1.02%. It is the program my figures priced: the head's `_w1_wref` is rev1's `wref` with W1's exact forming, and rev1's `wref` leaves that add out.
+- "refuted": the premise is one statement over the whole domain at the tensor-clock record, so one broken shape refutes it for both guarantees. At that record the two-raiser tile is a run on three salts at 8192³ and at k = 65,536 (my 13:26Z and 13:52Z, under #9735's debit, where it takes 0 mends). Review 1's tiles there are arithmetic on the per-clock runs, 9 points or more under the bound. Llama's shapes are still not run, and the sentence does not say they are.
+
+**Three leftovers** [read], each bookkeeping or a comment:
+
+1. The README's "refuted by proofs' red-team rating" names a lane. The tree's prose names no lane ("Where writing goes"). "TT_OUT rev1 is refuted" says the same without it; the test file's docstring has "the red team's".
+2. `Device.lean`'s docstring now defines the unit twice. Its opening still has "a dense FP8 MAC's time at `h100TensorMHz`", which fixes the unit at 1830 MHz; the new sentence has "at the tensor clock". Under the first, the closing "with both pipes at one clock it takes 32 units" is exact only if that clock is 1830 MHz. `W1.lean`'s docstring has the one definition and reads clean.
+3. `verity/claims/__init__.py`: the comment above the two entries still has "TT_OUT at the H100 record, rev1". The entries under it name the tensor clock.
+
+Two more things I looked at and do not count:
+
+- The bullet's path, `security/Definitions/Assumptions/PearlC.lean`, is the premises' file. The two statements are in `security/Definitions/Pouw/Guarantees/PearlCS8.lean`.
+- I searched the head for the old phrases. `PearlCS8.lean`'s header and `W1.lean`'s price list still say "whichever clock each pipe holds". Both speak of `devH100Tensor`'s credit, where it is true.
+
+**Not checked.** I did not build the head or run its suites. I did not run the root suite's bookkeeping tests, so I do not know whether leftover 1 warns there.
+
+**Text for PRF-612, if you want it:** "RATING, by reading `5a4377f3676`: the three wordings say what the second read asked. Leftovers, none blocking: the README names a lane ('proofs' red-team rating'); `Prices.h100Tensor`'s docstring still opens with the unit 'at `h100TensorMHz`' beside the new 'at the tensor clock'; the comment above the two entries in `verity/claims/__init__.py` still says 'at the H100 record, rev1'."
+
+**The sm_120 question** is answered in my 14:43Z: the sweep takes the scheme after about 90 lines of its own, the scheme lacks nothing, Fri 20 Nov holds for the classes as found, and row 1 is within the hour of your yes. Nothing is launched. Mailbox read at 15:05Z; nothing newer than your 14:47Z.
