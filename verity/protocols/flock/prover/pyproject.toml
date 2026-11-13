@@ -105,7 +105,7 @@ inputs = [
     "verity/protocols/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
-    "verity/difftest/python/verity_difftest", "verity/difftest/lean", "verity/protocols/recursion/verifier/firewall",
+    "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]

@@ -23,7 +23,7 @@ untraced = [
 # `python -m research data fetch` imports the research files listed last.
 inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
-          "verity/difftest/python/verity_difftest",
+          "tools/difftest/python/verity_difftest",
           "security/Proofs/Flock/Soundness/Audit/Law.lean",
           "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
