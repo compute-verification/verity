@@ -268,6 +268,7 @@ class _Stages:
 
     def __init__(self, t: TpRow, monkeypatch: pytest.MonkeyPatch, *, pending: bool = False, stops: dict[str, int] | None = None) -> None:
         self.ran: list[str] = []
+        halt = stops or {}
         os.makedirs(t.d, exist_ok=True)
 
         def stage(name: str) -> None:
@@ -276,8 +277,8 @@ class _Stages:
                 t.trap = True
             if name == "commit" and pending:
                 t.replay_pending = True
-            if name in (stops or {}):
-                raise Stop(stops[name])
+            if name in halt:
+                raise Stop(halt[name])
 
         for name in ("prepare", "build", "match", "commit", "replay", "research_result", "timeline_report"):
             monkeypatch.setattr(t, name, lambda name=name: stage(name))

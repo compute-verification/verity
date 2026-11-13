@@ -20,6 +20,7 @@ import pytest
 
 from tests.pipeline.test_tp_row_precheck import DENSE, _events, _log, _stages, _tp_row
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_driver
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
@@ -126,12 +127,12 @@ def test_the_manifest_beside_the_build_is_the_commits_when_it_is_of_record(tmp_p
 def test_a_config_runs_complete_manifest_is_its_own_and_one_that_is_not_complete_is_asked_about(tmp_path, monkeypatch):
     """A config run word-checked the manifest of its own Build, so a complete one is not asked about; one that is not complete is."""
     c = _Commit(tmp_path, monkeypatch, "--config-run", "1")
-    monkeypatch.setattr("verity_vllm.pipeline.row_config.commit_verdict", lambda row, rc, wall: None)
+    monkeypatch.setattr(RC, "commit_verdict", lambda row, rc, wall: None)
     c.row.commit()
     assert c.asked == [] and c.said()[0] == "required manifest of record: the one beside the Build (config run)"
 
     c = _Commit(tmp_path / "incomplete", monkeypatch, "--config-run", "1", of_record="absent or not complete", rebuilt=MANIFEST)
-    monkeypatch.setattr("verity_vllm.pipeline.row_config.commit_verdict", lambda row, rc, wall: None)
+    monkeypatch.setattr(RC, "commit_verdict", lambda row, rc, wall: None)
     c.manifest({**MANIFEST, "complete": False})
     c.row.commit()
     assert c.asked == [(c.row.d, c.row.ck_)] and [ran[0] for ran in c.ran] == ["commit.required_manifest", "commit.tp_commit"]
@@ -200,7 +201,7 @@ def test_a_tap_the_manifest_names_whose_build_is_not_on_the_host_stops_the_commi
 ])
 def test_tp_commit_runs_under_the_rows_staging_and_the_row_says_what_it_staged(tmp_path, monkeypatch, argv, staged, limit, said):
     c = _Commit(tmp_path, monkeypatch, *argv)
-    monkeypatch.setattr("verity_vllm.pipeline.row_config.commit_verdict", lambda row, rc, wall: None)
+    monkeypatch.setattr(RC, "commit_verdict", lambda row, rc, wall: None)
     c.row.commit()
     ((stage, to, lf, cmd, env),) = c.ran
     assert (stage, to, lf, cmd) == ("commit.tp_commit", limit, f"{c.row.d}/commit.log", c.row.commit_cmd([]))
