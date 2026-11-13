@@ -7,7 +7,8 @@ FLOCK_CHALLENGER=1, then the v2 executable's ``refusal`` on the per-member case 
 Each window is `test_audit_two_members._window` at its K's (`ScaledMmS8Coordinate`, one proof block a member, under
 ``stratified:1``, so every member is sampled). Per window it writes OUT/<tag>/result.json: the audit's exit, the
 per-member case's presence, the refusal line as the executable printed it, its exit, its peak RSS (the probe's
-`RUSAGE_CHILDREN` maxrss and /usr/bin/time -v's where present) and the bytes of every file the executable reads.
+`RUSAGE_CHILDREN` maxrss and /usr/bin/time -v's where present) and the bytes of every file the executable reads; and
+OUT/<tag>/rss.json, its memory as it runs once more (`sampled`), with the levels the rows show under `refusal_levels`.
 """
 from __future__ import annotations
 
@@ -41,6 +42,45 @@ def probed(argv: list[str], env: dict | None = None) -> dict:
     got = json.loads(p.stdout)
     got["seconds"] = round(time.monotonic() - t, 1)
     return got
+
+
+def sampled(argv: list[str], every: float = 0.05) -> dict:
+    """``argv`` once more, its memory read from /proc as it runs: rows of (seconds, VmRSS kB, VmHWM kB, bytes read so
+    far), so the level it holds once every file is read shows apart from what a member's check adds."""
+    t0 = time.monotonic()
+    p = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    rows: list[tuple] = []
+
+    def field(text: str, name: str) -> int | None:
+        return next((int(x.split()[1]) for x in text.splitlines() if x.startswith(name)), None)
+
+    while p.poll() is None:
+        try:
+            status = Path(f"/proc/{p.pid}/status").read_text()
+            io = Path(f"/proc/{p.pid}/io").read_text()
+        except OSError:
+            break
+        rows.append((round(time.monotonic() - t0, 2), field(status, "VmRSS:"), field(status, "VmHWM:"),
+                     field(io, "rchar:")))
+        time.sleep(every)
+    p.wait()
+    return {"rc": p.returncode, "rows": [r for r in rows if r[1] is not None]}
+
+
+def levels(rows: list[tuple], total: int) -> dict:
+    """What the rows show: the memory held when the last file is read, the lowest and highest held from then until
+    memory first passes 1.1 times that (the files alone, while each is hashed), and the peak."""
+    read = next((i for i, r in enumerate(rows) if r[3] is not None and r[3] >= total), None)
+    if read is None:
+        return {"read_done": None, "peak_rss_kb": max((r[1] for r in rows), default=None)}
+    base = rows[read][1]
+    rise = next((i for i in range(read, len(rows)) if rows[i][1] > 1.1 * base), len(rows))
+    flat = [r[1] for r in rows[read:rise]] or [base]
+    return {"read_done_s": rows[read][0], "rss_kb_at_read_done": base, "files_alone_until_s": rows[rise - 1][0],
+            "files_alone_rss_kb_min": min(flat), "files_alone_rss_kb_max": max(flat),
+            "peak_rss_kb": max(r[1] for r in rows), "peak_at_s": max(rows, key=lambda r: r[1])[0],
+            "end_s": rows[-1][0], "by_second_max_rss_mb": [
+                max(r[1] for r in rows if int(r[0]) == s) // 1024 for s in sorted({int(r[0]) for r in rows})]}
 
 
 def audit_argv(window: Path, out: Path, main: Path, bin_: Path, leanb: Path, ports: int) -> list[str]:
@@ -109,6 +149,11 @@ def one(out_root: Path, ks: tuple[int, ...], bin_: Path, leanb: Path) -> dict:
                  "case_files": sum(p.stat().st_size for p in paths)}
         sizes["total"] = sum(sizes.values())
         sizes["circuits"] = sorted(b.stat().st_size for b in blobs if b.name == "circuit.txt")
+        sizes["blobs_in_order"] = [[b.name, b.stat().st_size] for b in blobs]
+        series = sampled(argv_r)
+        (d / "rss.json").write_text(json.dumps({"columns": ["seconds", "VmRSS_kB", "VmHWM_kB", "rchar"],
+                                                "rc": series["rc"], "rows": series["rows"]}))
+        res["refusal_levels"] = levels(series["rows"], sizes["total"])
         line = (r["stdout"].strip().splitlines() or [""])[-1]
         res["refusal"] = {"command": " ".join([exe.name, "refusal", "PARAMS", "COMMITMENT", "EVIDENCE",
                                                f"[{len(blobs)} blobs]"]),
