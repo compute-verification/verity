@@ -112,7 +112,7 @@ def test_held_layers_takes_the_best_whole_number_of_layers():
 
 
 def _held(name):
-    """The scenario's serving block, its first family's profile, and the forward products a block holding whole layers
+    """The scenario's server block, its first family's profile, and the forward products a block holding whole layers
     finishes over E1's Proposition 3's limit on its activation rate, by the block's novel bits."""
     s = build(Registry.load(), name)
     p = s.families[0].profile(s.model, s.run)
@@ -124,8 +124,8 @@ def _held(name):
     return s, p, products, over
 
 
-def test_held_layers_breaks_the_activation_rate_at_the_serving_block():
-    """At the reference serving block a block holding two whole layers finishes 1.93 times the forward products E1's
+def test_held_layers_breaks_the_activation_rate_at_the_server_block():
+    """At the reference server block a block holding two whole layers finishes 1.93 times the forward products E1's
     Proposition 3 allows it on its activation rate, within the block's compute, and the calculator applies the rate
     there: the block is past the premise's credible size and short of the update's last layer."""
     s, p, products, over = _held("reference-onsite-h200")
@@ -154,7 +154,7 @@ def test_held_layers_breaks_the_activation_rate_from_one_layer_and_its_tokens_en
 
 
 def test_held_layers_finishes_nothing_where_no_layer_fits():
-    """`onsite-w63`'s serving block is past the activation rate's credible size and smaller than one layer's update:
+    """`onsite-w63`'s server block is past the activation rate's credible size and smaller than one layer's update:
     the construction finishes nothing there, and the rate is unbroken at that size."""
     s, p, _, over = _held("onsite-w63")
     k = s.regime.budget(s.context).inputs

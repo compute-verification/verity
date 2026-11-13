@@ -97,7 +97,7 @@ def test_only_a_bound_a_lock_states_sets_the_lower_bound_and_a_draft_one_is_stil
 
 def test_the_draft_bounds_set_these_scenarios_and_no_other(monkeypatch):
     """Leaving the draft bounds out lowers the scenarios `DRAFT_SET` names and moves no other: the onsite scenarios a
-    draft bound set at the serving block, and five it set at the declared block, two of them remote. With
+    draft bound set at the server block, and five it set at the declared block, two of them remote. With
     `bounds.lock_only` off each has the lower bound the draft bounds gave it."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
