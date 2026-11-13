@@ -1,7 +1,7 @@
 # The descriptor v1 evaluator in Lean
 
 `verity.circuits.evaluation.reference.evaluate` on a Program, as executable Lean: the Lake package `verity_evaluate`
-(lib `Evaluate`, exe `verity-evaluate`). It decodes a descriptor v1 Program ([format](../../circuits/PROTOCOL.md)),
+(lib `Evaluate`, exe `verity-evaluate`). It decodes a descriptor v1 Program ([format](../PROTOCOL.md)),
 binds the run inputs, evaluates every gate in canonical order and returns the root's outputs, or refuses. The Program is read
 through Flock's verifier (`Flock.Program`, required by path from `verity/protocols/flock/verifier`), which evaluates no primitive;
 this package adds the primitives. It is code, so it requires nothing of `security/`.
@@ -50,8 +50,8 @@ this package adds the primitives. It is code, so it requires nothing of `securit
   the suite holds to the library's and to Flock's pins.
 
 ~~~sh
-cd verity/definitions/evaluate && lake build      # .lake/build/bin/verity-evaluate
-python tools/verity/lean/check.py verity/definitions/evaluate   # the Lean check, from the repository root
+cd verity/circuits/evaluate && lake build      # .lake/build/bin/verity-evaluate
+python tools/verity/lean/check.py verity/circuits/evaluate   # the Lean check, from the repository root
 uv run tools/verity/check/suites.py verity-core-evaluate           # the difftest against the Python
 ~~~
 
