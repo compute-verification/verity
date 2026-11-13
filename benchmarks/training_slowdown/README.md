@@ -146,9 +146,13 @@ whose step reads a value back, is refused. It prints, an entry:
   SUBSET:CALLS, as `as_math` reads `--partial`), and the line says it is the data file's word and not the record's.
   It is never assumed: an entry whose record needs it and has none is refused, naming the key. A stated ask that is
   wrong writes products the entry's step doesn't have, so it shows as a difference;
-- the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
-  record's format's (`E_KINDS`), with its size after the counted steps beside the record's last checkpoint's, and how a
-  codec packs the same encoding another way than the record's program did (`E_PACKING`);
+- the start and the steps, which must be the record's: its steps less those the entry names as its program's alone,
+  each a step with no backward that the route rightly doesn't take (`record_only_steps` in `of_record.toml`: its
+  number in the record and why), whose count and tokens the verdict says. A named step with a backward is a
+  difference, and so is a record's step with no backward that the entry doesn't name;
+- E: its plan's kinds, each of which must be one of the record's format's (`E_KINDS`), with its size after the
+  counted steps beside the record's last checkpoint's, and how a codec packs the same encoding another way than the
+  record's program did (`E_PACKING`);
 - `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
   case alone. The device's: the norm as elementwise ops where CUDA's fused kernel is counted at an updated gain
   alone, and not at all in a step that trains no gain (`norm`). The program's own
