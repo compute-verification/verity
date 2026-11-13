@@ -522,7 +522,7 @@
         "review-*"
       ],
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
