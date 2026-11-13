@@ -36,7 +36,8 @@
                                                    stderr names the source (the index and its as-of time, or the catalog alone);
                                                    exit 1 when there is neither an index nor an artifact in the catalog
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
-  research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+  research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
+                                                   a label_auth or label_delegation token prints as its length unless --with-tokens;
                                                    first pulls TARGET's assertions the remote has and this store lacks (unreachable: a warning, the local ones);
                                                    --remote: each assertion marked both / LOCAL ONLY (not durable) / REMOTE ONLY; exit 1 if any local only
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
@@ -541,7 +542,7 @@ def cmd_snapshot(argv: list[str]) -> int:
 
 def _hide_tokens(v):
     """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
-    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    minutes and lands in worker logs, run outputs and agents' transcripts, so `labels` prints one only under `--with-tokens`."""
     if isinstance(v, dict):
         return {k: _hide_tokens(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -568,7 +569,10 @@ def cmd_labels(argv: list[str]) -> int:
     ap.add_argument("--by", default=None, metavar="PATTERN", help="fnmatch on the asserter, e.g. 'red-team-*'")
     ap.add_argument("--remote", action="store_true", help="compare with the remote: both / LOCAL ONLY / REMOTE ONLY per assertion (exit 1 if any is local only)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--with-tokens", action="store_true", help="with --json: each label_auth or label_delegation token whole "
+                    "(default: its length), for a reader that verifies one")
     ns = ap.parse_args(argv)
+    shown = (lambda v: v) if ns.with_tokens else _hide_tokens
     if ns.remote:
         from . import labels_sync as LS  # noqa: PLC0415
 
@@ -579,7 +583,7 @@ def cmd_labels(argv: list[str]) -> int:
         for x in rows:
             n[x["where"]] += 1
         if ns.json:
-            _dump({"target": ns.target, "remote": st.remote.describe(), "counts": n, "labels": rows})
+            _dump({"target": ns.target, "remote": st.remote.describe(), "counts": n, "labels": shown(rows)})
         else:
             for x in rows:
                 lab = x["label"] or {}
@@ -600,7 +604,7 @@ def cmd_labels(argv: list[str]) -> int:
             latest[(lab.key, lab.by)] = lab
         labs = sorted(latest.values(), key=lambda l: (l.ts, l.key, l.by))
     if ns.json:
-        _dump([lab.to_doc() for lab in labs])
+        _dump(shown([lab.to_doc() for lab in labs]))
         return 0
     for lab in labs:
         print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
