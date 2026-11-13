@@ -41,7 +41,7 @@ A tier-1 goal is a state of the whole system that you named, that one command or
 
 compute-research's six goals that were parked before today are one row of its table, so the parked count is five short.
 
-**Counts so far:** kept 124 (goal 1: 19, goal 2: 70, goal 3: 7, goal 4: 28), parked 55, dropped 20, new goals written for lines and rows that had none: 15.
+**Counts so far:** kept 124 (goal 1: 19, goal 2: 70, goal 3: 7, goal 4: 28), parked 55, dropped 20, new goals written for lines and rows that had none: 21.
 
 ## Each lead's sort of its own goals
 
@@ -123,6 +123,10 @@ compute-research's six goals that were parked before today are one row of its ta
 | memory-accounting | Title kept. **Check:** no file under `pous/` or `poub/` imports `verity.runtime` (14 do today [ran]), what a party, a channel and a protocol declare is in `verity/party.py`, `channel.py` and `protocol.py`, and the registry gives those files and `verity/runtime/` to @proofs. The message directory itself went with chain 2 | serves R1 and R6 | **Tue 17 Nov** (was Sun 15: no worker is on the split yet; today's are all crossing the chains) |
 | memory-accounting | **Memory accounting's Lean meets the bar.** Check: the swarm's `lean` seat reads zero (337 files, 101 list entries today); `security`'s lock lists every premise our guarantees take (15 unlisted today, #9583); the two storage schemes nothing serves are deleted with their guarantees | each area's code at the bar; serves R19 | **Tue 24 Nov** (kept) |
 | memory-accounting | Title kept. **Check:** the Lean check of each of the three memory audits verifies the memory challenger's signature under a pinned key before it reads the session (the wipe and PoUS since Wed 11 Nov; onsite PoUB with #9723), and the pinned keys are data in the deployment's configuration | serves R9 | **Wed 18 Nov** (was Tue 17: the keys-as-data change has no worker yet) |
+| memory-accounting | NEW. **Memory audits name their registered hardware.** Check: PoUS's and PoUB's parameters and signed bytes carry the registration's head and the device's place and server, and their capacity and read rate are read from the registration. | R8 | its day by 6 PM PST today (sizing at 3 PM) |
+| memory-accounting | NEW. **A memory-read session is proved in zero knowledge.** Check: R22's row deleted from the architecture file. Not sized. | R22 | not known; sized by Tue 17 Nov 6 PM PST |
+| memory-accounting | NEW. **PoUS's setup is a proof about the store.** Check: R23's row deleted from the architecture file. Not sized. | R23 | not known; sized by Tue 17 Nov 6 PM PST |
+| memory-accounting | NEW. **PoUS's session is checked inside a proof.** Check: R24's row deleted from the architecture file. Half in flight (#9629, #9630). Not sized. | R24 | not known; sized by Tue 17 Nov 6 PM PST |
 | network-accounting | "Network certification takes the registered site and says which links it accounts for." Check: one Lean check reads each link's capacity and key from the site's registration | R8 | Fri 20 Nov |
 | network-accounting | "Network accounting's code is at the bar." Check: no open issue with its label; one builder of a window's circuit | our area's code at the bar | Fri 27 Nov |
 | network-accounting | NEW. **The certifier's device is a party under the runtime.** Check: the device does no network I/O of its own outside the runtime's interface. | R1 (the certifier's device) | Fri 27 Nov; needs the runtime's interface for a device that holds a link |
@@ -130,6 +134,7 @@ compute-research's six goals that were parked before today are one row of its ta
 | network-accounting | "The network certifier and the inference-only policy each have a manifest of parties, and both deployment tables read them." Check: #9667 on `main` | R1 | Mon 16 Nov |
 | network-accounting | **Plan for one network certifier outside benchmarks.** kept. Check: a day for each change on its issue, with vllm's day for the remote demo | R16, R5 | Mon 16 Nov |
 | network-accounting | **Network certifier signs each session's start.** kept. Check: #9369 on `main` | R9 | Mon 16 Nov (was today: it is reviewed and must cross the moves) |
+| network-accounting | NEW. **The network checks refuse each case found accepted.** Check: each of the cases found has a test on `main` that hands the check the case and sees it refused (two have a pull request open, one a mend going into #9501, one no owner yet). | R7 | Thu 19 Nov |
 | network-accounting | **Network check accepts only verified audit answers.** kept. Check: a test hands the period check an answer the Lean verifier did not verify, and it is refused | R7 | Tue 1 Dec |
 | network-accounting | "The onsite demo's network code is on `main`." Check: the worker's recount finds no file of the onsite line's network code that `main` lacks, and the rows audit is the Lean executable | R6, R7 | Tue 24 Nov (was Fri 20: 6 changes open of 14, and two files the run of record needs are in none yet) |
 | network-accounting | **Certifier counts what left during a wipe.** kept. Check: #9154 and #9216 on `main`, and the wipe's check calls the Lean count | R9 | Wed 18 Nov (was Tue: the carry) |
@@ -154,6 +159,7 @@ compute-research's six goals that were parked before today are one row of its ta
 | training | **Slowdown's open premises sorted.** as titled. Check: each of the 26 premises has one line on @lean's list, and the policy's 20 are @network-accounting's | serves R21, R19 | Mon 16 Nov noon |
 | training | **Slowdown computed from a submitted circuit.** as titled. Check: the calculator prints a slowdown from a circuit file alone, with the largest step it finishes stated | serves R2: the calculator reads a circuit, so the benchmark needs no translator | Mon 16 Nov, as it is. What stopped the 1,024-token step was located this morning: an index cache the reading itself keeps, a few lines; the fix is not run yet |
 | training | **One translator from PyTorch to circuits.** as titled. Check: `benchmarks/training_slowdown` holds no translator and names only the PyTorch adapter's public interface (one module past it today, run); each library entry's figures equal before and after | closes R2's translator half | Mon 23 Nov: three working days after @vllm's split, not before Wed 18 Nov |
+| training | NEW. **Training's benchmarks all show on the dashboard.** Check: each of the four has a `metrics.toml` row and the tab shows its value within its schedule (one of four today). | R18 | Thu 19 Nov |
 | training | **Slowdown count skips repeated positions.** as titled. Check: a job's record holds its measured repeats and the count leaves them out (`tests/test_repeats.py` on `main`). Counter and five tests are pushed | the bar: the one open defect that can make a printed slowdown too high | Tue 17 Nov |
 | training | **The inference-only check reads a served record** (its title says "demo done"). Check: on `main` the compiled check accepts the served Llama 3.2 1B record and refuses it with one weight unregistered | serves R7 | Tue 17 Nov for the accept and the count rule; the rate rule's refusal needs @vllm's run at the new limit |
 | training | **Record check's copied definitions removed.** as titled. Check: the check's Lean has no definition of a return's fields and no string reader of its own | the bar: one definition in Lean | Wed 18 Nov on `main` (in review Mon 16) |
@@ -224,7 +230,7 @@ compute-research's six goals that were parked before today are one row of its ta
 
 ## Lines and rows with no goal yet
 
-L10, R11, R12, R14, R15, R22, R23, R24 (L = a not-yet line of the layout file, R = a row of the architecture file's code still to be written; the numbering is in the sheet on TOP-416.)
+L10, R11, R12, R14, R15 (L = a not-yet line of the layout file, R = a row of the architecture file's code still to be written; the numbering is in the sheet on TOP-416.)
 
 ## Parked: results, climbs, and work the architecture does not need now
 
