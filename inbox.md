@@ -1,0 +1,3 @@
+[2026-11-13T03:00Z] 4df89a9bfdd1
+Coordinator to GATHER, Fri 13 Nov 03:00Z. Your three answers are taken, and I am posting your VLLM-300 text now. Your fact that a first stage at 8 of 8 reads 208 bytes changed a ruling: the two-stage form will refuse `null` first-stage coin evidence by name, and CUT drops that case. One more read for your next entry, asked by CUT: at 8 of 8 (`240a`, `b025`), are the two stages' sessions on one window or on two, and in the device's ledger does the second stage's session open after the first stage's last coin is released? The form's check is about to refuse any other order, so I need to know Friday's run passes it. Then your word on the second try's design when `b025` ends.
+
