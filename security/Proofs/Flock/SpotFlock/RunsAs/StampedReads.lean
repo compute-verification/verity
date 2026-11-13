@@ -28,7 +28,6 @@ record reads the stamped verdicts. `Spot.Record.sessionRegistered` reads three k
 namespace SpotFlock.RunsAs
 
 open Lean (Json)
-open Flock (V)
 
 private theorem bind_iff {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
     (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -37,7 +36,7 @@ private theorem bind_iff {ε α β : Type} {x : Except ε α} {f : α → Except
 private theorem bind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := bind_iff.1 h
 
-private theorem throw_ne' {α : Type} (e : String) (a : α) : (throw e : V α) ≠ .ok a := fun h => by cases h
+private theorem throw_ne' {α : Type} (e : String) (a : α) : (throw e : Flock.V α) ≠ .ok a := fun h => by cases h
 
 private theorem map_ok' {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h : f <$> x = .ok b) :
     ∃ a, x = .ok a ∧ f a = b := by
@@ -118,7 +117,7 @@ theorem reads3_stamp {k : String} (F : Json → String × Json → Json) (hF : �
     (Spot.getD (.obj m) "of_record", Spot.getD (.obj m) "accepted", Spot.getD (.obj m) "registered")
   rw [h1, h2, h3]
 
-theorem mapM_reads {α : Type} (G : α × (String × Json) → V (String × Json)) :
+theorem mapM_reads {α : Type} (G : α × (String × Json) → Flock.V (String × Json)) :
     ∀ (l : List (α × (String × Json))) (ys : List (String × Json)),
       l.mapM G = .ok ys → (∀ z ∈ l, ∀ y, G z = .ok y → reads3 y = reads3 z.2) →
       ys.map reads3 = (l.map Prod.snd).map reads3
@@ -173,6 +172,19 @@ theorem stamped_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursi
     · exact absurd hy (throw_ne' _ _)
   · exact absurd hy (throw_ne' _ _)
 
+/-- The run of record's verdicts are the ones the form hands it. -/
+theorem inputOf_verdicts (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
+    (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
+    (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).verdicts = vs := by
+  first
+    | rfl
+    | (unfold VStar.Recursive.SampledTwo.inputOf
+       rfl)
+    | (simp only [VStar.Recursive.SampledTwo.inputOf]
+       generalize VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots = rs
+       obtain ⟨a, b⟩ := rs
+       rfl)
+
 /-- **The run of record's verdicts report the reads the sessions' own verdicts report**: `inputAt`'s input carries
 the verdicts `stamped` returned on `r.out`, and `sessionRegistered` reads the same of both. -/
 theorem inputAt_reported {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
@@ -181,8 +193,8 @@ theorem inputAt_reported {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneSt
     (h : VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
     Spot.Record.sessionRegistered i.verdicts = Spot.Record.sessionRegistered r.out := by
   obtain ⟨-, -, hrun, -, vs, received₂, j₁, j₂, hst, rfl, -, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok h
-  have hs := sessionRegistered_congr (stamped_reads hst (membersRun_wf hrun))
-  exact hs
+  rw [inputOf_verdicts]
+  exact sessionRegistered_congr (stamped_reads hst (membersRun_wf hrun))
 
 /-- The verdicts' premise of `accepted_ownReads_form` holds. -/
 theorem verdictsReadSame : VerdictsReadSame := fun _ _ _ _ _ _ _ _ _ h => inputAt_reported h

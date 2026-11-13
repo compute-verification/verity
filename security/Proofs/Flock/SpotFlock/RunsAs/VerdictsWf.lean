@@ -19,7 +19,6 @@ The walk is `membersRun`, `runMembers`, `stepMember`, `runFrom`, `step`, `push`,
 namespace SpotFlock.RunsAs
 
 open Lean (Json)
-open Flock (V)
 
 /-- Every verdict's value is a JSON object over a well-formed map. -/
 def OutWf (out : Array (String × Json)) : Prop :=
@@ -32,7 +31,7 @@ private theorem bind_iff {ε α β : Type} {x : Except ε α} {f : α → Except
 private theorem bind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := bind_iff.1 h
 
-private theorem throw_ne' {α : Type} (e : String) (a : α) : (throw e : V α) ≠ .ok a := fun h => by cases h
+private theorem throw_ne' {α : Type} (e : String) (a : α) : (throw e : Flock.V α) ≠ .ok a := fun h => by cases h
 
 private theorem mapError_ok' {ε α : Type} {x : Except ε α} {f : ε → ε} {a : α} (h : x.mapError f = .ok a) :
     x = .ok a := by
@@ -61,7 +60,7 @@ theorem verdictJson_wf (rd : Spot.OneStageZk.Reads) (programSha : Option String)
 
 theorem push_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {programSha : Option String} {want : Json}
     {r r' : Spot.OneStageZk.Run} {s : Spot.OneStageZk.RunFiles} {record : String} {st : Spot.OneStageZk.SetUp}
-    {coinKey : Option String} {verdict : V Unit}
+    {coinKey : Option String} {verdict : Flock.V Unit}
     (h : Spot.OneStageZk.push I rd programSha want r s record st coinKey verdict = .ok r') (hr : OutWf r.out) :
     OutWf r'.out := by
   unfold Spot.OneStageZk.push at h
@@ -76,7 +75,7 @@ theorem push_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {program
     exact hr.push (verdictJson_wf ..)
 
 theorem step_wf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {bs : Core.Blobs}
-    {scope ksFiles population : V Unit} {programSha : Option String} {want : Json}
+    {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {r r' : Spot.OneStageZk.Run} {s : Spot.OneStageZk.RunFiles}
     (h : Spot.OneStageZk.step I rd bs scope ksFiles population programSha want r s = .ok r') (hr : OutWf r.out) :
     OutWf r'.out := by
