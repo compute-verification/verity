@@ -15,3 +15,25 @@ ONSITEMAIN, Fri 13 Nov 9:08 AM PST. **A's carried head is pushed: #9670 at `de84
 - Its job is launched once: the pins regenerated, the records of its two Lean packages, the suites changed since `f54194bbb196`, quick. I edit the body when it has ended and send you the run.
 - B, L and I1 follow on this head, as in my 9:00 AM line; H stopped at the first move's base on one file (`benchmarks/network_traces/tests/test_certifier_piece.py`), so it gets a hand merge of that base first, which I send you.
 
+[2026-11-13T17:09Z] 17e3cbb92dd7
+TERMGB to the lead, Fri 13 Nov 9:12 AM PST. Section 4's first question, and CI-526's outcome.
+
+**CI-526, #9752 at `1e422bf8bf39`: its check passes** [ran]. The graph's task for the test file passes at the head (`r20261113-164544-3cda`, status pass) and errors at `main` `d119240998be` without the line (`r20261113-164620-c82d`, status error, the runner's own words about bash); the suite at the head: 180 passed, 11 skipped. The body says so. Unmarked.
+
+**Is the hole reachable on `main` without #9501? The release is; a check that charges it 0 is not.** [read at `d119240998be`, figures ran]
+- **Reachable: the release.** The certifier on `main` releases a request no class holds and files it in no class: the schedule's check holds each class's P to ingress's bound and never the largest class to cover it, the filing returns none, and the tables lay it no content row. All four schedules the tree has with content rows leave that gap: the cost runner's default (its largest class holds 46,149 bytes, ingress admits 48,288) and the two test bases (1,797 against 2,012).
+- **Not reachable: the charge.** Nothing on `main` reads a run's heads and charges an execution phase's schedules 0. Two things on `main` say 0 of a schedule, and neither is a check of a run:
+  - the calculator's three rows with the lengths held (`lengths`, `all three`, `design`) charge every connection of their scope 0 as the row's stated assumption. They take the scope's load as a number and read no schedule's sizes, no head and no run;
+  - the harness's sums under those rows take the output count at 0, marked assumed. The mark moves only on four verdicts of record on one class, and `main`'s writer of verdict records writes two of the four, so no command on `main` completes it. I did not look in the store for records labelled by hand [not checked].
+- **So I cut nothing from `main`.** The cause is on `main` and its first reader is #9501's. The mend's code is in files `main` has, so it could be cut from `main` instead: by default I do as ordered, its own commit on #9501's carried head.
+
+**The way: ingress refuses it (your first).** [argued, figures ran] Held to the schedule instead, each of the tree's four schedules is refused as it stands, and to pass each must lower ingress's bound, which is in whole cells, below its largest class: at the cost runner's default a prompt of 4,096 ids, which its largest class is sized for, is 46,149 bytes and 92 cells, and the bound would be 91. Ingress's refusal is to the byte: it refuses no request any class of the schedule holds.
+
+**Two more of the same kind, found reading for the mend. Neither is closed by either of your two ways.**
+1. **The response's side.** A release whose ids are more than O of every class that holds its request is unfiled the same way, and how many ids a response has is the server's own choice. The tree's four schedules happen to cover it (their egress bound is their largest class's O), and nothing holds a schedule to that. I close it in the same line as a second commit, at the schedule: refused unless a class of the largest P holds the most ids a response releases. It refuses none of the tree's four [ran]. Say if you would rather not.
+2. **Form 1.** A release filed in a class whose rows are all held is unfiled whatever its size (the content rows' own docstring), and #9501's reader does not tell a form-1 head from a form-2 one: it is handed no schedule. Not built: it needs the reader handed the schedule, or the lengths unit proving that every release has a row. Yours to place.
+
+With `FORMATS` empty #9501's reader holds no execution phase at all, so none of this charges anything at the carried head until a format is listed [read].
+
+Carries: #9533 `r20261113-165355-bd86` and #9501 `r20261113-165436-acea` are running. The writer's first four moves crossed clean, result `c44b3a8d67a2` (`r20261113-165449-44b7`); its hand merge is last, as ordered. Your 9:02 AM PST addition (#9305, #9329) is read: after the brief's jobs.
+
