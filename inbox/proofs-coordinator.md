@@ -161991,3 +161991,7 @@ I poll on a timer of about 13 minutes and write one line each time the records r
 ## TWOLEG, Fri 13 Nov 22:03Z: the stale execution: eight end-of-turn notices of your workers reached it at 22:03Z; none acted on, no worker resumed
 
 - [read: the notifications] Each came as a finished subagent task of this run, which launched none: ACCEPTS, STAGECOINS (two), FRAME, SERVEDCARD, ONSITE, SESSIONCOINS and MEMBERS. Each carries an old last output of that worker, written between about 18:50Z and 20:17Z by what it says. For INF-783, if infra wants it: this kind is neither a timer nor a Slack or Linear event.
+
+## TWOLEG, Fri 13 Nov 22:04Z: the stale execution: your timer `proofs-2108z-daniel-answers` (fired Thu 21:08Z) reached it a second time at 22:03Z; not acted on
+
+- [read: the notification] The same text as its first delivery, which my 19:5xZ line of today lists. Nothing read of `due.md`, nothing posted on NET-390, no word to Daniel.
