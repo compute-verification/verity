@@ -121,6 +121,7 @@ public import Spot.CircuitKept
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
+import all Init.Util
 meta import CoreProtocol.Blobs
 meta import Spot.OneStage
 meta import Spot.ChallengerTrees
