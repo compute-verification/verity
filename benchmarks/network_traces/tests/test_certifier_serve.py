@@ -49,6 +49,7 @@ SESSION = bytes(range(32))
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_certifier_serve",
                                                   ROOT / "benchmarks/network_traces/certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
@@ -450,7 +451,7 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     own fresh salt, and salted clock certificates of the syncs handed with the egress records, the same leaves too,
     each opening under its own fresh salt; a reveal signed between two records takes the same leaf: its calls run in
     the order they are made."""
-    import certifier_serve  # by name, so that the spawned process finds its functions
+    from benchmarks.network_traces import certifier_serve  # by name, so that the spawned process finds its functions
 
     _, report, _, runs = served
     published = runs["honest"]["published"]

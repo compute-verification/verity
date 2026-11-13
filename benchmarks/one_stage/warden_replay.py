@@ -40,8 +40,9 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import warden_serve as ws  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:

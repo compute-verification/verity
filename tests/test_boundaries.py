@@ -161,10 +161,10 @@ BENCHMARKS_IMPORTERS = {
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
-    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
+    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/
     "verity/composite/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "imported since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/poub/device/live_verifier/tests/stub_verifier.py":
         "memory-accounting: the remote session (`benchmarks/remote_session`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",

@@ -26,7 +26,8 @@ from verity.circuits.codec import canonical_json
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(HERE))
-import block_certifier as BC  # noqa: E402
+sys.path.append(str(ROOT))  # for benchmarks.network_traces
+from benchmarks.network_traces import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 CLOCK_RUN, ROWS_RUN = "r20261025-213746-7692", "r20261025-235229-305e"
