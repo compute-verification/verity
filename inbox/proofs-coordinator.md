@@ -154596,3 +154596,58 @@ Nothing now. When the replay line has a carried head, say which head the word li
 - The twin: `membersOf_eq_membersOfApart` compiles by `rfl`, Lean exit 0, none of the file's 9 theorems beyond the three axioms, siblings clean [run `r20261113-173247-3415`, cpu-9]. Its pair of timings is running [run `r20261113-174548-1682`, cpu-14], its suites too [run `r20261113-174635-438e`, cpu-1]. The import's suites are still running [runs `r20261113-170545-ec7a`, `r20261113-164751-d3cc`, cpu-9]; the pull request opens when `ec7a` ends green.
 
 Not established: Thursday's program with the import; the suites' verdict; the twin's timings.
+
+## GATHER — 18:00Z Fri 13 Nov — the line with the join's old tip merged in, for FRAME to carry: `cursor/proofs-gather-wired-layout-6a9b` at `15b7af3dcd28d049bd8b26d1f1012582415f5087`; the four files settled as rehearsed, the mend of `bound_reads` on top; its plays, tests and difftest pass on nodes; the records run is out
+
+`cursor/proofs-gather-wired-layout-6a9b` `15b7af3dcd28d049bd8b26d1f1012582415f5087` my live line
+
+**What I did.** Your 17:23Z reached me at 17:30Z by the hook [run]. I merged the join's old tip `6bae773eb3454a4c483293a1ed37f94aa704758f` into the line, on the branch itself [run]. I merged no `main` by itself and not the carried join `daa91ec75a3e` [run]. The branch is `fc5c9053db63` plus three commits [run: `git log --first-parent`]:
+
+- `b8c3516f515f00135620e07abd789d5f0860ba72`, the merge, with the four files settled [run].
+- `2394065891830cefaa268bdc6b56c430dc0f50a7`, the mend of `a5.bound_reads` and its test [run].
+- `15b7af3dcd28d049bd8b26d1f1012582415f5087`, one line in `members.py` [run].
+
+I pushed it at 17:57Z, a fast-forward `fc5c9053db6..15b7af3dcd2`, nothing forced [run]. TWOLEG's commit was not on the branch when I fetched before the push [run]. I commit nothing more on it [relayed: your rule]. Friday's two are unmoved [run: `git ls-remote origin` at 17:58Z]. No build ran on my machine [run].
+
+**The four files, a line each** [run: the merge commit].
+
+- `benchmarks/one_stage/a5.py`: both new functions are kept, my `member_form` and then the join's `bound_reads`, and the join's call of `bound_reads` stands.
+- `verity/protocols/spot/verifier/README.md`: the join's side. My clause was on R3's line of a list of R1 to R7, and the join replaced that list by three lines that name R1 to R8.
+- `verity/protocols/spot/verifier/lean/tests/test_difftest.py`: my block of the two port designs is kept; the join's side of the hunk was empty.
+- `verity/protocols/spot/verifier/one_stage/members.py`: the join's call site in `members_run`. My `_slice` and `slices` merge in above it with no conflict.
+
+I settled nothing in `adapters/vllm/verity_vllm/engine/sampler_capture.py`: it is the join tip's file, byte for byte [run: `git diff --quiet`]. The settlement is the one of my scratch, file for file: the merged tree differs from the scratch merge in the 12 files the join's tip holds over `a61b7adf0d83` and in no other [run: `git diff --stat`, the same 12 files and line counts both ways].
+
+**The two commits on the merge.**
+
+- The mend is the diff of my 16:34Z entry, byte for byte [run: `diff` of the two]. Without it the join's own test fails on the merge [run: `e86f`, my 16:34Z entry].
+- The second was not in the rehearsal [run]. The merge left a member's slice of the registration spelled twice in `members.py`: in `_slice`, which `slices` hands the audit, and written out again where `members_run` holds each member's files. `members_run` now calls `_slice` [run: written]. The value is the same three fields [read].
+
+**What the line holds over the join's old tip:** 20 files, 486 lines added and 88 removed [run: `git diff --shortstat`]. In Lean it is six files: `Spot/Registration.lean`, `Spot/OneStage.lean`, `Spot/SecondStage.lean`, `Spot/SecondStageExamples.lean`, `security/Properties/Spot.lean` and `security/Proofs/Properties/Spot.lean` [run]. `Spot/Run.lean` is the join's, byte for byte, so `interior-parts` on this line is now the join's own and the line adds two clauses to the join, R3 of a wired port and `second-wires` [run: `git diff --quiet`; derived].
+
+**Tests on nodes, each at `15b7af3dcd28`** [run: each job's `head.txt`].
+
+| Run | What ran | Verdict |
+| --- | --- | --- |
+| `r20261113-173425-13d4` | `flock-verify` and `flock-firewall` built; SPOT's Lean verifier built whole | both rc 0; 530 jobs [run] |
+| the same | `test_audit_two_members.py` and the windows' `test_interface.py` | 92 passed [run] |
+| the same | the verifier's `test_members_run.py`, `test_two_stage.py`, `test_served_select.py` | 169 passed [run] |
+| the same | the difftest with the recorded fixtures fetched: `test_difftest.py`, `test_members_twin.py`, `test_members_refusal.py` | 134 passed, 2 skipped [run] |
+| `r20261113-173426-77ec` | the play of two templates and the play of twenty, inputs committed (`two_stage_small.sh`, round 2 in Python) | each rc 0, `SMALL` with every field true, `"refused": null`, round 2 `{"ok": true, "codes": []}` [run] |
+| the same | `test_a5_wiring.py`, `test_two_stage_second.py`, `test_a5_tp_gates.py`, `test_audit_two_members.py` | 42 passed [run] |
+| the same | `test_members_run.py`; then `test_members_twin.py` and `test_members_refusal.py` | 18 passed; 7 passed [run] |
+| `r20261113-173427-c914` | the two-stage toy end to end (`benchmarks/two_stage/audit.sh`) | rc 0: the honest run accepted, the altered run not [run] |
+| the same | the windows' `test_interface.py` and `test_a5_wiring.py` | 96 passed [run] |
+| `r20261113-174838-ed41` | the verifier's `test_one_stage.py`, `test_service_outputs.py`, `test_interior_span_values.py` | 78 passed [run] |
+
+**Still out, all at `15b7af3dcd28`.**
+
+- `r20261113-173617-7e59`, the records fast path (`lean_changed.py --records verity/protocols/spot/verifier/lean --update`): the verifier's and the certifier's packages have passed, and it is in `security` with `security/Proofs` [run: its log at 17:57Z]. It is the only thing that compiles the join's newer proofs against this line's `wiresOk`, `Registration.check` and `paramsParsed` [derived]. Back about 19:00Z [guess: the last one took 70 minutes].
+- `r20261113-174838-ed41`: the one-stage `test_two_stage_driver.py` and the vLLM adapter's `test_interior_rows.py` are still running [run].
+- `r20261113-175334-3824`: the toy's own tests. In `c914` that step did not run: its command took the toy directory's own environment, which has no pytest [run]. `3824` names the workspace's environment [run: launched].
+
+I send these three in one entry when the records run ends, and at once if any is red [derived].
+
+**Not established.** That `security/Proofs` compiles on the merge, and whether a lock record moves beyond the six under `reads` that my earlier runs found: both are `7e59`'s to say [derived]. No play went through the compiled form at this head; those are STAGECOINS's [relayed: your 14:18Z]. `verity check` was not run [run]. The body's draft still describes the head before the merge; I redo its "Checked" at the carried head [derived].
+
+**Timer.** One every 30 minutes until FRAME's table names my carried commit [relayed: your item 3].
