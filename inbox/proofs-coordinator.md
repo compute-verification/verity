@@ -112206,3 +112206,73 @@ The written-bit half is the same with `outRowBit_outRowOf`. `BitsInPorts`' sourc
 ### To post
 
 Nothing.
+
+## ACCOUNTS, Fri 13 Nov 01:34Z: Site v2: the records run failed on one witness's form, not on a build; the witness is restated and builds (exit 0), `main` is merged, and the records rerun and the 16 suites run now at `2d8a2ac46c2c` (records due about 03:10Z). A fifth listed text changes: read STOP RULE.
+
+**Heads, all pushed.** Site v2 `cursor/proofs-site-v2-1dc6` at `2d8a2ac46c2c`. The two lists `cursor/proofs-composites-f4cc` at `1b478b7fdf27`. #9312 `b034e9d200b5` and #9313 `19474e53e4f7`, unmarked, not touched. No pull request for Site v2 yet: it opens when the rerun passes.
+
+**What passed**
+- The restated witness builds: `security/Proofs/Properties/Core/Site.lean`, lean exit 0 in 260 s, and none of its 136 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound` [run `r20261113-012045-e9fe` on vy-nebius-2, exit 0; its tree is the branch before the merge with `main`].
+- The main lock's audit, in the failed run: `security` PASS, 27,240 declarations, 1111 guarantees; `security/Proofs` PASS, 198,565 declarations [run `r20261112-231553-5b1a`, stdout lines 58 and 622].
+- The two lists' suites: 7 of 7 passed, none cached, then the composition suite's 4 slow tests passed [run `r20261112-231602-5563`, exit 0, stdout lines 30 and 39; it ran the tree at `57fb7f037f6b`, the commit before the head, and the head's one commit changes only `security/Properties/lean-audit.json`].
+
+**Why `5b1a` failed** [read: its stdout lines 666 and 667]. The build and the proofs passed. The properties lock's rule for witnesses refused one theorem, `Properties.Site.refusedAt_nontrivial`: a nontrivial witness must negate a head of its guarantee's conclusion, with one `∀` for each `∃` that opens the conclusion. `RefusedAt`'s approved new text opens with `Valid … ∧ (… ∨ …)` and no `∃`, so the old witness (`∀ i, ¬ Entry.refusal … = …`) has the wrong head and one binder too many. Everything else the run printed for that lock is a record that moved, listed below.
+
+### STOP RULE
+
+A fifth listed text changes. Daniel's yes named four. It is on my branch, which is unmarked and is no pull request, because the lock's check cannot pass without it; it lands only if you carry it.
+
+| | `Properties.Site.refusedAt_nontrivial` |
+|---|---|
+| Before | `∀ i : Fin honestLog.length, ¬Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (ofLog (log (honestLog.take i))) (head … (log (honestLog.take i))) (regEntry honestLog[i]) = some (refusal .previous)` |
+| After | `¬(Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log (honestLog.take 0)) ∧ ((∃ hi : 0 < honestLog.length, Entry.refusal … (ofLog (log (honestLog.take 0))) (head … (log (honestLog.take 0))) (regEntry honestLog[0]) = some (refusal .previous)) ∨ (0 = honestLog.length ∧ Refusal.previous = .inventory ∧ ¬Complete (digests witnessDigests) (auditor witnessAuditor) (ofLog (log honestLog)))))` |
+
+- **In plain words, before and after the same:** a check that refuses every log at its first entry, as not following the head, fails `RefusedAt` on the example log.
+- **What differs:** before, it was stated at every index of the example log. Now it is `RefusedAt`'s own conclusion, negated, at the index and refusal that check answers (0 and `previous`). The example log has one entry, so no index is lost [read: `honestLog := [honestEntry]`, `security/Properties/Core/Site.lean` at `2d8a2ac46c2c`].
+- **Why no other form keeps the old text** [derived]: the old text negates an equation. In the new `RefusedAt` that equation sits under `∧` and `∨`, so it is no longer a head of the conclusion (the rule lists `RefusedAt`, `And`, `Valid`, `Or`), and any witness of the new `RefusedAt` must change.
+- **It rests on nothing new:** no hypothesis, the three axioms only [run `e9fe`].
+- **The other way out** is to give `RefusedAt` back its opening `∃ hi`, which is not the form ruled at 21:31Z Thu (the end of the log is an index with no entry). I did not take it.
+
+### Records that move (from `5b1a`; the rerun confirms or corrects)
+
+- **`security/lean-audit.json`**: one `reads` entry, `Definitions.Core.Site` (`Verity.Site.Link` and `Verity.Site.Loc` changed, `Verity.Site.Kind.auditorHost` new). 136 guarantees of that lock read it: 99 `Nci.*`, 18 `Accounting.*`, 18 `Verity.*`, 1 `Flock.*`. No guarantee's own record moves. Committed as `c2fce58ca8` [read: the run's `lean-audit/record/security/lean-audit.json`].
+- **`security/Properties/lean-audit.json`**: the own records of `Properties.Site.checks`, `checks_honest`, `checks_nontrivial`, `refusedAt`, and now `refusedAt_nontrivial`; and three `reads` entries: `CoreProtocol.Site` (19 changed, 36 new, read by the thirteen), `Definitions.Core.Site` (18 changed, 36 new, read by 54 guarantees: 12 `Properties.Site`, 14 of the inference-only policy's check, 1 `Properties.Pouw`, 4 `Properties.Remote`, 23 `Verity.*`), `Properties.Core.Site` (12 changed, 4 new, read by the thirteen). Not committed: the failed run kept no record for this lock.
+- **`security/Proofs/lean-audit.json`**: nothing (0 guarantees).
+
+### The merge with `main`
+
+`e86d9204135c` merged as `2d8a2ac46c2c` [run: `git merge --no-ff`, lock driver installed]. One conflict, in `verity/hardware/tests/test_nodes.py`: each side added one import line (`from fractions import Fraction`; `from pathlib import Path`). Both kept; the file parses and ruff passes on `verity/hardware` [run on the VM]. Since the branch point `main` changed 11 Lean files, all proofs of the inference-only policy's check under `security/Proofs`, no lock, and nothing under the interface [run: `git diff --name-only 0e8d16c3b8 origin/main`].
+
+### Runs
+
+| Run | What | State |
+|---|---|---|
+| `r20261113-012045-e9fe` | the witness's try, vy-nebius-2 | exit 0, 530 s wall |
+| `r20261113-012523-6349` | records, `security` and its requirers, at `2d8a2ac46c2c`, 115 GB asked, vy-nebius-2 | took a slot 01:29:22Z; the last one held its slot 97 min, so about 03:10Z |
+| `r20261113-012523-9fef` | the 16 suites at `2d8a2ac46c2c`, `--quick`, vy-nebius-2 | took a slot 01:28:44Z; about 02:10Z |
+| `r20261112-231553-5b1a` | records at `a88978bf950f` | failed, exit 1, as above; it ran `security` through at 105 GB asked |
+| `r20261112-231602-5563` | the two lists' suites | exit 0, 7 of 7 and 1 of 1 |
+
+No Lean slot on vy-nebius-2 kept me more than ten minutes: the try waited 3 min 53 s, the records run 2 min 47 s [read: each run's `slot.json`].
+
+### To post
+
+**On TOP-398, the line owed by Fri 18:00Z** (a price, not a choice):
+
+> proofs, on whether a device with parts gets limits of its own in Lean in the Site's statements. **It costs Site v2's thirteen statements nothing unless the limit becomes a registered field, and then it moves what they read, not what they say.** The thirteen say one thing: the code's check of a registration agrees with the spec's. None states a limit.
+> - **Today, in Site v2:** a card has its sheet's limits. A host has two of its own, each held to the auditor's figure by an entry's check: its on-chip state, and for a memory tier the bits a second its leaves of that tier read or write together. The site at the top has none. Every other amount at a location with parts (compute, memory, read rate, egress) is a sum over its leaves in the accounting rows' code, which has no theorem.
+> - **Limits derived from the parts** (a function of the registered Site, with memory's one theorem, network's two and compute's lemma in their own areas): no text and no record of the thirteen moves. It can land after Site v2.
+> - **Limits registered on the location** (a new field checked against a figure of the auditor's, as a host's two are): no text of the thirteen changes; all thirteen's records of what they read move; the agreement gains a case for each new check. Site v2 added four checks in 992 lines of Lean over six files, so about 250 lines a check, one records run (97 minutes on a node last time), and the Python mirror with its difftest. A text changes only if the limit is checked at the log's end rather than entry by entry, as the complete inventory is: then `Checks` and `RefusedAt` again.
+> - **Renaming the kind `device`** (a card) so that "device" can mean any location: a rename map with a moves file; no record moves.
+
+[read: `security/Definitions/Core/Site.lean` lines 100 to 230 and 484 to 504, `CoreProtocol/Account.lean` lines 152 to 197, `CoreProtocol/Site.lean` lines 644 to 677, at `2d8a2ac46c2c`; derived: 992 added lines is `git diff --stat origin/main` over the six Lean files of the Site and its agreement, and four is the new checks `Chips`, `Rates`, `Timed`, `Complete`.]
+
+### Not established
+
+- That `security/Properties` passes its audit with the restated witness: the rerun says. I read the rule's code (`tools/verity/lean/check.py`, the branch for a first nontrivial witness) and the new form meets its three tests [read, not run].
+- The properties lock's regenerated record, entry by entry.
+- The suites at the merged head.
+- Whether #9375, when it lands, moves any of this: I merge `main` again after it and build my files and what imports them before a ready line.
+- The path move (the Site's file to `verity/device.py`): not on `main` at 01:24Z. If it lands before the pull request, I carry the branch across with `tools/move/restack.py`.
+
+**Next.** I end the turn on the two runs with a one-off timer for 03:10Z. On waking: read both, commit the properties lock's record, open the one pull request unmarked with the five texts before and after, and give you the ready line. The two lists wait on #9268, still open at 01:25Z [run: `gh pr view 9268`].
