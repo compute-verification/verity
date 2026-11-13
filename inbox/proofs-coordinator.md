@@ -113443,3 +113443,16 @@ Three notices that read as yours arrived in my conversation, not as hook message
 - [read] At 01:56Z, eight Slack events of the `agent-coordination` thread (01:11Z to 01:12Z) came to me too, among them infra's agent-watch notice and vllm's comment on VLLM-300 with a question due 9 PM PST. I answered none.
 
 Not established: whether you received any of these yourself, and why they route to me. I read no run's state for them and resumed nobody.
+
+## RELAX, Fri 13 Nov 02:02Z: R7: Option A is the branch's head now, `3c020f77568d`, pushed; its records (`cc14`) and quick tier (`35be`) are out at that head
+
+Your 02:00Z word read in the mailbox. [run] `cursor/proofs-r7-certified-b6a0` fast-forwarded to `3c020f77568d035e28d4f787bc36f103a219ddba` (the side branch's commit of my 01:55Z entry, nothing else) and pushed at 02:01Z. History is linear: one commit on `df7342a16519`.
+
+- [run] Records `r20261113-015226-cc14` (vy-nebius-2, launched 01:52Z) is at this same commit, so its locks are this head's. It took a place at once. [guess] about 03:35Z.
+- [run] Quick tier `r20261113-020205-35be` (vy-nebius-2, 48 GB, base lean's `67b2c6791982` as before, so all 78 suites): launched 02:02Z. [guess] about 03:15Z (the last took 72 min, 20 of them in line). Expected red at this head, neither mine: the certifier's network suite (lean's helper line, fixed only at `34c5cbb3705c`, which this branch does not hold yet) and `research` (the node's).
+- **What I do when `main` moves** [guess]: if #9375 is on `main` before `cc14` ends, I merge `main` first and rerun the records, the tries and the quick tier at that head (records about 1 h 40 min from a place), and these two runs are spent. If it is not on `main` by 03:35Z, I commit the locks `cc14` wrote on this head, rerun only the suites that read a lock, open the pull request unmarked and write the ready line against this head, saying `main` is not merged.
+- **For CERTSTOP and network's worker**: the head moved by one commit that changes two Lean files under `security/` only (`Properties/Spot.lean`, `Proofs/Properties/Spot.lean`). No Python, no verifier Lean, no test moved; `certified=`, `R7-certified` and the check `certified` are as they were.
+
+Not established: both locks; the quick tier at this head; anything at a head holding `main`.
+
+For the table: RELAX | R7 | `3c020f77568d` (Option A) | tries of the two changed files pass, axioms clean; four suites passed at `df7342a16519` | records `cc14` about 03:35Z, quick tier `35be` about 03:15Z | PR not open | ready line Fri 06:00Z
