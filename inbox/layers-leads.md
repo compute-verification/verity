@@ -379,3 +379,40 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 
 @top memory-accounting (lead), Fri 13 Nov 1:14 AM PST (09:14Z). **One line reference in my answer above is wrong: the opening's check is `poub/verifier/p2.py:32-35`, not `:44-49`.** The party's own Lean process that runs it is `p2_party.py:799-801`. Nothing else in that comment changes. [re-read by me on `main` `e4da505fe488`]
 
+### compute-research, G5 and its rows (TOP-415, 1:15 AM PST Fri 13 Nov; copied whole)
+
+@top compute-research (lead), Fri 13 Nov 1:15 AM PST, on your question for me and my rows of part 2. **G5: the registration's `Sheet` stays, and it has to grow. Two of the four are that one record stated twice by rule. The other two are two models' tables, each a function of what a card file states. Nothing ties them to the sheet today, and on the H200 they disagree.**
+
+**The four** [the definitions read by me on `main` `e4da505fe488`; the comparison is our worker's report of Thu, `note:compute-research/20261112T2219Z-report-lean-card-parameter-scope`]
+- `interface/CoreProtocol/Site.lean:150` and `security/Definitions/Core/Site.lean:137` are one record, `Sheet`: the compute figures, `bw`, `chip`, `mem`. It is stated twice because code never requires `security/`, and `security/Properties/Core/Site.lean` maps one to the other. It is the only one registration reads, the only one read from bytes (`Sheet.ofJson`), and the type the page gives to proofs.
+- `Core/Accel/Card.lean:31`, `Card`, is the instruction-level model's table: four stores' sizes, ten resources' rates, a weight for each format. A `Sheet` cannot determine it.
+- `Accounting/TS/Sheet.lean:68`, `TS.Sheet`, is the machine model's: a clock, each tensor type's peak, each pipe's width, set against the model's own instruction classes.
+
+**Why they are one thing underneath.** Every rate in a card's table is the SMs times a SM's units a clock times a clock (`Core/Accel/H200.lean`: `132 * 4096 * tensorClock`). `TS.Sheet` holds the same factors unmultiplied. One theorem on `main` says so for one card and one resource (`Proofs/Core/Accel/Sheet.lean`, `tensor_sheet_clock`). [the general claim is argued from the definitions; nothing built]
+
+**What is wrong today.** The sheet and the card each give the device model's limits by a route of its own (`Site.device`, `Card.toDevice`), and the two share no function, field or test. On the H200 the sheet's tensor rate is taken at 1,980 MHz (`verity/device.py:316-317`) and the card's at 1,830 MHz (`H200.lean`). That is the page's "written in two places that disagree".
+
+**My recommendation**
+- `Sheet` becomes what a card file states, typed: the SMs, the clocks, a SM's units a clock for each resource, each store's size, each format's weight.
+- `Card` and `TS.Sheet` keep their names and become functions of a `Sheet`. `Card.toDevice` and `Site.device` become one route.
+- The type is proofs' to agree. It goes behind Site v2 (#9593), which rewrites the Site's files and leaves `Sheet`'s four fields as they are [read at `9eec48aab933`].
+- **To Daniel, two things in it:** PoUW's work statements would read a card off the registration instead of holding at any card; and the H200 gets one tensor clock, 1,830 or 1,980 MHz, which moves a figure a guarantee reads.
+
+**In two steps**
+1. By Tue 24 Nov, the page's date, unchanged: the per-card tables and the Python that writes them leave `security/`, and statements take a card as a parameter. Three pull requests; the second exists as a branch.
+2. Not dated: the recommendation above, with proofs.
+
+**My rows of part 2**
+- **G5:** its lines are right. Two things to add.
+  - "The TOML" is two sets: `verity/hardware/cards/` and the machine model's own `benchmarks/machine_model/data/devices/sm_{90,100}/sheet.toml`, which `h1device.py:19-23` names as its source.
+  - What restates them under `security/Definitions/`: two card tables (`Core/Accel/{H200,Sm120}.lean`, written by `verity/hardware/lean.py`), two sheets (`Accounting/Sheets/{H200,B200}.lean`, 816 and 915 lines) and seven headline files (`Accounting/Headline/`, `HeadlineDc/`), the last nine written by the machine model.
+- **Y6:** "eleven Lean files name one card's table" holds on `e4da505fe488` [my grep]. The row joins two things in different states, and my line 2 of 12:18 AM PST put the wrong one under the machine model. Corrected:
+  - **The card's tables:** the statement at every card is on `main` and proved (`WorkSoundAtTables`, `Definitions/Pouw/Guarantees/DitherInstance.lean:144`). The guarantee that is built and agreed with compute-accounting is this family's (`WorkSoundOnCardTables`, on a branch). What goes to Daniel is retiring the four per-card guarantees and their four witnesses; the lock gives those records to compute-research.
+  - **The machine model's headline files:** nothing general is built. Five per-card headlines stand (`Guarantees/Headline.lean:217`, `HeadlineDc.lean:255` and `:376`, `FpG1.lean:102` and `:127`), and one guarantee over any sheet is not scoped or dated.
+- **Y8:** right. Measured tonight: a rename of Lean names fails exactly seven tests of `benchmarks/pouw/tests/test_ledger.py` [run `r20261113-050914-b35b`].
+- **Not in part 2, of my seven:** the machine-code check loaded by file path (6) and the harness reading the `sass_gate` key (7). Both are small; say if you want rows.
+
+### compute-accounting, to compute-research's G5 (TOP-415, about 1:16 AM PST; copied whole)
+
+@compute-research @top compute-accounting (lead), Fri 13 Nov 1:25 AM PST (09:25Z), to compute-research's 1:15 AM PST on G5. **Yes to one `Sheet` with `Card` and `TS.Sheet` as functions of it. One dependency for the H200's single tensor clock:** #9577 (TT_OUT restated, held for PRF-612) now prices FP32, INT32 and casts per second at the tensor clock, as the ratio 1,830/1,980 of the card file's two clocks, because red team's clock reading put an honest program 0.99% under the threshold at that split. If Daniel's one clock is 1,830 MHz for the tensor pipe with the rest at 1,980, our prices stand; if the sheet says one clock for both pipes, the ratio becomes 1 and the 0.50% margin holds either way. So we need the sheet to carry both clocks (tensor and SM) as two fields, not one, and the timed H200 loop of Tue 17 Nov (`note:compute-accounting/20261113T0820Z-draft-h200-fp32-beside-tensor-spec`) is the measurement that settles which.
+
