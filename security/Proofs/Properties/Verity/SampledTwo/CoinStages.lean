@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # The two-stage audit's coins from their families
@@ -612,16 +613,17 @@ agree below some `u` whose `16 u` bytes hold the first stage's. -/
 theorem elems_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray} (hone : OneRoot ℓ₁ after log)
     (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
-    (hL : b.size ≤ SpotFlock.L) {c c' : FlockDeploy.Coin} (he : ElemsBelow (fitOf (stageLocate ℓ₁ ℓ₂) 0 [] log) c c') :
-    ∃ u, b.size ≤ 16 * u ∧ ElemsBelow u c c' :=
+    (hL : b.size ≤ SpotFlock.L) {c c' : FlockDeploy.Coin}
+    (he : ∀ j : Fin 65536, j.val < fitOf (stageLocate ℓ₁ ℓ₂) 0 [] log → c j = c' j) :
+    ∃ u, b.size ≤ 16 * u ∧ ∀ j : Fin 65536, j.val < u → c j = c' j :=
   ⟨_, size_le_fit_first ℓ₁ ℓ₂ hone hw hb hL, he⟩
 
 /-- **`SecondElems`' elements at the locator**: as `elems_first`, at stage `j + 1` and its slice (`stageWidth`). -/
 theorem elems_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
     (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ)
-    {c c' : FlockDeploy.Coin} (he : ElemsBelow (fitOf (stageLocate ℓ₁ ℓ₂) (j + 1) [] log) c c') :
-    ∃ u, stageWidth b j ≤ 16 * u ∧ ElemsBelow u c c' :=
+    {c c' : FlockDeploy.Coin} (he : ∀ k : Fin 65536, k.val < fitOf (stageLocate ℓ₁ ℓ₂) (j + 1) [] log → c k = c' k) :
+    ∃ u, stageWidth b j ≤ 16 * u ∧ ∀ k : Fin 65536, k.val < u → c k = c' k :=
   ⟨_, stageWidth_le_fit_second ℓ₁ ℓ₂ hne hone hw hb j, he⟩
 
 /-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's draw): where the first stage's draw is the

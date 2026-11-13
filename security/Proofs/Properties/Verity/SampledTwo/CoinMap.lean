@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.Projection
-public import Proofs.Properties.Verity.SampledTwo.DevAgrees
+public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Properties.Verity.Sampled.CoinMap
 
 /-!
@@ -32,8 +32,8 @@ states its law.
 * **The law** (`LawAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
   event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`); and `CoinMapLaw`
   at the coin map's agreement (`ElemAgrees`): on the frame's plays counted, the coin `dev` reads for each read round has
-  the run's coin's elements below what its releases that fit carry (`ElemsBelow` at `fitOf`), which
-  `DevAgrees.lean`'s `FirstElems` and `SecondElems` read. The agreement holds only in the event: at an opening whose
+  the run's coin's elements below what its releases that fit carry (`DevAgrees.lean`'s `ElemsBelow` at `fitOf`,
+  stated by its body), which its `FirstElems` and `SecondElems` read. The agreement holds only in the event: at an opening whose
   class at the run's elements is empty the device releases the tree's own round, whose bits are not the run's.
 Statements and definitions; `LawAt` and `CoinMapHolds` are proved in `CoinMapLaw.lean` and `CoinMapAgree.lean`.
 -/
@@ -426,7 +426,7 @@ the coin `dev L` reads for each read round has the run's coin's elements below w
 that fit carry (`fitOf`). -/
 def ElemAgrees (L : Locate) (A : Live₂) (x : Msg) (reads : ℕ → Prop) (o : Verity.Exchange) (r : Coins A x) : Prop :=
   ∀ i : Fin (A.L.V.k x), reads i.val → ∀ c, dev L o.log i.val = some c →
-    ElemsBelow (fitOf L i.val [] o.log) c (r i)
+    ∀ j : Fin 65536, j.val < fitOf L i.val [] o.log → c j = r i j
 
 /-- **The coin map's law holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
 `CoinMapLaw` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
