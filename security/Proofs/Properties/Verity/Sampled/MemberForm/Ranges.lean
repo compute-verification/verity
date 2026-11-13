@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Data.List.Forall2
 public import Mathlib.Data.Finset.Basic
+public import Mathlib.Algebra.BigOperators.Group.List.Basic
 
 /-!
 # One range of units, and lists in one order
@@ -32,6 +33,10 @@ in one order, with no verifier and no window in it: arrays and lists of natural 
 * **A range's proof blocks in a sample** (`emb_mem`, `range_sampled`): where a range's proof block `u` sits at
   unit `lo + u` and the sample holds the proof blocks at the wanted units, the range has a proof block in the
   sample exactly when a wanted unit is in the range.
+* **Ranges that lie one after another** (`sum_le_of_apart`, `start_of_tiles`, `start_at`): ranges that share no
+  unit, in the order of their starts, the nonempty ones inside `[0, n)`, with lengths summing to `n`, lie one after
+  another from `0`: a nonempty one starts at the sum of the lengths before it. With them, what the sums read
+  (`foldl_add_eq_sum`, `forall₂_map_eq`, `sum_perm`).
 -/
 
 @[expose] public section
@@ -401,5 +406,85 @@ theorem range_sampled {nJ n lo : ℕ} {emb : Fin n → Fin nJ} (place : ∀ u, (
     show lo + (x - lo) ∈ want
     rw [e]
     exact hx
+
+/-! ## Ranges that lie one after another -/
+
+/-- **Ranges that share no unit, the nonempty ones inside `[s, e)`, have lengths summing to at most `e - s`**, in
+the order of their starts. -/
+theorem sum_le_of_apart {α : Type} (lo len : α → ℕ) :
+    ∀ (l : List α) (s e : ℕ), l.Pairwise (fun a b => lo a ≤ lo b) →
+      l.Pairwise (fun a b => ∀ x, lo a ≤ x → x < lo a + len a → lo b ≤ x → x < lo b + len b → False) →
+      (∀ a ∈ l, 0 < len a → s ≤ lo a ∧ lo a + len a ≤ e) → (l.map len).sum ≤ e - s
+  | [], _, _, _, _, _ => by simp
+  | a :: t, s, e, hs, hd, hin => by
+    rw [List.map_cons, List.sum_cons]
+    obtain ⟨hsa, hst⟩ := List.pairwise_cons.1 hs
+    obtain ⟨hda, hdt⟩ := List.pairwise_cons.1 hd
+    by_cases h0 : len a = 0
+    · rw [h0, Nat.zero_add]
+      exact sum_le_of_apart lo len t s e hst hdt fun b hb => hin b (List.mem_cons_of_mem _ hb)
+    · have ha := hin a List.mem_cons_self (Nat.pos_of_ne_zero h0)
+      have ht := sum_le_of_apart lo len t (lo a + len a) e hst hdt fun b hb hpos => by
+        have hb' := hin b (List.mem_cons_of_mem _ hb) hpos
+        refine ⟨?_, hb'.2⟩
+        by_contra hlt
+        exact hda b hb (lo b) (hsa b hb) (by omega) (Nat.le_refl _) (by omega)
+      omega
+
+/-- **Ranges that share no unit, in the order of their starts, the nonempty ones inside `[0, n)`, with lengths
+summing to `n`, lie one after another from `0`**: a nonempty one starts at the sum of the lengths before it. The
+ranges before it fit below its start and the rest from its start up to `n`, so neither part has room to spare. -/
+theorem start_of_tiles {α : Type} (lo len : α → ℕ) {l : List α} {n : ℕ}
+    (hs : l.Pairwise fun a b => lo a ≤ lo b)
+    (hd : l.Pairwise fun a b => ∀ x, lo a ≤ x → x < lo a + len a → lo b ≤ x → x < lo b + len b → False)
+    (hin : ∀ a ∈ l, 0 < len a → lo a + len a ≤ n) (hsum : (l.map len).sum = n) {pre : List α} {a : α}
+    {post : List α} (he : l = pre ++ a :: post) (hpos : 0 < len a) : lo a = (pre.map len).sum := by
+  subst he
+  have hs' := List.pairwise_append.1 hs
+  have hd' := List.pairwise_append.1 hd
+  have h1 : (pre.map len).sum ≤ lo a - 0 :=
+    sum_le_of_apart lo len pre 0 (lo a) hs'.1 hd'.1 fun b hb hb0 => by
+      refine ⟨Nat.zero_le _, ?_⟩
+      by_contra hlt
+      have hle : lo b ≤ lo a := hs'.2.2 b hb a List.mem_cons_self
+      exact hd'.2.2 b hb a List.mem_cons_self (lo a) hle (by omega) (Nat.le_refl _) (by omega)
+  have h2 : ((a :: post).map len).sum ≤ n - lo a :=
+    sum_le_of_apart lo len (a :: post) (lo a) n hs'.2.1 hd'.2.1 fun b hb hb0 => by
+      refine ⟨?_, hin b (List.mem_append_right _ hb) hb0⟩
+      rcases List.mem_cons.1 hb with e | hb'
+      · rw [e]
+      · exact (List.pairwise_cons.1 hs'.2.1).1 b hb'
+  rw [List.map_append, List.sum_append] at hsum
+  have ha := hin a (List.mem_append_right _ List.mem_cons_self) hpos
+  omega
+
+/-- `start_of_tiles`, at a place of the list: the nonempty range at place `i` starts at the sum of the first `i`
+lengths. -/
+theorem start_at {α : Type} (lo len : α → ℕ) {l : List α} {n : ℕ}
+    (hs : l.Pairwise fun a b => lo a ≤ lo b)
+    (hd : l.Pairwise fun a b => ∀ x, lo a ≤ x → x < lo a + len a → lo b ≤ x → x < lo b + len b → False)
+    (hin : ∀ a ∈ l, 0 < len a → lo a + len a ≤ n) (hsum : (l.map len).sum = n) {i : ℕ} {a : α}
+    (ha : l[i]? = some a) (hpos : 0 < len a) : lo a = ((l.map len).take i).sum := by
+  obtain ⟨hi, rfl⟩ := List.getElem?_eq_some_iff.1 ha
+  have he : l = l.take i ++ l[i] :: l.drop (i + 1) := by
+    rw [List.getElem_cons_drop hi, List.take_append_drop]
+  rw [← List.map_take]
+  exact start_of_tiles lo len hs hd hin hsum he hpos
+
+/-- A fold that adds a count of each entry is the sum of the entries' counts. -/
+theorem foldl_add_eq_sum {α : Type} (f : α → ℕ) (a : Array α) :
+    a.foldl (fun acc m => acc + f m) 0 = (a.toList.map f).sum := by
+  rw [← Array.foldl_toList, List.sum_eq_foldl, List.foldl_map]
+
+/-- Lists related member by member map alike under functions the relation equates. -/
+theorem forall₂_map_eq {α β γ : Type} {R : α → β → Prop} {f : α → γ} {g : β → γ} :
+    ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → (∀ a b, R a b → f a = g b) → l.map f = l'.map g
+  | _, _, .nil, _ => rfl
+  | _, _, .cons h t, hfg => by
+    rw [List.map_cons, List.map_cons, hfg _ _ h, forall₂_map_eq t hfg]
+
+/-- Lists with the same members, in any order, have one sum of counts. -/
+theorem sum_perm {α : Type} (f : α → ℕ) {l l' : List α} (h : l.Perm l') : (l.map f).sum = (l'.map f).sum :=
+  (h.map f).sum_eq
 
 end Verity.Sampled.MemberForm
