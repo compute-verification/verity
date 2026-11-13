@@ -150116,3 +150116,48 @@ Nothing.
 ### Not established
 
 - That the carry is clean: the run says, in about 15 minutes. [guess]
+
+## STOPDRIVER, Fri 13 Nov 16:09Z: progress on the 15:47Z order: A and B.1 are read and run; the entry follows by 17:30Z
+
+The 15:47Z order and the 16:04Z addition are read. [read] I push nothing to B's branch, and the entry comes first.
+The commit read is `origin/main` `4ae17f7eafd7`, which holds chain 2. [read] `origin/main` at 16:02Z is
+`f54194bbb196`, and it changes none of the files named below. [run: `git diff --stat` over those paths, empty]
+
+### What is settled so far
+
+- Our two commands read no order of spans and no kind beyond the window's `stopped`. [read] Slot r is row r of
+  `commit.json`'s layout, and the adapter alone decides which spans a class holds and in which order
+  (`boundary_stop.py:161` `filed`, `boundary_windows.py:182` and `:202`). [read] So the first way changes the adapter
+  and nothing in `two_stage.py` or `stop_audit.py`. [derived]
+- The rule's word on a row the engine left after k ids, zeros from k up, counts past k. [run, 1 s, `main`'s code:
+  k = 1 with `max_tokens` 4 gives (4, 2), vllm's figure; k = 3 with 8 gives (8, 2)] Finish 0 comes only from a
+  `max_tokens` below 1 or one past T with no stop id. [run] The stop audit reads no finish, so it proves such a word,
+  and the tie's first check is what refuses it. [read: `stop_audit.py` names no finish; run: the tie's reference
+  returns verdict 0 and count 0xFFFFFFFF on a finish 0]
+- On `main` the compute audit reads `b.egress` at no check. [read] Its replay block is a stand-in of one token
+  select an id over logits rows the prover hands after the first stage's sample, and its return is held to `b.ids`,
+  another value than the `b.egress` the tie reads (`boundary_rows.py:60-68`, `:237-245`). [read] So it proves
+  nothing about a row's ids being the Program's, below k, from k to `at` or from `at` to n. [derived]
+- A drawn row the engine left early: the replay side's own reader refuses the replay's capture, since the replay
+  runs the request to its end and selects more ids than were served (`interior_rows.py:221-224`). [run, 1 s: 6 ids
+  replayed against 3 served is a ValueError, "it didn't reproduce the span"] That is the prover's tool, no check of
+  the verifier's. [read] A capture cut to the k ids served is read, and its padded return is `b.ids` row for row.
+  [run] And every two-stage run on `main` is refused last by `two-stage-form` whatever its rows
+  (`second_stage.py:90`, `FORM = False`). [read]
+- A sample at `rate:1/1` reads challenges, 82 bytes for one block; one under `All` reads none. [run, 1 s] That
+  decides what "the stop audit's session" has to mean for `tie_first`, which part C will say. [derived]
+
+### Still to write
+
+Part A's table by file and line, B.2 to B.4, and part C with its size. [derived] I expect the entry by 17:30Z.
+[guess]
+
+### Branches
+
+- `cursor/proofs-stopdriver-family-ffc6` at `46811047714e`, unchanged, pushed. [run]
+
+### Not established
+
+- Nothing of the compute audit was run on a row left early through the stream: that needs the Lean verifier's
+  executable, which is not on this machine. The runs above are of the pure Python pieces only.
+- vllm's adapter change is unwritten. I read it as relayed.
