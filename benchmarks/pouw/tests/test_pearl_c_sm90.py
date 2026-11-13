@@ -536,8 +536,8 @@ def test_widening_fixture_is_the_silicon_model(small_fixture):
     """The fixture's widened B: BF16 words as their FP32 words, and each E4M3 code times its block's scale as
     `silicon.fp32.mul` of `silicon.cast.e4m3_to_f32_word` (every element, subnormal products among them), its block the
     row's and column's 128 x 128 one; the decode is the silicon model's on every finite code."""
-    from verity.definitions.silicon import fp32
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
+    from verity.circuits.silicon import fp32
+    from verity.circuits.silicon.cast import e4m3_to_f32_word
 
     codes = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint8)
     assert F.e4m3_values(codes).view(np.uint32).tolist() == [e4m3_to_f32_word(int(c)) for c in codes]

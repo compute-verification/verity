@@ -47,8 +47,8 @@ this registry, nor this registry core, so the two are separate bodies, and core'
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.fp32 import Bf16Add, F32DivV2, F32MulV2
-from verity.definitions.ops.prims import F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.circuits.ops.fp32 import Bf16Add, F32DivV2, F32MulV2
+from verity.circuits.ops.prims import F2fpBf16, HopperBF16WgmmaDot16, const
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.boolean import sigma_lift
