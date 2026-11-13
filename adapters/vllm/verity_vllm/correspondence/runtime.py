@@ -282,9 +282,6 @@ class RuntimeCorrespondence:
     def __len__(self) -> int:
         return len(self._calls)
 
-    def __iter__(self) -> Iterator[CallCorrespondence]:
-        return iter(self._calls[k] for k in sorted(self._calls))
-
     def record(self, call_id: int) -> CallCorrespondence:
         return self._calls[int(call_id)]
 
@@ -374,15 +371,12 @@ class _Stream:
     """A JSON text read in chunks with a cursor: `raw_decode` at the cursor, refilling until the value is complete."""
 
     def __init__(self, fh) -> None:
-        self.f, self.buf, self.pos, self.eof = fh, "", 0, False
+        self.f, self.buf, self.pos = fh, "", 0
         self.dec = json.JSONDecoder()
 
     def _more(self) -> bool:
-        if self.eof:
-            return False
         chunk = self.f.read(_CHUNK)
         if not chunk:
-            self.eof = True
             return False
         if self.pos > _CHUNK:
             self.buf, self.pos = self.buf[self.pos:] + chunk, 0
@@ -499,9 +493,8 @@ def read_program_dir(program_dir: Any) -> tuple[RuntimeCorrespondence | None, st
     """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
-    loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).  The ONE loader
-    every consumer (acquire, query, verdict) reads a Build's correspondence through; `read_program_document` is its document, for a
-    reader that holds no table (`RuntimeCorrespondence.records`)."""
+    loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).
+    `read_program_document` is its document, for a reader that holds no table (`RuntimeCorrespondence.records`): the query's reads that."""
     doc, digest, problem = read_program_document(program_dir)
     return (RuntimeCorrespondence.from_json(doc) if doc is not None else None), digest, problem
 

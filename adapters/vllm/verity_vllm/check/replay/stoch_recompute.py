@@ -44,11 +44,11 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.check.replay import launch_args
 from verity_vllm.check.replay.fork import fork_pool
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
-from verity_vllm.program import sampling_rng
 from verity_vllm.records.schema_ids import STOCH_RECOMPUTE_SCHEMA
 from verity_vllm.records.workload import Workload
 
@@ -518,21 +518,21 @@ def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], prog
             reasons.append(f"step {step}: {n_rows_step} sampled row(s) not value-checked (the logits row fed to the sampler was not snapshotted)")
             continue
         bf_words = np.asarray(store.extract(bsnap, bf)).reshape(bf.shape)
-        masked_obs = sampling_rng._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
+        masked_obs = launch_args._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
         R_, V = bf.shape
         cx = dict(g.constexprs or {})
         S = None
         if d["mask"] is not None:
             S = (d["mask"].constexprs or {}).get("S")
-        seeds_snap = sampling_rng._small_int_arg(store, g, "seeds_ptr")
-        pos_snap = sampling_rng._small_int_arg(store, g, "pos_ptr")
-        temp_snap = sampling_rng._small_arg(store, g, "temp_ptr", np.float32)
-        map_snap = sampling_rng._small_int_arg(store, g, "expanded_idx_mapping_ptr")
+        seeds_snap = launch_args._small_int_arg(store, g, "seeds_ptr")
+        pos_snap = launch_args._small_int_arg(store, g, "pos_ptr")
+        temp_snap = launch_args._small_arg(store, g, "temp_ptr", np.float32)
+        map_snap = launch_args._small_int_arg(store, g, "expanded_idx_mapping_ptr")
         p_snap = None
         if d["mask"] is not None:                                   # the split kernels' signature names the top-p buffer `P`
-            p_snap = sampling_rng._small_arg(store, d["mask"], "P", np.float32)
+            p_snap = launch_args._small_arg(store, d["mask"], "P", np.float32)
             if p_snap is None:
-                p_snap = sampling_rng._small_arg(store, d["mask"], "p_ptr", np.float32)
+                p_snap = launch_args._small_arg(store, d["mask"], "p_ptr", np.float32)
         served = list(se.sampled_token_ids)
         for row, (rid, pos_fact) in enumerate(ss.logits_rows):
             f = facts.get(rid)

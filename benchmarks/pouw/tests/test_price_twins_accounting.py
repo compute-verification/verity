@@ -29,6 +29,7 @@ import clear_work as CW  # noqa: E402
 import price_twins as P  # noqa: E402
 
 GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
+ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
 DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
 #: the twins' price records by FP32 add price, each with the cast its W_ref already holds: Lean's `Prices.sm120`
 #: ⟨8, 2, ⟨40, 1⟩⟩ at 8, and `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ (`DevicePricesLoop.lean`: the in-loop add, and the
@@ -104,7 +105,7 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
     rows, cols = 2, 3
     share = Fraction(rows * cols, n * n)
     if s.device.g:
-        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols)
+        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows)
         assert cap == rho * credit * share
         assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
     else:
@@ -141,9 +142,12 @@ def test_h100_gamma_is_rev1s_pin(pin, n):
 
 
 def test_the_zero_word_debits_every_later_promotion():
-    """`tile_cap`'s debit holds `tileDebitRev1`'s later +0 promotions: a zero word's k/(32·G) − 1."""
+    """`tile_cap`'s inert work holds `tileDebitRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
+    elements: every atom of a zero word is flagged, so each of the row's k elements is inert, its |cols|/n share."""
     s, k = scheme_of(next(t for t in TWINS if t["statement"] == "pearl-c-sm120/v1")), 1024
     record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
     atoms, zeros = D.chain_debit([[0] * k], [[0] * k], s.device)
     assert zeros == k // s.device.window - 1
-    assert CW.tile_cap(s, record, [[0] * k], [[0] * k])[0] == D.debit_units(atoms, 0, s.prices, s.device, zeros=zeros)
+    assert atoms == k // 32 and D.tile_debit([[0] * k], [[0] * k], [(ONE, [0] * k, ONE)], s.device) == (atoms, zeros, k)
+    assert CW.tile_cap(s, record, [[0] * k], [[0] * k], [(ONE, [0] * k, ONE)])[0] == D.debit_units(
+        atoms, Fraction(k, 16), s.prices, s.device, zeros=zeros)
