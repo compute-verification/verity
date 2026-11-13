@@ -77,7 +77,7 @@ REGISTRY = Registry(
     S("PEARLC4_CUBIN", str, None, VALUE, "the cubin the Pearl-C4 arm loads; unset, pearl_c4.cubin beside it"),
     S("PEARLC4_VERIFY_WORKERS", int, 16, WHERE, "the verifier's worker processes: how fast it runs, not what it checks"),
     S("PEARLC4_GATE_TILES", int, 2, VALUE, "the tiles the arm's gate checks a call"),
-    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a drawn tile through the fast path, else exact "
+    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a seeded tile through the fast path, else exact "
                                        "(real.py --f1 sets it for the processes it starts)"),
     S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
@@ -116,6 +116,9 @@ REGISTRY = Registry(
     S("SERVED_TREE", str, None, WHERE, "the source tree served_profile.py profiles; unset, the working directory"),
     # ---------------------------------------------------------------- the harness
     S("POUW_CUDA_BIN", str, None, WHERE, "the CUDA toolkit's bin directory the SASS gate takes cuobjdump and nvdisasm from"),
+    S("VERITY_POUW_NVCC", str, None, WHERE, "a CUDA >= 12.8 toolkit's root (its bin/ holds nvcc and cuobjdump), with which "
+                                            "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
+                                            "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
     S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
