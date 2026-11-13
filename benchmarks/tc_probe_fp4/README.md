@@ -1,7 +1,7 @@
 # tc_probe_fp4: Blackwell's FP4 and FP8 tensor-core instructions against their models
 
 The Blackwell counterpart of `benchmarks/tc_probe`. Each probe runs an instruction on its GPU, raw bits in and out, and
-compares every output word with the instruction's pinned model in `verity/definitions/silicon` (`BLACKWELL_SM120_NVF4`,
+compares every output word with the instruction's pinned model in `verity/circuits/silicon` (`BLACKWELL_SM120_NVF4`,
 `BLACKWELL_SM120_MXF4`, `GroupSum`). Where no model is pinned yet, a capture decides between named candidates. Every
 mismatch is recorded, and nothing is tuned to fit. Beside the probes, price microbenchmarks time each multiplier against
 dense NVFP4. Everything runs on sm_120a (RTX 5090, RTX PRO 6000) unless its file says sm_100a (B200).
@@ -56,4 +56,4 @@ uv run tools/verity/check/suites.py benchmarks/tc_probe_fp4                     
 - **Provides:** the Blackwell probes and the price microbenchmarks, run on a GPU, and their store declarations
   (`tool.py`).
 - **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name. Nothing else.
-- **Loads:** `verity.definitions.silicon`, `verity_config`, and `research` in `tool.py`.
+- **Loads:** `verity.circuits.silicon`, `verity_config`, and `research` in `tool.py`.

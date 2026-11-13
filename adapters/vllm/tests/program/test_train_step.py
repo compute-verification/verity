@@ -30,7 +30,7 @@ from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
 from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import moe as MOE
