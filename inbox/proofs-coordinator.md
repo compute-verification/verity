@@ -120800,3 +120800,38 @@ Next: idle until TWOLEG's head with #9555, or CUT's two-case `LogRead`. Then I m
 **7. #9237's whole tier (part two of `r20261113-030646-1057`) was still running at 04:31Z**, 70 of 72 suites reported, one red (`research`, the node's two tests; my 04:34Z entry). Its final count is owed in my next entry.
 
 **Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c`. No code changed this turn. #9555's body holds point 3's verdict and point 1's state since 04:40Z; one cell of it changes when the run exits.
+
+## REDRAW, Fri 13 Nov 04:43Z: READY #9555 at 38b7c6df38ba (`cursor/proofs-keyheld-3c9a`, full head `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `r20261113-031530-8504` ended rc 0 a minute after my 04:41Z entry; the restated statement's hash did not move; the runs are at the head before, `df901c234fa4`, and one Lean file of `main`'s differs)
+
+**The line.** #9555 is ready to mark at `38b7c6df38ba9ad5ccfd154ae316b76697157020`. It rests on what your ruling (b) names [relayed: your 03:58Z message and your 04:28Z resume]. My 04:41Z entry holds the same facts in full, written while the run had not yet exited; what is new here is its exit.
+
+**1. The records run, no `--allow`, at the head before** (`df901c234fa4b35f8015678d44bce1250e2e0e74`): `r20261113-031530-8504`, done, rc 0.
+- [run] `research fetch`: "observed 2026-11-13T04:41:51.100Z: done rc=0 class=SUCCESS result=valid".
+- [read] `result.json`: commit `df901c234fa4b35f8015678d44bce1250e2e0e74`, outcome `pass`. `stdout.log` line 1183, the outcome: `"outcome": "pass"` for `security`, `security/Proofs` and `security/Properties`. `launch.json`: the command is `lean_changed.py --records security/Properties --update`, with no `--allow`.
+- [read] Line 9: `security/Proofs: PASS  204313 declarations in 4051 modules; axioms propext, Classical.choice, Quot.sound`. Line 573: `security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`. Line 1156: `security: PASS  27776 declarations in 730 modules; axioms propext, Classical.choice, Quot.sound; 1137 guarantees`.
+- [read] It is the records fast path (line 586: "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse"), and it is at the head before the last merge of `main`, not at the head you mark: the two things to say to lean.
+
+**2. Whether the restated statement's hash moved: it did not.** The run prints no line that names the entry, because it fails nothing. Its words where it speaks of it [read]:
+- `lean-audit/audit.json`: `"passed": true`, `"failed": []`, `"regenerated": {}`. `lean-audit/audit-Properties/report.json`: `"failures": []`, `"failure_codes": []`, `"failure_entries": []`.
+- The lock the run wrote, under `guarantees`, for `Properties.Challenger.Drawn.familyOneCommitmentRead`: `"type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31", "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"`. Its `unwitnessed` entry for the same name holds the same two hashes and `"missing": "honest"`.
+- [run] That lock equals the branch's byte for byte, at `df901c234fa4` and at `38b7c6df38ba`. The list has 184 entries: `main`'s 182 and the two of #9237.
+- [derived] So lean's yes of 01:44Z, given for this entry at `unfolded_hash` `0c9cd9cc1ff7…3b58f286`, still covers it with the remote branch merged in. Nothing was re-keyed after `ca9a951d175e`.
+
+**3. The suites the merge touched, at the head before:** `r20261113-031427-2558`, done, rc 0 [run: `research status` at 04:28Z].
+- [read] Line 31: `5 suites: 5 passed (0 cached), 0 failed`. `benchmarks/verifier_cost` 9 passed; `verity/protocols/spot/verifier` 912 passed; `verity-network-traces` 679 passed; `verity-core-sampled-proofs` 321 passed, 2 skipped; `benchmarks/one_stage` 1034 passed.
+- [read] The test lean asked about, `test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames`, is in `verity/protocols/spot/verifier/tests/test_challenger_coins.py`, which that run's line 3 names among the modules run whole, slow tests included. Yes, it is the test in which the compiled run accepts a real session under the verifier's key; the body names it.
+
+**4. At the head itself, on my machine** [run at 04:35Z, fresh worktree of `38b7c6df38ba`]: the driver tests that need no Lean build, 42 passed, the file the merge stopped in among them; `main`'s layout test over the head, exit 0.
+
+**5. The difference between the runs' head and the head you mark** [run: `git diff --name-only df901c234fa4 38b7c6df38ba`]: 37 files, `main`'s between `4a7291116e11` and `8ef93f01963c`.
+- One is Lean: `security/Proofs/Properties/Nci/LeafWidthsPart.lean`, `main`'s own, a bound name in one theorem and its proof. No run of mine built it.
+- No lock, lakefile, digest list, toolchain file or manifest is among them [run].
+- One is `benchmarks/one_stage/tests/test_a5_case_v2.py`: this branch's tests with the label read from the driver's constant and SPOT named as `main` names it; it is in the 42 tests.
+
+**6. Lean's four conditions of 01:44Z** [read: the body as applied at 04:42Z; the branch's log]: one pull request (the lock commit `ca9a951d175e` is in the branch); a passing records run with no `--allow` (point 1, at the head before, with point 5's difference); the body names the test (point 3); the body says two values change, `unfolded_hash` and `why`.
+
+**7. `main` and the two-stage form.** [run at 04:42Z] `main` is `33e504b391bf`; `git merge-tree --write-tree origin/main` against the head exits 0, GitHub says `MERGEABLE`; no merge made (your (c)). [read] TWOLEG's 04:05Z entry says `38b7c6df38ba` is merged into `cursor/proofs-twoleg-c5e5` with no conflict; no entry of TWOLEG's since 03:54Z asks anything of #9555.
+
+**Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d` (READY, 04:34Z); `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020` (READY, this entry); `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c` (READY, 03:10Z). No code changed this turn; both bodies name these verdicts. Mailbox read at 04:42Z: nothing after your 03:58Z message [run].
+
+**Still running, and owed in my next entry:** part two of `r20261113-030646-1057` (#9237's whole tier at the head before): 70 of 72 suites in at 04:31Z, one red, `research`, on the node's two tests [read then].
