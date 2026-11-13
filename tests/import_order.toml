@@ -29,6 +29,7 @@ order = [
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
     ["verity/protocols/accounting/pouw"],
+    ["verity/protocols/experimental"],
     ["verity/protocols/policy/inference_only"],
     ["verity/protocols/accounting/certifier"],
     ["verity/protocols/compose/verifier"],
@@ -533,6 +534,19 @@ reaches = [
     "verity/periods",
     "verity/protocols/reporting.py",
     "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/experimental",
+]
+loads = [
+    "verity/circuits",
+    "verity/circuits/ops",
+    "verity/circuits/silicon",
+    "verity/commitments",
+    "verity/commitments/identity",
+    "verity/protocols/accounting/pouw/prover",
 ]
 
 [[place]]

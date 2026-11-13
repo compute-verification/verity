@@ -1,0 +1,10 @@
+# Dither, an experimental PoUW variant: its circuit (prover/dither.py) and the circuit's test, which runs
+# here as a suite (`uv run tools/verity/check/suites.py verity/protocols/experimental/dither`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/protocols/experimental/__init__.py",
+          "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/accounting/pouw"]
