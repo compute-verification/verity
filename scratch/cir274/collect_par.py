@@ -6,6 +6,7 @@ so the parent's are the ones it would have built. Run from adapters/vllm:
     ../../.venv/bin/python ../../scratch/cir274/collect_par.py OUT LAYERS LP
 
 Writes OUT/collect_<LP>_l<LAYERS>.json with collect43.py's fields."""
+import importlib
 import importlib.util
 import io
 import json
@@ -32,7 +33,7 @@ from verity_vllm.program.predict.steps import compile_steps  # noqa: E402
 from verity_vllm.program.predict.tp_steps import at_rank  # noqa: E402
 from verity_vllm.program.tp_workload import TpWorkload  # noqa: E402
 
-from verity.circuits import defs as D  # noqa: E402
+from verity.circuits import codec as C, defs as D  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 
 
@@ -41,7 +42,12 @@ def _rebind(defn, bindings):
 
 
 def _registered(fid):
-    return D.REGISTRY[fid]
+    if fid in D.REGISTRY:
+        return D.REGISTRY[fid]
+    for pat, make in C._LAZY_PRIMITIVE_FAMILIES:
+        if m := pat.fullmatch(fid):
+            return make(m)
+    raise KeyError(f"{fid}: neither registered in this process nor a lazy family's")
 
 
 class _ByRef(pickle.Pickler):
@@ -69,8 +75,17 @@ def _rank(r: int) -> bytes:
     rows = [[(x.request, x.start, x.n, x.samples) for x in step] for step in c.steps]
     mine = tuple(None if u is None else u.digest for u in c.requests)
     sites = {d: TB.rank_sites(c.programs[d].fn.body, world, r, d) for d in set(mine) - {None}}
-    return _dumps((rows, c.workload.digest, mine, sites, round(time.perf_counter() - t, 1),
-                   resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
+    modules = sorted(m for m in sys.modules if m.split(".")[0] in ("verity", "verity_vllm"))
+    return modules, _dumps((rows, c.workload.digest, mine, sites, round(time.perf_counter() - t, 1),
+                            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
+
+
+def _loads(got: tuple[list[str], bytes]):
+    """A rank's result, after importing the modules its compile imported, so the Definitions they register are the parent's."""
+    for m in got[0]:
+        if m not in sys.modules:
+            importlib.import_module(m)
+    return pickle.loads(got[1])
 
 
 def main() -> None:
@@ -84,7 +99,7 @@ def main() -> None:
         world = int(reg.phi.tp.get("world", 1))
         ARGS.update(reg=reg, advice=advice, ingress=ingress, world=world)
         with mp.get_context("fork").Pool(world) as pool:
-            got = [pickle.loads(b) for b in pool.map(_rank, range(world))]
+            got = [_loads(b) for b in pool.map(_rank, range(world))]
         rec["rank_compile_s"] = [g[4] for g in got]
         rec["rank_peak_gib"] = [round(g[5] / 1048576, 2) for g in got]
         if any(g[0] != got[0][0] for g in got):
