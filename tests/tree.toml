@@ -1,12 +1,10 @@
-# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at five levels: the root,
-# verity/, verity/protocols/, its three groups of protocols (proofs/, accounting/, policy/) and each protocol's
-# directory.
+# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at four levels: the root,
+# verity/, verity/protocols/ and each protocol's directory.
 #
 # [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
 # the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
-# and the `verity/protocols/NAME/` entries say what each of their directories may hold.  A protocol's directory is read
-# where main holds it: at its place in the tree, or, before its move lands, at the path of the [[not_yet]] line whose
-# `to` is that place.  The shape is not changed here without asking top.
+# and the `verity/protocols/NAME/` entries say what each of their directories may hold.  The shape is not changed here
+# without asking top.
 #
 # [[not_yet]] is what main holds and the tree doesn't: each path, where it goes (`to`), its owner and the day.  A day
 # is a date, 6 PM PST on it unless it gives a time.  A move that lands leaves its line for top to delete: the stale
@@ -156,7 +154,7 @@ day = "2026-11-20"
 
 [[tree]]
 path = "verity/protocols/"
-means = "the protocols in three groups, proofs/, accounting/ and policy/, with compose/ and experimental/ beside them"
+means = "one directory per protocol, the list flat"
 
 [[tree]]
 path = "verity/circuits/"
@@ -185,78 +183,44 @@ means = "a suite's configuration, where it has one"
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
 
 [[tree]]
-path = "verity/protocols/proofs/"
-means = "flock, spot and recursion: what the other protocols call to prove"
-owner = "top"
-day = "2026-11-15"
-
-[[tree]]
-path = "verity/protocols/accounting/"
-means = "pouw, pous, poub and certifier: compute, memory and network"
-owner = "top"
-day = "2026-11-15"
-
-[[tree]]
-path = "verity/protocols/policy/"
-means = "inference_only, on accounting/"
-owner = "top"
-day = "2026-11-15"
-
-[[tree]]
-path = "verity/protocols/proofs/flock/"
+path = "verity/protocols/flock/"
 means = "the proof system: its Lean verifier and the ZK server, and its prover"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/proofs/spot/"
+path = "verity/protocols/spot/"
 means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/proofs/recursion/"
+path = "verity/protocols/recursion/"
 means = "one proof system's verifier proved in another's proofs, and the ZK server's release side"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/accounting/pouw/"
+path = "verity/protocols/pouw/"
 means = "proof of useful work"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/accounting/pous/"
+path = "verity/protocols/pous/"
 means = "proof of useful space"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/accounting/poub/"
+path = "verity/protocols/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/accounting/certifier/"
+path = "verity/protocols/certifier/"
 means = "network certification: the network certifier and its guarantee"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
-path = "verity/protocols/policy/inference_only/"
+path = "verity/protocols/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "verity/protocols/compose/"
@@ -320,54 +284,6 @@ path = "verity/protocols/NAME/tests/"
 means = "its tests, a suite of its own"
 
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
-
-[[not_yet]]
-path = "verity/protocols/flock/"
-to = "verity/protocols/proofs/flock/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/spot/"
-to = "verity/protocols/proofs/spot/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/recursion/"
-to = "verity/protocols/proofs/recursion/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/pouw/"
-to = "verity/protocols/accounting/pouw/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/pous/"
-to = "verity/protocols/accounting/pous/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/poub/"
-to = "verity/protocols/accounting/poub/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/certifier/"
-to = "verity/protocols/accounting/certifier/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/protocols/inference_only/"
-to = "verity/protocols/policy/inference_only/"
-owner = "top"
-day = "2026-11-15"
 
 [[not_yet]]
 path = "verity/protocols/remote/"
@@ -513,13 +429,13 @@ day = "2026-11-18"
 
 [[not_yet]]
 path = "verity/protocols/pouw/clear/"
-to = "verity/protocols/accounting/pouw/verifier/"
+to = "verity/protocols/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
 [[not_yet]]
 path = "verity/protocols/pouw/receipts/"
-to = "verity/protocols/accounting/pouw/verifier/"
+to = "verity/protocols/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
