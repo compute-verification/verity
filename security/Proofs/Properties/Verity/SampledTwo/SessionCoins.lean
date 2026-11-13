@@ -196,7 +196,6 @@ theorem stmtReadsNone (A : Live₂) (C : CaseOf) (S : SessionReading)
   have hne : i ≠ A.h.stage + 1 := (show readsAt A.h i from hi).1
   unfold groupOf at hg
   split_ifs at hg
-  all_goals first | exact hne ‹i = A.h.stage + 1› | cases hg
 
 /-- **The sessions' coins the check reads are the device's** (piece: the sessions' coins): on a play the form accepts
 whose log the check read is the device's (`Good`, through the cut's `InteriorLogged`), wherever the check read a coin
@@ -559,8 +558,9 @@ structure MembersHeld (lines : List String) (trees : Array Spot.Challenger.Logge
   order : Spot.Challenger.membersOrder lines = some (Verity.Sampled.MemberForm.usedOf records)
   idx : ∀ j ρ, (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ →
     (Verity.Sampled.heldTrees trees).findIdx? (·.1 == ρ) = some (tree j)
-  roots : ∀ j x, records[j]? = some x → ∃ ρ, Spot.getD (Spot.getD x.2.2.1 "coin_tree") "root" = Json.str ρ ∧
-    (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ
+  roots : ∀ (j : ℕ) (x : String × Array (String × Option ℕ) × Json × String), records[j]? = some x →
+    ∃ ρ, Spot.getD (Spot.getD x.2.2.1 "coin_tree") "root" = Json.str ρ ∧
+      (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ
   closes : ∀ j, j < records.size → ∃ Lc c L₂ s n, log = Lc ++ c :: L₂ ∧ c.frame = .opening (tree j) s n
   before : ∀ pre r post, log = pre ++ r :: post → ∀ j, j < records.size → ∀ s n, r.frame = .opening (tree j) s n →
     ∀ q ∈ pre, ∀ j', j' < records.size → ∀ s' n', q.frame = .opening (tree j') s' n' → j' ≤ j
@@ -720,13 +720,14 @@ theorem MembersHeld.find (H : MembersHeld lines trees log records tree)
     (hrecs : records.toList.map (·.2.2.1) = recs) {t : ℕ} {x : String × Array (String × Option ℕ) × Json × String}
     (hx : records[t]? = some x) {ρ : String} (hρ : (Verity.Sampled.MemberForm.usedOf records)[t]? = some ρ) :
     recs[t]? = some x.2.2.1 ∧ recs.find? (Verity.Sampled.recordTree · == ρ) = some x.2.2.1 := by
-  have hrec : ∀ u b, recs[u]? = some b → ∃ y, records[u]? = some y ∧ y.2.2.1 = b := by
+  have hrec : ∀ (u : ℕ) (b : Json), recs[u]? = some b →
+      ∃ y : String × Array (String × Option ℕ) × Json × String, records[u]? = some y ∧ y.2.2.1 = b := by
     intro u b h
     rw [← hrecs, List.getElem?_map, Array.getElem?_toList] at h
     cases hy : records[u]? with
     | none => rw [hy] at h; simp at h
     | some y => rw [hy] at h; exact ⟨y, rfl, Option.some.inj h⟩
-  have hroot : ∀ u y, records[u]? = some y →
+  have hroot : ∀ (u : ℕ) (y : String × Array (String × Option ℕ) × Json × String), records[u]? = some y →
       (Verity.Sampled.MemberForm.usedOf records)[u]? = some (Verity.Sampled.recordTree y.2.2.1) := by
     intro u y hy
     obtain ⟨ρu, hr, hu⟩ := H.roots u y hy
