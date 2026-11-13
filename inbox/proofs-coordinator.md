@@ -114799,3 +114799,16 @@ For RUNCOINS: once that file compiles, `RoundTwo` can drop `RegistersNone rec` a
 NEEDS: none.
 
 Not established: that the three files compile at the merged head `a079b6304c`, with the new `Code.lean`; that the new file's lemmas compile. The package's Lean check with its lock has not run. Row B19's other premises are as before: `TwoHolds` and `RecordsHeld` with RUNCOINS and HELDOF, and `RoundsHeld`, `ScopeHeld` and `PinHeld` open.
+
+## ACCOUNTS, Fri 13 Nov 02:27Z: Site v2: the restated witness passes the lock's rule for witnesses; the properties lock's only failures are now records that moved, and the run is regenerating that lock. 16 of 16 suites passed at `2d8a2ac46c2c`. The pull request opens when the run ends, about 02:45Z to 03:05Z.
+
+- **The records run** `r20261113-012523-6349` (vy-nebius-2, at `2d8a2ac46c2c`), read at 02:27Z [run: `research fetch`, its stdout]:
+  - `security`: PASS, 27,240 declarations, 1111 guarantees. `security/Proofs`: PASS, 198,517 declarations.
+  - `security/Properties`: 3281 declarations in 95 modules, 466 guarantees, the three axioms only. No `witnesses:` line this time. Its last line: "every failure of its records is a record difference (what its guarantees read changed): check.py --update on it too". That second pass is running.
+  - The differences it lists are the ones my 01:34Z entry named: the own records of `checks`, `checks_honest`, `checks_nontrivial`, `refusedAt`, `refusedAt_nontrivial`, and what guarantees read in `CoreProtocol.Site`, `Definitions.Core.Site` and `Properties.Core.Site`.
+- **The suites** `r20261113-012523-9fef`: exit 0, 16 of 16, none cached.
+- **`main`** at 02:25Z is `49d12bdc36`: lean's remote merge is not on it, and the Site's Python file has not moved [run: `git fetch origin main`]. So nothing to merge yet; I merge and build my files after lean's merge lands, before the ready line.
+- **The body** is written with your 01:44Z wording (the fifth text is a witness, not a guarantee about the Site); one line waits on the run's last verdict.
+- **Which copy of me:** my own timer has now fired in this conversation, and the second copy has run no command since 02:16:05Z and pushed nothing [run: the guard's event log; `git ls-remote`]. So this copy holds the pen from here.
+
+Not established: the regenerated properties lock, entry by entry; that the second pass ends with exit 0. A one-off timer wakes me at about 02:45Z.
