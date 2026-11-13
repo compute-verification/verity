@@ -26,8 +26,16 @@ lose theirs the same way and `lake build` rebuilds them there and then, once, wi
 is elaborated once more, whose result is the check's (`siblings.check`). It never
 runs check.py, so it reads and writes no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
-slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
-unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
+slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are while they hold every package
+their manifest names (`cache.py`'s `fetched_deps`). A directory that lacks one, as a run killed while Lake cloned them
+leaves it, in `links.json` or not, is taken as none is: the try says what it lacks and takes the ones the node keeps
+(`link`). In the sandbox, where Lake clones nothing, a package still missing after that (the node keeps none, or its
+copy lacks one) ends the try before Lake runs: it exits 2, which is no verdict on FILE, and its line names what is
+missing and the `--records` run that fetches it onto this tree, which it names with `--tree`: a records run fetches for
+the one tree it takes. `--build` takes such a directory the same way and skips a package still
+missing, with a sandbox or without, since it fetches nothing cold. Without a sandbox the try's Lake runs
+unsandboxed, fetches dependencies the node does not keep, and restores nothing from a cache, its own included, so it
+compiles every module it needs (`build`). In the sandbox the tree's fetched dependencies are mounted
 read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
 no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
 it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
@@ -43,7 +51,7 @@ reads); each package whose check.py passes, its report saying it built in the sa
 compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
-pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
+pool or closes it (`build 0`), or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
 instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
 checkout's PKG, then its requirers, each build restored from the published cache (Security: about 40 minutes), with the same
 reports, record keep and kind; that path builds in this checkout, so a run takes it only with `--cwd clone`. It says which
@@ -85,7 +93,11 @@ moved; one failing for any other reason fails. With `--moved` too, each requirer
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
 failures are judged. The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
-dependencies there drops the rest first.
+dependencies there drops the rest first: every copy its `links.json` lists but those of the packages in the `closure` of
+one this run audits (a prover's among them), which its check.py builds, so that dropping one would only have it cloned
+again. Such a copy is kept while its entry is the key its manifest and toolchain give now and it holds every package the
+manifest names (`cache.py`'s `fetched_deps`), and dropped otherwise. Each drop says one line: the package, and whether
+it was outside this run's packages, under another key, or incomplete (`drops`).
 
 A record difference is not a failure of the run. A package that any other run of check.py fails only on record differences
 (check.py's report names the record that settles them, `regenerated`) has that record kept the same way, so a run without
@@ -335,6 +347,60 @@ def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
     links.pop(pkg, None)
 
 
+_CACHE = None
+
+
+def lacks(pkg: str, tree: Path) -> str | None:
+    """What ``tree/pkg``'s `.lake/packages` lacks of the fetched dependencies its manifest names, in words, or None when it
+    holds a directory for each (`cache.py`'s `unfetched`, whose `fetched_deps` is the one test of that; the file is loaded
+    by what takes a tree's dependencies and not with this one, as `moved.py` is). A run killed while Lake cloned them
+    leaves the ones it had cloned. Lake clones the rest where it may; in the sandbox it fails on the first one missing."""
+    global _CACHE
+    if _CACHE is None:
+        _CACHE = _module(Path(__file__).resolve().parent / "cache.py", "lean_cache_for_lean_changed")
+    gone = _CACHE.unfetched(tree / pkg)
+    names = f"{', '.join(gone[:8])}{' ...' if len(gone) > 8 else ''}"
+    return f"{len(gone)} of the packages its manifest names ({names})" if gone else None
+
+
+def fetched_by(pkg: str, tree: Path) -> str:
+    """The run that fetches ``pkg``'s dependencies onto ``tree`` where `--try` and `--build` can't: a records run's
+    check.py sets the package up outside the sandbox, where Lake clones what its manifest names. `--rebuild`, since
+    records that need no run are skipped, nothing fetched; `--tree`, since a records run fetches for the one tree it
+    takes, and a try on another tree of the node is then no better off."""
+    return f"`lean_changed.py --records {pkg} --rebuild --tree {tree}` here fetches them onto this tree"
+
+
+def drop_incomplete(pkg: str, tree: Path, links: dict[str, str], log=print) -> None:
+    """Before `--try` or `--build` takes ``tree/pkg``'s dependencies: a `.lake/packages` that `lacks` a package goes, with
+    its entry of ``links`` and of the tree's `LINKS`, and a line says what it lacked, so it is taken as none is: whole,
+    from the ones this node keeps (`link`). Whether a run was left mid-way there (`DIRTY`) does not decide it: a run
+    since can have cleared that mark and kept the directory."""
+    if (tree / pkg / ".lake" / "packages").is_dir() and (what := lacks(pkg, tree)):
+        unlink(pkg, tree, links)
+        write_links(tree, links)
+        log(f"lean-records: {pkg}: its fetched dependencies lacked {what}, as a run killed while Lake cloned them leaves "
+            "them; they were dropped, and are taken whole or not at all")
+
+
+def drops(pkg: str, todo: list[str], tree: Path, links: dict[str, str]) -> dict[str, str]:
+    """{package: why} for each package of ``links`` whose copy of its fetched dependencies a records run of ``todo`` drops
+    before it audits ``pkg``. The run keeps the copy of each package in the `closure` of one it audits, which its check.py
+    builds (a prover's among them), while its entry is the key its manifest and toolchain give now and it `lacks` nothing:
+    dropped, check.py would clone it again. Every other copy goes when ``pkg`` fetches dependencies, for the inodes."""
+    mine = {c for t in todo for c in closure(t)}
+    why = {}
+    for q, k in links.items():
+        if q not in mine:
+            if LA.deps_key(tree / pkg):
+                why[q] = "outside this run's packages"
+        elif k != (now := LA.deps_key(tree / q)):
+            why[q] = f"another key: {LINKS} has {str(k)[:12]}, and its manifest and toolchain now give {now[:12] if now else 'none'}"
+        elif what := lacks(q, tree):
+            why[q] = f"incomplete: it lacks {what}"
+    return why
+
+
 def read_links(tree: Path) -> dict[str, str]:
     """The tree's `LINKS`; none when the file is missing or not a JSON object (a write in place that failed after its
     truncation, on a full disk or a stopped run, left it empty), so each package's dependencies are taken again, as in a
@@ -393,45 +459,71 @@ def carry_builds(tree: Path, log=print) -> None:
     write_links(tree, links)
 
 
-def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
+def bound(pkg: str, tree: Path) -> list[str]:
+    """`sandbox.sh`'s `--at` for a build of ``tree/pkg``: ``tree`` at check.py's `FIXED` (its `bound`)."""
+    return AUDIT.bound([tree / p / ".lake" for p in closure(pkg)], tree)
+
+
+def in_sandbox(pkg: str, tree: Path, argv: list[str], at: tuple[str, ...] | list[str] = ()) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
+    fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root.
+    A build passes ``at``, `bound`'s words, and reads the tree at the fixed path, where its fetched dependencies are
+    read-only too."""
     rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
-    return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
+    ro += [str(AUDIT.fixed(Path(d), tree)) for d in ro] if at else []
+    return [*UNSHARE, "--", "bash", str(SANDBOX), *at, *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 
 
 def refused_write(text: str, pkg: str, tree: Path) -> str | None:
     """The path Lake's output ``text`` says a read-only file system refused it (`REFUSED_WRITE`), when it lies in the fetched
-    dependencies of ``tree/pkg`` or of a package it requires by path, which `in_sandbox` mounts read-only; else None."""
+    dependencies of ``tree/pkg`` or of a package it requires by path, which `in_sandbox` mounts read-only; else None. A
+    build names the tree's files under the fixed path (`bound`): such a path is given as the tree's."""
     ro = [(tree / p / ".lake" / "packages").resolve() for p in closure(pkg)]
-    return next((m.group(1) for m in REFUSED_WRITE.finditer(text)
-                 if any(d in Path(os.path.realpath(m.group(1))).parents for d in ro)), None)
+
+    def here(path: str) -> str:
+        p = Path(path)
+        return str(tree / p.relative_to(AUDIT.FIXED)) if p.is_relative_to(AUDIT.FIXED) else path
+
+    return next((p for p in (here(m.group(1)) for m in REFUSED_WRITE.finditer(text))
+                 if any(d in Path(os.path.realpath(p)).parents for d in ro)), None)
 
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
-          cmd: list[str] | None = None, echo=None) -> tuple[int, str]:
+          cmd: list[str] | None = None, echo=None, at: list[str] | None = None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
     sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes, or each line handed to ``echo``. Before the
-    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`). A `lake build` in
+    the sandbox reads the tree at the fixed path: ``at``, `bound`'s words (by default `bound`'s own), which a caller
+    that stores what it compiled hands `built_report` too. ``cmd`` runs at the tree's own, where its arguments name files.
+
+    Outside the sandbox Lake restores nothing from a cache, its own included, whatever the environment or a lakefile
+    says: there it restores by a hard link, and the restored file keeps the cache file's time, which `outdated` reads as
+    the time it was built. `LAKE_ARTIFACT_CACHE` turns the cache off for every package whose lakefile leaves
+    `enableArtifactCache` unset; a lakefile that sets it is read before the environment, so `LAKE_CACHE_DIR` names an empty
+    directory of this command's own, removed after it, and such a package finds there only what this command built."""
+    at = bound(pkg, tree) if at is None else at
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
-        rc, text = build(pkg, tree, lake, plugins, sandbox)
+        rc, text = build(pkg, tree, lake, plugins, sandbox, at=at)
         if rc:
             return rc, text
     argv = [lake, *(cmd or ["build", *(targets or [])])]
-    argv = in_sandbox(pkg, tree, argv) if sandbox else argv
+    argv = in_sandbox(pkg, tree, argv, at if cmd is None else ()) if sandbox else argv
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
            str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
-    p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                         encoding="utf-8", errors="replace")
-    out = []
-    for line in p.stdout:
-        if echo:
-            echo(line)
-        else:
-            print(line, end="", flush=True)
-        out.append(line)
-    return p.wait(), "".join(out)
+    with contextlib.nullcontext() if sandbox else tempfile.TemporaryDirectory(prefix="lake-no-cache-") as empty:
+        if empty is not None:
+            env |= {"LAKE_ARTIFACT_CACHE": "false", "LAKE_CACHE_DIR": empty}
+        p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                             encoding="utf-8", errors="replace")
+        out = []
+        for line in p.stdout:
+            if echo:
+                echo(line)
+            else:
+                print(line, end="", flush=True)
+            out.append(line)
+        return p.wait(), "".join(out)
 
 
 def sandboxed() -> bool:
@@ -521,9 +613,9 @@ BUILT = re.compile(r"^\s*\S+ \[\d+/\d+\] Built ([^\s:]+)(?: \(.*\))?$", re.M)
 
 
 def compiled(text: str) -> list[str]:
-    """The modules Lake's output ``text`` says it compiled. A `--try` or `--build` build reads Lake's own cache, so it
-    unpacks main's published build where that holds a module's input hash, and `put` must not take such a module as one
-    this node compiled: `LakeArtifacts.put` indexes only these."""
+    """The modules Lake's output ``text`` says it compiled. In the sandbox a `--try` or `--build` build reads Lake's own
+    cache, so it unpacks main's published build where that holds a module's input hash, and `put` must not take such a
+    module as one this node compiled: `LakeArtifacts.put` indexes only these."""
     return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
 
 
@@ -537,6 +629,13 @@ def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: s
         log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
     except (OSError, ValueError) as e:
         log(f"{who}: the artifact cache was not written: {e}")
+
+
+def built_report(at: list[str], text: str) -> dict:
+    """What `put_built` takes of a sandboxed `build` with Lake's output ``text``, as check.py's report says it of its
+    own: that it ran in the sandbox, where it read the tree (``at``, the `bound` words that `build` was handed), and the
+    modules Lake built."""
+    return {"sandbox": True, "bound": at[1:] or None, "compiled": compiled(text)}
 
 
 def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
@@ -647,7 +746,15 @@ def outdated(lib: Path) -> list[Path]:
     them from: one written before the source beside it, one with no source beside it, and one whose module has no trace,
     which Lake rebuilds, writing the source anew. Lake writes an object after its source, so such an object is from an
     earlier source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that
-    dropped a module's trace and `.hash` files and kept its objects left them so."""
+    dropped a module's trace and `.hash` files and kept its objects left them so.
+
+    The rule reads the files' times, so it rests on one premise: a file Lake restores from a cache is a copy, with the
+    time of its restore. Lake restores by a hard link wherever one can be made, and a linked file keeps the cache file's
+    time: a source restored so can be older than the object of the source that was there before it, which then stays,
+    and an object restored so is older than its own source, and goes. The premise is kept in two places. In the sandbox
+    each `.lake` is a mount of its own (`sandbox.sh`), a link into it from a cache fails, and Lake copies. Outside the
+    sandbox nothing is restored into a slot tree: `build` gives Lake no cache to read there, and check.py's build of one
+    stages none and runs with Lake's cache off (`lake_env`)."""
     out = []
     ir = lib.parent.parent / "ir"
     for o, of in OBJECTS.items() if ir.is_dir() else ():
@@ -1419,7 +1526,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     the tree (`put_left`). In a run, the module versions it added go into ``out``
     in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
     sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
-    (`LakeArtifacts.take`), so its builds restore what they compiled."""
+    (`LakeArtifacts.take`), so its builds restore what they compiled.
+    Before each package's audit, the copies of fetched dependencies `LINKS` lists that this run does not keep go, each
+    with a line naming the package and why (`drops`). It keeps those of the packages in the `closure` of one it audits,
+    each while its entry is the key its manifest and toolchain give now and it holds every package the manifest names;
+    the others go when the package about to be audited fetches dependencies."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
@@ -1496,7 +1607,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 else:
                     repair(tree, closure(p), links, None, log)
                 mark(tree, package=p, phase="deps")
-                for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
+                for other, why in drops(p, todo, tree, links).items():
+                    log(f"lean-records: {other}: its fetched dependencies are dropped from {tree} ({why})")
                     unlink(other, tree, links)
                 if not link(p, tree, deps, links, log) and (k := LA.deps_key(tree / p)):
                     links[p] = k
@@ -1509,7 +1621,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 def audit(with_update: bool) -> int:
                     nonlocal store, redone
                     got = subprocess.run(check_argv(tree / p, mine_out, with_update, moved, p == pkg, artifacts=store,
-                                                    facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                                                    facts_cache=facts_dir(), tree=tree), cwd=tree, env=env,
+                                         pass_fds=fds).returncode
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree, log, allowed)):
                         return got
                     store, redone = None, True
@@ -1737,18 +1850,25 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             write_links(tree, links)
             mark(tree, package=pkg, phase="deps")
             sandbox = sandboxed()
+
+            def unfetchable(why: str) -> int:
+                log(f"lean-try: {file}: not elaborated, and this says nothing about the file: {why}, and the sandbox can't "
+                    f"fetch them, so nothing ran; {fetched_by(pkg, tree)}")
+                (tree / DIRTY).unlink(missing_ok=True)
+                return 2
+
+            drop_incomplete(pkg, tree, links, log)
             packages = tree / pkg / ".lake" / "packages"
             # dependencies a `--records` run did not take (not in LINKS) are kept as they are, and stay out of LINKS, whose
             # packages the next `--records` run on another package drops
             if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
                 if sandbox:
-                    log(f"lean-try: {pkg}: no dependencies to take on this node, and the sandbox can't fetch them: nothing "
-                        f"ran; run `lean_changed.py --records {pkg}` here once")
-                    (tree / DIRTY).unlink(missing_ok=True)
-                    return 2
+                    return unfetchable(f"this node keeps no dependencies for {pkg} to take")
                 links[pkg] = LA.deps_key(tree / pkg)
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
+            if sandbox and (what := lacks(pkg, tree)):
+                return unfetchable(f"the dependencies this node keeps for {pkg} lack {what}")
             since, storing = time.time(), storable(sandbox)
             mark(tree, package=pkg, phase="try")
             opts = SIBLINGS.options(tree / pkg)
@@ -1756,9 +1876,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean "
                 f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
-            step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            bind = bound(pkg, tree)
+            step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox, at=bind)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
-                put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log, f"lean-try: {pkg}")
+                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1790,7 +1911,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     def rebuild(refusal: str) -> tuple[int, str, float]:
                         began = time.monotonic()
                         clashed(tree, closure(pkg), refusal, but=plan.module)
-                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
+                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox,
+                                              at=bind)
                         return status, built, time.monotonic() - began
 
                     rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
@@ -1829,7 +1951,8 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
     """`--build`: the ready mark's preflight's Lean step (`research.queue.Preflight`). On the tree of the `build` slot it takes,
     as `--try` does (slot, tree lock, sync, `repair` and dependencies), `lake build +MODULE...` of ``files``' modules (paths
     from the repository's root) in each package owning one, those it requires by path first; a package whose dependencies
-    this node doesn't keep is skipped, never fetched cold. Its last line is `BUILD_LINE` and a JSON object: `built` ({package:
+    this node doesn't keep, or keeps without one its manifest names (`lacks`), is skipped, never fetched cold. Its last
+    line is `BUILD_LINE` and a JSON object: `built` ({package:
     lake's exit status}), `failed` ({file: its first Lean error}, in a tracked `.lean` file; an import clash this tree left is
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
     every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
@@ -1883,19 +2006,25 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 left = None
                 write_links(tree, links)
                 mark(tree, package=pkg, phase="deps")
+                drop_incomplete(pkg, tree, links, log)
                 packages = tree / pkg / ".lake" / "packages"
                 if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
-                    doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
+                    doc["skipped"][pkg] = ("this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched "
+                                           f"cold; {fetched_by(pkg, tree)}")
                     continue
                 write_links(tree, links)
+                if what := lacks(pkg, tree):
+                    doc["skipped"][pkg] = (f"the dependencies this node keeps for its manifest lack {what}, and they aren't "
+                                           f"fetched cold; {fetched_by(pkg, tree)}")
+                    continue
                 since = time.time()
                 mark(tree, package=pkg, phase="build")
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
                 log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
-                rc, text = build(pkg, tree, lake, mods, sandbox)
+                bind = bound(pkg, tree)
+                rc, text = build(pkg, tree, lake, mods, sandbox, at=bind)
                 if storing:
-                    put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log,
-                              f"lean-build: {pkg}")
+                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
@@ -1925,15 +2054,16 @@ def report(out: Path, at: Path) -> dict:
 
 
 def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
-               artifacts: Path | None = None, facts_cache: Path | None = None) -> list[str]:
+               artifacts: Path | None = None, facts_cache: Path | None = None, tree: Path | None = None) -> list[str]:
     """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
-    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
+    ``artifacts`` cache where given and, in the sandbox, ``tree`` (the tree ``at`` is in; default: this checkout) at the
+    fixed path (`--tree`); with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
     document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none. With ``facts_cache``
     every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back only by
     the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
-            *(["--facts-cache", str(facts_cache)] if facts_cache else []),
+            *(["--facts-cache", str(facts_cache)] if facts_cache else []), *(["--tree", str(tree)] if tree else []),
             *(["--update"] if update else []),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), str(at)]
 

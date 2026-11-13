@@ -76,12 +76,14 @@ class CommittedStore:
         # accepts the manifest's raw form (alias -> [canonical, invocation]) or the parsed table (alias -> (canonical, invocation))
         self.aliases: dict[str, tuple[str, int]] = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         self.idx: dict[tuple, list[dict]] = {}
+        self._ops: dict[tuple[str, int], dict[str, set[str]]] = {}
         for e in bmap.get("entries") or []:
             ident = e.get("identity") or {}
             if "step" not in ident:
                 continue
             key = (str(ident.get("request_id", "r0")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")))
             self.idx.setdefault(key, []).append(e)
+            self._ops.setdefault(key[:2], {}).setdefault(key[2], set()).add(key[3])
         # a shared module's invocations share ONE member name in the collector's layouts: the reader is asked for the
         # entry's EXACT meta (`<name>#ord<tensor_ordinal>`, oracle_compare.entry_read_name) whenever more than one invocation is bound under
         # that name at the step -- by the bare name every layer read layer 0's words (the OLMoE mixedstop record: layers 1..15 unequal)
@@ -106,6 +108,10 @@ class CommittedStore:
 
     def has(self, rid: str, step: int, op_path: str, member: str) -> bool:
         return bool(self.entries(rid, step, op_path, member)[0])
+
+    def ops(self, rid: str, step: int) -> dict[str, set[str]]:
+        """Each op_path the binding map binds request ``rid`` under at ENGINE ``step``, as it spells it -> its members' names."""
+        return {op: set(ms) for op, ms in self._ops.get((rid, int(step)), {}).items()}
 
     def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
         es, canon, inv_min, bound = self.entries(rid, step, op_path, member)

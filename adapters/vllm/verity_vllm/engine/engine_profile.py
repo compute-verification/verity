@@ -62,10 +62,15 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
-        # generalization sweep: roles registered by verity_vllm/input_provenance/add_checkpoint.py carry `role == case`
+        # a role of the manifest (an entry added to `manifests/checkpoints.json` by hand, or by `fp8-checkpoint pin` or
+        # `int8-checkpoint pin` for a recipe pin) carries `role == case`
         matches = [c for c in checkpoint_entries(checkpoints_path) if c.get("role") == case]
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
+        if len(matches) > 1:
+            raise SystemExit(f"case {case!r}: {len(matches)} pins carry role {case!r} "
+                             f"({', '.join(str(c.get('revision'))[:12] for c in matches)}); a role names one checkpoint, "
+                             "so another revision of a model is pinned under a role of its own")
         cp = matches[0]
     # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
     if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):

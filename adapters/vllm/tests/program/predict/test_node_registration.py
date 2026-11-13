@@ -32,7 +32,7 @@ assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
-WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(32), bytes(range(64))
+WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(64), bytes(range(64))
 SHAPE = {"LP": 4, "T": 2}
 PHI = _phi(TINY, tp={"world": WORLD, "rank": 0})
 NODE = build_node_program(PHI, "request", **SHAPE)
@@ -93,7 +93,7 @@ def commit(tmp_path, monkeypatch):
             if name not in CKPT:
                 extra[name] = i
                 raw.tofile(bdir / "weights" / "extra" / f"{i}.bin")
-        tree = step_rows.weights_tree(GEO, names, step_rows.names_digest(names), troots, WK) | {"extra": extra}
+        tree = step_rows.weights_tree(GEO, names, troots, WK) | {"extra": extra}
         roots[r] = tree["root"]
         (bdir / "weights" / "tree.json").write_text(json.dumps(tree))
         (bdir / "context.json").write_text(json.dumps({"pair": 0, "tp": {"world": WORLD, "rank": r}, "replay": cfg}))
