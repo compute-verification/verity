@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.reporting import DELTAS, PERIODS
-from verity.protocols.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")

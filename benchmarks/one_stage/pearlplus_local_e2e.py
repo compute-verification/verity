@@ -188,7 +188,7 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.accounting.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -196,7 +196,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
-    from verity.protocols.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
@@ -298,7 +298,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
-            pkg = TREE / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus"
+            pkg = TREE / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
             b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
             log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
             exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
@@ -331,7 +331,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.protocols.spot.device.challenger import CoinError
+    from verity.protocols.proofs.spot.device.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)
