@@ -372,9 +372,7 @@ theorem coinSpec_streams (t : String) :
 theorem repStreams_table {spec : Flock.SessionSpec} {T : String} (h : spec.tables = #[T]) :
     spec.repStreams.toList = [(0, 0, repStreamName T 0), (0, 1, repStreamName T 1)] := by
   rw [FlockDeploy.repStreams_toList, h]
-  first
-    | rfl
-    | simp [repStreamName]
+  rfl
 
 /-- **A spec that is a one-table session's coin tree lists the session stream, then the session's rep streams**: where
 the JSON spec `d` is the coin tree of the table `T` and the session `spec` has that table alone, `d`'s streams are
@@ -387,9 +385,7 @@ theorem specStreams_repStreams {d : Json} {spec : Flock.SessionSpec} {T : String
   apply Array.ext'
   simp only [Array.toList_append, Array.toList_map]
   rw [repStreams_table ht]
-  first
-    | rfl
-    | simp
+  rfl
 
 theorem tableNames_one (t : Flock.Tags) : t.tableNames 1 = #[t.table] := by
   unfold Flock.Tags.tableNames
@@ -739,7 +735,8 @@ theorem setupAt_oneTable {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
   obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okHP hh hset with ⟨-, st, hst, rfl, -⟩ | ⟨h1, -⟩
   · obtain ⟨_, hP⟩ := FlockSoundness.Discharge.Hidden.setupHidden_specP hst
-    exact congrArg (fun t : Flock.Tags => #[t.table]) hP.tagsEq
+    have e : st.tags.table = W.tags.table := (congrArg Flock.Tags.table hP.tagsEq).trans rfl
+    exact congrArg (fun t : String => #[t]) e
   · exact absurd h1 (by omega)
 
 /-- **What a member's accepted session's verdict fixes of its tree**: where the per-member form accepted the session
