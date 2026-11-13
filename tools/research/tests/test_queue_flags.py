@@ -192,7 +192,7 @@ EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-m
     (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
     (["security/Proofs/Core/X.lean"], False),
     (["docs/a.md", "tools/pous_grader/lean-audit.json"], False),
-    (["verity/protocols/flock/verifier/lakefile.toml"], False),
+    (["verity/protocols/proofs/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
     (["verity/circuits/ops/add.py"], False), (["verity/circuits/kernels/k.cu"], False),
@@ -214,5 +214,5 @@ def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
     excludes = ("verity/protocols/__init__.py", "verity/hardware/record.py")
     for f in excludes:
         assert not lowrisk(["README.md", f], excludes), f
-    assert lowrisk(["verity/protocols/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/record.py",
+    assert lowrisk(["verity/protocols/accounting/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/record.py",
                     "x/verity/hardware/record.py", "verity/hardware/record.pyc"], excludes)
