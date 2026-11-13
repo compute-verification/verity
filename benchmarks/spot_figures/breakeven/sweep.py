@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_line, priced_strata,
-                    scale_proving, split_cols, tb)
+                    scale_proving, tb)
 
 from common import SCOPES, c, sc, tc
 import reprice
@@ -124,7 +124,6 @@ class Case:
     pool_window_s: int = 0
     compile_core_h: float = 0.0
     budget_form: str = ""
-    split: tuple[tuple[str, int], ...] = ()
     leverage: tuple[float, ...] = ()
     steady: str = ""
 
@@ -148,8 +147,7 @@ def build(case: Case):
     strata = None
     per_type = (case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
                 or case.server)
-    if (case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type
-            or case.split):
+    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type:
         strata = priced_strata(case.line)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum or case.fused else "read")
@@ -168,8 +166,6 @@ def build(case: Case):
                                    verify_expert=case.verify_expert, verify_other=case.verify_other)
         bm, bf = BUSY[case.line] if case.busy else (1.0, 1.0)
         strata = scale_proving(strata, marginal=case.marginal * bm, fixed=case.fixed * bf, cap=case.cap)
-        for pattern, n in case.split:
-            strata = split_cols(strata, pattern, n)
     L = make_line(case.line, strata, replay_gpu_s=case.replay, registration=case.registration)
     if case.ctx:
         L = reprice.workload(L, {"c343": reprice.C343, "c343-served": reprice.C343_SERVED}[case.ctx])
@@ -239,7 +235,7 @@ def run_case(job):
         sampled = pt["plan"]["replay_sample"]
         out["compile"] = {"sampled": sampled, "share": {str(h): sampled * h * 3600 / reprice.CORE_PER_GPU
                                                         / s.gpu_seconds for h in (*COMPILE_CORE_H, 14.0)}}
-        out["pool"] = pool(L, case, pt["registration_sample"])
+        out["pool"] = pool(L, case, sampled * MACHINE_GPUS * WINDOW / s.gpu_seconds)
         if case.leverage:
             walked = {k: v for k, v in out["pool"]["every"].items() if k.endswith("walked")}
             out["leverage"] = leverage(L, case, scope, WEIGHTS["FP4"] - advice, b4, walked)
@@ -397,8 +393,6 @@ def repriced() -> dict[str, Case]:
     return out | served_line()
 
 
-#: the column blocks: the all-reduces and MoeSum cut 32 ways, ResidualAdd 16
-COLUMN_BLOCKS = ((r"^(AllReduce|MoeSum)", 32), (r"^ResidualAdd", 16))
 #: kernels' marked prover PRs over main's prover, over old main's (2.088 s), and their modeled target over main's
 PROVER_MARKED = reprice.PROVE_MAIN / reprice.PROVE_MARKED
 PROVER_OLD_MAIN = reprice.PROVE_OLD_MAIN / reprice.PROVE_MARKED
@@ -408,9 +402,10 @@ PROVER_GOAL = reprice.PROVE_MAIN / reprice.PROVE_TARGET
 def served_line() -> dict[str, Case]:
     """(A′) at 128k priced as the long-running proof server proves it (`N0`..`N5`): today's measured server prices,
     main's verifier and the quant card, then each lever in turn; the measured levers alone (`N5m`); the extras on `N5`,
-    the path from it (`P1`..`P5`), a pool per window's lost hits on `N5`, `P1` and `P5`, quant K6144's cold session
-    once a prover process a day and once a window on `P1`'s, the leverage factors on `P1`'s and `P5`'s, the
-    per-window budget form on `N5` and `P5`, and the advice charged two ways."""
+    the path from it (`P2`..`P5`), a pool per window's lost hits on `N5` and `P5`, quant K6144's cold session once
+    a prover process a day and once a window on `N5`'s, the leverage factors on `N5`'s and `P5`'s, the per-window
+    budget form on `N5` and `P5`, and the advice charged two ways. The `workload` card holds the all-reduces, MoeSum
+    and ResidualAdd in the column blocks the census cut them into, so no step cuts them."""
     life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
     n0 = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K, fuse=True, fused=FUSED, server=True,
               verify=1.0, column="today", compile_core_h=1.0)
@@ -421,13 +416,12 @@ def served_line() -> dict[str, Case]:
     steps["N4"] = steps["N3"] | dict(front=True)
     steps["N5"] = steps["N4"] | dict(prover=PROVER_MARKED)
     steps["N5m"] = steps["N1"] | dict(k4=True, k_gain="mps_types", prover=PROVER_MARKED)
-    steps["P1"] = steps["N5"] | dict(split=COLUMN_BLOCKS)
-    steps["P2"] = steps["P1"] | dict(verify_cut=True)
+    steps["P2"] = steps["N5"] | dict(verify_cut=True)
     steps["P3"] = steps["P2"] | dict(dense_k=4)
     steps["P4"] = steps["P3"] | dict(prover=PROVER_GOAL)
     steps["P5"] = steps["P4"] | dict(tmpl="goal")
     out = {n: Case(**kw) for n, kw in steps.items()}
-    extras = {"cols": dict(split=COLUMN_BLOCKS), "flatcut": dict(verify_cut=True),
+    extras = {"flatcut": dict(verify_cut=True),
               "dense4": dict(dense_k=4), "provergoal": dict(prover=PROVER_GOAL),
               "prover2.8": dict(prover=PROVER_OLD_MAIN), "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"),
               "host": dict(host=3.5), "plain": dict(plain=True), "q20": dict(quant6144=0.020),
@@ -436,13 +430,13 @@ def served_line() -> dict[str, Case]:
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
     out["N5m+ktypes"] = Case(**(steps["N5m"] | dict(k_gain="types")))
-    for s in ("N5", "P1", "P5"):
+    for s in ("N5", "P5"):
         for w in POOL_WINDOW_LOST:
             if s == "P5" or w == 600:
                 out[f"{s}+poolwin{w}"] = Case(**(steps[s] | dict(pool_window_s=w, scale=1 + POOL_WINDOW_LOST[w])))
     for life, t in (("day", 86400.0), ("window", float(WINDOW))):
-        out[f"P1+poolwin600+cold{life}"] = replace(out["P1+poolwin600"], cold=COLD_6144 / (t - COLD_6144))
-    for n in ("P1+poolwin600", "P5", "P5+poolwin600", "P5+poolwin3600"):
+        out[f"N5+poolwin600+cold{life}"] = replace(out["N5+poolwin600"], cold=COLD_6144 / (t - COLD_6144))
+    for n in ("N5+poolwin600", "P5", "P5+poolwin600", "P5+poolwin3600"):
         out[n] = replace(out[n], leverage=LEVERAGE)
     for s in ("N5", "P5"):
         out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))

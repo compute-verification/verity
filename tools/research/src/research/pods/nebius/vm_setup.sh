@@ -62,6 +62,8 @@ systemctl daemon-reload
 systemctl enable vy-drop-ipv4-options.service
 systemctl restart vy-drop-ipv4-options.service
 sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
+# cloud-init writes it after systemd-sysctl has run, on the nodes deploy.toml gives it (launch.sh)
+[ ! -e /etc/sysctl.d/61-vy-userns.conf ] || sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf || log "61-vy-userns.conf not applied"
 sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done

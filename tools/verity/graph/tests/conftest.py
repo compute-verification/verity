@@ -10,6 +10,10 @@ import pytest
 from verity_graph import graph
 
 SPEC = """
+[slot]
+cores = 4
+mem_gb = 8
+
 [env.py]
 spec = ["uv.lock", "pyproject.toml"]
 

@@ -64,7 +64,8 @@ withdrawn whole, or in a part that holds a file read here, is refused before any
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
 there the evidence store is read with the run's `--store-read` key.
 
-Under `research run` it also writes, through the harness kit's writer (`verity_bench.kit`), `$OUT/result.json` with the
+Through the harness kit's writer (`verity_bench.kit`) it also writes the run directory's `result.json` under `research run`,
+and `$OUT/result.json` outside one where `OUT` is set, with the
 fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
 recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names

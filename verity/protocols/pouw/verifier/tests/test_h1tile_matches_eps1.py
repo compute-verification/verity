@@ -54,7 +54,7 @@ def test_one_design_across_schemes():
 
 
 def test_both_serve_the_exact_s8_product():
-    """Decision 101: the matmul keeps serving its exact product.  h1tile's served z is each cell's exact int8 dot, the
+    """The matmul keeps serving its exact product.  h1tile's served z is each cell's exact int8 dot, the
     product the reference's arm (`S8Dot{COMMIT "prefix"}`) serves; no noise reaches it."""
     rng = random.Random(102)
     a, b = _rows(rng, 4, 128, -127, 127), _rows(rng, 16, 128, -127, 127)

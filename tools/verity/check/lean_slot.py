@@ -15,10 +15,11 @@ dead process's flocks, after SIGTERM (`research cancel`) or SIGKILL too. CMD run
 it (check.py under check's step) runs at once instead of taking a second slot. Without SLOTS (a laptop) CMD runs as it is.
 
 With every slot of its pool taken, a request waits, and never gives up: it queues in arrival order in `lean-line-P` beside
-SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when, run, who, the time it
-took the slot) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls otherwise. In a `research run`,
-the run's timeout moves later by the time it waited, so the wait never counts against it. Who asked is --by,
-else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else RESEARCH_AGENT_URL.
+SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when it has held the slot,
+how long it waited in line first, run, who) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls
+otherwise. In a `research run`, the run's timeout moves later by the time it waited, so the wait never counts against it.
+Who asked is --by, else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else
+RESEARCH_AGENT_URL.
 
 `python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
 JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
@@ -163,7 +164,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     name, n = resolve(pools, pool, or_any)
     began = mono()
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
-    told, since, slept = None, 0, False
+    told, since, slept, joined = None, 0, False, now()
     try:
         while True:
             try:
@@ -179,7 +180,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
             if not queue:
                 raise Refused(f"{why}, and this request doesn't wait in line")
             lines = status(pools, d, now(), only=name, before=ticket.name)
-            seen = (why, [re.sub(r" \(\d+ min\)", "", ln) for ln in lines])       # the same holders, a minute older
+            seen = (why, [re.sub(r"\d+ min\b", "", ln) for ln in lines])          # the same holders, a minute older
             if seen != told or since >= REPORT_EVERY:
                 log(f"lean-slot: {why}; waiting, with no time limit, and retrying every {POLL_S} s ({SLOTS})")
                 for ln in lines:
@@ -191,7 +192,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
         ticket.unlink(missing_ok=True)
         os.close(tfd)
     i, fd = got
-    who = {**asker(by), "took": f"{now():%Y-%m-%dT%H:%MZ}"}
+    who = {**asker(by), "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": f"{now():%Y-%m-%dT%H:%M:%SZ}"}
     path = lock_path(d, name, i).with_suffix(".who")
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
     tmp.write_text(json.dumps(who) + "\n")

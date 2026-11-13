@@ -55,7 +55,7 @@ elif args[0] == "prove":
     die = int(os.environ.get("FAKE_PROVE_DIES_AFTER", "-1"))
     for n, raw in enumerate(sys.stdin):
         if n == die:
-            sys.exit(4)
+            sys.exit(int(os.environ.get("FAKE_PROVE_EXIT", "4")))
         j = json.loads(raw)
         host, port = j["verifier"].rsplit(":", 1)
         f = socket.create_connection((host, int(port))).makefile("rw")
@@ -71,7 +71,7 @@ elif args[0] == "prove":
 
 @pytest.fixture
 def binary(tmp_path, monkeypatch):
-    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER"):
+    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER", "FAKE_PROVE_EXIT"):
         monkeypatch.delenv(k, raising=False)
     b = tmp_path / "flock-circuit"
     b.write_text(FAKE.format(python=sys.executable))
@@ -252,6 +252,17 @@ def test_one_cpu_prover_without_devices(binary, tmp_path):
     assert s.device is None and "--gpu" not in record(s)["proved"]["argv"] and set(ps.exits) >= {"prover-cpu"}
 
 
+def test_the_wide_leaf_is_carried_by_both_sides_or_by_neither(binary, tmp_path):
+    """A session's prover and verifier name one statement version: `--wide-leaf` on both command lines of a wide server,
+    and on neither of any other's."""
+    for wide in (True, False):
+        with ProofServer(binary, tmp_path / f"ps-{wide}", wide_leaf=wide) as ps:
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), draw([1]), "s").result())
+        sides = (r["argv"], r["proved"]["argv"])
+        assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
+        assert [a[0] for a in sides] == ["serve", "prove"]
+
+
 def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(binary, tmp_path):
     """A templated statement's verifier loads its circuit with the unit (`--tmpl-unit`) and the prover's line names it
     (``tmpl_unit``); a flat statement on the same server names none."""
@@ -281,6 +292,21 @@ def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_
     assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
     v = f"verifier-{pin[:16]}"
     assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
+
+
+def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(binary, tmp_path, monkeypatch):
+    """A session is done on its records and never on its prover's exit status: a prover that ends with status 0 and no
+    ``LIVE`` record for a line it was handed fails that line's session, as one that ends with any other status does. The
+    server is closed as soon as the session fails, and its close finds the verifier's retiring thread started."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
+    st = statement(tmp_path, "ee" * 64)
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(st, {"units": [0]}, "s0").result()
+        left = ps.submit(st, {"units": [1]}, "s1")
+        with pytest.raises(ProofServerError, match=r"prover-cpu exited \(rc 0\) before its records"):
+            left.result()
+    assert first.accepted and left.live is None and ps.exits["prover-cpu"] == 0
 
 
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):
