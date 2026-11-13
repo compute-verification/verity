@@ -4115,7 +4115,37 @@
    "p5a": "19 SparseMlaHeadScores_v2, by blocks, greedy on the inferred wall 480 + 751 (NVIS - 21) / 42 s (between run k's NVIS=21 and NVIS=63); limits 2 x that, at least 1200 s",
    "p5b": "the other 18, the same way",
    "p5c": "the smallest of each never-staged family, alone in turn: FlashInferFp8Quant1x128_v2 K=1536 (t170), SparseMlaSplit_v2 T=1 (t171), DsaMqaLogits_v4 N=37 (t211); limits 3600 s",
-   "p5d": "the largest: K=6144 (t100), T=9 (t179), N=60 (t237); limits 5400 s"
+   "p5d": "the largest: K=6144 (t100), T=9 (t179), N=60 (t237); limits 5400 s",
+   "p5e": "after both ends of SparseMlaSplit_v2 passed the 64 GB job's 62 GB stage stop: its smallest end, T=1 (t171), at --mem-gb 160 (stop 156, Lean gate 150); limit 5400 s, budget 6000 s",
+   "p5f": "after both ends of DsaMqaLogits_v4 passed it: N=37 (t211), then N=60 (t237), at --mem-gb 160; limits 5400 s, budget 11400 s"
+  },
+  "estimates": {
+   "v2t171": {
+    "kind": "inferred",
+    "job_gb": 160,
+    "stage_gb": "at least 64.5",
+    "basis": "at 64 GB (r20261113-182723-4b4c) its stager passed 62 GB after 976 s, growing 3.98 GiB/min [measured]; its _v1 staged in 966 s (r20261113-104814-beb8) [measured], so for that long it reaches about 64 GiB, and it was still growing when stopped: past a 64 GB job, and inferred to fit a 160 GB job's 156 GB stop"
+   },
+   "v2t211": {
+    "kind": "inferred",
+    "job_gb": 160,
+    "stage_gb": 90,
+    "lean_gb": 95,
+    "basis": "at 64 GB (r20261113-182723-4b4c) its stager passed 62 GB after 673 s, growing 5.58 GiB/min [measured]; over its _v3's 960.6 s of staging (r20261113-075522-59c5) [measured] about 90 GiB; at _v3's stage-to-circuit ratio (47.3 GiB to 11.3 GiB) a circuit of about 21 GiB, Lean about 95 GB: fits 156 and 150, not 62"
+   },
+   "v2t237": {
+    "kind": "inferred",
+    "job_gb": 160,
+    "stage_gb": 133,
+    "lean_gb": 140,
+    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 732 s, growing 5.12 GiB/min [measured]; its _v3 was estimated 1.61 x N=37's time (3,687 s to 2,297 s) [fitted], so about 1,545 s of staging and about 133 GiB; the same ratio gives about 32 GiB of circuit and Lean about 140 GB: fits 156 and 150 [inferred, near both]"
+   },
+   "v2t179": {
+    "kind": "inferred",
+    "job_gb": null,
+    "stage_gb": 169,
+    "basis": "at 64 GB (r20261113-182801-c22c) its stager passed 62 GB after 1,575 s, growing 2.37 GiB/min [measured]; _v1's staging grew about 411 s a T (966 s at T=1 to 2,611 s at T=5) [measured], so about 4,256 s at T=9 and about 169 GiB: past a 160 GB job's 156 GB stop, so not run at 160"
+   }
   }
  }
 }
