@@ -293,7 +293,7 @@ def sweep_words() -> np.ndarray:
 
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
-    from verity.definitions.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.definitions.numerics import sparse_mla_split_twins as TW
     from verity.definitions.registry import sparse_mla_split as W
 

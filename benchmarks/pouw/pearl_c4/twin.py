@@ -1,7 +1,7 @@
 """Pearl-C4's numpy twin (``pearl-c-nvfp4-v0``, ``pearl-c-mxfp4-v0``): one 64 x 64 tile as the sm_120 kernels compute it,
 from its 64 A rows and 64 B rows (BF16 words) and the job's seeds.
 
-The per-element and per-word work is batched over `verity.definitions.kernels.tc`' bit-exact steps: the noise atoms, the noisy block
+The per-element and per-word work is batched over `verity.circuits.kernels.tc`' bit-exact steps: the noise atoms, the noisy block
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
 P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.pouw.prover.schemes.pearl_c4`).  `fixture.py` writes
 the device check's fixtures from these steps; `tile` is the steps as one tile, which
@@ -14,9 +14,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.definitions.kernels.tc import block_scaled_batch, group_sum_total_batch
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
+from verity.circuits.kernels.tc import block_scaled_batch, group_sum_total_batch
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
