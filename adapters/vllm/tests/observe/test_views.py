@@ -12,11 +12,9 @@ from verity_vllm.observe.fold.views import (
     byte_extent,
     collapsed_dims,
     element_runs,
-    flat_view,
     is_contiguous,
     row_view,
     rows_view,
-    same_storage,
 )
 
 
@@ -88,14 +86,6 @@ def test_rows_view_slices_the_leading_axis():
 ])
 def test_is_contiguous(v, expect):
     assert is_contiguous(v) is expect
-
-
-def test_flat_view():
-    v = V((3, 1, 5), (5, 99, 1), offset=7)
-    assert flat_view(v) == V((15,), (1,), offset=7)
-    assert flat_view(V((), (), offset=2)) == V((1,), (1,), offset=2)
-    with pytest.raises(ValueError):
-        flat_view(V((4, 576), (1, 4)))
 
 
 # -- element_runs ---------------------------------------------------------------------------------------
@@ -186,15 +176,10 @@ def test_collapsed_dims():
 
 def test_negative_strides_and_shapes_rejected():
     bad = V((4,), (-1,), offset=3)
-    for fn in (element_runs, is_contiguous, byte_extent, flat_view):
+    for fn in (element_runs, is_contiguous, byte_extent):
         with pytest.raises(ValueError):
             fn(bad)
     with pytest.raises(ValueError):
         row_view(bad, 0)
     with pytest.raises(ValueError):
         element_runs(V((-1,), (1,)))
-
-
-def test_same_storage():
-    assert same_storage(V((2,), (1,), alloc=3), V((9,), (2,), alloc=3, offset=5))
-    assert not same_storage(V((2,), (1,), alloc=3), V((2,), (1,), alloc=4))

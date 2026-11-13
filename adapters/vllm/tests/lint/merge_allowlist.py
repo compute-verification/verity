@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 KEY = ("file", "kind", "symbol", "detail")
 #: the repository lists' keys, each entry a count: the ruff list's per (file, rule), the environment-read list's per file
@@ -29,7 +30,7 @@ COUNTED = (("file", "rule"), ("file",))
 #: the tables merged by key: the keep map's ``modules``, P16's ``public`` (each command run from outside the integration, or
 #: only from a file the public export doesn't copy, and the file that runs it)
 TABLES = ("modules", "public")
-MISSING = object()
+MISSING: Any = object()
 
 
 def one(label: str, o, a, b, why: list[str], counted: bool = False):
@@ -99,7 +100,7 @@ def by_key(o: dict, a: dict, b: dict, label, why: list[str], counted=lambda k: F
 def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
     """(the merged document, why it is refused: empty when it merged)."""
     why: list[str] = []
-    out = {}
+    out: dict[str, Any] = {}
     for f in list(ours) + [f for f in theirs if f not in ours]:
         o, a, b = (d.get(f, MISSING) for d in (base, ours, theirs))
         if f == "entries" and MISSING not in (a, b):

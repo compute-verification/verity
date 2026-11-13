@@ -9,11 +9,14 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from verity.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    vllm_ruleset,
+)
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16
@@ -142,7 +145,10 @@ def test_a_flash_attention_layer_through_the_same_op_binds_the_attention_chain(v
     """A bf16 layer's call goes to the attention rule, which shares `extend_history` with the int8 one: the accepted target's chain,
     and on the H200 FA3's, whose tiles read each row's index on the prefill."""
     from tests.program.test_sigmoid_moe_fp8_derive import H200
-    from verity_vllm.program.frontend.rules.vllm_bindings import observe_attention_impls, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        observe_attention_impls,
+        observe_target_profile,
+    )
     from verity_vllm.program.frontend.rules.vllm_bindings.observations import ATTN_PINS
     T, H, G, D = 3, 2, 1, 32
     g = torch.Generator().manual_seed(3)
