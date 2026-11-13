@@ -56,7 +56,8 @@ the period starts at (`w₀`, in the listed entries' numbers: its link-windows a
 many periods),
 the observations' jitter bound `Dj ≥ 1`, the keys of the link's network certifier as its registered record lists them
 (`"keys"`, an entry for each certifier session: its LMS public key; its session, 32 bytes, which every certificate of
-the entry binds; and the start `a` of its stretch of link-windows, in the numbers `w₀` is in. Entry `i`'s stretch runs
+the entry binds (the `"session"` field: the id of the certifier's attachment to the link); and the start `a` of its
+stretch of link-windows, in the numbers `w₀` is in. Entry `i`'s stretch runs
 from its start up to the next entry's start, and the last entry's from its start on, so link-window `w` of the period
 picks the one entry whose stretch holds it (`entryAt`), and that session's own number for it is `w − a`: a session
 numbers its link-windows from 0. Refused by name: no entry; an entry whose start is below the one before it, out of
@@ -397,7 +398,8 @@ def Form.maxTokensCap : Form → Option Nat
   | .rows s .. => s.maxTokensCap
 
 /-- One entry of the link's network certifier's listed keys (`"keys"`), a certifier session's: its LMS public key, its
-session, and the start of its stretch of link-windows, in the numbers the period's `first` is in. -/
+session (the `"session"` field: the id of the certifier's attachment to the link), and the start of its stretch of
+link-windows, in the numbers the period's `first` is in. -/
 structure Entry where
   key : ByteArray
   session : ByteArray
