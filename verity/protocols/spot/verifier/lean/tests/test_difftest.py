@@ -5429,6 +5429,25 @@ PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
 SECOND_SELECTS = [Setup(P.mixed_population_program(list(ts)), P.template_instances_query([t.id for t, _n in ts]))
                   for ts in (((DUO, 8), (MERGE, 4)), ((UNIT, 8), (JOIN, 4)), ((SWAP, 4), (KEEP, 4), (LAST, 4)))]
 PROGRAMS.update({s.sha512: s.program for s in SECOND_SELECTS})
+#: A template whose one parameter has the name of its returned output, `o0`, and a template of two parameters, `a`
+#: and `b`. A replay block calling the first on PAIR's output, so that its return's link and its wire name one port;
+#: and one calling the second on its parameter `w` and PAIR's output, a link at `a` and a wire at `b`. Then the
+#: interiors after a replay sample of two: the chain's (`REPLAYS[1]`: ID8, its parameter `y`, on PAIR's output) and
+#: these two's.
+OUT_NAMED = bind(CompositeDefinition("CoreSpotOutNamed", 0, (), lambda S: ((("o0", Value(8)),), Value(8)),
+                                     lambda B, S, y: B.call(XOR8, y, y), register=False))
+BOTH = bind(CompositeDefinition("CoreSpotBoth", 0, (), lambda S: ((("a", Value(8)), ("b", Value(8))), Value(8)),
+                                lambda B, S, a, b: B.call(XOR8, a, b), register=False))
+PORT_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
+                for name, sig, body in (
+    ("OutNamed", lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+     lambda B, S, x: B.call(OUT_NAMED, B.call(PAIR, x))),
+    ("Both", lambda S: ((("x", Array(2, Value(8))), ("w", Value(8))), Value(8)),
+     lambda B, S, x, w: B.call(BOTH, w, B.call(PAIR, x))))]
+PORT_INTERIORS = [Setup(P.mixed_population_program([(PAIR, 2), (t, 2)]), P.template_instances_query([PAIR.id, t.id]))
+                  for t in (ID8, OUT_NAMED, BOTH)]
+PROGRAMS.update({PO.program_sha512(p): p for p in (P.population_program(r, 2) for r in PORT_REPLAYS)})
+PROGRAMS.update({s.sha512: s.program for s in PORT_INTERIORS})
 
 
 def replay_links(j):
@@ -7854,6 +7873,20 @@ def test_the_designs_rows_place_each_callers_units(pieces):
             assert got == expected and D.replay(port, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
 
 
+def _derived_case(r, s: Setup, pieces) -> dict:
+    """The second_statements piece's input for a run of no statements over interior `s` after a replay sample of two
+    (`_second_case`), at the design each derives from replay block `r`'s Definition, Lean's the Python's whole
+    (`replay_links`, `replay_wires`, `replay_rows`)."""
+    c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
+         "boundary": None}
+    design = {}
+    for name, port, mirror in (("links", REPLAY_LINKS, replay_links), ("wires", REPLAY_WIRES, replay_wires),
+                               ("rows", REPLAY_ROWS, replay_rows)):
+        design[name] = mirror(copy.deepcopy(c))
+        assert D.replay(port, c, pieces) == ("output", D.canonical(design[name])), (c["replay"], name)
+    return {**_second_case(s, True, [0, 2], []), "statements": None, **design}
+
+
 def test_round_two_passes_an_inlined_token_selects_design_by_units_or_chunk_position_and_refuses_it_gathered(pieces):
     """Round 2's design check, Lean's the Python's whole, on the design each derives (`replay_links`, `replay_wires`,
     `replay_rows`) from a replay block inlining a token select over two tokens, over its interior's parts after a
@@ -7864,16 +7897,8 @@ def test_round_two_passes_an_inlined_token_selects_design_by_units_or_chunk_posi
     refused (``second-wires``). By chunk position, as `GreedySelect_v1`'s combine reads each chunk's one output whole,
     each chunk a Definition of its own, the check holds the same way, each of the combine's two wires to another
     template's port, and is refused without its wires."""
-    def case(r, s):
-        c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
-             "boundary": None}
-        design = {}
-        for name, port, mirror in (("links", REPLAY_LINKS, replay_links), ("wires", REPLAY_WIRES, replay_wires),
-                                   ("rows", REPLAY_ROWS, replay_rows)):
-            design[name] = mirror(copy.deepcopy(c))
-            assert D.replay(port, c, pieces) == ("output", D.canonical(design[name])), (c["replay"], name)
-        return {**_second_case(s, True, [0, 2], []), "statements": None, **design}
-    gathered, units, places = (case(r, s) for r, s in zip(MULTI_REPLAYS[-3:], SECOND_SELECTS, strict=True))
+    gathered, units, places = (_derived_case(r, s, pieces)
+                               for r, s in zip(MULTI_REPLAYS[-3:], SECOND_SELECTS, strict=True))
     assert gathered["wires"] is None and len(units["wires"]) == 5
     assert sorted((w["port"], w["writer"], w["wport"]) for w in places["wires"]) == [
         ("r0", codec.descriptor_id(SWAP), "o0"), ("r1", codec.descriptor_id(KEEP), "o0")]
@@ -7881,6 +7906,31 @@ def test_round_two_passes_an_inlined_token_selects_design_by_units_or_chunk_posi
     for c, codes in ((gathered, ["second-wires"]), (units, ["second-statements"]),
                      ({**units, "wires": None}, ["second-wires"]), ({**units, "rows": short}, ["second-wires"]),
                      (places, ["second-statements"]), ({**places, "wires": None}, ["second-wires"])):
+        got = second_statements(copy.deepcopy(c))
+        assert D.replay(SECOND_STATEMENTS, c, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and not got["ok"], (codes, got)
+
+
+def test_round_two_refuses_a_design_whose_link_and_wire_name_one_port(pieces):
+    """Round 2's design check, Lean's the Python's whole, where a link and a wire name one port of a template, over
+    the interior's parts after a replay sample of two, with no statements. A template whose one parameter has its
+    returned output's name, `o0`, called on PAIR's output: each derives the return's link and the wire at its `o0`
+    from the replay block's Definition, and the design is refused (``second-wires``); the chain's ID8, the same block
+    with the parameter named `y`, passes the design (``second-statements`` alone). A template of two parameters, `a`
+    over the block's `w` and `b` over PAIR's output, passes too; with its wire and the wire's rows moved onto `a`, the
+    port its link names, it is refused. That last design is the one a template with both parameters named `a` derives;
+    it is fed whole and not derived, since a Definition with two parameters of one name is the decoder's to refuse."""
+    pair, named, both = (codec.descriptor_id(d) for d in (PAIR, OUT_NAMED, BOTH))
+    chain, renamed, beside = (_derived_case(r, s, pieces)
+                              for r, s in zip((REPLAYS[1], *PORT_REPLAYS), PORT_INTERIORS, strict=True))
+    assert {"port": "o0", "template": named, "value": "o0"} in renamed["links"]
+    assert renamed["wires"] == [{"port": "o0", "template": named, "wport": "o0", "writer": pair}]
+    assert {"port": "a", "template": both, "value": "w"} in beside["links"]
+    assert beside["wires"] == [{"port": "b", "template": both, "wport": "o0", "writer": pair}]
+    same = {**beside, "wires": [{**w, "port": "a"} for w in beside["wires"]],
+            "rows": [{**x, "port": "a"} if (x["template"], x["port"]) == (both, "b") else x for x in beside["rows"]]}
+    for c, codes in ((chain, ["second-statements"]), (renamed, ["second-wires"]), (beside, ["second-statements"]),
+                     (same, ["second-wires"])):
         got = second_statements(copy.deepcopy(c))
         assert D.replay(SECOND_STATEMENTS, c, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and not got["ok"], (codes, got)
