@@ -154432,3 +154432,78 @@ Branch `cursor/proofs-heldof-blob-f083`. Compiled head `f8c8ed69392`; pushed hea
 - The probes and compiles listed as not yet run.
 
 **Branches.** `cursor/proofs-heldof-blob-f083` at `3a9b64f5590` (compiled through `f8c8ed69392`), cut from `a7319a232b319179f766c435d9f2b8c68130c670`, never merged with `main`.
+
+## STOPDRIVER, Fri 13 Nov 17:49Z: step 6's branch is pushed at `5f0288f9993c`; B's tests pass at its head; four runs out
+
+`cursor/proofs-stopdriver-family-ffc6` `1cf9a938a3aec29e022ecc46afbe572fbea49b6a` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `5f0288f9993ce7e2aeff999b503bd289302a77da` B with TWOLEG's carried hold
+
+**1. B, step 4: one of the two runs is back**
+
+- [run] B's tests at `1cf9a938a3ae`, `r20261113-172745-d286` on vy-nebius-cpu-8: exit 0 in 708 s. The verifier's two
+  files 102 passed; the driver's four files 40 passed; nine files of the stream and the one-stage commands 88 passed;
+  the root's three files 44 passed.
+- [run] The changed suites at `1cf9a938a3ae`, `r20261113-172827-6798` on vy-nebius-cpu-10: still out. The change
+  touches 68 suites; 14 had passed and none had failed when I read it at 17:48Z. Due back about 18:20Z [guess].
+- [read] B is Python only: its 12 files hold no Lean file, no lock and no pin, so there is no records run.
+- B's pull request opens when `6798` ends with no failure of B's. I then write the one line you asked for.
+
+**2. Step 6: the branch, and what it is made of**
+
+- [run] `e638d8d0221e` merges TWOLEG's carried hold `13cfa5ad2998` (FRAME's table 4) into B's head `1cf9a938a3ae`.
+  `5f0288f9993c` is one more commit on it (item 3). Pushed; nothing went to a branch of TWOLEG's.
+- [run] Over TWOLEG's carried hold the branch holds 12 files, 528 lines added and 119 removed: B's 12 files. The
+  merge alone is 522 and 115 of them.
+- Six files conflicted, not five: the sixth is `window_place.py`, which both sides add. Each settlement in one line:
+  - `verifier/window_place.py`: B's file, the new blob `08a834e757ab`; TWOLEG read the two blobs and changes no line.
+  - `coins_reason`: TWOLEG's function, read under the caller's key and its copy of main's history; its docstring
+    keeps B's sentence that the window and the family are the caller's to name from the record.
+  - `two_stage.py`, two hunks: `_first_all`'s docstring keeps both sides' sentences; the stop sample's order is read
+    with TWOLEG's key and history for the family of the stop blocks' place, where TWOLEG's side read the hand-off's.
+  - `stop_audit.py`, three hunks: `resume` takes the session's root from the record's window (`first_root`) and
+    passes the key and the history on; `link` hands Lean the layout's run and the place's family, with the stream's
+    key and history. TWOLEG's side read both the root and the family from the hand-off.
+  - `test_stop_audit.py`, two hunks: the read is `link`'s, made with the case's key and history; a case that names a
+    family of its own gives it to Lean and to the Python by hand, since `link` takes none from a hand-off.
+  - `test_two_stage_driver.py`, two hunks: the stop sample's evidence is read under the pinned key for the family of
+    the stop blocks' place; B's new test and TWOLEG's new test stood at one spot, and both are kept.
+- [read] `service.py`, the test challenger, the README, `test_two_stage.py` and `test_two_stage_second.py` merged
+  with no conflict. I read `service.py`'s result: it is TWOLEG's file with B's change (26 lines added, 3 removed)
+  and nothing else.
+
+**3. One thing the order did not expect: TWOLEG's hold holds the cards piece**
+
+- [run] `08b5d4b3c0a6` and GATHER's merge `984cb027efa3` are ancestors of `b57566318669`, TWOLEG's hold before its
+  carry. So the merged tree has the four calls of `test_two_stage_second.py` that step 2 left: three of `TS.first`
+  and one of `TS.stop_first` on a source of no place, which B's first stage refuses.
+- [run] `5f0288f9993c` gives each of the four a source of the family of its class's place, as B's own two calls
+  have. It is a commit of its own, so it can be dropped or kept apart. B's branch still has none of the four.
+- [derived] So the cards piece reaches `main` with TWOLEG's pull request unless it lands before on its own. I have
+  not checked how much of the hold's 322 files over `4ae17f7eafd7` is the cards piece and how much is TWOLEG's.
+
+**4. Checks on the VM at `5f0288f9993c`**
+
+- [run] ruff on the six settled files, `service.py` and `test_two_stage_second.py`: passed.
+- [run] `import_order.py --check`: `tests/import_order.toml: the same`. `pins.py --stale`: exit 0, no stale pin.
+
+**5. Runs out at `5f0288f9993c`**
+
+- `r20261113-174530-94ef` on vy-nebius-cpu-5: the driver's four test files (the three tests of `test_stop_audit.py`
+  among them), the verifier's two, TWOLEG's place difftest, the composition test on the kept play, the nine other
+  files and four of the root's. Due back about 18:15Z [guess].
+- `r20261113-174610-c8f1` on vy-nebius-cpu-3: the play `sampled_two_small.sh`, then the composition test on the
+  play it made (`VERITY_SAMPLED_TWO_CASE` naming its `$OUT/form`). Due back about 19:00Z [guess].
+- `r20261113-174649-d5f3` on vy-nebius-cpu-14: the four suites TWOLEG counted at its hold, with `--quick`. Due back
+  about 18:45Z [guess].
+- [derived] The composition test on the kept play should still fail at this head: the kept play is one of before B,
+  and the test asks for a play made afresh and kept. I keep no fixture: that is TWOLEG's pull request's, or yours.
+
+### Not established
+
+- The changed suites at B's head (`6798`): not back.
+- Nothing is run yet at the merged head but ruff, the import listing and the pins. The three tests of
+  `test_stop_audit.py`, the composition test and the play are in the runs above.
+- Whether TWOLEG's new tests in suites I did not read sample a record that names a place on a source of another
+  family. Run `d5f3` answers it for the four suites.
+- The two runs at `bd7050308d5b` are superseded: `1de3` ended with exit 0 and `b3b1` still runs. I rest nothing on
+  either.
