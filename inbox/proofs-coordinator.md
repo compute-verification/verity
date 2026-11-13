@@ -111131,3 +111131,49 @@ The two-stage audit's majority bound is proved and compiled. Where the claim fai
 **To post.** Nothing.
 
 **Not established.** `Target.lean` has not compiled. No records run yet, and no `--siblings` check of the three files. Two of the premises above are not discharged: `ReadsBind` (binding) and `hX` (that the vocabulary's extractor is this majority). The earlier period's challenger signature hole stays open: an earlier period's genuine signature in the evidence makes the strategy's error ⊤ at the deployed theorems, and nothing here works around it. Pushed head: `e00ab95ce5`; nothing is left unpushed.
+
+## STAGECOINS, Fri 00:54Z: both stages' pieces are now written down to the device's log, but my first try on vy-nebius-cpu-11 (no wait, 19 min) failed in TWOLEG's `Steps.lean` and CUT's `Cut.lean` before reaching my files; a try with local fixes to those is running
+
+Both pieces of the two-stage audit that I own are now stated and written as theorems: the first stage's coins and the second stage's coins each agree with what the challenger released. Each stage's pieces now reach CUT's `LogIsDevice` (`StageCut`, `StageCoins`), so none of my files leaves a gap of its own. What remains is named premises, each with an owner below. Nothing of mine has compiled yet. My first try on vy-nebius-cpu-11 started at once, built for 19 minutes and stopped in two files I don't own. TWOLEG's `Steps.lean` doesn't open `Spot`, and its new `sourceRead_le` fails. CUT's `Cut.lean` fails in four places. To reach my own files tonight, I put the smallest fixes to those two files in a scratch commit that I will never push, and sent one try from it.
+
+**Branch** `cursor/proofs-stagecoins-71b1`, head `db028c1dff`, pushed. Left unpushed on purpose: the scratch commit `1f0f068d40` (local fixes to `Steps.lean` and `Cut.lean`, and `Cut.finders_of_break`'s body as `sorry`), which exists only to test my files.
+
+**Runs.** I followed the 00:22Z move: I cancelled my four tries on vy-nebius-2, none of which had started; the oldest had waited 62 min.
+* `r20261113-003026-1eda` on vy-nebius-cpu-11: `StageCoins.lean` at `db028c1dff`. It waited 0 min, ran 1154 s and exited 1 in `Steps.lean` and `Cut.lean` [run]. None of my modules was reached.
+* `r20261113-005151-0704` on vy-nebius-cpu-11: `StageCoins.lean` at scratch `1f0f068d40`. Launched 00:51Z; I expect a verdict around 01:15Z [guess]. This one try builds every file of mine.
+
+**New since 00:04Z** [derived; not compiled]:
+* I merged CUT's `6d551cb5a4`. The merge put two roots on one line of `lakefile.toml`; I split them back to one per line.
+* `StageLog` gains `drawn_fresh` (a draw's own read holds its coins, none empty), `freshCoins_append` and `drawn_shown_after` (a read that comes after releases with none of its family's coins).
+* `StageCut` (new): `firstShown_of : CaseIsSent C → CutReads C → FirstDrawn C → FirstShown C LogIsDevice` and `secondShown_of : CaseIsSent C → CutReads C → SecondAlone C → SecondShown C LogIsDevice`. They reuse CUT's `readsLogs_cases`, `secondDraws_eq`, `mapM_str_inv` and `linesOf_arr`, and `Properties.Challenger.oneStageZk_reads`.
+* `StageCoins` (new) holds the pieces as the projection reads them. They are the brief's `coinsRead_first` and `coinsRead_second`, now `CoinsAgree`:
+  * `coinsAgree_first_log : CaseIsSent C → CutReads C → FirstDrawn C → DevFirst C dev → CoinsAgree A (formReading A C S dev) (FormAccepts C) LogIsDevice .first`
+  * `coinsAgree_second_log : … → SecondAlone C → DevSecond A C dev → … .second`
+* I checked my docstrings: every "round" in them is the projection's coin round, none means a stage.
+
+**Sizes.** Six files, 1053 lines. No theorem of mine is left to write for the two pieces. Left: compile and fix; then, after the base takes the key change, `firstDraw` reads `i.family` (the 00:48Z ruling) and `FirstDrawn` narrows. Compiled hour: if `0704` comes back with few errors, both pieces compile by about 03:00Z, ahead of Fri 07:00Z [guess].
+
+### STOP RULE
+None. Nothing I wrote turns on the accept, wires the form into `Sampled.lean` or touches a lock. Nothing rests on the switch being off.
+
+### NEEDS
+1. **TWOLEG, `Steps.lean`, blocking every file that imports it** [run]. Unknown identifiers `OneStage.Public`, `OneStage.Commitment`, `OneStageZk.Run`, `OneStageZk.coinsOf` and others at lines 31 to 86. Fix: add `open Spot` after `open Lean (Json)`. `sourceRead_le` (line 117): `split at h` fails with "Dependent elimination failed". The fix in my scratch: `by_cases hl : read < ξ.size` then `· simp [hl] at h` and `· omega`.
+2. **CUT, `Cut.lean` at `6d551cb5a4`** [run]:
+   * line 97, `simp only at h1 h2 h3` makes no progress;
+   * line 122, `boundaryOf` passes `p.boundary` (now `Spot.OneStage.Params`) to `Flock.canon`; my scratch uses `pure p.boundary`;
+   * line 265, `forger` has no `Decidable (keyOf θ = some _)`; my scratch adds `open Classical in`;
+   * line 377, `finders_of_break` has a type mismatch at `And.intro hf`; my scratch replaces the body with `sorry`.
+3. **The premises my two pieces rest on**, each a named `Prop` in `StageCut`:
+   * `CaseIsSent C`: `C o` decodes as CUT's `caseOf o.sent`, with the same blobs. Owner: TWOLEG, or whoever instantiates `C`.
+   * `CutReads C`: the cut reads at least one log on every accepted play, since `LogIsDevice` is empty where it reads none. Owner: CUT.
+   * `FirstDrawn C`: the bytes the first stage read start `drawCoins`'s coins under the parameters' key in the segment's family. Owner: REDRAW's key change (`cursor/proofs-keyheld-3c9a`); once the run reads the verifier's key and family, I'll restate it as what that check gives.
+   * `SecondAlone C`: on two windows, the first session's releases hold no coins of the interior's family after the interior's digest (my 00:04Z NEEDS 1). Owner: TWOLEG, a refusal. Cc HISTORY (`bc-3e1bb2d6-7c79-5a00-8b4a-12f4945146a9`), whose piece covers the challenger's history across both sessions.
+   * `DevFirst` and `DevSecond`: COINMAP's.
+
+### To post
+Nothing.
+
+### Not established
+* No file of mine has compiled.
+* The family the first stage's coins are read in still comes from the evidence's segment on our base. By the ruling, it comes from the verifier's `family` once the key change lands.
+* An earlier period's signature passes the run's coin check. This is noted in the docstrings, not worked around.
