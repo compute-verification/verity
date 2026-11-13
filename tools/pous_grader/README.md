@@ -2,7 +2,7 @@
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
-outside help (a deployment accounts for help: `../verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
+outside help (a deployment accounts for help: `../../verity/protocols/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
 `security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
@@ -100,8 +100,8 @@ submissions/reference.lean          the grader's positive control
 
 ~~~bash
 lake build                          # the grader (the default target)
-(cd ../../../../security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
-python3 ../../../../tools/verity/lean/check.py --build --fresh . ../../../../security   # Verity's Lean audit
+(cd ../../security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
+python3 ../verity/lean/check.py --build --fresh . ../../security   # Verity's Lean audit
 bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
 bash check.sh                       # the audit and the grader's controls
 ~~~
@@ -149,12 +149,12 @@ starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them t
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
-  ../../../../security/lean-toolchain ../../../../security/lakefile.toml ../../../../security/lake-manifest.json \
-  ../../../../security/Proofs/lakefile.toml ../../../../security/Proofs/lake-manifest.json \
-  ../../../../security/Definitions/Pous.lean ../../../../security/Definitions/Core/Game.lean \
-  ../../../../security/Definitions/Assumptions/Pous.lean \
-  ../../../../security/Proofs/Pous/Statements.lean ../../../../security/Proofs/Pous/Sanity.lean \
-  ../../../../security/Proofs/Pous/Prob.lean ../../../../security/Proofs/Core/Game/Basic.lean \
-  ../../../../security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../security/Definitions/Pous ../../../../security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
+  ../../security/lean-toolchain ../../security/lakefile.toml ../../security/lake-manifest.json \
+  ../../security/Proofs/lakefile.toml ../../security/Proofs/lake-manifest.json \
+  ../../security/Definitions/Pous.lean ../../security/Definitions/Core/Game.lean \
+  ../../security/Definitions/Assumptions/Pous.lean \
+  ../../security/Proofs/Pous/Statements.lean ../../security/Proofs/Pous/Sanity.lean \
+  ../../security/Proofs/Pous/Prob.lean ../../security/Proofs/Core/Game/Basic.lean \
+  ../../security/Proofs/Pous/Accounting/Numbers.lean \
+  $(find ../../security/Definitions/Pous ../../security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~
