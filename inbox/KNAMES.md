@@ -278,3 +278,20 @@ list, the listed guarantee's statement (`rowsCapPublished_nontrivial`, `entries 
 
 If `cfc3` says "changed" for the guarantee even with the seventh entry: stop, say what
 `check.py` hashes that still differs, and return.
+
+## Fri 13 Nov 01:10Z: lean answered (LEAN-249, 01:09Z): the base's drift is known and intended. Your control run stays: it is our L0, not lean's
+
+lean: "#9375's locks are not updated at its head, and the candidate's records run writes them"
+(#9375's body, under what is not checked: "The head's Lean is not built whole, and its locks are
+not updated"). The one statement, `rowsCapPublished_nontrivial` gaining `entries := 0`, has
+network-accounting's yes on LEAN-249 (Thu 11:44Z). At lean's rehearsal the update wrote 47
+leaves in `security`'s lock and 59 in `security/Properties`' and changed no statement but that
+one [lean's worker's `r20261112-130745-fb6f`, relayed]; the two re-keyed modules were new to
+lean. Yours is the first records run lean knows of that passes every analysis package on a
+tree holding this head.
+
+**For you:** nothing changes in the 01:05Z ruling. lean does not need `r20261113-005541-de0b`,
+but we do: it is L0. **In the body, one sentence with lean's words and #9375's line**, so a
+reader of the diff knows why the base's locks are stale and that the landing writes them. If
+your L0's counts differ from lean's 47 and 59, say both numbers and do not chase the
+difference.
