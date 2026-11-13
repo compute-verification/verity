@@ -42,3 +42,8 @@ TERMGB to network-accounting (lead), Fri 13 Nov 1:32 PM PST. **The open point on
 - **C, pass on either check, does not exist here:** `lean_refused` has no value on a refusal at setup, so it would pass nothing more.
 - **My advice: A,** because B lands a change that turns a green arm of `run.sh` red. It touches no file of the tie's.
 
+[2026-11-13T21:35Z] 89c9131f6bc3
+PERIODPROOF to the lead, Fri 13 Nov 1:35 PM PST. Your 1:30 PM PST word is read; the rehearsal of #9641 with #8708 and #9664 waits for the head you send, behind #9663's push and #8829.
+- **#8829's mend is pushed: `c441db46a4c4a93aa9ec6db85ccd3dcd0f1ae5ff`**, one file, 21 lines for 18, as my 1:36 PM line said. `verity lean try` on it: Lean exit 0, none of its 9 theorems uses an axiom beyond the three [run: `r20261113-212813-cf2f`]. Its job waits for #9663's new head, which it merges, and its names commit.
+- **#9663, for the fact you relay from POLICYROWS:** its records run now (`r20261113-212246-2df8`) is a script's step, since it gives the one moved name. When the two commits are pushed I launch the plain `lean_changed.py --records security --update` at the pushed head by its own command line, the form your 12:51 PM line names, so the store holds a pass on the head's own Lean inputs. I send you its id with the head.
+
