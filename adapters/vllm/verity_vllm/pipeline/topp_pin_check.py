@@ -18,6 +18,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
@@ -119,14 +120,14 @@ def served(workload: str, out: Path) -> dict:
 @dataclass(frozen=True, kw_only=True)
 class KernelOptions:
     out: str = option("--out")
-    cmd: str = field(default="kernel", init=False)
+    cmd: Literal["kernel"] = field(default="kernel", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ServedOptions:
     workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
-    cmd: str = field(default="served", init=False)
+    cmd: Literal["served"] = field(default="served", init=False)
 
 
 COMMANDS = {"kernel": KernelOptions, "served": ServedOptions}
