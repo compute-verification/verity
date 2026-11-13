@@ -153837,3 +153837,43 @@ research run --on vy-nebius-cpu-6 --pool research --as proofs --project verity -
 - **Whether a run's own memory record counts a process inside such a scope**: not looked at; I print the scope's figures.
 
 Heads: `cursor/proofs-members-popimport-34fd` at `fb3e260c42d1` (pushed). `cursor/proofs-members-poporder-34fd` at `333b67d91756` (pushed; a vehicle for the measurements on the live line's tree, not for landing). The live line is where it was, `fd561fbff5b2`. Nothing unpushed. The pen is mine.
+
+## FRAME, Fri 13 Nov 17:28Z: STATUS TABLE 3: MEMBERS's switch is carried: `097b85eff21b` on `cursor/proofs-carried-members-switch-4ae1` (`clean`, the late-carry test passes); the records runs are slower than I said: none is back, #9681's is nearest
+
+**Every carry names `4ae17f7eafd7`, never the `main` of the day.**
+
+Each claim says where it comes from: [run] job 4 `r20261113-165520-a7b8` on vy-nebius-cpu-2 (1,747 seconds), [local] this machine (git only), [git]. My mailbox's last message is your 16:59Z one.
+
+| Line | Old head | The tool's result | Carried head | Pure | Published on |
+|---|---|---|---|---|---|
+| **MEMBERS's switch** | `fd561fbff5b2` | `clean`: crossed 24, none skipped | `097b85eff21b810113c125694d38ccd7bb112e0b` | yes | `cursor/proofs-carried-members-switch-4ae1` |
+| GATHER | `fc5c9053db63` | `conflicted at base`, the first move (my 17:17Z entry) | none | | not published |
+| HELDOF | `a7319a232b31` | `conflicted at base`, the first move (my 17:17Z entry) | none | | not published |
+
+**MEMBERS's switch.**
+
+- The carried head holds its old head `fd561fbff5b2` and `4ae17f7eafd7`. [git] `cursor/proofs-members-switch-main-34fd` moves to it by a fast-forward, which is MEMBERS's to push.
+- **The late-carry test passes.** [local] Merged with a `main` holding carried #9441: no conflict, and the merged tree is the line's own carried tree.
+- The grep: 22,390 added lines against the 17 crossed maps that name paths; none names an old path or module. [local]
+- The tool's last commit regenerates one pin, as on the join: one line of `tools/pous_grader/TRUSTED.sha256`. [run; git]
+- **Merged with the carried join it conflicts in that one file, `tools/pous_grader/TRUSTED.sha256`.** [local] It is the same conflict the two had before the carry, in the file's old place: both lines regenerate that pin. Regenerating the pin after the merge settles it; that is ASSEMBLY's when it merges the switch.
+- It merges with today's `main` with no conflict. [local]
+- WINDOWAT's line holds this head; its carry is in job 6, back about 17:40Z.
+
+**The records runs: none is back, and my hours were too early.** [run, 17:27Z]
+
+| Pull request | Run, node | Since | Where it is | Suites so far |
+|---|---|---|---|---|
+| #9441 | `42de`, vy-nebius-cpu-4 | 16:40Z | still in its first audit (`security/Proofs`) | 68 passed, none failed |
+| #9555 | `1e2c`, vy-nebius-cpu-5 | 16:42Z | still in its first audit | 19 passed, none failed |
+| #9681 | `03ad`, vy-nebius-cpu-3 | 16:45Z | `security/Proofs` PASS (1,638 s), `security` PASS (609 s); `security/Properties` left | 73 passed, none failed |
+| #9713 | `8a62`, vy-nebius-cpu-7 | 16:49Z | `security/Proofs` PASS; the others left | 67 passed, **1 failed** |
+| #9717 | `71b3`, vy-nebius-cpu-8 | 16:52Z | still in its first audit | 57 passed, none failed |
+
+- A records run audits three packages one after another. #9681's took 27 minutes for the first and 10 for the second, so a whole run is nearer 50 minutes than 40 on a node with its build kept, and longer on the nodes of #9441 and #9555.
+- **The one failed suite is the known one, on #9713 only.** [run; git] `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`, in the repository suite (356 passed, 1 failed). It is the edge `security/Proofs/Flock/SpotFlock/OwnReads.lean -> Proofs.Properties.Challenger.CanonLine`, which stays by your ruling until the lemma moves. The same suite passes whole (357) at #9681's, #9441's, #9555's and #9717's carried heads.
+- I send each ready line the minute its run ends.
+
+**Jobs out.** Job 5 `0286` (TWOLEG's hold) and job 6 `1c1f` (WINDOWAT's): about 17:40Z. The dry run of the lines merged with the join's tip, `627b` (HELDOF, MESSAGES, SESSIONOF2) and `r20261113-172002-1be8` on vy-nebius-cpu-6 (ADDRROW2, and my free line): about 17:55Z to 18:05Z.
+
+**Not established.** Any records run's verdict. Why #9441's and #9555's first audits take longer than #9681's: I see no error in either, only no output yet.
