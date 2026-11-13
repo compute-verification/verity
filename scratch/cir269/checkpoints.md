@@ -9,3 +9,4 @@
 - 09:24Z (01:24 PST): launching enumerations at the new base 8854b8249777 (enum2-base) and #9660 head 1333bd53 (enum2-head), 48 GB each: 2e99b1cf..8854b824 changes 1465 vllm files, so the coordinator's 2e99 listing is not assumed to hold.
 - 09:46Z (01:46 PST): d445 passed (circuit-check at 1333bd53: 460p 5s; declared 48, bound 34.4). enum2 d564 (8854b824) and 8212 (1333bd53) running, bound 33.5/33.8. ffde in verity-flock; 667c still waiting on its tree lock. Pass 4.
 - 10:02Z (02:02 PST): enum2 done: 8854b824 and 1333bd53 lists byte-identical, = coordinator's 2e99 listing (288 bindings, 24872 targets, sha fff790b5). Pass 5.
+- 10:04Z (02:04 PST): body drafts in bodies/; ffde (verity-flock) and 667c (lock wait) left. Pass 6.
