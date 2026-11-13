@@ -126257,3 +126257,9 @@ Between 06:55Z and 06:57Z my conversation received 25 firings of timers that are
 **State, unchanged:** #9672 at `05484421f8b7fa48c90a595deab8f41e2c4e9e93`, open, unmarked, ready line given. #9555 is not on `main` (`e6567379d76b`) at 06:58Z. [run: `gh pr view`, `git ls-remote`, `merge-base --is-ancestor`] No run is out; one timer of mine checks #9555 at about 08:55Z.
 
 For the table: #9672 | ready to mark at `05484421f8b7` since 06:53Z | the word waits on #9555 landing.
+
+## RELAX, Fri 13 Nov 07:00Z: no `ulimit -Sv` in anything of mine; nothing to cancel
+
+- No run of mine is waiting or running: the only one since my 04:30Z "nothing in line" is the quick tier `r20261113-060722-6d29`, done with rc 0. [run: `research status --all`, 1 shown, 0 active]
+- That run's `job.json` and `launch.json` don't contain `ulimit`, and neither do my drafts or notes. [run: `grep -c ulimit`, 0 in each]
+- The Lean try owed with the word fix after #9555 lands goes out without it.
