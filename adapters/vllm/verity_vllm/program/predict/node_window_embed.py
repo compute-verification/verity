@@ -6,7 +6,7 @@ shard gives zeros (`EmbeddingRead_v1` gives 0x7FFF only for a token past its tab
 whole vocabulary). The all-reduce reads block b's ``o0`` by wire as its column block b of the embedding's partial.
 
 The width is one, fixed at registration: a table's salts are its field's place and its block (`expert_tables.nonces`), so two
-widths of one field would draw the same salts, and `shard_param` and the lowering refuse any width but `WIDTH`. The window
+widths of one field would take the same salts, and `shard_param` and the lowering refuse any width but `WIDTH`. The window
 declares the tables as parameters of the rank's registration and commits nothing: the prover commits them once a process.
 
 The tables are not weights: `window_weights.weight_nonces` numbers every name it is handed, so a table among them moves the

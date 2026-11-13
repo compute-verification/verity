@@ -133,7 +133,7 @@ def test_split_keeps_weight_nonces(window, without):
 def test_split_beside_expert_tables():
     """Over an MoE layer with the sparse families, whose expert blocks' tables are in the window too, the split keeps both
     kinds of table apart: the plain weights and their nonces are the same with and without the shard's tables, and handed
-    unsplit all but the first would draw another nonce."""
+    unsplit all but the first would take another nonce."""
     from verity_vllm.program.predict import node_window_sparse as NS
 
     fn = glm_request(LP, 1, moe=True).program.fn
