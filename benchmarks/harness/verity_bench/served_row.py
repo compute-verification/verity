@@ -24,6 +24,8 @@ run; it reads from the tree who decided each of those and what proves it, and pr
   `exfiltration.RUN_NOT_PROVED` otherwise. A kind of verdict is ``proved`` only where a Lean verifier decided it and
   its lock entry lists no open premise.
 * **The prover's seconds** as the record holds them, said as ``at most`` where they are a session's, wait included.
+* **The verdict as a record** of the stop class's verdicts of record (`verdict_record`), naming its class, its
+  serve and the digest of its registration (`NAMES`), each null where the served run's files give none.
 """
 
 from __future__ import annotations
@@ -46,6 +48,10 @@ LEAN, PROVED = "lean", "proved"
 STAND_IN = ("check", "per_prompt", "per_output")
 #: the kind of verdict that is the Lean verifier's on a session's proof
 PROOFS = "lean-verify"
+#: what a verdict's record names beside its verdict, so that a reader can hold four verdicts to one class of one serve
+#: under one registration: the class, the served run it came from and the digest of the registration it was decided
+#: under
+NAMES = ("class", "serve", "registration")
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the command's
 #: word for an accept the verifier withheld (`exfiltration.VERDICT_READS`)
 PIECE, WITHHELD = "second_stage", "withheld"
@@ -215,7 +221,8 @@ def verdict_record(doc: Mapping) -> dict | None:
     """The audit's verdict as a record of the stop class's verdicts of record (`exfiltration.VERDICT_FIELDS`, the
     piece `PIECE`): the final accept as the outcome gave it, the verifier that gave it at the run's commit, the
     cited theorem only where the whole run is `proved`, and otherwise what stands between it and proved, in plain
-    words. None where the second stage reached no outcome: it holds no verdict."""
+    words. Beside them it names the class, the serve and the registration (`NAMES`) as the served run's files give
+    them, null where they give none. None where the second stage reached no outcome: it holds no verdict."""
 
     final, reads = doc["outcome"], doc["mark_reads"]
     if final["final"] == "none":
@@ -236,7 +243,7 @@ def verdict_record(doc: Mapping) -> dict | None:
             *(item["said"] for item in doc["to_fully_proved"]))))
     return {"piece": PIECE, "control": None, "run": doc["run"],
             "verifier": {"module": final["verifier"], "commit": doc["commit"]}, "verdict": word,
-            "proved_by": reads["theorem"] if proved else None, "open": waits}
+            "proved_by": reads["theorem"] if proved else None, "open": waits, **doc["named"]}
 
 
 def prover(record: Mapping, notes: Sequence[Mapping] = ()) -> dict:
@@ -280,6 +287,8 @@ def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mappi
     proved = (not items and final["final"] == "given" and final[PROVED]
               and all(holes.get(h) == spot_status.CLOSED for h in spot_status.HOLES))
     doc = {"schema": SCHEMA, "run": record.get("run"), "commit": record.get("commit"), "runs": record.get("runs"),
+           "named": {"class": shown.get("class"), "serve": ((record.get("runs") or {}).get("serve") or {}).get("run"),
+                     "registration": shown.get("registration")},
            "ties": shown.get("ties") or [], "first_stage": shown.get("first_stage"), "covered": cover,
            "verdicts": by_kind, "checks": audit_checks, "outcome": final,
            "verdict": {"line": verdict_line(by_kind, final), "mark": PROVED if proved else E.RUN_NOT_PROVED},
@@ -368,4 +377,7 @@ def render(doc: Mapping[str, Any]) -> str:
     if (record := doc["verdict_record"]) is not None:
         lines += ["", f"The verdict as a record of the stop class's verdicts of record (a line of `{E.VERDICTS_FILE}`, the "
                   f"piece `{PIECE}`):", "", "    " + json.dumps(record, ensure_ascii=False)]
+        if lacks := [f"`{k}`" for k in NAMES if record[k] is None]:
+            lines += ["", f"The record names no {E._listed(lacks)}: the served run's files give none, so a reader that "
+                      "holds four verdicts to one class of one serve under one registration cannot count it."]
     return "\n".join(lines)

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_served_record import LAYOUT, served
+from test_served_record import LAYOUT, REGISTRATION, served
 
 from verity_bench import exfiltration as E
 from verity_bench import jobs, served_row as W
@@ -21,6 +21,8 @@ GIVEN = {"accepted": True, "interior": [], "replay_sample": [], "statements": []
 #: a request's own Definition as a layout names it: none of the stand-in's fields
 OWN = {k: v for k, v in LAYOUT.items() if k not in W.STAND_IN} | {"replay": "Request_v1{L=2}"}
 CLOSED = dict.fromkeys(spot_status.HOLES, spot_status.CLOSED)
+#: what the fixture's four runs name a verdict's class, serve and registration by
+NAMED = {"class": "p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
 #: a made-up table in which a Lean verifier decides every verdict and every check, each under a lock entry
 ALL_LEAN = {
     "verdicts": {k: {"what": f"each session's {k}", "verifier": f"lean-{k}", "decided_by": "lean", "proved_by": "Made.up"}
@@ -47,6 +49,14 @@ def record_of(tmp_path, **how):
     return R.read(**served(tmp_path / "runs", **how))[0]
 
 
+def reads(record):
+    """Whether the command's own reader of a verdict's record takes the section's, field for field, and the record
+    names its class, its serve and its registration beside them."""
+
+    return (E.verdict(record, "the section's record") == {k: record[k] for k in E.VERDICT_FIELDS}
+            and set(record) == {*E.VERDICT_FIELDS, *W.NAMES})
+
+
 def over(statuses):
     """`spot_status.served`'s document over a served run's commits, each hole at one of ``statuses``."""
 
@@ -67,7 +77,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     assert out.count("proved by `Made.up`, which takes no open premise") == 3 and all(k[W.PROVED] for k in doc["verdicts"])
     assert doc["verdict_record"] == {"piece": "second_stage", "control": None, "run": record["run"],
                                      "verifier": {"module": "lean-outcome", "commit": record["commit"]},
-                                     "verdict": "accept", "proved_by": THEOREM, "open": None}
+                                     "verdict": "accept", "proved_by": THEOREM, "open": None} | NAMED
 
     # with no holes handed in, they are the next block's own reading over the served run's four runs: a hole closed
     # only at the runs read, one of the four not given, is not closed
@@ -125,7 +135,7 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
     lines = out.split("\nThe verdict as a record")[0]
     assert THEOREM not in lines and not any(h in lines for h in spot_status.HOLES)
     # the record names no proof while anything is open, and says what is, as the command's own reader requires
-    assert E.verdict(doc["verdict_record"], "the section's record") == doc["verdict_record"]
+    assert reads(doc["verdict_record"])
     assert (doc["verdict_record"]["verdict"], doc["verdict_record"]["proved_by"]) == ("accept", None)
     assert doc["verdict_record"]["open"] == {
         "theorem": f"{THEOREM} takes 1 open premise", "hole": "not closed at the run's commit: redrawn sample",
@@ -154,11 +164,19 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
                                                                      "m0-verifier": "rust and python"}
     assert "  - decided by a verifier that is not Lean: `m0-verifier` (`" in out and "`round_two` (`" in out
     # its record is the command's word for an accept the verifier withheld, and one the command's own reader takes
-    assert doc["verdict_record"] == E.verdict(doc["verdict_record"], "the section's record") == {
+    assert reads(doc["verdict_record"]) and doc["verdict_record"] == {
         "piece": "second_stage", "control": None, "run": record["run"],
         "verifier": {"module": "sampled-proofs-verifier", "commit": record["commit"]}, "verdict": "withheld",
         "proved_by": None,
-        "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample"}
+        "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample",
+        **NAMED}
+    # it names the class the second stage audited, the serve's run and the registration the second stage read, and
+    # where the served run's files give one of them none, the section says which
+    assert "The record names no" not in out
+    alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
+    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"serve": None}
+    assert "The record names no `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
+           "class of one serve under one registration cannot count it." in W.render(alone)
     assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
            "first stage's sample" in out
     # a run whose interior registers nothing names the form alone
@@ -174,7 +192,7 @@ def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
     assert doc["verdict"]["line"].endswith("; the final accept refused, `second-wires`")
     assert doc["to_fully_proved"][-1]["said"] == "the final accept is refused"
     assert (doc["verdict_record"]["verdict"], doc["verdict_record"]["open"]) == ("refuse", "the verifier refused it: second-wires")
-    assert E.verdict(doc["verdict_record"], "the section's record") == doc["verdict_record"]
+    assert reads(doc["verdict_record"])
     # the form's code beside another, or under a check that did not hold, is a refusal, not a withheld accept
     both = refused | {"statements": ["two-stage-form", "second-wires"]}
     assert W.account(record_of(tmp_path, outcome=both), tree(tmp_path), holes=CLOSED)["outcome"]["final"] == "refused"

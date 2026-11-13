@@ -148,9 +148,10 @@ each one with the file it read and what that file holds instead. It computes no 
   clock on the session's prover (`busy_s`), or `session`, the audit's clock on the whole session (`session_s`). The
   record's `prove_seconds_source` is `busy` only where every session's is, and `session` where any is; where a
   session names none its seconds are `session_s` and the field is named as absent.
-- Beside the fields above the record holds `audit`, what the audit showed: the sessions' verdicts counted by kind,
-  the driver's checks, the stream's outcome with its codes, the layout the serve committed, what the interior
-  registered, and what holds the four runs' files to each other.
+- Beside the fields above the record holds `audit`, what the audit showed: the class the second stage audited, as
+  its summary names the first stage's file (`class`), and the digest of the registration it read (`registration`);
+  the sessions' verdicts counted by kind, the driver's checks, the stream's outcome with its codes, the layout the
+  serve committed, what the interior registered, and what holds the four runs' files to each other.
 
 ## What a served run's audit showed
 
@@ -175,7 +176,10 @@ From a record that holds `audit` the command prints one more section, before the
   the next block reads them; `run, not proved` otherwise.
 - **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
   the provers ran on and what the data file notes of a card.
-- **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`.
+- **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`. Beside that
+  record's fields it names what the verdict is of: its `class`, its `serve` (the serve's run) and its `registration`
+  (the digest the second stage read), each null where the served run's files give none, and the section then says
+  which it lacks.
 
 ## The errors
 
