@@ -2482,7 +2482,7 @@ requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 [[package]]
 name = "verity-core-evaluate"
 version = "0.0.0"
-source = { virtual = "verity/definitions/evaluate" }
+source = { virtual = "verity/circuits/evaluate" }
 
 [[package]]
 name = "verity-core-firewall"
