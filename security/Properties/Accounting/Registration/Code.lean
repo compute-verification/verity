@@ -140,22 +140,28 @@ def HeadBinds : Prop :=
 
 /-! ## The witnesses' instances
 
-A log of the two kinds the Site's check doesn't hold, the check that accepts everything, and a log the spec refuses:
+A log of all three kinds, its site entry onsite, the check that accepts everything, and a log the spec refuses:
 what the guarantee's honest and nontrivial witnesses (`Proofs.Properties.Accounting.Registration.Code`) are stated
 at. -/
 
-/-- An information entry registering one value of θ and the builder, at cap 0, following the remote composite's
-genesis. -/
+/-- The code's example site as an onsite site entry, following the onsite composite's genesis: a host with a device and
+its HBM leaf, a network certifier splitting the host's uplink to the outside, and a memory challenger linked to the
+host. -/
+def siteEntry : Core.Registration.Entry :=
+  .site (.site (Core.Registration.genesis .onsite)
+    ⟨[Core.Registration.Example.sheet], Core.Registration.Example.locs, Core.Registration.Example.links⟩)
+
+/-- An information entry registering one value of θ and the builder, at cap 0, following `siteEntry`. -/
 def infoEntry : Core.Registration.Entry :=
-  .information (Core.Registration.genesis .remote)
+  .information siteEntry.digest
     [.theta { value := "weights", root := "root", leaves := 1, words := 1, domain := "domain" },
      .builder { digest := "builder", advice := "bits", cap := 0 }]
 
 /-- A declaration of day 0, following `infoEntry`. -/
 def dayEntry : Core.Registration.Entry := .declaration infoEntry.digest { day := 0, program := "program", blocks := [] }
 
-/-- A log the check accepts: `infoEntry`, then `dayEntry`. -/
-def honestLog : Core.Registration.Log := [infoEntry, dayEntry]
+/-- A log the check accepts: `siteEntry`, `infoEntry`, then `dayEntry`. -/
+def honestLog : Core.Registration.Log := [siteEntry, infoEntry, dayEntry]
 
 /-- The compiler with no gates: no circuit, no blocks, and nothing appended in any phase. -/
 def noGates : Verity.Compiler :=

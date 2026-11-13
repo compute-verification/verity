@@ -534,31 +534,70 @@ theorem view_binds {A A' : Core.Site.Registration.Auditor} {c : Core.Site.Regist
 
 /-! ## Witnesses
 
-The guarantee holds at `honestLog`, an information entry registering a value and a builder, and a declaration, for the
-remote composite, which the check accepts, whose denotation is valid and whose builder's compiler has its cap; and its
-conclusion fails at the check that accepts everything, at a log that registers one value twice. -/
+The guarantee holds at `honestLog`, the code's example site as an onsite site entry (a device, its memory leaf, a
+certified uplink and a memory challenger), an information entry registering a value and a builder, and a declaration,
+which the check accepts at the code's example auditor, whose denotation is valid and whose builder's compiler has its
+cap; and its conclusion fails at the check that accepts everything, at a log that registers one value twice. -/
+
+open Core.Registration.Example in
+/-- The example site passes every check of a site entry onsite, at the deployed digests: its device names its sheet's
+digest, its memory fits the sheet, its figures are the auditor's within its tolerance, its certifier splits the uplink and
+its challenger reaches the host. -/
+theorem example_refusal :
+    Core.Site.Entry.refusal Core.Site.Registration.sha512 auditor .onsite ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ = none := by
+  have hFresh : Core.Site.Entry.Fresh Core.Site.Registration.sha512 ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ :=
+    ⟨by decide +kernel, by simp [Core.Site.add]⟩
+  have hRefs : Core.Site.Entry.Refs ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by decide +kernel
+  have hKinds : Core.Site.Entry.Kinds ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by decide +kernel
+  have hSheets : Core.Site.Entry.Sheets Core.Site.Registration.sha512 auditor ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by
+    refine ⟨by decide +kernel, fun x hx hd => ?_⟩
+    simp only [locs, List.mem_cons, List.mem_nil_iff, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> (try simp at hd) <;> simp [Core.Site.add]
+  have hFigures : Core.Site.Entry.Figures auditor ⟨[sheet], locs, links⟩ := by decide +kernel
+  have hCapacity : Core.Site.Entry.Capacity Core.Site.Registration.sha512 ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by
+    refine ⟨by decide +kernel, fun x hx hd k hk => ?_⟩
+    simp only [Core.Site.add, List.nil_append, locs, List.mem_cons, List.mem_nil_iff, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> (try simp at hd)
+    simp [Core.Site.sheet?, Core.Site.add] at hk
+    subst hk
+    decide +kernel
+  have hOwners : Core.Site.Entry.Owners auditor ⟨[sheet], locs, links⟩ := by decide +kernel
+  have hCovered : Core.Site.Entry.Covered .onsite ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by decide +kernel
+  have hReached : Core.Site.Entry.Reached .onsite ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by decide +kernel
+  unfold Core.Site.Entry.refusal
+  simp only [hFresh, hRefs, hKinds, hSheets, hFigures, hCapacity, hOwners, hCovered, hReached, not_true_eq_false,
+    if_false]
+
+theorem siteEntry_refusal :
+    Core.Registration.Entry.refusal Core.Registration.Example.auditor .onsite (Core.Registration.State.empty .onsite)
+      siteEntry = none := by
+  simp only [siteEntry, Core.Registration.Entry.refusal, Core.Registration.State.empty,
+    Core.Site.Registration.Entry.refusal, Core.Site.Registration.Entry.kindRefusal, Core.Site.Registration.Entry.previous,
+    ne_eq, not_true_eq_false, if_false, example_refusal, Option.map_none]
 
 theorem check_honestLog :
-    (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome := by
-  simp [honestLog, infoEntry, dayEntry, Core.Registration.check, Core.Registration.Entry.refusal,
+    (Core.Registration.check Core.Registration.Example.auditor .onsite honestLog).toOption.isSome := by
+  simp only [honestLog, Core.Registration.check, List.foldlM_cons, siteEntry_refusal]
+  simp [siteEntry, infoEntry, dayEntry, Core.Registration.Entry.refusal,
     Core.Registration.State.empty, Core.Registration.State.add, Core.Registration.nodup, Core.Registration.Item.key,
     Except.toOption, bind, Except.bind, pure, Except.pure]
 
 /-- The witness log's one builder names the compiler with no gates, at its cap 0. -/
 theorem caps_honestLog : Caps noGatesBuilder honestLog := by
   intro p items h b hb
-  simp [honestLog, infoEntry, dayEntry] at h
+  simp [honestLog, siteEntry, infoEntry, dayEntry] at h
   obtain ⟨-, rfl⟩ := h
   simp at hb
   subst hb
   rfl
 
 theorem checks_honest :
-    (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome = true ∧
-      Verity.Registration.Valid (digests (names noGatesBuilder honestLog)) (auditor Properties.Site.witnessAuditor)
-        (composite .remote) (log noGatesBuilder honestLog) ∧ Caps noGatesBuilder honestLog :=
+    (Core.Registration.check Core.Registration.Example.auditor .onsite honestLog).toOption.isSome = true ∧
+      Verity.Registration.Valid (digests (names noGatesBuilder honestLog))
+        (auditor Core.Registration.Example.auditor) (composite .onsite) (log noGatesBuilder honestLog) ∧
+      Caps noGatesBuilder honestLog :=
   ⟨check_honestLog,
-    (checks noGatesBuilder Properties.Site.witnessAuditor .remote honestLog caps_honestLog).1.mp check_honestLog,
+    (checks noGatesBuilder Core.Registration.Example.auditor .onsite honestLog caps_honestLog).1.mp check_honestLog,
     caps_honestLog⟩
 
 theorem twiceLog_invalid (B : String → Verity.Compiler)
