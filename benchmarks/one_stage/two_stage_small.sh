@@ -82,8 +82,6 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 
 PY=(uv run --no-sync python)
 INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLINKED=(--unlinked); }
-# a linked run's record of round 1 doesn't commit the select's logits, so round 2 refuses it by second-inputs
-INPUTS=(); [ -n "${SMALL_INLINE:-}" ] || INPUTS=(--inputs)
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
