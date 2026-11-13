@@ -58,7 +58,7 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   evidence), at a read whose trees each open their `session` stream first (`LinkFirst`).
 * `MemberForm.Links`: the read of lines `membersTreeReason` accepts opens each tree's `session` stream first
   (`linkFirst_members`), by the check's scan of the lines (`Spot.Challenger.linksFirst`).
-* `MemberForm.Read`: v2's read at an accept of the form (`members_read`): the releases it read the release log as,
+* `MemberForm.Read`: v2's read at an accept of the form (`accept_read`): the releases it read the release log as,
   whose reads are the device's log's, the trees `membersTreeReason` accepts the sessions against, each statement's
   one session as the structure names it, and the device's log in order at the sample's family and digest.
 -/

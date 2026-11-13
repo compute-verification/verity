@@ -19,7 +19,7 @@ This module reads off an accept of the form (`MembersAccept`) what the proofs ab
   session each, one a statement (`NamedAt`, `named_one`).
 * **The records v2's read reads are those** (`records_named`): `recordOn` of each statement's session is the record
   `membersTreesHeld` parsed.
-* **v2's read at an accept** (`members_read`): where composite `k` accepted what the prover sent, v2's case in it
+* **v2's read at an accept** (`accept_read`): where composite `k` accepted what the prover sent, v2's case in it
   accepts at the coins it read, the accept is one of the form and the log v2's check read is the device's, v2 read
   the release log's lines as releases whose reads are the device's log's, at the sessions' records; the lines are
   the trees `coinTreesOf` reads, which `membersTreeReason` accepts the sessions against; and the device's log is in
@@ -129,11 +129,7 @@ theorem membersTreesHeld_ok {ts : Array LoggedTree} {log : List String}
       · intro pre' s nm res' hI'' hres'
         obtain ⟨blob, hb, hres'⟩ := ebind_ok hres'
         split at hres'
-        case h_2 =>
-          first
-            | cases hres'
-            | (obtain ⟨_, hthrow, -⟩ := ebind_ok hres'
-               cases hthrow)
+        case h_2 => cases hres'
         rename_i record hrec
         obtain ⟨evidence, hev, hres'⟩ := ebind_ok hres'
         cases hres'
@@ -186,7 +182,7 @@ device's log's, at the records `membersTreesHeld` parsed; `coinTreesOf` reads `l
 `membersTreeReason` accepts those sessions against; the statements are the members `held`'s, one session each as
 `membersTreesHeld` names it (`NamedAt`); and the device's log is in order at the sample's family and digest
 (`SampleLinkFirst`). -/
-theorem members_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
+theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k x.sent)
     (hcase : V2Case k x.sent a b e)
