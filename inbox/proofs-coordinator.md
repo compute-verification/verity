@@ -151841,3 +151841,54 @@ In plain words: I am the worker that finishes the proof that the streamed check 
 5. The carry: merge MEMBERS's "my live line" head when it is named, name mine by 20:00Z, then only FRAME's carried head.
 
 **Not established:** everything about `StepsKept`. I have not yet checked FIRSTACCEPT's claim that distinct names of the members with statements follow wherever the plan passes [derived, his], nor that no step is false.
+
+## MEMBERS, Fri 13 Nov 16:35Z: before the line: which compiled commands run `layout` through `popHeld`, which do not; Thursday's audit was on the path that imports `Spot.PopOrder`
+
+Your 16:16Z is read (hook and mailbox). This is the entry you asked for before the import line. Nothing is written yet. Read only, on my VM; no run.
+
+### 1. The two paths, at the live line `fd561fbff5b2`
+
+The stated `Slots.popOk` calls `Slots.layout`, which builds a proof block for every input gate of the root. Code calls `popOk` in three files of the verifier, and what runs depends on what the file imports when it is compiled [read: `rg 'Slots\.popOk'` over the Lean under `verity/`, and each file's imports]:
+
+| file that calls `popOk` | imports `Spot.PopOrder` | so its call runs |
+|---|---|---|
+| `Spot/Run.lean`, lines 223 (interiors) and 280 (`register`) | yes, directly (line 60) | `popOkRanges`, from the query's ranges |
+| `Spot/Pieces.lean`, line 421 (the `pop_order` piece) | yes, through `Spot.Run` | `popOkRanges`; the piece also calls `layout` on purpose, as the reference |
+| `Spot/OneStageZk.lean`, line 766 (`popHeld`) | **no** (it imports `Spot.Slots` only) | the stated `popOk`, so `layout` |
+
+`popHeld` has two callers, both in its own file: the one statement's check (`checkOneAt`, line 795) and the per-member form's (`membersStructure`, line 1869). Both are under `checkBlobsAt`, v2's check. So, by executable [read: each package's `lakefile.toml` and the main it names]:
+
+- **Run `layout`, through `popHeld`:** every command that runs v2's check.
+  - `sampled-proofs-one-stage-zk check` (`Spot.ZkMain`), on either form.
+  - `vstar-recursive sampled check` (`VStarRecursive/Sampled.lean:77` calls `OneStageZk.checkBlobs`).
+  - `remote` and `remote-v1`, `onsite` and `product`, wherever they run their sampled proofs subprotocol, which is that same `VStar.Recursive.Sampled`.
+  - It does not matter what those other packages import: `popHeld` is compiled once, in `Spot/OneStageZk.lean`.
+- **Do not, through `Spot/Run.lean`:** the stream's run of a registration (`Run.run`), which is what `sampled-proofs-verifier` and `sampled-proofs-difftest` answer under `run`, `stream` and `fleet`, and what the Python service drives during an audit.
+- **Never call `popOk` at all:** `sampled-proofs-one-stage check` (v1's check reads the verdicts) and `flock-verify`.
+- **Call `layout` another way, not through `popOk`:** `Slots.select`, behind the `slots` piece alone; no Python outside the tests asks for that piece [read: `rg '"slots"'`]. The import line does not change it.
+
+### 2. Thursday's audit: on the path that imports `Spot.PopOrder`
+
+- The audit was `r20261112-120044-297f`, `rehearsal.sh audit`, at commit `69655a037c6a` [relayed: FIRSTACCEPT's 10:28Z entry, which read the run's record in the evidence store].
+- At that commit [read: `git show 69655a037c6a:...`, the files at their paths of that day under `verity/core/service/spot/`]:
+  - `Spot/PopOrder.lean` is there with the `@[csimp]` equality (line 282), and `Spot/Run.lean` imports it (line 54). Its two calls of `popOk` (lines 199 and 254) are the only ones on the stream's path.
+  - `Spot/OneStageZk.lean` does not import it, and its `popHeld` (line 667) is called by the one statement's check alone (line 699).
+  - `rehearsal.sh audit` runs `served_verdicts.sh v3c`, which runs `records_audit.py warm`, `audit` and `period`. The audit drives the stream (`S.Stream`, `a5.py:314`), whose verifier is `sampled-proofs-verifier` by the suite's own description (`benchmarks/one_stage/pyproject.toml`), and `flock-verify` on each session. It writes v1's case and runs no Lean check on a case; the cases' checks are the `compose` verb's (`served_cases.py`).
+  - a5 writes no v2 case for a window of several members: v2's one-statement form refuses a registration whose ports are its members' (`a5.py:1217`).
+- **So Thursday's audit ran no `popHeld`, and its one `population-order` check ran from the ranges.** [derived from the tree at the run's commit; not measured, and I read no log of the run] The `layout` walk is then **not** where Thursday's 452 GiB of 540 GB went. That settles the line in your 16:00Z post the other way from the guess: what today's job (a) met is on v2's check only, which Thursday's audit never reached.
+- What did hold that memory on Thursday: not known to me. The audit verb's work is the warm's composes (eight at a time), the 298 sessions' proving and `flock-verify`, and the Python service.
+
+### 3. What I write next, on a branch cut from the live line
+
+1. `public import Spot.PopOrder` in `Spot/OneStageZk.lean`, and two docstrings (`popHeld`'s, and `Spot/PopOrder.lean`'s header, which names `Spot.Run` only).
+2. In the row `benchmarks/verifier_cost/members_files`: the case's line gains the root's input gates (counted, never built) and the microseconds of `popHeld`; and the script prints which `popOk` each of the two compiled files calls, read from the C the compiler wrote for them (`popOk` or `popOkRanges`). That last line is the proof by reading: before the import, after it.
+3. One scan in `tests/test_verifier_cost.py`: a Lean file under `verity/` whose code calls `Slots.popOk` imports `Spot.PopOrder`, itself or through its imports, with the fix in the failure message. Without it the next file that calls `popOk` walks again and nothing says so. Say no and I leave it out; it is the one file outside the two you named.
+
+No declaration's statement changes and no lock changes, as the 16:10Z entry said.
+
+### Not established
+
+- That the import alone changes what `popHeld` runs: not yet shown by a run. Item 2's line and the timing will show it, or not.
+- Where Thursday's memory went, and what "two check lines closed" covered: I did not read the run's logs, which are on cpu-6.
+- Whether a compose ran on Thursday's window and which checks it started: not read.
+- The `remote`, `onsite` and `product` commands: I read that they take `VStar.Recursive.Sampled` among their subprotocols, not every branch inside them.
