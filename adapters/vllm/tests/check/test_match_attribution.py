@@ -56,7 +56,7 @@ def _run(fold, steps, declared=(R0, R1)) -> MatchRun:
 
 
 @pytest.mark.parametrize("compact", [False, True], ids=["record", "compact"])
-def test_an_instance_that_reads_weights_alone_is_no_requests_and_is_in_the_leg_of_each_request_with_rows_in_its_step(compact):
+def test_an_instance_that_reads_weights_alone_is_no_requests_and_each_request_with_rows_in_its_step_holds_it(compact):
     """Nodes 3 (reads the weights alone) and 4 (reads node 3 alone) carry no request's data, nor does node 11 at engine step 1, where
     only r0 has a row.  Every other instance's row states its request."""
     B = _view([(3, "AddScalar_v1{N=2}", [W]), (4, "Scale_v1{N=2}", [[("n", 3, 0, 2)]]), (5, EMB, [P0, W]), (6, EMB, [P1, W]),
@@ -72,7 +72,7 @@ def test_an_instance_that_reads_weights_alone_is_no_requests_and_is_in_the_leg_o
     assert requests_observed(run, att, [R0, R1]) == {R0: [0, 1], R1: [0]}
     assert run.res["checks"] == [{
         "id": "G2", "what": G2, "status": "PASS", "problems": [], "n_problems": 0, "n_instances": 9, "unattributed": 0, "engine_steps": 2,
-        "attributed": 11,                                           # by leg: a shared instance counts in each leg that holds it
+        "attributed": 11,                                           # by request: a shared instance counts for each request that holds it
         "weight_only_shared": 3, "weight_only_specs": {"AddScalar_v1": 2, "Scale_v1": 1}}]
 
 
@@ -176,7 +176,7 @@ def _weight_only(res: dict) -> dict:
     """What the document says of the shared instances: G2's and G4's counts, and how the X-09 run inside it placed every instance."""
     g2, g4 = tgm._check(res, "G2"), tgm._check(res, "G4")
     assert g2["weight_only_shared"] == g4["weight_only_shared"] and g2["attributed"] == g4["attributed"]
-    return {"instances": g2["n_instances"], "by_leg": g2["attributed"], "shared": g2["weight_only_shared"], "specs": g2["weight_only_specs"],
+    return {"instances": g2["n_instances"], "by_request": g2["attributed"], "shared": g2["weight_only_shared"], "specs": g2["weight_only_specs"],
             "mapped": g4["mapped"], "distinct": g4["distinct"], "local_identities": g4["weight_only_local_identities"],
             "x09": res["x09"]["attribution"]["how"]}
 
@@ -184,21 +184,21 @@ def _weight_only(res: dict) -> dict:
 @pytest.mark.parametrize("impl", [gm, gmf], ids=["record", "fast"])
 @pytest.mark.parametrize("per_forward, r1, expect", [
     # one add, at engine step 0, and its reader in each step: those of steps 0 and 1 are shared, and step 2 is r0's alone
-    (False, tgm.R1, {"instances": 110, "by_leg": 113, "shared": 3, "specs": {"AddScalarBf16_v1": 1, "AddScalarF32_v1": 2},
+    (False, tgm.R1, {"instances": 110, "by_request": 113, "shared": 3, "specs": {"AddScalarBf16_v1": 1, "AddScalarF32_v1": 2},
                      "mapped": 107, "distinct": 110, "local_identities": 6, "x09": {"weight-only": 3, "meta": 107}}),
     # an add and its reader in each step, r1 arriving at step 1: those of steps 1 and 2 are shared, and step 0 is r0's alone
-    (True, tgm.R1_LATE, {"instances": 112, "by_leg": 116, "shared": 4, "specs": {"AddScalarBf16_v1": 2, "AddScalarF32_v1": 2},
+    (True, tgm.R1_LATE, {"instances": 112, "by_request": 116, "shared": 4, "specs": {"AddScalarBf16_v1": 2, "AddScalarF32_v1": 2},
                          "mapped": 108, "distinct": 112, "local_identities": 8, "x09": {"weight-only": 4, "meta": 108}}),
 ], ids=["once", "per-forward-late"])
 def test_on_the_toy_a_weight_add_of_a_step_two_requests_run_in_is_shared_and_has_a_local_identity_in_each(
         impl, memory, tmp_path, gemma_toy, per_forward, r1, expect):
     """The record states no request for an instance of a step two requests have rows in, and the step's one request otherwise.  A
-    shared instance is in both requests' legs, each compared with its component, and it has one local identity in each."""
+    shared instance is among the instances of both requests, each compared with its component, and it has one local identity in each."""
     gp, oracle = gemma_toy([tgm.R0, r1], tmp_path, per_forward)
     res = impl.check(gp, oracle, record_alternate=False)
     assert res["verdict"] == "PASS" and [k["status"] for k in res["checks"]] == ["PASS"] * 8, res["reasons"]
     assert _weight_only(res) == expect
-    assert sum(e["n_instances"] for e in res["requests"]) == expect["by_leg"] == expect["distinct"] + expect["shared"]
+    assert sum(e["n_instances"] for e in res["requests"]) == expect["by_request"] == expect["distinct"] + expect["shared"]
     assert tgm._check(res, "G8")["permutations"] == []              # a shared instance sits where its component has it: no step is permuted
 
 
