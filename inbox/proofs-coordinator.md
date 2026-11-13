@@ -131834,3 +131834,60 @@ name chosen stands beside that word or replaces it. [read `Spot/OneStage.lean` 1
 
 Not known: how many guarantees' `unfolded_hash` a change of the id moves. It is known after one records run of the
 change, about 70 minutes.
+
+## LOOSEMAP, Fri 13 Nov 09:01Z: CERTIFIED AFTER THE THREE on `5b2c1e735b92`: `cursor/proofs-loosemap-0917` at `56561c89bb4a` is a pure move (34 renames, 217 path-only edits) after `compose_map.toml`, `configurations_map.toml` and `world_map.toml`, and the four root tests and the listing's check pass before it and after it. NEW: as written it runs before top's difftest map; after that map one root of it must be restated
+
+**In plain words.** On the tree chain 2 starts from, a run staged the lane's other three maps, then this one, in the order the stager uses. The certificate accepts this map there as a move that changes nothing but paths, the hand patch applies by `git am`, and the checks of the whole tree pass on the result, as they do on the tree just before this map. One fact about where the stager may put it: the map names where each Python distribution's code sits, and top's chain has a map that moves one of them (the difftest harness). Placed before that map, this map runs as it is. Placed after it, two words of it must change first.
+
+Clock: `date -u` read 09:01Z. Mailbox: your 08:55Z message, read at 08:59Z. Its four points: (1) no Lean fast path, understood; (2) the group map's Lean keys: a node run is doing it (`r20261113-090013-dac7`: it stages the group map alone on `a21f150fcce8` and compares every package's key), entry by 09:30Z; (3) this entry; (4) the suites' line when `r20261113-084411-37ea` ends.
+
+**What ran** [run `r20261113-083849-4498`, cpu-14, rc 0; base `1cefb506b2ae`: `5b2c1e735b92`, `468878c8f37c` merged in, and the map's one file]
+- **The three before it**, staged in this order, each certified:
+  - `compose_map.toml`: "certified 1cefb506b2ae..3cfb95be8b7b is a pure move (19 renames, 33 path-only edits)";
+  - `configurations_map.toml`: "certified 3cfb95be8b7b..a09bf028bed6 is a pure move (13 renames, 32 path-only edits)";
+  - `world_map.toml`: "certified a09bf028bed6..53a1414fd9d3 is a pure move (6 renames, 11 path-only edits)".
+- **ONSITE's listing commit after the carve** (`3d2497789142`, as a patch): applied, commit `db54fce69cf8`.
+- **Before this map, on `db54fce69cf8`:** `import_order.py --check` "tests/import_order.toml: the same"; the four root tests "69 passed, 6 warnings in 84.68s".
+- **This map's certificate:** "move-check: certified db54fce69cf8b3e80475532f3ab391825d647ae0..2b99dac50fa6eec6d244661c09d554dc6b174065 is a pure move (34 renames, 217 path-only edits)". `resolve_check.py`: "0 issue(s)".
+- **The hand patch** by `git am` on the staged commit: applied, `5e558dc7f9b6`, one README, 4 lines in and 3 out.
+- **After this map and the hand patch, on `5e558dc7f9b6`:** `import_order.py --check` "tests/import_order.toml: the same" (the move rewrites nine lines of the listing); the four root tests "69 passed, 6 warnings in 82.05s"; `tests/test_tree.py HEAD` rc 0.
+- **Which tree those tests imported:** every step ran in a scratch copy with `PYTHONPATH` cleared, and printed
+  - `verity file /workspace/tmp/tmp.zxk0WD9Mxw/wt/verity/__init__.py`,
+  - `verity_flock file /workspace/tmp/tmp.zxk0WD9Mxw/wt/verity/protocols/flock/prover/python/verity_flock/__init__.py`,
+  both the scratch copy of the moved tree. With the runner's `PYTHONPATH` the second would have been the run's clone, the tree before any move, as in `r20261113-083812-b2d4`.
+- **Lean:** the same four audit keys change by this map (`core_firewall`, `security`, `security_properties`, `security_proofs`), and it changes 0 Lean sources, lakefiles, manifests, locks or toolchain files.
+- **`pins.py --stale` after this map: rc 1, four pins**, each stale through `security/Proofs/lake-manifest.json`: `verity/protocols/pous/lean/TRUSTED.sha256`, `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json`, and SPOT's `exfiltration_lean.json` and `exfiltration_two_lean.json`. **They are the three maps' and not this one's** [derived]: this map alone on the same base leaves nothing stale (`r20261113-083812-b2d4`, rc 0), it changes no manifest, and on chain 1's tree the same four are stale on ONSITE's staged tree before this map [my VM, `2ab2897b9423`]. I did not run `pins.py --stale` on `db54fce69cf8` itself.
+
+**The same on top's trial branch** (`cursor/top-moves-chain2-trial-0c4c` at `f14ded183a6`, which is `5b2c1e735b92` with top's prep commits and the chain's map branches merged in: proofs' three, top's definitions maps, the group map) [run `r20261113-084801-7460`, cpu-8, running; base `72ee881a5b3f`, that head and the map's file]
+- The three certify there with the same counts (19 and 33, 13 and 32, 6 and 11), and ONSITE's listing patch applies.
+- This map after them: "move-check: certified 20557c70c74f1efeb1b64ac79afa1830e561ad5d..69dfb9dab8403e46c3696240e3370305feb57eb3 is a pure move (34 renames, 217 path-only edits)".
+- Its tests have not ended.
+
+**NEW: where in chain 2 the map can sit** [my VM: every `*_map.toml` of the trial branch read as TOML, its `[paths]` held against this map's `[roots]`, `[paths]` and `[rewrite]` lists]
+- **No map on that branch but the group map has a `[paths]` row that names any of the seven paths**, old or new.
+- **Before top's `difftest_map.toml`: the map runs as it is.** That is where the three rehearsals above put it, right after the lane's other three.
+- **After `difftest_map.toml`: `[roots]` must be restated first.** That map moves the distribution `verity_difftest` from `verity/difftest/python/verity_difftest` to `tools/difftest/python/verity_difftest`, and this map's `[roots]` names the first, in `old` and in `new`. Both must read `tools/difftest/python/verity_difftest`, the change top made to eight maps in `f14ded183a6`. No row of `[paths]` changes. I have not run the map in that position.
+- **Nothing else of it goes stale later in the chain** [derived]: its `include` names `fixtures/artifacts.json`, which the artifacts map sends to the root, where no `exclude` covers it, so it is read either way; two `exclude` lines name `verity/definitions/silicon/captures/` and `hawkeye/`, which a definitions map moves; and neither the registry nor those two directories name any of the seven paths [my VM: `git grep` at `5b2c1e735b92`, 0 lines].
+
+**Where the stager takes it:** unchanged from my 08:45Z entry. The map: `cursor/proofs-loosemap-0917` at `56561c89bb4ac412d580313b31963169e4515079`. The hand patch: `proofs_loose_map_hand.patch` on `cursor/proofs-loosemap-0917-hand-patch` (`0d456883ef9d`), by `git am` on the commit the map makes, before the group map.
+
+**NEEDS**
+1. Nothing to go on.
+
+**To post** (one line, as it is):
+
+> Proofs' loose paths map (`cursor/proofs-loosemap-0917` at `56561c89bb4a`) is certified after proofs' other three maps on chain 2's base `5b2c1e735b92`: "a pure move (34 renames, 217 path-only edits)", with the four root tests (69 passed) and the import listing's check ("the same") passing before it and after it, and on the trial branch `f14ded183a6` the same certificate. It runs as written anywhere before `difftest_map.toml`; placed after it, its `[roots]` must name `verity_difftest` at `tools/difftest/python/verity_difftest` in both tables, as `f14ded183a6` did for eight maps. The four stale pins after the three maps are theirs, through `security/Proofs/lake-manifest.json`; this map adds none.
+
+**Not established**
+- The tests on the trial branch after this map (`r20261113-084801-7460`, running).
+- The map placed after `difftest_map.toml`, with its root restated: not run.
+- Which Lean keys the group map alone changes (`r20261113-090013-dac7`, running).
+- The suites: `r20261113-084411-37ea` (chain 2's base and this map alone) and `r20261113-082338-f6dc` (chain 1's tree), both running.
+- The whole order after the three is on no pushed branch: the node's commits are in its run's bundle only (`out/moved_with_hand.bundle` of `r20261113-083849-4498`, which needs the node's `db54fce69cf8`). The stager stages again in any case.
+
+**Pushed heads**
+- `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone).
+- `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef9d`.
+- `cursor/proofs-loosemap-0917-on-chain2` `546575e05f79` (the order on chain 2's base, this map alone).
+- `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae` (the base of the run above: nothing staged on it).
+- `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`; `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded).
