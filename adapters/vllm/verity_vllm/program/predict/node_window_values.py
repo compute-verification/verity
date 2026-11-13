@@ -631,7 +631,7 @@ def sample(n: int, rng: np.random.Generator, most: int = SAMPLE) -> list[int]:
 def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SAMPLE,
         only: Sequence[str] | None = None) -> dict[str, Any]:
     """Every template of ``ck``'s circuit: up to ``most`` units sampled under ``seed`` (all of a smaller one); a template whose
-    outputs the frame states is checked at its sample, any other through the sampled units' readers that are (a reader's
+    outputs the frame states is checked at its sample, any other through its sample's readers that are (a reader's
     units added to its own check, up to ``most`` more)."""
     rng = np.random.default_rng(seed)
     picked = {tid: sample(ck.counts[tid], rng, most) for tid in ck.c.ids}
