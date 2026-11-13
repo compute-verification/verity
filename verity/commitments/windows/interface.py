@@ -184,8 +184,8 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
-# (`ALLOWED` in tests/test_boundaries.py).
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/definitions/ops`)
+# and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
@@ -1542,6 +1542,11 @@ class _Drawn:
         _v, at, ys, _ = self._at[param]
         return ys[np.searchsorted(at, positions)].tobytes()
 
+    def strings(self, param: str, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Rows ``positions`` of ``param``'s value: the ``b || c`` its salts carry in its own tree, concatenated."""
+        v = self._at[param][0]
+        return b"".join(bytes(v.bcs[int(p)]) for p in positions)
+
     def entry(self, param: str, positions: Sequence[int] | np.ndarray) -> dict[str, Any]:
         """Core's ``Registered.statement(positions)``'s header entry: ``{"value", "positions", "paths"}``."""
         v, at, _, paths = self._at[param]
@@ -2342,13 +2347,18 @@ class Window:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
         tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
-        row that is neither. Each registered row the window reads has its salt sampled and its path made once (`_Drawn`)."""
+        row that is neither. Each registered row the window reads has its salt sampled and its path made once (`_Drawn`).
+        An input row recorded in full is committed under its value's salt, and refused unless it is the value's row
+        (`rows.commit`'s ``carried``): a salt hides one row. A supplied value's rows are left out, their salts being
+        public (`supplied`)."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
         committed = _ReadIndex(committed_reads(self.circuit.registered))
         base, cat, by, values = self._bases(), {}, self.circuit._by_id, self.registered or {}
+        public = {supplied_param(t, of) for t in (self.circuit.registered or Registered({})).tables for of in SUPPLIED}
+        carried: dict[str, bytes] = {}
         read_by, wanted = [], {}
         for m in self.window.members:
             words = dict(m.rows + m.outs)
@@ -2401,6 +2411,8 @@ class Window:
                         raise ValueError(f"{m.key} {p}: two units recorded two rows for one row of {param!r}")
                     d["rows"][p] = rows
                     salts_of[m.port(p)] = drawn.salts(param, positions)
+                    if param not in public:
+                        carried[m.port(p)] = drawn.strings(param, positions)
                     self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
             wired = {q for q, _o, _ws in m.wired}
             for r, x in d["rows"].items():
@@ -2409,7 +2421,8 @@ class Window:
                         raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
-        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of)
+        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of,
+                         carried=carried)
 
     def _written(self, values: Mapping[str, Any]) -> dict[str, dict[str, tuple[list[Any], np.ndarray]]]:
         """Each history writer's output (by template, then port): for each of its template's units, the committed table

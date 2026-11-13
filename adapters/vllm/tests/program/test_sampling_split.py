@@ -23,7 +23,9 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = Path(importlib.util.find_spec("verity.definitions.registry").origin).parent
+_SPEC = importlib.util.find_spec("verity.definitions.registry")
+assert _SPEC is not None and _SPEC.origin is not None
+REG = Path(_SPEC.origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
            "`uv run python tools/verity/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
@@ -60,7 +62,11 @@ SLOW_TRACE = ("GumbelLane_v1", "GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", 
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.defs import (
+        CompositeDefinition,
+        PrimitiveDefinition,
+        SpecializedDefinition,
+    )
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -77,7 +83,7 @@ def family_definitions() -> dict[str, object]:
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
-    out = {}
+    out: dict = {}
     for m in sorted(mods):
         if (REG / f"{m.rsplit('.', 1)[1]}.py").exists():
             for v in vars(importlib.import_module(m)).values():
@@ -102,6 +108,7 @@ def resolve(key: str, defs: dict[str, object]):
     from verity.definitions.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
+    assert m is not None, key
     fam, statics = m[1], _statics(m[2] or "")
     try:
         fn = specialization(fam, statics)

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import rec_profile as RP
+import rec_table as RT
 from test_recursion_e2e import job
 
 PARTS = ["L0", "L1", "alg-p0", "cap"]
@@ -34,7 +35,7 @@ def test_the_release_side_is_read_and_holds_the_headline(tmp_path):
     assert rel["ok"] and rel["trees_held"] and rel["tree_source"].startswith("local")
     assert [p["prove_wall_s"] for p in rel["parts"]] == [0.4] * 4 and rel["schedule"]["parts"] == PARTS
     assert doc["headline"]["released"] is True
-    md = RP.markdown(doc)
+    md = RT.markdown(doc)
     assert "**Release side.**" in md and "| L0 | 1.0 | 1.0 | 0.5 | 0.5 | 0.4 | go | release |" in md
 
 

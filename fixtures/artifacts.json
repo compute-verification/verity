@@ -2,10 +2,10 @@
   "art:8c365eeb9f120a3c3febf052ee7cfa2a88e4f1e87e7c4d0444552a77da5754ea": "verity/definitions/silicon/hawkeye/PIN.json",
   "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
   "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": "verity/definitions/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
-  "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "fixtures/bench-instances/v1/manifest.json",
-  "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
-  "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
-  "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
+  "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "benchmarks/numerical/bench-instances/v1/manifest.json",
+  "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+  "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+  "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
   "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/definitions/silicon/captures/autoproof-probe-vectors.json",
@@ -41,7 +41,6 @@
   "art:ec57810bfc93888b6911fddb9315bc7e840658398e43446d8c4f3bf603f2f850": "benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl",
   "art:e58f171c9b16e2c6b4b5b5ea561b0549300217757ecfce37aecab69ad2b7f8e6": "benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json",
   "art:844ad075fdd79a0e8723ed46a765d7422847d4edf1edb6ab70b3af3a5f2d0c7c": "verity/protocols/certifier/verifier/tests/fixtures/cache_step_vectors.json",
-  "art:d0d375725898d882c700f4184c6e75f503a5cfe949c7c353b5dc6e377ae13348": "verity/protocols/certifier/verifier/tests/fixtures/cache_step_v2_vectors.json",
   "art:70f4d6ec7fc238d2dee69c6b90b832660934f67c2631d7884eaadc46b360fb75": "verity/protocols/certifier/verifier/tests/fixtures/replay_step_vectors.json",
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "adapters/vllm/tests/regression/files.toml",
   "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
@@ -182,6 +181,8 @@
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
   "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
+  "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "verity/protocols/remote/verifier/composition/tests/fixtures/sampled-two-case",
+  "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -257,6 +258,10 @@
     ],
     "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": [
       "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81"
+    ],
+    "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": [
+      "art:cf13269bc59422f20c20c1a664879559b050c88054bba8b0d1e5b2e81bcbbedd",
+      "art:253bd5f4d35790a0f729bb2be897f0a72ca690e9a78c18b3aafa28b1c7d0a494"
     ]
   }
 }

@@ -168,30 +168,36 @@ def test_no_line_is_still_arriving() -> None:
 
 
 def test_each_check_names_its_fix() -> None:
+    """Its paths are made up: no tree holds them and no layout map names them, so a move leaves this test as it is. Only
+    the levels the checks read (`verity/`, `verity/protocols/`) are real."""
     doc = {"tree": [{"path": "verity/", "means": "m"}, {"path": "verity/protocols/", "means": "m"},
-                    {"path": "verity/protocols/flock/", "means": "m", "protocol": True},
-                    {"path": "verity/protocols/NAME/verifier/", "means": "m"},
-                    {"path": "verity/party.py", "means": "m", "owner": "top", "day": "2026-11-19"}],
-           "not_yet": [{"path": "verity/claims/", "to": "deleted", "owner": "top", "day": "2026-11-19"},
-                       {"path": "verity/gone.py", "to": "x", "owner": "top", "day": "2026-11-19"},
-                       {"path": "verity/periods/", "to": UNOWNED, "owner": UNOWNED, "day": UNOWNED, "arriving": True}]}
-    tracked = ["verity/claims/a.py", "verity/party.py", "verity/protocols/flock/verifier/V.lean",
-               "verity/protocols/flock/pod/x.py", "verity/protocols/remote/verifier/R.lean", "stray.md"]
+                    {"path": "verity/protocols/made-up-protocol/", "means": "m", "protocol": True},
+                    {"path": "verity/protocols/NAME/made-up-part/", "means": "m"},
+                    {"path": "verity/made-up-coming.py", "means": "m", "owner": "top", "day": "2026-11-19"}],
+           "not_yet": [{"path": "verity/made-up-dir/", "to": "deleted", "owner": "top", "day": "2026-11-19"},
+                       {"path": "verity/made-up-gone.py", "to": "x", "owner": "top", "day": "2026-11-19"},
+                       {"path": "verity/made-up-arriving/", "to": UNOWNED, "owner": UNOWNED, "day": UNOWNED,
+                        "arriving": True}]}
+    tracked = ["verity/made-up-dir/a.py", "verity/made-up-coming.py",
+               "verity/protocols/made-up-protocol/made-up-part/V.lean",
+               "verity/protocols/made-up-protocol/made-up-stray/x.py",
+               "verity/protocols/made-up-stray/made-up-part/R.lean", "made-up-stray.md"]
     assert strays(doc, tracked) == [f"{e}: move it to its place in {LAYOUT}'s [[tree]], {ASK}"
-                                    for e in ("stray.md", "verity/protocols/flock/pod", "verity/protocols/remote")]
+                                    for e in ("made-up-stray.md", "verity/protocols/made-up-protocol/made-up-stray",
+                                              "verity/protocols/made-up-stray")]
     assert landed(doc, tracked) == [
-        "verity/gone.py: main no longer holds it, so its move landed: delete its [[not_yet]] line",
-        "verity/party.py: main holds it now: drop its owner and day from its [[tree]] entry"]
-    assert still_arriving(doc, tracked + ["verity/periods/__init__.py"]) == [
-        "verity/periods/: main holds it now: drop its line's `arriving` and lower ARRIVING_MAX"]
-    bad = {"tree": [{"path": "hardware/", "means": "m", "owner": "top"}],
+        "verity/made-up-gone.py: main no longer holds it, so its move landed: delete its [[not_yet]] line",
+        "verity/made-up-coming.py: main holds it now: drop its owner and day from its [[tree]] entry"]
+    assert still_arriving(doc, tracked + ["verity/made-up-arriving/__init__.py"]) == [
+        "verity/made-up-arriving/: main holds it now: drop its line's `arriving` and lower ARRIVING_MAX"]
+    bad = {"tree": [{"path": "made-up-root/", "means": "m", "owner": "top"}],
            "not_yet": [{"path": "a/", "to": UNOWNED, "owner": "top", "day": "Thu 19 Nov"},
                        {"path": "b/", "to": "", "owner": "nobody", "day": UNOWNED, "colour": 1}],
            "open": [{"what": "w", "answers": "top"}]}
     assert malformed(bad, {"top"}) == [
         "[[not_yet]] b/: colour is no key of [[not_yet]] (its keys: arriving, day, note, owner, path, to)",
         "[[not_yet]] b/: its to is empty: write it", "[[open]] w: give it its by",
-        "[[tree]] hardware/: an entry main doesn't hold yet names both its owner and its day",
+        "[[tree]] made-up-root/: an entry main doesn't hold yet names both its owner and its day",
         "[[not_yet]] a/: an owned line names its to: write it, or the owner is unowned",
         "[[not_yet]] b/: an owned line names its day: write it, or the owner is unowned",
         "[[not_yet]] a/: its day 'Thu 19 Nov' is a date (2026-11-19), with a time where it isn't 6 PM PST (2026-11-13 "

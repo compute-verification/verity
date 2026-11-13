@@ -34,11 +34,21 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
+from verity_vllm.check.verdict import _after_release_verdict, _c1_verdict
+from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
+from verity_vllm.pipeline.replay_plan import Planner
+
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "deferred_records", "discard", "open_bundle",
+           "partial", "path", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
@@ -64,9 +74,9 @@ def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Pa
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """The Commit's sampled-replay and boundary-linkage records while their replay is deferred: not evaluated, named, with the bundle."""
     why = f"deferred: the C2 replay runs on CPU from the replay bundle {bundle} (`verity-vllm row stage replay`)"
-    return ({"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
+    return ({"schema": SR.SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
              "deferred": {"bundle": str(bundle)}},
-            {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
+            {"schema": LINKAGE_SCHEMA, "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
 
 
 def refuse(args: Any) -> None:
@@ -98,17 +108,16 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
     facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
     one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
     if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
-            or C2.live_only(SimpleNamespace(protocols=protocols)) or C2.retention_of(com, args) != "host"
+            or C2.live_only_entry(protocols) or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
-    from verity_vllm.check.replay.driver import engine_facts_of_record
 
     hashed: dict[str, str] = {}
     try:
         extras: Any = weights_extra(com, rc)
     except ValueError as e:                          # raised where the write is taken (`defer`), as before
         extras = e
-    engine = engine_facts_of_record()
+    engine = SR.engine_facts_of_record()
     pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
 
     def write() -> float:
@@ -128,7 +137,6 @@ def prepare(args: Any) -> Any:
     refuse(args)
     if args.replay_deferred != "slim":
         return None
-    from verity_vllm.pipeline.replay_plan import Planner
 
     return Planner(args)
 
@@ -142,15 +150,13 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
     SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
     `args.replay_bundle_cap_gb`: the replay then runs in process."""
-    from verity_vllm.check.replay.driver import engine_facts_of_record
-
     tl.start("validate.replay_bundle", pair=pair)
     slim, t = None, None
     if started is not None:
         t0 = time.perf_counter()
         write_s, hashed = started.future.result(), started.hashed
-        print(f"[delta] REPLAY BUNDLE (pair {pair}): store written in {write_s:.1f} s beside the checks before the C2 site "
-              f"(waited {time.perf_counter() - t0:.1f} s here)", flush=True)
+        logger.info("[delta] REPLAY BUNDLE (pair %s): store written in %.1f s beside the checks before the C2 site (waited %.1f s here)", pair,
+                    write_s, time.perf_counter() - t0)
     else:
         if plan is not None:
             t0 = time.perf_counter()
@@ -159,18 +165,19 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                     planned = plan()
             except Exception as e:  # noqa: BLE001  -- no plan, no slim bundle: the replay runs in this process
                 tl.end("validate.replay_bundle", pair=pair, ok=False)
-                print(f"[delta] REPLAY BUNDLE (pair {pair}): no plan ({e!r:.300}); the C2 replay runs in this process", flush=True)
+                logger.warning("[delta] REPLAY BUNDLE (pair %s): no plan (%.300r); the C2 replay runs in this process", pair, e)
                 return False
-            sr_p = planned.get("replay") or {}
-            slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
+            replay, read = planned.get("replay"), t.nbytes()
+            sr_p: dict[str, Any] = replay if replay else {}  # a plan with no replay of its own: its picks are unknown
+            slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
-            print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {slim['bytes'] >> 20} MiB of the store "
-                  f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
+            logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
+                        slim["picked"], read >> 20, slim["plan_s"], slim["unresolved_n"])
         size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
         if size > cap:
             tl.end("validate.replay_bundle", pair=pair, ok=False)
-            print(f"[delta] REPLAY BUNDLE (pair {pair}): REFUSED -- {size / 1e9:.1f} GB is over the {cap / 1e9:.0f} GB cap (--replay-bundle-cap-gb); "
-                  "the C2 replay runs in this process", flush=True)
+            logger.warning("[delta] REPLAY BUNDLE (pair %s): REFUSED -- %.1f GB is over the %.0f GB cap (--replay-bundle-cap-gb); the C2 replay "
+                           "runs in this process", pair, size / 1e9, cap / 1e9)
             return False
         hashed = {}
         write_store(out, pair, com, rc, digests=hashed, touched=t)
@@ -183,12 +190,12 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else engine_facts_of_record(), "slim": slim,
+           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else SR.engine_facts_of_record(), "slim": slim,
            HASHED: hashed}
     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
     deferred[pair] = ctx
     tl.end("validate.replay_bundle", pair=pair)
-    print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY + LINKAGE (pair %s): DEFERRED -- store and weights tree written to %s", pair, partial(out, pair))
     return True
 
 
@@ -200,8 +207,6 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
     """The verdict of an instrumented run whose C2 replay is deferred: (False, reason) when a check the Commit ran itself fails -- C1, a
     failing value-correspondence component (oracle compare, weights of record), the openings after release -- else (None, PENDING):
     `check.verdict.commit_verdict` decides once the replay is on the record."""
-    from verity_vllm.check.verdict import _after_release_verdict, _c1_verdict
-
     wp, vc = commit.get("weights_pin"), commit.get("value_correspondence")
     fail = (_c1_verdict(commit, tokens_equal, min_openings, declaration, required_classes)
             or ((False, f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}")
@@ -212,13 +217,21 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
 
 
 def awaits_replay(c: dict) -> bool:
-    return c.get("commit_pass") is None and (c.get("sampled_replay") or {}).get("grade") == "deferred"
+    """Whether a run's Commit record has no pass yet and its sampled replay is the deferred one (`deferred_records`)."""
+    sr = c.get("sampled_replay")
+    return c.get("commit_pass") is None and (sr.get("grade") if sr else None) == "deferred"
+
+
+def commit_of(row: dict) -> dict:
+    """A run's Commit record; an empty one for a row that holds none, which neither passed nor awaits a replay."""
+    commit = row.get("commit")
+    return commit if commit else {}
 
 
 def pass_of(rows: list[dict]) -> bool | None:
     """The Commit's X-03 pass over its instrumented runs: True when every one passed, None when none failed and some await their
     deferred replay, else False."""
-    inst = [r.get("commit") or {} for r in rows if r["arm"] != "control"]
+    inst = [commit_of(r) for r in rows if r["arm"] != "control"]
     if inst and all(bool(c.get("commit_pass")) for c in inst):
         return True
     if inst and all(bool(c.get("commit_pass")) or awaits_replay(c) for c in inst):
@@ -234,14 +247,15 @@ def seal_all(out: Path, deferred: dict[int, dict], rows: list[dict], verdict: di
     bundles = []
     for p, ctx in deferred.items():
         row = next((rw for rw in rows if rw["pair"] == p and rw["arm"] != "control"), None)
-        if row is None or not awaits_replay(row.get("commit") or {}):
+        if row is None or not awaits_replay(commit_of(row)):
             discard(out, p)
             continue
         hashed = ctx.pop(HASHED, None)
         with tl.span("closure.replay_bundle", pair=p):
             m = seal(out, p, ctx | {"row": row, "verdict": verdict}, Path(out) / f"binding_map_p{p}.json", hashed=hashed)
         bundles.append({"pair": p, "path": m["path"], "manifest_sha256": m["sha256"], "bytes": m["bytes"], "files": len(m["files"])})
-        print(f"[delta] REPLAY BUNDLE (pair {p}): {m['path']} sealed, {len(m['files'])} files, {m['bytes'] >> 20} MiB, manifest sha256 {m['sha256'][:16]}", flush=True)
+        logger.info("[delta] REPLAY BUNDLE (pair %s): %s sealed, %s files, %s MiB, manifest sha256 %s", p, m["path"], len(m["files"]),
+                    m["bytes"] >> 20, m["sha256"][:16])
     verdict["replay_deferred"] = {"pending_pairs": pending, "bundles": bundles}
 
 
@@ -257,8 +271,6 @@ def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tup
     name, bytes)`, read from where they live (the device).  `extra_names`: those tensors (default: the registered buffers and engine
     constants, which no checkpoint holds)."""
     import torch
-
-    from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
 
     tree = getattr(com, "weights_tree", None)
     if not tree or (rc.weight_registration or {}).get("root") != tree.get("root"):
@@ -330,7 +342,7 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
     rels = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
         sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(p / r), rels)))
-    files = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
+    files: dict[str, dict[str, Any]] = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
     man = {"schema": SCHEMA, "files": files, "bytes": sum(v["bytes"] for v in files.values()),
            "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            **({NOT_RETAINED: context[NOT_RETAINED]} if context.get(NOT_RETAINED) else {})}
