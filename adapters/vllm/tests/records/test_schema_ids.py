@@ -95,6 +95,7 @@ ON_DISK = {
     "TP_WEIGHTS_PIN_SCHEMA": "verity-sweep/tp-weights-pin/v1",
     "WEIGHTS_OF_RECORD_PRIOR_SCHEMA": "verity/commit/weights-of-record/v1",
     "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
+    "WORKLOAD_PROGRAM_SCHEMA": "verity/workload-program/v1",
     "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
     "XRANK_COLLECTIVES_FOLD_SCHEMA": "verity/tp2/xrank-collectives-fold/v1",
     "XRANK_COLLECTIVES_SCHEMA": "verity/tp2/xrank-collectives/v1",

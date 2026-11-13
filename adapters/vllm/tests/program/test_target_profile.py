@@ -237,6 +237,21 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     assert parse_target_arg('{"compilation": "piecewise"}').execution_label == "bi-compiled"
 
 
+def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
+    """The two texts of a compiled profile's engine block: the derivation from its parenthesis on, the claim whole.  A Build that writes
+    the block puts them in the artifact's identity, and components compose only where their blocks are equal, so a word of them changes
+    here too.  They name no module and cite nothing."""
+    me = TargetProfile(compilation="piecewise").modelled_engine()
+    assert me["program_derivation"].endswith(
+        " artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
+        "compilation facts + kernel_set digest")
+    assert me["claim"] == (
+        "P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay (wrapper-level "
+        "hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; the eager Program is NOT a "
+        "model of this execution (P_compiled != P_eager: roundings elided, residual recomputed unrounded, other reduction orders; tokens "
+        "diverge from eager). Attention = eager FA2 splitting op; lm_head eager")
+
+
 def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():
     """`compilation="breakable"`: execution label `compiled`, engine args the CUDA-graph mode and capture sizes (no Inductor config),
     VLLM_USE_BREAKABLE_CUDAGRAPH set, and a declared engine block of mode NONE at those capture sizes for GM-01."""
