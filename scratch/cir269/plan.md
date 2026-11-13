@@ -301,3 +301,53 @@ fewest it can be: **2**, with S1 to S3 in PR 2b's candidate and S4 and S5 in one
      `InitVar`; 16 of 18 files use `from __future__ import annotations` [read]), but a `@dataclass` reads its fields'
      annotations, so this is CIR-234's to decide, with a test.
 - Neither day reaches vLLM's function-import rate (section (b): Flock's 30 and `cache.py`'s rule need designs).
+
+## 5. The trial
+
+Run Thu 12 Nov 6:15 PM PST [02:15Z] on `cursor/circuits-cir269-trial-6f04`, head
+`f94e9e91b89e09d6ef206af880ee1d3c10ef37c5` (one commit on `main` `636d15d041b5`; 4 files, +64 −22). Not a pull request.
+
+What it applies, interface A on the smallest group:
+
+- **The function:** `call_scope.specialization(fam, statics, reg=None)` takes the registry and loads no catalog. `None`
+  means `verity.circuits.defs.REGISTRY` as the process has registered it, and the recursive call passes `reg` on. Line 17's
+  import of `registry.catalog` is gone.
+- **One site of `targets.py`, site 6 (`:634`, `numerics.rows.ROWS`):** `word_call_families` takes the row families from
+  `_handed(ROW_FAMILIES, ...)`, the one binding file that defines `row_families`. `_read_by` is now `_handed` plus a call,
+  with the same refusal text. `adapters/vllm/verity_vllm/__init__.circuit-check.py` defines `row_families()`.
+- **A test** in `test_targets.py`: the real `verity_vllm` sidecar defines `row_families`; with stand-in sidecars, one
+  that defines it gives its families; none, or two, are refused by name.
+
+Results [ran, locally, `uv run --no-sync`]:
+
+| File | Count |
+| -- | -- |
+| `tools/verity/circuit_check/tests/test_targets.py` | **15 passed** in 17.66 s (14 on `main` plus the new one; `-k row_families`: 1 passed) |
+| `tests/test_boundaries.py` | **58 passed** in 44.68 s |
+| `verity/definitions/tests/test_call_scope.py`, beside the two asked for | 1 passed in 0.23 s |
+| the real sidecar's `row_families()` against `rows.ROWS` | 108 families, equal |
+| `ruff check` of the 4 files | all checks passed |
+
+After it, `rg` finds `verity.definitions.registry`/`numerics` in `call_scope.py` nowhere, and in `targets.py` at the
+other sites only (`:83`, `:87`, `:482`, `:492`, `:501`, shifted 8 lines by `_handed`).
+
+What the trial does **not** show:
+
+- The ordering step of A. `row_families` is read after the registries, as `request_program` is. `load_catalog` would
+  be read before them, by loading the registering sidecar first, and that is untried.
+- What it does to records. The `targets.py` edit moves its `common` unit, so on `main` every target would miss once.
+  No suite session ran, by the brief.
+- That `test_boundaries.py` passes says only that nothing new is refused on today's tree. The trial's value there is
+  that site 6 and line 17 no longer exist to be exposed by the move.
+
+## What is not established
+
+- **That the move keeps circuit-check's records once 2a and 2b are in** (section 3's "no versioned file, no cold build at
+  the move"). It rests on `_digest_ast` keying an import by the names it binds and on `_moved`'s docstring; nothing ran it.
+  I checked that no file of `src/circuit_check` names the served part by path (`rg` for `definitions/registry` and the
+  like [ran]), so the only names are the sites above.
+- Whether `popread.py`, `call_boundary_plan.py`, `prove_records.py` and `bool_build_cost/run.py` load the catalog before
+  they call `specialization` (PR 1's risk). I read `serving_templates.py:536` and `a11_kinds.py:277`, which do.
+- The note `lanes/top/20261112T1707Z-report-layout-rest-sized.md` and `lanes/vllm/20261109T1930Z-plan-overhaul-tools.md`:
+  not on this machine. Their figures here are the coordinator's reading.
+- Section 6 (e)'s one-worker day: an estimate of editing work, not timed.
