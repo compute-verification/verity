@@ -128444,3 +128444,165 @@ nothing calls the check. One more run, which prints every clause's verdict and t
 
 Branches: `cursor/proofs-heldof-4c7b` at `be198cefc6`; scratch `cursor/proofs-heldof-descrun-f684` at `ae14c73b55`.
 Both pushed; nothing unpushed.
+
+## MESSAGES, Fri 13 Nov 07:47Z: AN UNEVEN SPLIT IS REFUSED at `verity/protocols/flock/verifier/Flock/Zk.lean:317` (a rep with too many rounds) and `verity/protocols/flock/verifier/Flock/Transcript.lean:83` (a rep with too few), proved as `FlockDeploy.streams_size_zk` (`security/Proofs/Flock/Claims/DeployK.lean:943`); `repRounds true` AT PLAY 2556 IS 98 BY ITS ACCEPTED RECORD AND `streams_size_zk` [derived]; THE `#eval` IS RUNNING (`r20261113-072700-d101`, ends by about 08:17Z); THE TWO FACTS SERVE DIFFERENT STATEMENTS: the session premises need the per-rep count, which the check already enforces, and `FixedBefore` still needs the `rep-stream-order` refusal
+
+**Plain words.** A session whose two reps have the wrong round counts is refused, even when the counts add up to the
+right total. The masked verifier replays each rep from its own stream, found by name, and refuses a stream that has
+rounds left over or that runs out. A Lean theorem already says so. The `#eval` of `repRounds` at play 2556 is still running. Until it ends, 98 rests on that theorem applied to the play's accepted record (98 + 98 rounds), not on an evaluation. The count is not the order, though.
+The three session premises need the count, and the deployed check already refuses a wrong count, so no new refusal is
+needed for them. `FixedBefore`, on the frame side, needs the order: every opening the log has before round `i`'s is on
+a round before `i`. Nothing in the check gives that between rep 0 and rep 1 of one tree. So the order refusal is still
+needed, and the count does not replace it. Your 07:01Z word to soundness, that the order refusal might be withdrawn
+for the count, should be corrected: we need both facts, and only the order needs a new refusal. I wrote neither.
+
+### 1. The uneven split (your condition 1)
+
+- **`custody` and `liveOf` check only the total** [read]. `liveOf` (`security/Proofs/Flock/Claims/Deploy.lean:154–175`)
+  reads each of `spec.repStreams`' streams by name and keeps its rounds as they are. `custody` (`Deploy.lean:182–188`)
+  checks `rounds.length == mids.length` over all streams flattened, then each round against its message and coin.
+  A 99 + 97 record passes both wherever 98 + 98 does.
+- **The masked verifier reads each rep alone** [read]. `Flock.Zk.verify` (`Flock/Zk.lean:324`) decodes the record and
+  runs `verifyRep` (`Zk.lean:290`) once per rep, on the stream named `{table}/rep{r}`. The rep's transcript takes its
+  coins from that stream's rounds one at a time (`squeeze`, `Flock/Transcript.lean:79`).
+  - A rep with fewer rounds than its schedule asks for is refused at `Transcript.lean:83`:
+    `"R2: round {t.k}: the verifier issued no such coin"`. A round with the wrong challenge count is refused at line 85.
+  - A rep with rounds left over is refused at `Zk.lean:317`:
+    `"S15/R2: {name}: {…} recorded rounds were never consumed"`.
+  - The hashed twins are `Flock/With/Transcript.lean:41,43` and `Flock/With/Zk.lean:327`.
+- **Proved** [read]: `FlockDeploy.streams_size_zk` (`DeployK.lean:943`). If `Zk.verifyWithM hs spec (tabsOf sts) record
+  proofs = .ok ()` at any hashes and `liveOf spec record = .ok lv`, then there are `2 * sts.size` streams, and stream
+  `k` has `repRounds true spec sts[k / 2]!` rounds. It follows from `rep_zk` (`DeployK.lean:908`) and
+  `zkVerifyRepWith_rounds` (`DeployRoundsZk.lean:381`). The deployed `Zk.verify` is `Zk.verifyWith Sha512.hash`
+  wherever every table's Merkle scheme is the registry's (`Zk.verify_eq_verifyWith`, `Flock/With/ZkEq.lean:62`), and
+  `verifyWith` is `verifyWithM` (`With/Zk.lean:382`).
+- **The form runs it** [read]. `Spot.OneStageZk.verdictOf` calls `Flock.Zk.verify spec tabs record proofs`
+  (`verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean:556`). A session that fails it makes `membersRun`'s
+  `all` false, and the two-stage form refuses at
+  `verity/protocols/recursion/verifier/recursive/VStarRecursive/SampledTwo.lean:300–301`:
+  `"proofs: a session's verifier did not accept"`.
+- **So condition 1 is derivable, not a new premise** [derived]. With one table a session (condition 2),
+  `(FlockDeploy.V true).k x = 2 + 2 · repRounds`, so `repsOf K = repRounds`, and `streams_size_zk` gives each rep stream
+  exactly that many rounds. That also needs SESSIONOF's fact that the form's setup of a session is
+  `FlockDeploy.setupOf true` at the session's statement. In `sessionsRun_replay` I keep condition 1 a named premise as
+  you ruled. It can be discharged from `streams_size_zk` once SESSIONOF's setup fact is stated.
+
+### 1b. `repRounds` at play 2556
+
+- **The record** [run: `out/form/blobs/002-session.json` of `r20261113-053625-2556`, read by script]:
+  - one table, `circuit` (`hello.tables`, `config.tables`), and `reps: 2`;
+  - streams `circuit/rep0` and `circuit/rep1`, each with 98 rounds and 950 challenge elements;
+  - verdict `accepted: true`, both reps `ok`. The form's `on.json` accepted too.
+- **So 98 = `repRounds true spec sts[0]!` there** [derived]. The play accepted, so `streams_size_zk` gives each stream
+  `repRounds` rounds, and each stream has 98. This rests on the theorem's hypotheses holding at that play,
+  `Zk.verify_eq_verifyWith`'s `Named` among them. It is not an evaluation.
+- **The `#eval`** (`security/Proofs/Properties/Verity/SampledTwo/RepRoundsProbe.lean` on the scratch branch
+  `cursor/proofs-messages-probe-745c`, head `42cba05f12`, not for `main`). In `IrDepSession.lean`'s pattern, it is a
+  `#eval` gated on `VERITY_REPROUNDS_DIR`, run by `lean_changed.py --try` on the play's form case, which the job
+  fetched from the store. It prints `repRounds true` for each table, `rounds`, `2 + rounds` (`V true`'s `k` where the
+  statement sets up), `liveOf`'s stream sizes and `sessionMsgs`' length. A second pass prints `Flock.Zk.verify`'s
+  verdict on the record as kept, re-serialized, and with one round moved each way (99 + 97 and 97 + 99).
+  - `r20261113-071313-1f5a`: refused before running, because the file was not a Lake root.
+  - `r20261113-071614-0917`: I cancelled it while it waited for memory on vy-nebius-cpu-1.
+  - `r20261113-071906-98da`: "Stack overflow detected", lean exit 134 after 258 s. `FlockDeploy.decode` compares the
+    57 MB statement's re-encoding by `decide` on a `List`, which recurses once per byte in the interpreter. The probe
+    now uses `RecDeploy.VStarBuild.setupB`, which compares by a loop and is `setupOf` by `setupB_eq`
+    (`Recursion/IrDep.lean:617`), as `IrDepSession` does.
+  - **`r20261113-072700-d101`** (vy-nebius-cpu-2, `--mem-gb 16`, `--timeout 50m`, no `ulimit`): its build
+    completed (11738 jobs). At 07:46Z `lean` had used 810 CPU-seconds and 5 GB and printed nothing yet: a `#eval`'s
+    output shows only once it ends. It ends by about 08:17Z, at its timeout. I will post its lines in my next entry,
+    or say it timed out.
+
+
+### 2. Which statement needs which fact
+
+- **The three session premises need the count, not the order** [read; derived]. `SeqCoinsRead`
+  (`Accepts.lean:217`), `SessionMsgs` (`Accepts.lean:247`) and `SessionsRun` (`OfRun.lean:97`) read session `t`'s run
+  round `off t + j` through `slotStream tab R j`, and SESSIONCOINS's `roundOf` places an opening by its stream's name
+  and count. Which rep was opened first in the log changes nothing there. The count, that each rep has `R` rounds, is
+  what makes `slotStream`'s split at `R` the record's split. The check already enforces it (section 1).
+- **`FixedBefore` needs the order** [read; derived]. COINMAP's 06:58Z item 2 is right, and it is my 06:20Z reason for
+  `rep-stream-order`. The frame is a run of `SpotFlock.V`, whose prover answers run round `i` having seen only the
+  challenges of rounds before `i`. `FixedBefore` at round `i` says the value fixed for round `i` is the same at any run
+  challenges that agree on those the history before `i` shows. From `place_prefix_used`, that holds when every opening
+  the log has before round `i`'s is on a round before `i`. Here is where the check gives that and where it doesn't:
+  - **Within one stream:** given by the count. Round `k` of a stream is its stream's `k`-th opening (`roundOf`).
+  - **The link first, the closing last:** given by `memberTreeReason`'s rules (`Spot/ChallengerTrees.lean`).
+  - **Across sessions:** given by `membersOrder` (`ChallengerTrees.lean:406–422`): the trees are opened one after
+    another, in the sessions' order.
+  - **Between rep 0 and rep 1 of one tree: not given.** Nothing in the check reads the log's order between two rep
+    streams of one tree. The challenges of round `k` of a stream come from the tree's key at that stream and round,
+    whatever the order they were asked in, and the record keeps each stream apart. So a 98 + 98 record can come from
+    a log that opened rep 1's round 0 (run round `R + 1`) before rep 0's round `R − 1` (run round `R`). At such a play
+    the strategy picks rep 0's last message after seeing a challenge the run shows only later. `FixedBefore` at that round
+    is false there, and no collision bound holds.
+- **The count does not give the order** [derived]. The count is about how many rounds each stream has. The order is
+  about when the device released them, and the counts are 98 + 98 whatever the order was.
+- **So: both facts, and one new refusal.** The count is needed by the session premises and is already a refusal
+  (`Zk.lean:317`, `Transcript.lean:83`). The order is needed by `FixedBefore`. Only `rep-stream-order` would add it.
+  I wrote neither.
+- **What the order refusal costs an honest play: nothing seen.** [run] Play 2556's release log
+  (`interior.coins.session.log` in its `evidence.json`, art `art:d63a5946…`'s `out/form/evidence.json`, read by
+  script) opens one tree in this order: `session` round 0, `circuit/rep0` rounds 0–97, `circuit/rep1` rounds 0–97,
+  `session` round 1, the closing round. That is the order `rep-stream-order` asks for. That play came from the Python
+  server. [read, 06:20Z] The Firewall's schedule `planOf` (`Firewall/SessionPlan.lean:77`) opens rep streams one after
+  another in `repStreams` order.
+- **Not established:** the order of the stages' rounds (0 to `stage`) against the sessions' rounds in the log
+  (STAGECOINS's and CUT's).
+
+### 3. COINMAP's NEEDS 1: `place_prefix_used`'s shape is what `FixedBefore` takes
+
+[read: `CoinPrefix.lean` at `41ff648dbd`, lines 345–351] Yes, as it stands, and I want no other shape. Take `q` as the
+log's openings before the one `place` puts on round `i`. Then `FixedBefore` at round `i` follows from
+`place_prefix_used` and three facts. None of the three is COINMAP's:
+
+1. **The order fact (section 2):** every opening of `q` is on a round before `i`. With it, `Shows hist r'` gives
+   `place_prefix_used`'s premise `hq` (`r j = r' j` where `usedOf L j [] q ≠ 0`), since `Shows` agrees on whole coins
+   (`Messages.lean:100`). The order fact needs `rep-stream-order`, `membersOrder` and the stages' order.
+2. **The locator reads only the prefix's frames:** at `r'` the opening after `q` is still put on round `i`.
+   `place_prefix_used` keeps `q` and `rl`'s frame, and `roundOf` reads a stream's name and count. That is a lemma about
+   `locOf`/`roundOf`, SESSIONCOINS's file or mine.
+3. **`Fx` reads only that opening's frame and bytes**, not its coins `cs`. At the strings form (`stringsFx Dg ctx`)
+   this is a fact about `Dg`, which is due by Sat 02:00Z with `Fx`, `raw` and `ctx`.
+
+I will write the round-keyed corollary (`q` taken up to round `i`'s opening) on my side. COINMAP owes nothing more for
+this.
+
+### 4. `r20261113-063039-7ab0`: read
+
+[run: its `stdout.log`, fetched whole] Tree `49dbe8d36f` (`launch.json` `source_sha`). Results:
+- "TRY SessionDev exit 0": lean exit 0 in 354 s, 22 theorems, none past the three axioms.
+- "TRY SessionOpened exit 0": 229 s, 6 theorems.
+- "TRY SessionCut exit 0": 389 s, 7 theorems.
+- Each passed the sibling check, and the run ends "ALL rc=0".
+
+`sessionsRun_replay`, with conditions 1 to 3 as named premises: step A is written and pushed, and not compiled:
+`SampledTwo/SessionReplay.lean` on `cursor/proofs-messages-f55d` at `3c07a782ee`. It has two theorems:
+- `run_acc_replay`: any prover that sends a fixed list `sends ++ [f]`, whatever the answers, is accepted by
+  `FlockDeploy.V true` under `run_acc_of_zk`'s conditions, with `sends` and `f` in place of the honest run's.
+- `replayProver_next`: on a play whose case gives `ms`, the replaying prover's message after a history of length `i`
+  is `ms`'s `i`-th.
+
+Its try goes out when the probe ends, since tries go one at a time. Step B comes next: `SessionsRun` at
+`replayProver C` from `msgsAtCase`'s shape (`linkOf_sessionMsgs`, `finalOf_sessionMsgs`), the count (`hk` through
+`rounds_sum`) and the custody of the challenges.
+
+### STOP RULE
+Kept. The probe is on a scratch branch, `cursor/proofs-messages-probe-745c`, and is not for `main`; its only other edit
+is that branch's lakefile root. On `cursor/proofs-messages-f55d`, the lock's only edit is one name in `roots`
+(`…SampledTwo.SessionReplay`), with its lakefile root, in the commit that adds the file. No listed guarantee, named assumption, lock or verifier line was touched, and neither
+refusal was written.
+
+### NEEDS
+1. **Coordinator → soundness:** the correction in the plain words. The order refusal is still needed, for
+   `FixedBefore`. The count needs no refusal, since the check already refuses a wrong count.
+2. **SESSIONOF:** that the form's setup of a session is `FlockDeploy.setupOf true` at its statement, with one table.
+   That is conditions 2 and 3, and it discharges condition 1 through `streams_size_zk`.
+3. **COINMAP:** nothing (section 3).
+
+### Not established
+- `repRounds true` evaluated at play 2556's statement: `r20261113-072700-d101` is running.
+- That `streams_size_zk`'s hypothesis `Zk.verifyWithM … = .ok ()` is met by the form's `Zk.verify` at the
+  registry's Merkle schemes on every accepted play. `Zk.verify_eq_verifyWith` needs `st.merkle.Named` for each table,
+  which I have not traced to the form's setup.
+- The stages' order against the sessions in the log.
