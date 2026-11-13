@@ -1599,7 +1599,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("tools", "infra"): ["tools/tests/test_console.py"],
         ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
     }, found
-    assert _row("verity/settings.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
+    assert _row("verity/errors.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
         and _row("verity/protocols/flock/verifier/Flock/V.lean", steps) == "verity/protocols/flock/verifier"
     assert [_below(f, steps) for f in ("verity/commitments/crypto/lms.py", "verity/commitments/merkle.py", "verity/errors.py",
                                        f"{prover}/circuit/words.py", "examples/a/b.py", "conftest.py")] == [
