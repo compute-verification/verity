@@ -261,9 +261,10 @@ def split(q, k, valid, scale_bits: int, BN: int, sink=None):
     return oacc, np.where(empty, U32(F_NINF), fadd(log2f(total), st.m)).astype(U32)
 
 
-def combine(lse, oacc, sink) -> np.ndarray:
-    """`FlashMlaCombine_v1` for every head: lse (H, NS), oacc (H, NS, D), sink (H,) -> bf16 (H, D)."""
-    lse, oacc, sink = _w(lse), _w(oacc), _w(sink)
+def combine_scale(lse, sink=None) -> np.ndarray:
+    """-g for every head: lse (H, NS) and sink (H,), or None where the call gives no sink -> (H,); split s weighs
+    exp2(lse[s] - g)."""
+    lse = _w(lse)
     NS = lse.shape[1]
     mx = np.full(lse.shape[0], F_NINF, dtype=U32)
     for s in range(NS):
@@ -280,14 +281,28 @@ def combine(lse, oacc, sink) -> np.ndarray:
         h = len(lanes) // 2
         lanes = [a if b is None else b if a is None else fadd(a, b) for a, b in zip(lanes[:h], lanes[h:])]
     total = lanes[0]
-    g = np.where(feq(total, 0), U32(F_PINF), fadd(log2f(total), mx))
-    g_sink = fadd(g, log2f(fadd(F_ONE, exp2f(ffma(sink, L2E, neg(g))))))
-    g_none = np.where(feq(sink, F_NINF), U32(F_PINF), fmul(sink, L2E))
-    g = np.where(feq(g, F_PINF), g_none, g_sink).astype(U32)
+    g = np.where(feq(total, 0), U32(F_PINF), fadd(log2f(total), mx)).astype(U32)
+    if sink is not None:
+        sink = _w(sink)
+        g_sink = fadd(g, log2f(fadd(F_ONE, exp2f(ffma(sink, L2E, neg(g))))))
+        g_none = np.where(feq(sink, F_NINF), U32(F_PINF), fmul(sink, L2E))
+        g = np.where(feq(g, F_PINF), g_none, g_sink).astype(U32)
+    return neg(g)
+
+
+def combine_values(w, oacc) -> np.ndarray:
+    """The partials weighed for every head: w (H, NS) f32, oacc (H, NS, D) f32 -> bf16 (H, D), split by split from 0."""
+    w, oacc = _w(w), _w(oacc)
     res = np.zeros(oacc.shape[::2], dtype=U32)
-    for s in range(NS):
-        res = ffma(exp2f(fadd(lse[:, s], neg(g)))[:, None], oacc[:, s], res)
+    for s in range(w.shape[1]):
+        res = ffma(w[:, s, None], oacc[:, s], res)
     return DR.f2fp_bf16(res)
+
+
+def combine(lse, oacc, sink) -> np.ndarray:
+    """`FlashMlaCombine_v1` for every head: lse (H, NS), oacc (H, NS, D), sink (H,) -> bf16 (H, D)."""
+    lse = _w(lse)
+    return combine_values(exp2f(fadd(lse, combine_scale(lse, sink)[:, None])), oacc)
 
 
 def decode(q, nope, scale, rope, idx, lens, sink, *, SPLITS, NW: int, QT: int, BN: int, SCALE: float) -> np.ndarray:

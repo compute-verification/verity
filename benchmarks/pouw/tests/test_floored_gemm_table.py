@@ -3,16 +3,10 @@ share weighted by each kernel's duration, a metric ncu gave no number left out, 
 no data."""
 from __future__ import annotations
 
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
-
-POUW = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("floored_gemm_table", POUW / "floored_gemm" / "table.py")
-T = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(T)
+import table as T
 
 TENSOR = "sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed"
 ALU = "sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active"

@@ -7,10 +7,10 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 
-import pytest
-
 import pous_test_signer as ts
+import pytest
 from pous_fakes import Clock
+
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import run
 from verity.protocols.pous.verifier.schemes import p2 as P2

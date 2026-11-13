@@ -35,8 +35,13 @@ MARKER = Path("/etc/vy/runs-via-slot")
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
-#: slot.py from a shipped tree
-SLOT_PATHS = ("tools/verity/check/slot.py",)
+#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below the path slot.py has
+#: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
+#: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
+#: tree each run ships
+NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+#: slot.py as a run's command names it: a shipped tree's, or the machine's own
+SLOT_PATHS = ("tools/verity/check/slot.py", NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
@@ -54,8 +59,9 @@ POOL_WAIT_S = 14400
 
 def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S) -> list[str]:
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
-    LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, with slot.py from the run's own shipped tree (so the run's
-    cwd is its source).  `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
+    LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own shipped tree
+    (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one (`node_copy`).
+    `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
     isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
     runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
     if not POOL_NAME.fullmatch(pool):
@@ -71,10 +77,19 @@ def pool_slots(pool: str) -> str:
     return POOLS.get(pool) or f"{LOCKS}/{pool}/slots"
 
 
+def node_copy(command: list[str]) -> list[str] | None:
+    """A command that names a pool and then the shipped tree's slot.py (`in_pool`'s words, however it was built), with the
+    machine's own copy (NODE_SLOT) in the tree's place; None for any other command. A recorded check (`check.py --record
+    --on`) names its pool in the run's environment and no pool in its command, so it keeps its tree's slot.py."""
+    if command[:1] == ["env"] and through_slot(command) and command[3] == SLOT_PATHS[0]:
+        return [*command[:3], NODE_SLOT, *command[4:]]
+    return None
+
+
 def through_slot(command: object) -> bool:
-    """Whether a workload command is `[env CHECK_SLOTS=POOL] python3 <tree>/check/slot.py [OPTS] -- CMD...`, the way check.py's
-    SLOT_WRAP, train.sh and `research queue ready --on` send a check: CMD then runs under a slot's lock and cores. `slot.py
-    --status` is not a run."""
+    """Whether a workload command is `[env CHECK_SLOTS=POOL] python3 SLOT [OPTS] -- CMD...`, SLOT one of SLOT_PATHS, the way
+    check.py's SLOT_WRAP, train.sh and `research queue ready --on` send a check: CMD then runs under a slot's lock and cores.
+    `slot.py --status` is not a run."""
     if not (isinstance(command, list) and all(isinstance(c, str) for c in command)):
         return False
     if command[:1] == ["env"] and len(command) > 1 and POOL.fullmatch(command[1]):

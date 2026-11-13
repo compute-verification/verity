@@ -430,9 +430,16 @@ def mapping(name: str) -> bool:
 
 def fetched_deps(d: Path) -> bool:
     """Whether a package's non-path dependencies are in place (`lake` would otherwise clone them first)."""
+    return not unfetched(d)
+
+
+def unfetched(d: Path) -> list[str]:
+    """The non-path dependencies of the package at ``d`` that are not in place, each as Lake names its directory and in
+    its manifest's order, the order Lake clones them in."""
     m = d / "lake-manifest.json"
     deps = [p for p in json.loads(m.read_text()).get("packages", []) if p.get("type") != "path"] if m.is_file() else []
-    return not deps or all((d / ".lake" / "packages" / unescape(p["name"])).is_dir() for p in deps)
+    names = [unescape(p["name"]) for p in deps]
+    return [n for n in names if not (d / ".lake" / "packages" / n).is_dir()]
 
 
 def unescape(name: str) -> str:

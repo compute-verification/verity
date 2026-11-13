@@ -208,7 +208,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
-| `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
+| `ShaSpeed` and Dither's `Pouw.Assumptions.ServiceSound`, the Lean's names until renamed; not H1's premise `Properties.Pouw.Period.ServiceSound` (a window's one-stage Flock sessions), another premise, which keeps its name | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
@@ -238,7 +238,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "post-landing run", "postland" | after-landing run |
 | "train" for a batch of PRs landed on one check | candidate |
 | "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
-| "components", "product" for a composite's parts and their joining, and the Lean's and wire format's names | subprotocols; composition |
+| "components", "product" for a composite's parts and their joining, and the Lean's and the channels' message format's names | subprotocols; composition |
 | "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
@@ -250,8 +250,8 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
 | "prover" for the party: "the prover's node, machine, host or site", "a machine the prover doesn't control", "nothing the prover runs or hosts", "prover-controlled", "prover hardware", "the prover system" | the developer: the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware ("prover" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover in a soundness statement) |
-| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.configuration.deploy` keep the word) | configuration: onsite or remote, the Lean's `Composite` |
-| "composite protocol" (the Lean's `Composite` keeps its name) | configuration: onsite or remote; protocol soundness is stated per configuration |
+| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.configuration.deploy` keep the word) | onsite or remote, the list of protocols a configuration names, the Lean's `Composite` |
+| "composite protocol" (the Lean's `Composite` keeps its name) | compose, over onsite's or remote's list; protocol soundness is stated per configuration |
 | "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |

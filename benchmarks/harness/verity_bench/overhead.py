@@ -20,7 +20,7 @@ stock's at the card's weight (`host_cost`, from the timed pass); the denominator
 arm is each linear's fastest kernel of the scheme's scaling by wall time, with the least-SM-time kernel's γ beside it; the
 `stock` scheme's γ is the A/A control, one kernel against its own twin. A figure of record has at least `MIN_REPS` reps,
 an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes the SM-time cross-check
-(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_CAP` at each point. `periods` states it per monitoring period.
+(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_MAX` at each point. `periods` states it per monitoring period.
 
 **What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
 scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
@@ -33,6 +33,7 @@ import math
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -46,7 +47,7 @@ RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 #: busy SM-time at most CROSS_CHECK over its kernels' durations x the SMs their blocks occupy
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05
 #: the scheme gate: γ at most this at each point
-GAMMA_CAP = 10.0
+GAMMA_MAX = 10.0
 POINTS = ("C", "L")
 
 
@@ -204,11 +205,11 @@ def _mid(lo: int, hi: int) -> int | None:
 
 @dataclass(frozen=True)
 class Points:
-    """The rule's verdict on the m's sampled so far: C and L (None until sampled), the best throughput, and the bracket each
+    """The rule's verdict on the m's sampled so far: C and L (`c`, `lat`; None until sampled), the best throughput, and the bracket each
     lies in (its sampled neighbour on the side it could still move to, None at the sweep's end)."""
 
     c: int | None
-    l: int | None
+    lat: int | None
     best_flop_per_ms: float
     c_bracket: tuple[int | None, int | None]
     l_bracket: tuple[int | None, int | None]
@@ -229,17 +230,17 @@ def rule(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
             break
         if m % GRID == 0:
             c = m
-    l = None
+    lat = None
     for m in ms:
         if times[m] > (1 + L_SLACK) * times[1]:
             break
         if m % GRID == 0:
-            l = m
+            lat = m
     below = max((m for m in ms if c is not None and m < c), default=None)
-    above = min((m for m in ms if l is not None and m > l), default=None)
-    if l is None:
+    above = min((m for m in ms if lat is not None and m > lat), default=None)
+    if lat is None:
         above = min((m for m in ms if m > 1 and times[m] > (1 + L_SLACK) * times[1]), default=None)
-    return Points(c, l, best, (below, c), (l, above))
+    return Points(c, lat, best, (below, c), (lat, above))
 
 
 def next_ms(times: Mapping[int, float], model: str = KERNEL_MODEL) -> list[int]:
@@ -268,7 +269,7 @@ def final(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
     if more := next_ms(times, model):
         raise ValueError(f"the sweep isn't finished: it still samples m = {', '.join(map(str, more))}")
     p = rule(times, model)
-    if p.c is None or p.l is None:
+    if p.c is None or p.lat is None:
         raise ValueError(f"the rule finds no {'C' if p.c is None else 'L'} on multiples of {GRID} in the sweep")
     return p
 
@@ -299,9 +300,10 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
     linears = MODELS[model]
     rows = {row["label"]: row for r in results for row in r.get("shapes", [])}
     ms = sorted({row["m"] for row in rows.values() if (row["n"], row["k"]) in set(linears.values())})
-    times, chosen = {}, {}
+    times: dict[int, float] = {}
+    chosen: dict[int, dict] = {}
     for m in ms:
-        per = {}
+        per: dict[str, dict[str, Any]] = {}
         for linear, (n, k) in linears.items():
             row = rows.get(label(m, n, k))
             got = timed(row, method=method) if row else {}
@@ -474,7 +476,7 @@ def cross_check_why(ratios: Mapping[str, float | None], bound: float = CROSS_CHE
     off = {k: r for k, r in ratios.items() if r is None or r - 1 > bound}
     if not off:
         return None
-    worst = max(off, key=lambda k: math.inf if off[k] is None else off[k])
+    worst = max(off, key=lambda k: math.inf if (r := off[k]) is None else r)
     return (f"{len(off)} entries' SMs Active SM-time exceeds their kernels' occupied SM-time by over {bound:.0%} "
             f"({worst}: {off[worst]})")
 

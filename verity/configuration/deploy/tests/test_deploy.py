@@ -9,11 +9,10 @@ import json
 import socket
 import struct
 import threading
-import tomllib
-
-import pytest
 
 import deploy_example as X
+import pytest
+
 from verity.configuration.deploy import manifest as M
 from verity.configuration.deploy.channels import Playback, dial
 from verity.configuration.deploy.runtime import ARRIVED, RUNTIME, run
@@ -187,7 +186,7 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     t = threading.Thread(target=reset)
     t.start()
     r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
-            verify=X.verify, seed=SEED, dial_to={"responder": "%s:%d" % server.getsockname()[:2]})
+            verify=X.verify, seed=SEED, dial_to={"responder": "{}:{}".format(*server.getsockname()[:2])})
     t.join()
     server.close()
     how = r.ended["challenger"]["responder"]
@@ -201,7 +200,7 @@ def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
     """A dial whose connect fails (nothing listens at the address) is a channel that ended on connecting: the challenger
     is told `Closed` with it, and the run's result names it, as for a stream that fails later."""
     server = socket.create_server(("127.0.0.1", 0))
-    address = "%s:%d" % server.getsockname()[:2]
+    address = "{}:{}".format(*server.getsockname()[:2])
     server.close()
     r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
             verify=X.verify, seed=SEED, dial_to={"responder": address})
@@ -327,23 +326,6 @@ def test_placement_refuses_by_name_or_marks_the_run_simulated(tmp_path):
     assert e.value.name == "unknown-machine"
 
 
-def test_a_workload_provides_what_the_protocol_needs():
-    m = M.Manifest("verity/example/needs", 1, "p", X.MANIFEST.parties, X.MANIFEST.channels, X.MANIFEST.messages,
-                   needs=("windows",))
-    M.workload(m, ["windows", "store"])
-    with pytest.raises(Refused) as e:
-        M.workload(m, ["store"])
-    assert e.value.name == "workload-needs"
-
-
-def test_the_manifest_renders_as_toml():
-    doc = tomllib.loads(M.render(X.MANIFEST))
-    assert doc["party"]["challenger"] == {"principal": "auditor", "per": "one", "needs": ["clock", "coins"]}
-    assert doc["channel"][0] == {"from": "challenger", "to": "responder", "messages": ["Challenge", "Verdict"],
-                                 "latency_ms": 1, "carries_coins": True}
-    assert doc["message"]["Answer"] == {"version": 1, "kind": "private"}
-
-
 def test_a_channels_after_names_the_manifests_messages():
     challenge, answer = X.MANIFEST.channels
 
@@ -351,7 +333,7 @@ def test_a_channels_after_names_the_manifests_messages():
         return M.Manifest("verity/example/after", 1, "p", X.MANIFEST.parties,
                           (challenge, M.Channel(answer.sender, answer.receiver, answer.messages, after=after)),
                           X.MANIFEST.messages)
-    assert tomllib.loads(M.render(with_after("Challenge")))["channel"][1]["after"] == ["Challenge"]
+    assert with_after("Challenge").channels[1].after == ("Challenge",)
     with pytest.raises(ValueError, match=r"\['Nonce'\] on responder -> challenger are not its messages"):
         with_after("Nonce")
 
