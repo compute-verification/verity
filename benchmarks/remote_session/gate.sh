@@ -113,8 +113,9 @@ probe() {
     echo "can't fetch main's first-parent history from $MAIN_SHOWN (fetch.probe.log), so COMMIT can't be checked on" \
       "it: nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never" \
       "the source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
-      "before (git fetch origin main), whose launch pushes its origin/main there; if it still fails, the bare named here" \
-      "is missing or holds no main on the gate's node, and no launch can probe until it does"
+      "before (git fetch origin main), whose launch pushes its origin/main there; if it still fails, run" \
+      "git -C THAT_PATH rev-parse --verify refs/heads/main on the gate's node, THAT_PATH the repository named here, and" \
+      "relaunch once it prints main's head"
     exit 3; }
   echo "main from $MAIN_SHOWN at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
