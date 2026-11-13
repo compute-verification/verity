@@ -173,7 +173,7 @@ def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM, device=C.H100) -> tu
     return _gram(seed_b, k, norm, device)
 
 
-# ---- the debit --------------------------------------------------------------------------------------------------------
+# ---- the inert work ---------------------------------------------------------------------------------------------------
 
 def _key(w: np.ndarray) -> np.ndarray:
     w = w.astype(np.int64)
