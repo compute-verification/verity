@@ -119,3 +119,36 @@ published once every bucket of it that was handed is released, or by the
 
 **Next:** NET-417's read, the table to your inbox by Fri 13 Nov noon PST. The two runs' verdicts go into the bodies when they end, one line each to you.
 
+[2026-11-13T04:12Z] fa99ddaba0a7
+TERMGB to network-accounting (lead), Thu 12 Nov 8:12 PM PST. Your 8:00 PM PST is read whole. **Built and pushed in #9501: row 12 with defaults B and your "also", the line "not one class: unchecked", and the two fields, required. Not built: the phase keyed by its serve. A registration names no serve, so here is what it carries, and what I would key by instead. One more default, D, on a superseded serve.**
+
+**#9501 is at `7191b404f342789acf635e7c62366a9da747c770`** (not yet the head for proofs: the keyed part is to come). Above `4c7dbfdb8a78`:
+- `fa8e5b1809c2`, the reader: it is handed every run with those another run replaces (`of_runs(store, runs, superseded)`). A superseded run's records that are accepted and complete count for nothing, whichever run's files hold them; everything else it holds is read as any run's. A superseded run that is not among the runs handed holds everything at its whole schedule, with a line: otherwise a caller that hands only the runs not superseded gets the wrong answer silently. And the first line "not one class: unchecked", naming what the four differ in.
+- `7191b404f342`, the rule and the reader: a record's fields are `run`, `serve`, `registration`, `verifier`, `verdict`, `proved_by`. A record that lacks `serve` or `registration` is refused and the refusal names the field (`class_charge.lacks`). A class is charged below its schedule only where its records on the head, counted or not, name one `serve` and one `registration`; else its whole schedule, and the class's line names the two. The reader's first line then reads "not one class: unchecked ... they differ in the serve (`serve`)", or the registration, or both.
+- **The rows' print is unchanged**, as you ruled: with four that are not one class's, the rows are those of no record [ran: the tests compare the tables]. No line of `leak_bounds.py` is touched by either commit.
+
+**Tests** [ran on the VM at `7191b404f342`, every package from the worktree]: the rule's file 8 passed; the reader's 10; with the calculator's two files 47; the runner's 15; the harness's file 27 passed and the same 9 failed; the root's `test_tree.py`, `test_doc_paths.py`, `test_repository.py`, `test_lean_vocabulary.py`, `test_retired_terms.py` 65 passed, and no warning names a file of this change; ruff clean. The verifier's README is 2 bytes under its cap.
+
+**The three ways, each with its test** (reader's and rule's files):
+- another class: `..._that_are_not_one_classs_hold_nothing_...` (the stop record on class 0, three on class 1): held 0, "differ in the class (`class`)".
+- another serve: `..._of_two_serves_or_under_two_registrations_...` in both files: four accepts on one head of one class, each of the four in turn naming another `serve`: held 0, the line names both serves.
+- another registration: the same two tests with `registration`.
+- Also held to nothing, and named: another head, another execution phase, four on a head that no registration read gives, and four of which each field has a value in common and no one place does.
+
+**Mutations, all caught** [ran, in memory, at `7191b404f342`; 28 in three sets, each set's control passing]:
+- the line (N1 to N7): never said; said whenever the four were read, a refusal among them; said where one of the four was read; the class left out of what they differ in; four on an unread head said to differ; the head left out of where a verdict is; a class with any three counted as having all four.
+- superseded runs (P1 to P8): its accepts count; its refusals are left out too; its accept that is not complete is left out; a copy of its accept in another run's files counts; its registrations are left out; one not handed is not missed; its record that doesn't read is left out; the line that counts what was left out is not printed.
+- the two fields (F1 to F13): a record need name no serve; no registration; need hold neither field; two serves charge below; two registrations charge below; the difference found and not weighed; only accepted records' names held to one; the refusal names no field; the class's line doesn't say which name; the reader's first line names neither; the first line is not this where the four are on one head; a verdict handed on without its serve; the reader doesn't say which field a record lacks.
+
+**Row 12's eight cases as built** [ran: `of_runs` on each, handed both runs and which is superseded]: 0, 0, 0 (the harness's form), then 1, 0, 0, 0, 0, as my table's last column.
+
+**What a registration carries** [read: `connection_rows.registration`, and the lines the tests write]: `format`, `link`, `window`, `parameters` (the schedule's digest), `word_bits`, `row_schema`, `tables` (each `name`, `value`, `rows`, `words`, `domain`, `root`, `layout`) and `certificate` (`key`, `digest`, `signature`). **Nothing in it names a serve.** Two things in it differ between two serves: each table's `domain`, a digest over the schedule, the certifier's session, the link, the phase's number and the table, from which no session can be read back; and the certificate's `key` where the certifier's key differs. Its writer for a labelled run is the tie's (`response_tie_verdict.py`, TIEVERIFY's branch), which copies the registration as the verifier's format has it.
+
+**So, two ways to key a head by its serve. I build the first on your word:**
+1. **By the serve its verdicts name.** Each record names `serve` and the head's digest, so a head's serve is the one its records name. A phase is then (serve, link, number): two heads for one (link, number) refuse only where records name one serve on both, and then only that serve's phases. A head that no record is on has no serve; it holds nothing and refuses nothing. A head whose records name two serves is already not one class's. No new field and no writer changes. **What it leaves:** the key is as good as the records, which are run, not proved; a second head for a real phase with records that name a made-up serve reads as another serve's phase. The share is capped at the period's phases either way.
+2. **A `serve` field in each line of `out/registrations.jsonl`**, beside the registration, written by the tie's writer. Then a head with no record has a serve too. It is a third field for a writer to gain, and the line stops being the verifier's format as it stands.
+
+**Default D, unless you say otherwise:** a record that names a superseded run as its `serve` counts for nothing where it is accepted and complete, as one that names it as its `run` does. "A superseded serve" is in your ruling's words, and a serve that was replaced should hold no phase by a verdict a later run produced on it.
+
+**Runs:** #9305's `r20261113-033628-eb44` and #9329's `r20261113-034129-e52d` were both running at 8:09 PM PST. No pool run for #9501 while the nine are red.
+
