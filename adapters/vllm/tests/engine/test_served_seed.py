@@ -25,7 +25,7 @@ class Params:
 
 def test_the_default_is_the_hash_of_its_name():
     want = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
-    assert served_seed.DEFAULT_SEED == want and 0 <= want < 1 << 63
+    assert want == served_seed.DEFAULT_SEED and 0 <= want < 1 << 63
 
 
 def test_a_derived_seed_is_the_hash_of_its_domain_the_coin_and_the_id_each_length_prefixed():
@@ -57,6 +57,15 @@ def test_served_keeps_a_clients_seed_defaults_a_greedy_one_and_derives_a_stochas
 def test_an_unseeded_stochastic_request_without_an_id_is_refused_by_name(params):
     with pytest.raises(ValueError, match="sampled under one derived from its window's seed coin and its certified id, the body's `user`"):
         served_seed.served(params, None, COIN)
+
+
+@pytest.mark.parametrize("params", [Params(temperature=0.8), {"temperature": 1.0, "seed": None}])
+def test_an_unseeded_stochastic_request_without_a_coin_is_refused_in_the_words_derived_refuses_it(params):
+    with pytest.raises(ValueError) as served:
+        served_seed.served(params, "q1", None)
+    with pytest.raises(ValueError) as derived:
+        served_seed.derived(None, "q1")
+    assert str(served.value) == str(derived.value) == "a window's verifier coin is non-empty bytes, not None"
 
 
 def test_a_served_seed_is_a_function_of_the_coin_and_the_id_alone():

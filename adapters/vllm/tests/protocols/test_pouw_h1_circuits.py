@@ -11,20 +11,26 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.circuits import partition_object as PO
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.spot.verifier.one_stage import partition as P
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC
+from tests.protocols import pouw_h1_gpu as GPU
 from tests.protocols import pouw_h1_rehearsal as RH
-from tests.protocols.test_pouw_h1_served import _unit
+from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata
@@ -38,6 +44,7 @@ def _sha(b: bytes) -> str:
 def _auditor(monkeypatch):
     """Infra's gate, ``auditor.py``, as a module of its own (its dataclasses read it from `sys.modules`)."""
     spec = importlib.util.spec_from_file_location("live_challenger_auditor", AUDITOR)
+    assert spec is not None and spec.loader is not None, f"{AUDITOR} is no module"
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
@@ -99,9 +106,6 @@ def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, m
     """``pouw_h1_gpu.py --commit --peer --period P`` opens P with ``--length``, its ``--declare``'s fixed length, and
     ``--circuit-files``, each K's and the live template's, in the form the gate takes and core's credit reads back
     (`credit.committed_length`, `credit.committed_files`), so credit holds its window to both."""
-    from verity_vllm.protocols.pouw import h1 as PH
-
-    from tests.protocols import pouw_h1_gpu as GPU
     decl = PH.Static((1,) * 32, 3, 32, 4)
     files = {"k4096": "2b" * 64, "k14336": "3c" * 64, CR.LIVE: "4d" * 64}
     argv = GPU.period_open_argv("o1", "a" * 128, 7, decl, files)
@@ -121,11 +125,6 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     declared Program's PREFIX (core's credit verifies each ``live@<s>`` on ``circuit_files["live"]``), kept on a second
     build. A Commit's period opens on exactly that manifest's files (`pouw_h1_gpu.period_files`): built for its circuit,
     every stratum and the live template, at its own T and S."""
-    from types import SimpleNamespace
-
-    from verity.protocols.spot.verifier.one_stage import partition as P
-
-    from tests.protocols import pouw_h1_gpu as GPU
     d, raw = program
     lived = []
 
@@ -159,13 +158,11 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
         GPU.period_files(out, _sha(raw), layout, decl)
 
 
+@pytest.mark.slow
 def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program():
     """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
     the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
     v2's."""
-    from verity.protocols.pouw.prover.circuit import live as L
-    from verity.protocols.spot.verifier.one_stage import partition as P
-
     for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
                                 (64, (L.program_v2(64, 1, "h1/"), L.query_v2(64)))):
         assert PC.live_part(t, 1, "h1/") == P.partition(program, query)
@@ -189,9 +186,6 @@ def test_a_j10r_program_builds_its_live_file_and_lowers_its_strata_as_j10r(tmp_p
     template the declared J10-R one (`h1tile.PouwH1Tile5`'s, here the served tests' stand-in): with ``--strata none``
     its live file and manifest are built, the files a period opens on; a stratum it lowers is lowered as J10-R's
     statement (``j10r``), never v1's."""
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-
-    from tests.protocols.test_pouw_h1_served import StandInJ10R
     j10r = _unit(defn=StandInJ10R)
     monkeypatch.setattr(HW, "tile_unit", lambda k, tile, definition=None:
                         (j10r if definition is HT.PouwH1Tile5 else _unit())(k))
@@ -202,8 +196,12 @@ def test_a_j10r_program_builds_its_live_file_and_lowers_its_strata_as_j10r(tmp_p
     (d / RH.PROGRAM_META).write_text(json.dumps({"program_digest": _sha(raw),
                                                  "layout": SV.declared_layout(SHAPES, MODULES, ROWS, STEPS)}))
     out = tmp_path / "circuits"
+
+    def lower_live(T: int, part: dict, path: Path) -> None:
+        path.write_text(f"the live template at T = {T}\n")
+
     doc = PC.build(d, out, lower=lambda *_a: pytest.fail("lowered a J10-R stratum"), live=(ROWS, STEPS),
-                   lower_live=lambda T, part, path: path.write_text(f"the live template at T = {T}\n"), only=())
+                   lower_live=lower_live, only=())
     assert doc["templates"] == {f"k{k}": PO.template_id(HW.template(k, j10r(k))) for k in (64, 128)}
     assert sorted(doc["files"]) == [CR.LIVE] and doc["program"] == _sha(raw)
     lowered = []

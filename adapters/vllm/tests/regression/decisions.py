@@ -13,8 +13,8 @@ The retired checks follow (`[rows.<row>.retired.<check>]`: `reason`, `since`, `n
 from __future__ import annotations
 
 import argparse
-import textwrap
 import sys
+import textwrap
 from typing import Any
 
 from . import resolver
@@ -78,8 +78,8 @@ def render_retired(rows: list[dict[str, Any]], *, width: int = 132) -> str:
 def render(rows: list[dict[str, Any]], *, width: int = 132) -> str:
     findings = {(d["finding"], d["row"]) for d in rows}                      # one decision = one finding on one row; a block per check it touches
     n_pending = sum(1 for d in rows if d["status"] == "pending_review")
-    lines = [f"labelled decisions in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(findings)} (by finding x row), "
-             f"{len(rows)} check consequence(s), {n_pending} pending_review", ""]
+    lines = [(f"labelled decisions in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(findings)} (by finding x row), "
+              f"{len(rows)} check consequence(s), {n_pending} pending_review"), ""]
     for d in rows:
         flag = "PENDING " if d["status"] == "pending_review" else ("MALFORMED " if d["problem"] else "")
         lines.append(f"{flag}#{d['row']} {d['check']}  {d['finding']}  [{d['status']}]  since {d['since']}"

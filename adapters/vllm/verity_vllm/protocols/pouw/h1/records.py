@@ -6,7 +6,7 @@ credit's value check (`reason`) holds the records to the call's committed scales
 read where the arm wrote them (`of`); `host` copies them only for what reads them on the host."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, overload
 
 import numpy as np
 
@@ -24,11 +24,19 @@ def of(z: Any, units: int) -> Any:
     return z.detach() if hasattr(z, "detach") else np.ascontiguousarray(z)
 
 
+@overload
+def host(records: None) -> None: ...
+@overload
+def host(records: Any) -> np.ndarray: ...
 def host(records: Any) -> np.ndarray | None:
-    """`records` (`of`'s) on the host, [units, `ZY_BYTES`] uint8."""
+    """`records` (`of`'s) on the host, [units, `ZY_BYTES`] uint8; None for none."""
     if records is None:
         return None
     return np.ascontiguousarray(records.detach().cpu().numpy() if hasattr(records, "detach") else np.asarray(records))
+
+
+def numpy_of(t: Any) -> np.ndarray:
+    return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
 def split(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -151,4 +159,4 @@ def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
     return not bool(bad)
 
 
-__all__ = ["UNIT", "ZY_BYTES", "holds_on", "of", "reason", "refusal", "split"]
+__all__ = ["UNIT", "ZY_BYTES", "holds_on", "numpy_of", "of", "reason", "refusal", "split"]

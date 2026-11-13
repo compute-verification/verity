@@ -11,6 +11,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["InferenceBlocks", "SCHEMA"]
+
 SCHEMA = "verity-vllm/inference-blocks/v1"
 ROOT = re.compile(r"[0-9a-f]{128}")
 

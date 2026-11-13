@@ -22,6 +22,7 @@ storage references (weakrefs only).
 from __future__ import annotations
 
 import bisect
+import importlib.util
 import threading
 import weakref
 from collections import deque
@@ -192,16 +193,15 @@ class StorageAdapter:
 
 def _probe_weakrefs() -> bool:
     """True when this torch preserves storage PyObjects and they support weakrefs (both needed for exact frees)."""
-    try:
-        import torch
-    except Exception:  # noqa: BLE001
+    if importlib.util.find_spec("torch") is None:
         return False
+    import torch
+    t = torch.empty(2)
     try:
-        t = torch.empty(2)
         s = t.untyped_storage()
         if s is not t.untyped_storage():
             return False
         weakref.ref(s)
-        return True
-    except Exception:  # noqa: BLE001
+    except (AttributeError, TypeError):      # a torch without untyped_storage; a storage that takes no weakref
         return False
+    return True
