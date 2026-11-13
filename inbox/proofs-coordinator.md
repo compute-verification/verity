@@ -160246,3 +160246,22 @@ I hold one recurring timer, ten minutes; my mailbox held no order newer than you
 - That the carried blob line compiles: no build ran on it. HELDOF's own "not compiled" on its three last commits stands.
 - That way (b)'s moved declarations compile in their new modules, with their smaller imports; that only `reads` records move, or none; the quick suites; the unread count.
 - Whether `CanonText` needs the `backward.privateInPublic` option for its one definition that reads the private `hex4`; the try says, and the fix is two lines.
+
+## DUPNAMES, Fri 13 Nov 20:51Z: carry of #9376 under way with `restack.py`: 5 of 29 moves crossed, two real stops closed by hand; I expect the ready line about 00:30Z Sat (4:30 PM PST Fri)
+
+Your 20:31Z is read, and `main`'s AGENTS.md reread at `f479876a8758` [read].
+
+**`r20261112-191457-d910`** (quick suites at `359dd99f07`): done rc 0, Thu 21:01Z. 88 suites, 88 passed, 0 failed; `verity-vllm` 14,321 passed with the size lint among them [read: its stdout, last line and :162].
+
+**The carry.** `main` holds 29 move commits the branch lacks (22 `Layout-move:`, 7 `Move:`) [run: git log --grep on 359dd99f07..origin/main], so it is `tools/move/restack.py`, `main`'s copy, on this VM. The tool refused the first move as `based-after` and gave the command against the move's own commit, which I ran. State at 20:50Z:
+
+- Crossed, each `clean` [run: restack.py, its JSON]: the specs move, then the four of Fri 06:52Z to 07:03Z (config, settings, bench instances, flat files). 8 min for four moves, so the 24 left take about 50 min [derived].
+- Stop 1, at the base of the config move (`a2ba479e2b6`), closed by hand in a merge: `verity/circuits/tests/test_format_spec.py`'s import holds `Body, Builder` and `DefinitionTable`; and the two lines of `test_registered.py` that merged silently name `DefinitionTable`. The three lines you named.
+- Stop 2, at the base of the terms move (`92b5727aca4`), closed by hand in a merge: `derive.py` and `registration.py`. `main` split `derive.py` (620 lines now, off the size list) and sorted its imports. **I put the names check back inline in `derive.py`, five lines, and took `main`'s `registration.py` whole.** `declare_weights` existed only to keep `derive.py` inside its recorded size, and that reason is gone on `main`. So vllm's files are **three** again, not four: `derive.py` and the two tests.
+- Running now: the remaining 24 moves, onto `main` at `f479876a8758`. After the last base I merged, only move commits touch this change's Python and Lean files on `main` [run: git log 92b5727aca4..origin/main over them], so I expect no further stop but the locks [guess].
+
+**The head.** Each result so far descends from `359dd99f07` [run: git merge-base --is-ancestor], so I intend to push the carried head to `cursor/proofs-dupnames-7453` itself as a fast-forward: no force, no new branch, and #9376 keeps its head branch. If the final result does not descend from it, I use `--push-to` and name the branch.
+
+**Then:** the touched test files one at a time here, the adapter's lint files by name, the push, and the two runs on nodes I name. If the records run regenerates a lock I compare it with the committed one before any commit.
+
+Mailbox: none at 20:50Z. Nothing marked; nothing on Linear or Slack.
