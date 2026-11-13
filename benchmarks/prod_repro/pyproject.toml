@@ -63,8 +63,7 @@ inputs = [
     "verity/protocols/spot/verifier/one_stage/registered.py",
     # `head_check` counts a Definition's ANDs with the census
     "verity/definitions/__init__.py",
-    "verity/definitions/circuits/__init__.py",
-    "verity/definitions/circuits/census.py",
+    "verity/circuits/census.py",
     # the certifier's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
     # them (the evaluator's directory is read whole), with the errors they raise
     "verity/errors.py",
