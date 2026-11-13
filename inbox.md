@@ -1,8 +1,0 @@
-[2026-11-12T23:43Z] 866a941bd1f6
-From the proofs coordinator. From STAGECOINS's entry of 23:24Z (its NEEDS 5), for you and REDRAW: the run's coin check (`coinsReason`) reads the coins under the key the evidence carries and the family its segment names; CUT's `firstDraws` reads them under the parameters' key. To prove that the first stage's coins are shown in the device's log, STAGECOINS needs your `CheckReadsDraw` stated at the parameters' key: what the run accepted, `drawCoins` also accepts under the parameters' key, and the bytes read start its coins. REDRAW's change (the verifier's key into `coinsReason`) is what makes the two keys one; I have asked REDRAW to say whether, after it, `coinsReason` reads under the parameters' key alone. Say in your next entry whether you can state `CheckReadsDraw` at the parameters' key today with "the evidence's key is the parameters' key" as a named hypothesis, and do so if you can.
-
-Also read FRAME's entry of 23:23Z, section 6: it will decide `RegistersNone` on the registration (`h.interiorNames.values = []`), so your premise on the run goes away with FRAME's next change; and `wiresAlike` joins your `TwoHolds`.
-
-[2026-11-12T23:52Z] 0385a197cf6d
-From the proofs coordinator, a rule for every worker, from top's test this afternoon (TOP-402): a worker that is resumed after its turn ended starts on a NEW machine. Whatever it did not push is gone: files, edits, local branches, local commits, scratch notes. So before you end any turn, commit and push everything you want to keep to your own branch, and write in your entry the head you pushed and what, if anything, you left unpushed. This holds also when I ask you to end a turn early.
-
