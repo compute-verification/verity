@@ -28,11 +28,12 @@ definitions each needs that the tree does not hold. No body is `sorry`.
   `Site.leak_le_sum_K_sinks_registered`.
 * The runs: `onsite_node0_covered` (the example site), `oneNode_charged` and `twoNodes_charged` (two hosts with a
   link between them, under one site and under two), `hosts_sink_runs`, `sites_linkKinds`.
-* (2) as filed: the sink form with the sealing concluded from the registration. In the model, `sealed_of_ends`,
-  `releaseTerm`, `leak_le_sum_K_release` (a release place is a trusted unit; its whole cost is one summand) and
-  `leak_le_sum_K_release_none`. At a node, `Site.LinkKinds`, `Site.Within`, `Site.host_of_challenger`,
-  `Site.challengers_sealed`, `Site.uncovered_sealed`, `Site.leak_le_sum_K_sealed_registered`, and with a shared
-  challenger as a trusted unit `Site.sealedOf`, `Site.sharedOf`, `Site.leak_le_sum_K_filed`. From a valid log,
+* (2) as filed: each memory challenger a sealed sink or a trusted unit, the sealing concluded from the registration.
+  In the model, `sealed_of_ends`, `challengerTerm`, `leak_le_sum_K_combined` (a challenger that is a trusted unit
+  costs one summand) and `leak_le_sum_K_combined_none`. At a node, `Site.LinkKinds`, `Site.Within`,
+  `Site.host_of_challenger`, `Site.challengers_sealed`, `Site.uncovered_sealed`,
+  `Site.leak_le_sum_K_sealed_registered` (every challenger a sink), `Site.sharedOf`, `Site.within_of_not_shared`,
+  `Site.leak_le_sum_K_filed` (the combined form) and `Site.leak_le_sum_K_filed_none`. From a valid log,
   `Registration.Valid.linkKinds` and `Registration.Valid.ends_places`.
 * The Site as the hardware model's links: `Site.linkEnds`, `Site.linkβ` over ids; `Site.Place`, `Site.place`,
   `Site.placeEnds`, `Site.loc` over the finite type of places, which `B4` needs.
@@ -470,13 +471,13 @@ theorem sealed_of_ends [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (c
   have hb := (h e).2
   by_cases s1 : (ends e).1 ∈ sink <;> by_cases s2 : (ends e).2 ∈ sink <;> simp_all
 
-/-- **The release term**: what the release places `rel` add to the exponent of (2), each its count `c y` over the
-window and one jitter share. It is `0` when there is no release place. -/
-def releaseTerm (rel : Finset L) (c : L → ℕ) (jitter buckets : ℕ) : ℕ :=
-  (∑ y ∈ rel, c y) + jitter * buckets * rel.card
+/-- **The challengers' term**: what the memory challengers `chal` that are trusted units add to the exponent of (2),
+each its record's `c y` over the window and one jitter share. It is `0` when no challenger is a trusted unit. -/
+def challengerTerm (chal : Finset L) (c : L → ℕ) (jitter buckets : ℕ) : ℕ :=
+  (∑ y ∈ chal, c y) + jitter * buckets * chal.card
 
-theorem releaseTerm_empty (c : L → ℕ) (jitter buckets : ℕ) : releaseTerm (∅ : Finset L) c jitter buckets = 0 := by
-  simp [releaseTerm]
+theorem challengerTerm_empty (c : L → ℕ) (jitter buckets : ℕ) : challengerTerm (∅ : Finset L) c jitter buckets = 0 := by
+  simp [challengerTerm]
 
 end Covering
 
@@ -544,53 +545,54 @@ theorem leak_le_sum_K_sealed {L E Ω : Type*} [LinearOrder L] [Fintype L] [Finty
   rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from hseal, Nat.add_zero] at h
   exact h
 
-/-- **(2), the sink form with release places.** The certifiers `cert`, the release places `rel` (apart from the
-certifiers), the location `X` and the sealed sinks `sink`. A release place is a trusted unit whose record over the
-window takes at most `2 ^ c y` values: it is where a device that is otherwise a sink lets something leave the
-location. With `B4`'s premises at `cert ∪ rel` and the location `X ∪ sink`: what the outside of `X`, the sinks, the
-certifiers and the release places does during `[a, b)` takes at most
-`2 ^ (∑ K over cert + jitter · buckets · #cert + β° (b − a) + releaseTerm)` values, `β°` the capacity of the links
-across `X`'s boundary with no certifier, release place or sink at an end.
+/-- **(2), the combined form: a memory challenger is a sealed sink or a trusted unit.** The certifiers `cert`; the
+challengers `chal` that are trusted units (apart from the certifiers), each with a record of its own that takes at
+most `2 ^ c y` values over the window; the location `X`; and the sealed sinks `sink`, the challengers every link of
+which ends at a sink, a certifier, a challenger of `chal` or a place of `X`. With `B4`'s premises at `cert ∪ chal` and
+the location `X ∪ sink`: what the outside of `X`, the sinks, the certifiers and those challengers does during
+`[a, b)` takes at most `2 ^ (∑ K over cert + jitter · buckets · #cert + β° (b − a) + challengerTerm)` values, `β°`
+the capacity of the links across `X`'s boundary with no certifier, challenger or sink at an end.
 
-The release places' whole cost is the last summand (`releaseTerm`): with no release place it is `0` and this is
-`leak_le_sum_K_sealed` (`leak_le_sum_K_release_none`). It is `B4` as it stands, at `cert ∪ rel`. -/
-theorem leak_le_sum_K_release {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+A sink adds nothing and nothing is asked of what it does. A challenger of `chal` is asked what a certifier is
+(`TrustedUnits`), and its whole cost is the last summand (`challengerTerm`): with none it is `0` and this is
+`leak_le_sum_K_sealed` (`leak_le_sum_K_combined_none`). It is `B4` as it stands, at `cert ∪ chal`. -/
+theorem leak_le_sum_K_combined {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
     (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
-    (𝒱 cert rel X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ)
+    (𝒱 cert chal X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ)
     (jitter a b : ℕ) (K c : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
-    (hd : Disjoint cert rel) (hT : TrustedUnits S 𝒱 (cert ∪ rel) spec record bucket jitter)
-    (hXs : Disjoint X sink) (hsec : Secrets S (cert ∪ rel) (X ∪ sink) a)
-    (hseal : Sealed ends β (cert ∪ rel) X sink) (hK : RecordsWithin S cert record a b K)
-    (hc : RecordsWithin S rel record a b c) :
-    (Set.range fun r => (S r).acts (X ∪ sink ∪ (cert ∪ rel))ᶜ (Set.Ico a b)).encard ≤
+    (hd : Disjoint cert chal) (hT : TrustedUnits S 𝒱 (cert ∪ chal) spec record bucket jitter)
+    (hXs : Disjoint X sink) (hsec : Secrets S (cert ∪ chal) (X ∪ sink) a)
+    (hseal : Sealed ends β (cert ∪ chal) X sink) (hK : RecordsWithin S cert record a b K)
+    (hc : RecordsWithin S chal record a b c) :
+    (Set.range fun r => (S r).acts (X ∪ sink ∪ (cert ∪ chal))ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
-        uncertifiedCapacity ends β (cert ∪ rel ∪ sink) X * (b - a) +
-        releaseTerm rel c jitter ((Finset.Ico a b).image bucket).card) : ℕ) : ℕ∞) := by
-  have hK' : RecordsWithin S (cert ∪ rel) record a b (fun y => if y ∈ cert then K y else c y) := by
+        uncertifiedCapacity ends β (cert ∪ chal ∪ sink) X * (b - a) +
+        challengerTerm chal c jitter ((Finset.Ico a b).image bucket).card) : ℕ) : ℕ∞) := by
+  have hK' : RecordsWithin S (cert ∪ chal) record a b (fun y => if y ∈ cert then K y else c y) := by
     intro y hy
     by_cases hyc : y ∈ cert
     · have h1 := hK y hyc
-      simp only [hyc, if_true]
+      simp only [hyc, ↓reduceIte, if_true]
       exact h1
     · have h1 := hc y ((Finset.mem_union.1 hy).resolve_left hyc)
-      simp only [hyc, if_false]
+      simp only [hyc, ↓reduceIte, if_false]
       exact h1
-  have hs : ∑ y ∈ cert ∪ rel, (if y ∈ cert then K y else c y) = (∑ y ∈ cert, K y) + ∑ y ∈ rel, c y := by
+  have hs : ∑ y ∈ cert ∪ chal, (if y ∈ cert then K y else c y) = (∑ y ∈ cert, K y) + ∑ y ∈ chal, c y := by
     have h1 : ∑ y ∈ cert, (if y ∈ cert then K y else c y) = ∑ y ∈ cert, K y :=
       Finset.sum_congr rfl fun y hy => if_pos hy
-    have h2 : ∑ y ∈ rel, (if y ∈ cert then K y else c y) = ∑ y ∈ rel, c y :=
+    have h2 : ∑ y ∈ chal, (if y ∈ cert then K y else c y) = ∑ y ∈ chal, c y :=
       Finset.sum_congr rfl fun y hy => if_neg (Finset.disjoint_right.1 hd hy)
     rw [Finset.sum_union hd, h1, h2]
-  refine (leak_le_sum_K_sealed S ℓ ends β link 𝒱 (cert ∪ rel) X sink spec record bucket jitter a b
+  refine (leak_le_sum_K_sealed S ℓ ends β link 𝒱 (cert ∪ chal) X sink spec record bucket jitter a b
     (fun y => if y ∈ cert then K y else c y) hcs hdl hT hXs hsec hseal hK').trans ?_
   refine Nat.mono_cast (Nat.pow_le_pow_right Nat.two_pos (le_of_eq ?_))
   rw [hs, Finset.card_union_eq_card_add_card.2 hd, Nat.mul_add]
-  unfold releaseTerm
+  unfold challengerTerm
   omega
 
-/-- **With no release place the release term drops**, and the statement is `leak_le_sum_K_sealed`'s with nothing else
-restated. -/
-theorem leak_le_sum_K_release_none {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
+/-- **With no challenger a trusted unit the challengers' term drops**, and the statement is `leak_le_sum_K_sealed`'s
+with nothing else restated. -/
+theorem leak_le_sum_K_combined_none {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
     (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
     (K c : L → ℕ) (hcs : CausalStrategy S ℓ) (hdl : DeclaredLinks S ends β link)
@@ -600,11 +602,11 @@ theorem leak_le_sum_K_release_none {L E Ω : Type*} [LinearOrder L] [Fintype L] 
     (Set.range fun r => (S r).acts (X ∪ sink ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       ((2 ^ ((∑ y ∈ cert, K y) + jitter * ((Finset.Ico a b).image bucket).card * cert.card +
         uncertifiedCapacity ends β (cert ∪ sink) X * (b - a)) : ℕ) : ℕ∞) := by
-  have h := leak_le_sum_K_release S ℓ ends β link 𝒱 cert ∅ X sink spec record bucket jitter a b K c hcs hdl
+  have h := leak_le_sum_K_combined S ℓ ends β link 𝒱 cert ∅ X sink spec record bucket jitter a b K c hcs hdl
     (Finset.disjoint_empty_right cert) (by rw [Finset.union_empty]; exact hT) hXs
     (by rw [Finset.union_empty]; exact hsec) (by rw [Finset.union_empty]; exact hseal) hK
     (fun y hy => absurd hy (by simp))
-  rw [releaseTerm_empty, Nat.add_zero, Finset.union_empty] at h
+  rw [challengerTerm_empty, Nat.add_zero, Finset.union_empty] at h
   exact h
 
 end Accounting
@@ -847,55 +849,100 @@ theorem leak_le_sum_K_sealed_registered {Ω : Type*} (pinned : Finset String) (i
   exact h
 
 open Classical in
-/-- **The sealed challengers of node `i`**: the memory challengers that cover it and are linked only into it. -/
-noncomputable def sealedOf (pinned : Finset String) (i : String) : Finset String :=
-  (S.challengersOf pinned i).filter fun y => S.Within i y
-
-open Classical in
-/-- **The shared challengers of node `i`**: the memory challengers that cover it and have a link that ends outside
-it. On `main`'s Site that is a challenger linked to a host of another node. -/
+/-- **The shared challengers of node `i`**: the memory challengers that cover it and have a registered link that ends
+outside it. On this Site's link kinds that is a challenger linked to a host of another node. -/
 noncomputable def sharedOf (pinned : Finset String) (i : String) : Finset String :=
   (S.challengersOf pinned i).filter fun y => ¬ S.Within i y
 
-theorem mem_sealedOf {pinned : Finset String} {i y : String} (h : y ∈ S.sealedOf pinned i) :
-    S.kind? y = some .challenger ∧ S.Within i y := by
+/-- A challenger that covers node `i` and is not shared is linked only into `i`. -/
+theorem within_of_not_shared {pinned : Finset String} {i y : String}
+    (h : y ∈ S.challengersOf pinned i \ S.sharedOf pinned i) : S.Within i y := by
   classical
-  unfold sealedOf at h
-  exact ⟨(S.mem_challengersOf (Finset.mem_filter.1 h).1).1, (Finset.mem_filter.1 h).2⟩
+  obtain ⟨h1, h2⟩ := Finset.mem_sdiff.1 h
+  by_contra hw
+  exact h2 (by unfold sharedOf; exact Finset.mem_filter.2 ⟨h1, hw⟩)
 
-/-- **(2) at a node, as filed: the sealed challengers are sinks, and a shared challenger is a trusted unit.** At a
-Site whose links join kinds a link may join and end at registered places, for node `i`: the location is `i`'s prover
-places with its sealed challengers (`sealedOf`), and the trusted units are its certifiers with its shared challengers
-(`sharedOf`). With `B4`'s premises there, what the outside does during `[a, b)` takes at most
-`2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the count over the certifiers and the shared
-challengers, `β°` the sum of `β` over the registered links with exactly one end among `i`'s prover places and no
-certifier or challenger of `i` at either end.
+/-- The certifiers of node `i`, the challengers `units` and the other challengers that cover `i` are together the
+auditor's devices at `i`. -/
+theorem units_union_sinks {pinned units : Finset String} {i : String} (hu : units ⊆ S.challengersOf pinned i) :
+    S.certifiersOf i ∪ units ∪ (S.challengersOf pinned i \ units) = S.auditorsOf pinned i := by
+  ext y
+  simp only [auditorsOf, Finset.mem_union, Finset.mem_sdiff]
+  constructor
+  · rintro ((h | h) | ⟨h, -⟩)
+    · exact Or.inl h
+    · exact Or.inr (hu h)
+    · exact Or.inr h
+  · rintro (h | h)
+    · exact Or.inl (Or.inl h)
+    · by_cases hy : y ∈ units
+      · exact Or.inl (Or.inr hy)
+      · exact Or.inr ⟨h, hy⟩
 
-A sealed challenger adds nothing, and that it is sealed is no premise. A shared challenger adds its `K`, its record's
-count over the window, and one jitter share; with no shared challenger this is `leak_le_sum_K_sealed_registered`. -/
-theorem leak_le_sum_K_filed {Ω : Type*} (pinned : Finset String) (i : String)
+/-- **(2) at a node, the combined form: each memory challenger that covers the node is a sealed sink or a trusted
+unit.** At a Site whose links join kinds a link may join and end at registered places (a valid log's Site:
+`Registration.Valid.linkKinds`, `Registration.Valid.ends_places`), for node `i` and a set `units` of the memory
+challengers that cover it, the rest of which are each linked only into `i` (`Within`). The location is `i`'s prover
+places with the rest; the trusted units are `i`'s certifiers with `units`. With `B4`'s premises there, what the
+outside does during `[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the
+count over the certifiers and `units`, `β°` the sum of `β` over the registered links with exactly one end among `i`'s
+prover places and no auditor's device of `i` at either end.
+
+A challenger outside `units` adds nothing, nothing is asked of what it does, and that it is sealed is no premise. A
+challenger of `units` adds its `K`, its record's count over the window, and one jitter share. `units` must hold every
+challenger with a registered link that ends outside `i` (`sharedOf`, `within_of_not_shared`), and holds as well any
+challenger whose device lets what it received leave by a path of its own. With `units` empty this is
+`leak_le_sum_K_sealed_registered` (`leak_le_sum_K_filed_none`). -/
+theorem leak_le_sum_K_filed {Ω : Type*} (pinned units : Finset String) (i : String)
     (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
     (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
     (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
     (hkinds : S.LinkKinds) (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
+    (hu : units ⊆ S.challengersOf pinned i) (hin : ∀ y ∈ S.challengersOf pinned i \ units, S.Within i y)
     (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
-    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) spec record bucket jitter)
-    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i))
-      (S.loc (S.proverUnder i ∪ S.sealedOf pinned i)) a)
-    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) record a b K) :
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i ∪ units)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i ∪ units))
+      (S.loc (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i ∪ units)) record a b K) :
     (Set.range fun r =>
-        (R r).acts (S.loc (S.proverUnder i ∪ S.sealedOf pinned i) ∪
-          S.loc (S.certifiersOf i ∪ S.sharedOf pinned i))ᶜ (Set.Ico a b)).encard ≤
-      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i ∪ S.sharedOf pinned i), K y) +
-        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)).card +
-        ((S.uncovered (S.certifiersOf i ∪ S.sharedOf pinned i ∪ S.sealedOf pinned i) (S.proverUnder i)).map
-          (·.β)).sum * (b - a)) : ℕ) : ℕ∞) := by
-  have h := Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱
-    (S.loc (S.certifiersOf i ∪ S.sharedOf pinned i)) (S.loc (S.proverUnder i ∪ S.sealedOf pinned i)) spec record
-    bucket jitter a b K hcs hdl hT hsec hK
+        (R r).acts (S.loc (S.proverUnder i ∪ (S.challengersOf pinned i \ units)) ∪
+          S.loc (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i ∪ units), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i ∪ units)).card +
+        ((S.uncovered (S.auditorsOf pinned i) (S.proverUnder i)).map (·.β)).sum * (b - a)) : ℕ) : ℕ∞) := by
+  have h := Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i ∪ units))
+    (S.loc (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) spec record bucket jitter a b K hcs hdl hT hsec hK
   rw [S.uncertified_registered_eq _ _ hends,
-    S.uncovered_sealed (S.certifiersOf i ∪ S.sharedOf pinned i) (S.proverUnder i) (S.sealedOf pinned i)
-      (S.challengers_sealed hkinds i (S.sealedOf pinned i) fun y hy => S.mem_sealedOf hy)] at h
+    S.uncovered_sealed (S.certifiersOf i ∪ units) (S.proverUnder i) (S.challengersOf pinned i \ units)
+      (S.challengers_sealed hkinds i (S.challengersOf pinned i \ units)
+        fun y hy => ⟨(S.mem_challengersOf (Finset.mem_sdiff.1 hy).1).1, hin y hy⟩),
+    S.units_union_sinks hu] at h
+  exact h
+
+/-- **With no challenger a trusted unit, the combined form is the sink form**: `leak_le_sum_K_filed` at `units = ∅`
+has `leak_le_sum_K_sealed_registered`'s premises and its limit, nothing else restated. -/
+theorem leak_le_sum_K_filed_none {Ω : Type*} (pinned : Finset String) (i : String)
+    (R : Ω → Accounting.Actual.Run S.Place) (ℓ : S.Place → S.Place → ℕ)
+    (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
+    (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
+    (hkinds : S.LinkKinds) (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
+    (hin : ∀ y ∈ S.challengersOf pinned i, S.Within i y)
+    (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds S.linkβ link)
+    (hT : Accounting.TrustedUnits R 𝒱 (S.loc (S.certifiersOf i)) spec record bucket jitter)
+    (hsec : Accounting.Secrets R (S.loc (S.certifiersOf i))
+      (S.loc (S.proverUnder i ∪ S.challengersOf pinned i)) a)
+    (hK : Accounting.RecordsWithin R (S.loc (S.certifiersOf i)) record a b K) :
+    (Set.range fun r =>
+        (R r).acts (S.loc (S.proverUnder i ∪ S.challengersOf pinned i) ∪ S.loc (S.certifiersOf i))ᶜ
+          (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.loc (S.certifiersOf i), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i)).card +
+        ((S.uncovered (S.auditorsOf pinned i) (S.proverUnder i)).map (·.β)).sum * (b - a)) : ℕ) : ℕ∞) := by
+  have h := S.leak_le_sum_K_filed pinned ∅ i R ℓ link 𝒱 spec record bucket jitter a b K hkinds hends
+    (Finset.empty_subset _) (by rw [Finset.sdiff_empty]; exact hin) hcs hdl
+    (by rw [Finset.union_empty]; exact hT) (by rw [Finset.union_empty, Finset.sdiff_empty]; exact hsec)
+    (by rw [Finset.union_empty]; exact hK)
+  rw [Finset.union_empty, Finset.sdiff_empty] at h
   exact h
 
 end Verity.Site
@@ -907,10 +954,9 @@ variable {D : Digests} {A : Auditor} {c : Composite}
 /-- **A valid log's links join kinds a link may join**: the entry check `kind` holds each new link to it at the Site
 as the entry extends it, and a later entry changes no registered id's kind. -/
 theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).LinkKinds := by
+  unfold Site.LinkKinds
   induction l using List.reverseRecOn with
-  | nil =>
-    intro k hk
-    simp at hk
+  | nil => simp
   | append_singleton l e ih =>
     obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
@@ -935,9 +981,7 @@ theorem Valid.ends_places {l : Registration} (h : Valid D A c l) :
     ∀ k ∈ (Site.ofLog l).links, k.ends.1 ∈ (Site.ofLog l).places ∧ k.ends.2 ∈ (Site.ofLog l).places := by
   have hk : ∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Known k.ends.1 ∧ (Site.ofLog l).Known k.ends.2 := by
     induction l using List.reverseRecOn with
-    | nil =>
-      intro k hk
-      simp at hk
+    | nil => simp
     | append_singleton l e ih =>
       obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
       cases e with
