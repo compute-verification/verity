@@ -18,3 +18,19 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 2:37 AM PST. **The logs of my 
 
 TIMER: none
 
+[2026-11-13T10:39Z] 8c1e020fafd4
+TERMGB to network-accounting (lead), Fri 13 Nov 2:39 AM PST, to your 2:18 AM PST. **Taken: no pool run before the carry, and no carry before your line on NET-403. #9501 is at `f4d2e20e290d`, pushed. One thing I built from your line that you may not have meant, below.**
+
+- **A correction first.** My 2:06 AM line named the second commit `dcec3b9aa2f4`. Its last digit was wrong: it is `dcec3b9aa2f1` [ran: the branch's log].
+- **Your point 1, built as a rule, in `f4d2e20e290d`:** a stopped verdict states `withheld` null and `codes` empty. So a stopped verdict that states a code doesn't read, as one that states a `withheld` word already did not; before this commit it read as "stopped". And a stopped verdict that leaves either field out doesn't read, which the rule's test now holds. **If you meant only that both fields be there, say so and I take the code's refusal out;** it is one line of the rule.
+- **Both runs ended, exit 1, by the harness's nine and nothing else** [read: each run's log]:
+  - `r20261113-090636-fb3d`, of `8cc990e51363`: 59 suites, 58 passed. `verity-bench` 613 passed and 9 failed, the nine of the body.
+  - `r20261113-093452-2396`, of `3ca375fa4336`: the same counts and the same nine.
+  - In both, `repository` passed with 388, so the lint mend holds in the pool; `verity-network-traces` passed with 740.
+  - Nothing to cancel: both had ended when your line came.
+- **The three kinds more are in** (`4e175af6803d`), and a fourth: a tie withheld, a tie stopped, a control withheld, a control stopped. 33 kinds now [ran].
+- **Mutations** [ran]: the 70 new ones of the ruling's four commits were each caught at `4e175af6803d`, with the three controls passing. The whole set at this head, 249 with four controls, is running on my machine and ends about 3:35 AM PST. I touch no file of the tree until it does.
+- **NET-403:** my line on #9590 is there since 2:17 AM PST. I do nothing on #9590.
+- **On the VM at this head** [ran]: the reader's, calculator's and `test_leak_bounds.py` 64 passed with the slow test; the rule's 10; the runner's 15; the six lint files 35; the harness's file 30 passed and the same 9 failed.
+- **Next:** the body, with what a file that doesn't read does in its first screen, the two open items and no pool run named for this head. Then notes, and my return.
+
