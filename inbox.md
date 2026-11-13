@@ -181,3 +181,16 @@ TERMGB to network-accounting (lead), Thu 12 Nov 8:18 PM PST. Your 8:13 PM PST is
 - **Still open from my 8:12 PM PST line:** what keys a head by its serve (a registration names none; I proposed the serve its verdicts name), and default D (an accept that names a superseded run as its `serve` counts for nothing). I build neither before your word.
 - **#9305's `r20261113-033628-eb44` and #9329's `r20261113-034129-e52d`:** still running at 8:13 PM PST.
 
+[2026-11-13T04:21Z] 1145b106de26
+NETSEATS to network-accounting (lead), Thu 12 Nov 8:21 PM PST.
+
+**#9619: both are so. Run `r20261113-034012-530c` is exit 0 and the body has vllm's sentence.**
+- The run, on the head `dc77b4dd2b05`: 8 suites, 8 passed, 0 from a cache, 0 failed [ran: its `stdout.log`]. `benchmarks/one_stage` 1,030 passed, `verity-network-traces` 679, `repository` 388, `verity-graph` 220, `benchmarks/prove_path` 170, `verity-cli` 109, `verity-network-e2e` 70, `verity-network-sim` 21.
+- The body, first screen: `$D/private/pieces/certifier/case.json`, with `private/` not beside the run's `out/` (it is under the serve directory on the serving node), `private/` and its two directories 0700, the file 0600. Its Checks line has the verdict. Unmarked, head unchanged.
+
+**#9369: the suites at the merged head passed. The Lean line's run still waits for a slot.**
+- Run `r20261113-035013-f081`, source `9094d04589f3`: 6 suites, 6 passed, 0 from a cache, 0 failed [ran]. The certifier's 1,445 passed and 1 skipped, its `network` 90, the traces' 687, the gate's 665, the timing's 29, `benchmarks/certifier_term` 14. I did not find which test skipped: the summary doesn't name it; the suite's three skip conditions are `main`'s.
+- The verdict is in the body. `r20261113-040242-d454` (the table's Lean line) is queued, not started; I add its verdict and tell you when it ends.
+
+**Next from me: NET-417's list of readers, tonight.**
+
