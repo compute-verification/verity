@@ -57,14 +57,15 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
   `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
-  accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for one sample over several
-  members' statements is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
-  `proofs` of other keys than the one statement's, so their parameters name no members (`paramsOfJson_members`),
-  their evidence no statements (`evidenceOf_statements`), and the check at the coins (`checkBlobsAt`, which `live`
-  runs) is the one statement's (`checkOneAt`: `checkBlobsAt_parsed`, `live_checkAt_parsed`). The form's own parsers
-  read it (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either
-  form), and on parameters that name members with evidence that names statements `checkBlobsAt` is
-  `checkMembersAt`; parameters of one form with evidence of the other reject. Its parameters' `proofs` is exactly
+  accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
+  statement's check does (`checkMembersAt_accept`). `protocol` reads either form (`paramsEitherOfJson`,
+  `evidenceEitherOf`): `proofs` of the one statement's keys is read by `paramsOfJson` and `evidenceOf`, whose
+  parameters name no members (`paramsOfJson_members`) and whose evidence names no statements
+  (`evidenceOf_statements`), and `proofs` of the form's keys by the form's own parsers (`membersParamsOfJson`,
+  `membersEvidenceOf`). The check at the coins (`checkBlobsAt`, which `live` runs) is the one statement's
+  (`checkOneAt`) on parameters that name no members with evidence that names no statements, and `checkMembersAt` on
+  parameters that name members with evidence that names statements (`checkBlobsAt_accept`); parameters of one form
+  with evidence of the other reject. Its parameters' `proofs` is exactly
   `{"members"}` (`membersOf`), an object from each member's name to exactly
   `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
@@ -798,12 +799,6 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
 
 /-! ## The per-member form (module docstring, **per member**) -/
 
-/-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers one sample over several
-members' statements. -/
-def MULTI_REFUSED : String :=
-  "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' " ++
-    "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})"
-
 /-- The ranges ascend from `at_`: each `[lo, hi)` holds a unit and starts at or after the end of the one before. -/
 def ascending : Nat → List (Nat × Nat) → Bool
   | _, [] => true
@@ -863,13 +858,13 @@ def membersParamsOfJson (j : Json) : V Params := do
   pure { p with own, members := some (← membersOf own (getD pr "members")) }
 
 /-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
-statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
+statement's. `protocol` reads its parameters by it. -/
 def paramsEitherOfJson (j : Json) : V Params :=
   if (field? j "proofs").bind keys? == some #["members"] then membersParamsOfJson j else paramsOfJson j
 
 /-- **The per-member form's evidence**: `proofs` exactly `{"statements"}` (`statementsOf`), and everything else as the
-one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order), so its
-sessions are the statements', in v1's `sessions`' order. -/
+one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order); its
+sessions are the statements', as `statementsOf` read them, in v1's `sessions`' order (`membersEvidenceOf_sessions`). -/
 def membersEvidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
   let some pr := field? j "proofs" | throw "the evidence names no proofs (the statements' sessions' files)"
@@ -879,10 +874,10 @@ def membersEvidenceOf (b : ByteArray) : V Evidence := do
     | _ => #[]
   let one := Json.mkObj (without j "proofs" ++ [("proofs", Json.mkObj [("sessions", Json.arr sessions)])])
   let e ← evidenceOf (← Flock.canon one).toUTF8
-  pure { e with statements := some statements }
+  pure { e with sessions := statements.flatMap (·.sessions), statements := some statements }
 
 /-- **The evidence in either form**: the per-member form's where `proofs` is exactly `{"statements"}`, else the one
-statement's. `protocol` reads `evidenceOf`, which refuses the per-member form's. -/
+statement's. `protocol` reads its evidence by it. -/
 def evidenceEitherOf (b : ByteArray) : V Evidence :=
   match Core.canonicalJson b with
   | .ok j => if (field? j "proofs").bind keys? == some #["statements"] then membersEvidenceOf b else evidenceOf b
@@ -1517,29 +1512,38 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
   exact runMembers_sampled h
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
-verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
-refused (`MULTI_REFUSED`). -/
+verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check: v1 accepts only verdicts
+that all accepted, and the run's own `all` says it again, so an acceptance reads the run. -/
 def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
   match membersRun p ms c e sts bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
-    | .accept _ _ =>
-      .reject (if r.all then s!"proofs: {MULTI_REFUSED}" else "proofs: a session's verifier did not accept")
+    | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
     | .reject why => .reject why
     | .undecided why => .undecided why
 
-/-- **The per-member form accepts nothing**: whatever the parameters, the registration, the coins, the evidence and
-the blobs. -/
-theorem checkMembersAt_refuses (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray)
-    (e : Evidence) (sts : Array StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
-    checkMembersAt p ms c ξ e sts bs ≠ .accept pub prof := by
-  intro h
+/-- **What the per-member form's check accepts**: its run returned (`membersRun`) with every session accepted, and
+v1's check at the coins accepts on the run's verdicts, with the check's public output and profile. -/
+theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkMembersAt p ms c ξ e sts bs = .accept pub prof) :
+    ∃ r, membersRun p ms c e sts bs = .ok r ∧ r.all = true ∧
+      OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
   unfold checkMembersAt at h
   split at h
   · cases h
-  · split at h <;> cases h
+  · rename_i r hr
+    split at h
+    · rename_i pub' prof' hc
+      split at h
+      · rename_i hall
+        cases h
+        exact ⟨r, hr, hall, hc⟩
+      · cases h
+    · cases h
+    · cases h
 
 /-- The refusal of parameters and evidence of two forms (`checkBlobsAt`). -/
 def FORMS : String :=
@@ -1547,8 +1551,8 @@ def FORMS : String :=
     "or the members and their statements"
 
 /-- **The check at the coins `ξ`**, by the form of the parameters' `proofs` and the evidence's: the one statement's
-(`checkOneAt`), or the per-member form's (`checkMembersAt`, which accepts nothing); parameters of one form with
-evidence of the other reject (`FORMS`). -/
+(`checkOneAt`), or the per-member form's (`checkMembersAt`); parameters of one form with evidence of the other
+reject (`FORMS`). -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p.members, e.statements with
@@ -1556,17 +1560,42 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
   | some ms, some sts => checkMembersAt p ms c ξ e sts bs
   | _, _ => .reject FORMS
 
-/-- **What `checkBlobsAt` accepts, the one statement's check accepts**, on parameters and evidence of the one
-statement's form: the per-member form accepts nothing (`checkMembersAt_refuses`). -/
+/-- **What `checkBlobsAt` accepts is one form's accept**: the one statement's check accepts, on parameters that name
+no members and evidence that names no statements; or the per-member form's check accepts, on parameters that name
+members and evidence that names statements. -/
 theorem checkBlobsAt_accept {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} (h : checkBlobsAt p c ξ e bs = .accept pub prof) :
-    checkOneAt p c ξ e bs = .accept pub prof ∧ p.members = none ∧ e.statements = none := by
+    (p.members = none ∧ e.statements = none ∧ checkOneAt p c ξ e bs = .accept pub prof) ∨
+      ∃ ms sts, p.members = some ms ∧ e.statements = some sts ∧
+        checkMembersAt p ms c ξ e sts bs = .accept pub prof := by
   unfold checkBlobsAt at h
   split at h
   · rename_i hm hs
-    exact ⟨h, hm, hs⟩
-  · exact absurd h (checkMembersAt_refuses _ _ _ _ _ _ _ _ _)
+    exact .inl ⟨hm, hs, h⟩
+  · rename_i ms sts hm hs
+    exact .inr ⟨ms, sts, hm, hs, h⟩
   · cases h
+
+/-- **On parameters that name no members, what `checkBlobsAt` accepts the one statement's check accepts**, and the
+evidence names no statements (`checkBlobsAt_accept`). -/
+theorem checkBlobsAt_accept_one {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity} (hm : p.members = none)
+    (h : checkBlobsAt p c ξ e bs = .accept pub prof) :
+    checkOneAt p c ξ e bs = .accept pub prof ∧ e.statements = none := by
+  rcases checkBlobsAt_accept h with ⟨-, hs, h1⟩ | ⟨ms, -, hms, -, -⟩
+  · exact ⟨h1, hs⟩
+  · cases hm.symm.trans hms
+
+/-- **On parameters that name the members `ms`, what `checkBlobsAt` accepts the per-member form's check accepts**, at
+the statements the evidence names (`checkBlobsAt_accept`). -/
+theorem checkBlobsAt_accept_members {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity} {ms : Array Member} (hm : p.members = some ms)
+    (h : checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ sts, e.statements = some sts ∧ checkMembersAt p ms c ξ e sts bs = .accept pub prof := by
+  rcases checkBlobsAt_accept h with ⟨hn, -, -⟩ | ⟨ms', sts, hms, hs, h1⟩
+  · cases hm.symm.trans hn
+  · obtain rfl : ms = ms' := Option.some.inj (hm.symm.trans hms)
+    exact ⟨sts, hs, h1⟩
 
 /-- On parameters that name no members and evidence that names no statements, the check is the one statement's. -/
 theorem checkBlobsAt_one {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
@@ -1587,9 +1616,9 @@ def protocol : Core.BlobProtocol where
   Evidence := Evidence
   Public := OneStage.Public
   Profile := Core.Integrity
-  params := paramsOfJson
+  params := paramsEitherOfJson
   commitment := OneStage.commitmentOf
-  evidence := evidenceOf
+  evidence := evidenceEitherOf
   digest c := c.digest
   check p c e := checkBlobs p c e Core.Blobs.empty
   publicJson := OneStage.publicJson
@@ -1655,21 +1684,69 @@ theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b =
   subst h
   rfl
 
-/-- **On what `protocol` parses, the check at the coins is the one statement's**: `protocol` reads its parameters by
-`paramsOfJson` and its evidence by `evidenceOf`, which return the one statement's form alone (`paramsOfJson_members`,
-`evidenceOf_statements`), where `checkBlobsAt` is `checkOneAt` (`checkBlobsAt_one`). So `checkMembersAt` runs on no
-input `protocol` parses. -/
-theorem checkBlobsAt_parsed {j : Json} {b : ByteArray} {p : Params} {e : Evidence} (hp : paramsOfJson j = .ok p)
-    (he : evidenceOf b = .ok e) (c : OneStage.Commitment) (ξ : ByteArray) (bs : Core.Blobs) :
-    checkBlobsAt p c ξ e bs = checkOneAt p c ξ e bs :=
-  checkBlobsAt_one (paramsOfJson_members hp) (evidenceOf_statements he)
+/-- **The per-member form's parameters name members**: whatever `membersParamsOfJson` returns names some. -/
+theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
+    ∃ ms, p.members = some ms := by
+  unfold membersParamsOfJson at h
+  split at h
+  · obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
+    try dsimp only at h
+    obtain ⟨p0, -, h⟩ := Flock.HmNets.bind_ok h
+    try dsimp only at h
+    obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
+    cases h
+    exact ⟨ms, rfl⟩
+  · cases h
 
-/-- **`live`'s check at the coins is the one statement's on what `protocol` parses** (`checkBlobsAt_parsed`), on any
-blobs. -/
-theorem live_checkAt_parsed (bs : Array ByteArray) {j : Json} {b : ByteArray} {p : Params} {e : Evidence}
-    (hp : paramsOfJson j = .ok p) (he : evidenceOf b = .ok e) (c : OneStage.Commitment) (ξ : ByteArray) :
-    (live bs).checkAt p c ξ e = checkOneAt p c ξ e (Core.Blobs.ofArray bs) :=
-  checkBlobsAt_parsed hp he c ξ (Core.Blobs.ofArray bs)
+/-- **Parameters of either form that name no members are the one statement's**: `paramsOfJson` returned them. -/
+theorem paramsEitherOfJson_one {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) (hm : p.members = none) :
+    paramsOfJson j = .ok p := by
+  unfold paramsEitherOfJson at h
+  split at h
+  · obtain ⟨ms, hms⟩ := membersParamsOfJson_members h
+    cases hm.symm.trans hms
+  · exact h
+
+/-- **The per-member form's evidence names its statements, and its sessions are theirs in order**: whatever
+`membersEvidenceOf` returns names statements whose sessions, one statement's after another's, are its sessions. -/
+theorem membersEvidenceOf_sessions {b : ByteArray} {e : Evidence} (h : membersEvidenceOf b = .ok e) :
+    ∃ sts, e.statements = some sts ∧ e.sessions = sts.flatMap (·.sessions) := by
+  unfold membersEvidenceOf at h
+  obtain ⟨j, -, h⟩ := Flock.HmNets.bind_ok h
+  try dsimp only at h
+  split at h
+  · obtain ⟨sts, -, h⟩ := Flock.HmNets.bind_ok h
+    try dsimp only at h
+    obtain ⟨one, -, h⟩ := Flock.HmNets.bind_ok h
+    try dsimp only at h
+    obtain ⟨e0, -, h⟩ := Flock.HmNets.bind_ok h
+    cases h
+    exact ⟨sts, rfl, rfl⟩
+  · cases h
+
+/-- **Evidence of either form that names the statements `sts` has their sessions, in order**: the per-member form's
+parser returned it (`membersEvidenceOf_sessions`), since the one statement's names none (`evidenceOf_statements`). -/
+theorem evidenceEitherOf_sessions {b : ByteArray} {e : Evidence} {sts : Array StatementFiles}
+    (h : evidenceEitherOf b = .ok e) (hs : e.statements = some sts) : e.sessions = sts.flatMap (·.sessions) := by
+  unfold evidenceEitherOf at h
+  split at h
+  · split at h
+    · obtain ⟨sts', hs', hse⟩ := membersEvidenceOf_sessions h
+      obtain rfl : sts = sts' := Option.some.inj (hs.symm.trans hs')
+      exact hse
+    · cases hs.symm.trans (evidenceOf_statements h)
+  · cases h
+
+/-- **Evidence of either form that names no statements is the one statement's**: `evidenceOf` returned it. -/
+theorem evidenceEitherOf_one {b : ByteArray} {e : Evidence} (h : evidenceEitherOf b = .ok e)
+    (hs : e.statements = none) : evidenceOf b = .ok e := by
+  unfold evidenceEitherOf at h
+  split at h
+  · split at h
+    · obtain ⟨sts, hs', -⟩ := membersEvidenceOf_sessions h
+      cases hs.symm.trans hs'
+    · exact h
+  · cases h
 
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file

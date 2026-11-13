@@ -4,10 +4,9 @@ read of a case's parameters and evidence, and nothing of the audit.
 
 It runs the form's two parsers (`membersParamsOfJson`, `membersEvidenceOf`) and the statements' public structure
 (`membersHeld`, and `sampledHeld` at the evidence's `proved_units`: each statement's member is one the sample holds).
-It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`),
-whose acceptance stays refused (`MULTI_REFUSED`): `protocol` reads `paramsOfJson` and `evidenceOf`, which refuse the
-form's keys, and this command is outside `protocol`. Its line says `parsed, not checked` (`PARSED`) and holds no
-outcome of the audit, so nothing reads it as one: it holds a writer of the form's keys to the parsers.
+It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`), which `check`
+runs on a case of the form (`protocol` reads either form's keys). Its line says `parsed, not checked` (`PARSED`) and
+holds no outcome of the audit, so nothing reads it as one: it holds a writer of the form's keys to the parsers.
 -/
 module
 
