@@ -1,32 +1,41 @@
 """summarize.py OUT: each config's numbers (OUT/<role>-k<K>/summary.json) and all of them (OUT/summary.json), from what job.sh
 leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean verifier's
-VERDICT lines, each Lean check judged against the verdict it must give, and the HZ_LEAN globs that picked the checks run.
-A row unit's checks pass `--public-inputs`, a form flock-verify refuses until its soundness proof covers it (T4): each is
-REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and passes
-when not accepted, an honest check only with the refusal as its reason. A plain tile is refused once every check has
-passed, its output row holding two output ports, a form the proof does not cover: its honest checks pass only with a
-refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session sampled, but a
-tile is no Program's: the verifier holds no descriptor (`--program`), so its honest checks pass only refused for that
-alone, once every check has passed (`NO_PROGRAM`). Every other tile check passes only when a check rejects it.
-Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
+VERDICT lines, each Lean check held to the verdict it must give (`as_expected`), and the HZ_LEAN globs that picked the checks
+run. A row unit's checks pass `--public-inputs`, a form the Lean verifier refuses until its soundness proof covers it (T4): each
+is REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and is as
+expected when not accepted, an honest check only with the refusal as its reason. A plain tile is refused once every check
+has passed, its output row holding two output ports, a form the proof does not cover: its honest checks are as expected
+only with a refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session
+sampled, but a tile is no Program's: the verifier holds no descriptor (`--program`), so its honest checks are as expected
+only refused for that alone, once `Zk.verify` and every check before it have passed (`NO_PROGRAM`). Every other tile check
+is as expected only when a check rejects it. A refusal never counts as an acceptance: each config counts the honest checks
+Lean accepted (`lean_accepted`) apart from those it refused for `NO_PROGRAM` alone (`lean_refused_no_program`), and its
+`as_expected` says only that every check and control gave the verdict it must.
+Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `as_expected`, its two counts and
+`lean_checks` are null."""
 import json
 import os
 import statistics
 import sys
 from pathlib import Path
+from typing import Any
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
 REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 REFUSED = "refused: "
-#: flock-verify's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
+#: the Lean verifier's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
-def load(p: Path):
+def load(p: Path) -> Any:
+    """``p``'s JSON, or None where the job left no such file; a file that doesn't parse reads as absent and is named on stderr."""
+    if not p.is_file():
+        return None
     try:
         return json.loads(p.read_text())
-    except (OSError, ValueError):
+    except ValueError as e:
+        print(f"summarize: {p} is not JSON ({e}): read as absent", file=sys.stderr)
         return None
 
 
@@ -37,19 +46,18 @@ def tail(p: Path, n: int = 2) -> str:
         return ""
 
 
-def gb(t) -> float | None:
+def gb(t: dict | None) -> float | None:
     return round(t["maxrss_kb"] / 2**20, 2) if t else None
 
 
-def med(xs):
+def med(xs: list[float]) -> float | None:
     return round(statistics.median(xs), 4) if xs else None
 
 
 def session(d: Path) -> dict | None:
-    try:
-        runs = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE\t")]
-    except OSError:
+    if not (d / "prove.out").is_file():
         return None
+    runs = [json.loads(ln[5:]) for ln in (d / "prove.out").read_text().splitlines() if ln.startswith("LIVE\t")]
     if not runs:
         return {"error": tail(d / "prove.err", 3) or "no LIVE line"}
     timed = [r for r in runs if not r["warm"]] or runs
@@ -89,12 +97,12 @@ def lean(d: Path, refused: bool, covered: bool) -> dict:
         why = (verdict[0].get("why") or "") if verdict else ""
         if refused:
             got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why == REFUSAL else "REJECT"
-            expect, ok = "REFUSED", got == "REFUSED" or (got == "REJECT" and not EXPECT.get(tag, False))
+            expect, held = "REFUSED", got == "REFUSED" or (got == "REJECT" and not EXPECT.get(tag, False))
         else:
             got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why.startswith(REFUSED) else "REJECT"
             expect = "REFUSED" if EXPECT.get(tag, False) else "REJECT"
-            ok = got == expect and (not covered or expect != "REFUSED" or why.startswith(NO_PROGRAM))
-        out[tag] = {"expect": expect, "verdict": got, "pass": ok,
+            held = got == expect and (not covered or expect != "REFUSED" or why.startswith(NO_PROGRAM))
+        out[tag] = {"expect": expect, "verdict": got, "as_expected": held,
                     "why": why[:300] if verdict else tail(f.with_suffix(".err"), 2),
                     "exit": t.get("exit"), "wall_s": t.get("wall_s"), "maxrss_gb": gb(t) if t else None}
     return out
@@ -113,10 +121,14 @@ def one(d: Path) -> dict:
     rec.update(zk=session(d), controls=selftests(d),
                lean=lean(d, not role.startswith(("tile", "hidden")), role.startswith("hidden")),
                lean_checks=os.environ.get("HZ_LEAN") or "*")
-    rec["all_pass"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
-                           and all(v["pass"] for v in rec["lean"].values()) and all(v["pass"] for v in rec["controls"].values()))
+    honest = [v for c, v in rec["lean"].items() if EXPECT.get(c, False)]
+    rec["lean_accepted"] = sum(v["verdict"] == "ACCEPT" for v in honest)
+    rec["lean_refused_no_program"] = sum(v["verdict"] == "REFUSED" and v["why"].startswith(NO_PROGRAM) for v in honest)
+    rec["as_expected"] = bool(rec["zk"] and rec["zk"].get("accepted") and rec["lean"]
+                              and all(v["as_expected"] for v in rec["lean"].values())
+                              and all(v["pass"] for v in rec["controls"].values()))
     if os.environ.get("HZ_STAGE_ONLY", "0") == "1":
-        rec.update(stage_only=True, lean_checks=None, all_pass=None)
+        rec.update(stage_only=True, lean_checks=None, as_expected=None, lean_accepted=None, lean_refused_no_program=None)
     (d / "summary.json").write_text(json.dumps(rec, indent=1))
     return rec
 
@@ -126,7 +138,8 @@ rows = [one(d) for d in sorted(p for p in OUT.iterdir() if p.is_dir() and (p / "
 for r in rows:
     z = r.get("zk") or {}
     print(json.dumps({k: r.get(k) for k in ("tag", "binding", "staging", "ands", "k_log", "circuit_sha512", "stage_maxrss_gb",
-                                            "stage_wall_s", "stage_error", "stage_only", "lean_checks", "all_pass")}
+                                            "stage_wall_s", "stage_error", "stage_only", "lean_checks", "lean_accepted",
+                                            "lean_refused_no_program", "as_expected")}
                      | {"zk": {k: z.get(k) for k in ("accepted", "k_log", "proof_bytes_total", "prove_total_s_median",
                                                       "rust_verify_s_median", "prover_maxrss_gb", "error")},
                         "controls": {c: v.get("pass") for c, v in r["controls"].items()},

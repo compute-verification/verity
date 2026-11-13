@@ -505,10 +505,12 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
         assert len({p["activation_roots"] for p in b if p["units"]}) == 5
 
 
+@pytest.mark.slow
 def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
     end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
+    length is the point: a few steps would not show a buffer that grows across passes."""
     rng = np.random.default_rng(17)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -740,7 +742,7 @@ class TwinDev(RecordingDev):
                 a.p[j] = v
             for j, v in enumerate(i):
                 a.i[j] = v
-            getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+            assert getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem) == 0, name
         if name.startswith("pd_") or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):
@@ -1955,6 +1957,10 @@ def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segmen
             (4, 5, "s512_folds", 11), (5, 6, "s512_tile_segs", 7), (6, 7, "s512_folds", 7)]
     assert [r[4] for r in SP._folds(rows)] == ["pearlc:row_digests", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:tile_hash",
                                                "pearlc:folds", "pearlc:tile_hash", "pearlc:tile_hash"]
+    # hash_wide.cuh's launches (rows past 128 segments) are the same steps
+    assert [SP.category(k) for k in ("s512_row_segs_w", "s512_heads_w", "s512_folds_w")] == [
+        "pearlc:row_digests", "pearlc:setup", "pearlc:folds"]
+    assert [r[4] for r in SP._folds([(0, 1, "s512_row_segs_w", 7), (1, 2, "s512_folds_w", 7)])] == ["pearlc:row_digests"] * 2
 
 
 def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monkeypatch, tmp_path):

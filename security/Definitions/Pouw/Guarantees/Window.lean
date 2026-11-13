@@ -81,9 +81,11 @@ three more links, each stated:
   are the words `tile_read` reads from the `-h3` leaf at the unit's position) with probability at most `δ_in(R, τ)`.
   The units' statements are the verifier's own (`Check.program`) and the served pass is fixed before the window, so
   the prover picks neither. On main no Program reads the `-h3` leaf (`Pc8TileSide` passes neither `ia` nor `jb` on, its
-  side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` is Python only), so
+  side ports' regions are empty, nothing outside `window.py` calls `tile_read`, and `window_problem` has a Program only
+  for its part on the entry rows, `PouwWindowStatement`, whose proof no verifier requires), so
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
-  Program: the outputs' half is that Program's opening of the `-h3` root, the inputs' half Flock's `AnchorsSound`
+  Program the verifier requires: the outputs' half is that Program's opening of the `-h3` root, the inputs' half
+  Flock's `AnchorsSound`
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `WindowDelta`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).

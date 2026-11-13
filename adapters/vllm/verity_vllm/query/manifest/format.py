@@ -38,7 +38,6 @@ IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path",
 FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights", "fa2_hidden_m1_stream", "fa3_hidden_m1_stream", "moe_block_stream",
             "tp_rank_partials",
             "sampler_seed",                     # additive: only Programs with a stochastic selector emit it
-            "sampler_splits",                   # additive: only a Program whose `splits` Input a stochastic selector reads
             "norm_scales",                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
             "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
@@ -504,13 +503,10 @@ TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect"
 #: reproducible from the committed logits, so the population REQUIRES it and a collector that does not bind it fails coverage (named).
 STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 
-#: the derived-S Program has a second request-owned runtime input beside the seed: `splits`
-#: (`Array<T+1,Value<32>>`, one i32 per sampling event = the split count S the top-p mask kernel launched with, `SplitsFor_v1(n_live, num_SMs)`),
-#: read by every `GumbelTopPTokenSelect_v1{V}` row as its 6th operand.  It is a required value of the sampling event exactly as the seed is
-#: (identity `runner.sampler/splits`, one i32 per sequence per step, family `sampler_splits`): the committed sampled id is reproducible from
-#: the committed logits only with the seed AND the S the mask used.  Emitted iff the Program HAS the `splits`
-#: parameter (static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
-SPLITS_PARAM = "splits"
+#: the runtime inputs a stochastic selector may read: the seed alone.  Its top-p split count S is the registered constant
+#: (`topp_geometry.registered_splits`), a `Const32[S]` of the Program; a selector reading S from a Program input (one a live batch
+#: could set) is refused by name.
+SAMPLER_INPUTS = frozenset({"seed"})
 
 #: [DSV4] a TP rank Program's WITNESS input `schedule`, each Marlin align call's key per pair, read by `MoeAlignRanks_v1` only; no
 #: builder emits it any more (every Program keys the align by the pair indices, the served deterministic align's order).  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
@@ -518,10 +514,6 @@ SPLITS_PARAM = "splits"
 #: committed ranks rank each expert's pairs), and the manifest names no identity for it.
 SCHEDULE_PARAM = "schedule"
 SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
-
-
-def has_splits_param(params) -> bool:
-    return any(str(n) == SPLITS_PARAM for n, _t in (params or []))
 
 
 #: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.

@@ -501,6 +501,21 @@ def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_
     assert any("connection 1 failed closed (format) at egress cell 0" in p for p in problems), problems
 
 
+def test_a_response_cap_is_a_schedule_flag_rehearse_passes_to_serve():
+    """`--max-tokens-cap` sets the schedule's response cap, which `rehearse` passes to its `serve` and the digest
+    binds; without it the schedule has none and no flag carries it."""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    rehearse = ["rehearse", "--fake", "--out", "o", "--ids"]
+    capped = ws._params(ws.parser().parse_args(rehearse + ["--max-tokens-cap", "7"]))
+    assert capped.max_tokens_cap == 7 and capped.digest != ws._params(ws.parser().parse_args(rehearse)).digest
+    flags = ws._flags(ws.parser().parse_args(rehearse + ["--max-tokens-cap", "7"]))
+    assert flags[flags.index("--max-tokens-cap") + 1] == "7"
+    assert ws._params(ws.parser().parse_args(serve + flags)) == capped
+    assert "--max-tokens-cap" not in ws._flags(ws.parser().parse_args(rehearse))
+    assert ws._params(ws.parser().parse_args(serve)).max_tokens_cap is None
+
+
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
     """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
@@ -578,22 +593,27 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
          id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
-    `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`,
-    `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response
-    read id-form at P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order.
-    Returns the network certifier."""
+    `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`, its
+    connection rows kept as the publisher process keeps them when the schedule has lengths rows (its key then a
+    height taller, for their heads), `deployment.json`, and `client.json` with every cell's arrival 1 ms into the
+    bucket it was sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side
+    of each connection, in connect order. Returns the network certifier."""
     tau = params.bucket_ms / 1000
+    height = 5 if load_heads or params.lengths else 4
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, 5 if load_heads else 4)
+        ws.cs.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
-        hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
+        hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
+                 "lengths": publisher.lengths}
         public = publisher.key
     else:
-        signer = ws.cs.signer(key, 4)
-        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), params, commit or WR.Cells.of)
-        hooks, public = {"publish": publisher, "withhold": publisher.withhold}, signer.public_key()
+        signer = ws.cs.signer(key, height)
+        issuer = ws.Issuer(signer, SESSION)
+        publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
+        hooks, public = {"publish": publisher, "withhold": publisher.withhold,
+                         "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
     answers = iter(responses)
 
     async def connect():

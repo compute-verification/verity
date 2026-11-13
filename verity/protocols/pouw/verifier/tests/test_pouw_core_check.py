@@ -225,6 +225,47 @@ def test_ratios_have_one_spelling():
             CC.ratio(s, "x")
 
 
+def test_a_ratio_reads_a_number_of_any_length():
+    """As `Core.Ratio.ofString` does, past `int`'s limit on digits, and leaves the process's limit as it was."""
+    limit = sys.get_int_max_str_digits()
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    assert len(big) == 4301 > sys.int_info.default_max_str_digits
+    assert CC.ratio(big, "x") == 10**4300
+    assert CC.ratio(f"{big}/{odd}", "x") == Fraction(10**4300, 10**5000 + 1)
+    assert CC.ratio(f"7/{odd}", "x") == Fraction(7, 10**5000 + 1)
+    for s, why in ((f"{big}/{big}0", "lowest terms"), ("0" + big, "canonical form"), (f"{big}/0{odd}", "canonical form"),
+                   (f"{big}/1", "denominator 1"), (f"{big}/{odd}/3", "not a ratio")):
+        with pytest.raises(CC.Refused, match=why):
+            CC.ratio(s, "x")
+    assert sys.get_int_max_str_digits() == limit
+
+
+def test_a_ratio_is_written_at_any_length():
+    """`window.ratio_str` is `str` of a Fraction (`Core.Ratio.toString`) past `str`'s limit on digits, under the least
+    limit a process can set, and `core_check.ratio` reads back the text it writes; `_core_draw` and `integrity_json`
+    write a long ratio with it."""
+    rng = random.Random(7)
+    least = sys.int_info.str_digits_check_threshold
+    ns = [0, 7, 10**least - 1, 10**least, 10**(2 * least), 10**(2 * least) + 1, 10**(2 * least) - 1]
+    ns += [rng.randrange(10 ** rng.randrange(1, 4000)) for _ in range(60)]
+    qs = [Fraction(n) for n in ns] + [Fraction(n, d) for n, d in zip(ns, reversed(ns)) if d] + [Fraction(-3, 7)]
+    written = {q: str(q) for q in qs}
+    limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(least)
+        assert {q: Wd.ratio_str(q) for q in qs} == written
+    finally:
+        sys.set_int_max_str_digits(limit)
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    for s in (big, f"{big}/{odd}", f"7/{odd}", "0", "3/7"):
+        assert Wd.ratio_str(CC.ratio(s, "x")) == s
+    assert CC._core_draw({"bernoulli": f"{big}/{odd}"}, "d") == {"bernoulli": f"{big}/{odd}"}
+    p = {"programs": [], "prescribed": [], "linked": False, "covered": [], "levels": [], "drawn": [],
+         "delta": Fraction(7, 10**5000 + 1)}
+    assert CC.integrity_json(p)["delta"] == f"7/{odd}"
+    assert sys.get_int_max_str_digits() == limit
+
+
 _WINDOW_ENTRY = "is not the registered window's entry"
 _HEADER, _COUNT = "the proof's public file has no JSON header", "the proof's header has no instance count"
 _ROWS = "the proof's first rows are not an A row and a B row of the registered schemas"

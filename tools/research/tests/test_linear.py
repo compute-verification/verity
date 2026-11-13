@@ -122,7 +122,7 @@ class FakeLinear:
             return {"data": {"teams": {"nodes": [{"id": f"T-{team}", "key": team[:3].upper(), "name": team}] if team else []}}}
         if "state { type }" in q:
             return {"data": {"issue": {"state": {"type": self.state_type}, "comments": {"nodes": self.comments}}}}
-        if "botActor" in q:
+        if "botActor" in q and "pageInfo" not in q:
             return {"data": {"issue": {**self.authors["I1"], "comments": {"nodes": self.comments}}}}
         if "issueLabels" in q:
             return {"data": {"issueLabels": {"nodes": [{"id": self.labels[v["n"]]}] if v["n"] in self.labels else []}}}
@@ -403,10 +403,9 @@ def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, ro
     assert lin.sent("state { type }")[-1][1] == {"id": "INF-1"}
 
 
-def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
+def test_subscriptions_prescribe_no_linear_subscription_and_the_registry_refuses_a_shared_key(registry, capsys):
     rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
-    assert rc == 0 and 'subscribe_linear_issue(options={"scope": "team", "teamId": "COMM"}' in out
-    assert "subscribe_linear_comment" not in out
+    assert rc == 0 and "subscribe_linear" not in out and "no Linear subscription on COMM" in out and "`unheard`" in out
     assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "console")[1]
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"
@@ -687,6 +686,21 @@ def test_an_open_issue_in_no_project_is_an_orphan_48_h_after_it_was_filed_and_a_
         issue("INF-64", "Backlog", dueDate="2026-10-01", title="Parked\u2026", createdAt=ago(49)),   # Backlog: not overdue, no title
         issue("INF-65", "Todo", **loose, createdAt=ago(49)),
     ]) == [("INF-62", "orphan"), ("INF-65", "orphan")]
+
+
+def test_a_persons_new_issue_with_no_answer_after_2_h_is_unheard_and_an_apps_never_is(tmp_path):
+    """No lane subscribes to its team's issue events, which wake it mostly for its own writes; the sweep rings a lane for a
+    person's issue that nobody has answered instead."""
+    person, app = {"creator": {"name": "Daniel Reuter"}, "botActor": None}, {"creator": {"name": "Verity Asks"}, "botActor": {"name": "Verity Asks"}}
+    found = audit_of(tmp_path, [
+        issue("INF-100", "Backlog", createdAt=ago(3), **person),                                          # unheard
+        issue("INF-101", "Backlog", createdAt=ago(1), **person),                                          # not 2 h yet
+        issue("INF-102", "Backlog", createdAt=ago(3), comments={"nodes": [{"createdAt": ago(2)}]}, **person),   # answered
+        issue("INF-103", "Backlog", createdAt=ago(3), **app),                                             # an agent's
+        issue("INF-104", "Todo", createdAt=ago(3), **person),                                             # Todo, unanswered
+        issue("INF-105", createdAt=ago(3), **person),                                                     # started
+    ])
+    assert [x for x in found if x[1] == "unheard"] == [("INF-100", "unheard"), ("INF-104", "unheard")]
 
 
 def test_an_open_issue_on_a_milestone_dated_before_today_is_lapsed_and_one_dated_today_is_not(tmp_path):
@@ -1050,6 +1064,28 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "W")
     assert rc == 2 and "INF-1's team DAN has no handle in the registry" in err
     assert len(lin.sent("commentCreate")) == 2 and lin.moved == []
+
+
+def test_a_worker_signs_as_its_own_lane_on_another_lanes_issue_and_its_branch_suffix_holds_it_to_it(
+        fake, registry, routes_dirs, capsys, lin, monkeypatch, tmp_path):
+    """A proofs worker's review on a compute-accounting issue reads as proofs', not as the issue team's."""
+    monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
+    monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
+    monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
+    lin.subscribers["I1"] = []
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "reviewed", "--worker", "circuits/PROVECUT")
+    assert rc == 0 and out.strip() == "INF-1 commented as circuits/PROVECUT"
+    assert lin.sent("commentCreate")[-1][1]["i"]["createAsUser"] == "circuits/PROVECUT"
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "nobody/W")
+    assert rc == 2 and "@nobody is no handle in the registry" in err
+    reg = json.loads(registry.read_text())
+    next(h for h in reg["handles"] if h["handle"] == "infra")["branch_suffixes"] = ["98f5"]
+    registry.write_text(json.dumps(reg))
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "98f5")                      # an infra worker's checkout
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "circuits/W")
+    assert rc == 2 and "ends in @infra's suffix, so its worker signs as infra/W" in err
+    assert len(lin.sent("commentCreate")) == 1
 
 
 def stateless(fake: FakeLinear) -> bool:

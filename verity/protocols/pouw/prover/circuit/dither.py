@@ -1,7 +1,7 @@
 """Dither's served unit: the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled output cells.
-The protocol is Dither v3.2 (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`), as the v31 prover implements it
-(`benchmarks/pouw/accel_v31/v31.py`). No guarantee states its proof block yet: `Pouw.Guarantees.Dither.WorkSoundNoFold`
+The protocol is Dither v3.2 (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`). No guarantee states its proof block
+yet: `Pouw.Guarantees.Dither.WorkSoundNoFold`
 is stated for the no-fold round, whose committed values are 32-bit prefix sums, not v3.2's 16-bit T_s and 32-bit O.
 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
@@ -17,7 +17,7 @@ MACs an output cell: segment S is checked through O, the un-noised product of op
 checks O for O's consumers and earns nothing, and neither does a call at L ≥ K. A filler call
 may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it commits no O, so it commits T_S (`Shape.o`).
 
-**The coins** are each stream's 512-bit seed, expanded as v31 expands them:
+**The coins** are each stream's 512-bit seed, expanded as
 ``prg(seed, x, idx) = SHA-512(seed ‖ x ‖ be64(idx))``, x NUL-padded to 8 bytes. A served call's seeds come from the
 challenger's raw coin opened after its operand roots (`seeds`): seed_x = SHA-512(`SEEDS_TAG` ‖ coin ‖ operand-root
 receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's signed receipt of the block's operand roots.
@@ -48,8 +48,8 @@ A proof block reads the noise per inner index k: ``na = d_A + V[k mod L′]`` an
 Every row is private but the coins' (na, nb, da, db), and the only output is the pass bit. The X W′ᵀ sums run 32 entries
 a step through `segment.PouwSegDot0_v2` and `PouwSegDot_v2`, the s8 tensor-core step on each card (`DEVICES`, `dot_steps`).
 
-**The leaves** (`Shape`) are the value root's layout the kernels write:
-v31's at 16 KiB rows, without segment S's rows. Output tiles of 128 × 128 output cells (tile tm (n / 128) + tn), a tile's
+**The leaves** (`Shape`) are the value root's layout the kernels write,
+at 16 KiB rows and without segment S's rows. Output tiles of 128 × 128 output cells (tile tm (n / 128) + tn), a tile's
 output cells row-major (c = 128 r + col); per tile, its tile-segments' 16,384 T_s for s = 1 .. S − 1 as little-endian u16
 (32 KiB each) and then its O as little-endian u32 (64 KiB), cut into rows of `row` bytes, so a tile is `Shape.lpt`
 consecutive leaves. Each row is an ``hm96-sha512/row/v2`` leaf (`leaf_h`) in one binary frame-v3-sha512 tree a call,

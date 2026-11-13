@@ -10,7 +10,7 @@
 # With PIN_BUILD (a Build of record's build.json, `served-match`'s; PIN_BUILD_NAME names one sent with the run, as
 # $RESEARCH_RUN_DIR/inputs/<name>) in place of SEED_ARGS, the dir is seeded with that Build's autotune winners (`served-pin
 # seed`, as prof.sh), compile caches off, and checked against them after the run (`served-pin check` -> $OUT/pin_check.txt):
-# by curve.py's rules a compiled ratio counts only when the winners are the Build's.
+# a compiled ratio counts only when the winners are the Build's.
 #
 # From the source tree's root on one RTX PRO 6000 (VERITY_BENCH_VENV names the pinned-vLLM environment, as run.sh's):
 #   SPEC=llama31-8b-fp8-rtx-served-arm SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \

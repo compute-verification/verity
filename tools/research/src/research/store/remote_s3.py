@@ -737,6 +737,17 @@ class S3Remote:
             res["action"] = "exists"
         return res
 
+    def replace(self, key: str, path: Path) -> None:
+        """Write `key` whatever it holds, in one PUT, so a reader gets the old object or the new one whole.  Not part of the
+        `Remote` protocol and never for a store record, whose keys are immutable: only for a key that caches them, the labels
+        pack (`labels_sync.publish_pack`)."""
+        path = Path(path)
+        sha, size = sha256_file(path)
+        if size > self.single_put_max:
+            raise ValueError(f"{key}: {size} bytes is over one PUT's {self.single_put_max}")
+        with self._request("PUT", key, body=path, payload_hash=sha):
+            pass
+
     def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
         """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
         that holds no key."""

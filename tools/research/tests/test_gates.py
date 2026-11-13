@@ -1,7 +1,10 @@
 """`research.gates`: the environment every gate's subprocess gets and the one refusal path."""
 from __future__ import annotations
 
+import json
 import subprocess
+
+import pytest
 
 from research import gates
 
@@ -27,10 +30,11 @@ def test_git_env_drops_a_hooks_repository_and_the_callers_slots_and_import_path(
               "GIT_CONFIG_KEY_3": "merge.lean-imports.name", "GIT_CONFIG_KEY_4": "merge.lean-imports.driver",
               "GIT_CONFIG_KEY_5": "merge.lakefile-lists.name", "GIT_CONFIG_KEY_6": "merge.lakefile-lists.driver",
               "GIT_CONFIG_KEY_7": "merge.fixture-map.name", "GIT_CONFIG_KEY_8": "merge.fixture-map.driver",
-              "GIT_CONFIG_KEY_9": "merge.vllm-allowlist.name", "GIT_CONFIG_KEY_10": "merge.vllm-allowlist.driver",
-              "GIT_CONFIG_KEY_11": "merge.lean-caps.name", "GIT_CONFIG_KEY_12": "merge.lean-caps.driver",
-              "GIT_CONFIG_KEY_13": "merge.pyproject-test-lists.name", "GIT_CONFIG_KEY_14": "merge.pyproject-test-lists.driver"}
-    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "15", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
+              "GIT_CONFIG_KEY_9": "merge.markdown-rows.name", "GIT_CONFIG_KEY_10": "merge.markdown-rows.driver",
+              "GIT_CONFIG_KEY_11": "merge.vllm-allowlist.name", "GIT_CONFIG_KEY_12": "merge.vllm-allowlist.driver",
+              "GIT_CONFIG_KEY_13": "merge.lean-caps.name", "GIT_CONFIG_KEY_14": "merge.lean-caps.driver",
+              "GIT_CONFIG_KEY_15": "merge.pyproject-test-lists.name", "GIT_CONFIG_KEY_16": "merge.pyproject-test-lists.driver"}
+    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "17", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
 
 
 def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):
@@ -59,6 +63,35 @@ def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):
     assert subprocess.run(["git", "config", "merge.lean-audit.driver"], cwd=tmp_path, capture_output=True).returncode == 1
     git("merge", "-q", "--no-edit", "b")
     assert (tmp_path / "lean-audit.json").read_text() == '{\n "a": 1,\n "b": 1,\n "m": 1\n}'
+
+
+@pytest.mark.parametrize("script", ["adapters/vllm/tests/lint/merge_allowlist.py",
+                                    "integrations/vllm/tests/lint/merge_allowlist.py"])
+def test_the_vllm_allowlist_driver_merges_in_either_layout(tmp_path, script):
+    """A crossing of the layout move merges once at the move's base and once on the moved `main`, so the vLLM lints' driver
+    is found at its moved place and at its old one: with only one place named, the other merge left the lists conflicted."""
+    def git(*a):
+        return subprocess.run(["git", "-c", "commit.gpgsign=false", *a], cwd=tmp_path, check=True, capture_output=True, text=True,
+                              env=gates.git_env(GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t",
+                                                GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"))
+
+    driver = tmp_path / script
+    driver.parent.mkdir(parents=True)
+    driver.write_text("import json, sys\no, a, b = (json.load(open(p)) for p in sys.argv[1:4])\n"
+                      "json.dump(sorted(set(a) | set(b)), open(sys.argv[2], 'w'), indent=1)\n")
+    (tmp_path / ".gitattributes").write_text("allow.json merge=vllm-allowlist\n")
+    (tmp_path / "allow.json").write_text('[\n "m"\n]\n')
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "o")
+    git("checkout", "-q", "-b", "b")
+    (tmp_path / "allow.json").write_text('[\n "b",\n "m"\n]\n')
+    git("commit", "-q", "-am", "b")
+    git("checkout", "-q", "main")
+    (tmp_path / "allow.json").write_text('[\n "a",\n "m"\n]\n')
+    git("commit", "-q", "-am", "a")
+    git("merge", "-q", "--no-edit", "b")
+    assert json.loads((tmp_path / "allow.json").read_text()) == ["a", "b", "m"]
 
 
 def test_refuse_says_why_on_stderr_and_exits_refused(capsys):

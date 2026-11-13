@@ -1,0 +1,46 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "partition",
+ "model": "GLM-5.3",
+ "value": {
+  "name": "per-expert-fused",
+  "label": "weight-row reads fused into their GEMMs: Definitions built and circuit-checked (in review); not yet measured, proved or served",
+  "replaces": [
+   "MoeExpertFp8Gemm_v1",
+   "MoeExpertFp8GemmW_v1",
+   "MoeRouterSigmoidBias_v1"
+  ],
+  "strata": [
+   {
+    "block": "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}",
+    "kind": "MoeRouterSigmoidBiasSlots_v2",
+    "per_token": 600,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=96}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 19200,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8ReadGemm_v1{READ={\"fn\":\"EmbeddingRead_v1{V=256,H=3072}\"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}",
+    "kind": "MoeExpertFp8ReadGemm_v1",
+    "per_token": 2457600,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 230400,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8ReadGemmW_v1{READ={\"fn\":\"EmbeddingRead_v1{V=256,H=4096}\"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v2\"}}",
+    "kind": "MoeExpertFp8ReadGemmW_v1",
+    "per_token": 921600,
+    "k_log": 25
+   }
+  ]
+ }
+}

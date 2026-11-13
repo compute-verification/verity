@@ -13,7 +13,7 @@ inputs = ["verity/configuration/config/verity_config", "verity"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_j10r_ws.py", "tests/test_settings.py"]
+tests = ["tests/test_h1v3_ref.py", "tests/test_j10r_ws.py", "tests/test_settings.py"]
 paths = ["benchmarks/hash/dither"]
 
 [[tool.verity.tests.reads]]

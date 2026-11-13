@@ -62,6 +62,62 @@ documents each option it takes: `tensor_parallel_size`, `max_num_seqs`, `max_num
 engine spec (`verity_vllm/engine/spec.py`). Outside code imports only the public modules (`PUBLIC` in
 `tests/test_vllm_public_api.py`), and from each only its `__all__`.
 
+## Replay
+
+Under the two-stage design (`GLOSSARY.md`), serving commits only what each replay block reads and writes at its edges.
+After the first stage samples replay blocks, the developer replays each sampled one and registers its interior, and the
+second stage samples proof blocks inside it. Here a replay block is one request, from its first engine step to its
+finish inside one served window. The parts, in the order they run:
+
+- **The boundary commitment at serve** (`verity_vllm/pipeline/boundary_rows.py`). For each request that finishes in a
+  window, the engine core keeps two hiding rows: its ingress (the prompt's length, the sampling inputs and seed, the
+  prompt's token ids) and its egress (how many ids were served, why it finished, the ids). The requests of one size
+  class, prompt and output lengths rounded up to powers of two, are one registration. A window closes after its
+  length, when no request is running, or at stop, and a thread of its own commits it. A request still running is
+  carried to the next window, so a replay block never crosses one. A scheduler that caches prefixes commits the
+  same rows; it is refused only with history tables, which hold a request's latent rows from position 0, where a
+  request served from the cache computes none before its hit's end.
+- **The schedule** (`verity_vllm/engine/step_trace.py`). The in-process engine core records what the scheduler decided
+  at every step: each arrival, each step's rows in the model runner's order with their first positions and lengths,
+  preemptions, cache hits and finishes. Recording changes nothing the engine does. The schedule reaches an audit as
+  advice: `verity_vllm/pipeline/advice_windows.py` commits an advice's encoding as hiding rows, with only their root
+  and the length in bits public and the registered compiler's digest bound beside them.
+- **The replay** (`benchmarks/serve_tax/replay.py`). A served model's kernels need not be batch invariant: a request's
+  bits can depend on the requests that shared its steps. So the replay re-runs the whole window, not the sampled
+  request alone. It starts the served engine again in one process from the trace's header, adds every request under
+  its served engine id, prompt, sampling inputs and seed right before the step it arrived before, and lets the
+  scheduler decide the rest as it did. It then compares its own step trace and every sampled token with the served
+  ones, and `replay.json` says where they differ.
+- **What keeps it bit for bit.** Both sides run the engine profile of `verity_vllm/engine/env.py`, which gives each
+  switch's reason: Model Runner V2, the engine core in-process, Inductor's reduction tiling fixed. Both run with
+  `PYTHONHASHSEED=0` and request ids not randomized, because the scheduler iterates sets of request ids. A model whose
+  sparse attention selects positions by a top-k over more keys than it keeps is served and replayed with the
+  canonical top-k plugin (`benchmarks/dsa_topk/`), since the stock kernels' selection can vary from run to run.
+- **The interior registration** (`verity_vllm/pipeline/interior_rows.py`). The replay takes each sampled request's
+  logits rows and sampled ids at every rank's sampler (`verity_vllm/engine/sampler_capture.py`, `replay.py
+  --capture`). `pieces` cuts them into the proof blocks Flock proves, and `interior` commits those after the boundary
+  registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
+  one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
+  token selection and not the model's layers.
+- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
+  commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
+  challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
+  stage. The verifier refuses every two-stage run at its last check (`FORM` in
+  `verity/protocols/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+
+The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
+the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
+REPLAY_CAPTURE=ID,...` replays that load's window alone and captures the named requests. A replay block that is a span
+of positions inside a request, and a served prefix-cache hit, are not on this path.
+
+What a replay costs is measured, and no figure is kept in the tree. `replay.json` holds the served window's seconds
+beside the replay's and the engine's start. `benchmarks/serve_tax/tp_restore.sh` serves, restores a fresh engine from a
+snapshot taken at a window's edge and replays to the next edge; its `restore.json` holds the seconds of the build, the
+restore and the replay. For an engine in one process, `benchmarks/serve_tax/restore.py` and `rebuild.py` also write
+the replay's busy GPU seconds beside serving's for the same steps; a tensor-parallel replay has no such counter. The
+planner prices a sampled replay block's replay from the model's `replay` card (`benchmarks/spot_figures/cards/`) in
+`benchmarks/spot_figures/total_cost.py`.
+
 ## Where to look
 
 One line for each subpackage of `verity_vllm/`, and for what sits beside it:
@@ -79,12 +135,14 @@ verity_vllm/
   observe/           the observer's capture of an engine run, folded back into a Program (fold/) for the Match
   acquire/           value acquisition: the acquisition plan, and the hooks and native taps it installs
   commit/            the Commit: the GPU committer (committer/) and the rows-sha512 scheme (step_rows.py)
+  commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
   properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, tap exactness
   records/           typed stage records, one for each kind one stage writes and another reads
-  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime); each workload's served pin per device
+  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
+                     of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
 tests/               the suite verity-vllm, a directory for each subpackage; lint/ holds the ratchets (lint/README.md)

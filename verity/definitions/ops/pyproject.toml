@@ -17,6 +17,7 @@ inputs = ["verity", "security", "verity/definitions/kernels", "adapters/vllm/ver
           "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
           "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/numerical/python/verity_numerical/reference/__init__.py"]
 parallel = true
+worker_gb = 10
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

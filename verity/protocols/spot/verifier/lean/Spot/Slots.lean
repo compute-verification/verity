@@ -47,7 +47,8 @@ def Layout.blocks (l : Layout) : Array ProofBlock := l.classes.flatten.flatten
 /-- Unit `u`'s slot: the proof block that is it. -/
 def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.blocks.findIdx? (·.unit == some u)
 
-/-- The gates of the root's input nodes (`TemplateQuery.isInput`), in gate order. -/
+/-- The gates of the root's input nodes (`Desc.isInputNode`: a node whose callee is a primitive with an input id), in gate
+order. A call of a composite is a query's to place, whatever its id, and none of its gates is here. -/
 def inputGates (d : Desc) : Array Nat := Id.run do
   let some root := d.def? d.root | return #[]
   let mut out := #[]
@@ -55,7 +56,7 @@ def inputGates (d : Desc) : Array Nat := Id.run do
   for x in root.nodes do
     let tid := d.callees.getD x.fn ""
     let n := x.members * d.gates tid
-    if Flock.TemplateQuery.isInput tid then out := out ++ (Array.range n).map (at_ + ·)
+    if d.isInputNode x then out := out ++ (Array.range n).map (at_ + ·)
     at_ := at_ + n
   return out
 

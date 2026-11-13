@@ -54,7 +54,7 @@ def test_an_output_length_past_max_tokens_is_refused(x):
     """A slot's max_tokens below its certified output length's width, 2^bitlen(mt) <= olen, leaves the length term
     uncodable: the reference refuses ``code`` and leaves ``charge`` unspecified, and the circuit clears bit 2."""
     honest = V7.case(x.S, x.sl, BOOK)
-    k, (_id, _P, O, *_cap) = max(enumerate(x.sl.arrivals), key=lambda a: a[1][2])
+    k, (_id, _P, O, *_rest) = max(enumerate(x.sl.arrivals), key=lambda a: a[1][2])
     assert O >= 2
     short = _with_mt(x.S, honest, k, O >> 1)
     flags = V7.check(x.S, short.rows)
@@ -85,7 +85,7 @@ def test_the_length_term_at_powers_of_two(x):
     O, b = x.sl.arrivals[k][2], x.sl.arrivals[k][2].bit_length()
     rest = honest.length - WC.length_bits(x.sl.max_tokens[k])
     cases = []
-    for mt in sorted({O, (1 << b) - 1, 1 << b, (1 << b + 1) - 1, 1 << b + 1, WC.MT_CAP}):
+    for mt in sorted({O, (1 << b) - 1, 1 << b, (1 << b + 1) - 1, 1 << b + 1, (1 << WC.MW) - 1}):
         c = V7.case(x.S, replace(x.sl, max_tokens=tuple(mt if j == k else m for j, m in enumerate(x.sl.max_tokens))), BOOK)
         assert (c.verdict, c.length) == (V7.ACCEPT, rest + mt.bit_length() + 1), mt
         cases.append(c)
@@ -113,9 +113,9 @@ def test_a_term_is_charged_in_its_bodys_window_when_its_output_ends_later():
 @pytest.mark.slow
 def test_w212_charges_v1s_segment_and_its_length_tails():
     """Window 212 at its own statics (`compile_slice_w212.json`), its three requests' max_tokens their certified output
-    lengths (each ran to its cap: ``cap`` = 1 in `compile_slice_w212_class_async.json`): from the session's carry into
-    w212, the unit charges v1's 27 bits plus 5 + 4 + 5 for the length terms, and the circuit accepts that charge and
-    refuses one bit less."""
+    lengths (each ran to its bound, its arrival's last field in `compile_slice_w212_class_async.json`): from the session's
+    carry into w212, the unit charges v1's 27 bits plus 5 + 4 + 5 for the length terms, and the circuit accepts that
+    charge and refuses one bit less."""
     w = _load(OWN)
     sl = V7.Slice(w.sl.arrivals, w.sl.decisions, w.sl.steps, w.sl.tokens, tuple(a[2] for a in w.sl.arrivals))
     v1 = CS.case(w.S, w.sl, BOOK, served=w.served, carry=CARRY)

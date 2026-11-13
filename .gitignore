@@ -61,9 +61,10 @@ verity/protocols/flock/prover/tests/fixtures/hidden-outputs
 verity/protocols/flock/prover/tests/fixtures/honest-session
 verity/protocols/flock/prover/tests/fixtures/honest-plain
 verity/protocols/flock/prover/tests/fixtures/plain-tree
-benchmarks/pouw/machine_model/data/cover/corpus.json
-benchmarks/pouw/sass_census/data/bu_12_9.json
-benchmarks/pouw/sass_census/data/sass_isa_tables.json
+benchmarks/machine_model/data/cover/corpus.json
+benchmarks/machine_model/data/cover/bu_12_9.json
+benchmarks/machine_model/data/cover/sass_isa_tables.json
+benchmarks/training_slowdown/data/v3-selection.json
 benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 verity/protocols/flock/prover/tests/fixtures/public-inputs
 verity/protocols/flock/prover/tests/fixtures/public-inputs-blocks
@@ -74,6 +75,7 @@ verity/protocols/flock/prover/tests/fixtures/zk-sessions
 verity/protocols/spot/verifier/tests/fixtures/form-refusals
 adapters/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures
+benchmarks/network_e2e/encodings/tests/fixtures_draft
 benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
 benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json

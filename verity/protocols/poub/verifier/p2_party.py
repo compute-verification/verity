@@ -70,6 +70,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
+from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 
 from . import audit, p2, p2_lean, pooled
@@ -85,14 +86,16 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
 (`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
-δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13."""
+δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
+assumed)."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
 EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `RemoteAudit.Protocol.certify` sums; "
-             "not the sketch's term at units (`SketchBoundP2`, drafted)")
+             "not the sketch's term at units (`SketchBoundP2`, drafted), and not Σ_t adv_t (SHA-512 stream as PRF: "
+             "not priced, not assumed)")
 #: what an accepted session's `gamma` is against, and what it and `q_bytes` are before (`core_answer`)
 GAMMA_TERMS = ("μ_timing + μ_sample only, 1 − q_bytes/(R · span), R the read rate `r_bytes_per_s`; q_bytes and γ are "
                "before μ_chip, λ, μ_rebuild, μ_host, μ_link and μ_carrier, which `audit.ledger` does not take off a P2 "
@@ -186,8 +189,6 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
     sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_session.setup_of` refuses."""
-    from verity.protocols.pous.device import challenger_session as CS
-
     request = record["request"]
     s = CS.setup_of(request)
     if s is None:
@@ -201,8 +202,6 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 def pous_record(directory: Path, session_id: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
-    from verity.protocols.pous.device import challenger_session as CS
-
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")
     doc = json.loads((directory / CS.SETUPS / f"{session_id}.json").read_text())
@@ -810,10 +809,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "Twin", "answer", "core_answer", "held_json",
-           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "prove",
-           "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of", "session",
-           "verdict_json"]
+__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer", "core_answer",
+           "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record",
+           "prove", "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of",
+           "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

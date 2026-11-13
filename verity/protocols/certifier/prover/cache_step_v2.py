@@ -3,8 +3,8 @@
     CacheStep_v2{N, U, TW, RW, L, R, D, NB, SW} (pool, slot, r, admit, take, free, K, wh, ev, nins, new, tau, held, ret,
                                                 units) -> (ok, pool', trail)
 
-`CacheStep_v1` (`cache_step`) checks a hit against a cache that never evicts, so past the cumulative pool bound advice
-v1 sends each hit's shortfall. This unit models what vLLM d9105ea8's `BlockPool` does to the cached blocks (the
+`CacheStep_v1` (`cache_step`) checks a hit against a cache that never evicts, so past the cumulative pool bound it holds
+a hit only to the longest cached prefix, and advice v1 sends no hit. This unit models what vLLM d9105ea8's `BlockPool` does to the cached blocks (the
 replay's `pool.BlockPool` is its line-for-line model): which requests hold each cached block, the free queue's order, eviction
 and the blocks a leaving request returns. So the hit, the evictable count `ev` and the returns `ret` that
 `ReplayStep_v1` reads are derived at every step, past the bound too. `reference` is the specification in Python. The

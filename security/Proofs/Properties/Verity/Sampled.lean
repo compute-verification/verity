@@ -32,7 +32,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   it (`Live.wr`, `wrZP`), so what it writes at the outcome an accepted transcript's files decode to is accepted, and
   V5's `RecordCustodyZKJPLaw` holds at it under the sample file's law with no premise (`Live.hCust`). At the device's
   bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
-* **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`law`), sampled as
+* **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`design`), sampled as
   `Spot.Select.select` samples it, by `Spot.Draw.drawUnits` on the device's one byte stream (`src`); a
   sample that fails samples every unit. It is V5's sample at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
@@ -72,14 +72,15 @@ files and at the strategy a strategy of the period's game projects to. This modu
   the read shows no log; a record that doesn't parse reads as `null`, as `treesHeld` reads it, and v2 refuses its
   session.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
-  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables off the committed
-  files as v2 does (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
+  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables the circuit file
+  registers (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
-  the sampled verdict never accepts.
+  the sampled verdict accepts with probability at most the published `δ`.
 * **The deployed digests and reading** (`programDigestOf`, `publicDigestOf`, `readOf`): the digests v2's parameters
-  name (`paramsOf`), and the files they name, the lookup tables the committed files hold and `verify --zk`'s tags.
+  name (`paramsOf`), and the files they name, the lookup tables the circuit file registers (`pinnedTables`: each
+  pinned table its META looks up, at a file with the table's pinned digest, `pinnedFile`) and `verify --zk`'s tags.
   They give `DigestsAt` at every parameters (`digestsAt_of`), and at a session whose inputs are v2's the reading is the
   session's (`readOf_eq`).
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
@@ -90,8 +91,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
     holds no proof block of a set of more than an `ε` share of them, the acceptance probability of the sampling design's one-stage
     design over the population's strata (`Claims.Sampling.OneStage.Pa`). The sampling design and the strata define it, and at the
     subset sampling design of `kd` units it is `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`;
-  * the tables' knowledge term at the worst registration (`ksAvgStrictZ`) and the binding error at `t + w` per run
-    (`sessionDelta`);
+  * the tables' knowledge term at the worst registration (`ksAvgStrictZ`), the binding error at `t + w` per run and
+    `ecr/sha-512` at the finder that recomputes the registration's roots (`rootsErr`) (`sessionDelta`);
   * each round the device opens after a digest of the prover's message, the record the commitment is a digest of, and
     the message the composition's commitment is the SHA-512 of (the digests it binds, among them the one v2's sample
     answers): a two-continuation finder (`twoRun`), which runs the play twice after the digest and outputs the two
@@ -101,8 +102,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
     open: the leaf's coins against fresh ones, at the mean over the device's fresh tree key of hm96's hiding gap
     (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf, so `Claims.Hm96Hiding` holds at it
     with no premise (`CROnly.hm96Hiding_gap`). The device refuses every tree past its caps, so every run of a play
-    samples trees of at most `maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
-    `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
+    samples trees of at most `maxLeaves` (`2^49`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
+    `2 · 2^49/2^257 = 2^-207` (`Live.hidingTerm`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's collision bound at `t`, its budget over `2^256` (`cr`, `Vocab.crBound`).
 -/
@@ -118,13 +119,14 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
-derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once
-with one domain at each root, the population, the registration's descriptor and query and the population's order, the
-sampling design on the registration's strata and the sample's size), the device's byte stream the sample reads, A3 at those bytes and
-the verify command's tags as fields, and the bound's parameters. The registration, the sample file (the printed one),
-the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
-`Live.dg`), and `live-verifier` holds at the writer under the sample file's law (`Live.hCust`). The live rounds' count and the tree
-openings the session reads after a digest are its coin tree's (`Live.N`, `Live.rounds`). -/
+derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
+distinct, the population, the registration's descriptor, query, sampling-design object and work table and the
+population's order, and the sampling design the verifier samples under from them, a subset one), the device's byte
+stream the sample reads, A3 at those bytes and the verify command's tags as fields, and the bound's parameters. The
+registration, the sample file (the printed one), the writer and the rounds' digest are the ones the period's
+registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`, `Live.dg`), and `live-verifier` holds at the writer under the
+sample file's sampling design (`Live.hCust`). The live rounds' count and the tree openings the session reads after a
+digest are its coin tree's (`Live.N`, `Live.rounds`). -/
 structure Live where
   /-- the population: the public file's proof blocks -/
   n : ℕ
@@ -143,10 +145,8 @@ structure Live where
   pubO : Flock.Public
   hpubO : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pubO
   hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true
-  /-- the circuit names each of its ports once -/
-  hdup : Flock.Registered.dupName D.unroll = none
-  /-- two ports with one root at the public file's leaf map have one domain -/
-  hroots : Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n)
+  /-- no two of the circuit's ports have one published domain -/
+  hdup : Flock.PortRoots.dupId D.unroll pub = false
   hn : pub.n = n
   hnO : pubO.n = n
   /-- the statement's descriptor -/
@@ -155,18 +155,18 @@ structure Live where
   qr : Lean.Json
   /-- the registration's population is the public file's proof blocks, in order -/
   hpop : Flock.Bridge.PopMatches desc qr n
-  /-- the sampling design the parameters' selection rule derives over the population (`Spot.Select`) -/
-  law : Flock.Draw.Law
-  /-- the sample's size -/
-  kd : ℕ
-  /-- the sampling design is on the strata of the registration's layout and samples `kd` proof blocks -/
-  hlaw : Flock.Bridge.LawOn law (Flock.Bridge.nsOf desc qr) kd
-  hdiv : kd % nTab I = 0
+  /-- the registration's sampling-design object and work table -/
+  lj : Lean.Json
+  tb : Option Lean.Json
+  /-- the sampling design the verifier samples under from the registration (`Flock.Bridge.designAt`) is the sample
+  file's, its proof blocks sampled uniformly (`Live.hCust`) -/
+  hsub : Flock.Bridge.designAt desc qr lj tb n = .subset (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n))
+  hdiv : Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n) % nTab I = 0
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
   /-- a table `verify --zk` sets up, whose refused table the plan reads only at a sample `verify --zk` sets up no table
   for (`tableZHJP`), where no witness satisfies it -/
-  y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n) / nTab I)) S₀ d₀
   /-- the device's bytes the sample reads -/
   Ω : Type
   [fΩ : Fintype Ω]
@@ -183,7 +183,7 @@ structure Live where
   hM : 1 ≤ M
   ρ : ℝ
   hρ : ρ < 1
-  hr : ∀ S R j, rateZ (planZHJP (Reg := ByteArray) (printedDraw (.subset kd)) y₀ S R) j k ≤ ρ
+  hr : ∀ S R j, rateZ (planZHJP (Reg := ByteArray) (printedDraw (.subset (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)))) y₀ S R) j k ≤ ρ
   /-- the claim's share: at most an `ε` share of the proof blocks unbound -/
   ε : ℝ
   /-- one opening's verification, in SHA-512 calls -/
@@ -223,6 +223,12 @@ namespace Live
 
 variable (A : Live)
 
+/-- **The sampling design the verifier samples under**, from the registration (`Flock.Bridge.designAt`). -/
+abbrev design : Flock.Draw.Law := Flock.Bridge.designAt A.desc A.qr A.lj A.tb A.n
+
+/-- **The sample's size**: the proof blocks the sampling design samples (`Flock.Bridge.lawK`). -/
+abbrev kd : ℕ := Flock.Bridge.lawK A.design
+
 /-- **The session's coin tree**: the keyed coin tree `verify --zk` sets the session up on (`ZkExec.zkCoins`), its
 session stream and each table's two rep streams, `2^roundsLog` rounds each (`Flock.Zk.coinSpec`). -/
 def coinSpec : Flock.CoinTree.Spec := Flock.Zk.coinSpec (A.I.tags.tableNames A.I.count)
@@ -261,7 +267,7 @@ abbrev Reg (_ : Live) : Type := ByteArray
 hash lemma's bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf. The prover sees every
 leaf before it chooses what to open, so the term counts the leaves the device samples, not the rounds the session
 opens; the device refuses every tree past its caps (`Verity.releases`), so every run of a play samples trees of at most
-`maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`, with no premise), and the term is `2 · 2^46/2^257 = 2^-210`
+`maxLeaves` (`2^49`) leaves in all (`Leaves.play_leaves_le`, with no premise), and the term is `2 · 2^49/2^257 = 2^-207`
 at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
@@ -297,6 +303,19 @@ theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts
     A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => .subset A.kd :=
   recordCustodyZKJPLaw_deployed A.I A.own A.kd _
 
+/-- The session's sampling design is no Bernoulli design (`Flock.Bridge.notBernoulli_designAt`). -/
+theorem hb : Flock.Bridge.NotBernoulli A.design := Flock.Bridge.notBernoulli_designAt _ _ _ _ _
+
+/-- **The sampling design is on the strata of the registration's layout and samples `kd` proof blocks**, at the
+registration's population (`Flock.Bridge.lawOn_drawsUnder`); where the registration names no sampling design, the
+verifier samples under `subset 0`, which samples none. -/
+theorem hlaw : Flock.Bridge.LawOn A.design (Flock.Bridge.nsOf A.desc A.qr) A.kd := by
+  rcases Flock.Bridge.designAt_cases A.desc A.qr A.lj A.tb A.n with h | h
+  · exact Flock.Bridge.lawOn_drawsUnder A.hpop h (Flock.Bridge.notBernoulli_drawsUnder h)
+  · unfold Live.kd Live.design
+    rw [h]
+    exact ⟨rfl, Nat.zero_le _⟩
+
 /-- **The session at the device's bytes as deployed**: the sample reads the device's one-stage rounds
 (`DeployedCoins`), their bytes in order (`deployedSrc`), where A3 holds with no premise
 (`uniformRandomBytes_deployed`). -/
@@ -324,15 +343,15 @@ noncomputable def extend (S : Widening) : Live where
 noncomputable def L : FlockSoundness.Audit.Law A.n where
   Ω := A.Ω
   draw ω :=
-    match _root_.Spot.Draw.drawUnits A.law A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+    match _root_.Spot.Draw.drawUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
     | .error _ => Finset.univ
 
 /-- The session's sample is V5's, `Flock.Bridge.execSel` at the session's bytes and law. -/
-theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.law A.n := by
+theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.design A.n := by
   unfold Live.L Flock.Bridge.execSel
   refine congrArg (@Verity.Law.mk (Fin A.n) A.Ω _ _) (funext fun ω => ?_)
-  rcases _root_.Spot.Draw.drawUnits A.law A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+  rcases _root_.Spot.Draw.drawUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     _ | ⟨d, x⟩ <;> rfl
 
 /-- **Flock's live audit at the session**, the game V5 bounds: the prover registers, the device's bytes sample, and
@@ -401,18 +420,27 @@ of `kd` units, `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`. Those s
 claim, so no count of them enters; with none (`ε ≥ 1`) the term is `0`. -/
 noncomputable def drawMiss : ℝ≥0∞ :=
   ENNReal.ofReal (⨆ B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card},
-    (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
+    (_root_.Properties.Spot.oneStageOf A.design).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
+
+/-- **The registration's roots term**: `ecr/sha-512` at the finder that recomputes the registration's roots at the
+public file's leaf map (`Flock.Bridge.rootsFinderL`, no coins, `Flock.Bridge.rootsCostL` SHA-512 calls): two ports with
+one root and different domains are a collision it finds. -/
+noncomputable def rootsErr : ℝ≥0∞ :=
+  Claims.ecrBound Claims.Sampling.sha512Msg
+    (Flock.Bridge.rootsFinderL A.D.unroll (Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n))
+    (Flock.Bridge.rootsCostL A.D.unroll (Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n))
 
 open Classical in
 /-- **The session's error at `t` calls**, V5's at the worst registration: the sample's term, the tables' knowledge term
-at the finders' budgets, and the binding error at `t + w` per run. -/
+at the finders' budgets, the binding error at `t + w` per run, and the registration's roots term (`Live.rootsErr`). -/
 noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ :=
   A.drawMiss +
     (⨆ R : A.Reg, ksAvgStrictZ (planZHJP A.dj A.y₀) A.L A.k (A.qF t) (A.qS t) R) +
     ENNReal.ofReal ((∑ p : A.vb.Pos,
         (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p) : ℝ) /
           Fintype.card A.L.Ω) *
-      (2 * (A.tL t * (1 + A.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * A.M) + A.k / (Real.exp 1 * A.Rw)) / (1 - A.ρ))
+      (2 * (A.tL t * (1 + A.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * A.M) + A.k / (Real.exp 1 * A.Rw)) / (1 - A.ρ)) +
+    A.rootsErr
 
 /-- **A two-continuation finder's term at budget `q`**: the square root of the strict birthday bound `q²/2^513`, since
 the most likely revealed message misses with probability at most the root of the finder's success. -/
@@ -468,7 +496,7 @@ theorem sessionDelta_extend (S : Widening) (t : ℕ) : (A.extend S).sessionDelta
           (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) : ℝ) /
             Fintype.card (A.extend S).L.Ω) *
         (2 * (A.tL t * (1 + A.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * A.M) + A.k / (Real.exp 1 * A.Rw)) /
-          (1 - A.ρ)) = A.sessionDelta t
+          (1 - A.ρ)) + A.rootsErr = A.sessionDelta t
   rw [hks, hsum]
   rfl
 
@@ -515,7 +543,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
     (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
-        (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩
+        (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
           A.roots)))
 
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
@@ -649,7 +677,7 @@ the published certificate's. The device's bytes and the bound's parameters are t
 (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    lawAt p.base.verifier A.n = .ok A.law ∧
+    lawAt p.base.verifier A.n = .ok A.design ∧
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query ∧
     ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ V.families θ ∧
@@ -665,16 +693,66 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   read : V.read θ F = A.fileRead
   share : (V.certOf θ).ε = A.ε
 
-/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
+/-- **The first of `F` whose SHA-512's hex is `sha`**, as `Spot.OneStageZk.tablesOf` finds a pinned table
+on the blobs (`tablesOf_ofArray`). -/
+def tableFile (sha : String) (F : Array ByteArray) : Option ByteArray :=
+  F.find? fun b => Flock.hexOf (Flock.Sha512.hash b) == sha
+
+theorem tablesOf_ofArray (F : Array ByteArray) :
+    _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) =
+      Flock.MUFU_TABLES.filterMap fun t => (tableFile t.sha512 F).map fun b => (t.name, b) := by
+  unfold _root_.Spot.OneStageZk.tablesOf _root_.Core.Blobs.ofArray tableFile
+  congr 1
+  funext t
+  rw [Array.find?_map, Option.map_map]
+  rfl
+
+theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h : tableFile sha F = some a) :
+    Flock.hexOf (Flock.Sha512.hash a) = sha := by
+  unfold tableFile at h
+  have h' := Array.find?_some h
+  exact beq_iff_eq.1 h'
+
+open Classical in
+/-- **A pinned table's registered file**: a file whose SHA-512's hex is the table's pinned digest `sha`
+(`Flock.MUFU_TABLES`), where some file has it. -/
+noncomputable def pinnedFile (sha : String) : Option ByteArray :=
+  if hx : ∃ b : ByteArray, Flock.hexOf (Flock.Sha512.hash b) = sha then some hx.choose else none
+
+theorem pinnedFile_hash {sha : String} {b : ByteArray} (h : pinnedFile sha = some b) :
+    Flock.hexOf (Flock.Sha512.hash b) = sha := by
+  unfold pinnedFile at h
+  split at h
+  · rename_i hx
+    cases h
+    exact hx.choose_spec
+  · cases h
+
+/-- **The lookup tables a circuit file registers**: each pinned table its META looks up
+(`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`pinnedFile`). -/
+noncomputable def pinnedTables (circuitFile : ByteArray) : List (String × ByteArray) :=
+  let names := match _root_.Spot.OneStageZk.lookupsOf circuitFile with
+    | .ok ns => ns
+    | .error _ => []
+  Flock.MUFU_TABLES.filterMap fun t =>
+    if names.contains t.name then (pinnedFile t.sha512).map (fun b => (t.name, b)) else none
+
+/-- **v2's tables on the blobs sent are the registered ones**: each pinned table the blobs sent hold, at the first blob
+whose SHA-512's hex is its digest (`tableFile`, as `Spot.OneStageZk.tablesOf` finds it), is its registered
+file (`pinnedFile`). -/
+def TablesSent (s : Verity.Sent) : Prop :=
+  ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 s.blobs = some a → pinnedFile t.sha512 = some b → a = b
+
+/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the registered lookup tables**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
-vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
-files as v2 reads them off the blobs (`Spot.OneStageZk.tablesOf`). -/
+vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads, of the committed files, the lookup tables
+their circuit file registers (`pinnedTables`). -/
 structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
   circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
+  tables : ∀ F, (V.read θ F).tables = pinnedTables (V.circuitFile θ F)
 
 /-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
 def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
@@ -711,18 +789,18 @@ def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
   Flock.Zk.tags tags (Flock.Zk.maskLogOf circuitFile) 1
 
 /-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the files the digests v2's
-parameters name (`programDigestOf`, `publicDigestOf`), the pinned MUFU tables the committed files hold
-(`Spot.OneStageZk.tablesOf`), and `verify --zk`'s tags at the statement's tags and the circuit file
-(`zkTagsOf`). Where the statement has no tags v2 refuses, and the tags read are a default. -/
+parameters name (`programDigestOf`, `publicDigestOf`), the lookup tables the circuit file registers (`pinnedTables`),
+and `verify --zk`'s tags at the statement's tags and the circuit file (`zkTagsOf`). Where the statement has no tags v2
+refuses, and the tags read are a default. -/
 noncomputable def readOf (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
   ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
       (Verity.namedFile (programDigestOf θ) F),
-    Verity.namedFile (programDigestOf θ) F, _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F),
+    Verity.namedFile (programDigestOf θ) F, pinnedTables (Verity.namedFile (programDigestOf θ) F),
     Verity.namedFile (publicDigestOf θ) F⟩
 
 /-- **The deployed digests and reading give `DigestsAt`**: at every parameters, a vocabulary whose digests are the
 ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
-(`readOf`) reads the files at those digests and the lookup tables off the committed files. -/
+(`readOf`) reads the files at those digests and the lookup tables the circuit file registers. -/
 theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf θ F) (θ : ByteArray) :
     DigestsAt V θ where
@@ -732,16 +810,16 @@ theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = program
   publicFile p hθ dg hdg := by
     rw [hp, publicDigestOf, paramsOf_eq hθ]
     simp only [Option.bind, digestOf, hdg]
-  tables F := by rw [hr]; rfl
+  tables F := by rw [hr, Vocab.circuitFile, hc]; rfl
 
 /-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
 `flock-verify` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
-tables the committed files hold. -/
+tables the circuit file registers. -/
 theorem readOf_eq (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (htags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
     (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
-    (htab : A.I.tables = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)) :
+    (htab : A.I.tables = pinnedTables (V.circuitFile θ F)) :
     readOf θ F = A.fileRead := by
   have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
   have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
@@ -974,21 +1052,26 @@ def SampleLinkFirst (label : String) (after : ByteArray) (log : List Verity.Rele
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.Spot.Challenger.TREE_SESSION)
 
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
-session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game makes the sampled
-verdict accept. Parameters naming the recursive form (`VStar.Recursive`) are not this leg's. -/
+session and the parameters name the one-stage form (`ParamsAt`), each strategy of the period's game that meets the
+further finders' premises (`Vocab.finderCR`, the condition of `error` SPOT's target reads it under) makes the sampled
+verdict accept with probability at most the published `δ` at its calls: `0` where the verdict never accepts, `⊤` where
+the deployment claims nothing. Parameters naming the recursive form (`VStar.Recursive`) are not this target's. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
     Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
+    V.finderCR .sampled θ F c σ →
+      Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
 `S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
-name and the lookup tables v2 reads off the committed files (`DigestsAt`); the device's log as the sampled check reads
+name and the lookup tables the circuit file registers (`DigestsAt`); the device's log as the sampled check reads
 it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
 the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
-commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), and the
-published `δ` is at least the session's at the read finder's collision bound (`Live.delta`, `Vocab.crBound`). -/
+commitment opens (`Live.OpensUnder`), `error`'s condition holds SPOT's per-finder premises (`FinderCR`), the
+vocabulary's session premises (`Vocab.premises`) are exactly the session's at the projected strategy
+(`Live.FinderCR`), and `True` where `S` holds no session, and the published `δ` is at least the session's at the read
+finder's published bound (`Live.delta`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
@@ -1001,7 +1084,10 @@ structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Arr
     HEq (V.extract θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))
   opens : ∀ θ F A, S θ F = some A → ∀ c, A.OpensUnder (V.read θ F) (V.Opens θ F c)
   finderCR : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ → FinderCR V K A θ F c σ
+    V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ → FinderCR V K A θ F c σ
+  premises : ∀ θ F (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    V.premises .sampled θ F c σ ↔
+      ∀ A, S θ F = some A → (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (V.cost θ F c σ)
   delta : ∀ θ F A, S θ F = some A → ∀ t, A.delta t (V.crBound θ .sampled t) ≤ V.delta θ .sampled t
 
 end Verity.Sampled

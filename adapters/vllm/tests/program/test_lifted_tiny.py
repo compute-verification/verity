@@ -246,7 +246,7 @@ def test_lis_active_and_lbot():
     ia = L.l_is_active(32)
     assert ia.id == "LIsActive32_v1" and ia.ret == Value(2)
     assert ia.evaluate(7) == 1 and ia.evaluate(0) == 1 and ia.evaluate(0xFFFFFFFF) == 1
-    assert ia.evaluate(BOT32) == 0  # Active(0), never ⊥: activity as a value (the S-migration hook)
+    assert ia.evaluate(BOT32) == 0  # Active(0), never ⊥: activity as a value
     assert ia.evaluate(INV32) == 0b11 and ia.evaluate(_bad(32)) == 0b11  # negative: INV_1
     for w in (1, 16, 32):
         bp = L.l_bot(w)
@@ -356,12 +356,12 @@ def test_lstep_live_continuation_relation():
 
 
 def _check_specified_list():
-    """Only the specified families — the five of v0.4 (+ the labelled PAD-04 candidate `LSplitsForSMS`), the two Continuation_v1 members
+    """Only the specified families — the five of v0.4, the two Continuation_v1 members
     (SPEC B6) and `LFixedSelect<E>x<w>` (MOE-PAD-SPEC §2) — are non-strict; everything registered as
     `Lifted[…]` is the strict wrapper.  The Continuation members and LFixedSelect are materialised here so the list is checked with them in it."""
     import re
     L.l_is_eos(1), L.l_emit_next(1), L.l_emit_next(0), L.l_fixed_select(4, 16), L.l_enable()  # + LEnable_v1 (v0.6 B7)
-    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LSplitsForSMS\d+|LIsEOS\d+|LEmitNext\[H=\d+\]|LFixedSelect\d+x\d+|LEnable)_v1$")
+    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LIsEOS\d+|LEmitNext\[H=\d+\]|LFixedSelect\d+x\d+|LEnable)_v1$")
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
     for fid, d in list(REGISTRY.defs.items()):
@@ -619,8 +619,8 @@ def test_lserve_transition_and_prefix_theorem():
     assert L.activity_prefix(out, (17,), N_EVENTS) == 4 == L.served_count(out)
 
 
-def test_live_count_hook_reads_the_steps_input_activity_not_the_previous_output():
-    """The S-migration operand `n_live_t = Σ_r live_{r,t}` must count the rows the sampler actually runs.
+def test_live_reads_the_steps_input_activity_not_the_previous_output():
+    """The Program's per-step liveness `live_s` counts the rows the sampler actually runs.
     On TINY with EOS at event 3 (`a_r = 4`): the Program's `live_s` (= `LIsActive(tok_in_s)` under GUARD=in) is `[1,1,1,0,0,0,0,0]`
     — the served rows; the retired hook `LIsActive(out[s−1])` over-counts by one at `a_r` (the committed EOS is Active)."""
     p3, t3, out = _lserve((17,))
@@ -630,46 +630,8 @@ def test_live_count_hook_reads_the_steps_input_activity_not_the_previous_output(
     assert live == [L.l_is_active(32).evaluate(t) for t in tok_in] == [1, 1, 1, 0, 0, 0, 0, 0]
     wrong = [L.l_is_active(32).evaluate(out[s - 1]) for s in range(1, D_MAX + 1)]
     assert wrong == [1, 1, 1, 1, 0, 0, 0, 0] and sum(wrong) == sum(live) + 1  # the phantom row at a_r
-    # the served rows of this request: prefill + 3 decode events; the hook agrees with served_count − 1 decode rows
+    # the served rows of this request: prefill + 3 decode events; live agrees with served_count − 1 decode rows
     assert sum(live) == L.served_count(out) - 1
-
-
-def test_lsplits_for_candidate_pad04():
-    """CANDIDATE PAD-04: `LSplitsForSMS<SMS>_v1` — payload agreement with `SplitsFor_v1` (the verbatim vLLM
-    doubling loop) for every `1 ≤ n ≤ 64` at 142 / 132 / 108 SMs; `Active(0)` → ⊥ (no live row, no event); ⊥ → ⊥; INV → INV_6;
-    `n > 64` refused by name (structural bound, asserted at build); the table's named flip points are checked (17, 34, 35; 67.. are beyond 64)."""
-    from verity.definitions.registry import topp_geometry
-    for sms in (142, 132, 108):
-        lp, up = L.l_splits_for(sms), L.splits_for_prim(sms)
-        assert lp.id == f"LSplitsForSMS{sms}_v1" and up.id == f"SplitsForSMS{sms}_v1" and lp.lifted_from is up
-        assert lp.lift_class == "specified" and lp.candidate == "PAD-04" and lp.id in L.specified_ids()
-        assert lp.params == (("n_live", Value(L.N_LIVE_BITS + 1)),) and lp.ret == Value(L.SPLITS_BITS + 1)
-        for n in range(1, 65):
-            s = topp_geometry.splits_for(n, sms)
-            assert lp.evaluate(n) == up.evaluate(n) == s and 1 <= s <= 32 and s & (s - 1) == 0  # Active(n) → 0‖S, bit for bit
-            assert s == max(x for x in (1, 2, 4, 8, 16, 32) if x * n <= sms or x == 1)
-        assert lp.evaluate(0) == L.enc_bot(L.SPLITS_BITS)  # the specified rule
-        assert lp.evaluate(L.enc_bot(L.N_LIVE_BITS)) == L.enc_bot(L.SPLITS_BITS)
-        assert lp.evaluate(L.inv(L.N_LIVE_BITS)) == L.inv(L.SPLITS_BITS) and lp.evaluate((1 << L.N_LIVE_BITS) | 5) == L.inv(L.SPLITS_BITS)
-        with pytest.raises(ValueError, match="not the split pipeline"):
-            lp.evaluate(65)
-        with pytest.raises(ValueError, match="outside the domain"):
-            up.evaluate(0)
-        with pytest.raises(ValueError, match="outside the domain"):
-            up.evaluate(65)
-    assert [L.l_splits_for(142).evaluate(n) for n in (1, 4, 5, 8, 9, 17, 18, 35, 36, 64)] == [32, 32, 16, 16, 8, 8, 4, 4, 2, 2]
-    assert [L.l_splits_for(132).evaluate(n) for n in (1, 4, 5, 8, 9, 16, 17, 33, 34, 64)] == [32, 32, 16, 16, 8, 8, 4, 4, 2, 2]
-    assert L.l_splits_for(142).evaluate(17) == 8 != L.l_splits_for(132).evaluate(17) == 4  # the two profiles disagree at 17
-    assert L.assert_splits_domain(64) == 64 and L.assert_splits_domain(1) == 1
-    for bad in (0, 65, 128):
-        with pytest.raises(ValueError, match="at most 64 live rows"):
-            L.assert_splits_domain(bad)
-    with pytest.raises(ValueError, match="not a target profile"):
-        L.l_splits_for(0)
-    # codec: the candidate's ids resolve lazily like the other five
-    from verity.circuits.codec import _lookup_primitive
-    assert _lookup_primitive(REGISTRY, "LSplitsForSMS142_v1") is L.l_splits_for(142)
-    assert _lookup_primitive(REGISTRY, "SplitsForSMS142_v1") is L.splits_for_prim(142)
 
 
 def test_lserve_guard_choice_is_labelled_and_the_other_option_is_refused():

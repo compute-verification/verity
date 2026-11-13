@@ -12,9 +12,10 @@ Findings, each confirmed executably below:
    arbitrarily long "hit" that charges nothing, with canonical sources naming invented owners. The hit channel is
    closed only once the compile slice's proof block binds `units` (and the chained table) to the certified I/O and wires
    `wh` into `ReplayStep_v1`'s `hit`.
-3. Past the pool bound (`sent` = 1, where eviction may have shortened the real hit) the hit is advice v1's charged
-   field and is checked only to be a cached prefix: a claim LONGER than the table is refused (can't exceed the cache),
-   a SHORTER one is accepted (it over-charges). So eviction is a charged residual here, not a free channel.
+3. Past the pool bound (`sent` = 1, where eviction may have shortened the real hit) the hit is checked only to be a
+   cached prefix: a claim LONGER than the table is refused (can't exceed the cache), a SHORTER one is accepted. So a
+   code that used the mode would have to send and charge the hit. Advice v1 doesn't use it and sends no hit: past the
+   bound each hit is the block pool's, which `CacheStep_v2` derives.
 """
 from __future__ import annotations
 
@@ -85,10 +86,10 @@ def test_the_hit_length_is_pinned_to_the_committed_table_only():
             assert CS.reference(S, table, replace(row, wh=x)).ok == (x == cached)
 
 
-def test_past_the_bound_the_hit_is_charged_not_free():
-    """Finding 3. With `sent` = 1 the hit is advice v1's charged field: a claim longer than the committed table is
-    refused, a shorter one accepted (over-charging). Eviction can only shorten the real hit, so this is a charged
-    residual, not a free lengthening channel."""
+def test_past_the_bound_the_hit_is_bounded_by_the_cache_not_fixed():
+    """Finding 3. With `sent` = 1 a claim longer than the committed table is refused and a shorter one accepted.
+    Eviction can only shorten the real hit, so the mode gives no free lengthening channel, and a code that used it
+    would have to send and charge the hit, which advice v1 doesn't."""
     rng = random.Random(2)
     units_toks = [tuple(rng.randrange(1 << S.TW) for _ in range(S.U)) for _ in range(KU)]
     units = tuple(units_toks)

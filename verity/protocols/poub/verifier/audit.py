@@ -101,11 +101,21 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA, IntegrityProfile, Subset
-from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
-from verity.commitments import verify_opening
-from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments import (
+    Commitment,
+    CommitmentDomain,
+    MerkleTree,
+    RangeIndexedDomain,
+    verify_opening,
+)
+from verity.commitments import Opening as MerkleOpening
 from verity.commitments.randomness import derive, frame
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.protocols.spot.verifier.profile import (
+    WINDOW_DELTA,
+    IntegrityProfile,
+    Subset,
+)
 
 from . import codec, coins, receipts
 from . import pooled as _pooled
@@ -1656,7 +1666,9 @@ class GammaTerms(_Terms):
     checked against is within, when appended blocks are credited (`Scheduled.cap`, `Params.schedule_cap`; the layout is
     then `SteeredLayout` at cap + 1), None when none are.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
-    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s."""
+    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s.
+    Neither holds the windows' PRF advantages: each reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not
+    assumed; `ledger.DELTA_FORM`), and a record names the term beside them (`ledger.NAMED_TERMS`)."""
 
     timing: float
     sample: float
@@ -1868,7 +1880,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         raise ValueError(f"the rebuild model is of {rebuild.codec.name} {rebuild.codec.to_json()}, the record's codec "
                          f"{record.codec.name} {record.codec.to_json()}")
     if link and not record.bind:
-        raise ValueError("the link term is a registration's that binds z: this record's receipts are of blocks alone")
+        raise ValueError("μ_link is a registration's that binds z: this record's receipts are of blocks alone")
     mu_rebuild = rebuild.fraction(capacity_bytes_per_s)
     whole = capacity_bytes_per_s * record.span_ns / 1e9
     b = record.block_bytes
@@ -1913,3 +1925,11 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                       windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
                       error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None,
                       steering=schedule.cap if credit else None)
+
+
+__all__ = ["Append", "AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
+           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "Pass", "Prover", "REGISTRY_SCHEMA", "Rebuild", "Record",
+           "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
+           "Store", "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
+           "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",
+           "register"]

@@ -16,10 +16,12 @@ stops once an outermost argparse parse has read every word; an argparse error an
 writes, connects), or refuses by its own check after a parse that left words for later, isn't judged.
 
 A mention is not a command line, so these pass: `research run` without `--`; a chain of subcommand words, alone or
-before one placeholder (`research tele SUBCOMMAND`), unless the CLI has no such subcommand; outside a code block, a span
-that leaves out a required argument or a flag's value (`research status --also`); and an upper-case placeholder (`RUN`,
-`NAME`) the CLI's refusal names back. KNOWN lists the command lines that didn't parse when this test landed, each with its owner (the handle whose
-`owns` covers the file) and why; it only shrinks, and an entry this tree no longer fails on fails too.
+before one placeholder (`research tele SUBCOMMAND`), unless the CLI has no such subcommand, or no runner of the name a
+`verity bench` or `verity demo` is given (a directory that moved keeps no command under its old name); outside a code
+block, a span that leaves out a required argument or a flag's value (`research status --also`); and an upper-case
+placeholder (`RUN`, `NAME`) the CLI's refusal names back. KNOWN lists the command lines that didn't parse when this test
+landed, each with its owner (the handle whose `owns` covers the file) and why; it only shrinks, and an entry this tree no
+longer fails on fails too.
 """
 from __future__ import annotations
 
@@ -46,8 +48,6 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, the command as parsed) -> "owner: why", each a documented command line that didn't parse when this test landed
 KNOWN = {
     ("benchmarks/commitments/README.md", "verity bench commitments"): "proofs: says it doesn't apply (no run.py or run.sh)",
-    ("demos/README.md", "verity demo dither_full_util"): "top: says it runs nothing yet (no runner on main)",
-    ("demos/dither_full_util/README.md", "verity demo dither_full_util"): "compute-accounting: says it runs nothing yet",
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
@@ -404,8 +404,9 @@ def judge(r: dict) -> str | None:
     if any(re.search(rf"(?<![\w-]){re.escape(t)}(?![\w-])", why) for t in a[1:] if PLACEHOLDER.fullmatch(t)):
         return None
     rest = list(itertools.dropwhile(WORD.fullmatch, a[1:]))
-    if (not rest or rest == [rest[0]] and PLACEHOLDER.fullmatch(rest[0])) and not re.search(
-            r"invalid choice|unknown command|no command|no such|has no run", why):
+    # `verity bench|demo` lists its runners' names to refuse one it has no directory for, and to say it was given none
+    unknown = r"invalid choice|unknown command|no command|no such|has no run" + ("|NAME is one of" if len(a) > 2 else "")
+    if (not rest or rest == [rest[0]] and PLACEHOLDER.fullmatch(rest[0])) and not re.search(unknown, why):
         return None
     if not r["block"] and re.search(r"arguments are required|expected one argument", why):
         return None
@@ -441,6 +442,17 @@ def test_every_documented_command_line_parses():
 def test_known_lists_only_lines_that_still_fail():
     stale = sorted(set(KNOWN) - set(failures()))
     assert not stale, "KNOWN entries that parse now or are gone (delete them):\n" + "\n".join(f"  {f}: `{c}`" for f, c in stale)
+
+
+def test_a_runner_s_name_with_no_directory_fails_as_a_mention_too():
+    """`verity bench NAME` runs `benchmarks/NAME`'s runner, so a document that names a runner by a NAME with no directory
+    there names no command, in a code block or in passing; the command alone, or with a placeholder, is a mention."""
+    why = "verity bench NAME [ARGS] (a - in NAME is a _): NAME is one of memory, overhead"
+    line = {"status": "fails", "why": why, "block": False}
+    assert judge({**line, "argv": ["verity", "bench", "moved"]}) == why
+    assert judge({**line, "argv": ["verity", "bench", "moved", "--out", "DIR"], "block": True}) == why
+    assert judge({**line, "argv": ["verity", "bench"]}) is None
+    assert judge({**line, "argv": ["verity", "bench", "NAME"]}) is None
 
 
 def test_the_child_parses_without_running():

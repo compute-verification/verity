@@ -1,0 +1,15 @@
+[Unit]
+Description=the App's one-hour token for the verified queue's loop, minted by root (pods/nebius/vqueue/token.sh)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# root, since the key is root's alone; the loop's group, so the token's file and directory are the loop's to read
+Group=vy-vqueue
+RuntimeDirectory=vy-vqueue
+RuntimeDirectoryMode=0750
+# the token outlives this oneshot
+RuntimeDirectoryPreserve=yes
+TimeoutStartSec=2min
+ExecStart=/usr/local/lib/vy-vqueue/token.sh /run/vy-vqueue/token

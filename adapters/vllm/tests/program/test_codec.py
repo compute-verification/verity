@@ -324,11 +324,10 @@ def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_
 
 @pytest.mark.slow
 def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_program():
-    from verity_vllm.program import profile_descriptor as PD
     from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1, encode_program as enc
     from verity_vllm.program.descriptor_equivalence import canonical_runs
     LP, STEPS = 4, 2
-    desc = PD.build("B0", LP, STEPS)
+    desc = enc(Program(bind(b1.Serve, C=b1.B0_CONFIG, LP=LP, STEPS=STEPS)))
     assert desc["schema"] == SCHEMA_V1
     root = desc["definitions"][desc["root"]]["body"]
     fn_of = desc["callees"].__getitem__  # v1: callee ids are interned

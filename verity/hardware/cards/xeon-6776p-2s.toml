@@ -1,7 +1,7 @@
 # Two Intel Xeon 6776P sockets, the RTX PRO 6000 node's host: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
-# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host exceeds it, whatever firmware
+# it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
 
 kind = "host"
 sku = "xeon-6776p-2s"
@@ -14,6 +14,8 @@ nodes = "an RTX PRO 6000 node, carrying eight rtx-pro-6000-server cards: its VM 
 sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 6776P is a 2S part (Intel ARK 243691, Scalability 2S); lscpu on an RTX PRO 6000 node's VM shows 2 (art:1f22137354a4)" }
 cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores); the VM sees 48 a socket" }
 priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
+# What a node's VM gives each GPU it carries: a measurement of our nodes, not a number of the server.
+vm_cores = { value = 12, unit = "core/GPU", mark = "measurement", source = "the cores a GPU the RTX PRO 6000 node's VM gives, not the server's: lscpu shows 2 sockets x 48 cores x 2 threads, and the VM carries eight cards, 96 / 8 (art:1f22137354a4); the server has cpu.sockets x cpu.cores, 128" }
 
 [clock]
 turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
@@ -21,16 +23,39 @@ priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel 
 
 [rate]
 amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
+sha512 = { value = 0.007722, unit = "compression/cycle/core", mark = "placeholder", source = "not measured on this host and in no Intel document. A count, neither a measurement nor a ceiling: eight compressions in 1,036 cycles, 2,072 512-bit operations (80 rounds of 17, 64 schedule words of 11, 8 feed-forward adds) on two ports for 512-bit vector work (Intel ARK 243691: '# of AVX-512 FMA Units 2'; no document read gives Redwood Cove's ports). The 8468 host's measured 0.007522 is 97% of the same count. Open until an AVX-512 SHA-512 kernel runs on an RTX PRO 6000 node's host" }
 ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
 
 # The host's DRAM: R's host tier (verity/protocols/poub/verifier/timing.py's HOST_ figures).
 [memory]
 channels = { value = 8, unit = "channel/socket", mark = "ceiling", source = "Intel ARK 243691: 8 memory channels" }
-speed = { value = 6400, unit = "MT/s", mark = "placeholder", source = "DDR5-6400, the part's DDR5 rate (Intel ARK 243691), which remote_bandwidth/timing.py takes for the node; the node's DIMMs are not on record (a guest can't read them), and the part also takes MRDIMMs (ARK 243691: 'MRDIMM(8800MT/s)', 'Maximum Memory Speed 8000 MT/s'), so the ceiling is up to 8800 MT/s, 1.1264e12 B/s over both sockets, until the installed DIMMs are read" }
+speed = { value = 6400, unit = "MT/s", mark = "placeholder", source = "DDR5-6400, the part's DDR5 rate (Intel ARK 243691), which PoUB's timing.py takes for the node; the node's DIMMs are not on record (a guest can't read them), and the part also takes MRDIMMs (ARK 243691: 'MRDIMM(8800MT/s)', 'Maximum Memory Speed 8000 MT/s'), so the ceiling is up to 8800 MT/s, 1.1264e12 B/s over both sockets, until the installed DIMMs are read" }
 bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 channel's data width: two 32-bit subchannels (JEDEC JESD79-5), ECC bits apart" }
 bandwidth = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8: timing.py's HOST_SPEC_BYTES_PER_S, '16 channels of DDR5-6400'; a placeholder while memory.speed is" }
-read = { value = 6.068e11, unit = "B/s", mark = "measurement", source = "8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any reader mix measured; DRAM caps the sum, not the root complex (art:3250e5915dd8, note:20261015T0731Z-draft-model-constants; timing.py's HOST_READ_BYTES_PER_S)" }
+read = { value = 6.068e11, unit = "B/s", mark = "measurement", source = "8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any reader mix measured; DRAM limits the sum, not the root complex (art:3250e5915dd8, note:20261015T0731Z-draft-model-constants; timing.py's HOST_READ_BYTES_PER_S)" }
 write = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "memory.bandwidth, as timing.py's HOST_WRITE_BYTES_PER_S takes it; above every write measured: 16 cores of one socket wrote 207.69 GB/s by non-temporal AVX-512 stores, 88.16 by rep stosb and 82.35 by cached stores (art:414bbca7c1fd, benchmarks/bandwidth/write_host.c)" }
+# The part's own ceiling, a second reading of speed, bandwidth and write: the channels at the fastest memory the
+# processor takes, whatever DIMMs the server has.
+speed_max = { value = 8800, unit = "MT/s", mark = "ceiling", source = "the fastest memory the part takes: Intel ARK 243691, 'Memory Types DDR5(6400MT/s), MRDIMM(8800MT/s)', above the same page's 'Maximum Memory Speed 8000 MT/s'" }
+bandwidth_max = { value = 1.1264e12, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed_max x memory.bus / 8 (563.2e9 a socket)" }
+write_max = { value = 1.1264e12, unit = "B/s", mark = "ceiling", source = "memory.bandwidth_max: the channels' rate bounds writes as it does reads" }
+
+# The PCI Express lanes into the sockets, and what a socket takes from devices apart from them (other). A device
+# outside the sockets (a disk, a network port, a GPU) gives the server its bytes over one of those, each way at most
+# its rate less its coding.
+[pcie]
+lanes = { value = 88, unit = "lane/socket", mark = "ceiling", source = "Intel ARK 243691: 'Max # of PCI Express Lanes 88'" }
+speed = { value = 32, unit = "GT/s", mark = "ceiling", source = "Intel ARK 243691: 'PCI Express Revision 5.0', whose lanes carry at most 32 GT/s each way (PCI Express Base Specification 5.0)" }
+other = { value = 20, unit = "GT/s/socket", mark = "ceiling", source = "what a socket takes from devices apart from its lanes. No chipset link: Intel's Xeon 6 product brief, 'the first Intel Xeon processors without platform controller hub (PCH) technology, enabling the CPU to selfboot without an assist from PCH'. Intel ARK 243691 lists the lanes as the part's only expansion option and no USB port, so a board's SATA ports are a controller's on the lanes, and its USB 3.0 ports are either such a controller's (the Aivres KR2280V3 white paper says so of its board) or the socket's own, and no page on record says which. The ceiling counts them as the socket's own: four ports at 5 GT/s a socket, eight for the server, above the six USB 3.0 ports at 5 Gb/s of the two-socket board with the most on record (Supermicro X14DBI-T user's manual: 'Four USB 3.0 ports on the rear I/O', 'One USB 3.0 header with support of two connections')" }
+bandwidth = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "cpu.sockets x (pcie.lanes x pcie.speed + pcie.other) x 128/130 / 8, rounded up to a whole byte: 128b/130b is the coding of every PCI Express rate from 8 GT/s up (PCI Express Base Specification 5.0), a packet's framing, header and CRC take more, and USB's coding takes more than it. The sockets' remaining pins give the server no device's bytes at a rate that counts: the memory channels are memory.bandwidth_max's, UPI joins the two sockets, and the sideband buses to the board's management controller carry megabits a second, under what a packet's framing takes off this figure" }
+
+# The host's disks, read back at most, all of them together. read_max is the server's: a disk's bytes are outside the
+# sockets and enter them over a lane, whatever the disk is and whatever a guest runs. read is the disks of a node's VM
+# as a run read them: a measurement of our node, not a number of the server (as cpu.vm_cores), so a host card has it
+# only where its node's disks were read.
+[disk]
+read = { value = 4.311e9, unit = "B/s", mark = "measurement", source = "the RTX PRO 6000 node's VM's three virtio disks (275 GB, 1 MiB and 5.39 TB; the data disk was 5,392,331,440,128 B at this read and is larger in the node file's later one), each one's highest second by /proc/diskstats under fio's read-only direct reads of the raw devices, summed: 0.224 + 1.523 + 2.564 GB/s; the three at once peaked at 3.850 (art:53c2656f4c56; verity/protocols/poub/verifier/session/verifier.py's DISK_BYTES_PER_S rounds it up)" }
+read_max = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "pcie.bandwidth: every byte a disk gives the server enters its sockets over a lane or one of the ports counted with them, so they together bound each disk's read and all the disks' at once. A byte of a disk that the server's memory already holds (a hypervisor's cache) is read from DRAM, within memory.bandwidth_max. A limit a provider sets on a disk is a setting, not this: disk.read's run read two disks above theirs" }
 
 # The host's on-chip storage at most, for the whole server whatever share of it the VM gets: the host's part of
 # S_chip (timing.py's HOST_CHIP_BYTES).

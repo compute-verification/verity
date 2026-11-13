@@ -73,9 +73,12 @@ The statement's form is the causal game, the committed files, one fixed extracto
   calls plus its loss at `Pr[B^τ]`, the form of `Accounting.PeriodLive.error`; elsewhere `⊤`. There `B^τ` outputs a
   SHA-512 collision with probability at most its budget over `2^256` (`crBound`), which a bound reads as `ε_cr`. That
   admits Flock's conditional bound (`loss = 0`). A bound that reads further finders built from the strategy lists them (`finders`, each a
-  `FinderSpec`: the finder, and its budget as a function of the strategy's calls that bounds its calls), and the error
-  is `⊤` where one of them outputs a collision with probability above its budget over `2^256` (`finderCR`, built by
-  `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
+  `FinderSpec`: the finder, its budget as a function of the strategy's calls that bounds its calls, and its claim), and
+  the error is `⊤` where one of them beats its claim (`finderCR`, built by `finderCROf`): a collision with probability
+  above its budget over `2^256`, the bound `ecr/sha-512` gives it, or above the strict birthday bound `cr/sha-512` gives
+  it. A bound that reads Flock's premises at the strategy projected into a session asks them as `premises`. Each is
+  asked of the finders built from this strategy alone: some strategy hard-codes a SHA-512 collision, so none is asked
+  of every strategy. Two openings of one position
   and a second file with a registered digest (`fileFinder`, `publicFinder`) each enter that way. The named assumption
   `ecr/sha-512` is asked only of the finder. A forged device release enters the same way through a fixed forger
   (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are). It sees
@@ -351,7 +354,7 @@ def takeCoin (l : String) : List (String × ℕ) → Option (List (String × ℕ
     if l' = l then (match n with | 0 => none | n + 1 => some ((l', n) :: fs)) else (takeCoin l fs).map ((l', n) :: ·)
 
 /-- The most coin-tree lines the device's log holds, each tree it sampled and each round it opened (`MAX_TREE_LINES`). -/
-def maxTreeLines : ℕ := 2 ^ 20
+def maxTreeLines : ℕ := 2 ^ 23
 
 /-- **The most coins a coin tree the device samples holds**, every stream's every round (`MAX_TREE_COINS`). -/
 def maxTreeCoins : ℕ := 2 ^ 26
@@ -375,7 +378,7 @@ opening once its log holds `MAX_TREE_LINES` of them (`LiveChallenger._tree_line`
 def treeLines (ts : List OpenTree) : ℕ := (ts.map fun T => 1 + ∑ s, T.opened s).sum
 
 /-- **The most leaves the device's coin trees hold in a play**: at most `maxTreeLines` trees (`treeLines`), each of at
-most `maxTreeCoins` leaves (`TreeSpecOk`), `2^46`. -/
+most `maxTreeCoins` leaves (`TreeSpecOk`), `2^49`. -/
 def maxLeaves : ℕ := maxTreeLines * maxTreeCoins
 
 /-- **The most frames the device serves** under the coin commitment's families `fs`: each frame it serves releases one of
@@ -594,20 +597,30 @@ structure Place where
   rank : ℕ
   offset : ℕ
 
+/-- **The named claim a further finder is asked under**: `ecr/sha-512` at its budget (`ecr`), or `cr/sha-512`, the
+strict birthday bound (`cr`, `Claims.StrictBirthday`). -/
+inductive FinderSpec.Claim
+  | ecr
+  | cr
+
 /-- **A further collision finder a subprotocol's bound reads, with its budget**: a finder built from the strategy, and
 its SHA-512 budget as a function of the strategy's calls alone (`budget`, as `q_F = 2t + 2v` and `q_S = t + v` are of
-`t`), which bounds the finder's calls on every coin (`calls`). -/
+`t`), which bounds the finder's calls on every coin (`calls`), and the named claim it is asked under (`claim`). -/
 structure FinderSpec (G : Game Exchange) (cost : Game.Strategy G → ℕ) where
   finder : Game.Strategy G → Claims.Finder
   budget : ℕ → ℕ
   calls : ∀ σ (x : (finder σ).S), (finder σ).cost x ≤ budget (cost σ)
+  claim : FinderSpec.Claim := .ecr
 
-/-- **A further finder's collision premise, at its budget**: applied to the strategy, it outputs a SHA-512 collision with
-probability at most its budget at the strategy's calls over `2^256`, what `ecr/sha-512` gives a finder of that many
-calls. -/
+/-- **A further finder's collision premise, at its budget**, asked of the finder applied to the strategy: under `ecr`,
+it outputs a SHA-512 collision with probability at most its budget at the strategy's calls over `2^256`, what
+`ecr/sha-512` gives a finder of that many calls; under `cr`, it meets the strict birthday bound
+(`Claims.StrictBirthday`, `cr/sha-512`), at most `q²/2^513` at any `q` its calls stay within. -/
 def FinderSpec.CR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost) (σ : Game.Strategy G) :
     Prop :=
-  (f.finder σ).Pr sha512Msg ≤ (f.budget (cost σ) : ℝ) / 2 ^ (256 : ℝ)
+  match f.claim with
+  | .ecr => (f.finder σ).Pr sha512Msg ≤ (f.budget (cost σ) : ℝ) / 2 ^ (256 : ℝ)
+  | .cr => Claims.StrictBirthday sha512Msg (f.finder σ)
 
 /-- **The collision premises at a list of further finders**, each at its own budget (`FinderSpec.CR`): `True` at no
 finder. -/
@@ -668,6 +681,11 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   the strategy's calls (`cost`) that bounds its calls (`FinderSpec`); none where the bound reads only `finder`. -/
   finders : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     List (FinderSpec (play (families θ) (signer θ) θ F c) (cost θ F c))
+  /-- **The premises at the finders subprotocol `a`'s sessions build from the strategy**, those its bound reads that
+  are no `Claims.Finder` (Flock's at the strategy projected into a session), asked of this strategy alone; `True` where
+  the bound reads none. -/
+  premises : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Prop := fun _ _ _ _ _ => True
   /-- each subprotocol's forger of the device's signature, applied to the strategy -/
   forger : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Hash.Assumptions.LmsForger
@@ -860,13 +878,14 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
   Hash.Assumptions.LmsUnforgeable lmsVerify (V.epsForge θ) (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a)
     (V.signatures θ) (V.forger a θ F c σ)
 
-/-- **Subprotocol `a`'s error at a strategy**: where its finders meet their collision premises (`finderCR`, `FinderCR`)
-and its forger its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
+/-- **Subprotocol `a`'s error at a strategy**: where the finders built from this strategy meet their collision premises
+(`finderCR`, `premises`, `FinderCR`) and its forger its forgery premise (`Unforgeable`), each asked of this strategy
+alone, its published `δ` at the strategy's SHA-512 calls, plus the published
 `ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
 bound (`⊤`), as `Accounting.condError` reads it. Flock's conditional bound is the case `loss = 0`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  condError (fun σ => V.finderCR a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
+  condError (fun σ => V.finderCR a θ F c σ ∧ V.premises a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
       V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ

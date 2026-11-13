@@ -10,7 +10,8 @@ or punctuation is dropped. It is checked when its first segment is a top-level e
 from the document's directory or one of its ancestors (a package README's `tests/test_x.py`). It exists when it is a
 tracked file, a directory holding one, or a fixture `fixtures/artifacts.json` registers for fetching (or a path inside
 one). Under `verity/`, a token whose second segment is no entry of `verity/` is an identifier (`verity/partition/v1`),
-not a path, unless it names a file (its last segment has an extension: `verity/protocols/cap.py`, from before a move);
+not a path, unless it names a file (its last segment has an extension: `verity/protocols/cap.py`, from before a move)
+or its second segment is a directory `verity/` had before a move (`VERITY_RETIRED`: `verity/core/`);
 any other token that reads as a repository path but isn't one is in `NOT_PATHS` with its reason.
 
 A backticked bare file name of source code (`probe.py`, `run.sh`, `hash.c`: an extension in `_NAME`) is checked too.
@@ -33,6 +34,9 @@ from test_repository import REGISTRY, ROOT, _tracked
 LEAN_DOCS = "security/"
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive", "glossary"})
+#: The same one level down: directories `verity/` had before a move, so `verity/core/` reads as a path and not as an
+#: identifier.
+VERITY_RETIRED = frozenset({"core", "ml"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
     ("verity/definitions/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
@@ -83,10 +87,6 @@ WAITING = {
     ("security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
-    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py"):
-        "both demo branches edit the file",
-    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py"):
-        "both demo branches edit the file",
     ("security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/RowCircuit.lean", "tests/test_circuit_row_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
@@ -167,7 +167,8 @@ def dead(doc: str, path: str, link: bool, tree) -> bool:
     if top not in RETIRED and not _exists(top, tree):
         return False
     named_file = "." in posixpath.basename(path)
-    if top == "verity" and rest and not named_file and not _exists("verity/" + rest.split("/")[0], tree):
+    under = rest.split("/")[0]
+    if top == "verity" and rest and not named_file and under not in VERITY_RETIRED and not _exists("verity/" + under, tree):
         return False
     bases = [""] if link or not here else [""] + [here.rsplit("/", i)[0] + "/" for i in range(here.count("/") + 1)]
     return not any(_exists(base + path, tree) for base in bases)
@@ -197,6 +198,17 @@ def test_not_paths_are_current():
                                               for _, line in lines(doc, (ROOT / doc).read_text())
                                               for raw, path, link in mentions(line))]
     assert not stale, f"NOT_PATHS entries that no longer apply; remove them: {stale}"
+
+
+def test_a_directory_verity_had_before_a_move_reads_as_a_path():
+    """`verity/core/` names a directory the tree lacks, where `verity/partition/v1` names a format: the first is a dead
+    path, with or without a file under it, and the second is no path."""
+    tree = (frozenset({"README.md", "verity/protocols/a.py"}), frozenset({"verity", "verity/protocols"}), frozenset())
+    docs = {"README.md": "`verity/core/` `verity/ml/circuits` `verity/core/protocols/a.py` `verity/protocols/` "
+                         "`verity/partition/v1` `verity/runtime/`"}
+    assert dead_paths(tree, read=docs.__getitem__) == [
+        ("README.md", 1, "verity/core/"), ("README.md", 1, "verity/ml/circuits"),
+        ("README.md", 1, "verity/core/protocols/a.py")]
 
 
 def test_the_scan_reads_each_form_and_catches_a_dead_path():

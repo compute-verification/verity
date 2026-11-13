@@ -33,6 +33,7 @@ from verity.definitions.registry import marlin_moe as _marlin
 from verity.definitions.registry import mhc as _mhc
 from verity.definitions.registry import moe as _moe
 from verity.definitions.registry import pouw_rows as _pouw_rows
+from verity_vllm.program import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
 from verity.definitions.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
@@ -213,8 +214,6 @@ REFERENCE_CPU_F32 = Vocabulary(
 from verity.definitions.registry import b1_tp2 as TP2
 from verity.definitions.registry import pad_prims as PP
 from verity.definitions.registry import prims as P
-from verity.definitions.registry import sampling as _sampling
-from verity.definitions.registry import sampling_vocab
 from verity.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
 from verity.definitions.registry import layer_norm as _LN
 
@@ -445,14 +444,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
-           # the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
-           # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
-           # temperature, top_p and the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
-           # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
-           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
-           # the same select at a constant split count S (the registered S): its top-p keep word as word gates
-           # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
+           # the seeded temperature + top-p token select at the registered split count S (registry.sampling: TemperatureScale ->
+           # TopPMask -> GumbelSelectF32, exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) ->
+           # `_gumbel_sample_kernel` + argmax; the seed, pos, temperature, top_p and `Const32[S]` are OPERANDS), its top-p keep word as
+           # word gates (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`), so a partition query cuts it.  `rules/vllm_sampling.py`
+           # asks for it.  Greedy rows keep `token_select`.
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
@@ -494,6 +490,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # latent cache row [kv_c | k_pe] as one Definition
            "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
            "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
+           # the table-read form's long rows (`Registered.dsa_table_reads`, `program.dsa_table`): a row's top-TOPK positions, and
+           # the TOPK history rows read at them
+           "dsa_topk_index": lambda N, TOPK: ir_bind(_dsa_table.DsaTopKIndex, N=N, TOPK=TOPK),
+           "dsa_history_reads": lambda V, TOPK, H: ir_bind(_dsa_table.DsaHistoryReads, V=V, TOPK=TOPK, H=H),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -569,10 +569,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                        "read from the registered table (Exp2Lut127_v2, TableRead8x2_v1)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
-           "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
-                                      "widening, div.full.f32 temperature, the S-split top-p mask (_topp_sb_{stats,step,mask}; S = the splits operand "
-                                      "= SplitsFor_v1(|live|, num_SMs)), Gumbel-max with key tl.randint(seed, pos), first global maximum "
-                                      "(registry.sampling; difftest 72/72 bit-exact on L40S; R16 GPU fixture at S = 1..32)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
            "silu_mul": "SiluMul_v2{I}: vLLM _C.silu_and_mul (act_and_mul_kernel<bf16, silu_kernel>) -- SiluMulBf16_v2 per element: "
                        "expf's overflow (gate <= -89 -> -0), up + 0.0f, gate -0 kept, NaN 0x7FFF (registry.act)",
@@ -659,6 +655,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "argument, so the rows of a block of the batched form share one N",
            "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
                              "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
+           "dsa_topk_index": "DsaTopKIndex_v1{N,TOPK}: a counted mask's TOPK members' positions in ascending index order, the slots "
+                             "the concentrator gives their rows",
+           "dsa_history_reads": "DsaHistoryReads_v1{V,TOPK,H}: the TOPK history rows at those positions, one read each of the "
+                                "layer's history table",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

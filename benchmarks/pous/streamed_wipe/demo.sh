@@ -22,6 +22,9 @@
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
 #                        there, e.g. 'python -m verity.protocols.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
+#   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
+#                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
+#                        challenger here signs under a key this run makes, trusted without it
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
 #                        `simulated`, the premise assumed; its key in this run's scratch all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
@@ -78,7 +81,7 @@ if [ "${1:-}" = leased ]; then
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
-  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL=
+  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= TRUSTED=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -94,6 +97,7 @@ else
       --challenger) CH=$2; shift ;;
       --challenger-address) CH_ADDR=$2; shift ;;
       --challenger-command) CH_CMD=$2; shift ;;
+      --trusted-sha512) TRUSTED=$2; shift ;;
       --threads) THREADS=$2; shift ;;
       --store) STORE=$2; shift ;;
       --disk) DISKS+=("$2"); shift ;;
@@ -116,6 +120,10 @@ else
   if [ -n "$CH$CH_ADDR$CH_CMD" ] && [ -z "$CH" -o -z "$CH_ADDR" -o -z "$CH_CMD" ]; then
     echo "demo.sh: --challenger, --challenger-address and --challenger-command go together"; exit 2
   fi
+  [ -n "$CH" ] && [ -z "$TRUSTED" ] && {
+    echo "demo.sh: --challenger takes --trusted-sha512: a challenger on its own host is trusted only under its pinned key"; exit 2; }
+  [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
+    echo "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not $TRUSTED"; exit 2; }
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
   [ -n "$EGRESS" ] && [ -n "$CH" ] && {
     echo "demo.sh: --egress-bits reaches only a challenger here; the one on $CH signs the count its --challenger-command starts it with"; exit 2; }
@@ -186,11 +194,11 @@ EOF
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
-    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" <<'EOF'
+    "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" "$TRUSTED" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
- specs, disk, dram) = sys.argv[1:]
+ specs, disk, dram, trusted) = sys.argv[1:]
 links = [] if not dev else [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
                              "mbps": int(mbps) if mbps.strip().isdigit() and int(mbps) > 0 else None}]
 for spec in filter(None, specs.splitlines()):
@@ -204,7 +212,8 @@ doc = {"tools": json.loads(tools),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
-                "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram)}}
+                "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram),
+                "trusted_sha512": trusted or None}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))

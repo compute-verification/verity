@@ -61,9 +61,14 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
                  "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
+                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/verity/check/merge_rows.py)",
+                 "merge.markdown-rows.driver": "python3 tools/verity/check/merge_rows.py %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
                                               "(adapters/vllm/tests/lint/merge_allowlist.py)",
-                 "merge.vllm-allowlist.driver": "python3 adapters/vllm/tests/lint/merge_allowlist.py %O %A %B %P",
+                 # a crossing of the layout move merges once in each layout, so the script is found at either place
+                 "merge.vllm-allowlist.driver": "f=adapters/vllm/tests/lint/merge_allowlist.py; "
+                                                "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
+                                                "python3 \"$f\" %O %A %B %P",
                  "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
                                          "(tools/verity/lean/merge.py)",
                  "merge.lean-caps.driver": _lean_driver("--caps "),

@@ -167,10 +167,13 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h7, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h9, h⟩ := bind_ok h
   obtain ⟨_, h10, h⟩ := bind_ok h
   obtain ⟨_, h11, h⟩ := bind_ok h
   obtain ⟨_, h12, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h

@@ -6,12 +6,15 @@ record. The compiled per-step units of an arbitrary vLLM model, its head-check u
 it.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
-      --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1]
+      --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1] [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
     python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
-      --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1]
+      --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1] \\
+      [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
 
-* **Members** (`Member`). One template's units, one statement: a bound Definition Flock lowers flat (`ir_lower`; Lean
-  refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
+* **Members** (`Member`). One template's units, one statement: a bound Definition Flock lowers flat (`ir_lower`), or with
+  ``--structural MODE`` as `struct_lower`'s template where it lowers (``verity/flock-circuit/tmpl``, its unit's rows placed
+  for the prover by ``--tmpl-unit-bin``, `a0.templated`; the member's ``form`` says which, and why a member is flat),
+  `UnitStager`'s rows and output rows, the prover's rows, the rows
   the verifier derives itself (``held``: public inputs, opened by ``b || c`` to its own copy under the salts the prover
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
@@ -54,7 +57,7 @@ and the window circuit's units (`window_circuit`): an attention head's per-key-b
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes Flock's block
 (`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
 
-Known limits: units flat or untyped staged; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
+Known limits: units flat unless ``--structural``, and untyped; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
 """
 from __future__ import annotations
@@ -126,13 +129,23 @@ class Member:
 
 @dataclass(frozen=True)
 class Tools:
-    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, and the Lean ZK server's frame
-    ``flock-firewall`` (None: proved without the ZK server)."""
+    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, the Lean ZK server's frame
+    ``flock-firewall`` (None: proved without the ZK server), and with ``structural`` (a layout mode, ``iv/hybrid/4``)
+    ``tmpl_unit``, `flock-tmpl-unit`, which places a templated statement's unit rows for its prover: each member is then
+    staged as `struct_lower`'s template (`UnitStager`'s ``structural``) where it lowers, and flat where it doesn't, its
+    record's ``form`` saying why."""
 
     bin: str
     lean: str
     firewall: str | None = None
     delta: float = 2.0 ** -20
+    structural: str | None = None
+    tmpl_unit: str | None = None
+
+    def __post_init__(self):
+        if (self.structural is None) != (self.tmpl_unit is None):
+            raise ValueError("structural and tmpl_unit come together: a templated statement's prover reads the unit "
+                             "flock-tmpl-unit places")
 
 
 def free_port() -> int:
@@ -206,22 +219,43 @@ def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], s
     return {"outs": outs, "salts": salts, "ands": counts["ands"], "unit_nnz": counts["nnz_a"] + counts["nnz_b"]}
 
 
-def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: dict) -> dict:
+def _stager(m: Member, sd: Path, bound: dict, layout: str | None) -> tuple[Any, str | None]:
+    """Member ``m``'s bound `UnitStager`: with ``layout``, `struct_lower`'s template where it lowers ``m``'s Definition, else
+    the flat statement; and why a layout's template was not staged (None: it was, or no layout was asked for)."""
+    from verity_flock import class_statement as CS
+
+    kw = {"circuit": sd / "circuit.txt", "bind": bound}
+    why = None
+    if layout is not None and m.reads != "inline":
+        why = f"its reads are in {m.reads}, and a templated statement's are inline"
+    elif layout is not None:
+        try:
+            return CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, layout=layout, structural=True, **kw), None
+        except NotImplementedError as e:
+            why = f"struct_lower: {e}"
+    return CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, reads=m.reads, **kw), why
+
+
+def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: dict, tools: Tools | None = None) -> dict:
     """Member ``m``'s statement, bound to the partition (``bound``) at global units ``base ..``: its circuit lowered
-    once, its rows committed under salts from ``salt_key``. Returns a0's statement dict (``dir``, ``pin``, the header ...)."""
-    from verity_flock import class_statement as CS, ir_lower as IL
+    once, its rows committed under salts from ``salt_key``; with ``tools.structural``, the templated statement where
+    `struct_lower` lowers its Definition, its unit placed by ``tools.tmpl_unit`` (`a0.templated`). Returns a0's statement
+    dict (``dir``, ``pin``, the header, ``form``: its statement, its layout or why it is flat ...)."""
+    from verity_flock import ir_lower as IL
 
     t0 = time.time()
     sd = out / f"stage-{m.name}"
-    key = json.dumps([m.defn.id, m.name, m.rows, m.out_rows, bound, m.reads], sort_keys=True)
-    st = _STAGERS.get(key) if _STAGERS is not None else None
-    if st is None:
-        st = CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, circuit=sd / "circuit.txt", bind=bound, reads=m.reads)
+    layout = tools.structural if tools is not None else None
+    key = json.dumps([m.defn.id, m.name, m.rows, m.out_rows, bound, m.reads, layout], sort_keys=True)
+    held = _STAGERS.get(key) if _STAGERS is not None else None
+    if held is None:
+        held = _stager(m, sd, bound, layout)
         if _STAGERS is not None:
-            _STAGERS[key] = st
+            _STAGERS[key] = held
     else:
         sd.mkdir(parents=True, exist_ok=True)
-        (sd / "circuit.txt").write_text(st.text)
+        (sd / "circuit.txt").write_text(held[0].text)
+    st, flat_why = held
     lower_s = round(time.time() - t0, 1)
     k_log = st.meta["k_log"]
     nbl = max(3, (-(-m.n // st.meta["vus_per_block"]) - 1).bit_length())
@@ -242,9 +276,13 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
         IL.write_tables(d / "tables")
     if not (d / "circuit.txt").exists():
         os.link(sd / "circuit.txt", d / "circuit.txt")
+    tmpl = a0.templated(st, d, tools.tmpl_unit if tools is not None else None)
+    form = {"statement": tmpl.get("statement", a0.STATEMENT_ID), **({"layout": layout} if tmpl else {}),
+            **({"flat": flat_why} if flat_why else {})}
     s = {"name": m.name, "tag": m.name, "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
          "n": m.n, "base": base, "defn": m.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"],
-         "ports": st.ports, "outs": got["outs"], "lower_s": lower_s, "stage_s": round(time.time() - t0, 1), **files}
+         "ports": st.ports, "outs": got["outs"], "lower_s": lower_s, "stage_s": round(time.time() - t0, 1), "form": form,
+         **tmpl, **files}
     s["header"] = a0.public_header(d, m.n)
     return s
 
@@ -380,14 +418,14 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         tid = P.template_id(m.defn)
         if tid not in bases or bases[tid][1] != m.n:
             raise ValueError(f"{m.name}: template {tid} has no range of {m.n} units in the program ({bases.get(tid)})")
-        s = stage(m, bases[tid][0], bound, out, salt_key, files)
+        s = stage(m, bases[tid][0], bound, out, salt_key, files, tools)
         staged.append(s)
         by_name[m.name] = (bases[tid][0], m.n)
         leg["members"][m.name] = {"template": tid, "n": m.n, "base": s["base"], "ands": s["ands"], "unit_nnz": s["unit_nnz"],
                                   "k_log": s["meta"].get("k_log"), "pin": s["pin"], "lower_s": s["lower_s"],
-                                  "stage_s": s["stage_s"], "forged": list(m.forge)}
+                                  "stage_s": s["stage_s"], "forged": list(m.forge), "form": s["form"]}
         log(f"staged {m.name}: {m.n} units from {s['base']}, {s['ands']} ANDs, k_log {s['meta'].get('k_log')}, "
-            f"pin {s['pin'][:16]}, {s['stage_s']} s")
+            f"pin {s['pin'][:16]}, {s['stage_s']} s, {json.dumps(s['form'])}")
 
     want, roots, publics = {}, [], {}
     for m, s in zip(members, staged):
@@ -441,7 +479,8 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
             (sdir / "draw.json").write_text(json.dumps(sample, sort_keys=True))
             submitted[m.name] = None if pairs else server.submit(
                 Statement(pin=s["pin"], circuit=s["dir"] / "circuit.txt", tables=s["dir"] / "tables",
-                          instances=s["dir"] / f"inst-{s['n']}.bin", public=s["dir"] / f"pub-{s['n']}.bin"),
+                          instances=s["dir"] / f"inst-{s['n']}.bin", public=s["dir"] / f"pub-{s['n']}.bin",
+                          tmpl_unit=s.get("tmpl_unit")),
                 sample, str(sdir.resolve()), out=sdir / "sessions", self_check="skip" if m.forge else None,
                 verdict=lambda _, s=s, sdir=sdir: a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True))
         got = {m.name: _session(m, s, submitted[m.name], leg["members"][m.name]["drawn"], tools, out / f"session-{m.name}")
@@ -532,7 +571,8 @@ def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     shutil.copytree(src, out / "sessions", copy_function=os.link)
     pin_ok = a0.sha512_file(da / "circuit.txt") == honest["members"][b]["pin"]
     lv = a0.lean_verify(tools.lean, {"dir": stage_, "partition_file": Path(honest["_out"]) / "partition.json",
-                                     "program_file": Path(honest["_out"]) / "program.json"}, n, out, zk=True)
+                                     "program_file": Path(honest["_out"]) / "program.json",
+                                     "statement": honest["members"][b]["form"]["statement"]}, n, out, zk=True)
     return {"refused": not pin_ok and a0.lean_refused(lv, "staged for another circuit"), "circuit_is_committed_pin": pin_ok,
             "lean": lv.get("accepted"),
             "lean_why": lv.get("why")}
@@ -553,7 +593,8 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
     shutil.rmtree(out / "sessions", ignore_errors=True)
     shutil.copytree(Path(honest["_out"]) / f"session-{member}" / "sessions", out / "sessions", copy_function=os.link)
     lv = a0.lean_verify(tools.lean, {"dir": d, "partition_file": Path(honest["_out"]) / "partition.json",
-                                     "program_file": Path(honest["_out"]) / "program.json", "registered_file": f}, n, out, zk=True)
+                                     "program_file": Path(honest["_out"]) / "program.json", "registered_file": f,
+                                     "statement": honest["members"][member]["form"]["statement"]}, n, out, zk=True)
     return {"refused": a0.lean_refused(lv, "registered"), "port": port, "lean": lv.get("accepted"), "lean_why": lv.get("why")}
 
 
@@ -923,8 +964,8 @@ def reuse_lowerings():
 
 
 def sized(fn) -> dict:
-    """`m1_families`' estimate of the unit (an upper bound on its ANDs) and M0's block for it (``rows_log``: its rows'
-    in-circuit hashing alone, a lower bound whatever its ANDs)."""
+    """`m1_families`' estimate of the unit (its leaves' ANDs, table reads apart: not its ``ands`` staged with reads
+    inline) and M0's block for it (``rows_log``: its rows' in-circuit hashing alone, a lower bound whatever its ANDs)."""
     import math
 
     import m1_families as MF
@@ -1082,6 +1123,11 @@ def main(argv=None) -> int:
     for p_ in (s, d):
         p_.add_argument("--gpus", default=None, help="the proof server's GPUs, comma-separated (default: one CPU prover)")
         p_.add_argument("--verify-ahead", type=int, default=2, help="the proof server's FC_VERIFY_AHEAD")
+        p_.add_argument("--structural", default=None, metavar="MODE",
+                        help="a layout mode (iv/hybrid/4): each member struct_lower's templated statement where it lowers, "
+                             "else flat (its record's form says why); with --tmpl-unit-bin")
+        p_.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit, which places a templated statement's unit rows "
+                                                             "for its prover")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     gpus = [int(x) for x in a.gpus.split(",")] if a.gpus else None
@@ -1094,7 +1140,7 @@ def main(argv=None) -> int:
     if a.command == "defs":
         if not a.census and not (a.bin and a.lean):
             ap.error("defs: --bin and --lean, or --census")
-        tools = None if a.census else Tools(a.bin, a.lean, a.firewall)
+        tools = None if a.census else Tools(a.bin, a.lean, a.firewall, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
         with server(tools):
             summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused, a.reads)
         ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
@@ -1102,7 +1148,7 @@ def main(argv=None) -> int:
                                                                         else "sized" if a.census else defs_ok(r))
                                                                     for k, r in summary.items()}))
         return 0 if ok else 1
-    tools = Tools(a.bin, a.lean, a.firewall)
+    tools = Tools(a.bin, a.lean, a.firewall, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
     ks = [int(x) for x in a.ks.split(",")]
     program = query = reg = None
     if a.registered:

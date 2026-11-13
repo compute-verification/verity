@@ -578,6 +578,17 @@ def test_it_refuses_a_dirty_worktree(toy, toy_map):
         M.main(["--map", str(toy_map), "--root", str(toy)])
 
 
+def test_a_text_file_over_the_limit_stops_the_move_and_a_lock_over_it_is_renamed(toy, toy_map, monkeypatch):
+    readme, lock = (len((toy / p).read_bytes()) for p in ("README.md", "Sec/lean-audit.json"))
+    monkeypatch.setattr(M.L, "TEXT_LIMIT", readme - 1)
+    with pytest.raises(SystemExit, match=rf"\n  README\.md \({readme} bytes\)\n"):
+        M.main(["--map", str(toy_map), "--root", str(toy)])
+    assert git(toy, "status", "--porcelain") == ""
+    monkeypatch.setattr(M.L, "TEXT_LIMIT", lock - 1)
+    assert M.main(["--map", str(toy_map), "--root", str(toy)]) == 0
+    assert json.loads((toy / "Sec/lean-audit.json").read_text())["roots"] == ["Proofs.NetworkCertifier"]
+
+
 def test_two_files_landing_at_one_path_fail(toy, toy_map):
     (toy / "w/certifier").mkdir(parents=True)
     (toy / "w/certifier/grid.py").write_text("")

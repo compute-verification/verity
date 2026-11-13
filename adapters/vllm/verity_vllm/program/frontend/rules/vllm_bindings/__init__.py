@@ -44,8 +44,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScal
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_allreduce_settings, active_target_profile, clear_observations,
                                                                            declared_derived_accounting, observe_attention_impls, observe_export_facts,
-                                                                           observe_allreduce_settings, observe_batched_form, observe_launch_context,
-                                                                           observe_target_profile)
+                                                                           observe_allreduce_settings, observe_batched_form,
+                                                                           observe_launch_context, observe_target_profile)
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, MEAN_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, gemm_pins_for,
                                                                    lookup_key, tuned_gemm_table_sha256)
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import FusedQKvRmsNormRule, TritonGemmRule, TritonRmsNormRule
@@ -94,6 +94,6 @@ def vllm_ruleset():
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
            "active_allreduce_settings", "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key",
-           "observe_allreduce_settings", "observe_attention_impls", "observe_batched_form", "observe_export_facts", "observe_launch_context",
-           "observe_target_profile",
+           "observe_allreduce_settings", "observe_attention_impls", "observe_batched_form", "observe_export_facts",
+           "observe_launch_context", "observe_target_profile",
            "triton_launch", "tuned_gemm_table_sha256", "vllm_ruleset"]

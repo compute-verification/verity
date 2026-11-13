@@ -1,10 +1,12 @@
-"""The fused all-reduce + residual add + RMSNorm rows split into their parts (`pipeline.serving_rows`' parts, ``PARTS``): an
-``AllReduceRmsNormMnnvl_v1`` row holds one ``AllReduceResidualMnnvl_v1`` at its width and W / w of it at each halving w (as
-``COLS``), and one ``RmsNormMnnvl_v1``, each at the row's statics it has.  Each part reads the row's operands and committed outputs
-its entry names (or an intermediate an earlier part returns), with the types the row gives them; together the parts cover the
-row's two outputs once each (the residual part's blocks its r in order, the norm part its normed row, each under one index entry
-naming that output) and compute them: each part's Definition on its units' committed rows is their outputs.  A row is read by
-one member per part, never by two members of one part, nor by the row and a part."""
+"""The fused all-reduce + residual add + RMSNorm rows split into their parts (`pipeline.serving_rows`' parts, ``PARTS`` and
+``FINAL``): an ``AllReduceRmsNormMnnvl_v1`` row holds one ``AllReduceResidualMnnvl_v1`` at its width and W / w of it at each
+halving w (as ``COLS``), its norm's sum of squares ``RmsNormMnnvlSumSq_v1`` and apply ``RmsNormMnnvlApply_v1`` in column blocks
+(``PARTS``, a decoder layer's norm), and one ``RmsNormMnnvl_v1`` (``FINAL``, the final norm read whole), each at the row's
+statics it has.  Each part reads the row's operands and committed outputs its entry names (or an intermediate an earlier part
+returns), with the types the row gives them; together the parts cover the row's two outputs once each (the residual part's
+blocks its r in order, the final norm its normed row, each under one index entry naming that output) and compute them: each
+part's Definition on its units' committed rows is their outputs.  A row is read by one member per part, never by two members
+of one part, nor by the row and a part.  The norms' split itself: `test_serving_rows_norm_split`."""
 from __future__ import annotations
 
 import numpy as np
@@ -17,13 +19,16 @@ from verity.circuits.evaluation import evaluate_batch
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
+from verity_vllm.query.program_view import spec_base
 from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import cuda_rmsnorm as C
 from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
-OP = "model.layers.6.post_attention_layernorm"
+OP = "model.fused_allreduce_rms_norm_all_reduce"
 MEMBERS = [("normed", N, "bf16"), ("residual", N, "bf16")]
 
 
@@ -37,6 +42,14 @@ def resid(w: int, boolean: bool = False):
 
 def norm(boolean: bool = False):
     return bind(SG.RmsNormMnnvl if boolean else TA.RmsNormMnnvl, N=N, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False)
+
+
+def sumsq():
+    return bind(TS.RmsNormMnnvlSumSq, N=N, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False)
+
+
+def apply(g: int):
+    return bind(TS.RmsNormMnnvlApply, G=g, SHOT=1)
 
 
 def ev(fn, *args: np.ndarray) -> list[np.ndarray]:
@@ -94,14 +107,19 @@ def row(monkeypatch):
 
 def test_a_row_holds_each_part_at_its_statics_and_the_residual_at_every_halving():
     spec = descriptor_id(fused())
+    halvings = (2, 4, 8, 16, 32, 64, 128, 256)
     assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(resid(N)), 1),
-                                        *((descriptor_id(resid(N // k)), k) for k in (2, 4, 8, 16, 32, 64, 128, 256)),
+                                        *((descriptor_id(resid(N // k)), k) for k in halvings), (descriptor_id(sumsq()), 1),
+                                        *((descriptor_id(apply(N // k)), k) for k in halvings
+                                          if ST.cols_refused(descriptor_id(apply(N // k))) is None),
                                         (descriptor_id(norm()), 1))
     t = SRW.template(descriptor_id(resid(N // 2, boolean=True)))
     assert (t.layout, t.word, t.packed) == ("cols", descriptor_id(resid(N // 2)), None)
     t = SRW.template(descriptor_id(norm(boolean=True)))
     assert (t.layout, t.word, t.packed) == ("part", descriptor_id(norm()), None)
-    assert SRW.part(descriptor_id(norm()), spec) == SRW.PARTS["AllReduceRmsNormMnnvl_v1"][1]
+    assert SRW.part(descriptor_id(norm()), spec) == ST.FINAL["AllReduceRmsNormMnnvl_v1"][1]
+    assert SRW.part(descriptor_id(sumsq()), spec) == SRW.PARTS["AllReduceRmsNormMnnvl_v1"][1]
+    assert SRW.part(descriptor_id(apply(64)), spec) == SRW.PARTS["AllReduceRmsNormMnnvl_v1"][2]
     assert SRW.part(descriptor_id(resid(N)), descriptor_id(resid(N))) is None
 
 
@@ -110,13 +128,19 @@ def test_each_part_reads_what_the_row_gives_it_and_the_parts_return_every_output
     """An intermediate (a named return) is read only by a later part, with the type the part returning it gives it, and has a
     twin (`part_rows.MIDS`); the row's committed outputs are returned once each."""
     whole = {"AllReduceRmsNormMnnvl_v1": fused, "DeepGemmFp8Linear_v1": lambda: bind(DG.DeepGemmFp8Linear, K=256, N=200),
-             "FlashInferFp8Linear_v1": lambda: bind(DG.FlashInferFp8Linear, K=256, N=200)}[family]()
+             "FlashInferFp8Linear_v1": lambda: bind(DG.FlashInferFp8Linear, K=256, N=200),
+             "RMSNormCudaVector8_v1": lambda: bind(C.RMSNormCudaVector8, N=N, EPS=1e-5, BLOCK=32),
+             "RMSNormFusedCudaVector8_v1": lambda: bind(C.RMSNormFusedCudaVector8V1, N=N, EPS=1e-5, BLOCK=32),
+             "RMSNormFusedCudaVector8_v3": lambda: bind(C.RMSNormFusedCudaVector8, N=N, EPS=1e-5, BLOCK=32),
+             "DsaRMSNorm_v1": lambda: bind(DN.DsaRMSNorm, N=N, EPS=1e-5)}[family]()
+    assert spec_base(descriptor_id(whole)) == family
     params, ret = whole.signature()
     outs = getattr(ret, "fields", None) or (ret,)
     assert sorted(j for p in SRW.PARTS[family] for j in p[2] if isinstance(j, int)) == list(range(len(outs)))
     mids: dict[str, object] = {}
     for fam, reads, returns in SRW.PARTS[family]:
-        pp, pr = SRW._bind(descriptor_id(whole), fam, **ST.PART_STATICS.get(family, {})).signature()
+        cols = {"G": whole.bindings[ST.col_span(fam)]} if fam in ST.COL_SPANS else {}
+        pp, pr = SRW._bind(descriptor_id(whole), fam, **ST.PART_STATICS.get(family, {}), **cols).signature()
         given = {"arg": lambda g: params[g][1], "out": outs.__getitem__, "mid": mids.__getitem__}
         assert [ty for _n, ty in pp] == [given[src](g) for src, g in reads], fam
         got = list(getattr(pr, "fields", None) or (pr,))
@@ -129,6 +153,7 @@ def test_each_part_reads_what_the_row_gives_it_and_the_parts_return_every_output
 
 @pytest.mark.parametrize("w", [N, N // 2, N // 8])
 def test_the_parts_cover_the_row_s_outputs_and_compute_them(row, w):
+    """The final norm's row (``OP``, outside every decoder layer): its residual in column blocks, its norm whole."""
     x = row()
     tmpls = [descriptor_id(resid(w, boolean=True)), descriptor_id(norm(boolean=True))]
     rows, _defs, counts = SRW.member_rows({"r0": {}}, tmpls)
@@ -139,7 +164,7 @@ def test_the_parts_cover_the_row_s_outputs_and_compute_them(row, w):
     assert (mn.n, mn.base, mn.rows, mn.outs) == (1, nh, (("in0", N), ("in1", N)), (("out.normed", N),))
     dr, er = SRW.read(mr, rows[0], x["store"], x["weights"])
     dn, en = SRW.read(mn, rows[1], x["store"], x["weights"])
-    assert er == [[0, nh, "r0", 16, 6, OP, "residual", 0, 9]] and en == [[nh, nh + 1, "r0", 16, 6, OP, "normed", 0, 9]]
+    assert er == [[0, nh, "r0", 16, None, OP, "residual", 0, 9]] and en == [[nh, nh + 1, "r0", 16, None, OP, "normed", 0, 9]]
     P = x["parts"].reshape(WORLD, N)
     for j in range(nh):
         assert dr["rows"]["in0"][j].tolist() == P[:, j * w:(j + 1) * w].reshape(-1).tolist()

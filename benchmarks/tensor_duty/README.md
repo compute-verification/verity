@@ -19,14 +19,17 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
   SM on shared-memory operands, as `int8_class_rate/`'s wgmma kernel; and mma.sync m16n8k32 s8 (`sync_s8`) on register
   operands. Classes: zero, a constant, uniform bytes, and `Verity.OperandClass`'s s2, u2 and u4. Fills: idle
   (`__nanosleep`) or FFMA chains. Its header gives the period loop and the JSON fields.
-- `gen_wgmma.py` writes `wgmma_e4m3.cuh`; the s8 wrappers are `int8_class_rate/wgmma_i8.cuh`.
+- `gen_wgmma.py` writes `wgmma_e4m3.cuh` (a test holds the file to it); the s8 wrappers are
+  `int8_class_rate/wgmma_i8.cuh`.
 - `run.sh`: one card. It builds outside the lease, then under one gpu-lease sets the power limit and, for each clock,
   locks it, warms the card and runs every arm, class, fill, burst and duty; at exit it resets the clock and the power
   limit. Last it runs `summarize.py`, and exits nonzero unless the card passes. Its header lists the knobs.
-- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.hardware.rate`), exiting 0
+- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.hardware.cards.rate`), exiting 0
   only on PASS; then the maximum by clock, arm and class against both readings, each clock's and arm's duty x class
   table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdict to
   the card on made-up points.
+
+`verity bench tensor_duty` runs `run.sh`, which writes under a run's `$OUT` and refuses without one, so run it as:
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
@@ -34,4 +37,5 @@ research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_
 PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py ~/.research/runs/RUN/out
 ~~~
 
-The card's `clock.tensor` source cites the run of record by its `art:` id.
+The card's `clock.tensor` source cites the run of record by its `art:` id. Nothing imports this directory:
+`summarize.py` is a command, and it reads the card through `verity.hardware.cards`, never a copy of its numbers.

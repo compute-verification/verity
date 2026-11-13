@@ -74,6 +74,11 @@ def RMSNormCudaVector8(B, S, x, w):
     from +0.  CUB reduces the thread partials; the epilogue is
     ``bf16_rn((f32(x) * rsqrtf(var / N + EPS)) * f32(w))``.
     """
+    return _out(B, x, w, _pure_scale(B, S, x))
+
+
+def _pure_scale(B, S, x):
+    """`RMSNormCudaVector8_v1`'s ``rsqrtf(var / N + EPS)``: each thread's FMA chain, then CUB's reduce."""
     N, block = _check(S, fused=False)
     vectors = N // VECTOR
     partials = []
@@ -84,7 +89,7 @@ def RMSNormCudaVector8(B, S, x, w):
         for z in xf[1:]:
             acc = B.call(P.F32Fma, z, z, acc)
         partials.append(acc)
-    return _out(B, x, w, _arg_scale(B, S, _cub(B, partials)))
+    return _arg_scale(B, S, _cub(B, partials))
 
 
 def _vector_sum(B, rf):
@@ -222,20 +227,26 @@ def RMSNormFusedCudaVector8(B, S, x, res, w):
     full warps is one batch of pair sums, and the warp aggregates are added in order. Every add and multiply is v1's,
     on v1's operands, so each output word is v1's.
     """
-    N, block = _check(S, fused=True)
+    _check(S, fused=True)
     r = B.batch(P.Bf16AddF2fp, x, res, axes=(0, 0))
+    return tuple_of(_out(B, r, w, _fused_scale(B, S, r)), r)
+
+
+def _fused_scale(B, S, r):
+    """v3's ``rsqrtf(var / N + EPS)`` over the residual sums ``r``, v1's words: the squares, pair sums and vector partials
+    as batches, the per-lane scans, then CUB's levels."""
+    N, block = _check(S, fused=True)
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
     vectors = N // VECTOR
     squares = B.batch(P.F32Mul, rf, rf, axes=(0, 0))
     pairs = _pair_sums(B, squares)
     vec = _sums_in_order(B, pairs.reshape(Array(vectors, Array(VECTOR // 2, F32))), VECTOR // 2)
-    scale = _arg_scale(B, S, _cub_levels(B, _lane_partials(B, vec, block)))
-    return tuple_of(_out(B, r, w, scale), r)
+    return _arg_scale(B, S, _cub_levels(B, _lane_partials(B, vec, block)))
 
 
 from verity.definitions.registry import boolean_norms as _boolean_norms  # noqa: E402
 
-_boolean_norms._set_cuda_vector8_words(RMSNormCudaVector8, RMSNormFusedCudaVector8V1)
+_boolean_norms._set_cuda_vector8_words(pure=RMSNormCudaVector8, fused=RMSNormFusedCudaVector8V1)
 
 
 __all__ = [

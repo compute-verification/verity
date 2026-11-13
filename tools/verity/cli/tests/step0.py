@@ -58,18 +58,27 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true."""
+    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
+    by default (``max_tokens_cap``, ``lengths``, ``content``) stays out of the table while unset (`WARDEN_DEFAULTS`),
+    as it stays out of `WardenParams.digest`, so a configuration that sets none has the form and hash it had before
+    any was a parameter."""
     names = [f.name for f in fields(WardenParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
         raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
+    given = {k: params[k] for k in names if k in params}
     try:
-        WardenParams(**{k: params[k] for k in names})
+        WardenParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
-    return {**{k: params[k] for k in names}, "tie": True}
+    return {**given, "tie": True}
+
+
+#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
+#: rows' form, the content rows' classes), and ``tie``.
+WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,7 +114,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
+              default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),

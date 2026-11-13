@@ -392,8 +392,10 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
-    stratified over the three templates, its bound 0, for the group's registration; a refused audit a reject of the same
-    registration naming why; an accepted record of another registration the driver's error."""
+    stratified over the three templates, its bound 0, for the group's registration, and the tied values R8 let through
+    in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
+    refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
+    error."""
     from verity.protocols.pouw.verifier import core_check as CC
 
     G, T = 2, 4
@@ -410,6 +412,10 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
+    assert "rests_on_period_check" not in a["public"]
+    tied = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog"])
+    assert CC.answer_of(tied)["verdict"] == "accept"
+    assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog"]}
     (level,) = CC.integrity(a["profile"])["levels"]
     assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
     why = "the scan's audit of link-windows [0, 1] refused: egress-1: registered reads: table row 3 does not open"
@@ -835,7 +841,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
-                         stagers={s: SimpleNamespace(defn=defs[s]) for s in templates})
+                         stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())
     members = [{"name": f"{s}-{w}", "n": T, "defn": defs[s]} for s in templates for w in range(2)]
     want = {"ingress-0/row": {"leaves": T, "domain": "aa" * 64}, "egress-1/o0": {"leaves": T, "domain": "bb" * 64},
             "scan/state": {"leaves": 2 * T, "domain": "cc" * 64}}

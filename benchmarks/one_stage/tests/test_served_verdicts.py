@@ -10,8 +10,8 @@ product runs no onsite piece and composes sampled proofs and PoUW alone, the oth
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
-`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
+CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
@@ -55,6 +55,7 @@ import jsonschema
 import pytest
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -540,6 +541,59 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
+def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
+    """The answer the bandwidth session's piece writes of an accepted session (`served_bandwidth.answer`) names the term
+    its eps leaves out, PoUB's ledger's object (`ledger.NAMED_TERMS`). The block record, which `block_record.check`
+    holds, carries it beside the error sum under the bandwidth audit's name, the sum's number the answer's eps, and the
+    accept's clause in the composed reason says the error with the term beside it in the ledger's own words
+    (`ledger.DELTA_FORM` with the error for δ). At an eps the record establishes at neither δ, the clause that says so
+    prints the error the same way. The same answer with the term struck from its profile is the bandwidth audit's
+    error: the composed verdict is ``reject``, with no block record."""
+    import served_bandwidth as SB
+
+    beside = ledger.DELTA_FORM.removeprefix("δ")
+    (d := tmp_path / "bandwidth").mkdir()
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+
+    def written(delta: str, samples: int) -> dict:
+        """The piece's answer of an accepted session at ``delta`` that sampled ``samples`` openings: its eps is
+        ``delta`` + ``samples``/2^64."""
+        session = {"registration": {"digest": "cd" * 64},
+                   "answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
+                              "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
+        return SB.answer(session, "beside the served window", 1000)
+
+    def composed(answer: dict) -> tuple:
+        (d / "answer.json").write_text(json.dumps(answer))
+        return S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                        servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+
+    a = written("1/1099511627776", 0)
+    assert a["verdict"] == "accept" and a["profile"]["named_terms"] == ledger.NAMED_TERMS
+    report, rec, line = composed(a)
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {}
+    sums = rec["composed"]["joint_horizon"]
+    assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
+    assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
+    assert all(x["not_established"] == [] for x in sums["at"].values())
+    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    assert line["reason"] == report["composed"]["reason"]
+
+    _, rec, line = composed(written("1/100", 1))
+    assert BR.check(rec) == {}
+    assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
+    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
+            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+
+    silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
+    report, rec, line = composed(silent)
+    assert rec is None and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the bandwidth audit"], None)
+    assert "ValueError: bandwidth: its answer's profile names no term its error leaves out; its piece writes them in its " \
+           "answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)" in report["protocols"]["bandwidth"]["reason"]
+    assert "; the bandwidth audit: error: " in line["reason"]
+
+
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
     """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
@@ -615,11 +669,13 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
-#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate, the
+#: bandwidth audit's profile naming the term its error leaves out, as its piece writes it
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
              "profile": {"delta": "1/1000000"}},
-    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200}, "profile": {}},
+    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200},
+                  "profile": {"named_terms": ledger.NAMED_TERMS}},
     "pous": {"protocol": "verity/pous/p2/v4/run", "public": {"certified": True, "eps": "1/1000000", "s_bits": 1 << 30},
              "profile": {}},
     "certifier": {"protocol": "verity/certifier/v0", "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {}},
@@ -629,15 +685,17 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 
 
 @pytest.mark.parametrize("case, piece", [("accept", None)] + [
-    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
+    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS] + [
+    ("unnamed", "bandwidth")])
 def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_that_does_not_accept(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
     about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
-    accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    accept, the bandwidth audit's with its error and the term it leaves out beside it. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
-    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
+    server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
@@ -650,6 +708,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
             a = {**a, "verdict": "reject", "reason": "a read came back late", "public": None, "profile": None}
         if comp == piece and case == "malformed":
             a = {**a, "public": {"unrelated": 1}}
+        if comp == piece and case == "unnamed":
+            a = {**a, "profile": {}}
         (d / "answer.json").write_text(json.dumps(a))
         server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
         if comp == "wipe" or server != "vy-dc-h200":
@@ -665,13 +725,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
-    if case in ("reject", "malformed"):
+    if case in ("reject", "malformed", "unnamed"):
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
         assert line["verdicts"][name] == ("reject" if case == "reject" else "error")
         assert not (tmp_path / "record" / "block-record.json").exists()
         report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: KeyError")
+        why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
+                                                   "leaves out; its piece writes them in its answer's profile as named_terms"}
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} leg: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
@@ -681,7 +743,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)"}
+                                         "except with 1/100)",
+                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
@@ -964,12 +1027,15 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
-def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
+def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
+    """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
+    which CLASSES doesn't name and which would run out of time here, is never started."""
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
+    assert rc == 0 and limits == ["30m"], (rc, lines)
+    assert len(lines) == 1, lines
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    assert not list(tmp_path.rglob("window-circuit*record*"))
     published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
     kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
     assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
@@ -981,13 +1047,12 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     ("record", {"record": "expire"}, "WINDOW-CIRCUIT class record timed out after WC_TIMEOUT=30m"),
 ])
 def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classes, answers, refused):
-    """Each class of CLASSES gates, not just one of them, whatever the class of record's measurement says; CLASSES that
-    names `record` gates on it under WC_TIMEOUT and doesn't measure it again."""
+    """Each class of CLASSES gates, not just one of them; CLASSES that names `record` gates on the class of record
+    under WC_TIMEOUT, and no class CLASSES doesn't name is counted."""
     rc, lines, limits = _circuits(tmp_path, classes, answers)
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
-    measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+    assert len(lines) == len(classes.split()) and limits == ["30m"] * len(classes.split()), (lines, limits)
 
 
 W63K4 = "8,32,4,4,16"
@@ -1837,15 +1902,17 @@ if __name__ == "__main__":
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
-    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
-    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
-    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
+    under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
+    Lean built but the two products'; the wipe's, which no piece wrote, is named not written and none is made; and
+    served_cases.py's are written under the private dir, given no α or Γ while ALPHA and GAMMA are unset; each product
+    gets the cases of its own subprotocols; OUT/verdicts.txt gets each
     CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
     and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
-    says so and fails, since no Lean answered. PRODUCT=remote needs no
-    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
+    says so and fails, since no Lean answered. PRODUCT=remote reads neither PoUS's case nor the wipe's, and runs
+    remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and under it no
     product is handed a case under ``SERVE_DIR/private/pouw``, whose period case reaches a product only tied to that
@@ -1853,16 +1920,17 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     there, from a prover-side copy of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
-    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
-    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
-[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
-for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
-echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
-echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
-echo "CASE: evidence beef"
-echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
-    for pkg in ("protocols/pous/verifier/check", "protocols/pous/device/lean", "protocols/remote/verifier", "protocols/onsite/verifier"):
+    _script(bin_ / "gpu-lease", f'echo "$@" >> {tmp_path}/card')
+    for w, protocol in (("pous/w0", "verity/pous/p2/v4/run"), ("other", "verity/certifier/v9")):
+        (d / "private" / w).mkdir(parents=True)
+        (d / "private" / w / "case.json").write_text(json.dumps({"evidence": "beef"}))
+        (d / "private" / w / "answer.json").write_text(json.dumps({"protocol": protocol, "verdict": "accept"}))
+    (out / "pieces" / "pous").mkdir(parents=True)
+    (out / "pieces" / "pous" / "pous.json").write_text(json.dumps(
+        {"window": 0, "verdict": "accept", "decided_by": {"program": "pous-run-protocol", "host": "the-served-node"}}))
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
@@ -1894,7 +1962,8 @@ sys.exit(1)
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
+        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
@@ -1905,8 +1974,11 @@ sys.exit(1)
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert (tmp_path / "built").read_text().split() == ["remote", "onsite"] and not (tmp_path / "card").exists()
+    assert sorted(f.name for f in (d / "private" / "pous" / "w0").iterdir()) == ["answer.json", "case.json"]
+    assert not (d / "private" / "wipe").exists()
     assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
-    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(out.iterdir()) == [out / "composite", out / "pieces", out / "verdicts.txt"]
     assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
         "composite/onsite/composite.json", "composite/remote/composite.json"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
@@ -1915,7 +1987,6 @@ sys.exit(1)
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
-    (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
     env["PRODUCT"] = "remote"
@@ -1960,6 +2031,92 @@ sys.exit(1)
     assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
         f"COMPOSITE: composed on {host}, not the served node the-served-node: from a prover-side copy of its serve dir's "
         "audit inputs and the cases written here from it, not from the parties that produced them")
+
+
+#: onsite's own protocols: the piece's private directory, its public summary, its Lean, and a directory that isn't its
+ONSITE_OWN = {"verity/pous/p2/v4/run": ("pous/w0", "pous/pous.json", "pous-run-protocol", "pous/w1"),
+              "verity/wipe/v0": ("wipe", "wipe/summary.json", "wipe-protocol", "earlier/wipe")}
+#: A stand-in for a product's Lean executable: it reads nothing it is handed and rejects under its own name, so the
+#: VERDICT line it leaves says nothing of what the product's Lean answers
+NO_LEAN = '''import json, sys
+from pathlib import Path
+print(json.dumps({"protocol": f"verity/{Path(sys.argv[0]).name}/v0", "reason": "stand-in: no Lean ran",
+                  "verdict": "reject"}))
+sys.exit(1)
+'''
+
+
+@pytest.mark.parametrize("protocol", list(ONSITE_OWN))
+@pytest.mark.parametrize("killed", [True, False])
+def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and_composes_the_rest(tmp_path, protocol,
+                                                                                                    killed):
+    """served_composite.sh with onsite_pieces.sh's `onsite_cases` and composite.py as they are, a stand-in lake, and a
+    stand-in for each product's Lean, which reads nothing and rejects under its own name (`NO_LEAN`); the serve dir,
+    named through a link, holds a case of each of onsite's subprotocols. A piece killed once it wrote its case and its
+    answer and before it published its summary (PoUS's pous.json, the wipe's summary.json): the protocol is
+    NOT_WRITTEN and its directory LEFT_OUT; the case composite.py makes for onsite's Lean names every other
+    subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
+    that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote, which composes
+    neither protocol, is handed its three cases and misses none; and the exit is 0, each product's Lean having
+    answered. A case of the protocol in another directory beside the piece's own (a second window's; the wipe's left
+    by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
+    OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
+    is the stand-in."""
+    import composite as C
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "link", tmp_path / "out"
+    (tmp_path / "serve").mkdir()
+    d.symlink_to(tmp_path / "serve", target_is_directory=True)
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+
+    def case(where: str, of: str) -> None:
+        (d / "private" / where).mkdir(parents=True)
+        (d / "private" / where / "case.json").write_text(json.dumps(
+            {"commitment": "c0", "evidence": "beef", "params": {"in": where}}))
+        (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": of, "verdict": "accept"}))
+
+    own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])}
+    for p, where in own.items():
+        case(where, p)
+    for _, summary, lean, _ in ONSITE_OWN.values():
+        (out / "pieces" / summary).parent.mkdir(parents=True)
+        (out / "pieces" / summary).write_text(json.dumps(
+            {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
+    if killed:
+        (out / "pieces" / ONSITE_OWN[protocol][1]).unlink()
+    else:
+        case(ONSITE_OWN[protocol][3], protocol)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "ONSITE_PIECES": str(ONSITE_PIECES)}
+    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+                       check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    said = (out / "verdicts.txt").read_text()
+    lines = {p: [f"COMPOSITE NOT_WRITTEN {p}" if killed and p == protocol else f"COMPOSITE CASE {p} accept"]
+             for p in ONSITE_OWN}
+    lines[protocol].append(f"COMPOSITE LEFT_OUT {protocol}: a case under the serve dir's private that is not its "
+                           "piece's with its Lean's answer (onsite_cases.log on the node)")
+    assert said.splitlines()[:-1] == [
+        *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
+        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
+        "COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in",
+        *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
+        "COMPOSITE onsite: VERDICT verity/onsite/v0 reject stand-in"]
+    assert str(tmp_path) not in said
+    for x in ("remote", "onsite"):
+        want = [p for p in C.COMPONENTS[x] if not (killed and p == protocol)]
+        made = d / "private" / "composite" / x / "private"
+        assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
+            (p, {"in": own[p]}) for p in want]
+        assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
+        assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
+            p for p in C.COMPONENTS[x] if p not in want]
 
 
 DIGEST = "5e" * 64
