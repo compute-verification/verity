@@ -123375,3 +123375,45 @@ theorem namesHeld_of (hh : heldOf i it u = some h) :
 - the descriptor check, which is unwritten;
 - that `HeldOfFiles` and `HeldOfCheck` theorems use only the three axioms (built, not probed);
 - that RecVStar's `checkStmt` doesn't read the partition when `inner = none` [guess].
+
+## REDRAW, Fri 13 Nov 05:50Z: PRF-582 (a) is written and pushed: the reader compares by a match at your twenty sites, four comparisons, each with its two lemmas (two pairs existed, the rest are in the change). Its records run `r20261113-054723-4bcf` is on vy-nebius-2, expected to end about 06:55Z. Not compiled yet, no difftest yet
+
+**In plain words.** A checkpoint before long work, and the answer to your 05:41Z and 05:44Z messages: which comparison is used where, and where its two lemmas are, so MEMBERS can take its site. Nothing here is compiled in the tree yet; the run will say. The pen `~/wt/.pen` is mine: this turn started on a new machine, which had no `~/wt`, so I made it at 05:34Z. The remote heads and my last entry (05:12Z) show no act I did not make [run]. Mailbox read at 05:49Z: 361 lines, its last message your 05:31Z one; your 05:41Z and 05:44Z came by the hook [run].
+
+**1. The comparisons, and their two lemmas** (for MEMBERS: the first line)
+
+- **With a string: `Spot.jsonStrIs j s`** (`Spot/Json.lean` 64, it existed). Both lemmas exist [read]:
+  - `Properties.Pouw.LiveSalt.jsonStrIs_eq`: `jsonStrIs j s = true → j = .str s` (`security/Proofs/Properties/Pouw/LiveSalt.lean` 143);
+  - `Verity.Sampled.MemberForm.jsonStrIs_self`: `jsonStrIs (.str s) s = true` (`security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean` 305).
+- **With `null`: `Json.isNull`**, Lean's own match, which the reader already used at its line 631. Its lemmas did not exist; they are in this change, beside `nat_nonnull`: `Properties.Pouw.LiveSalt.Ledger.isNull_eq` (`j.isNull = true → j = .null`) and `isNull_self` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean`). [run: written]
+- **With `true`: the reader's own `jsonTrue`** (`ChallengerSession.lean` 305, it existed, `auditedOpen` uses it). `Ledger.jsonTrue_eq'` existed (line 502); `Ledger.jsonTrue_self` is new, beside it. [read; run]
+- **With a Boolean the reader computed** (one site, 662): `Spot.jsonBoolIs j b`, new, beside `jsonStrIs` in `Spot/Json.lean`. `Ledger.jsonBoolIs_eq` and `Ledger.jsonBoolIs_self` are new. I looked at `jeq` for this site, which is on the same line for the windows: its `= true → x = .bool b` would need a proof about each value's first character, and `jsonBoolIs`'s is two lines. [derived]
+- **MEMBERS's site** (`Spot/OneStageZk.lean` 589, `(programSha.map Json.str) != some want`): the comparison is `jsonStrIs want sha` under a match on `programSha`, so `!(match programSha with | some sha => jsonStrIs want sha | none => false)`, with the first pair above. Nothing of mine has to land first: both lemmas are on `main`. [read the site; derived]
+
+**2. The sites** (line numbers at #9555's head `38b7c6df38ba`)
+
+- **The eleven:** seven compare with a string, by `jsonStrIs`: `ChallengerSession.lean` 248, 256, 813, 817, 871, 888 and `ChallengerCoins.lean` 57. Four compare with `null`, by `Json.isNull`: `ChallengerSession.lean` 270, 682, 855 and `ChallengerRecord.lean` 103. Line 888's `cs.contains (Json.str pinned)` is `cs.any (jsonStrIs · pinned)`. [run: the diff]
+- **Your nine of 05:44Z, in the same change:** 420, 435, 644, 739 by `Json.isNull`; 518 and 610 by `jsonStrIs` (610 under a match on the optional field); 657 and 661 by `jsonTrue`; 662 by `jsonBoolIs`. [run: the diff]
+- **Left as they are, as you say:** 778 (`ledgerHead`), `ChallengerInnerTrees` 94 and the others you list. I had changed 778 in my second commit, before your message, and put it back word for word in the third. [run: `git diff 38b7c6df38ba` shows no line of `ledgerHead`]
+- **Which of the nine my witness never meets:** all but 435. A session with no reserve and no period reaches neither `isReserve` (518), the reserve's open (610), a period's open (644) or close (420, 657, 661, 662), nor a session's period (739). It meets 435: its end names a record leaf. [derived from reading `verifyLedger` and `isBodyOf`]
+
+**3. Why no input changes verdict** (the sentence for the ready line, and what I ran so far)
+
+- Lean's `==` on JSON against `null`, a string or a Boolean is true exactly when the other value is that same leaf, which is what each match computes; so every comparison gives the same Boolean on every value. [read: `beq'` in Lean 4.34.0's `Lean/Data/Json/Basic.lean`, whose last case `| _, _ => false` takes every pair of different kinds; `Array.contains as a` is `as.any (a == ·)`]
+- On 22 values of every kind and 9 strings, each `==` form the change replaces and its match gave the same answer: 0 disagreements. [run: a scratch file on Lean 4.34.0, compiled code]
+- The five new lemmas compile on a scratch file with Lean's own imports only, with the proofs as they are in the tree. [run] In the tree they are not compiled yet.
+- The difftest's verdicts on every case: not run yet. It goes after the records run, one try at a time: `suites.py --changed 38b7c6df38ba --quick`, which runs the reader's difftest modules whole.
+
+**4. A correction to my 05:12Z entry, line 9**
+
+- I guessed that this change moves the re-keyed entry's `unfolded_hash`. It does not: that hash is of the statement with its definition unfolded once, so it moves when the statement's text changes, not when a function the statement applies changes its body. [read: `tools/verity/lean/check.py`, `witness_failures`' docstring] This change edits no statement. So lean's yes at `0c9cd9cc1ff7…3b58f286` stands through (a), and I ask for no re-key. The run's `--update` printout will show it either way. [derived]
+- The records of the guarantees that read the reader will show its changed definitions. That is this change, and the pull request will say so. [guess, until the printout]
+
+**5. State**
+
+- Branch `cursor/proofs-honest-draw-5b2f`, mine, from `38b7c6df38ba`, at `d88dc93788903551197f090ca6f8c7b67c893aef`, pushed; nothing unpushed. Three commits: the eleven; your nine; the Boolean comparison beside `jsonStrIs`, 778 put back, and the five lemmas. No pull request yet: I open it when the run compiles. [run]
+- It merges with `main` at `b843a10af48a` clean. [run: `git merge-tree`, exit 0]
+- `tests/lint/test_lean_bar.py` and `tests/test_lean_vocabulary.py` on the branch: 23 passed. [run, my machine]
+- Run: `r20261113-054723-4bcf`, `lean_changed.py --records security/Properties --update` at `d88dc9378890`, on vy-nebius-2, launched 05:48Z, running at 05:49Z [run: `research status`]. The last such run took 65 minutes, so about 06:55Z if its Lean slot comes at once [guess]. It is my one try there.
+- #9237, #9555, #9373: heads unchanged (`a2c3831345e0`, `38b7c6df38ba`, `54d0d016ab78`). [run]
+- While it builds I read for (b), `drawCoins_ok_of_steps`. Next entry by 06:50Z, or at the run's end.
