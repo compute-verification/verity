@@ -316,7 +316,7 @@ def test_a_tile_unit_a_row_schema_and_a_public_salt_past_its_table_are_refused()
     assert SV.unit_of(None) is None and SV.unit_of("v1") is None and SV.unit_of("j10r") is not None
     with pytest.raises(ValueError, match="^no tile unit 'j11': the pouw setting 'unit' is v1 or j10r$"):
         SV.unit_of("j11")
-    words = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
     assert NR.row_digests(words).shape == (3, 64)
     with pytest.raises(ValueError, match="^rows of 'row/v3': hm96-sha512/row/v2 or hm96-sha512/row-seg/v1$"):
         NR.row_digests(words, "row/v3")
