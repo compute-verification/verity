@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc

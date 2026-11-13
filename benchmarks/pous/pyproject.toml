@@ -59,8 +59,8 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "verity/protocols/spot/verifier/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`deploy.stream.Side`) and the challenger's parties run on
-          "verity/configuration/deploy", "verity/configuration/wire",
-          "verity/configuration/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
+          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
           "verity/protocols/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           # p2_v1/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
           "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py",
@@ -76,4 +76,4 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pous_wipe_resume.py"]
-paths = ["verity/configuration/deploy", "verity/protocols/pous", "verity/configuration/wire"]
+paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/pous", "verity/channel.py", "verity/tests/tests/test_channel.py"]

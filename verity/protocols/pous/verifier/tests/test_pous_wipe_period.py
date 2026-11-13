@@ -25,7 +25,7 @@ import pytest
 from pous_fakes import Clock
 import pous_test_signer as ts
 import wipe_side
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_party as WP
