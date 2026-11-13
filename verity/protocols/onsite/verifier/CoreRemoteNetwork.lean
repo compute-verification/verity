@@ -3,7 +3,7 @@ Remote with the network certifier (`verity/remote-network/v0`), **development**:
 (`Core.Remote.protocol`, `verity/remote/v0`, whose work is PoUW's period credit, not Pearl+'s run verdict) and
 communication through the auditor's network certifiers at the site's boundary, with no memory challenger. Its
 subprotocols are that composite's three (`Core.Remote.components`: the inference-only policy, PoUW's period credit and
-sampled proofs) and the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
+SPOT) and the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
 period's execution phases certified and proved, and the bound `K` on what left the site).
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols
 (`Core.Remote.tied`), remote's tie (`Core.Remote.windows`) and its own (`egress`), so its verdict is the AND of
@@ -22,7 +22,7 @@ executable (`remote-network`). The same holds of the composite without PoUW (`Co
 this module's egress tie: no composite of record is over the network certifier's period but onsite's.
 
 The network certifier's period reads its audits' answers as its evidence carries them; nothing here holds them to
-sampled proofs' answer (`NetworkCheck.Period`'s "What it doesn't check"). The policy's v0 publishes the declared
+SPOT's answer (`NetworkCheck.Period`'s "What it doesn't check"). The policy's v0 publishes the declared
 division and each inference block's profile in the clear, remote's stated exception (`Core.Remote`).
 -/
 module
@@ -95,7 +95,7 @@ private def allRefused : Answer := answer (components.map refused)
     refused PouwCheck.Period.protocol, refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
--- remote's record tie: the policy and sampled proofs on two records reject, whatever the subprotocols answer
+-- remote's record tie: the policy and SPOT on two records reject, whatever the subprotocols answer
 private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def recordsOf (policy sampled : String) : Answer :=

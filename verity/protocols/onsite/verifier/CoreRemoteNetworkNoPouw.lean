@@ -2,7 +2,7 @@
 Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`), **development**: the subprotocols
 of remote with the network certifier's development composite (`Core.RemoteNetwork`) but PoUW's period credit. Its
 subprotocols are the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`), the
-inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`) and sampled proofs
+inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`) and SPOT
 (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`), each as remote with the network certifier reads it.
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols (`Core.Remote.tied`)
 and remote with the network certifier's egress tie (`Core.RemoteNetwork.egress`), so its verdict is the AND of its
@@ -36,7 +36,7 @@ open Composition
 
 def protocolId : String := "verity/remote-network-no-pouw/v0"
 
-/-- The subprotocols, in the order of their ids: the network certifier's period, the policy and sampled proofs. -/
+/-- The subprotocols, in the order of their ids: the network certifier's period, the policy and SPOT. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, VStar.Recursive.Sampled.protocol]
 
@@ -92,7 +92,7 @@ private def allRefused : Answer := answer (components.map refused)
     refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
--- remote's record tie: the policy and sampled proofs on two records reject, whatever the subprotocols answer
+-- remote's record tie: the policy and SPOT on two records reject, whatever the subprotocols answer
 private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def recordsOf (policy sampled : String) : Answer :=
