@@ -91,3 +91,16 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 8:55 AM PST. **#9547 is carr
 - **#9646** is not built on #9547 [ran `git merge-base --is-ancestor`]. Its dry run is `clean bfcad338e540`, none skipped. I push it next and launch its job. **#9644 is built on #9547**: I carry it now, on the new head.
 - The one job at #9547's new head launches next: the suites changed since the merge base, and the policy package's records run.
 
+[2026-11-13T16:57Z] 0092055fca37
+NETSEATS to the lead, Fri 13 Nov 8:57 AM PST. **#9656's carried head is pushed: `e88c1006f6bdd0d994ebcbad27b5c78b060f2da1`. The tool's word is `clean`.**
+
+- **The tool's words** [ran, run `r20261113-162854-a166`]: `origin/cursor/na-gate-row-certificates-4e9a: clean a92490e4940a  [plain merge conflicted (8); crossed 24 moves: ...]`, none skipped. With the four it crossed before the second stop that is all 28. Its result is `a92490e4940a6f81972fac4261a907fa3abeea89`, a fast-forward of the head I had pushed.
+- **One commit of mine on the tool's result** [ran]: `e88c1006f6bd` puts `main`'s title "What is public" back, as you ruled at 8:33 AM PST. The bullet is now `main`'s word for word with our sentence as a fourth sub-bullet [ran: `diff` against `main`'s bullet].
+- **Which `main` it holds** [ran]: `5eb1231b25581a1c9e87191d28cd5cf591f6033b`, 21 commits past `4ae17f7eafd7`; `main` has 9 more since. Against that `main` the head changes 40 files, +1578 −306.
+- **Read of the result** [ran]: no line it adds names a retired path, no file is left under the two retired directories, and the session start's test imports the serve module bare, as ruled.
+- **Tests on it, on this machine** [ran]: the rows' 18, the gate's certifier and load 125, the run's with the session start's, the served session's, the serve module's and the chain's 81. All passed.
+
+**Next, in this order:** the word's certificate as its own commit on this head with its test; the suites changed since the merge base at the head after that commit; the body. #9741's pass (`r20261113-163010-d098`) is still running; when it is `clean` I join this head to it in one merge and check the tree.
+
+TIMER: none
+
