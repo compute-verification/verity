@@ -5,11 +5,11 @@ public import Proofs.Pouw.Lead.PStar.AlphabetProofs
 /-!
 # The exact `p*` of `blc4a-t64-e7`'s three coin lanes under `-rot`'s weights (proofs)
 
-`blc4a-t64-e7` draws three odd 7-bit coins `s = (s₀, s₁, s₂)`, each in `±127`, for each 64-row tile, step and column,
+`blc4a-t64-e7` samples three odd 7-bit coins `s = (s₀, s₁, s₂)`, each in `±127`, for each 64-row tile, step and column,
 after `A_j` is held, and every row of the tile reads the same coins. `-rot` weights them `(127, 1, 1)` on even rows and
 `(1, 127, 1)` on odd rows, so an entry's step increment is `c + b + 127·s₀ + s₁ + s₂` on an even row and
 `c + b + s₀ + 127·s₁ + s₂` on an odd one, with `b ∈ {0, 1}` the row's bit and `c` the row lane's constant. Its `p*` is
-the largest share of the draws `(b, s)` on which the increment equals a value fixed before the draw.
+the largest share of the samples `(b, s)` on which the increment equals a value fixed before the sample.
 
 * **The coin sum** (`evenSum_fiber_le`, `evenSum_fiber_127`): no value is `127·s₀ + s₁ + s₂` for more than 130 of the
   128³ coin triples, and 127 is it for exactly 130. A solution with `s₂ ≠ −127` is fixed by `s₁`, since two would need
@@ -143,7 +143,7 @@ theorem evenSum_fiber_127 : 130 ≤ (triples.filter fun s => evenSum s = 127).ca
 /-- Swapping the first two coins carries the odd rows' coin sum onto the even rows'. -/
 private def swap01 (s : ℤ × ℤ × ℤ) : ℤ × ℤ × ℤ := (s.2.1, s.1, s.2.2)
 
-/-- **Both classes have one law**: for every value, the odd rows' fiber has as many triples as the even rows'. -/
+/-- **Both classes have one sampling design**: for every value, the odd rows' fiber has as many triples as the even rows'. -/
 theorem oddSum_fiber_card (v : ℤ) :
     (triples.filter fun s => oddSum s = v).card = (triples.filter fun s => evenSum s = v).card := by
   refine card_nbij' swap01 swap01 (fun s hs => ?_) (fun s hs => ?_) (fun s _ => rfl) (fun s _ => rfl)
@@ -187,7 +187,7 @@ theorem rotSum_odd (i : ℕ) {s : ℤ × ℤ × ℤ} (hs : s ∈ triples) : ∃ 
   · exact ⟨a + 127 * b + c + 64, by simp only [rotSum, hi, ite_false, oddSum, ha, hb, hc]; ring⟩
 
 /-- **The increment's largest fiber**: over the row bits `{0, 1}` and the coin triples, no value is row `i`'s increment
-for more than 130 of the `2·128³` draws, whatever `c` and the class. -/
+for more than 130 of the `2·128³` samples, whatever `c` and the class. -/
 theorem rotLane_fiber_le (c : ℤ) (i : ℕ) (v : ℤ) :
     (fiber (rotLane c i) ({0, 1} : Finset ℤ) triples v).card ≤ 130 := by
   refine le_trans ?_ (rotSum_fiber_le i (v - c - (v - c - 1) % 2))
@@ -208,7 +208,7 @@ theorem rotLane_fiber_le (c : ℤ) (i : ℕ) (v : ℤ) :
     simp only [rotLane, mem_insert, mem_singleton] at hp hp'
     rw [show b = b' by omega]
 
-/-- **It is attained**: `c + 127` is row `i`'s increment for 130 draws, with `b = 0` and the 130 triples of
+/-- **It is attained**: `c + 127` is row `i`'s increment for 130 samples, with `b = 0` and the 130 triples of
 `evenSum_fiber_127` (swapped on odd rows). -/
 theorem rotLane_fiber_attained (c : ℤ) (i : ℕ) :
     130 ≤ (fiber (rotLane c i) ({0, 1} : Finset ℤ) triples (c + 127)).card := by
@@ -218,8 +218,8 @@ theorem rotLane_fiber_attained (c : ℤ) (i : ℕ) :
   rw [mem_coe, fiber, mem_filter, mem_product]
   exact ⟨⟨by simp, hs.1⟩, by simp only [rotLane, hs.2]; ring⟩
 
-/-- **`p*` exactly**: the largest share of the `2·128³ = 4,194,304` draws on which row `i`'s increment hits a value fixed
-before the draw is `130/4,194,304 = 65/2,097,152`, on even and odd rows alike. -/
+/-- **`p*` exactly**: the largest share of the `2·128³ = 4,194,304` samples on which row `i`'s increment hits a value fixed
+before the sample is `130/4,194,304 = 65/2,097,152`, on even and odd rows alike. -/
 theorem rotLane_pstar (c : ℤ) (i : ℕ) :
     (∀ v, 2097152 * (fiber (rotLane c i) ({0, 1} : Finset ℤ) triples v).card ≤
         65 * (({0, 1} : Finset ℤ) ×ˢ triples).card) ∧

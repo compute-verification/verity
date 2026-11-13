@@ -2,7 +2,7 @@
 ``kernel-attempt/v1``, so what was tried, on which kernel, with what result and why it was kept or dropped is a query, not
 prose.
 
-A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.pouw.verifier.serving.KernelVariant`'s
+A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.accounting.pouw.verifier.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
 metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
@@ -18,7 +18,7 @@ is kept as ``arm_claim`` and never published.
 
 `verify.py` builds the records (`records`), writes them under the run's ``ledger/`` (so they are preserved with the run's
 files wherever the store isn't reachable) and publishes them with ``--publish``. `rows` is what `panel.py` reads beside
-``attempts.jsonl``. `verity.protocols.pouw.verifier.serving` is imported outright, so a job where `verity` doesn't import
+``attempts.jsonl``. `verity.protocols.accounting.pouw.verifier.serving` is imported outright, so a job where `verity` doesn't import
 stops there; `research.store` is imported when present (from this checkout's ``tools/research/src`` otherwise), so a node-2
 job without it still writes its records.
 """
@@ -39,7 +39,7 @@ from typing import Any, Iterable
 import price_twins as P
 from verity_config.settings import of
 
-from verity.protocols.pouw.verifier import serving
+from verity.protocols.accounting.pouw.verifier import serving
 
 #: what `verify.py`, the filler's `arms.py` and `score.py`, and the tests read
 __all__ = [
@@ -142,7 +142,7 @@ def variant_id(family: str, device: str, source_digest: str) -> str:
 def variant_record(*, family: str, device: str, schemes: Iterable[str], sources: Iterable[Path], root: Path,
                    binaries: Iterable[Path] = (), schedules: Iterable[str] = ("serial",), loader: str = "cubin-ctypes",
                    prices: str | None = None, config: dict[str, str] | None = None) -> dict:
-    """What an arm's `build` returns as ``variant``: `verity.protocols.pouw.verifier.serving.KernelVariant`'s fields (its shape rule and step
+    """What an arm's `build` returns as ``variant``: `verity.protocols.accounting.pouw.verifier.serving.KernelVariant`'s fields (its shape rule and step
     IO aside) and its id. ``binary_sha256`` is the one binary's digest, or the digest of the sorted digests of several.
     `config` names every run-time choice that selects code from the binary (environment knobs such as
     ``PEARLC_A_FORMS``): it is part of the source digest, so the id tells the forms apart, and serving must pin it."""
@@ -157,7 +157,7 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
                                   schedules=frozenset(rec["schedules"]), shapes=serving.ShapeRule(), source_sha256=src,
                                   binary_sha256=binary, loader=loader, prices=prices)
         if v.id != rec["id"]:
-            raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.pouw.verifier.serving's {v.id}")
+            raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.accounting.pouw.verifier.serving's {v.id}")
     return rec
 
 
@@ -176,7 +176,7 @@ def typed_gamma(result: dict) -> dict[str, str]:
     return out
 
 
-#: `verity.protocols.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
+#: `verity.protocols.accounting.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
 #: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
 _SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
 
@@ -248,7 +248,7 @@ def _clocks(p: dict, side: str) -> list[float]:
 
 
 def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: dict, run_id: str) -> dict:
-    """`verity.protocols.pouw.verifier.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
+    """`verity.protocols.accounting.pouw.verifier.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a

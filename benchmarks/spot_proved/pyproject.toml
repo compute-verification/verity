@@ -12,11 +12,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # includes
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/definitions",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/windows",
-          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/definitions/kernels/sha512.cuh",
-          "verity/protocols/spot/verifier/profile.py",
-          "verity/hardware/record.py", "verity/claims/__init__.py", "verity/protocols/spot/verifier/__init__.py",
-          "verity/protocols/spot/verifier/one_stage", "verity/protocols/spot/verifier/service.py",
-          "verity/protocols/spot/device/coins.py", "verity/protocols/spot/device/challenger.py",
-          "verity/protocols/spot/device/remote.py", "verity/protocols/spot/verifier/second_stage.py",
-          "verity/protocols/spot/verifier/schedule.py", "adapters/vllm/verity_vllm",
-          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
+          "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/circuits/kernels/sha512.cuh",
+          "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/hardware/record.py", "verity/claims/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/service.py",
+          "verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/device/challenger.py",
+          "verity/protocols/proofs/spot/device/remote.py", "verity/protocols/proofs/spot/verifier/second_stage.py",
+          "verity/protocols/proofs/spot/verifier/schedule.py", "adapters/vllm/verity_vllm",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]

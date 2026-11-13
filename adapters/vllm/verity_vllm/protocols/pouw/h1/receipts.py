@@ -68,11 +68,11 @@ from typing import Any
 
 import numpy as np
 import torch
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.prover.circuit import segment as SG
-from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.verifier import credit as CR
 
 M32 = (1 << 32) - 1
 R = C_ = 32
@@ -113,8 +113,8 @@ def noise_blocks_cpu(seeds: list[bytes], n: int) -> torch.Tensor:
 
 def noise_cubin(arch: str) -> Path:
     """`NOISE_CU` built with the nvcc on the path for ``sm_<arch>`` (``"90"``: an H200, ``"120"``: an RTX PRO 6000) into a
-    cubin, with `verity.definitions.kernels`' ``sha512.cuh``, in the integration's build cache (`row_tables_device.built`)."""
-    from verity.definitions import kernels
+    cubin, with `verity.circuits.kernels`' ``sha512.cuh``, in the integration's build cache (`row_tables_device.built`)."""
+    from verity.circuits import kernels
 
     from verity_vllm.commit import row_tables_device as RTD
 
