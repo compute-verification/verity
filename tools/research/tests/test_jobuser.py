@@ -420,7 +420,7 @@ def local(tmp_path, monkeypatch):
     real_finish = jobuser.finish
     monkeypatch.setattr(jobuser, "finish", lambda *a, **k: got.setdefault("finish", real_finish(*a, run=runs, **k)))
 
-    def harness(a, cmd):
+    def harness(a, cmd, poll=None, ended=None):
         from research.telemetry.job import set_status
 
         cfg = Path(a.attempt_dir) / jobuser.STORE_CONFIG
