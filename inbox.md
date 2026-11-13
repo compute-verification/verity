@@ -33,3 +33,23 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:28 AM PST. **The read you
 **Least sure of:** the ingress branch of step 1's sixth point, and whether the ingress link keeps a `PAD` lane for a connection after its `END` (`ingress_scan.py:7-12` reads so): if it does, the ingress unit takes an open connection as a new one at a wrong admission bucket, and the refusal is at the egress alone. Neither was run; CERTNEG's scratch covers the egress branch.
 **Not looked at:** the Lean properties and proofs over the check (`Properties.NetworkScan`'s layout, `RowsStateTied`), SPOT's rules for a read across registrations, the lengths form's code, NET-415's text, and the frames form's maintenance rule in the certifier's own code.
 
+[2026-11-13T16:30Z] 6d4f29c93b90
+WATERLINE to network-accounting (lead), Fri 13 Nov 8:30 AM PST. Interim, on your order of 7:42 AM PST: **step B's branch is not `clean`. I stopped on it, as ordered, and pushed nothing. #9685's dry run is still running.**
+
+**The tool's words** [ran: `tools/move/restack.py cursor/na-certifier-by-package-e388 --no-pins --dry-run --kept`, from a checkout of `main` at `4ae17f7eafd7`]:
+
+    cursor/na-certifier-by-package-e388: conflicted at base (1)  [plain merge conflicted (1); crossed 21 moves: 833703ef0e1d … 33cf1e51e2b0; stopped at the move 396437741ba7]
+        tests/test_boundaries.py
+
+**What it is** [read]: an ordinary conflict with the tree before the 22nd of the 24 moves, in one hunk.
+- The base it names is `50f76ac59743`, two hand commits after the 21st move. One of them, `03ed85416838`, deletes the two lines of `BENCHMARKS_IMPORTERS` just above the comment line that my branch reworded (its "by path" came off).
+- Both edits stand: the two lines go and my comment stays. Nothing else conflicts.
+
+**Why I did not merge it by hand:** your line for this branch says anything but `clean` stops. And the base cannot be merged into the branch itself: that would be a plain merge across 21 moves. It has to go onto the tool's own result after the 21st move (`d68e5a871e6a`, in my object store, 50 commits on the branch's head).
+
+**What I propose, on your word:** push that result with the one-hunk merge of `50f76ac59743` on top, as a fast-forward of the branch, then run the tool again for the last three moves.
+
+**Meanwhile, unpushed:** I make that merge in a scratch worktree and dry-run the tool on it, so that I can tell you whether the last three moves cross clean. On waking: a new machine, both branches on origin as I left them.
+
+TIMER: none
+
