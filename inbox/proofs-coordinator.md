@@ -162039,3 +162039,5 @@ Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
 - Timers and events not mine since 21:12Z: none.
 
 ## TWOLEG, Fri 13 Nov 22:06Z: the stale execution: your timer `history-launch-retry` (fired Thu 23:41Z) reached it a second time at 22:05Z; not acted on, no worker launched or resumed
+
+## TWOLEG, Fri 13 Nov 22:06Z: the stale execution: your timer `launch-retry-2355z` (fired Thu 23:55Z) reached it a second time at 22:06Z; not acted on, no worker launched, no brief written
