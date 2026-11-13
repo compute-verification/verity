@@ -34,6 +34,7 @@ pytest.importorskip("torch")
 import torch
 
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
+from verity_vllm.commit.step_rows import program_field
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit, source_identity
@@ -42,7 +43,8 @@ from verity_vllm.pipeline import commit_coins as CC
 Record = dict[str, Any]
 
 VOCAB = 16
-PROGRAM = hashlib.sha256(b"the stand-in engine's Program").digest()
+#: The stand-in engine's Program digest as the roots bind it; `commit` reads a served Build's through the same function.
+PROGRAM = program_field(hashlib.sha512(b"the stand-in engine's Program").hexdigest())
 PLUGIN = f"plugin:{__name__}:committer"
 PLUGIN_2 = f"plugin:{__name__}:committer_2"
 #: Two requests of unequal `max_tokens`: three engine steps a run, the last with one request.
@@ -484,7 +486,8 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
         ("commit_verdict", {"tokens_equal": True, "min_openings": 4, "declaration": said, "required_classes": CLASSES}),
         ("binding_record", {"com": com, "pair": 1, "served_tokens": TOKENS, "stop": STOP_RULE, "finish_reasons": {"a": "length", "b": "length"}}),
         ("commit_verdict", {"tokens_equal": True, "min_openings": 4, "declaration": said, "required_classes": CLASSES})]
-    assert {name for name in os.environ if name not in stand_ins.environ} <= set(ENVIRON), "main wrote a name the fixture does not take back"
+    extra = sorted(n for n in os.environ if n not in stand_ins.environ and n not in ENVIRON)
+    assert extra == [], "main wrote a name the fixture does not take back"
 
 
 def test_only_the_control_arm(tmp_path, stand_ins, capsys):

@@ -5,8 +5,8 @@ roots are checked here; the input ports' roots depend on the row leaf's schema a
 -/
 module
 
-public import Flock.FV3
 public import Flock.Circuit
+public import Flock.FV3
 
 @[expose] public section
 
