@@ -1191,10 +1191,251 @@ def Member.files (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
   (m.statement slice bs >>= fun a => a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
 
 /-- **Every member's files, sampled or not**: each member's statement with its files held (`Member.files`), at its
-`slice` of the registration, in the members' order, under its name. -/
+`slice` of the registration, in the members' order, under its name. Compiled as `membersFilesKept`, which parses a
+circuit file once for the members that name it and returns the same (`membersFiles_eq_kept`). -/
 def membersFiles (slice : Member → Json) (bs : Core.Blobs) : List Member → V (List (String × StepAt))
   | [] => pure []
   | m :: ms => m.files (slice m) bs >>= fun a => membersFiles slice bs ms >>= fun as => pure ((m.name, a) :: as)
+
+/-- **The circuit a statement's files parse to** (`StepAt.ofOwn`'s parse), at the statement's tags `tags0`, the
+circuit file `circuitB` and the blobs' lookup tables: it reads nothing else of the statement's own inputs and nothing
+of its public file, so members that name one circuit file parse to one circuit. -/
+def parseAt (tags0 : Flock.Tags) (circuitB : ByteArray) (bs : Core.Blobs) : V Flock.Circuit :=
+  Flock.ProvedScope.circuitOf (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1) circuitB (tablesOf bs)
+
+/-- `StepAt.ofOwn` on a circuit parsed before it (`parsed`): every check that reads the parse is made on `parsed`. -/
+def StepAt.ofParsed (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
+    (population : V Unit) (parsed : V Flock.Circuit) : StepAt :=
+  let I := inputsOf tags0 p circuitB pubB bs
+  { I, rd, scope := scopeAt parsed I rd
+    ksFiles := Flock.PortRoots.checkOf parsed (Flock.Witness.zkTags I) pubB
+    ksForm := Flock.KsScope.filesOf parsed (Flock.Witness.zkTags I) I.publicFile I.count
+    g := parsed.toOption.map (·.g)
+    population
+    programSha := programDigest p.program
+    want := getD p.partition "program" }
+
+/-- `StepAt.ofOwn` is `StepAt.ofParsed` at its own parse (`parseAt`). -/
+theorem StepAt.ofOwn_parsed (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
+    (population : V Unit) :
+    StepAt.ofOwn p tags0 circuitB pubB bs rd population =
+      StepAt.ofParsed p tags0 circuitB pubB bs rd population (parseAt tags0 circuitB bs) :=
+  rfl
+
+/-- `statementOf` with the circuit's parse supplied: `parse`, at the statement's tags and the circuit file, in place
+of `parseAt`; every other check as `statementOf` makes it, in its order. -/
+def statementOfBy (parse : Flock.Tags → ByteArray → V Flock.Circuit) (p : Own) (population : ByteArray → V Unit)
+    (bs : Core.Blobs) : V StepAt :=
+  tablesHeld p bs >>= fun _ =>
+  match Flock.Tags.find? STATEMENT with
+  | none => throw s!"the statement {STATEMENT} is not known"
+  | some tags0 =>
+    match tags0.plainLeaves with
+    | true => throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
+    | false =>
+      match p.registered.isNone && readsRegistered p.programJ with
+      | true =>
+        throw ("registered: the program reads registered values (a RegisteredInput among its definitions) and the " ++
+          "verifier holds no registered reads: verify with its own registered file")
+      | false =>
+        bs.get p.circuit "circuit" >>= fun circuitB =>
+        bs.get p.pub "public file" >>= fun pubB =>
+        match fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        | some what => throw s!"{what}: {FITS}"
+        | none =>
+          readsOf p.registered >>= fun rd =>
+            pure (StepAt.ofParsed p tags0 circuitB pubB bs rd (population pubB) (parse tags0 circuitB))
+
+/-- Two binds of one value are equal where their continuations agree on what it returned. -/
+theorem bind_congr_ok {α β : Type} {x : V α} {f g : α → V β} (h : ∀ a, x = .ok a → f a = g a) :
+    x >>= f = x >>= g := by
+  cases x with
+  | error e => rfl
+  | ok a => exact h a rfl
+
+/-- `statementOf` is `statementOfBy` at its own parse (`parseAt`). -/
+theorem statementOf_by (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) :
+    statementOf p population bs = statementOfBy (fun t c => parseAt t c bs) p population bs := by
+  unfold statementOf statementOfBy
+  refine bind_congr_ok fun _ _ => ?_
+  cases Flock.Tags.find? STATEMENT with
+  | none => rfl
+  | some tags0 =>
+    dsimp only
+    cases tags0.plainLeaves with
+    | true => rfl
+    | false =>
+      dsimp only
+      cases (p.registered.isNone && readsRegistered p.programJ) with
+      | true => rfl
+      | false =>
+        dsimp only
+        refine bind_congr_ok fun circuitB _ => ?_
+        refine bind_congr_ok fun pubB _ => ?_
+        cases fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        | some what => rfl
+        | none =>
+          dsimp only
+          refine bind_congr_ok fun rd _ => ?_
+          rw [StepAt.ofOwn_parsed]
+
+/-- **`statementOfBy` reads its parse only at the statement's tags and the blob under the circuit's digest**: two
+parses that agree there give one statement, or one refusal. -/
+theorem statementOfBy_congr {parse parse' : Flock.Tags → ByteArray → V Flock.Circuit} {p : Own}
+    {population : ByteArray → V Unit} {bs : Core.Blobs}
+    (h : ∀ tags0 circuitB, Flock.Tags.find? STATEMENT = some tags0 → bs.get p.circuit "circuit" = .ok circuitB →
+      parse tags0 circuitB = parse' tags0 circuitB) :
+    statementOfBy parse p population bs = statementOfBy parse' p population bs := by
+  unfold statementOfBy
+  refine bind_congr_ok fun _ _ => ?_
+  cases ht : Flock.Tags.find? STATEMENT with
+  | none => rfl
+  | some tags0 =>
+    dsimp only
+    cases tags0.plainLeaves with
+    | true => rfl
+    | false =>
+      dsimp only
+      cases (p.registered.isNone && readsRegistered p.programJ) with
+      | true => rfl
+      | false =>
+        dsimp only
+        refine bind_congr_ok fun circuitB hc => ?_
+        refine bind_congr_ok fun pubB _ => ?_
+        cases fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        | some what => rfl
+        | none =>
+          dsimp only
+          refine bind_congr_ok fun rd _ => ?_
+          rw [h tags0 circuitB ht hc]
+
+/-- `Member.files` with the circuit's parse supplied (`statementOfBy` in place of `statementOf`). -/
+def Member.filesBy (parse : Flock.Tags → ByteArray → V Flock.Circuit) (m : Member) (slice : Json)
+    (bs : Core.Blobs) : V StepAt :=
+  ((statementOfBy parse m.own (m.population slice) bs >>= fun a => m.blockHeld a.g >>= fun _ => pure a) >>= fun a =>
+    a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
+
+/-- `Member.files` is `Member.filesBy` at its own parse (`parseAt`). -/
+theorem Member.files_by (m : Member) (slice : Json) (bs : Core.Blobs) :
+    m.files slice bs = m.filesBy (fun t c => parseAt t c bs) slice bs := by
+  unfold Member.files Member.statement Member.filesBy
+  rw [statementOf_by]
+
+/-- The parse of the circuit file under `digest`, as a member that names it parses it: `parseAt` at the statement's
+tags and the blob under the digest; a refusal where the statement is not known or no blob has the digest. -/
+def parseUnder (bs : Core.Blobs) (digest : String) : V Flock.Circuit :=
+  match Flock.Tags.find? STATEMENT with
+  | none => throw s!"the statement {STATEMENT} is not known"
+  | some tags0 => bs.get digest "circuit" >>= fun circuitB => parseAt tags0 circuitB bs
+
+/-- **The parses kept for the members still to come**: under a circuit file's digest, as the members name it, the
+file's parse, made when the first member that reaches its parse asks for it and once only. -/
+abbrev KeptParses := List (String × Thunk (V Flock.Circuit))
+
+/-- The parse kept under the digest `d`, the first there. -/
+def KeptParses.find (d : String) : KeptParses → Option (Thunk (V Flock.Circuit))
+  | [] => none
+  | e :: rest => if e.1 = d then some e.2 else KeptParses.find d rest
+
+/-- The parse for a member that names the digest `d`: the one kept under it, else one to make of the blob under it
+(`parseUnder`). Nothing is parsed until a statement asks for it. -/
+def KeptParses.parse (bs : Core.Blobs) (kept : KeptParses) (d : String) : Thunk (V Flock.Circuit) :=
+  match kept.find d with
+  | some th => th
+  | none => Thunk.mk fun _ => parseUnder bs d
+
+/-- The parses kept after a member that names the digest `d` and read the parse `th`: `th` under `d` where one of
+the members still to come, `ms`, names `d`, and no parse under `d` where none does, so a file's parse is held from
+its first member to its last and no longer. -/
+def KeptParses.after (ms : List Member) (d : String) (th : Thunk (V Flock.Circuit)) (kept : KeptParses) : KeptParses :=
+  let rest := kept.filter fun e => e.1 != d
+  if ms.any fun m => m.own.circuit == d then (d, th) :: rest else rest
+
+/-- `membersFiles` on the parses `kept`: each member's files held on the parse kept under its circuit's digest
+(`KeptParses.parse`), which is then kept for the members still to come that name it (`KeptParses.after`). -/
+def keptFiles (slice : Member → Json) (bs : Core.Blobs) : KeptParses → List Member → V (List (String × StepAt))
+  | _, [] => pure []
+  | kept, m :: ms =>
+    let th := kept.parse bs m.own.circuit
+    m.filesBy (fun _ _ => th.get) (slice m) bs >>= fun a =>
+      keptFiles slice bs (kept.after ms m.own.circuit th) ms >>= fun as => pure ((m.name, a) :: as)
+
+/-- **Every member's files, a circuit file parsed once for the members that name it**: `keptFiles` from no parse
+kept. It returns what `membersFiles` returns, a refusal included (`membersFiles_eq_kept`), and is compiled in its
+place. -/
+def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
+  keptFiles slice bs [] ms
+
+/-- Every parse kept is the one a member that names its digest makes (`parseUnder`). -/
+def KeptParses.Held (bs : Core.Blobs) (kept : KeptParses) : Prop := ∀ e ∈ kept, e.2.get = parseUnder bs e.1
+
+/-- A parse `KeptParses.find` returns under a digest is kept under it. -/
+theorem KeptParses.find_mem {d : String} {th : Thunk (V Flock.Circuit)} :
+    ∀ {kept : KeptParses}, kept.find d = some th → (d, th) ∈ kept
+  | [], h => by cases h
+  | e :: rest, h => by
+    unfold KeptParses.find at h
+    split at h
+    · rename_i he
+      cases h
+      rw [← he]
+      exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (KeptParses.find_mem h)
+
+/-- The parse `KeptParses.parse` returns under a digest is the one a member that names it makes. -/
+theorem KeptParses.parse_get {bs : Core.Blobs} {kept : KeptParses} (hk : kept.Held bs) (d : String) :
+    (kept.parse bs d).get = parseUnder bs d := by
+  unfold KeptParses.parse
+  cases hf : kept.find d with
+  | none => rfl
+  | some th => exact hk (d, th) (KeptParses.find_mem hf)
+
+/-- The parses kept after a member are again each the one a member that names its digest makes. -/
+theorem KeptParses.after_held {bs : Core.Blobs} {kept : KeptParses} (hk : kept.Held bs) (ms : List Member)
+    (d : String) : (kept.after ms d (kept.parse bs d)).Held bs := by
+  have hrest : ∀ e ∈ kept.filter (fun e => e.1 != d), e.2.get = parseUnder bs e.1 :=
+    fun e he => hk e (List.mem_filter.1 he).1
+  unfold KeptParses.after
+  dsimp only
+  split
+  · intro e he
+    rcases List.mem_cons.1 he with rfl | he
+    · exact KeptParses.parse_get hk d
+    · exact hrest e he
+  · exact hrest
+
+/-- `parseUnder` at a digest is `parseAt` at the statement's tags and the blob under the digest. -/
+theorem parseUnder_at {bs : Core.Blobs} {d : String} {tags0 : Flock.Tags} {circuitB : ByteArray}
+    (ht : Flock.Tags.find? STATEMENT = some tags0) (hc : bs.get d "circuit" = .ok circuitB) :
+    parseUnder bs d = parseAt tags0 circuitB bs := by
+  unfold parseUnder
+  rw [ht]
+  dsimp only
+  rw [hc]
+  rfl
+
+/-- A member's files held on the parse kept under its circuit's digest are its files as `Member.files` holds them. -/
+theorem Member.filesBy_kept {bs : Core.Blobs} {kept : KeptParses} (hk : kept.Held bs) (m : Member) (slice : Json) :
+    m.filesBy (fun _ _ => (kept.parse bs m.own.circuit).get) slice bs = m.files slice bs := by
+  rw [Member.files_by]
+  unfold Member.filesBy
+  rw [statementOfBy_congr (parse' := fun t c => parseAt t c bs) fun tags0 circuitB ht hc =>
+    (KeptParses.parse_get hk m.own.circuit).trans (parseUnder_at ht hc)]
+
+/-- `keptFiles` on parses each of which a member that names its digest makes is `membersFiles`. -/
+theorem keptFiles_eq (slice : Member → Json) (bs : Core.Blobs) :
+    ∀ (ms : List Member) (kept : KeptParses), kept.Held bs → keptFiles slice bs kept ms = membersFiles slice bs ms
+  | [], _, _ => rfl
+  | m :: ms, kept, hk => by
+    rw [keptFiles, membersFiles]
+    rw [Member.filesBy_kept hk, keptFiles_eq slice bs ms _ (KeptParses.after_held hk ms m.own.circuit)]
+
+/-- **The files' pass with each circuit file parsed once is the files' pass**: `membersFilesKept` returns exactly
+what `membersFiles` returns, a statement for each member or the first refusal, so every statement about
+`membersFiles` is one about the compiled pass. -/
+@[csimp] theorem membersFiles_eq_kept : @membersFiles = @membersFilesKept := by
+  funext slice bs ms
+  exact (keptFiles_eq slice bs ms [] (fun _ h => nomatch h)).symm
 
 /-- The statement `membersFiles` read for the member `m`, the first under its name, as `heldStep` finds a statement's
 member; a refusal where it read none. -/
