@@ -1,0 +1,77 @@
+# `verity/definitions/circuits/` and `verity/definitions/commitments/` into the packages they extend: what
+# `tools/move/layout.py --map tools/move/definitions_merge_map.toml` moves and rewrites.
+#
+# - Every file moves to the same place under `verity/circuits/` or `verity/commitments/`; no name collides but the four
+#   empty `__init__.py` files, which the map drops, since the packages they would land in have their own. The rows are
+#   files, but for `targets/`, which lands whole in a directory of its own: a directory row would record in research's
+#   `moves.json` that each dropped `__init__.py` moved, and would read a path into either directory as moved whole.
+# - Each Python unit keeps its name; `tests/test_boundaries.py` lists the new places beside the old ones.
+# Nothing is edited, and no file is added. The format is `layout_map.toml`'s. It needs no other map;
+# `definitions_served_map.toml` runs after it.
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/definitions/circuits/targets/" = "verity/circuits/targets/"
+"verity/definitions/circuits/boolean/memcheck.circuit-check.json" = "verity/circuits/boolean/memcheck.circuit-check.json"
+"verity/definitions/circuits/boolean/memcheck.circuit-check.py" = "verity/circuits/boolean/memcheck.circuit-check.py"
+"verity/definitions/circuits/boolean/memcheck.py" = "verity/circuits/boolean/memcheck.py"
+"verity/definitions/circuits/census.py" = "verity/circuits/census.py"
+"verity/definitions/circuits/constants.py" = "verity/circuits/constants.py"
+"verity/definitions/circuits/library.py" = "verity/circuits/library.py"
+"verity/definitions/circuits/operations.py" = "verity/circuits/operations.py"
+"verity/definitions/circuits/requirement.py" = "verity/circuits/requirement.py"
+"verity/definitions/circuits/requirement_units.circuit-check.json" = "verity/circuits/requirement_units.circuit-check.json"
+"verity/definitions/circuits/requirement_units.circuit-check.py" = "verity/circuits/requirement_units.circuit-check.py"
+"verity/definitions/circuits/requirement_units.py" = "verity/circuits/requirement_units.py"
+"verity/definitions/circuits/stacking.py" = "verity/circuits/stacking.py"
+"verity/definitions/commitments/gates/attest.circuit-check.py" = "verity/commitments/gates/attest.circuit-check.py"
+"verity/definitions/commitments/gates/attest.py" = "verity/commitments/gates/attest.py"
+"verity/definitions/commitments/gates/block_key.circuit-check.json" = "verity/commitments/gates/block_key.circuit-check.json"
+"verity/definitions/commitments/gates/block_key.circuit-check.py" = "verity/commitments/gates/block_key.circuit-check.py"
+"verity/definitions/commitments/gates/block_key.py" = "verity/commitments/gates/block_key.py"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["verity/definitions/circuits/", "verity/definitions/commitments/"]
+
+[drop]
+paths = ["verity/definitions/circuits/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/commitments/gates/__init__.py"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, and Lean sources. A module's source is in its build key, so a path
+# rewritten in a comment would compile the module again, and every module that imports it. A `.lean` file that writes
+# a path outside a comment is still rewritten (`include`); lakefiles and Lake manifests are too.
+# Nor `verity/definitions/requirement/lakefile.toml`, whose comment naming `circuits.requirement` is left for a hand
+# edit beside the Lake packages' move, so this map changes no Lean input.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**",
+           "verity/circuits/silicon/captures/**", "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean",
+           "verity/definitions/requirement/lakefile.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`)
+"verity.definitions.circuits.boolean.memcheck" = "verity.circuits.boolean.memcheck"
+"verity.definitions.circuits.census" = "verity.circuits.census"
+"verity.definitions.circuits.constants" = "verity.circuits.constants"
+"verity.definitions.circuits.library" = "verity.circuits.library"
+"verity.definitions.circuits.operations" = "verity.circuits.operations"
+"verity.definitions.circuits.requirement" = "verity.circuits.requirement"
+"verity.definitions.circuits.requirement_units" = "verity.circuits.requirement_units"
+"verity.definitions.circuits.stacking" = "verity.circuits.stacking"
+"verity.definitions.circuits.targets" = "verity.circuits.targets"
+"verity.definitions.commitments.gates.attest" = "verity.commitments.gates.attest"
+"verity.definitions.commitments.gates.block_key" = "verity.commitments.gates.block_key"
