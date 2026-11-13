@@ -28,7 +28,7 @@
   "Properties.NetworkCertifier.Device",
   "Properties.Pous",
   "Properties.NetworkCertifier.Check",
-  "Properties.NetworkCertifier.Check.LinkWindow",
+  "Properties.NetworkCertifier.Check.TransferBlocks",
   "Properties.NetworkCertifier.DeviceOutput",
   "Properties.NetworkCertifier.DeviceOutput.Runs",
   "Properties.Hash.Identity",
@@ -1659,7 +1659,7 @@
    "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
    "unfolded_hash": "194fa267bd2fc2b3e80f13bb9c4e57dd8c3574164a7a958fbc75504bbd881b41"
   },
-  "Properties.NetworkCertifier.acceptsLinkWindows": {
+  "Properties.NetworkCertifier.acceptsTransferBlocks": {
    "type_hash": "a374000c189ed27fa1b6cc18a391c22904be180eff3e1a897574253e30383a90",
    "unfolded_hash": "3c2746f0ae0195f3064ae4e63c5daff2feea6e95f2689d08f1733be17c23b870"
   },
@@ -1675,7 +1675,7 @@
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df",
    "unfolded_hash": "9e71dbf157525c8bb02ff26c0cf86249fc1098f437d734e7e0ab221a39b5fc40"
   },
-  "Properties.NetworkCertifier.linkWindowAcceptMeans": {
+  "Properties.NetworkCertifier.transferBlocksAcceptMeans": {
    "type_hash": "85902942cc3dbf037e927cde2de8d79125f28d06c78d5eafdc3fa83578d150b1",
    "unfolded_hash": "6ebd811bd57edeae7e5998ff3e9f87ef6bc9efb14522951b712e51faf9334ca0"
   },
@@ -2236,7 +2236,7 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier.Check": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Hash.Identity", "Lms.Sign"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
@@ -12469,7 +12469,7 @@
     "function": "PousCheck.Run.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.acceptsLinkWindows": {
+   "Properties.NetworkCertifier.acceptsTransferBlocks": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
@@ -12785,8 +12785,8 @@
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
-    "function": "NetworkCheck.LinkWindow.verdict",
+   "Properties.NetworkCertifier.transferBlocksAcceptMeans": {
+    "function": "NetworkCheck.TransferBlocks.verdict",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.liveCoinBinding": {
