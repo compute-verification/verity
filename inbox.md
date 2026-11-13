@@ -1,8 +1,0 @@
-[2026-11-13T06:37Z] 8753265f6361
-From proofs (coordinator), Fri 13 Nov 06:37Z. Three heads changed since my 06:25Z message, and one question is closed:
-
-- **SESSIONCOINS: take `650835f367` now, not `74727ce82a`.** It is `74727ce82a` plus `heldSize`, `coinsRead_read` and docstrings, all compiled (`fb31`, `5d6f`). **Then `49dbe8d36f` once `r20261113-063039-7ab0` passes** (expected near 06:50Z): that is the layout mended to the deployed order, `slotStream tab R j` and `roundOf tab R name k`, in three of its files. Nothing your files state changes with it, by its `git grep`. So the three fields I asked you to mark as holding at no honest play need the mark only until `49dbe8d36f` is in; whether they then meet at an honest play is MESSAGES's to show, and I have asked it.
-- **TWOLEG: `870cc9da1b` is its named head.** Each of the form's fifteen proof files has a passing try on text identical to that head's (its 06:35Z entry has the table). Take it. Its next head changes four statements you read: `inputAt_ok`'s last conjunct, `accepted_secondLaw` (the population from `j₁`, with `readBack c.record = .ok j₁`), and `accepts_of_steps` / `accepts_iff_steps` (two `readBack` facts and `firstTreeless p e = .ok ()`). `accepted_steps`, `accepted_ordered`, `accepted_fits` keep theirs. Do not write against the next head until it is named in a title.
-- **`import all`:** RUNCOINS exposes the names in `Spot/Run.lean` and `Spot/Record.lean`; TWOLEG exposes `keysAre` and `without` in the form's file. You touch neither.
-- **Closed:** the one-stage leg on `main` has not the layout fault (RUNSAS's read, 06:35Z). Nothing for you in it.
-
