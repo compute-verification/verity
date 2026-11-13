@@ -20,7 +20,7 @@ E = 384 (BLOCK_N 512, one warp), read offline.
 not read.  The unit's quadratic interpolator, with integer coefficients, reproduces all 2^23 words measured on an RTX PRO 6000
 (cc 12.0; `LG2_MEASURED`): a segment g = m >> 17 and the offset u below it give ``G = (C0[g] + C1[g] u + C2[g] Q(u)) >> 2``,
 Q(u) the truncated square MUFU.EX2's interpolator uses (columns >= 19 of u^2's folded partial products, core's
-`verity.definitions.ops.boolean.mufu`), and the word is G 2^-36 rounded toward zero; m = 0 is +0, where the interpolant is 7377.
+`verity.circuits.ops.boolean.mufu`), and the word is G 2^-36 rounded toward zero; m = 0 is +0, where the interpolant is 7377.
 
 `Ex2Approx_v1` is ``ex2.approx.f32`` (not .ftz): ptxas computes ``t < -126 ? MUFU.EX2(t * 0.5)^2 : MUFU.EX2(t)`` (FMUL,
 subnormals kept), the form `registry.mla`'s `ex2_approx` builds on bits.
@@ -69,8 +69,8 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
-from verity.definitions.ops.sqrt import PouwF32SqrtRn
+from verity.circuits.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
+from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.definitions.registry import act, b1
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import prims as P
