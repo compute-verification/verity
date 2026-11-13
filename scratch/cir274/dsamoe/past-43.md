@@ -87,7 +87,9 @@ Verified [ran]:
   8,343 to 8,403 ranges, and at 86 ids `70363f03…` to `7b8f323e…`, 14,175 to 15,555 ranges; templates, wires, cuts and
   registered reads are identical (`r20261113-055056-8688`). At 64 ids the repeat is the decode step's split chain
   (`T=65, places=26, repeated_keys=9`).
-- the value check at 4 layers, patched: VALUES.
+- the value check at 4 layers, patched, 43 ids, 2 outputs: the window's digest `61b9f8d8516fe67f…`, 105 templates, 39,273
+  units checked, 0 mismatches, no undeclared input, no row two pieces hold (`r20261113-062219-2777`). At 150 ids:
+  VALUES150.
 
 It touches neither `node_window.py` nor `node_window_dense.py` nor their tests.
 
@@ -215,6 +217,11 @@ What it changes:
 - a test of a mixed (B, N, M) grid in `test_node_window_sparse.py`; `test_batched_gemm_slices` stays, since the
   unmixed form is unchanged;
 - two unit orders in one lowering, where today there is one [inferred].
+
+Its value check at 86 ids, 4 layers [ran, `r20261113-060524-d1f6`]: every template but one matches, and
+`BatchedGemm_v1{B=1,K=512,N=1}` mismatches 1,013 of 1,024 sampled units. The cause is the check's stand-in for a free `w`
+(`node_window_values.py:311-320`), which assumes the tree's unit order `a + (b N + n) M + t` [read]; the form's mixed nodes
+are member-slowest. With the stand-in taught the form's order (scratch only, `p3_bgform.py`): BGVALUES2.
 
 The alternative is a frame change: `_whole` gathering the mixed members by one step per template. That is REQBLOCK's file.
 

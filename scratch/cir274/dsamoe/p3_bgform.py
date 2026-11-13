@@ -2,7 +2,8 @@
 writer template (a prefill step that mixes split and unsplit attention chains, `p3_splits.py`). Where one feed over the
 whole (B, N, M) grid holds, `batched_gemm` as it is. Else its units member-slowest, ``a + t B N + b N + n``, x fed a run of
 like members at a time over (members, B, N), and its output ``Piece(0, B N, Row(t, a, "o0", 1), 1, B N)``. Installed over
-`batched_gemm` by monkeypatch, so the tree stays as it is. Run from the root of the tree:
+`batched_gemm` by monkeypatch, so the tree stays as it is, with the value check's stand-in for a free w (`node_window_values.FREE`), which
+assumes the tree's unit order, taught the member-slowest one for the nodes laid out so. Run from the root of the tree:
 
     .venv/bin/python p3_bgform.py OUT OUTS:LP...
 
@@ -15,6 +16,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 spec = importlib.util.spec_from_file_location("compile_cost", "benchmarks/compile_cost/run.py")
 cc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cc)
@@ -24,11 +27,28 @@ from verity.commitments.windows import interface as IF  # noqa: E402
 from verity_vllm.program.predict import node_window as NW  # noqa: E402
 from verity_vllm.program.predict import node_window_dense as ND  # noqa: E402
 from verity_vllm.program.predict import node_window_sparse as NS  # noqa: E402
+from verity_vllm.program.predict import node_window_values as NV  # noqa: E402
 from verity_vllm.program.predict.steps import plan_steps, request_program  # noqa: E402
 from verity_vllm.program.predict.window_builder import Row  # noqa: E402
 
 ORIG = NS.batched_gemm
 MIXED = {"nodes": 0, "runs": 0}
+#: the nodes laid out member-slowest, whose free w the value check's stand-in reads in that order
+SLOWEST: set[int] = set()
+_FREE_W = NV.FREE[("BatchedGemm", "w")]
+
+
+def _batched_gemm_w(ck, node, a, u, words):
+    if id(node) not in SLOWEST:
+        return _FREE_W(ck, node, a, u, words)
+    B, K, N = (int(node.fn.bindings[x]) for x in ("B", "K", "N"))
+    t, bn = divmod(u - a, B * N)
+    if words != K:
+        raise ValueError(f"BatchedGemm w: a row of {words} words, not K = {K}")
+    return ck.values.leaves(ck.values.arg(node, 1, t).slice(bn * K, (bn + 1) * K)).astype(np.uint16)
+
+
+NV.FREE[("BatchedGemm", "w")] = _batched_gemm_w
 
 
 def batched_gemm_runs(w, j, node):
@@ -48,6 +68,7 @@ def batched_gemm_runs(w, j, node):
             MIXED["runs"] += 1
             s = e
     MIXED["nodes"] += 1
+    SLOWEST.add(id(node))
     refs = node.args[1].refs
     if len(w.segments(refs.slice(0, K))) == 1:
         w.b.read(t, "w", a, (M, B, N), w.weight(refs, B * N * K), (0, N * K, K))
