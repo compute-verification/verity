@@ -62,12 +62,15 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.circuits.defs import bind
-from verity.definitions.ops import s8 as OS8
-from verity.definitions.ops import prims as P
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import SpecializedDefinition, bind
+from verity.circuits.program import Program
 from verity.commitments import domains
+from verity.definitions.ops import prims as P
+from verity.definitions.ops import s8 as OS8
 
 from verity.protocols.pouw.verifier.protocol import DomainError
+
 from . import segment as SG
 
 #: the scheme's id and the kind `circuit.SCHEMES` records for it (its silicon target)
@@ -80,8 +83,8 @@ TAG = domains.POUW_EPS1_SEED.encode()
 RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
-#: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
-LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd (proofs; compute accounting writes the statement)"
+#: the per-dot work the TS conjecture credits is open until a theorem links TS to EndToEnd
+LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd"
 
 M32 = SG.M32
 
@@ -178,7 +181,7 @@ def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -
 _TAIL = ((2, "fresh", (-127, 127), (-64, 64)), (1, "fresh", (-128, 127), (-64, 64)))
 
 
-def arm(k: int):
+def arm(k: int) -> SpecializedDefinition:
     """H1's served noised arm as the s8 family: `S8Dot_v1{K, L=32, NOISE "weight", LIMBS "byteclamp", COMMIT "prefix"}`, whose
     committed prefix words `T_0 .. T_{KS-1}` are the receipt the fx1 fold reads (`ops.s8`).  A pure exact s8 matmul:
     its noise, coin and limbs are input values."""
@@ -188,7 +191,7 @@ def arm(k: int):
                 TAIL=_TAIL, TDOT=P.BlackwellS8ImmaDot32, NOISE="weight", LIMBS="byteclamp", COMMIT="prefix")
 
 
-def check(ks: int):
+def check(ks: int) -> SpecializedDefinition:
     """H1 + fx1's spot check, `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's
     whole call against its receipt, every absorbed word recomputed, no prefix word a witness."""
     if ks < 2:
@@ -202,7 +205,7 @@ def templates(shape: Shape) -> dict[str, Any]:
     return {"arm": arm(shape.k), "fold": SG.PouwFx1Absorb, "check": check(shape.ks)}
 
 
-def unit(shape: Shape):
+def unit(shape: Shape) -> SpecializedDefinition:
     """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (a unit is a whole dot product)."""
     shape.check()
     return check(shape.ks)
@@ -295,9 +298,6 @@ class Eps1Traced:
         return noise(the_seed, receipt, self.shape, tile, ctid)
 
     def digest(self) -> str:
-        from verity.circuits.codec import program_digest
-        from verity.circuits.program import Program
-
         return program_digest(Program(self.check))
 
 

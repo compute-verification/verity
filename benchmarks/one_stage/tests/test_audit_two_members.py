@@ -29,7 +29,7 @@ Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the
 and about 5 GB at its peak, which the suite's ``worker_gb`` declares. Of it the changed member's audit is about 50 s:
 it alone shows a false member stopped (the ZK server lets no proof of it out, and the Lean verifier refuses its
 session), where the audit's own negatives change the record around honest sessions. The audit on the window's
-challenger session is a third run of the window, and its key about fifteen core-minutes: it alone runs Flock's own
+challenger session is a third run of the window, under a key made for it at the deployed parameters: it alone runs Flock's own
 `serve --tree-from` client against the relay, the challenger's service on a session held open through the proving,
 and Lean's whole per-member check (`OneStageZk.membersRun`, then v1's check at the challenger's coins) on a window's
 real files, where every other test of those gives one of them a stand-in. A pass is reused while the suite's
@@ -63,6 +63,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
+import a5_coins as AC  # noqa: E402
 import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
@@ -141,7 +142,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
     the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
-    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins."""
+    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins. The audit record
+    names whose coins those are, the key and the session the challenger's ledger opens on the run's root, and says it
+    wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public outputs."""
     window = _window(tmp_path / "window")
     assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
@@ -156,6 +159,20 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     outcome = row["coins"]["outcome"]
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
+    # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
+    # as the coins' check verified them; SPOT's answer carries them, and that the audit, of two members, wrote
+    # no case for the compiled check
+    opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
+               if e["kind"] == "open")
+    whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
+    assert opened["body"]["window"] == {"root": RUN} and len(whose["key_sha512"]) == 128
+    assert row["coins"]["verified"] == whose
+    record = json.loads((out / "window" / "audit.json").read_text())
+    assert record["coins"]["verified"] == whose
+    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
+    answer = _answer(out)
+    assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
+    assert answer["public"]["case_v2"] == record["case_v2"]
     assert row["fixed_before_draw"]["ok"] is True
     for k in range(len(TEMPLATES)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
@@ -173,7 +190,9 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins. On that case Lean's check passes everything
     before the per-member form's refusal and answers `MULTI_REFUSED`, with exit 1; with one proof file of the first
-    session changed after its closing round, it refuses the session's coins as the driver's check of the log does."""
+    session changed after its closing round, it refuses the session's coins as the driver's check of the log does. The
+    Python run of the form (`members.members_run`) answers the same on both: every session accepted with the units it
+    proved, which maps to the refusal, and the changed file's reason."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -195,7 +214,16 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     named = list(zip(evidence["sessions"], dirs))
     assert MT.trees_reason(log, named) is None and MT.trees_reason(log, named[::-1]) == C.MEMBERS_ORDER
 
-    assert M.case_refusal(case) == (M.ALL_PASSED, True)
+    program, _ = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)).program()
+    record = json.loads(bytes.fromhex(case["commitment"]))
+
+    def twin(c: dict, e: dict):
+        return M.members_run(params, record, e, M.blobs_of([Path(b) for b in c["blobs"]]), program=program,
+                             verify=AC.lms_verify)
+    run, refused = twin(case, evidence)
+    assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
+    assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
+    assert M.case_refusal(case) == (M.run_reason(run, refused), True) == (M.ALL_PASSED, True)
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
@@ -206,7 +234,8 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
              "evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()}
     assert str(rep) in case["blobs"] and other["blobs"] != case["blobs"]
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
-    assert M.case_refusal(other) == (f"proofs: {why}", True)
+    assert twin(other, evidence) == (None, why)
+    assert M.case_refusal(other) == (M.run_reason(None, why), True) == (f"proofs: {why}", True)
 
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
@@ -219,9 +248,18 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert rc == 0 and row.get("ok") is True, said
     assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "lean_refused": True}, row["forged"]
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
+    assert _answer(out)["verdict"] == "reject"
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
     assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]
     for k, proofs in ((0, True), (1, False)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         record = json.loads(session.read_text())
         assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
+
+
+def _answer(out: Path) -> dict:
+    """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
+    certifier's period read it), its registration the one the audit registered."""
+    import served_integrity as SI  # beside a5, on the path `records_audit` put there
+
+    return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))
