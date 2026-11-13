@@ -2358,13 +2358,7 @@ requires-dist = [
 [[package]]
 name = "verity-bench-specs"
 version = "0.0.0"
-source = { virtual = "benchmarks/specs" }
-dependencies = [
-    { name = "verity-vllm" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-vllm", editable = "adapters/vllm" }]
+source = { virtual = "benchmarks/harness/specs" }
 
 [[package]]
 name = "verity-certifier-timing"
@@ -2595,7 +2589,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-machine-model"
 version = "0.0.0"
-source = { editable = "benchmarks/pouw/machine_model" }
+source = { editable = "benchmarks/machine_model" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },

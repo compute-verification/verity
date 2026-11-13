@@ -233,7 +233,7 @@ def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
 
 #: Per fold: its step, its state, the keys it reads, its rotations into an XOR (None: words enter by addition), the key rule
 #: each schedule samples its multipliers under, and its soundness status (``status`` one of proved, open, pairs-only,
-#: retired; ``needs`` the open premises; ``ref`` where it is stated).
+#: retired; ``needs`` the open premises; ``ref`` what is proved and what is open).
 FOLDS = {
     "duo": {"step": duo_step, "state": ("y", "z"), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (),
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)", "served": "fixed public odd keys SERVED_KA"},
@@ -247,34 +247,29 @@ FOLDS = {
                    "runs with the same final states differ at two words at least four positions apart "
                    "(DuoWindowNoKernel), a run checkpointed every four words has no kernel (DuoCheckpointNoKernel), "
                    "and every run of more than 2*4^n words has one (DuoLongRunKernel); open for five or more words "
-                   "at the deployed keys, and for the served receipt y ^ rotl(z, 16) at any length "
-                   "(note:20261017T1000Z-draft-fold-r §6.5, §8)"},
+                   "at the deployed keys, and for the served receipt y ^ rotl(z, 16) at any length"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),
-              "ref": "RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee): (RT) open, no lemma removes it; "
-                     "(G₃) suffices for (G₄). P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11): pricing can't "
-                     "replace (RT); (G₃) proved at one MMA under key_ok_r11 (Theorem 1), and for chains apart from runs "
-                     "of two or more non-XOR δ"},
+              "ref": "(RT) open, no lemma removes it; (G₃) suffices for (G₄). Pricing can't replace (RT); (G₃) is proved "
+                     "at one MMA under key_ok_r11, and for chains apart from runs of two or more non-XOR δ"},
     "li": {"step": li_step, "state": ("y",), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (0,),
            "key_rule": {"pfill": "key_ok_r9"},
            "status": "open", "needs": ("RT", "G3", "HO"),
-           "ref": "as xin13 (RS-E-REF Part IX, P2-FF r11), and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
-                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2). "
+           "ref": "as xin13, and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
+                  "words whose rows or columns are equal or complementary. "
                   "With every absorbed word pinned and a checkpoint a segment (the XOR of the chains' states), none of "
                   "them is read: a half step is a bijection and a checkpoint is injective in each word, for odd "
                   "multipliers alone (Lean: Pouw.SecurityProofs.Receipt.LiHalfBijective, LiCheckpointWordInjective, "
-                  "LiCheckpointLowBit; note:20261017T1848Z-draft-li-alt)"},
+                  "LiCheckpointLowBit)"},
     "ram": {"step": ram_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": None,
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)"},
             "status": "pairs-only", "needs": (),
-            "ref": "a step is rotl(y, 7) a0 + Q: it reads a pair only through Q = a0 d0 + d1, one product a pair "
-                   "(note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)"},
+            "ref": "a step is rotl(y, 7) a0 + Q: it reads a pair only through Q = a0 d0 + d1, one product a pair"},
     "xin7": {"step": xin7_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (7, 19),
              "key_rule": {"pfill": "key_ok"},
              "status": "retired", "needs": (),
-             "ref": "±128 is an int8 ratio at its step boundary (note:20261016T1117Z-draft-fullfloor-s-r9 §1); "
-                    "pfill.cuh refuses -DPFILL_XIN"},
+             "ref": "±128 is an int8 ratio at its step boundary; pfill.cuh refuses -DPFILL_XIN"},
 }
 
 #: Who runs which schedule, and the build that selects the fold

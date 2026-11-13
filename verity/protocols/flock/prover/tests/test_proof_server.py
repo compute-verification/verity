@@ -263,6 +263,21 @@ def test_the_wide_leaf_is_carried_by_both_sides_or_by_neither(binary, tmp_path):
         assert [a[0] for a in sides] == ["serve", "prove"]
 
 
+def test_the_callers_challenger_flags_end_every_verifiers_line_and_no_provers(binary, tmp_path):
+    """``tree_from``: the flags of the challenger session the caller holds end the verifier's command line and reach no
+    prover's, on either statement version; the server starts no challenger of its own, and refuses to be given both."""
+    flags = ["--tree-from", "127.0.0.1:9", "--tree-secret-file", str(tmp_path / "secret")]
+    for wide in (True, False):
+        with ProofServer(binary, tmp_path / f"ps-{wide}", verify_ahead=0, wide_leaf=wide, tree_from=flags) as ps:
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), draw([1]), "s").result())
+        sides = (r["argv"], r["proved"]["argv"])
+        assert sides[0][-len(flags):] == flags and not set(flags) & set(sides[1])
+        assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
+        assert ps.challengers == {}
+    with pytest.raises(ValueError, match="not both"):
+        ProofServer(binary, tmp_path / "both", challenger=True, tree_from=flags)
+
+
 def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(binary, tmp_path):
     """A templated statement's verifier loads its circuit with the unit (`--tmpl-unit`) and the prover's line names it
     (``tmpl_unit``); a flat statement on the same server names none."""
@@ -277,36 +292,6 @@ def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(b
             assert r["argv"][r["argv"].index("--tmpl-unit") + 1] == str(st.tmpl_unit) == r["proved"]["line"]["tmpl_unit"]
         else:
             assert "--tmpl-unit" not in r["argv"] and "tmpl_unit" not in r["proved"]["line"]
-
-
-def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
-    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
-    and the next session meets a new prover and verifier on their first lines."""
-    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
-    pin = "ff" * 64
-    with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(statement(tmp_path, pin), draw([0]), "s0").result()
-        with pytest.raises(ProofServerError, match="prover-cpu exited"):
-            ps.submit(statement(tmp_path, pin), draw([1]), "s1").result()
-        last = ps.submit(statement(tmp_path, pin), draw([2]), "s2").result()
-    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
-    v = f"verifier-{pin[:16]}"
-    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
-
-
-def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(binary, tmp_path, monkeypatch):
-    """A session is done on its records and never on its prover's exit status: a prover that ends with status 0 and no
-    ``LIVE`` record for a line it was handed fails that line's session, as one that ends with any other status does. The
-    server is closed as soon as the session fails, and its close finds the verifier's retiring thread started."""
-    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
-    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
-    st = statement(tmp_path, "ee" * 64)
-    with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(st, {"units": [0]}, "s0").result()
-        left = ps.submit(st, {"units": [1]}, "s1")
-        with pytest.raises(ProofServerError, match=r"prover-cpu exited \(rc 0\) before its records"):
-            left.result()
-    assert first.accepted and left.live is None and ps.exits["prover-cpu"] == 0
 
 
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):

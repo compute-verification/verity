@@ -37,6 +37,46 @@ in seconds. `flat` computes them gate by gate from the definitions; the tests ho
 covering every node form, the Boolean GEMM, and b1's layer at tiny shapes. `measure.Ambiguous` refuses the one case the
 summaries can't count exactly (one value bound to two activation leaves above the op); `flat` measures it.
 
+## The min-cut bound's work
+
+`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
+each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
+multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
+`training_slowdown.work.he_of_rows`' β), each premise a Program doesn't state taken on the side of the smaller bound.
+The products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
+and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
+reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
+distinct contexts do). A product is charged where both operands depend on θ′ in every word, each is specific or a weight
+(`work.may_repeat`: an operand that reads the current inputs, or whose rows aren't shown distinct, and is not specific
+may repeat its rows, however the Program writes them), the two are no one array and not two activations;
+`Work.left_out` holds the rest by why. Nothing is stated
+beside the circuit. A gather's rows by the batch stay a gather's rows until one rule makes them specific: a softmax over
+a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
+The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position, no two positions of the batch hold
+equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
+the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
+linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
+by a shared weight would then read one pair of values twice. A carried word's rows are distinct only where they are θ's
+(a weight: θ's rows, which differ for generic weights) or one node computes them one to one from distinct rows: by a
+shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it reads, as a weight's update does, and by a
+multiply or a divide only where every other argument is one no input reaches, one word every member of every enclosing
+batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
+a multiply by a stated 0 reaches nothing. One more premise holds the reading below the work, its parts each held as a
+fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is nonzero; an update
+that can't change a weight or cancels it for a reason no constant shows (W plus z plus -1 times z) still makes θ′ and
+keeps its rows distinct; a weight combined with its own words still counts as a weight with distinct rows, though the
+combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times M; a multiplier v
+plus -1 times v, v registered or carried), or times its own rows in another order (M times swap(M), whose two rows are
+equal for every M), so the looked-up rows plus such an array are charged as weights though they repeat with the
+tokens; so does one word every member of every batch reads as a multiplier (a learning rate, a
+decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute rows from one array's words
+into two arrays give each distinct rows.
+`work.bound(work, c)` is the most blocks over its
+sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
+has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
+training loop's reading beside its trace's, never above it.
+
 ## Interface
 
 ```python
@@ -72,7 +112,7 @@ names what it reads of both among its `inputs`.
 The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
 either it writes no file.
 
-Nothing loads the package. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
+The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
 `verity/protocols/inference_only/rho/data/circuits.toml` as data, each number with its source.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.

@@ -22,6 +22,7 @@ from verity.protocols.certifier.verifier import active as A, compile_slice as CS
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
+from verity_vllm.engine.step_trace import scheduler_config
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -1007,6 +1008,29 @@ def test_the_served_statics_refuse_an_output_length_past_a_length_slot():
         sc.served_statics({**ENGINE, "max_model_len": 2**33}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6})
     assert sc.served_statics({**ENGINE, "max_model_len": 2**32 - 1}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3,
                                                                        "IW": 6})["L"] == 2**32 - 1
+
+
+def test_a_serve_launched_with_the_context_limit_left_to_vllm_gets_its_served_statics():
+    """What a committing serve hands the binding at start, the step trace's config of its scheduler, for a launch at
+    ``--max-model-len -1``: ``max_model_len_auto`` beside the limit vLLM fitted. It binds, and to the statics of a
+    launch that stated the fitted limit."""
+    class Scheduler(SimpleNamespace):
+        pass
+
+    def config(launch: int) -> dict:
+        return scheduler_config(Scheduler(
+            scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=8, enable_chunked_prefill=True,
+                                             long_prefill_token_threshold=0, max_num_partial_prefills=1, policy="fcfs",
+                                             async_scheduling=False),
+            cache_config=SimpleNamespace(block_size=16, enable_prefix_caching=True, num_gpu_blocks=64, cache_dtype="auto"),
+            max_model_len=1008, vllm_config=SimpleNamespace(speculative_config=None, model_config=SimpleNamespace(
+                max_model_len=1008, original_max_model_len=launch))))
+
+    size_class = {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6}
+    auto, stated = config(-1), config(1008)
+    assert auto == {**stated, "max_model_len_auto": True}
+    assert sc.served_statics(auto, size_class) == sc.served_statics(stated, size_class)
+    assert sc.served_statics(auto, size_class)["L"] == 1008
 
 
 def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():

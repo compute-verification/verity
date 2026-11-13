@@ -154,7 +154,11 @@ def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, st
     heaviest binding's build holds.
     So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_recorded`) makes
     them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
-    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches."""
+    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records'
+    cache, unless handed, is marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session
+    removes nothing, which the runs that write the cache do (`cache.expire`)."""
+    if not handed:
+        CC.mark(cache)
     with pytest.MonkeyPatch.context() as mp:
         # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts

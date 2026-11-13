@@ -159,11 +159,11 @@ before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
-                 pass_ns: int) -> dict:
+                 pass_ns: int, node: ledger.Node) -> dict:
     """The ledger's timing term, `1 − reads/(R·span)`, split per pass into parts that sum to it exactly, each a share
     of R·span.  `tiers` is the calibration's bare read of each tier (`read_tiers`: its bytes and milliseconds, the
     prover's own measurement), and `pass_ns` the median spacing of the session's root arrivals (the verifier's clock).
-    With s the span a pass, G every GPU's stated read and H the host's:
+    With s the span a pass, G every GPU's stated read and H the host's (`node.tiers`, the ledger's node):
 
     - `above_stated_tiers`: R beyond G + H (at spec R, the hardware's gap);
     - `host_dram_idle`: H·s less the host tier's bytes;
@@ -176,7 +176,8 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
     `receipts_beyond_read`."""
     s = span_ns / passes / 1e9
     whole = capacity_bytes_per_s * s
-    gpus, host = timing.GPUS * timing.GPU_READ_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S
+    hbm, dram = node.tiers["hbm"], node.tiers["dram"]
+    gpus, host = hbm.devices * hbm.read_bytes_per_s, dram.devices * dram.read_bytes_per_s
     hbm_bytes, host_bytes = tiers["hbm"]["bytes"], tiers.get("host", {}).get("bytes", 0)
     hbm_s, pass_s = tiers["hbm"]["ms"] / 1e3, pass_ns / 1e9
     return {"above_stated_tiers": (capacity_bytes_per_s - gpus - host) / capacity_bytes_per_s,
@@ -321,12 +322,13 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
 
 def summed(windows: list[dict], *, hbm_bytes: int, block_bytes: int, delta: float, labels: bool, kv_credited: bool,
            chip_bytes: int) -> dict:
-    """`memory`'s session line from its windows: the worst window's in each form, against `hbm_bytes`."""
+    """`memory`'s session line from its windows: the worst window's in each form, against `hbm_bytes`.  Its `delta`
+    (and the `error` a ledger adds, `memory_error`) reads `ledger.DELTA_FORM`: `named` is the term it leaves out."""
     worst = min(windows, key=lambda x: x["credited"]["hbm"])
     credited = worst["credited"]["hbm"]
     average = average_line([x["average"] for x in windows])
     return {"form": WORST_PASS, "hbm_bytes": hbm_bytes, "block_bytes": block_bytes, "delta": delta,
-            "labels": labels, "kv_credited": kv_credited, "chip_bytes": chip_bytes,
+            "named": ledger.NAMED_TERMS, "labels": labels, "kv_credited": kv_credited, "chip_bytes": chip_bytes,
             "credited_bytes": credited, "share": credited / hbm_bytes, "residual": 1 - credited / hbm_bytes,
             "epsilon": worst["epsilon"], "window": worst["window"],
             "weights_bytes": min(x["credited"]["weights"] for x in windows),
@@ -376,8 +378,9 @@ def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
     horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
     commitment's hiding terms, the receipts' binding term and the sample's rejection (`ledger.hiding`, `ledger.binding`,
-    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  None when no
-    reading has a ledger."""
+    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  It leaves
+    out the windows' PRF advantages, which the record names beside it (`ledger.NAMED_TERMS`, `ledger.DELTA_FORM`).
+    None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
@@ -401,7 +404,7 @@ def sketch_at(session: dict, registration: dict, outside: int | None = None) -> 
     d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
     horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
     return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
-            "error": None if horizon is None else horizon + float(d)}
+            "error": None if horizon is None else horizon + float(d), "named": ledger.NAMED_TERMS}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -1380,13 +1383,13 @@ class Verifier:
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
             if pace is not None:
-                rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+                inputs = out["ledger"]["inputs"]
                 try:
                     out["ledger"]["paced"] = paced_line(
                         out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
                         wrong=audit.pooled(record)[0], blocks=reg.blocks,
-                        rebuild_per_ns=line.number(rebuild.squarings_per_s) / record.codec.encode_squarings / line.NS,
-                        chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                        rebuild_per_ns=line.number(inputs["squarings_per_s"]) / record.codec.encode_squarings / line.NS,
+                        chip_bytes=inputs["chip_bytes"], block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
                         burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
                         ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
@@ -1437,6 +1440,8 @@ class Verifier:
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
+        No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
+        (`ledger.NAMED_TERMS`) is that term, beside `delta` and in each object that carries a δ or an error.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
@@ -1447,10 +1452,11 @@ class Verifier:
                                     link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
-        node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
-                "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
-                "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
-                "host_chip_bytes": timing.HOST_CHIP_BYTES}
+        hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
+        node = {"gpus": hbm.devices, "gpu_spec_bytes_per_s": hbm.spec_bytes_per_s,
+                "gpu_read_bytes_per_s": hbm.read_bytes_per_s, "host_spec_bytes_per_s": dram.spec_bytes_per_s,
+                "host_read_bytes_per_s": dram.read_bytes_per_s, "gpu_chip_bytes": hbm.chip_bytes,
+                "host_chip_bytes": dram.chip_bytes}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
@@ -1483,11 +1489,13 @@ class Verifier:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             whole = r * record.span_ns / 1e9
-            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "certified_bytes": (1 - g.gamma) * whole,
+            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
+                         "certified_bytes": (1 - g.gamma) * whole,
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
-                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
         out["delta"] = ledger.delta_parts(record, stated)
+        out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
@@ -1499,7 +1507,7 @@ class Verifier:
                                                                            blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
-                                   chip_bytes=timing.CHIP_BYTES)
+                                   chip_bytes=stated.chip_bytes)
             if (error := memory_error(out)) is not None:
                 out["memory"]["error"] = error
             if self.host_bytes:

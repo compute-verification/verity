@@ -138,7 +138,8 @@ def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_an
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[0] == ("memory: 0.156 of the node's memory read rate is left uncertified by this session, at the data "
-                       "sheet's read bandwidth (2.0000 TB/s)")
+                       "sheet's read bandwidth (2.0000 TB/s); its error reads δ + Σ_t adv_t (SHA-512 stream as PRF: "
+                       "not priced, not assumed), δ in the verifier's ledger")
     assert text[1] == (f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier, its verifier not on the "
                        f"auditor's verifier host")
     assert text[2] == "  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory, bound to no checkpoint"
@@ -620,6 +621,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert got["capacity at measured"]["unit"] == f"{M.BYTES}, at the measured read rate: {M.OWN_RATE}"
     assert {got[n]["unit"] for n in ("verified", "free at spec", "free at measured")} == {M.BYTES}
     assert got["error"]["unit"] == M.ERROR and "PRF advantages" in M.ERROR and "are not in it" in M.ERROR
+    # and says it in the words every δ of the session's is read in, never as a bare error
+    assert "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), this number its δ" in M.ERROR
     rate, span = "ledger.{}.capacity_bytes_per_s", "ledger.inputs.span_ns"
     assert {n: m["inputs"] for n, m in got.items()} == {
         "metric": [RUN, "ledger.spec.gamma"], "verified": [RUN, "ledger.spec.certified_bytes"],

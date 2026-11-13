@@ -127,7 +127,7 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
 
 /-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/
 theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
+    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn
   simp only [h, Array.length_toList]
   exact _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw h

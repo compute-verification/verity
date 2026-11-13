@@ -72,7 +72,7 @@ their verifier's program and its query is their verifier's, at the parameters wh
 the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
-    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ lawAt p.base.verifier A.n = .ok A.law ∧
+    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ lawAt p.base.verifier A.n = .ok A.design ∧
       _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨p, hp, -, -, hl, hd, hq, -⟩ := hsu.params
   exact ⟨p, hp, hq.symm, hl, hd⟩
@@ -391,11 +391,11 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
 /-- **v2's design at the law's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
-`A`'s law, the design under `law (lawText A.law)` is `designSlots A`. -/
+`A`'s law, the design under `law (lawText A.design)` is `designSlots A`. -/
 theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
-    (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.law)
-    (hk : ∀ k, A.law = .subset k → 1 ≤ k) :
-    _root_.Properties.Spot.slotDesign (.law (lawText A.law)) v.program v.query v.workTable =
+    (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.design)
+    (hk : ∀ k, A.design = .subset k → 1 ≤ k) :
+    _root_.Properties.Spot.slotDesign (.law (lawText A.design)) v.program v.query v.workTable =
       .ok (designSlots A) :=
   slotDesign_lawText hu hl hk
 
