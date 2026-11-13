@@ -8,7 +8,7 @@ run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)
 commitment: the client takes no second one in a family (`ChallengerCoins(record, *more)`: a family for each), and both
 verifiers refuse a family whose log shows another root (`FAMILY_ROOT`, the run's `family`), so a prover that reads a
 sample and registers again has no sample a verifier takes. A window's seed salt
-(`coins.draw_seed_salt`) is its family's first coin after the window's open root, drawn once, which the verifier reads
+(`coins.draw_seed_salt`) is its family's first coin after the window's open root, sampled once, which the verifier reads
 back from the challenger's log (`coins.seed_salt_of`), refusing a second coin, a forged one and another window's."""
 
 from __future__ import annotations
@@ -335,10 +335,10 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
 
 
 def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
-    """A window's withheld session that opened `test_remote.RELEASED` coins of another family before the draw, so
+    """A window's withheld session that opened `test_remote.RELEASED` coins of another family before the sample, so
     many that its release at the close is past `remote.MAX_HEAD` as one frame (which cut the close, so its coins never
-    settled) and takes several (`remote.release_frames`): the draw's coins, its own family's from the first, settle
-    from them, and the Lean run accepts the draw on that evidence. The evidence with the draw's coins as their raw
+    settled) and takes several (`remote.release_frames`): the sample's coins, its own family's from the first, settle
+    from them, and the Lean run accepts the sample on that evidence. The evidence with the sample's coins as their raw
     bytes alone, as a cut close left them, is refused: an opening without its salt is malformed."""
     import test_remote
     from test_challenger import lms_verify
@@ -467,8 +467,8 @@ def _salt_coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChall
 
 def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn_once():
     """The seed salt is the seed-salt family's first coin, opened after the window's open root and read whole, with no
-    derivation, which the verifier replays from the record. The draw refuses coins of another family, a window root in
-    another form, and a family with a coin open already: nothing redraws a window's salt."""
+    derivation, which the verifier replays from the record. The sample refuses coins of another family, a window root in
+    another form, and a family with a coin open already: nothing resamples a window's salt."""
     window = "a1" * 64
     ch, coins = _salt_coins()
     salt = T.draw_seed_salt(coins, window)
@@ -491,7 +491,7 @@ def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn
 
 
 def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):  # noqa: F811
-    """Over a challenger served on loopback for the window, withheld: the stream draws the window's seed salt at its
+    """Over a challenger served on loopback for the window, withheld: the stream samples the window's seed salt at its
     open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
     (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the
     window's open root). A session whose challenger released a second coin after the root (a server picking its salt
