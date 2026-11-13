@@ -7,7 +7,7 @@ from rho.envelopes import Detection
 from rho.params import Registry
 from rho.scenario import build
 
-from verity.protocols.spot.verifier.profile import MARGIN, WINDOW_DELTA, Bernoulli, IntegrityProfile
+from verity.protocols.proofs.spot.verifier.profile import MARGIN, WINDOW_DELTA, Bernoulli, IntegrityProfile
 
 REG = Registry.load()
 

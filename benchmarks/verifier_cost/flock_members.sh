@@ -28,7 +28,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -20 "$OUT/sync.log"; exit 2; }
 PYM=$SRC/.venv/bin/python
-export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 # the verifier m1_unit.py runs, its verify call recorded an argument a line
 RECORDED=$W/verify-recorded

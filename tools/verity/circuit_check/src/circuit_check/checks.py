@@ -1514,7 +1514,7 @@ def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.protocols.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.protocols.accounting.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
     over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.circuits.codec import program_digest
@@ -1630,7 +1630,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = ("verity/protocols/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
+        rec["correspondence"] = ("verity/protocols/proofs/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)
