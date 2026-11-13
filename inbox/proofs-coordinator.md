@@ -141401,3 +141401,57 @@ MEMBERS's new check runs `tablesHeld` at each template's member. In the stream i
 - Everything in my 12:17Z entry's list.
 
 Next: the proof of `StreamSound`, starting with the blobs-held lemma, then the group fold. After that, the `security/Properties` statement, and the mains last.
+
+
+## ADDRROW2, Fri 13 Nov 12:45Z: the four programs are PUSHED for GATHER (`cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`); the `rfl` probe on the join's tip: COMPILED, plain `rfl` (`r20261113-123721-ce64`, rc 0); the lemma that takes the premise away is STATED below, not proved. My head is unchanged: `034f12b9a7fdf93cc3dd6b16b1060705898318de`.
+
+**In plain words.** You asked three things at 12:18Z. First, the programs: they are on a scratch branch for GATHER, with the script that builds them, and the four texts are byte for byte the ones the decoder took in my earlier run. Second, the one-line fact that the form's own copies take their wires from the derivation: it compiles on the join's tip, by plain `rfl`, and with it the form's own copies give `wiresChecked` from `wiresUnlinked` alone. Third, the lemma: once `wiresOk` has the new clause, "no link names a wire's reader port" is a fact of every accepted run, read from the design check the second stage already makes at each session. Nothing stands between the verifier's lookup of a link and the proofs' lookup: they are the same search over the same list. So the premise `wiresChecked` leaves the row fact and the address premise, and what replaces it is the equation "the wires are the derived ones", which the probe is about.
+
+Clock: `date -u` read 12:45Z when I wrote this. Mailbox: your 12:18Z, by the hook at 12:35Z and in the mailbox file; nothing newer [run: `git show` of the mailbox at 12:44Z]. Correction: my notice's title said 12:12Z and it was pushed at 12:11Z. After it, twenty-four more of your timers reached me (fired Thu 19:49Z to Fri 08:30Z); I acted on none.
+
+**1. The programs, for GATHER's negative cases** [run: `git push`, then `git ls-remote` gives the head].
+- Branch `cursor/proofs-addrrow2-programs-c41d`, one commit `6dd041406c14e3ffa0589545936489df0605456c` on `origin/main` at `053b8e50fe8a`. Never to merge. Everything is under `scratch/wire-port-programs/`:
+  - `build.py`: the script. Run from the repository's root: `python scratch/wire-port-programs/build.py`. It builds the four programs with `CompositeDefinition`, `bind` and `population_program`, writes each descriptor, and writes `cases.json`.
+  - `o0-chain.json` and `same-both.json`: the two that derive a link and a wire of one port.
+  - `plain-chain.json` and `plain-both.json`: the same two programs with ordinary names; no such wire.
+  - `cases.json`: for each of the four, the outer block's descriptor id to pass as `replay` (`CoreSpotReplayNamed_v0` for the two chains, `CoreSpotReplayBoth_v0` for the other two), the links and wires the Python derivation gives, and the wires whose reader port a link names too (`clash`).
+- I ran the script on that branch's own code [run, on my VM, under a second]: it prints one clashing wire for `o0-chain` and for `same-both`, none for the other two.
+- The four texts are byte for byte the strings the decoder took in `r20261113-120007-5323` [run: a script compared each file with the string in that run's scratch file].
+- Correction to my 12:08Z entry, item 3: I wrote that the text is "the builder's own". Exactly: the descriptor object is the builder's (`codec.encode_program`, a Python dictionary), and the text is `json.dumps` of it. The files hold that text.
+
+**2. The `rfl` probe on the join's tip** [run: `r20261113-123721-ce64`, vy-nebius-cpu-8, rc 0]. One probe file, written inside the run's own clone of the join's tip `4e986e339ad2` (12:31Z, which holds my `034f12b9a7`), in no branch. Its text is in my artifacts (`ProbeWiresAt.lean.txt`); it is 46 lines and imports `HeldOf.lean` and `AddressFacts/RowWires.lean`. Three theorems:
+- `HeldOf.wires_of_heldOf (hh : heldOf i it u = some h) : h.wires = Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn`.
+- `HeldOf.links_of_heldOf (hh : heldOf i it u = some h) : h.links = Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record`.
+- `HeldOf.wiresChecked_of_heldOf (hh : heldOf i it u = some h) (hu : AddressRow.wiresUnlinked h = true) : AddressRow.wiresChecked h = true`, which is `wiresChecked_of_unlinked (wires_of_heldOf hh) hu`.
+- **Verdict: "lean exit 0 in 329 s", and "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".** The proof of the first two is `obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh` and then `rfl`: no unfolding of `withFrame` or `held₀` is needed. (The probe offered two fallbacks after `rfl`; the linter says neither ran. A kept copy should drop them.) So the answer to my 12:08Z item 2 is yes, and it is one line.
+
+**3. The lemma that takes the premise away, stated before any proof** [derived from reading; nothing here is compiled, and the first statement cannot be until `wiresOk` has the clause].
+- **Which pass I read it from: `SecondStage.designOk`**, as the second stage's check of each session holds it. In the proofs' code that is `readsOk` (`Code.lean:882`), whose pass gives `designOk (partsAt h …) (ownOf h st rec draw c₀) = true` (`design_of_readsOk`, `ReadsDesign.lean:62`). `designOk` is `linksOk && wiresOk`. An accepted run gives `readsOk` at its checked inner block's template (`stmtOkAt_unit`). This is the route `CheckedRun.reader_of_wire` takes today for `wiresOk`'s first clause (`RowLeaves.lean:204`). I do not read it from `SecondStage.check` or from the form's step: `r.Ok h` is stated over the proofs' code, and that code calls `designOk` directly.
+- **What stands between `linkOf own` and `heldLink h`: nothing but unfolding.** At an accepted run `own` is `ownOf h st rec draw c₀` (`Code.lean:856`), which sets `links := h.links` and `wires := h.wires`. `SecondStage.linkOf own t port` is `(own.links.getD #[]).find? fun l => l.template == t && l.port == port` (`SecondStage.lean:675`) and `heldLink h t port` is the same expression over `h.links` (`Code.lean:419`). So `linkOf (ownOf h st rec draw c₀) t port = heldLink h t port` by `rfl`. The same holds of the wires: `reader_of_wire` already passes `w ∈ h.wires.getD #[]` where `wiresOk`'s lemma wants `w ∈ own.wires.getD #[]`.
+- **The statements.** File `AddressFacts/RowUnlinked.lean`, new, importing `RowWires.lean`:
+  - `AddressRow.wiresOk_unlinked {ps} {own : Spot.SecondStage.Own} (hok : Spot.SecondStage.wiresOk ps own = true) {w} (hw : w ∈ own.wires.getD #[]) : (Spot.SecondStage.linkOf own w.template w.port).isNone = true`. The new clause, read off a pass. It needs GATHER's `wiresOk`.
+  - `CheckedRun.wiresUnlinked_of_ok {h : Held} {r : CheckedRun h.stage} (hr : r.Ok h) : AddressRow.wiresUnlinked h = true`. In words: where any run is accepted, no link names a wire's reader port.
+  - `CheckedRun.wiresChecked_of_ok {P : Flock.Program.Prog} {key : String} (hw : h.wires = Spot.SecondStage.replayWires P key) (hr : r.Ok h) : AddressRow.wiresChecked h = true`. From the second and `wiresChecked_of_unlinked`.
+  - `AddressRow.ownLeaves_of_derived (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hw : h.wires = Spot.SecondStage.replayWires P key) : AddressRow.OwnLeaves h`. `OwnLeaves` asks its fact only at accepted runs, and `own_leaves` takes `wiresChecked` beside the accepted run, so the third statement feeds it at each run.
+  - `addressesConnected_of_derived (hWf : RefReadsWf h) (hna : ∀ v, h.reg.always v = false) (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) (hK : firstK h.reg.first = some K) (hw : h.wires = Spot.SecondStage.replayWires P key) : AddressesConnected h`, and `rowFact_of_derived` the same way. These are `addressesConnected_of_firstK` and `rowFact_of_firstK` with `hwc : wiresChecked h = true` replaced by `hw`. At the form's own copies `hw` is the probe's `wires_of_heldOf hh`.
+- **What I do now, unless you say no**: write that file today with the first statement as a named hypothesis, `AddressRow.ReadersUnlinked : Prop := ∀ ps own, wiresOk ps own = true → ∀ w ∈ own.wires.getD #[], (linkOf own w.template w.port).isNone = true`, owner GATHER, and compile the other four under it. That hypothesis is false of today's `wiresOk` [guess: the check has no clause that could give it], so until GATHER's head the four say nothing about today's verifier; with GATHER's head the hypothesis becomes the first statement, about ten lines, and is deleted. No listed guarantee reads any of it.
+- **Size** [guess]: about 70 lines. The second statement is `reader_of_wire`'s first seven lines and one more step.
+- **One fact for GATHER and ASSEMBLY** [read, on the join's tip]: two proofs read `wiresOk`'s clauses by their position in the `&&` chain: `AddressRow.wiresOk_reader` (`RowLeaves.lean:158`, mine, `h1.1.1.1`) and `wiresOk_writer` (`InsideOf.lean:81`, not mine, `h1.1.1.2`). If the new clause is appended last, each needs one more `.1`; if it is put first, only mine changes. I am changing mine now to read its clause by what it says and not by where it stands, so that it compiles before and after GATHER's change; it goes in the same run as the new file. `WiredCode.lean:111` names "the fourth clause" in a docstring only.
+
+**STOP RULE.** Nothing. I pushed no Lean and changed no file of my branch since `034f12b9a7`. The scratch branch holds a Python script and five JSON files under a directory of its own.
+
+**NEEDS.**
+1. **Coordinator: GATHER's head**, when it is named compiled, and where in the chain the clause sits. Then I prove item 3.
+2. **Coordinator: where the probe's three theorems should live**, if you want them kept. They cannot be on my branch, where `HeldOf.lean` does not build; on the join they are one new file.
+
+**Not established.**
+- Item 3 is statements only. `wiresChecked h = true` is still a premise of `rowFact_of_firstK` and `addressesConnected_of_firstK` on my head.
+- That an accepted run gives `designOk` at `ownOf h …` is read from `reader_of_wire`'s proof, which compiles; that the new clause comes out of it the same way is not compiled.
+- The relation between the proofs' `ownOf h …` and the `Own` the real verifier builds in `Run.lean` is not mine and I did not read its lemmas.
+- The probe was compiled alone, in a clone, with no `--siblings`; it is in no branch.
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `034f12b9a7fdf93cc3dd6b16b1060705898318de`, unchanged and compiled (`r20261113-115941-3c1b`). `cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`, scratch. Nothing is uncommitted.
+
+**Runs.** `r20261113-123721-ce64` (the probe, `--on auto`, vy-nebius-cpu-8, launched 12:37Z): done, rc 0, 329 s for the file. Earlier runs unchanged: `b2d0`, `3523`, `3c1b`, `2853`, `5323`, all rc 0.
+
+**To post.** Nothing from me. For GATHER: the branch and paths of item 1.
