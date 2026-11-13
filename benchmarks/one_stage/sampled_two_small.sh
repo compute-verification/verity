@@ -41,6 +41,9 @@ PY=(uv run --no-sync python)
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
+# a class whose record commits the select's inputs (SMALL_ARGS with --logits): `second` opens the rows the serve kept
+LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
+KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --deployed-key --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 \
@@ -51,7 +54,7 @@ rc=0
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --deployed-key \
   --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("INTERIOR " + json.dumps(s.get("interior", {}).get("members")))' \
