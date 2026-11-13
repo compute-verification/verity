@@ -1300,7 +1300,8 @@ sampled_of_record() {
 # coin record, Pearl+'s answer, the Lean verdict and each challenger session's public key, out/key.json at its path, and
 # no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
 # window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
-# file, each session's record and proofs, the lookup tables), H1's log and each record it names, and PoUW's period case.
+# file, each session's record and proofs, the lookup tables), H1's log and each record it names, the serve's first
+# registration record where it wrote one, and PoUW's period case.
 # And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
 # stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
 # host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
@@ -1327,6 +1328,7 @@ EOF
 ) || return 1
   {
     printf '%s\n' "$1/summary.json" "$1/window/audit.json" "$1/window/registration.json" "$1/runs.json" h1/log.jsonl \
+      deployment-registration.json \
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
       "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
