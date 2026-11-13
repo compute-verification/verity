@@ -8,7 +8,7 @@ concatenated by rows; ``o_proj``; ``gate_up_proj``, gate then up; ``down_proj``)
 option is installed through `protocols.install` with `pous.linear_types` the stand-in's type, ``p2_lib`` the
 `benchmarks/torch_gpu/p2_stage/build.sh` library and the salt source a public test coin (no salt of record).
 
-    PYTHONPATH=<root>:<root>/adapters/vllm:<root>/verity/configuration/config:<root>/tools/research/src \\
+    PYTHONPATH=<root>:<root>/adapters/vllm:<root>/tools/config:<root>/tools/research/src \\
       python tests/protocols/pous_gpu.py --snapshot SNAP --lib LIB --out DIR [--m 1,256] [--reps 5]
 
 Records in ``DIR/pous_gpu.json`` and checks:
