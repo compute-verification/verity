@@ -328,17 +328,26 @@ def test_validate_document_names_each_problem():
     assert problems(no_keys) == ["missing top-level key 'body'", "missing top-level key 'calls'"]
     assert problems(lambda d: d.update(schema="runtime-correspondence/v0", body="root")) == [
         f"schema 'runtime-correspondence/v0' != {SCHEMA!r}", "body 'root' != 'program_fn'"]
-    for rank in ({"world": 2, "rank": 2}, {"world": 2, "rank": -1}, {"world": "2", "rank": 0}, {"world": 2}):
+    for rank in ({"world": 2, "rank": 2}, {"world": 2, "rank": -1}, {"world": "2", "rank": 0}, {"world": 2}, {}):
         assert problems(lambda d, rank=rank: d.update(rank=rank)) == [f"rank coordinate {rank!r} is not integers 0 <= rank < world"]
     assert problems(lambda d: d.update(rank=None)) == []
     assert problems(no_node_or_op) == ["occurrences[0] lacks 'node'", "occurrences[0] lacks 'op'"]
+    assert problems(lambda d: d["occurrences"][0].pop("module")) == ["occurrences[0] lacks 'module'"]
     assert problems(lambda d: d["occurrences"][with_inputs]["inputs"][0].update(source="elsewhere")) == [
         f"occurrences[{with_inputs}].inputs[0].source 'elsewhere' not in the enum"]
-    for key, value in (("occurrence", "0"), ("operand_ranks", [0, "1"])):
-        changed = dict(doc["occurrences"][collective]["collective"], **{key: value})
+    assert problems(lambda d: d["occurrences"][with_inputs]["inputs"][0].pop("source")) == [
+        f"occurrences[{with_inputs}].inputs[0].source None not in the enum"]
+    assert problems(lambda d: d["occurrences"][with_inputs].update(inputs=None)) == []
+    assert problems(lambda d: d["occurrences"][with_inputs].pop("inputs")) == []
+    whole = doc["occurrences"][collective]["collective"]
+    unnumbered = {k: v for k, v in whole.items() if k != "occurrence"}
+    for changed in (dict(whole, occurrence="0"), dict(whole, operand_ranks=[0, "1"]), unnumbered, {}):
         got = problems(lambda d, changed=changed: d["occurrences"][collective].update(collective=changed))
         assert got == [f"occurrences[{collective}].collective has a non-integer rank coordinate: {changed!r}"]
+    assert problems(lambda d: d["occurrences"][collective]["collective"].pop("operand_ranks")) == []
     assert problems(lambda d: d["calls"][0].pop("occ")) == ["calls[0] lacks 'occ'"]
     assert problems(lambda d: d["calls"][0].update(occ=None)) == []
     for occ in (n_occ, -1):
         assert problems(lambda d, occ=occ: d["calls"][2].update(occ=occ)) == [f"calls[2].occ {occ} out of range"]
+    with pytest.raises(TypeError):                                       # no problem in the list: the comparison refuses an `occ` that is no number
+        problems(lambda d: d["calls"][0].update(occ=""))

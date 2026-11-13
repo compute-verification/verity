@@ -24,7 +24,7 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
 (`Dataflow.determinate_iff_checked`).
 
 * The probability side. `prob_accepts`: a transcript fixed before the coins passes `k` independent samples with
-  probability `(1 − π(B))^k`, and `0` when an always-proved unit is wrong.
+  probability `(1 − π(B))^k`, and `0` when an always-proved unit is incorrect.
 * `certificate`, **from (i) alone**: for every transcript committed before the coins, the verifier accepts it while
   `B ∩ A ≠ ∅` or `π(B) > ε` with probability at most `(1 − ε)^k`.
 * `accepts_local`, **what (ii) buys**: the verdict reads only the always-proved and sampled proof blocks' positions.
@@ -32,13 +32,13 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
   `π(B) ≤ ε`, and every egress slot where it differs from the honest run inside the incorrect proof blocks' cone (by (iii)).
   `integrity_inferred`: sampling by cone egress, `π ∝ E`, at most `ε · Σ_u E(u)` egress slots differ.
 * `inference_iff`, **tier 2**: a bound `g` on a policy's damage holds at confidence `1 − δ` exactly when every transcript
-  with damage above `g` and no always-proved unit wrong passes with probability at most `δ`, that is
+  with damage above `g` and no always-proved unit incorrect passes with probability at most `δ`, that is
   `(1 − π(B))^k ≤ δ`. `inferable_of_amp`: an amplification bound `K` gives the bound `K · C · ε`.
   `not_inferable_of_massless`: a transcript with damage and no sample weight on its incorrect proof blocks passes with
   probability one, so no bound below its damage is inferable at any confidence.
 
 **The counterexamples, one family per item.**
-* (i), a transcript after the coins: `adaptive_dodges`, every sample passes with every unsampled unit wrong
+* (i), a transcript after the coins: `adaptive_dodges`, every sample passes with every unsampled unit incorrect
   (`flags_free` meets the hypothesis). A sample after the transcript: `late_sample_dodges`, the point mass on a correct
   unit passes with probability one.
 * (ii), a non-local check: `checksum_untestable`, a decision that reads fewer than `n` positions and accepts every
@@ -116,7 +116,7 @@ theorem sum_good (chk : U → T → Prop) (σ : T) :
   linarith
 
 /-- **A transcript fixed before the coins passes** with probability `(1 − π(B))^k` when no always-proved unit is
-wrong. -/
+incorrect. -/
 theorem prob_accepts (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
     prob π k (fun d => Accepts chk A d σ) = (1 - mass π (bad chk σ)) ^ k := by
   classical
@@ -124,7 +124,7 @@ theorem prob_accepts (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disj
   rw [← sum_good π chk σ, ← prob_all]
   exact prob_congr π k fun d => ⟨fun h => h.2, fun h => ⟨hA, h⟩⟩
 
-/-- **It never passes when an always-proved unit is wrong.** -/
+/-- **It never passes when an always-proved unit is incorrect.** -/
 theorem prob_accepts_eq_zero (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : ¬ Disjoint (bad chk σ) A) :
     prob π k (fun d => Accepts chk A d σ) = 0 := by
   have hA : ¬ ∀ u ∈ A, chk u σ := fun h => hd ((disjoint_bad_iff chk A σ).2 h)
@@ -133,7 +133,7 @@ theorem prob_accepts_eq_zero (chk : U → T → Prop) (A : Finset U) (σ : T) (h
 
 /-- **The sampling certificate**, from tier 1's first item alone: for every transcript committed before the coins
 (`σ` does not depend on the sample) and every sample fixed before it (`π`, `A` and `k` do not depend on `σ`), the
-verifier accepts while an always-proved unit is wrong or `π(B) > ε` with probability at most `(1 − ε)^k`. A
+verifier accepts while an always-proved unit is incorrect or `π(B) > ε` with probability at most `(1 − ε)^k`. A
 randomized prover is a mixture of such transcripts, so the bound holds for it too. -/
 theorem certificate (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε ≤ 1) (σ : T) :
     prob π k (fun d => Accepts chk A d σ ∧ ¬ Certified chk π A ε σ) ≤ (1 - ε) ^ k := by
@@ -152,7 +152,7 @@ theorem certificate (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε
 /-! ## Tier 2: which damage bounds the certificate supports -/
 
 /-- **Which bounds are inferable**: the damage bound `g` holds at confidence `1 − δ` for every transcript exactly when
-every transcript with damage above `g` and no always-proved unit wrong passes the sample with probability
+every transcript with damage above `g` and no always-proved unit incorrect passes the sample with probability
 `(1 − π(B))^k ≤ δ`. The best inferable bound is the largest damage among transcripts with
 `(1 − π(B))^k > δ`. -/
 theorem inference_iff (chk : U → T → Prop) (A : Finset U) (dmg : T → ℝ) (g δ : ℝ)
@@ -192,7 +192,7 @@ theorem inferable_of_amp {chk : U → T → Prop} {A : Finset U} {c : U → ℝ}
       _ = K * C * ε := (mul_assoc _ _ _).symm
   exact absurd h.2 (not_lt.2 h2)
 
-/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit wrong and no sample
+/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit incorrect and no sample
 weight on its incorrect proof blocks passes with probability one. -/
 theorem not_inferable_of_massless (chk : U → T → Prop) (A : Finset U) (σ : T)
     (hd : Disjoint (bad chk σ) A) (h0 : mass π (bad chk σ) = 0) :
@@ -249,7 +249,7 @@ theorem checksum_dense {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (Fin n)
 
 /-- **A non-local check isn't implied by sampled local reads**: a decision that reads fewer than `n` positions and
 accepts every transcript whose `n` values sum to zero accepts every transcript. So a unit whose check is the checksum,
-always proved and read through any fewer than `n` positions, passes when it is wrong. -/
+always proved and read through any fewer than `n` positions, passes when it is incorrect. -/
 theorem checksum_untestable {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (Fin n)) (hR : R.card < n)
     (dec : (R → V) → Prop) (hcomp : ∀ τ : Fin n → V, checksum τ → dec fun r : R => τ r) (σ : Fin n → V) :
     dec fun r : R => σ r :=
@@ -257,8 +257,8 @@ theorem checksum_untestable {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (F
 
 /-! ## (i) A transcript after the coins, and a sample after the transcript -/
 
-/-- **A transcript chosen after the coins dodges the sample**: when every set of units is some transcript's wrong set,
-the strategy that reads the sample passes every sample with every unsampled unit outside `A` wrong. -/
+/-- **A transcript chosen after the coins dodges the sample**: when every set of units is some transcript's incorrect set,
+the strategy that reads the sample passes every sample with every unsampled unit outside `A` incorrect. -/
 theorem adaptive_dodges [Fintype U] [DecidableEq U] {chk : U → T → Prop} (hfree : ∀ B : Finset U, ∃ σ, bad chk σ = B)
     (A : Finset U) (k : ℕ) :
     ∃ σ : (Fin k → U) → T, ∀ d, Accepts chk A d (σ d) ∧ bad chk (σ d) = (A ∪ univ.image d)ᶜ := by
@@ -271,7 +271,7 @@ theorem adaptive_dodges [Fintype U] [DecidableEq U] {chk : U → T → Prop} (hf
   exact ⟨fun d => g (A ∪ univ.image d)ᶜ, fun d =>
     ⟨⟨fun u hu => pass _ u (by simp [hu]), fun i => pass _ _ (by simp)⟩, hg _⟩⟩
 
-/-- Its wrong set holds all but `|A| + k` units, so under the uniform sample `π(B) ≥ 1 − (|A| + k)/|U|`. -/
+/-- Its incorrect set holds all but `|A| + k` units, so under the uniform sample `π(B) ≥ 1 − (|A| + k)/|U|`. -/
 theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : Fin k → U) :
     Fintype.card U ≤ ((A ∪ univ.image d)ᶜ).card + A.card + k := by
   rw [card_compl]
@@ -281,7 +281,7 @@ theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : 
   omega
 
 /-- **A sample chosen after the transcript dodges it**: the transcript passes the point mass on a correct unit with
-probability one, whatever its wrong set. -/
+probability one, whatever its incorrect set. -/
 theorem late_sample_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
     (h₀ : chk u₀ σ) (hA : ∀ u ∈ A, chk u σ) (k : ℕ) :
     prob (PMF.pure u₀) k (fun d => Accepts chk A d σ) = 1 := by
@@ -293,7 +293,7 @@ theorem late_sample_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) 
   have : u ≠ u₀ := fun e => hu' (e ▸ h₀)
   simp [this]
 
-/-- The flags population (POP1) meets `adaptive_dodges`'s hypothesis: every set of units is some assignment's wrong
+/-- The flags population (POP1) meets `adaptive_dodges`'s hypothesis: every set of units is some assignment's incorrect
 set. -/
 theorem flags_free (n : ℕ) (B : Finset (Fin n)) :
     ∃ σ, bad (corr (Dataflow.flags n) (Dataflow.flagsFns n)) σ = B := by
@@ -422,7 +422,7 @@ theorem gate_determinate (k : ℕ) (a : Gx k → Bool) : DeterminateAt (gate k) 
 /-- **But not robustly**: for every `y`, some assignment whose only possibly incorrect proof block is the gate shows `y` on the
 `y` slots. -/
 theorem gate_free (k : ℕ) (y : Fin k → Bool) :
-    ∃ σ : Gx k → Bool, (gate k).wrong (gateFns k) σ ⊆ {none} ∧ ∀ i, σ (some (false, i)) = y i := by
+    ∃ σ : Gx k → Bool, (gate k).incorrect (gateFns k) σ ⊆ {none} ∧ ∀ i, σ (some (false, i)) = y i := by
   let σ : Gx k → Bool := fun s => match s with
     | none => false
     | some (_, i) => y i
@@ -431,7 +431,7 @@ theorem gate_free (k : ℕ) (y : Fin k → Bool) :
   · exact mem_singleton_self _
   · exfalso
     classical
-    have hu' : ¬ (gate k).Correct (gateFns k) σ (some (b, i)) := by simpa [Dataflow.wrong] using hu
+    have hu' : ¬ (gate k).Correct (gateFns k) σ (some (b, i)) := by simpa [Dataflow.incorrect] using hu
     exact hu' (gate_correct_some.2 rfl)
 
 /-- The `y` slots, the egress. -/
@@ -464,7 +464,7 @@ theorem gate_coneEgress (k : ℕ) : (gate k).coneEgress (gateOut k) {none} = ∅
   subst this
   simp [gateOut] at hs
 
-/-- **With the gate wrong, the egress takes all `2^k` values**, though the gate writes one slot and its cone holds no
+/-- **With the gate incorrect, the egress takes all `2^k` values**, though the gate writes one slot and its cone holds no
 egress. Determinacy at fixed functions, without robustness, bounds neither integrity nor control. -/
 theorem gate_egress (k : ℕ) (a : Gx k → Bool) :
     2 ^ k ≤ ((gate k).egress (gateFns k) a ∅ (gateOut k) {none}).card := by
@@ -498,24 +498,24 @@ section Skeleton
 
 variable {S : Type} (P : Dataflow U S)
 
-theorem bad_corr [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : bad (corr P f) σ = P.wrong f σ := rfl
+theorem bad_corr [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : bad (corr P f) σ = P.incorrect f σ := rfl
 
 /-- **Integrity's damage lies in the incorrect proof blocks' cone** (by robust determinacy): in a checked population, every egress
 slot where a run differs from the honest run is in the cone egress of its incorrect proof blocks. -/
 theorem damaged_sub_coneEgress [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s)
-    (O : Finset S) : damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ) := by
+    (O : Finset S) : damaged O σ honest ⊆ P.coneEgress O (P.incorrect f σ) := by
   classical
   intro o ho
   simp only [damaged, mem_filter] at ho
   refine (P.mem_coneEgress).2 ⟨ho.1, ?_⟩
   by_contra hno
   exact ho.2 (P.eq_off_cone (P.covered_of_singleAssignment h.1) h.2 f
-    (fun t ht => (hσ t ht).trans (hh t ht).symm) le_rfl (by simp [P.wrong_eq_empty hc]) hno)
+    (fun t ht => (hσ t ht).trans (hh t ht).symm) le_rfl (by simp [P.incorrect_eq_empty hc]) hno)
 
 theorem card_damaged_le [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s)
-    (O : Finset S) : (damaged O σ honest).card ≤ ∑ u ∈ P.wrong f σ, (P.coneEgress O {u}).card :=
+    (O : Finset S) : (damaged O σ honest).card ≤ ∑ u ∈ P.incorrect f σ, (P.coneEgress O {u}).card :=
   (card_le_card (damaged_sub_coneEgress P h f a hh hc hσ O)).trans (P.card_coneEgress_le O _)
 
 /-- **The skeleton theorem**: in a checked population (tier 1's (ii) by type, (iii) by the checks), for every run
@@ -524,8 +524,8 @@ committed before the coins on the given inputs and every sample fixed before it,
 theorem skeleton [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
-    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.wrong f σ) A ∧ mass π (P.wrong f σ) ≤ ε ∧
-      damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ))) ≤ (1 - ε) ^ k := by
+    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.incorrect f σ) A ∧ mass π (P.incorrect f σ) ≤ ε ∧
+      damaged O σ honest ⊆ P.coneEgress O (P.incorrect f σ))) ≤ (1 - ε) ^ k := by
   refine (prob_mono π k
     (E' := fun d => Accepts (corr P f) A d σ ∧ ¬ Certified (corr P f) π A ε σ)
     fun d hd => ⟨hd.1, fun hcert => hd.2 ⟨hcert.1, hcert.2,
