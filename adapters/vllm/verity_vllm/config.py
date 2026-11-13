@@ -4,7 +4,7 @@
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``; a row id finds its file through
   :func:`row_file`, which also reads the directories ``$VERITY_WORKLOADS`` names.  A workload's bytes are a fixture in the
-  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``fixtures/artifacts.json``),
+  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``artifacts.json``),
   and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
@@ -343,7 +343,7 @@ def vllm_revision() -> str:
 WORKLOAD_SCHEMA = workload_record.SCHEMA
 
 
-#: The repository root: its ``fixtures/artifacts.json`` registers each stored workload file by its art id.
+#: The repository root: its ``artifacts.json`` registers each stored workload file by its art id.
 REPO = ROOT.parent.parent
 #: A workload directory's digests, ``<sha256>  <name>`` a line (``sha256sum``'s format): each file it lists is a fixture in the
 #: evidence store, gitignored here, and every reader takes it through :func:`workload_file`.
@@ -364,7 +364,7 @@ def _fetch(paths: list[Path]) -> None:
     by that tree's own ``research``."""
     by_repo: dict[Path, list[Path]] = {}
     for p in paths:
-        repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
+        repo = next((d for d in p.resolve().parents if (d / "artifacts.json").is_file()), REPO)
         by_repo.setdefault(repo, []).append(p)
     for repo, ps in by_repo.items():
         rels = [os.path.relpath(p.resolve(), repo) for p in ps]
@@ -381,7 +381,7 @@ def _fetch(paths: list[Path]) -> None:
 
 def workload_file(path: str | Path) -> Path:
     """``path``, made present and checked when its directory's ``SHA256SUMS`` lists it: an absent file is fetched by the art id
-    ``fixtures/artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
+    ``artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
     refused.  A file its directory doesn't list is returned as it is."""
     p = Path(path)
     want = stored_workloads(p.parent).get(p.name)
@@ -391,7 +391,7 @@ def workload_file(path: str | Path) -> Path:
         _fetch([p])
     if (got := hashlib.sha256(p.read_bytes()).hexdigest()) != want:
         raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
-                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
+                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in artifacts.json, "
                            f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
     return p
 

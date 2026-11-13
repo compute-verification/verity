@@ -356,7 +356,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
+PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/proofs/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -3187,11 +3187,11 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/",
-                  "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/flock/prover/python/",
-                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "verity/protocols/pous/lean/",
-                  "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py",
-                  "verity/definitions/commitments/", "verity/protocols/poub/verifier/commitments/",
+_COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
+                  "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
+                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
+                  "verity/protocols/accounting/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
@@ -3199,7 +3199,7 @@ _COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/de
                   "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",
-                  "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
+                  "verity/circuits/private_circuits/", "benchmarks/numerical/python/")
 
 
 def contained_first(entries: dict[int, Entry]) -> list[int]:
@@ -3760,7 +3760,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/protocols/flock/verifier",)
+LEAN_BUILDS = ("verity/protocols/proofs/flock/verifier",)
 #: the Lean audit on the merge, for a change that touches Lean (`lean_audit`): run from the root of the tier's checkout, after
 #: `LEAN_BUILDS` and before the suites, with `--base {main's tip} --out DIR` (`quick_tier.py --lean-audit`), it audits what the
 #: change reaches and publishes the modules it builds and its replay entries, which the audit of the candidate landing that merge

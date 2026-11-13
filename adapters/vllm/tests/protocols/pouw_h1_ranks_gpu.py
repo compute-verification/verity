@@ -57,9 +57,9 @@ def entropy(label: str) -> Callable[[int], bytes]:
 
 
 def coins(steps: int) -> tuple[Any, Any]:
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.spot.device.challenger import LiveRecord
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
+    from verity.protocols.proofs.spot.device.challenger import LiveRecord
     return Challenger(0, entropy("salt")), LiveRecord(Wd.live_challenger(0, steps, entropy("rounds")), Wd.ROUND)
 
 

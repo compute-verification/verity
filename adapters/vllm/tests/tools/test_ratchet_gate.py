@@ -1119,11 +1119,11 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     seen: list[list[str]] = []
     monkeypatch.setattr(G, "ruff_findings", _noting(seen, lambda ruff, config, files: sorted(files), G.ruff_findings))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("definitions", {"verity/definitions/word.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"verity/definitions/registry/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
         "tools/c.py": "C = 1\n", "adapters/vllm/verity_vllm/c.py": "import os\n",
-        "verity/definitions/tiny.py": "import os\n", "verity/definitions/word.py": None, "tools/notes.md": "import os\n"})
+        "verity/definitions/registry/tiny.py": "import os\n", "verity/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]

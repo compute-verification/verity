@@ -32,7 +32,7 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/clear"))
 settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -43,9 +43,9 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 
 def capture(args) -> int:
     import torch
-    from verity.protocols.pouw.verifier.audit import weights_root
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier.audit import weights_root
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -98,8 +98,8 @@ def _scheme(man: dict):
 def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
-    from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
-    from verity.protocols.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -139,7 +139,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     import verify_run as VR
     from verity.commitments import Commitment
     from clear_audit import Transcript, Verifier
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
     import clear_work as CW
     from verity_vllm.protocols.pouw.pearl_c import manifest as PM
 

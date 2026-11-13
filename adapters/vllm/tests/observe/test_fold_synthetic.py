@@ -588,7 +588,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
-    from verity.definitions.circuits.constants import (
+    from verity.circuits.constants import (
         REGISTRATION,
         RUN,
         inputs,

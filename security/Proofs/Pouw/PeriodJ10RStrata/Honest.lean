@@ -152,10 +152,10 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
       tileLuck Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) t ≤ 7 / 8 ∧
         tileLuck0 Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) t ≤ 1 / 2) ∧
     (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).game =
-      periodGame (tileStage (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s))
+      monitoringPeriodGame (tileStage (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s))
         (liveCone Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s)) 1 1 (k s)
         (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
-    (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryWindow
+    (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) live) ∧
     PrefixOf (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
       (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
@@ -168,7 +168,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
     UnitFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
       (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
         HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
-      (periodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)
+      (monitoringPeriodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)
         (runAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
           HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile))
       (fun _ t => (tileWords Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) t : ℝ))
@@ -268,7 +268,7 @@ open Classical in
 /-- **Stratum `s`'s live words at verdict `acc`**: `stratumLive` with `acc` for `Credit.window`'s verdict. -/
 noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
-    (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (acc : Paths (StrataCoin C m σ) n → Fin n → Prop) (x : Paths (StrataCoin C m σ) n) : ℝ :=
   ∑ w : Fin n, if UpToBy acc x w then
     ∑ t : Fin (tileCount σ s), (liveWords Sc Cd (tileCount σ s) (Wp.liveAt (pathsAt C hM σ s n x) w) t : ℝ) else 0
@@ -278,7 +278,7 @@ period's fixed words, summed over `S`, are at least the sum over `S` of each str
 prefix. -/
 def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
-    (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
+    (Wp : (s : Fin mB) → ExecutionPhasePlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (acc : Paths (StrataCoin C 1 σ) n → Fin n → Prop) (ρ δs : Fin mB → ℝ) (δ : ℝ) : Prop :=
   prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
@@ -291,7 +291,7 @@ verdict that credits every window, is the conclusion with that verdict in place 
 theorem strataBound_window {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
     (ws : CreditWindows (StrataCoin C 1 σ) n)
-    (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
+    (Wp : (s : Fin mB) → ExecutionPhasePlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U) (ρ δs : Fin mB → ℝ) (δ : ℝ) :
     prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
       n * ∑ s ∈ S, ((Pl s).run (pathsAt C (hM s) σ s n x)).fixed <

@@ -21,10 +21,10 @@ from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import dead_free as DF
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
@@ -82,7 +82,7 @@ def _boundary_window() -> CS.Binding:
 
 
 def _first(members):
-    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage drawn (spans 0 and 2)."""
+    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
     names: dict[str, tuple] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(members, CELLS, "00", [0], WIRES))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
