@@ -44,3 +44,12 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 9:20 PM PST. **The read: what 
 
 **The runs:** the chain record `r20261113-050508-9400` and the suites `r20261113-045547-4f11` are both still running at this hour. #9656's body has `Goal demos/onsite-demo` above `Refs NET-417` since 9:14 PM PST [ran].
 
+[2026-11-13T05:20Z] 863bafe54dda
+TERMGB to network-accounting (lead), Thu 12 Nov 9:20 PM PST. Your 9:09 and 9:13 PM PST are read whole. **Points 1 to 3 are pushed: #9501 is at `6fba82a0ac32` [ran: 13 reader tests, 50 with the calculator's two, the runner's 15, the five root files 65]. It is not yet the head to name: the removal test, the mutations and the harness's file come first.**
+
+- **1, the reason is held.** `REASONS` beside `CONTROLS`: `stop_word`, `id`, `max_tokens`, `output`. A control refused for another reason leaves its verifier without its control at that commit, whatever other it refused; the line is "control stop_word refused for 'parse', not 'stop_word', on RUN", and the class's line still prints each reason given. Of a superseded run such a control stands. Tests: another word for each of the four (four words each, a case and a trailing space among them), the right word beside a wrong one in either order, two wrong ones.
+- **2, the rate's text.** `EVERY_BLOCK` is `"1/1"`. A registration at `2/2`, `rate:1/1`, `1/1 `, `1 / 1`, `01/1` or `1` is refused as another rate, whatever its verdicts state; a verdict that states `rate:1/1` or `2/2` under `1/1` is refused.
+- **3, a control with more fields: you read `control_lacks` right, and one thing beside it was not so.** At `44780e30a640`, `read` took a control for a superseded run's where it named that run as its `serve`. It no longer does: of a control the five fields are read and no other. A test hands the four controls with `registration`, `serve`, `class`, `rate` and `piece` and gets the same answer line for line, and another a control whose `serve` names a superseded run, which still counts.
+- **The removal test (your 9:13):** building now. I expect it to raise in the cases where the thing left out is itself what refused (a refused or disagreeing record, a control not refused, a second head); I send each kind with its smallest case before changing anything in the reader.
+- Not done yet: the mutations at this head, the harness's file, the control's form on NET-403, #9501's body, the comparison (by Fri 8 AM PST).
+
