@@ -116581,3 +116581,79 @@ The runs:
 NEEDS: none of mine. For FRAME and HELDOF: the new `templateOk` clause has no source on the running side, so it is HELDOF's to decide at the built copies.
 
 Not established: whether Flock's own session verifier, or `Desc.parseStmt`, refuses such a circuit by another route; I read neither for this. Whether the Python that stages a run calls a layout check; I read only its one docstring. That `SecondStageOf.lean` compiles. The axiom probes of `Round2.lean` and the bridge at the new head.
+
+## GATHER, Fri 13 Nov 03:03Z: `b025` passed every check by name, so my word on the second try's design is yes: `--replay rate:1/1 --k 4` at Friday's shape runs end to end in 65 minutes at a peak of 61 GiB; neither 96 GB nor 63 MiB was passed, and each stage's read is far inside `L`
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `671dd73cce63074b543d8a77239f250d9e73edf0`, the head I stand behind: `5ad83c84ef5e` plus one test file, so the code `b025` and `7b90` ran at `5ad83c84ef5e` is its code. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed at it by `c6bd`. Both pushed. [run: `git ls-remote`, 02:52Z]
+
+**In plain words.** The second try's design now runs end to end at Friday's size, except for the engine. At the served model's vocabulary, on 8 requests of 64 tokens under a stop rule, with the select's inputs committed by the serve before any coin, the first command took all 8 outer blocks. The second committed their 10,240 inner blocks, sampled 4 in each of the 160 cells, proved the 640 in zero knowledge in 20 sessions of 32, and had Lean verify each session: all 20 accepted. Every inner block read its inputs where the serve committed them; the second-stage record registers no value. The 18 negatives were each refused, and the outcome is refused by `two-stage-form` alone, as it must be while the accept is off. So you can confirm `--replay rate:1/1 --k 4` to serving. It is measured on made-up logits on a CPU node: nothing here ran on the engine or on cards. [run: `r20261113-011443-b025` on vy-nebius-2, at `5ad83c84ef`, ended 02:59:10Z exit 0; its `second/summary.json`, `expect.txt`, `first.log`, `coins.json` and `resources.jsonl`, read 03:00Z]
+
+### 1. `b025`'s own verdict, by the same names
+
+- Its summary line: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true}`, under `second try, Friday shape with committed logits, every span and 4 a cell (8 spans of 64 tokens under a stop rule, rate:1/1, k 4: 32 units a session) rc=0`. [run: `out/expect.txt`, `out/rc.txt`]
+- The first command: all 8 outer blocks of the class `p4-o64`, the stop class's 8, the order held, no error.
+- 22 checks before the sample: all true. 60 verdicts, 3 for each of 20 sessions (`m0-verifier`, `lean-draw`, `lean-verify`): all accepted, each session 32 inner blocks of one template. 18 negatives: all refused. The 20 circuit files are the ones the params name. The second stage's check on the statements: `ok`, no code.
+- The outcome: not accepted; the second stage's audit record fails `statements` alone, with `two-stage-form`; the first stage's fails nothing.
+- The second-stage record registers no value and has no link: the select's inputs are the serve's.
+- The record's own bound, over the whole class since every outer block is sampled: at most 10 of 10,240 inner blocks wrong at δ = 1/2, at most 9 of 64 in a cell.
+- Nothing failed.
+
+### 2. The two things you asked to hear at once: neither happened
+
+- **Memory:** peak 61.2 GiB at 02:41:59Z, while the prover ran, against the 96 GB asked. [run: `job-memory.py`]
+- **`statements.json`:** 44,206,756 bytes (42.2 MiB), under 63 MiB, so my rehearsal's script kept it. Three other files passed 63 MiB and are in `large.txt` with their digests (`audit/case.json`, `audit/case-v2-members.json`, `audit/program.json`); the rerun reads none of them, and serving's `KEEP_WORK=1` keeps everything whatever its size. [run: `ls` of the fetched `out/second`, `large.txt`]
+
+### 3. The bytes each stage read, against `L`
+
+| Stage | Its coin evidence | Bytes read | Against `L` = 2^20 = 1,048,576 |
+|---|---|---|---|
+| First, 8 of 8 | a segment `draw/0`, 4 openings | 208 | 0.02% of `L` |
+| Second, 4 of 64 in 160 cells | a segment `draw/0`, 340 openings | 21,760 | 2.1% of one `L` |
+
+- Neither passes its bound: the form as you ruled it (`L < ξ.size` refused in the first stage, `stage · L < ξ₂.size` in the second) would take Friday's shape with `stage` = 1. [run: `out/second/coins.json`, `evidence` and `read`; derived]
+- The first stage's evidence is not `null` at 8 of 8, here as in `240a`.
+- `L` here is `SpotFlock.L` (`security/Proofs/Flock/SpotFlock/Code.lean:418–419`). If the form's `L` is another number, the byte counts are what to hold against it. The largest read I have at any design is `240a`'s second stage, 102,400 bytes at 32 of 64 a cell. [read; run]
+
+### 4. Times and memory, and the estimate
+
+| Part | `c6bd`: 4 of 8, 1 a cell, 80 inner blocks | `b025`: 8 of 8, 4 a cell, 640 inner blocks |
+|---|---|---|
+| Waited for a place (vy-nebius-2) | 16.6 min | 7.5 min |
+| First command | 3.7 min | 3.7 min |
+| Second command | 48.7 min | 61.7 min |
+| of it: Python alone, before the prover | 30.6 | 43.2 |
+| of it: the prover and Lean's verifier | 10.3 | 10.4 |
+| of it: the rest | 7.8 | 8.1 |
+| A session's proof | 1.7 to 3.8 s | 3.5 to 9.4 s |
+| Lean's verdict on a session | 26 to 31 s | 27 to 40 s |
+| Peak memory | 58.8 GiB | 61.2 GiB |
+| `statements.json` | 20.2 MB | 44.2 MB |
+
+[run: `slot.json`, file times, process names by the minute, `audit.timing` of each]
+
+**The estimate you asked for by 05:30Z.**
+
+- **First try, `--replay rate:1/2 --k 1`:** about 4 minutes and then about 50, peak 59 GiB. Ask 80 GB. [run: `c6bd`]
+- **Second try, `--replay rate:1/1 --k 4`:** about 4 minutes and then about 62, peak 61 GiB. Serving's terms of 96 GiB and 180 minutes cover it nearly three times over in time. [run: `b025`]
+- **The sample I would set** is these two. The second gives the record's own bound of 10 of 10,240 inner blocks at δ = 1/2 and 35 at δ = 1/10, once the accept is on. [run for 10; derived for 35, my 01:50Z entry]
+- **The largest sample that ends inside five hours:** only the part before the prover grows, by about 13 minutes from 80 to 640 inner blocks. Carried on in a line, 16 a cell (2,560 inner blocks) is about 1.5 to 2 hours and 32 a cell (5,120) about 2 to 3, with a `statements.json` near 130 and 240 MB. Both are guesses from three points that do not separate the outer blocks' share from the inner blocks' and neither is rehearsed at this vocabulary; the prover's memory at 256 inner blocks a session is not known. I would not set either on Friday without a rehearsal tonight (one run, about 2.5 hours at 96 GB, on a CPU node). Say if you want it. [guess; derived from `b876`, `c6bd`, `b025`]
+- **What these numbers leave out:** the engine. On the served class the first command also reads the serve's kept files, and the second reads the kept rows of real logits; serving's own run over tonight's served class is the first measure of that.
+
+To post on VLLM-300, if you want it unchanged:
+
+> proofs confirms the second try's design: `--replay rate:1/1 --k 4`, 96 GiB, 180 minutes, at `671dd73cce63074b543d8a77239f250d9e73edf0` on `cursor/proofs-gather-second-try-5a28` (`5ad83c84ef5e` plus one test file; the same code). Rehearsed at Friday's shape on made-up committed logits, V = 154,880, 8 requests of 64 tokens under a stop rule: exit 0, first command 3.7 minutes, second 61.7 minutes, peak 61.2 GiB, 20 sessions of 32 all accepted by Lean, refused by the form alone. Its `statements.json` was 44 MB and its second stage read 21,760 bytes of coins. Not shown: anything on the engine.
+
+### 5. Runs
+
+- `r20261113-030038-1a73` (vy-nebius-2): the rerun over `b025`'s kept files at the second try's head, launched 03:00:38Z. Its script now also prints the class's figure from the verifier's own function, labelled "not established: the accept is withheld", as you ruled at 02:43Z; no tree change. Expected end by 03:25Z. [guess]
+- `r20261113-023437-3243` (vy-nebius-2): the rerun over `c6bd`'s kept files, running since 02:40:53Z; it had written its first print's summary by 02:57Z and was in its three changed copies. [run: the listing of its `out/`]
+
+Your 03:00Z ask (one window or two for the two stages' sessions, and whether the second stage's session opens after the first stage's last coin is released in the device's ledger) is read and not answered here: it is my next entry, from `b025`'s and `240a`'s kept evidence.
+
+### 6. Not established
+
+- Anything on the served engine or on cards in my runs.
+- That either outcome prints again from its kept files at this vocabulary: both reruns are running.
+- A sample above 4 a cell at this vocabulary.
+- Which launch file and tree Friday's second serve uses (my 02:57Z entry, section 1).
+- The accept.
