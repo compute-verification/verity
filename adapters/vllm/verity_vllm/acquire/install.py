@@ -11,7 +11,7 @@
                                                                (arena, hashing, roots, sources) is untouched
     plan_selection(plan, model)                                 that module set and consumer-input set
 
-A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) unless the caller says `refuse_incomplete=False` -- fail closed.
+A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) -- fail closed.
 `sink(site_key, tensor)` receives the observed tensor at each site; `OccurrenceSink` counts occurrences and records shapes only (no
 value reads, no synchronisation): the GPU gate's non-interference observer.
 """
@@ -106,10 +106,9 @@ class OccurrenceSink:
              "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
 
 
-def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, sink: Sink | None = None,
-                      refuse_incomplete: bool = True) -> Installation:
+def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, sink: Sink | None = None) -> Installation:
     hooks, deferred, unsupported = _sites_of(plan)
-    if unsupported and refuse_incomplete:
+    if unsupported:
         raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))
     sink = sink or (lambda key, t: None)
     inst = Installation(deferred=list(deferred))
