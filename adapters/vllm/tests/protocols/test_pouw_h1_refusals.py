@@ -386,6 +386,13 @@ def test_a_step_scheduled_twice_before_its_forward_admits_once_and_is_a_gap():
     assert run.owners == {0: [0, 0, 0]} and [e.prompt for e in run.requests] == [(1, 2, 3)]
 
 
+def test_a_window_that_commits_nothing_admits_nothing():
+    """A window installed with ``commit`` off has no request table: an admission gives no entry and names no slot."""
+    run = _driven(commit=False)
+    assert run.admit([("a", [1, 2, 3], 4)], [("a", 3)]) == []
+    assert run.requests == [] and run.owners == {} and run.request_gaps() == []
+
+
 @pytest.mark.parametrize("admission", [RQ.ROUND0, RQ.PER_ROUND])
 def test_a_window_whose_opener_refused_its_salt_opens_it_once(admission):
     """A window opens its salt once: after its opener refused, the window records why, and it never asks the opener
