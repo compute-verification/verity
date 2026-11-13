@@ -4,21 +4,16 @@ shape, unchecked when the gate has no check of it). A table that printed a cost 
 a wrong kernel's number into a report."""
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 from types import ModuleType
 
+import etable
+import lptable
+import mtable
+import pvtable
 import pytest
-
-MASKED = Path(__file__).resolve().parents[1] / "masked_gemm"
-
-
-def table(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(f"masked_gemm_{name}", MASKED / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+import stable
 
 
 def arms(ms: dict[str, float]) -> dict[str, dict]:
@@ -43,7 +38,7 @@ def cells(lines: list[str], *start: str) -> list[str]:
 
 
 def test_mtable_ratios_digits_and_verdicts(tmp_path, capsys):
-    T = table("mtable")
+    T = mtable
     low = {"8": {"L": [2, 3], "Kc": [0, 0]}}
     ms = {"plain_i8": 2.0, "plain_e4": 1.0, "full_i8": 3.0, "cg_full_i8": 4.0, "cduo32_full_i8": 5.0, "low8_i8": 2.5,
           "lowtc8_i8": 2.2, "low8_e4": 1.5}
@@ -68,7 +63,7 @@ def test_mtable_ratios_digits_and_verdicts(tmp_path, capsys):
 
 
 def test_etable_groups_and_verdicts(tmp_path, capsys):
-    T = table("etable")
+    T = etable
     ms = {"plain_i8": 2.0, "plain_e4": 1.0, "cg_i8": 2.4, "fus_cduo32_i8": 3.0, "sep_lt_i8": 2.6}
     row = {"gpu": "a made-up GPU", "sms": 188, "lt_algo": [1, 2], "m": 8, "n": 8, "k": 32, "batch": 1}
     bench = [row | {"shape": s, "arms": arms({k: f * v for k, v in ms.items()})} for s, f in (("qk2k", 1), ("qk8k", 3))]
@@ -93,7 +88,7 @@ def test_etable_groups_and_verdicts(tmp_path, capsys):
 
 
 def test_stable_takes_the_cheapest_arm_that_passed(tmp_path, capsys):
-    T = table("stable")
+    T = stable
     ms = {"plain_i8": 2.0, "plain_e4": 1.0, "gen_pm1": 0.5, "sform_pm1_i8": 1.0, "slt_pm1_i8": 3.0, "fus_pm1_i8": 2.5,
           "sduo_pm1_i8": 4.0}
     row = {"gpu": "a made-up GPU", "sms": 188, "lt_algo": [1, 2], "shape": "sq4096", "m": 8, "n": 8, "k": 32, "batch": 1}
@@ -113,7 +108,7 @@ def test_stable_takes_the_cheapest_arm_that_passed(tmp_path, capsys):
 
 
 def test_pvtable_takes_the_noise_free_producer_off_a_producers_arm(tmp_path, capsys):
-    T = table("pvtable")
+    T = pvtable
     ms = {"plain": 2.0, "prodN": 1.0, "prodmax": 0.5, "cduo": 3.0, "genP_pm1": 0.4, "genV_pm1": 0.6, "sepS_pm1": 3.0,
           "fusS_pm1": 2.6, "prodSlt_pm1": 3.4, "sepSd_pm1": 5.0}
     row = {"gpu": "a made-up GPU", "sms": 188, "H": 32, "lt_algo": [1], "s": 2048, "arms": arms(ms)}
@@ -133,7 +128,7 @@ def test_pvtable_takes_the_noise_free_producer_off_a_producers_arm(tmp_path, cap
 
 
 def test_lptable_routes_parts_and_the_share_over_the_reference(tmp_path, capsys):
-    T = table("lptable")
+    T = lptable
     ms = {"plain": 2.0, "genU": 0.2, "genF": 0.4, "lt_bsep": 3.0, "t_bfus": 2.8, "td_bsep": 4.0, "bonly": 2.4, "ltK": 2.5,
           "tK": 2.6, "cplain": 2.2}
     row = {"gpu": "a made-up GPU", "sms": 188, "shape": "o", "m": 8192, "n": 4096, "k": 4096, "batch": 1, "Kp": 4192, "mx": 2,

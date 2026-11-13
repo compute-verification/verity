@@ -12,11 +12,11 @@ import sys
 import threading
 
 import pytest
+from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.configuration.deploy.stream import Side
 from verity.protocols.poub.verifier import audit, codec, verifier_party
 from verity.protocols.poub.verifier import period as P
-from remote_bandwidth_fakes import Clock, Entropy
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -39,7 +39,7 @@ def dropping(honest: audit.Store) -> audit.Store:
     return out
 
 
-def _split(cheat=None) -> tuple[P.Period, int]:
+def _split(cheat=None) -> tuple[P.Run, int]:
     request = verifier_party.request_of("n0")
     a, b = socket.socketpair()
     got: dict = {}
@@ -57,14 +57,14 @@ def _split(cheat=None) -> tuple[P.Period, int]:
     return got["period"], passes
 
 
-def _in_process(cheat=None) -> P.Period:
+def _in_process(cheat=None) -> P.Run:
     c = Clock(10 ** 9, 1_000)
     return P.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
 
 
 @pytest.mark.parametrize("cheat, verdict", [(None, "accept"), (dropping, "reject")], ids=["honest", "dropping"])
 def test_the_split_session_is_the_periods(monkeypatch, cheat, verdict) -> None:
-    """Registration draws a fresh nonce from the OS; pinned, the two sessions are the same session."""
+    """Registration samples a fresh nonce from the OS; pinned, the two sessions are the same session."""
     monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=bytes(audit.NONCE_BYTES)))
     split, passes = _split(cheat)
     assert split == _in_process(cheat)
