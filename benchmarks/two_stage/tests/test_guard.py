@@ -1,18 +1,22 @@
 """SPOT[Flock]'s two-stage Lean model on a real run of the toy: the conjuncts of `SpotFlock.stmtOk`
 (`security/Proofs/Flock/SpotFlock/Code.lean`) that read the run accept an honest two-stage run at a `Held` fixed before
-the run, and refuse two runs they must refuse.
+the run, and refuse the runs they must refuse.
 
 What it shows: `stmtOk` is its conjuncts on the registration alone (`regOk`: `partition` and `two`) and its conjuncts on
 the run (`runOkAt`), a kernel-checked equation (`TwoGuard.stmtOk_split`). On the honest run's messages (the boundary
-record x, the interior record m₁, its four session statements m₂ in template order, the two stages' coins c₀ and c₁),
-`runOkAt h x m₁ m₂ c₀ c₁` evaluates to true in Lean, at an `h` that `TwoGuard.lean` builds only from what the auditor
-registers before the run: the boundary registration's program, query, work table and selection rule, the counts, the
-templates' names, links and descriptor (`held.json`), the templates' reference statements, made from the interior
-window with no run in it and admitted only after the script checks each is in Flock's masked scope (`zkOk`), and the
-templates' reference reads as the params name them (`ref-<t>.reads.json`, `Held.refReads`). Nothing in
-`h` reads the run's messages or coins. `two`'s conjuncts on the members' files (`twoFilesOk`: the layout fits them, and
-each reference statement reads as a member's) evaluate to true too. `runOkAt` refuses the altered run, and the honest
-run with one byte of a session statement's registered reads flipped (`guard.flip_registered`).
+record x, the interior record m₁, its session statements m₂, one per template in template order, the two stages' coins
+c₀ and c₁), `runOkAt h x m₁ m₂ c₀ c₁` evaluates to true in Lean, at an `h` that `TwoGuard.lean` builds only from what the
+auditor registers before the run: the boundary registration's program, query, work table and selection rule, the counts,
+the templates' names, links, wires and descriptor, the boundary and interior registrations' ports (`held.json`), the
+templates' reference statements, made from the interior window with no run in it and admitted only after the script
+checks each is in Flock's masked scope (`zkOk`), and the templates' reference reads as the params name them
+(`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. `two`'s conjuncts on the
+members' files (`twoFilesOk`: the layout fits them, and each reference statement reads as a member's) evaluate to true
+too. `runOkAt` refuses the altered run, and the honest run with one byte of a session statement's registered reads
+flipped (`guard.flip_registered`). Its records check (`recordsOk`) refuses the honest run with FLIP_B's own port `o0`,
+which no link or wire names, dropped from round 1's record and registered as a value of its name (`guard.drop_port`),
+and with a value the registration registers registered twice (`guard.register`), where the same run with it registered
+once passes.
 
 What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous. `regOk` also
 asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, which read only `h` and unroll the members'
@@ -44,6 +48,11 @@ import guard as G  # noqa: E402
 
 EXE = of(__file__).VERITY_TWO_STAGE_GUARD
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
+#: a value no port of the toy's is named, which the registered-value variants register
+VALUE = "TwoStageToyGuard/registered"
+#: `toy.FLIP_B`'s name, the template whose own port `o0` no link or wire names; `toy` needs the workspace, which
+#: `guard_node.py --pytest`'s environment doesn't have
+FLIP_B = "TwoStageToyFlipB"
 pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names the command that runs TwoGuard.lean "
                                 "(guard_node.py --pytest makes it)")
 
@@ -71,10 +80,30 @@ def verdicts(run: Path) -> list[bool]:
     return [v["accepted"] for v in json.loads((run / "verdicts.json").read_text())]
 
 
+def variant(tmp_path: Path, run: Path, files: dict[str, bytes]) -> Path:
+    """``run``'s export with ``files`` in place of its own, the rest linked."""
+    d = tmp_path / "run"
+    d.mkdir()
+    for p in run.iterdir():
+        if p.name not in files:
+            (d / p.name).symlink_to(p)
+    for name, data in files.items():
+        (d / name).write_bytes(data)
+    return d
+
+
+def registered(run: Path, tmp_path: Path, times: int) -> dict:
+    """``check`` of ``run`` at a registration whose interior registers `VALUE`, its record registering it ``times`` times."""
+    held = json.loads((run / "held.json").read_text())
+    held["interior_names"]["values"] = [VALUE]
+    m1 = G.register((run / "m1.bin").read_bytes(), VALUE, times)
+    return check(variant(tmp_path, run, {"held.json": json.dumps(held).encode(), "m1.bin": m1}))
+
+
 def test_honest_run_passes(runs: Path):
     assert all(verdicts(runs / "honest"))
     result = check(runs / "honest")
-    assert result["runOk"] and result["twoFilesOk"], result
+    assert result["runOk"] and result["recordsOk"] and result["twoFilesOk"], result
 
 
 def test_altered_run_fails(runs: Path):
@@ -86,3 +115,21 @@ def test_one_registered_byte_flipped_fails(runs: Path, tmp_path: Path):
     flipped = tmp_path / "m2-flipped.bin"
     flipped.write_bytes(G.flip_registered((runs / "honest" / "m2.bin").read_bytes()))
     assert not check(runs / "honest", flipped)["runOk"]
+
+
+def test_dropped_port_registered_as_a_value_fails(runs: Path, tmp_path: Path):
+    honest = runs / "honest"
+    (flip_b,) = [n for n in json.loads((honest / "held.json").read_text())["names"] if n.startswith(f"{FLIP_B}_")]
+    port = f"{flip_b}/o0"
+    result = check(variant(tmp_path, honest, {"m1.bin": G.drop_port((honest / "m1.bin").read_bytes(), port)}))
+    assert not result["recordsOk"] and not result["runOk"], result
+
+
+def test_value_registered_once_passes(runs: Path, tmp_path: Path):
+    result = registered(runs / "honest", tmp_path, 1)
+    assert result["recordsOk"] and result["runOk"], result
+
+
+def test_value_registered_twice_fails(runs: Path, tmp_path: Path):
+    result = registered(runs / "honest", tmp_path, 2)
+    assert not result["recordsOk"] and not result["runOk"], result

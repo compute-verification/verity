@@ -1,7 +1,6 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "compile_settings", "detail": "except Exception"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},
@@ -13,7 +12,6 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
-    {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "_rid_of", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "git_head", "detail": "except Exception", "count": 2},
@@ -35,7 +33,6 @@
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
     {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
-    {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_is_fake", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_reset_tuned_table_cache", "detail": "except Exception"},
@@ -59,7 +56,6 @@
     {"file": "verity/definitions/registry/lifted.py", "kind": "broad-except", "symbol": "_is_decoded", "detail": "except Exception"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "_real_rows", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"}
   ]
 }

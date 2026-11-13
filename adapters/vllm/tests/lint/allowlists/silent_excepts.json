@@ -14,7 +14,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "step_bound_bytes", "detail": "except StopIteration: isz = 2"},
-    {"file": "verity_vllm/commit/opened.py", "kind": "silent-except", "symbol": "OpenedReader.or_none", "detail": "except OpeningNotVerified: return None"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "silent-except", "symbol": "_cgroup_memory", "detail": "except OSError: return None"},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "silent-except", "symbol": "oom_kills", "detail": "except (OSError, StopIteration, ValueError, IndexError): return None"},
     {"file": "verity_vllm/check/replay/population.py", "kind": "silent-except", "symbol": "_stratum_spec", "detail": "except (TypeError, ValueError): return spec"},

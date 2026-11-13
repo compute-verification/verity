@@ -6,12 +6,15 @@ from __future__ import annotations
 import gzip
 import json
 
+import pytest
+
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
 from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
-    AnnotationCorrespondence,
+    ReturnSlot,
+    infer_wrapper_prefix,
     read_program_correspondence,
 )
 
@@ -50,7 +53,7 @@ MODULES = ["body.embed", "body.blocks.0.norm_in", "body.blocks.0.proj_a", "body.
 
 def test_same_plan_under_both_sources_and_the_source_is_recorded():
     man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    fallback = AnnotationCorrespondence(rt, wrapper_prefix="model.")
+    fallback = AcquireCorrespondence(rt, wrapper_prefix="model.")
     canonical = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(MODULES))},
                                       digests={"build_request": "d" * 64})
     assert fallback.source == "v1_annotations" and canonical.source == "correspondence"
@@ -62,7 +65,7 @@ def test_same_plan_under_both_sources_and_the_source_is_recorded():
     assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if P.ROUTE_OF_FAMILY.get(v.family) in P.MODULE_ROUTES) + sum(len(v.consumers) for v in b.values)
     da, db = a.to_json(), b.to_json()
     assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
-    assert P.load_plan.__name__ and P.plan_digest(db) == db["plan_digest"]
+    assert P.plan_digest(db) == db["plan_digest"]
 
 
 def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
@@ -70,7 +73,7 @@ def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
     partial = [m for m in MODULES if m != "body.blocks.0.act"]                     # the record owns no Call under body.blocks.0.act
     corr = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(partial))})
     plan = P.acquisition_plan(man, corr, tables=TABLES)
-    assert plan.digest == P.acquisition_plan(man, AnnotationCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).digest
+    assert plan.digest == P.acquisition_plan(man, AcquireCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).digest
     unc = plan.correspondence["modules"]["unconfirmed"]
     assert [u["value"] for u in unc] == ["body.blocks.0.act/out"] and unc[0]["module"] == "body.blocks.0.act" and unc[0]["role"] == "owning module"
     act = next(v for v in plan.values if v.value_id == "body.blocks.0.act/out")
@@ -92,7 +95,7 @@ def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_t
     assert pa.digest == pb.digest and pb.correspondence["modules"]["unconfirmed"] == [] and pb.correspondence["modules"]["confirmed"] == pa.correspondence["modules"]["confirmed"] > 0
     assert pb.correspondence["wrapper_prefix"] == "model." and pb.correspondence["wrapper_prefix_source"] == "runtime_tree"
     # the fallback has no record to confirm against: no prefix is determined
-    fb = AnnotationCorrespondence(rt, wrapper_prefix="")
+    fb = AcquireCorrespondence(rt, wrapper_prefix="")
     assert fb.wrapper_prefix == "" and fb.wrapper_prefix_source is None
     # any wrapper attribute chain is determined the same way; a record whose paths meet the tree under NO prefix gets "" and every module
     # reads unconfirmed (shown in the provenance, not hidden)
@@ -102,6 +105,20 @@ def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_t
     assert alien.wrapper_prefix == "" and alien.confirmed("body.blocks.0.act") is False and alien.owned_modules() == ["", "q.zz.a", "q.zz.b.c"]
 
 
+def test_a_path_that_is_the_trees_own_votes_for_no_prefix():
+    """A record written in the tree's own paths (no export wrapper): each path that is a module of the tree votes for no prefix, so the
+    record's modules read confirmed.  No prefix wins a tie with a longer one, and is outvoted by a prefix more paths meet the tree under."""
+    rt = tree()
+    own = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES, prefix=""))})
+    assert own.wrapper_prefix == "" and own.wrapper_prefix_source == "runtime_tree"
+    assert own.confirmed("body.blocks.0.act") is True and own.owned_modules() == sorted(MODULES)
+    assert infer_wrapper_prefix(MODULES, rt) == ""
+    both = tree(embed=["Embed", "Module"])                                         # `body.embed` is a module as it stands, and `embed` is one under `body.`
+    assert infer_wrapper_prefix(["body.embed"], both) == ""                       # one vote each: the shorter
+    assert infer_wrapper_prefix(["body.embed", "logits"], both) == ""             # two votes to one
+    assert infer_wrapper_prefix(["model.body.embed", "model.logits", "body"], rt) == "model."
+
+
 def test_owning_module_by_call_id_reads_the_record():
     corr = AcquireCorrespondence(tree(), wrapper_prefix="model.", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES))},
                                  aliases={"body.blocks.0.act": ["body.blocks.0.norm_in", 1]})
@@ -109,7 +126,15 @@ def test_owning_module_by_call_id_reads_the_record():
     assert corr.owning_module({"call": 3, "program": "p"}) == "body.blocks.0.norm_in"     # op_path_aliases apply to the record's path too
     assert corr.owning_module({"i": 6, "name": "argmax[0]"}) == "" and corr.owning_module({"name": "model.body.embed/e[0]"}) == "body.embed"
     assert corr.confirmed("body.embed") is True and corr.confirmed("runner.sampler") is False
-    assert AnnotationCorrespondence(tree()).confirmed("body.embed") is None
+    assert AcquireCorrespondence(tree()).confirmed("body.embed") is None
+
+
+def test_a_named_port_off_the_runner_is_the_whole_return_and_a_call_that_names_no_module_is_refused():
+    corr = AcquireCorrespondence(tree(), wrapper_prefix="model.")
+    assert corr.return_slot({"op_path": "body.embed", "output_member": "hidden"}) == ReturnSlot()
+    for call in ({}, {"i": 6}, {"call": 2}):                                         # a call id reads a record, and this reader has none
+        with pytest.raises(KeyError, match="neither op_path, call nor name"):
+            corr.owning_module(call)
 
 
 def test_from_programs_presence_test_digest_check_and_uniform_fallback(tmp_path):
