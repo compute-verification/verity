@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -248,6 +248,8 @@ def _overhead_parser(commands: Any) -> None:
 def _prove(args: Any) -> int:
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
                               cores=args.cores, local_only=args.local_only)
+    if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
+        prove_records.record(doc, args.metrics)
     if args.steady_rows:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
     if args.system == "spot":
@@ -347,8 +349,12 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+    """`metrics`: a runner's metric ids, each for the total of `prove`'s table it names (`prove_records.FIGURES`),
+    which `prove` records in a research run's result."""
+
     args = _parser().parse_args(argv)
+    args.metrics = dict(metrics or {})
     try:
         settings.validate(of_record=args.command == "_vllm-point")
         return int(args.run(args))
