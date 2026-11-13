@@ -39,7 +39,7 @@ def _resume(stage1: dict, stop: BS.Stop = T.STOP, design: str = DESIGN):
     return SA.resume(stage1, T.PAIR, stop, design, proof_deadline=T.RULE.proof_deadline)
 
 
-def _stage1(tmp_path: Path, monkeypatch, seed: str) -> dict:
+def _handoff(tmp_path: Path, monkeypatch, seed: str) -> dict:
     """A stop class's hand-off as `two_stage.py first --stop` writes it, on one session of a test's challenger."""
     pubs = [json.loads(json.dumps(T._stop_class().public()))]
     monkeypatch.setattr(T.AC, "start", T._start(T.OneSession(seed)))
@@ -74,7 +74,7 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     directory nor calls the prover's half. Refused: another stop rule, another sampling design, a sample that is not
     the hand-off's, a hand-off with no stop sample, and a stop record on a boundary record the boundary stream never
     logged (case 2)."""
-    stage1 = _stage1(tmp_path, monkeypatch, "resume")
+    stage1 = _handoff(tmp_path, monkeypatch, "resume")
 
     def prover(*_a: object, **_k: object):
         raise AssertionError("the verifier's half called the prover's")
@@ -114,7 +114,7 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     the boundary audit's premise too, and no other entry names one. So the record is not complete, and the summary
     says no length is held and lists the three premises, the boundary audit's and the stop rule's held here word for
     word."""
-    stage1 = _stage1(tmp_path, monkeypatch, "accept")
+    stage1 = _handoff(tmp_path, monkeypatch, "accept")
     got, summary = _audit(stage1)
     audit = got["audit"]
     assert got["accepted"] is True and got["symbol"] == S.ACCEPT and audit["accepted"] is True
@@ -153,7 +153,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     record is on no entry of record, and the summary holds no length on it. With one that accepted
     with an entry that did not run the entry has no verdict and gives its reason (case 4): the record accepts, and
     the boundary-audit entry is among those that keep it from being complete."""
-    stage1 = _stage1(tmp_path, monkeypatch, "refusals")
+    stage1 = _handoff(tmp_path, monkeypatch, "refusals")
     _, summary = _audit(stage1, accepted=False, why="the proof does not verify")
     assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["verdicts"][SA.ORDER] is True
     assert summary["failed"] == ["registered", "roots"]
@@ -240,7 +240,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
     coin opened and not read, and no evidence. Case 3: the boundary stream's audit record missing, refused, and
     another registration's. Case 4: that audit record accepted with an entry that did not run."""
-    stage1 = _stage1(tmp_path, monkeypatch, "across")
+    stage1 = _handoff(tmp_path, monkeypatch, "across")
     r, s = _resume(stage1), stage1["stop"]
     earlier, later = stage1["registration"], s["registration"]
     refused = SMALL.unaccepted(stage1)
@@ -342,13 +342,13 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
     the second's is complete; no audit record of the third record; and the stop stream's handed in its place.
     Refused: an empty list, a boundary that is not hex, a read whose later registration names no previous record, by
     its index, and a list without its ``last``."""
-    stage1 = _stage1(tmp_path, monkeypatch, "across-all")
-    r, s = _resume(stage1), stage1["stop"]
-    boundary, stop = stage1["registration"], s["registration"]
-    refused = SMALL.unaccepted(stage1)
+    handoff = _handoff(tmp_path, monkeypatch, "across-all")
+    r, s = _resume(handoff), handoff["stop"]
+    boundary, stop = handoff["registration"], s["registration"]
+    refused = SMALL.unaccepted(handoff)
     accepted = {**refused, "symbol": S.ACCEPT, "audit": {**refused["audit"], "accepted": True}}
     file = SA.reads(r)
-    assert SA.decide(r, stage1, file, _proved(r, file), accepted)["accepted"] is True
+    assert SA.decide(r, handoff, file, _proved(r, file), accepted)["accepted"] is True
     stopped = r.stream.records[-1]
     assert stopped["registration"] == stop == stopped["audit"]["registration_digest"] and stopped["symbol"] == S.ACCEPT
     assert stopped["audit"]["accepted"] is True and stopped["audit"]["complete"] is False
@@ -356,7 +356,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
     whole = {**stopped, "audit": {**stopped["audit"], "complete": True}}
     third = {**s["record"], "previous": stop}
     tie = SA.R.digest(third)
-    window = stage1.get("window_root") or r.layout.run
+    window = handoff.get("window_root") or r.layout.run
 
     def chain(seed: str, *commits: tuple[str, int]) -> tuple[dict, dict]:
         one, got = _released(seed, *commits)
