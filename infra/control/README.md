@@ -70,7 +70,7 @@ stops its own loop before `drive.sh start` here. Its checkout was cloned over ht
 `drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token is verity-drive's (App
 5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository only.
 
-Reading GitHub. Everything on the pod that only reads GitHub reads it with one read-only token, which the pod mints itself:
+Reading GitHub. Every watch on the pod reads GitHub's API with one read-only token, which the pod mints itself:
 `gh_read_token.sh --cached` (`/data/infra/gh_read_token.sh`), the same App's installation token asked for with Contents and
 Pull requests read and nothing else, kept 45 min in a cache file of its own (`/dev/shm/verity-read-token`), apart from
 `gh_app_token.sh`'s write token. Each reader runs it at each read and holds no token from its start: the sweep's read of
@@ -80,8 +80,10 @@ So `relay.env` needs no `GH_TOKEN` line, and no watch reads with a person's toke
 or a helper that gives no token, rings infra once until a read works again: the sweep's doorbell and the agent watch's
 `github_refused` say what to do, and the cloud watch opens `github|unreadable`. On the pod, `/data/infra/gh_read_token.sh >
 /dev/null` prints GitHub's reason when the App's key, installation or permissions are at fault, and `rm
-/dev/shm/verity-read-token` drops a cached token GitHub no longer takes. What writes to GitHub (drive, the fixtures export,
-the steward, the nightly check) keeps `gh_app_token.sh` and `gh_notes_token.sh`.
+/dev/shm/verity-read-token` drops a cached token GitHub no longer takes. Drive, which writes, keeps `gh_app_token.sh`'s
+token, as does git wherever its credential helper is `gh_app_token.sh git` (the fixtures export's, the steward's and the
+nightly check's fetches, the agent watch's `git ls-remote`, the watchers' clones), and the steward's notes clones keep
+`gh_notes_token.sh`'s.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin over https,
 its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.
