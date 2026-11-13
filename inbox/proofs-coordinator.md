@@ -129881,3 +129881,33 @@ Scratch branch `cursor/proofs-count-scratch-class-7d3a`, head `77c5473205cbaf8fa
 - Your word "carry". Then I carry #9621's branch with `tools/move/restack.py`, put the fix's commit on it, run the changed suites on a node and give you the ready line.
 - #9621 on `main`, then the guard's pull request; then the security level at the served run's sizes and the one writer.
 - Untouched: #9621's branch is still at `13a60635abb2`, no `main` is merged into any branch of mine, and I have built nothing of the join of the two readers.
+
+## CUT, Fri 13 Nov 08:23Z: the mend is PUSHED and NOT compiled: `4c18473270` on `cursor/proofs-cut-9323` = `4d24802945` + TWOLEG's named head `1e20910586` + `firstReads` proved from the digest comparison, no premise; one try of all eight Cut files is out (`r20261113-081936-5897`, vy-nebius-cpu-3, building); ASSEMBLY: do not merge `4c18473270` before its verdict
+
+**In plain words.** TWOLEG named `1e20910586` at 08:12Z, so I did what your 07:54Z mail says: merged that head, changed the one proof that takes `inputAt_ok` apart to its end, pushed, and sent the try. No statement changed. Until the try ends, the only compiled head of mine is `4d24802945`, and that one does not compile on a tree that holds `1e20910586`.
+
+1. **The merge** [run]: `95ca8be6a7` merges `1e20910586` into `4d24802945` with no conflict; 21 files change, none of them mine. It brings 23 commits, none a merge, and no commit of `main`: both sides' merge base with `origin/main` is `8ef93f0196` (Fri 13 Nov 02:34Z). The lock's roots are the two sides' union, 196, no name twice, and the lakefile's roots likewise [run: a walk of both files at the three heads].
+2. **The mend** [read], `4c18473270`, one file, 6 lines in and 24 out. In `firstReads_of_shown` the `obtain` on `inputAt_ok` now takes `j₁`, `j₂` and the last conjunct `hdig : Registration.digest j₁ = .ok c.digest`; the step `after = c.digest` rewrites with `hdig`, where it used `Properties.Spot.digestIsRecord's` on `c.record`. `commitment_of_caseOf` is deleted: nothing on my branch, the join's `42bba26494` or TWOLEG's branch reads it [run: `git grep`]. One bullet of the module docstring now says the record is the one the form read back. `FirstReads`, `firstReads_of_shown`, `cutBound_shown` and every other statement are word for word what `4d24802945` has.
+3. **Why nothing else of mine changes** [read]. `accepted_steps` and `accepted_ordered` keep their statements at `1e20910586`. `CutHeld:207`, `CutRead:200` and `CutOrder:437` stop at `inputAt_ok`'s third conjunct. No file of mine opens the form's namespace, so the form's new `firstLines` does not meet `Verity.SampledTwo.firstLines`. `keysAre` is private again at `1e20910586` (TWOLEG's `806224946c` says "no proof names them"; `CutFirst.lean:63` does, by `open private`, which a private name allows).
+4. **On the VM at `4c18473270`** [run]: `pytest tests/test_lean_packages.py`: "35 passed, 3 warnings in 11.00s", the `import_all` test among them. The three warnings are caps with room, none on a file of mine.
+5. **The try** [run]: `r20261113-081936-5897`, `--on auto`, spilled to vy-nebius-cpu-3, launched 08:19:36Z at `4c18473270806bd4509fe07f9764d39d38e3c3ee`, worktree clean and pushed. It took "Lean audit slot build/1 of 5" at once and is in `Cut.lean`'s dependencies ("89 files changed there"). Eight files in the order they import each other: `Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutFirst`, `CutOrder`, `CutAccept`, `CutRoots`, each with `--siblings` and its axiom probe. The first two import no file TWOLEG changed in `security/Proofs`; they are there for a probe line over the new form.
+
+### STOP RULE
+
+Not reached. No statement of mine changed; the form's change is TWOLEG's and soundness took it (your 07:54Z mail).
+
+### NEEDS
+
+- ASSEMBLY: `4d24802945` is the compiled head today (my 08:16Z entry). If you merge TWOLEG's `1e20910586` into the join before `4c18473270` has its verdict, `CutFirst.lean:260` fails there, and `CutAccept`, `DeviceAccept` and `JoinsAt` with it [derived: they read `firstReads`]. `4c18473270` holds `1e20910586`, so one merge of it brings both once it is named compiled.
+- Nothing from the coordinator or TWOLEG.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- That `4c18473270` compiles: `5897` says, expected by about 08:50Z.
+- Two lines of bookkeeping on my branch that the join already settles its own way [run]: pous's `TRUSTED.sha256` line for `security/Proofs/lakefile.toml` is TWOLEG's value and does not match my merged lakefile (it did not match at `4d24802945` either, nor does the join's match its own); and my lock's `roots` list three of the cut's eight modules (`CutFirst`, `CutAccept`, `CutRoots`) where the join's lists all eight. I leave both to the join, so that my branch adds no conflict there.
+
+Branch `cursor/proofs-cut-9323` at `4c18473270` (pushed). Run out: `r20261113-081936-5897` on vy-nebius-cpu-3. Mailbox read through `5653cb3294`.
