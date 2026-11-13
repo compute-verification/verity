@@ -113388,3 +113388,47 @@ def NamesDistinct (h : Held) : Prop :=
 NEEDS: none new.
 
 Not established: that these proofs depend only on propext, Classical.choice and Quot.sound (the run's `--try Round2.lean --siblings` step, not yet reported), and that the bridge `RoundTwoOf.lean` elaborates against RUNCOINS's new `RoundTwo` (the run's last step). So nothing here is "done" by the rule yet. [guess] Both steps report by about 02:30Z.
+
+## ACCEPTS, Fri 02:00Z: `Accepts.lean` (the statements and `stmtAt`) compiles; `AcceptsProof.lean` failed on seven errors in four small lemmas, all fixed, and the next try of all four files waits on cpu-12
+
+COMPILED: `Accepts.lean` (`stmtAt` and every statement of the piece), in run `r20261113-011808-1c8b` on vy-nebius-cpu-12 [run: "Built Proofs.Properties.Verity.SampledTwo.Accepts"]. NOT YET: `AcceptsProof.lean`, `Cover.lean` and `ReadsOnly.lean`. In plain words: the half of my piece that says which statement the proved verifier judges an accepted two-stage audit at now compiles. The half that says the proved verifier accepts exactly what the form's check read failed its first compile. The errors were four small lemmas, two about how coins were chosen and two about reading a run. The main proof itself reported no error [run]. I fixed all four and sent the next try, which builds all four files.
+
+Details:
+
+- [run] `r20261112-233803-98af` (vy-nebius-2, at `e00f3a3ea5`) failed only inside TWOLEG's `Steps.lean` (no `open Spot`), not in my files. I merged TWOLEG's `7fed11bb74`, the head its 01:16Z entry says compiles. My one use of `accepted_steps` takes only its first conjuncts and ignores the rest, so the new `interiorUnshown` conjunct changes nothing for me. `inputAt_ok`'s shape is the one I destructure.
+- [run] `r20261113-011808-1c8b` (cpu-12, at `17a5617656`, 1,515 s, most of it rebuilding what the #9375 merge changed): `Steps`, `Projection`, `Reading` and `Accepts` built. `AcceptsProof.lean` had seven errors:
+  - `coinOf_starts` and `stageCoinsOf_starts`: `Classical.epsilon_spec` couldn't infer its predicate.
+  - `msgAt_run`: the history was left for Lean to guess.
+  - `form_coin_stage`: simp lacked `j ≤ more`.
+  - Every other declaration, `acceptsRun` included, reported no error. The `sorry` warnings in that log are ArkLib's, not mine.
+- Fixed at `ce21628a5f`, pushed. [run] `r20261113-015430-0088` (cpu-12, `--try ReadsOnly.lean --siblings`, 24 GB, 2,700 s) was waiting at 01:59Z, with four checks ahead. Expected end [guess]: about 02:45Z.
+
+**The coordinator's questions.**
+
+1. **Does the form's `sourceRead` close `SourcesFit`?** Not alone. The form sets `source := ξ` and `interior.source := ξ₂` (`VStarRecursive/SampledTwo.lean`, `inputOf`) [read]. `sourceRead_le` gives `ξ.size ≤ read`, where `read` is what `Select.select` read of `ξ` (`Spot/Run.lean`, `run`) [read]. The first stage's clause, `ξ.size ≤ L`, then needs only `read ≤ L`: the selection reads at most one coin's bytes at the held copy. That fact is about the run's selection, and RUNCOINS's "the selection reads only the released prefix" is its nearest owner [derived]. The second stage's clause, `ξ₂.size ≤ stage · L`, is untouched: it is `OneStageZk.coinsOf`'s output size, for TWOLEG or STAGECOINS. Until then `SourcesFit` stays a named premise.
+2. **Does the form's member check give `RoundsHeld`, `ScopeHeld` and `PinHeld`?** Yes in source, not yet as lemmas. The form builds each session's statement itself: `stepMember` runs `runFrom (m.statement (slice m) bs) …` (`Spot/OneStageZk.lean`, `stepMember`, `runMembers`) [read]. So the statement is the member's registered statement at the blobs, not bytes the prover chose. That gives the three clauses as follows, if the session statements in `SessionReading.stmts` are exactly those statements, encoded with HELDOF's `memberRaw`:
+   - **`PinHeld`** (`pinOk`, `SpotFlock/Code.lean`): `pinOk` compares a statement with template `t`'s reference statement, ignoring `draw`, `registered` and `publicFile`. When both are `memberRaw` of the same member at the same blobs, they differ only in those three fields, so `pinOk` holds by construction [derived]. This needs no accepted play, only HELDOF's `refRawOf` and the reading's `stmts` built alike.
+   - **`RoundsHeld`**: `k₀ h t` is `(FlockDeploy.V true).k (h.xS₀ t)`, and `k` reads only `setupOf true x` [read]. It follows from pin given one lemma: `setupOf`'s tables and spec don't read `draw`, `registered` or `publicFile` [guess on the lemma's truth: the public file's instance count is fixed by the member's units, which `unitsHeld` checks].
+   - **`ScopeHeld`** (`zkOk`, shape, `scopeCheck true`, `hiddenOf`): this one does need the accepted play: each member's session ran accepted. SESSIONOF's `sessionChecks_of_verdict` is the right argument, but it is stated at the one-stage v2 verdict (`checkBlobsAt`), not at the per-member `runFrom` [read: `Sampled/AcceptedChecks.lean` at `a9f4d34485`].
+   - **I take the three**, as named premises of my bridge from RUNCOINS's `spotRunAcceptsPlay` to `PlayAccepts`. I state them over the reading's `stmts`. Their proofs need the items under NEEDS 1 and 2 below. No check of the form has to change.
+3. **Who builds `SessionReading.stmts`?** SESSIONOF, I propose: `sessionOf` already builds each session's statement from the parameters and files. `stmts` is that list encoded (`FlockDeploy.encList` of `memberRaw` at each template's member, with the session's draw and registered reads), so `pinOk` compares like with like. In my files `S` is a parameter of `formReading` and of the piece, and nothing I wrote fixes `stmts` [read]. If SESSIONOF has no room, I write that definition myself, in a new file, and say so in the next entry.
+4. **Daniel's ruling that Friday's run is a demo:** nothing in my files changes.
+
+Branch `cursor/proofs-accepts-7d08` at `ce21628a5f`, pushed. Nothing is left unpushed.
+
+**Size.** Four files, about 925 lines. Every statement of mine is written and proved in source. What remains is compiling three files, and the premises below, which are others'.
+
+**STOP RULE.** Nothing. No lock, no listed guarantee, no wiring into `Sampled.lean`, nothing that turns the accept on. Nothing rests on the switch being off.
+
+**NEEDS.**
+
+1. SESSIONOF:
+   - the per-member form of `sessionChecks_of_verdict`: at `stepMember` accepted for member `m`, the session's statement `m.statement (slice m) bs` passes `zkOk`, `scopeCheck true` and `hiddenOf`, and has its reference statement's shape;
+   - and `stmts` built with `memberRaw` (question 3).
+2. HELDOF: `h.xS₀ t` is the encoding of `refRawOf p bs t`; and `setupOf true` (so Flock's `V.k`) and `shapeOf` read neither `draw`, `registered` nor `publicFile`.
+3. RUNCOINS: `read ≤ L` at an accepted run (for `SourcesFit`'s first clause). Unchanged from earlier: `AcceptedTwo` reads `Spot.Run.run i`, while the form calls `run i true`, and the bridge needs `jsonMsg (recordMsg j) = j`.
+4. TWOLEG or STAGECOINS: `(OneStageZk.coinsOf p.audit c₂ e.interior)`'s output has at most `stage · L` bytes.
+
+**To post.** Nothing.
+
+**Not established.** That `AcceptsProof.lean`, `Cover.lean` and `ReadsOnly.lean` compile (run `0088`). The three statement clauses, as lemmas. The earlier period's genuine challenger signature still makes the error ⊤, as `Accepts.lean`'s docstring says. Ready for soundness's reading: `Accepts.lean`, compiled.
