@@ -309,6 +309,61 @@ def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
     assert b.run_pass(bytes(64), plan)[1][3] == plan
 
 
+def served(coins: tuple[int, ...]) -> tuple[NodeMemory, remote.StoreBackend]:
+    """A store whose trace ran `engine`'s first ``len(coins)`` steps with no session: step 0 before the first window, as
+    `Serving.ready` runs it, the rest in window 0.  Once step k has run, the first ``coins[k]`` appends, in the order
+    made, are encoded, each under a coin of its own: the line open then writes an append's blocks, and none before."""
+    s = store()
+    b = remote.StoreBackend(s, engine(s), randbytes=random.Random(7).randbytes)
+    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    b.encode(reg)
+    trace = b.serving(reg, 2)
+    for k, landed in enumerate(coins):
+        if k == 1:
+            b.begin_window(bytes(32), None)
+        assert trace.advance(0 if k else None) == k
+        for a in trace.appends[len(trace.landed):landed]:
+            b.encode_append(a.first, bytes([a.first]) * 32)
+    return s, b
+
+
+def test_a_map_agrees_with_its_trace_and_its_store_up_to_the_appends_not_yet_encoded():
+    """`memory_map.agreement` after a trace with no session, whose step 0's append was encoded at once (its line writes
+    pages 0 and 3's K0 V0, the store's blocks 1, 3, 13 and 15), step 1's only once step 2 had run (the line open at
+    the end writes it, which the agreement closes), and step 2's never: the map, replayed, holds the trace's live
+    blocks, its writes are the appends' digests in order up to the one not encoded (`unrecorded`), and each slot it
+    holds at an appended index holds that index's bytes in the store."""
+    s, b = served((1, 1, 2))
+    first, late, waiting = b.trace.appends
+    assert store_map.agreement(b) == {
+        "live_agrees": True, "appends_agree": True, "recorded": first.count + late.count, "unrecorded": waiting.count,
+        "held_appended": first.count + late.count, "held_wrong": [], "agrees": True}
+    assert {x: s.memory_map.replay.holds(x) for x in (1, 3, 13, 15)} == dict(
+        zip((1, 3, 13, 15), range(first.first, first.first + first.count)))
+    assert b.trace.deferral()["encodes"] == [[0, 0, first.first, first.count], [1, 2, late.first, late.count],
+                                             [2, None, waiting.first, waiting.count]]
+
+
+@pytest.mark.parametrize("part", ["live", "appends", "store"])
+def test_a_map_that_disagrees_with_its_trace_or_its_store_says_in_which_part(part):
+    """Each part of `memory_map.agreement` decides alone, after steps 0 and 1 with step 0's append encoded: a trace
+    whose live blocks are not the map's (`live_agrees`), one whose appended digests are not the map's writes
+    (`appends_agree`), and a store whose bytes at a slot the map holds at an appended index are not that index's
+    (`held_wrong`, the slot)."""
+    s, b = served((1, 1))
+    landed, waiting = b.trace.appends
+    if part == "live":
+        b.trace.live[0] = False
+    elif part == "appends":
+        b.trace.digests[0] = bytes(len(b.trace.digests[0]))
+    else:
+        s.backing("kv/0").array[(1 - s.region("kv/0").first) * BLOCK] ^= 1
+    assert store_map.agreement(b) == {
+        "live_agrees": part != "live", "appends_agree": part != "appends", "recorded": landed.count,
+        "unrecorded": waiting.count, "held_appended": landed.count, "held_wrong": [1] if part == "store" else [],
+        "agrees": False}
+
+
 @pytest.mark.slow
 def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_first_step():
     """The Commit's binder numbers the engine's steps from its first run; an audit run after its runs takes the next."""
