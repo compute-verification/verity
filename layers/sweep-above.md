@@ -1,6 +1,6 @@
 # SWEEP-ABOVE: the layers above the proofs, as `main` holds them
 
-**Status: first table (items 1 and 2). Items 3 to 6 follow in the next push.**
+**Status: items 1 to 3. Items 4 to 6 follow in the next push.**
 
 - Commit of `main` read: `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` ("Queue: #9668 Retired terms: the PoUW verifier's
   six stale entries…", committed 2026-11-13 05:59 UTC). Every path below is as that commit holds it.
@@ -154,6 +154,101 @@ The listing's order (`tests/import_order.toml:14-43`) is one total order: pous (
 certifier, remote, onsite, composite (row 21). So by the listing the certifier (row 18) may load the policy (row 17), which
 2a and 2b show it does [read by me]. The page's diagram has policy → accounting and no arrow from accounting to policy
 (page lines 171-179) [read by me].
+
+## 3. The runtime; adapters, PyTorch, vLLM and models; `commitments/` and `circuits/` naming a protocol
+
+### 3a. Who imports the runtime
+
+What `main` has as the runtime is inside `verity/configuration/deploy/` (2,352 lines, 9 files, `wc -l`): its
+`__init__.py:1-8` names `party` (a party's interface), `manifest` (what a protocol declares), `config` (the configuration),
+`runtime` (what runs the parties: `run`, `runtime.py:553`), `stream` (one party over a byte stream), `sources` (clocks and
+coins), and internal `transcript`, `channels`, `process`; "The layer … imports no protocol" [read by me]. By the page,
+`party`/`manifest`/`config` are the shared files `party.py`, `protocol.py`, `config.py` (page §6 lines 200-205) and
+`runtime`, `stream`, `sources`, `channels`, `process`, `transcript` are `runtime/` ("sockets, randomness and clock,
+transcripts", page line 206). Inside the layer: `process.py:24` imports `runtime`; `runtime.py:51-55` imports `sources`,
+`channels`, `manifest`, `party`, `transcript`; `party.py`, `manifest.py`, `config.py` import only `verity.configuration.wire`
+and `manifest` [read by me].
+
+Imports of the runtime's modules from outside `verity/configuration` (`ast` over `verity/`, script `/tmp/sw/dep.py`: 23
+import lines name `runtime`, `stream` or `sources`; 16 name only `party`, `manifest`, `config`) [counted by me]:
+
+| Importer | Line | What it takes | Source or test |
+| --- | --- | --- | --- |
+| poub verifier `session_parties.py` | 47 | `runtime.ProtocolDef` (`runtime.py:73`: "A protocol as the runtime runs it: its manifest, and a factory for each of its parties") | source |
+| poub verifier `verifier_party.py` | 34 | `stream.Side` | source |
+| pous device `challenger_party.py` | 64, 66 | `stream`, `runtime.ProtocolDef` | source |
+| pous device `challenger_session.py` | 46, 49 | `stream`, `stream.Side` | source |
+| pous verifier `period.py`, `wipe_party.py`, `wipe_period.py` | 60, 42, 59 | `stream.Side` | source |
+| pous verifier `wipe_parties.py` | 33 | `runtime.ProtocolDef` | source |
+| spot verifier `parties.py` (proofs) | 126 | `runtime.ProtocolDef`; also `config.COMPOSITES` at 123 | source |
+| poub tests (`test_session_parties.py:13-14`, `test_verifier_party.py:17`), pous tests (`test_pous_challenger_party.py:23-26`, `test_pous_wipe_parties.py:19-21`, `test_pous_wipe_period.py:28`, `test_pous_wipe_store.py:28`), spot tests (`test_parties.py:19`, `test_spot_parties.py:26`) | | `runtime.run`, `sources`, `stream.Side`, `ProtocolDef` | tests |
+
+No file of PoUW, the certifier, the policy, compose (`remote`, `onsite`, `composite`), `verity/hardware`,
+`verity/circuits` or `verity/commitments` imports a runtime module (same scan) [counted by me]. The shared file
+`verity/configuration/deploy/config.py:59-61` names the protocol ids of both composites in `COMPOSITES`
+(`"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs", "wipe")`,
+`"verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")`); its docstring line 25: "this module imports
+no protocol and no workload" [read by me].
+
+### 3b. Adapters, PyTorch, vLLM and models named in `verity/`
+
+Import statements (and `import_module` strings) of `torch`, `vllm`, `verity_vllm`, `transformers`, `safetensors`,
+`triton`, `huggingface_hub` anywhere under `verity/` (`/tmp/sw/adp.py`) [counted by me]:
+
+| File | Line | Module |
+| --- | --- | --- |
+| `verity/protocols/flock/pod/gemm_slowdown.py` | 54 | `torch` |
+| `verity/definitions/requirement/tests/test_census_and_memory_map.py` | 179, 180, 198, 242, 269, 270, 271, 404 | `verity_vllm.program.predict.build`, `.phi`, `verity_vllm.query.required`, `verity_vllm.protocols.remote_bandwidth.memory_map`, `verity_vllm.commit`, `…remote_bandwidth.interface`, `…remote_bandwidth.registry` |
+
+`tests/test_integration_boundaries.py` `KNOWN` (lines 35-81) has 43 entries: the 7 `verity_vllm` modules of
+`test_census_and_memory_map.py` above, and 36 entries naming `verity.definitions.*` modules (in `flock/prover`,
+`flock/sigma/tests`, `definitions/tests`, `definitions/evaluate/tests`). `INTEGRATIONS` is read from each
+`adapters/*/pyproject.toml`'s wheel packages, which is `['verity_vllm']` (`adapters/vllm/pyproject.toml`); the check for
+gone entries (line 137) looks only at modules whose root is in `INTEGRATIONS`, so the 36 `verity.definitions.*`
+entries are neither found nor checked as gone [read by me; counts `sed -n 36,80p … | grep -c`].
+
+Names in text (code, comments, docstrings, data) under `verity/`, excluding `.lake` [counted by me]:
+
+| Pattern | Files / lines | Where most (files/lines) | Places that are code, not prose [read by me] |
+| --- | --- | --- | --- |
+| `vllm` (case-insensitive; `rg -c -i vllm verity`) | 416 / 1,260 | `definitions/registry` 120/391, `protocols/flock` 79/238, `protocols/certifier` 47/155, `definitions/numerics` 31/97, `protocols/pouw` 29/54, `composite` 7/58, `commitments/*` 11 files | `verity/commitments/domains.py:183-196,210,397-400`: 14 constants named `VLLM_*` with bytes `"verity-vllm/…"` (e.g. `VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"`, `VLLM_SERVING_ROWS = "verity-vllm/serving-rows/v2"`), the same in Lean `verity/commitments/identity/Identity/Domains.lean:30-48,236-239` and `Identity/Domains/Shared.lean:61-64`; `verity/commitments/windows/rows.py:93,97,1269` and `windows/interface.py:132` write `"verity-vllm/serving-rows/…"` and `"verity-vllm/advice-windows/advice/v1"`; `verity/commitments/pyproject.toml:10-11` lists `adapters/vllm/verity_vllm/settings.py`, `__init__.py`, `check` as test inputs; `verity/errors.py:5` (docstring: verdict codes `verity_vllm.check.codes` build on `ProtocolError`); `verity/settings.py:5-9` (the vLLM adapter keeps its own copy) |
+| vLLM's scheduler (`rg -c -i scheduler verity`) | 42 / 121 | `protocols/certifier/verifier/replay_step.py` 26 | `replay_step.py:1-15`: "One vLLM v1 scheduler step as a Boolean Definition … vLLM v1's `Scheduler.schedule` and `update_from_output` (the pinned 0.28.1rc1.dev472)"; it is in the certifier's verifier place |
+| `\btorch\b\|PyTorch` | 137 / 483 | `definitions/registry` 53/203, `definitions/tests` 14/146, `protocols/flock` 22/44, `definitions/numerics` 20/46, `definitions/ops` 14/20, `protocols/pouw` 6/13 | the one import above; the rest not split into code and prose (not read) |
+| model families (`llama\|qwen\|deepseek\|mistral\|mixtral\|gpt-oss\|GPT-n\|gemma\|kimi\|phi-n\|granite\|olmo`, case as written) | 209 / 638 | `protocols/inference_only` 31/282, `definitions/registry` 75/165, `protocols/flock` 29/62, `protocols/pouw` 19/34, `composite` 1/20, `protocols/certifier` 11/13, `protocols/poub` 6/13, `hardware/cards` 1/2 | see the next row |
+| model checkpoints pinned in a verifier | 1 file, 7 models | `verity/protocols/pouw/verifier/lean/check/models.json` | keys `GLM53_INT8`, `LLAMA31_8B_INT8`, `LLAMA32_1B_BF16`, `LLAMA32_1B_INT8`, `LLAMA32_1B_INT8_K2048`, `QWEN25_32B_BF16`, `TORCH_LOOP_MLP_H128_W8A8`, each a `checkpoint_sha512` and the SHA-512 of each file (`model-00001-of-00141.safetensors`, …). Read by PoUW's Lean verifier `PouwCheck/Credit.lean:1634` (`include_str "../models.json"`, `PINNED_MODELS`, `MODEL_FIELD := "model"` at 1625), by `pouw/verifier/credit.py:284-285`, by PoUB's device `poub/device/live_verifier/host.py:165` (`MODEL_PINS`), by `poub/verifier/store.py:146` (prose) and by compose's device `verity/composite/device/live_challenger/models.py:53` (`PINS`) |
+| other files named for models | | `verity/protocols/inference_only/nci/models.json`, `verity/protocols/inference_only/rho/data/models.toml` | not opened |
+
+### 3c. `verity/commitments/` and `verity/circuits/` naming a protocol
+
+Imports [counted by me]: no Lean `import` and no Lake `require` from `verity/circuits/*` or `verity/commitments/*` into a
+protocol (`/tmp/sw/leanimp.py`, `/tmp/sw/lake.tsv`). Python: one file, a test,
+`verity/commitments/tests/test_block_check.py:17-24` imports `verity.protocols.poub.verifier.audit`, `.codec`,
+`.receipts`, `.commitments.gates.block_check` (the listing names it in poub verifier's `loaded_by`). The listing's
+`verity/commitments` place holds two files of PoUB's verifier, `verity/protocols/poub/verifier/commitments/gates/block_check.py`
+and its `.circuit-check.py` (`tests/import_order.toml`, the `verity/commitments` place's `paths`) [read by me].
+
+Names in text, `rg -c` per pattern, `.lake` excluded [counted by me]:
+
+| Pattern | `verity/circuits` files/lines | `verity/commitments` files/lines |
+| --- | --- | --- |
+| PoUW (`\b(pouw\|PoUW\|Pouw)\b`) | 10 / 19 | 21 / 240 |
+| PoUS | 0 / 0 | 4 / 72 |
+| PoUB (`poub\|bandwidth`) | 0 / 0 | 4 / 56 |
+| certifier | 0 / 0 | 12 / 94 |
+| SPOT (`spot\|sampled.proofs`) | 1 / 1 | 14 / 43 |
+| Flock | 30 / 75 | 46 / 178 |
+| registration | 12 / 29 | 17 / 109 |
+| inference-only, NCI | 0 / 0 | 0 / 0 |
+
+The largest is `verity/commitments/domains.py` (409 lines, 341 constants `^[A-Z_0-9]+ = "`), "One table of domain
+separators: every versioned string a protocol hashes…" (`domains.py:1-17`), mirrored by
+`verity/commitments/identity/Identity/Domains.lean` and held equal by `tests/test_domains.py`. Its sections, constants
+per section [counted by me, `awk` over the `# ` headers]: PoUW 91 (lines 19-125) and Pearl 5 (126); shared 44 (133-186,
+including "sampled proofs' one-stage statement, registrations and partitions" 9 at 171 and "the served path's PoUW
+manifests (`verity_vllm.protocols.pouw`)" 3 at 182); "Not yet read from here": the commitments' own 24, signatures 1,
+sampled proofs and the challenger 23 (216), Flock and the ZK server 23 (241), PoUS, the wipe and the memory challenger
+44 (266), the remote bandwidth audit 27 (312), the network certifier 49 (341), composition 2 (392), served periods 5
+(396), the wire and the deployment layer 3 (403).
 
 ## Not read yet (this push)
 
