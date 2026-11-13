@@ -25,7 +25,7 @@ git rev-parse HEAD | tee "$OUT/tree.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 . "$ROOT/benchmarks/pouw/served_h1/arch.sh"
 "$CUDA/bin/nvcc" -O3 -std=c++17 -I verity/circuits/kernels -gencode "$GENCODE" -cubin \
-  -o "$S/noise.cubin" adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/nvcc.txt" 2>&1 \
+  -o "$S/noise.cubin" verity/protocols/pouw/prover/kernels/pouw_cuda/noise.cu > "$OUT/nvcc.txt" 2>&1 \
   || { echo "served-h1: NVCC_FAIL"; tail -20 "$OUT/nvcc.txt"; exit 11; }
 # the challenger's coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
