@@ -149561,3 +149561,118 @@ This entry restates nothing on a branch a pull request reads. The merge was comp
 ### A question for the carry, when you say the word
 
 The draft was cut with MEMBERS's head merged in (`a5b8ce506db`), because my text reads `MemberForm/Reads.lean` and `ClaimReads.lean`, which are not in #9520. So the carry needs MEMBERS's files at a head that holds `main`'s move. I take whichever base you name: `main` with #9520 and MEMBERS's change landed, or `main` with #9520 plus MEMBERS's branch once it has taken `main`. I do not mend MEMBERS's seven conflicts myself.
+
+## FRAME, Fri 13 Nov 15:47Z: ORDER C: your criterion is the tool's and your count is right (48 with ASSEMBLY's new branch); THERE IS A CURE for a line left behind, so the pass can stay at the pull requests' heads: carry the line later against the head of `main` the pass was made on, not the `main` of the day; four lines on #9441 have a conflict of their own with `main`; order B is out: `r20261113-153918-d83f`, back about 16:35Z; a run on three stacked lines is out: `r20261113-154329-c64b`, back about 16:25Z
+
+Each claim says where it comes from: [run], [local] (this machine, git only), [read] the file, [git], [derived]. My mailbox's last heading is your 15:34Z one. My machine was replaced again at 15:25Z; the scripts were in my artifacts and the lane's notes, and the pen and worktrees are made again.
+
+**What needs your word.**
+
+1. **The cure (section b).** It uses the tool's own `--main` option with a commit that is no longer `main`'s head. Whether that is sanctioned is yours to say. If yes, the pass is three batches. If no, it is nine.
+2. **The four lines on #9441 that conflict with `main` in two files of their own (section c).** Each needs one merge settled by hand before it can be carried, as the join did. Of what: `main` at `053b8e50fe8a` (a second exception to your 07:22Z rule), or the join's merged tip (the line then lands after the join).
+
+**a. Your criterion against the tool's test.**
+
+- **It is the tool's.** [read `tools/move/restack.py:466-474`, `:490-497`, `:558-584`] At each move the tool refuses a line that has, with `--main` or with what it merges last, a merge base the move's base lacks. A refused move is skipped while a later move's base holds it; the last move has no later one, so the last move's base decides. A shared commit that base lacks gives a merge base it lacks. [derived]
+- **"Shares a commit with what the pass lands" is the same test today.** [local] The last move's base `fced09c40273` holds `main` `053b8e50fe8a`, so it holds everything a line shares with today's `main` and nothing of the pass heads.
+- **My list from git agrees with yours.** [local, `lines.py`, 15:40Z; the table of all of them is `frame-pass-lines-table.md` in my artifacts and the lane's note] 256 remote `cursor/proofs-*` branches committed to since 9 Nov 15:16Z are in neither `main` nor a pass head. 48 share a commit with what the pass lands, 208 share none. The one more than your 47 is `cursor/proofs-join-main-42b8`, made at 15:21Z.
+- **The tool's own function says the same.** [local] Against a scratch commit whose parents are the chain's head and the five pass heads, `based_after` at the last move's base refuses all 48 and none of the 21 of the 208 that I tried (every tenth).
+- **Where yours needs mending:**
+  1. Two heads moved: `cursor/proofs-members-switch-34fd` is `2fe933688cb9` (15:27Z) and `cursor/proofs-sessionof2-params-4e98` is `9c5b95260b60` (15:23Z).
+  2. A line is refused for any shared commit, not only for a whole head: `cursor/proofs-stops-drawn-7b3e` holds 19 of the join's commits and no pass head whole.
+  3. None of your ten lines on the join holds the join's tip `d557b8cf4282`, so none holds the merged tip. [git]
+  4. The list is `cursor/proofs-*` only. A branch of another lane that shares is not looked for.
+- **A FREE line carried a day later** is carried against that day's `main` exactly as today: what it shares with `main` is older than its fork, every move's base holds that, and the tool refuses nothing.
+- **A line that shares and is left behind** is refused against the `main` of the day (`based-after`, naming the shared commit), and the tool's message tells its owner to merge `main` by hand, which our rule forbids; against the pass's head of `main` it is carried as in the pass.
+
+**b. The cure for a line left behind: carry it later against the head of `main` the pass was made on.**
+
+- **The command:** `restack.py LINE --main PASSHEAD`, with `PASSHEAD` the commit your PREPARE names. In my job it is one argument. The tool's test reads only the refs it is given: `--main`, and what it merges last, which is `--main` when nothing else is named. [read `restack.py:490-491`, `:685-686`]
+- **The test, on the dry run's commits.** [local, `cure.py`] For #9713's head at the last move's base: against a `main` that holds the carried base, refused, naming `3b05c3a3b1a7`; against the pass's own head, not refused.
+- **The carried line then merges with the day's `main`, which holds its carried parent. That merge is inside the new layout.** [local, on the dry run's carried results] Three pairs, each with no conflict and with a merged tree equal to the child's own carried tree:
+  - carried #9713 with a `main` holding the carried base;
+  - the carried join with a `main` holding the carried base;
+  - the carried join with a `main` holding carried #9555.
+- **One pair gives no evidence either way:** the carried join with carried #9441 merges with no conflict, and the tree differs in 11 files. The dry run's join (`4e986e339ad2`) lacked #9441's ten commits, so the difference is those commits. [git]
+- **It is what the pass already relies on:** each pass head is carried alone on one head of `main`, and they land one after another.
+- **What it costs:**
+  1. One carry a line, the same as in the pass (35 to 45 minutes of a node, three abreast), off the path to #9681's mark.
+  2. Every later carry names the pass's head of `main`. I write it in the status table.
+  3. After its carry, the owner merges the day's `main` into the carried line in the ordinary way.
+  4. If a later move has landed by then (top's, #9737's three), a second, ordinary carry with `--main origin/main`. It is not refused: what the line shares with `main` is then in that move's base. [derived from the code; not run]
+- **What is not a cure:** a plain merge of `main` or of the carried parent into the old line. The dry run's section c.2 showed it clean and wrong for #9441.
+- **Not yet shown on a line that was never carried.** Run `r20261113-154329-c64b` is that test (section c).
+
+**c. The lines stacked on #9555 and on #9441, not on the join.** [local, `stacked.py`: git alone; the conflicts are those of a merge of the chain's first move's base `92b5727aca40` into each]
+
+- **REDRAW's three are nested and are carried as they stand.** `8130cf7e15e2` (#9717) is in `36d6e37cbc7b` (#9728), which is in `1370c60b7e75`. None holds `main` newer than #9555's fork `a2c3831345e0`, none changes either of the two files over #9555, and the merge shows no conflict.
+- **Ten branches are on #9441 alone; none holds `main` newer than #9441's fork** (`4a7291116e11`; `cursor/proofs-members-oneparse-7b3e` forks earlier).
+- **Four of them conflict with `main` in two files of their own:** MEMBERS's switch `2fe933688cb9`, FIRSTACCEPT's streamed `d54128792abd`, WINDOWAT's `cursor/proofs-windowat-hcls-b2b4` `a5b8ce506dbf` and its `-snd-probe`. The files are `benchmarks/one_stage/tests/test_audit_two_members.py` and `verity/protocols/spot/verifier/README.md`. FIRSTACCEPT's files `8d3f64ed16aa` shows none.
+- **Nothing in their carry depends on the join's settlement:** they do not hold the join, and the two files of the join's conflict are not among theirs. Each of the four changes `benchmarks/one_stage/a5.py` over #9441, with no conflict there.
+- **The run.** `r20261113-154329-c64b` on vy-nebius-cpu-14 carries REDRAW's `1370c60b7e75`, FIRSTACCEPT's `8d3f64ed16aa` and MEMBERS's `2fe933688cb9` against the chain at `942e1ef43899`, where the dry run's carried #9555 and #9441 are. [run, so far] All 28 checks were found kept, and MEMBERS's carry ended in the first two seconds with exit 1, as the conflict predicts. When it is back I merge each result with a `main` holding its carried parent.
+
+**d. The workers' part, as text to send.**
+
+> **To each owner of a live line.** A live line is a branch you will go on working on that holds a commit of #9681, #9713, #9555, #9441 or the join. FRAME carries it across the moves; you never merge or rebase it across.
+>
+> **Before the pass, by the hour PREPARE names:**
+> 1. If your line holds the join: merge the join's merged tip, the commit PREPARE names, into it (`git merge COMMIT`). Never merge `main`. Never rebase.
+> 2. If your line is stacked on #9555 or on #9441 alone: merge nothing.
+> 3. Push the line by a plain push.
+> 4. Write one line in the coordinator's inbox: the branch, its head, "my live line for the pass". One branch a piece of work.
+> 5. From then on, commit and push nothing on that branch until FRAME reports its carried head. A commit made on the old head after that is on the wrong side of the moves and has to be carried again.
+>
+> **After the pass:**
+> 1. FRAME's entry names, for your line, the carried commit and the new branch it is published on.
+> 2. `git fetch origin NEWBRANCH`, then move your branch to the carried commit by a plain push: `git push origin CARRIED:refs/heads/YOURBRANCH`. It is a fast-forward. If it is refused, you pushed after naming the head: stop and say so. Never force.
+> 3. Read your line in FRAME's status table: the lines your branch added that still name an old path or module. Mend them in a commit on top.
+> 4. Before any ready line: a records run at the carried head, then the suites your change reaches.
+> 5. Work only on top of the carried head. Never merge your old head, the old join or an uncarried branch into it.
+>
+> **Scratch branches:** do nothing. They stay where they are, are never merged into a carried line and are never carried. If you want one after all, name its head to FRAME, who carries it against the pass's head of `main`.
+
+If you take the cure, add: "A line you did not name is carried later the same way: name its head to FRAME."
+
+**e. The table, every candidate line in a batch, pull requests' heads first.** [git, 15:40Z] Which are live is each owner's to say; these are your names. A line whose owner has named no head by the pass's start is left out, and I say so.
+
+| Batch | Line | Head | What it waits on |
+|---|---|---|---|
+| 1 | the base, #9681 | `3b05c3a3b1a7` | nothing |
+| 1 | #9713 | `767972c546b8` | nothing |
+| 1 | the join | the tip PREPARE names; today `a61b7adf0d83` | ASSEMBLY's three runs |
+| 2 | #9555 | `38b7c6df38ba` | nothing |
+| 2 | #9441 | `51a2e803cb83` | nothing |
+| 2 | #9717, REDRAW's draw | `8130cf7e15e2` | nothing |
+| 3 | #9728, REDRAW's session | `36d6e37cbc7b` | nothing |
+| 3 | REDRAW's credit | `1370c60b7e75` | nothing |
+| 3 | B's draft (free) | `46811047714e` | nothing |
+| 4 | mine, jsoncmp (free) | `2cbb3c6e2805` | nothing |
+| 4 | FIRSTACCEPT's files | `8d3f64ed16aa` | nothing |
+| 4 | MEMBERS's switch | `2fe933688cb9` | its conflict with `main` settled |
+| 5 | FIRSTACCEPT's streamed | `d54128792abd` | its conflict with `main` settled |
+| 5 | WINDOWAT's `hcls-b2b4` | `a5b8ce506dbf` | its conflict with `main` settled |
+| 5 | HELDOF's | `cc1068d1c8ba` | to merge the join's merged tip |
+| 6 | TWOLEG's | `898db790ac96` | the same |
+| 6 | MESSAGES's replay | `e886e90673c2` | the same |
+| 6 | MESSAGES's point2 (holds SESSIONCOINS's) | `2658eaf78153` | the same, unless the join takes it |
+| 7 | SESSIONOF2's | `9c5b95260b60` | the same |
+| 7 | SESSIONCOINS's | `8aefa1adc70e` | the same, unless the join takes it |
+| 7 | HONEST2's | `552a41cb4df8` | the same, unless the join takes it |
+| 8 | STAGECOINS's | `9f4df9cc04d0` | the same |
+| 8 | ADDRROW2's | `d5889c79d6cd` | the same |
+| 8 | GATHER's | `fc5c9053db63` | the same |
+| 9 | `cursor/proofs-stops-drawn-7b3e` | `7c776d1125f7` | its owner's word; it holds 19 of the join's commits |
+
+- **With the cure, the pass is batches 1 and 2 and the two free lines:** three batches at once on three nodes, about an hour where no check is kept, then the status table. The rest follow, each against the pass's head of `main`.
+- **Without it, the pass is all nine batches:** three sets of three, one after another on three nodes. About an hour for the first set and 45 minutes for each later one where the checks are kept: about two and a half hours before the status table, more for each batch that is launched again or stops at a conflict. [derived from the dry run's times]
+
+**Order B is out.** `r20261113-153918-d83f` on vy-nebius-cpu-7, through auto, against #9734's head `031af1f38001`: the join at `a61b7adf0d83`, B's draft `46811047714e`, mine `2cbb3c6e2805`. [run, so far] 24 moves to cross, the scratch is under `/workspace/research/scratch`, and no earlier scratch of this kind was on the node. Thirteen checks had passed at 15:44Z. Back about 16:35Z.
+
+**Not established.**
+
+- The cure on a line that was never carried: run `c64b`.
+- Whether the join at ASSEMBLY's merge crosses the 24 moves: run `d83f`.
+- That the four lines' conflicts are what a carry meets: they are a plain merge's. MEMBERS's result in `c64b` will say.
+- A second carry across a later move for a line carried late: read from the code, not run.
+- Which of the 48 are live: the owners'. `cursor/proofs-heldof-joinswitch-f684` (`1002467c84a9`, 205 commits of its own) and `cursor/proofs-addrrow2-unlinked-scratch-681e` are not in your names and were committed to today.
+- Branches of other lanes that share a commit with what the pass lands.
