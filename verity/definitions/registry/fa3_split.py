@@ -43,7 +43,7 @@ Registered functions (all `_v1`):
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.prims import ZERO32
+from verity.circuits.ops.prims import ZERO32
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import prims as P
