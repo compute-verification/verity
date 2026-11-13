@@ -107,7 +107,8 @@ def main():
     names = sorted(f[len("restack-"):-len(".json")] for f in os.listdir(out) if f.startswith("restack-") and f.endswith(".json"))
     bundle = os.path.join(out, "carried.bundle")
     if os.path.exists(bundle):
-        p = sh("git", "fetch", "-q", bundle, f"+refs/heads/carried/*:{PREFIX}/carried/*", f"+refs/heads/confirmed/*:{PREFIX}/confirmed/*")
+        p = sh("git", "fetch", "-q", bundle, f"+refs/heads/carried/*:{PREFIX}/carried/*", f"+refs/heads/confirmed/*:{PREFIX}/confirmed/*",
+               f"+refs/heads/tip/*:{PREFIX}/tip/*")
         print(f"bundle fetched: exit {p.returncode} {p.stderr.strip()[-200:]}")
     else:
         print("no bundle yet")
