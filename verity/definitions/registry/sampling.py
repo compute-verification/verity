@@ -42,12 +42,12 @@ import struct
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.circuits.refs import tuple_of
-from verity.definitions.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
+from verity.circuits.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity.definitions.registry import ref_prims as RP
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.fp32 import F32AddFtz, F32Mul
-from verity.definitions.ops.mufu import DivFullRcp, DivFullScaleA
-from verity.definitions.ops.prims import Bf16ToF32, const
+from verity.circuits.ops.fp32 import F32AddFtz, F32Mul
+from verity.circuits.ops.mufu import DivFullRcp, DivFullScaleA
+from verity.circuits.ops.prims import Bf16ToF32, const
 
 SEMANTIC_ID = "sampling/GumbelTokenSelect@v1"
 
