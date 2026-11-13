@@ -953,6 +953,8 @@ class World:
         #: under drive.toml's `signed_verdicts = "shadow"`, the labels' `StoreLabels.unauthenticated`, filled as they are read
         self.unauthenticated: dict[tuple, str] = {}
         self._prs: dict[int, PR] | None = None
+        #: each PR `handle` read from GitHub as it isn't open (a landed member's), else None when it can't be read
+        self._closed: dict[int, PR | None] = {}
         self._driver: Landing | None = None
         self._slim: Landing | None = None
         self._main: str | None = None
@@ -985,7 +987,7 @@ class World:
 
     def fetch(self) -> str:
         """origin's `main`, fetched with origin's `queue/*` branches into `NS`."""
-        self._prs, self.q._registry = None, None
+        self._prs, self._closed, self.q._registry = None, {}, None
         self.q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--prune", "origin",
                        f"+refs/heads/main:{MAIN}", f"+refs/heads/queue/*:{NS}/queue/*")
         if self.q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
@@ -2077,7 +2079,16 @@ class World:
             lock.close()
 
     def handle(self, number: int) -> str | None:
-        p = self.prs.get(number) or self.open().get(number)
+        """The handle of PR ``number``'s lane (`Queue.handle`): of an open PR, or of one GitHub has closed, as a member is once
+        its candidate lands, read once a tick; None when none is known."""
+        if (p := self.prs.get(number) or self.open().get(number)) is None:
+            if number not in self._closed:
+                try:
+                    self._closed[number] = self.q.github.pr(number)
+                except (QueueError, ValueError, KeyError, TypeError) as e:
+                    self._closed[number] = None
+                    self.log(f"research queue vqueue: #{number} isn't open and its PR can't be read, so it names no lane: {e}")
+            p = self._closed[number]
         return self.q.handle(p) if p is not None else None
 
     def _tasks(self, sha: str) -> dict[str, dict]:
@@ -3783,7 +3794,8 @@ class Loop:
 
     def _off_owners(self, c: Candidate, step: str, new: dict[str, str]) -> tuple[str, ...]:
         """Who acts on what ``c`` failed of ``step`` off the gate (``new``, `_off_new`), first who acts (`reds.red_owners`): of
-        ratchet-gate, the lane of each member whose merge it fails, then the step's owner in ci.toml at ``c``; of circuit-check,
+        ratchet-gate, the lane of each member whose merge it fails, with the step's owner in ci.toml at ``c`` only when one such
+        lane is unknown or it fails no merge, since the gate itself may then be wrong; of circuit-check,
         the owner in `main`'s registry of each sidecar's pins file at ``c`` pinning a failed target (`World.pins`), and for a
         target none owns, the lane of each member whose change meets circuit-check's inputs (`queue.forces_cold`), else the
         step's owner; of another, the step's owner.  `CI` when none is known."""
@@ -3791,6 +3803,7 @@ class Loop:
         job, lanes, owners = d._step_owner(step, c.sha), [], []
         if step == RATCHET_STEP:
             lanes = [w.handle(int(k[1:])) for k in new if k != step]
+            job = None if lanes and all(lanes) else job
         elif step == CIRCUIT_STEP:
             pins = w.pins(c.sha, (_target(k) for k in new))
             by = {x: [h for p in pins.get(x, ()) if (h := d._path_owner(p))] for x in map(_target, new)}
