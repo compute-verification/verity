@@ -207,6 +207,24 @@ def test_the_kept_segments_follow_the_last_windows_tail():
             SC.decode(CV.pack(V.string_of(wins, reg, sent, moved)[0])[0], record, reg)
 
 
+def test_the_decoder_reads_each_count_from_the_window_the_replay_charges_it_to():
+    """The window the decoder takes a step's counts from, the earliest that releases an output no row had emitted when
+    the step began, is the one `codec.charged` gives that step off the replay that ran: the terms a string decodes to
+    are `codec.kept_terms`' of its replay, window by window. That rests on each request's release buckets being in
+    order, and a request whose buckets decrease is refused by name."""
+    for K, asy, (tick, order, shared) in product((1, 3, 5), (False, True), ((False, (0, 1, 2), 0), (True, (0, 1, 2), 0),
+                                                                           (False, (1, 0, 2), 0), (False, (0, 1, 2), 4))):
+        record, reg, served = _case(K, asy=asy, tick=tick, order=order, shared=shared)
+        with KP.emitting() as emitted:
+            rp, _, _ = V.replay_record(record, reg, reg.engine, list(order), lambda i, k: True, served.kept)
+        terms = V.kept_terms(record, reg, list(order), rp, emitted)
+        assert _terms(SC.encode(served, record, reg), record, reg) == terms and len(terms.windows) > 2
+    q = record.requests[0]
+    assert replace(q, release=(q.release[0],) * len(q.output)).release == (q.release[0],) * len(q.output)
+    with pytest.raises(V.AdviceCodeError, match="^request q0: its outputs' release buckets decrease$"):
+        replace(q, release=(*q.release[:-2], q.release[-1] + 1, q.release[-1]))
+
+
 def test_without_a_draft_every_string_is_the_one_it_was():
     """With no draft registered the schedule's string is `codec.encode`'s of the I1 v0 it decodes to, with no kept
     term in any window, and its bytes are the ones this code gave such a record before it carried kept counts."""

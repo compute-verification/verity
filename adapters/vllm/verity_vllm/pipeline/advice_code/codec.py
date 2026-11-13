@@ -786,7 +786,7 @@ def _replayed(wins: Sequence[Any], tails: Sequence[Sequence[int]], d: Any, recor
         raise AdviceCodeError(f"the replay asks {used} of the string's {len(arrived)} decisions")
     if _residual(record, reg, order, rp, decisions, looks, len(wins), emitted) != list(wins):
         raise AdviceCodeError("the windows aren't the replay's residual: a value charged to another window than A5's")
-    return cfg, order, rp, None if reader is None else reader.end(kept_terms(record, reg, order, rp, emitted))
+    return cfg, order, rp, None if reader is None else reader.end()
 
 
 def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], d: Any, record: Record, reg: Registered) -> Decoded:
