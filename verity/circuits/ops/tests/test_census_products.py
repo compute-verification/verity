@@ -16,7 +16,7 @@ import verity.circuits.ops as OPS
 import verity.circuits.ops.gemm  # registers the steps
 import verity.circuits.ops.boolean.s8  # noqa: F401  (binds the u8 x s8 step)
 from verity.circuits.boolean.trace import word_of
-from verity.definitions.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census
+from verity.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census
 from verity.circuits.codec import descriptor_id, encode_program
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
@@ -79,7 +79,7 @@ import json, sys
 import verity.circuits.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
-from verity.definitions.circuits.census import COUNTERS, census
+from verity.circuits.census import COUNTERS, census
 from verity.circuits.codec import decode_program
 from verity.circuits.defs import REGISTRY
 try:
@@ -146,7 +146,7 @@ import json, sys
 import verity.circuits.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
-from verity.definitions.circuits.census import census
+from verity.circuits.census import census
 from verity.circuits.codec import decode_program
 from verity.circuits.defs import REGISTRY
 try:
