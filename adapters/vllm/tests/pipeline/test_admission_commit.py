@@ -192,6 +192,18 @@ def test_the_commit_admission_counts_the_declared_lag():
     assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
 
 
+def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope_as_on_main():
+    """The record's fields are evaluated in their order, `staging` before the envelope's predicted bytes: of exclusions that do
+    not sort and an envelope bound that does not scale, the first is the one raised."""
+    sizing, wl, _ = _fixture("b16")
+    unsortable: Any = {1, "a"}
+    unbounded: Any = float("inf")
+    with pytest.raises(OverflowError):
+        ADM.admission(sizing, wl["requests"], None, envelope_bound_bytes=unbounded)
+    with pytest.raises(TypeError):
+        ADM.admission(sizing, wl["requests"], None, retain_exclude=unsortable, envelope_bound_bytes=unbounded)
+
+
 def test_the_resident_bytes_add_to_the_pool_and_can_refuse():
     """The Commit's peak is the pinned pool plus what it holds beside it; a pool that fits alone can still be refused."""
     sizing, wl, _ = _fixture("b16")
