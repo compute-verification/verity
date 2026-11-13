@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState, _Stages
 from verity_vllm.protocols.pouw.pearl_c.host import (
     _Driver,
     _event,
@@ -101,17 +101,17 @@ class GraphCalls(WholeCalls, _RunState):
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
                 self._tree_joined()
-                xa, tree, y = self._stages[w, sh.m16]
+                xa, tree, y = cast("_Stages", self._stages)[w, sh.m16]
                 for stage, t in zip((xa, tree), self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
                 y[:m].copy_(out[0][:m])
             if self._statement_on():
                 self.statement.stage(w, sh)
             return out
-        if self._whole is not None and self._whole_retained and (w, sh.m16) not in self._stages:
+        if self._whole is not None and self._whole_retained and (w, sh.m16) not in cast("_Stages", self._stages):
             import torch
-            self._stages[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
-                                       sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
+            cast("_Stages", self._stages)[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
+                                                        sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
             self._stages_poisoned = None
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)

@@ -1,9 +1,12 @@
 """Values the pouw protocols' own lines never hand these functions, and what each function does with one: it checks nothing
 of its own, so the value goes on as it is and the line that reads it decides.  A pass before its first call has no base, a
 run without graphs has no driver, a kernel file is a Python file, a manifest's schema is a string, a whole step's sets are
-keyed by a pass kind's key and a committed linear's weight has two dimensions; each test hands the other value."""
+keyed by a pass kind's key and a committed linear's weight has two dimensions; a retained call's pass has a directory, a
+retained capture has its stages, a capture holds its calls and its side steps not yet joined, and a replayed forward has
+the slots its replay uploaded; each test hands the other value."""
 from __future__ import annotations
 
+import contextlib
 import re
 import sys
 from types import SimpleNamespace
@@ -130,6 +133,107 @@ def test_forked_steps_without_a_driver_are_built_and_fail_when_the_first_runs(mo
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'record'"):
         out[0]()
     assert ran == [] and run.kernel.dev.stream == 5
+
+
+NO_BASE_YET = r"unsupported operand type\(s\) for \+: 'NoneType' and 'int'"
+NO_STAGES = "'NoneType' object is not subscriptable"
+CALL = PG.WholeCall(7, 32, 4096, 4096, 32, 64)
+
+
+def test_a_retained_call_of_a_pass_without_a_directory_fails_at_its_first_path():
+    """`_retained` makes the call's paths under the pass's directory unchecked.  A pass that retains nothing has none, and
+    the first path made of it is where it fails, before a directory, a record or a file is kept."""
+    pytest.importorskip("torch")
+    cur = PPD._Pass(None)
+    with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
+        PPD.PearlCDeviceRun._retained(SimpleNamespace(), cur, None, 1, None, None, None)
+    assert cur.dirs == set() and cur.records == [] and cur.files == []
+
+
+def test_whole_calls_kept_without_stages_fail_at_the_first_calls_stage():
+    """`_keep_whole` reads each call's stage of the run's stages unchecked.  A run that staged nothing has none."""
+    cur = PPD._Pass(None, matmuls=["the call's matmul"])
+    with pytest.raises(TypeError, match=NO_STAGES):
+        PG.GraphCalls._keep_whole(SimpleNamespace(cur=cur, _stages=None), (CALL,), 0)
+
+
+def test_a_forwards_slots_and_its_calls_start_at_the_passes_base_unchecked():
+    """`_slots` and `whole_replayed` add to the pass's base as it is.  Before the pass's first call it is None, and the
+    sum refuses it, before `whole_replayed` appends a call."""
+    cur = PPD._Pass(None)
+    with pytest.raises(TypeError, match=NO_BASE_YET):
+        PG.GraphCalls._slots(SimpleNamespace(cur=cur), (), (0, 0, 0))
+    with pytest.raises(TypeError, match=NO_BASE_YET):
+        PG.GraphCalls.whole_replayed(SimpleNamespace(cur=cur), (CALL,))
+    assert cur.matmuls == []
+
+
+def test_a_replayed_forward_with_no_uploaded_slots_appends_its_calls_and_fails_at_the_slots():
+    """`whole_replayed` takes the slots the replay uploaded unchecked.  With none (no `whole_replay` before it), the
+    forward's calls are appended to the pass first, and reading the slots is where it fails."""
+    cur = PPD._Pass(None, base=2)
+    run = SimpleNamespace(cur=cur, hashing=True, _uploaded=None)
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'predicted'"):
+        PG.GraphCalls.whole_replayed(run, (CALL,))
+    assert [(mm.index, mm.weight) for mm in cur.matmuls] == [(2, 7)] and run._uploaded is None
+    assert (cur.tiles, cur.flag_rows) == (0, 0)
+
+
+def test_a_graphed_call_of_a_retained_capture_without_stages_fails_where_it_reads_them(monkeypatch):
+    """`_graph_call` reads the run's stages unchecked, in a retained capture and at the warm-up before it.  With none, the
+    capture's call is recorded and launched before its stage is read, and the warm-up fails at the lookup, before any
+    stage is made."""
+    sh = SimpleNamespace(k=4096, n=4096, m16=32)
+    launched: list = []
+
+    def into(*a):
+        launched.append(a)
+        return "y", True
+    run = SimpleNamespace(_whole=[], _whole_retained=True, _stages=None, _tree_joined=lambda: launched.append("joined"),
+                          _into=into)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    with pytest.raises(TypeError, match=NO_STAGES):
+        PG.GraphCalls._graph_call(run, 7, sh, None, 5, 64, 32, 3, None)
+    assert run._whole == [CALL] and launched == [(7, sh, None, 5, 64, 32), "joined"]
+    monkeypatch.setattr(PG, "_capturing", lambda: False)
+    with pytest.raises(TypeError, match="argument of type 'NoneType'"):
+        PG.GraphCalls._graph_call(run, 7, sh, None, 5, 64, 32, 3, None)
+    assert run._whole == [CALL] and run._stages is None and len(launched) == 2
+
+
+def test_a_deferred_call_launched_while_the_capture_holds_no_calls_fails_after_its_steps_at_their_count():
+    """`_into` counts the capture's calls unchecked, after a deferred call's steps, to tell the forward's last call.  With
+    no list of them, the steps run and are forked first, and the count is where it fails; the kernel's stream is put
+    back."""
+    ran: list = []
+    buf = SimpleNamespace(data_ptr=lambda: 0)
+    graph = SimpleNamespace(graph="a graph", y=buf, leaves=buf, cuts=(1, 2), stats_at=None, tree_at=None,
+                            steps=[lambda: ran.append("head"), lambda: ran.append("gemm"), lambda: ran.append("tail")])
+    run = SimpleNamespace(_graph_key=lambda w, sh, m: ("key", True), _graphs={"key": graph}, _widening=None, entry="entry",
+                          _forks_stats=lambda: False, _pd_shared=lambda: False, _defers=lambda: True,
+                          _defers_a=lambda: False, _prefetches=lambda: False, whole_shape_joins=True,
+                          _fork=lambda sh, steps, raw: [f() for f in steps], _whole=None, order={7: 0},
+                          kernel=SimpleNamespace(dev=SimpleNamespace(stream=None)))
+    pipe = SimpleNamespace(b={})
+    with pytest.raises(TypeError, match=r"object of type 'NoneType' has no len\(\)"):
+        PG.GraphCalls._into(run, 7, SimpleNamespace(m16=32), pipe, 5, 64, 32)
+    assert ran == ["head", "gemm", "tail"] and run.kernel.dev.stream is None and pipe.tiles_group is False
+
+
+def test_side_steps_forked_with_no_list_of_those_not_joined_run_and_fail_where_they_are_noted(monkeypatch):
+    """`_fork` notes the forked steps among those no call has joined, unchecked.  With no list of them (outside a
+    capture), the steps run on the side stream first, the kernel's stream is put back, and the note is where it fails."""
+    torch = pytest.importorskip("torch")
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: "the capturing stream")
+    monkeypatch.setattr(torch.cuda, "stream", contextlib.nullcontext)
+    waits: list = []
+    ran: list = []
+    side = SimpleNamespace(cuda_stream=11, wait_stream=waits.append)
+    run = SimpleNamespace(_side_stream=side, device="cuda", hashing=False, _tree_joined=waits.append, _pending=None,
+                          whole_shape_joins=False, kernel=SimpleNamespace(dev=SimpleNamespace(stream=None)))
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'append'"):
+        PG.GraphCalls._fork(run, "a shape", [lambda: ran.append(run.kernel.dev.stream)], 5)
+    assert waits == ["the capturing stream", side] and ran == [11] and run.kernel.dev.stream == 5
 
 
 class Refused(Exception):
