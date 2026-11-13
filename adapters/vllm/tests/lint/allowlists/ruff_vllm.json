@@ -555,7 +555,6 @@
     {"file": "verity_vllm/program/predict/window_circuit.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/window_cut.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/window_cut.py", "kind": "SIM300", "symbol": "_hands_on", "detail": "Yoda condition detected"},
-    {"file": "verity_vllm/protocols/__init__.py", "kind": "ISC004", "symbol": "_uncut", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "verity_vllm/protocols/pouw/h1/answers.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/pouw/h1/answers.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Mapping`"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "B023", "symbol": "stage.lowered", "detail": "Function definition does not bind loop variable `k`"},
