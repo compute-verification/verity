@@ -133280,3 +133280,116 @@ Clock: `date -u` read 09:42Z. Branch `cursor/proofs-addrrow2-5e1b` at `7b4574d02
 - Whether any instance in use has an inner block always checked.
 
 Runs: `r20261113-082753-b31c`, `r20261113-090552-1d81`, `r20261113-093259-3922`: all done, rc 0. None out.
+
+## FIRSTACCEPT, Fri 09:41Z: the compiled check holds every blob at once because its checked function takes them as one argument, and the proofs speak of that argument; its run already goes a member at a time and keeps little between members, so a streamed run can stand beside it with one new theorem and no statement restated; measured: the files are held at 1.05 bytes a byte, and the one member being checked adds 4 to 6 bytes per byte of its circuit
+
+**FIRSTACCEPT: can the compiled check read one member's circuit at a time?** Your 09:14Z items, in order. I changed no checked function and opened no pull request. Mailbox read through 09:14Z.
+
+**Short answer.** Not as written, and not by changing the main alone. The checked function takes all the blobs as one argument, and the proofs speak of that argument. Its run already goes one member at a time and keeps little between members. So the smallest change adds a streamed run beside the check, with one new theorem that ties what it accepts to what the check accepts. No statement is restated and no lock record moves. With it, a 32 GB circuit would peak at about 170 to 215 GB by today's ratios, not at the window's sum.
+
+**This entry also replaces 09:17Z's two slopes.** I now measured the split directly, in place of fitting it. The files are held at 1.05 bytes a byte, not 1.3 to 1.5. The one member being checked adds 4.2 to 5.7 bytes per byte of its circuit, not 3.2 to 3.8. Thursday's 17 largest circuits come to about 0.2 to 0.75 TB, where 09:17Z said 0.2 to 0.9 TB. The conclusion stands: it may or may not fit one node.
+
+### 1. Where the circuits are read and held
+
+[read: #9594's tree at `9049e2c572`; the mains and `Blobs.lean` read the same on `main` at `5b2c1e735b9`]
+
+- **The mains read every file first.** `refusalMain` reads each blob named on the command line with `IO.FS.readBinFile` into one array, then calls `membersOutcome` (`Spot/MembersRefusal.lean:117-125`). The accepting main is the same shape: `ZkMain` calls `refusalMain`, which falls to `membersMain`, then `Spot.OneStageZk.main`, then `protocol.main`, which is the interface's `Core.BlobProtocol.main`. Its `check` reads every blob file into one array and calls `P.answer` on it (`CoreProtocol/Blobs.lean:92-97`).
+- **The checked function takes them all as one argument.** `Core.Blobs` is an array of (digest, bytes) pairs. `Blobs.ofArray` computes the SHA-512 of every blob before any check runs (`Blobs.lean:31-34`). The interface's `BlobProtocol.checkBlobs` has the type `Params → Commitment → Evidence → Blobs → Outcome` (`Blobs.lean:46-47`). `checkBlobs`, `checkBlobsAt`, `checkMembersAt`, `membersRun` and every function under them take `bs : Core.Blobs` (`Spot/OneStageZk.lean:1342`, `:1315`, `:1285`, `:1268`).
+- **The proofs speak of that argument.** They state the check at `Core.Blobs.ofArray s.blobs`, where `s.blobs` is the array of blobs the exchange sent (`V2Accepts`, `security/Proofs/Properties/Verity/Sampled/Assembled.lean:152-188` on `main`). WINDOWAT's `MembersAccept` holds `membersRun p ms c e sts bs = .ok r` as a field (`MemberForm/Accept.lean` on `cursor/proofs-windowat-5e4b`).
+- **So it is both, and the second one binds.** A main that read files lazily would still have to build the whole `Core.Blobs` to call the function.
+- **Inside the function a blob is found only by digest.** `Blobs.get` finds a blob by the digest the parameters or the evidence name (`Blobs.lean:39-44`). `tablesOf` finds the pinned lookup tables by their pinned digests (`OneStageZk.lean:453-455`). No function walks the blobs in order.
+- **One check reads the whole set.** `tablesHeld` refuses unless the lookup tables among all the blobs are exactly the ones the member's circuit looks up (`:473-477`). So every member's check needs the same tables beside its own files.
+
+### 2. What a per-member loop keeps, and what would be restated
+
+[read: the per-member run as it will stand, on `cursor/proofs-windowat-5e4b` at `e977fbc96f6`, which carries #9441, #9576 and #9584; line numbers are that tree's `Spot/OneStageZk.lean`]
+
+**The run reads the members' files in three passes today.**
+- Pass A, `membersTreesHeld` (`:1445-1455`), over the sampled members: each session's record and files (`sessionEvidence`), and the member's circuit and public file, which it sets up at the record's sample to read the `root_B` lengths (`rootBTables`).
+- Pass B, `membersFiles` (`:1200-1202`), over every member, sampled or not: the member's circuit and public file, parsed once (`StepAt.ofOwn`, `:1142-1152`).
+- Pass C, the fold of `stepMember` (`:1250`), over the sampled members: the session's record and files, and the circuit again for the session's set-up (`step`, `setupAt`).
+
+**Fixed before any blob is read**, from the parameters, the registration and the evidence alone: the statements' structure (`membersHeld`), the challenger's trees (`treesOf`), the log's order (`orderHeld`), the population, the members laid over it, the registered values and the roots (`popHeld`, `laidHeld`, `classHeld`, `rootsOf`), and that each statement's member is sampled (`sampledHeld`). The sample and the challenges are in the evidence and the parameters, not in a blob.
+
+**Kept between members**, all small:
+1. One row a session for the trees: its name, its tables with their `root_B` lengths, its record parsed, and the SHA-512 of its evidence (`membersTreesHeld`'s `named`).
+2. The run so far (`Run`, four fields): the keys of the challenger's trees used so far, the verdicts, the units proved, and whether every session accepted.
+3. The lookup tables.
+4. Nothing more, if a member's files check and its session run in one turn. As written, `membersFiles` returns every member's `StepAt`, and a `StepAt` holds the member's circuit and public file bytes (`StepAt.I`, `:1124-1133`). Pass C reads them back for the session's set-up.
+
+**After the last member:** `Challenger.membersTreeReason` on the rows, `provedHeld` on the units proved, and v1's `checkAt` on the verdicts at the challenges.
+
+**No digest is kept across members.** Each blob is looked up under the SHA-512 the verifier computes of its own bytes. A loop hashes each file as it loads it.
+
+**One turn a member changes the order of the checks.** Passes A, B and C become one pass. What is accepted does not move, since an accept needs every check. Which check a refused case names first can move.
+
+**What would be restated if the functions took a stream.** Every definition from `Member.statement` up changes type, and every statement that names one is restated:
+- In the verifier's file, MEMBERS's and WINDOWAT's: the definitions `Member.statement`, `Member.files`, `membersFiles`, `stepMember`, `runMembers`, `membersTreesHeld`, `membersStructure`, `membersRun`, `checkMembersAt`; the statements `Member.statement_parse`, `Member.files_ok`, `membersFiles_ok`, `runMembers_files`, `runMembers_sampled`, `runMembers_proved`, `membersRun_files`, `membersRun_proved`, `membersRun_sampled`; and `Member.FilesHeld`.
+- In WINDOWAT's proofs, `security/Proofs/Properties/Verity/Sampled/MemberForm/`: `MembersAccept` and `FormAccepts` (`Accept.lean`); `membersStructure_ok`, `membersTreesHeld_ok` (`Read.lean`); `members_ok`, `runMembers_ok`, `membersRun_ok`, `membersFiles_lookup`, `statementAt_files` (`Run.lean`); `membersStructure_laid` (`Sample.lean`); `run_units`, `run_over`, `member_session` (`Units.lean`); `filesPass_of_held`, `WindowOn.passes` (`Passes.lean`). `soundnessAt_form` takes `FormAccepts` as a hypothesis [relayed: MEMBERS 08:23Z]. This list is what a search for the names finds; statements that reach them through `MembersAccept` are more.
+- If `Core.Blobs` itself changed, the one statement's proofs would move too: `checkBlobsAt` is named in 17 files under `security/Proofs/Properties/` on `main`. [run: `git grep`]
+
+**What is restated if the stream stands beside the check: nothing.** See item 4.
+
+### 3. Where the bytes go
+
+[run: `r20261113-092111-cae1`, vy-nebius-cpu-11, placed by `--on auto`; commit `98ae150c015` on the scratch branch, which adds a reader of the process's memory every 50 ms to the driver; the six-member window, K = 128 to 4096]
+
+- **How measured.** The driver ran `refusal` once more and read its resident memory and its bytes read from `/proc` every 50 ms: 1,655 rows over 83.6 s.
+- **The window:** 740.3 MB of files in 30 blobs; the largest circuit is 258.3 MB. `refusal` again exited 1 with `ALL_PASSED`.
+
+| level | memory | what it is |
+|---|---|---|
+| before any blob is read | 0.07 GB | the executable itself |
+| all files read, at 0.25 s | 0.85 GB | the files' bytes: 0.78 GB over the first level, 1.05 bytes a byte |
+| between members | 1.0 to 1.3 GB | the files, and what the run keeps |
+| peak, at 82.6 s of 83.6 s | 2.25 GB by the rows, 2.29 GB by `time -v` | the last member's session, the largest circuit |
+
+- **So at the peak:** 0.07 GB is fixed, 0.78 GB is the text of all the files, and 1.40 to 1.44 GB is the working memory of the one member being checked. That is 5.4 to 5.6 bytes per byte of that member's circuit.
+- **The working memory is given back between members.** The level falls to about 1.0 GB after each member, and rises again with the next.
+- **Your question, text beside the parse or the parse alone:** with six members, about a third of the peak is text held and two thirds is the one member's working memory. With one member, the text would be about a sixth.
+- **The same split on the other windows.** [derived: peak less 0.07 GB less 1.054 × files, from 09:17Z's table]
+
+| largest circuit | working memory per byte of it |
+|---|---|
+| 0.067 GB (K 256) | 6.4 to 7.6 |
+| 0.258 GB (K 4096), three windows | 5.4 to 5.7 |
+| 0.478 GB (K 8192) | 5.0 |
+| 0.952 GB (K 16384) | 4.2 |
+
+- It falls as the circuit grows. I have no size past 0.95 GB.
+- **A circuit is parsed several times.** On #9594's tree a sampled member's circuit goes through `circuitOf` six or seven times [read: `rootBTables`, `scopeOf` twice, `ksFiles`, `Member.blockHeld`, `step`'s `setupAt`, `verdictOf`'s `KsScope.checkOf`]. The rows show five pairs of peaks near 2.05 GB: one at 12 to 13.5 s, and four from 63 s to the end, where the last member is checked. Each is about 1.2 GB over the files' level, 4.7 bytes per byte of the largest circuit. [run] #9441 makes the files' checks share one parse [read].
+- **Hashing copies the blob.** `Sha512.hash` begins with `msg.push 0x80` (`Base/Hash.lean:315-317`). The blob is still held by the array, so by my reading that push copies it whole: a passing copy of one blob at a time. [read] The rows do not tell me when it happens.
+- **Time.** `refusal` took 76 to 83 s on this window, and 132.5 s on 1.435 GB. At 90 to 110 s a GB, 136 to 544 GB is about 3.5 to 17 hours in one process. [derived, linear]
+
+### 4. The smallest change: for TOP-415 and for MEMBERS
+
+**For TOP-415.** The compiled check reads every member's files into memory before it checks any, because its checked function takes all the files as one argument and the proofs are stated of that argument. Measured, it holds the files at 1.05 bytes a byte and adds 4 to 6 bytes per byte of the circuit of the one member it is checking. On Thursday's window that is about 0.2 to 0.75 TB for the 17 largest circuits alone. The smallest change that makes the peak the largest member's leaves the check and every proof as they are. It adds a second run beside the check that takes one member's files at a time, and one theorem: what the second run accepts, the check accepts on all the files together. Then a 32 GB circuit peaks at about 170 to 215 GB by today's ratios. The owner of the per-member form writes it, with the switch that lets the form accept or right after it. No lock record moves; one statement is added.
+
+**For MEMBERS, the shape.** [derived from items 1 and 2; nothing written or compiled]
+- **Leave as they are:** `checkMembersAt`, `membersRun` and every definition and statement in item 2's lists, and `Core.Blobs`, `BlobProtocol` and `BlobProtocol.main` in the interface.
+- **Add a step.** One pure function from the state of item 2 and one member's own `Core.Blobs` to the next state. The member's blobs are its circuit, its public file, the lookup tables and, if it has a statement, its session's record and files. The step calls the functions that exist, on those blobs: the member's row for the trees, `Member.files`, and `stepMember` if it has a statement.
+- **Add a finish.** The checks after the last member, as they are: `Challenger.membersTreeReason`, `provedHeld`, v1's `checkAt`.
+- **Add one theorem.** Where the step folded over the members and then the finish accept, `checkMembersAt` accepts on `Core.Blobs.ofArray` of all the files. Its proof needs one fact of each function the step calls: its value on the member's own blobs is its value on all of them. That holds because a blob is found only by digest, where no two of the blobs sent share a digest and differ. Two that do are a SHA-512 collision, which is in the trust base.
+- **Add a main for the form**, the v2 executable's own, as `refusalMain` is. It reads one member's files, runs the step, and lets them go.
+- **It states accepts only.** A refused case may name another first reason than `checkMembersAt` does, since three passes become one.
+- **Before the switch it is true and empty,** as `formAccepts_refused` is: nothing of the form accepts. So it belongs with the switch (your S8) or after it.
+- **The lock.** No listed statement changes and no definition a listed statement reads changes, so no record moves. [derived: from the rule that a record holds a statement, the definitions it reads and its premises; I did not run the lock's generator] The theorem is one new record if you list it. Unlisted, the new main is unproved glue, and more of it than today's.
+- **The driver's part is mine:** the command line must give each member's files apart, in the members' order. Today the case lists the blobs flat [read: `case_refusal`]; in my runs they were already five a member, in the members' order [run].
+- **With #9441 the sum is over every member.** Once every member's files are read, sampled or not, the check holds all the window's circuits, not the sampled ones. The stream then matters more.
+
+### Corrections to 09:17Z
+
+- **The slopes.** 09:17Z fitted "1.3 to 1.5 bytes per byte of all the files, plus 3.2 to 3.8 per byte of the largest circuit". Measured on one window, the files are 1.05 bytes a byte, and the one member's working memory is 5.4 to 5.6 bytes per byte of its circuit. Across my sizes it is 4.2 to 7.6, falling with size.
+- **Thursday's 17 largest circuits.** [derived; sizes relayed, 17 circuits of 8 to 32 GB] 1.054 × 136 + 4.2 × 8 ≈ 177 GB, to 1.054 × 544 + 5.7 × 32 ≈ 756 GB. So about 0.2 to 0.75 TB, where 09:17Z said 0.2 to 0.9 TB.
+- **One member at a time.** (1.054 + 4.2) × 32 ≈ 168 GB, to (1.054 + 5.7) × 32 ≈ 216 GB, where 09:17Z said 150 to 160 GB and your 09:14Z 125 GB. It may be lower, since the ratio falls with size.
+- **In the "For TOP-415" section of 09:17Z,** read "about 1.05 bytes per byte of all the files, plus 4 to 6 bytes per byte of the largest circuit" and "about 0.2 to 0.75 TB". The rest of that section stands.
+
+**Not established.**
+- The ratio past a 0.95 GB circuit. Thursday's are 8 to 34 times larger.
+- What the working memory is made of: the parsed circuit, the session's tables, or lines of text beside them. That needs a probe inside the Lean executable, which I did not write.
+- That the theorem of item 4 goes through, and that no lock record moves. I read the functions and compiled nothing.
+- The sizes of Thursday's members' circuit files, and whether members share one. I relay "17 circuits of 8 to 32 GB".
+- The accepting check's peak. It reads its files as `refusal` does [read]; the form is refused, so there is nothing to measure.
+- The second window of run `cae1` (K 8192, 16384), still running as I write.
+
+Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `98ae150c015`, pushed, no pull request (scratch, not for landing). `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Run: `r20261113-092111-cae1` on vy-nebius-cpu-11, running its second window; I add its row when it ends. No timer held.
