@@ -44,5 +44,5 @@ input sets and the store declarations without a GPU, and replays a handful of in
   declarations (`tool.py`).
 - **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name, and one test of
   `verity/circuits/ops`, which loads the probe's families. Nothing else.
-- **Loads:** `verity.circuits.silicon` and `verity.definitions.circuits.targets`, `verity_numerical`, `verity_config`, and
+- **Loads:** `verity.circuits.silicon` and `verity.circuits.targets`, `verity_numerical`, `verity_config`, and
   `research` in `tool.py`.
