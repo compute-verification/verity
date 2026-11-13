@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
-public import Proofs.Properties.Verity.SampledTwo.SessionFits
+public import Proofs.Properties.Verity.SampledTwo.AttachmentFits
 public import Proofs.Properties.Verity.SampledTwo.SessionRecord
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
