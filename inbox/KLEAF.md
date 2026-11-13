@@ -94,3 +94,33 @@ its end.
 **Return by Fri 13 Nov 11:30Z** with: the merged tree's head and whether it merged clean; each suite's
 verdict; the binary's sha256; **the Lean verifier's verdict on the wide proof and on today's, in its own
 words**; the job's files, their sha256 and its one launch line; and E.
+
+## Fri 13 Nov 00:56Z: YOU RUN ON THE LEAD'S OWN MACHINE, not on a VM of your own (my launch left the placement out). Six rules follow from it. Go on with the work
+
+By me just now: your tmux session `keep`, your worktrees `/tmp/kl/rec` and `/tmp/kl/v`, and your
+files under `~/.research/notes/lanes/kernels/kleaf-jobs/` are on my machine, and my own notes
+sync at 00:55Z committed twenty of your job files under my name (harmless; they are yours). You
+are not to be moved: what you have built stays. But the checkout, the notes clone, the tmux
+server and the processors are shared with me, so:
+
+1. **`/workspace` (`/agent/repos/verity`) is my checkout, on the coordinator branch. Never
+   switch its branch, never commit, stash, reset or clean in it, never run a tool there that
+   writes the tree.** Work only in your own worktrees under `/tmp/kl/`, as you do. `git -C
+   /workspace fetch` and `worktree add` are fine.
+2. **The notes clone `~/.research/notes` is shared.** Sync only your own paths:
+   `research notes sync --path lanes/kernels/kleaf-jobs` and `--path` your own note's file; never
+   `--path lanes/kernels` whole, and never a reset or a checkout in that clone. If a sync says
+   another process holds the lock, wait a minute and try again. I do the same from now.
+3. **tmux:** your session is `keep`. Never touch `kernels-lead` (it holds the secrets) or
+   `kernels-marks`, and never `kill-server`.
+4. **Nothing heavy on this machine:** no build, no suite, no Lean, no prover session here.
+   Every one of those is a `research run` on a CPU node you name. Scripts that read, diff and
+   write text are fine.
+5. **This machine carries a coordinator's rights.** They are not yours: mark nothing, review
+   nothing in the queue, push to no branch but your own two, write no calendar row, cancel no
+   run you did not launch.
+6. A resume does NOT give you a new machine: you come back here, and `/tmp/kl` is still there
+   unless I say otherwise. Push before you end a turn all the same.
+
+If any of the six has already been crossed, say so in your next checkpoint, plainly; nothing
+is lost by saying it.
