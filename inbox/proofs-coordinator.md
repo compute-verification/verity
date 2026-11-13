@@ -125360,3 +125360,42 @@ The executables' build and the difftest are `14a0`'s, at `03072eb90b`: `BUILD rc
 - A records run's PASS at any head with `SampledTwo/` files.
 - That the spec's `repStreams` for that statement is `[circuit/rep0, circuit/rep1]`: I read the log and the tree's line, not the spec.
 - The negative case and the play at the next head: not written, not run.
+
+## HISTORY, Fri 13 Nov 06:36Z: ASSEMBLY, MERGE `4d5a24fe63` NOW: all three files COMPILE there (`r20261113-053555-2f67`, rc 0; 5, 1 and 35 theorems, three axioms). After its two tries pass, merge `35388bbd54`: `Apart` marked as taken, CUT's compiled `8cf4d46672` merged, and one new small file, CUT's cut from the form's accept at my history (`DeviceAccept.lean`, NOT compiled)
+
+**In plain words.** The head I named at 05:38Z is confirmed by its run: my three files build on top of the other two workers' changes. Since then I marked the older condition (`Apart`) as taken, not proved, as you asked, with one change to your wording that I explain below. CUT finished its cut an hour ago: it now needs only two facts about the device, and both are the ones I prove. So I wrote the six-line statement that puts them together at my record of the device's two sessions. It is in a compile run.
+
+Clock: `date -u` read 06:33Z. Mailbox read at 06:28Z, whole (your 05:44Z, 05:49Z, 06:09Z). Pen: the machine was replaced since 05:38Z and `~/wt` was gone; this loop made `~/wt/.pen` at 06:28:57Z, no other loop held it. Events not mine: at 06:27Z ten completion notices of other workers reached me (GATHER, RUNCOINS, REDRAW, TWOLEG, RUNSAS, SESSIONOF, STOPDRIVER, CUT, PERIODREAD, STAGECOINS); I did nothing on them.
+
+**1. `r20261113-053555-2f67`** (vy-nebius-2), head `4d5a24fe63`: **done, rc 0**, 05:36Z to 06:07Z [run]. "tries: DeviceOrder rc=0 DeviceRead rc=0 Device rc=0".
+- "`DeviceOrder.lean`: lean exit 0 in 1121 s"; "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`DeviceRead.lean`: lean exit 0 in 385 s"; "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`Device.lean`: lean exit 0 in 341 s"; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- Its build log shows "Built" for `Cut`, `CutPrints`, `CutHeld`, `CutRead` and `CutOrder` at that head, so CUT's changed `Cut.lean` and `CutRead.lean` (the first stage's family read from the boundary registration) broke nothing of mine.
+
+**2. `Apart`, your 05:44Z** [read: my file; pushed at `187f5fb312`, docstrings only, no statement changed].
+- `Apart`'s docstring now says it is taken as a hypothesis, not proved, and that `DeviceOrder`'s `LedgerInOrder` replaces it on the cut's path. The four statements that take it (`printsTwo_dev₂`, `binds_dev₂`, `cut_dev₂`, `cutRead_dev₂`) each say "`Apart` is taken, not proved."
+- ONE DEPARTURE from "the same words", for you to overrule: I did not write that `Apart` "is a lemma of the modelled device once the model builds that device's whole ledger". I believe that is false of `Apart` [derived]: it names the two windows, so at a device that opens each window as the prover's request names it, it fails where the request names them the other way round. That is the swap, and why CUT left `PrintsTwo`. The docstring says so instead: "it is no lemma of a device that opens each window as a prover's request names it". If soundness's device opens the windows from the parameters and never from the request, `Apart` would be a lemma of it and I put your words in; say which.
+
+**3. New: `SampledTwo/DeviceAccept.lean`** (mine; 41 lines, one theorem; NOT compiled) [read].
+- CUT's 06:26Z: all seven files of the cut compile at `8cf4d46672`, and `cutBound_accept` takes `Wired`, `PrintsInOrder` at each play and `SignsPlay`, with `FirstReads` and `OrderShown` now proved from the form's accept.
+- `cutAccept_dev₂` is that cut at the deployed two-session history: from `Wired`, `LedgerInOrder` at each play on two windows (taken), and the vocabulary's signer being the deployment's. Both facts the cut takes of the device are proved there (`printsInOrder_dev₂`, `signsPlay_dev₂`). Same bound, finder and forger.
+- It is stated at the form's accept. It goes into no listed guarantee; its file is under the lock's `roots` only, by the roots rule.
+- Nobody asked for it this hour. It is the same instantiation as `cutRead_dev₂` and `cutOrder_dev₂`, at CUT's last form; drop it if the join takes CUT's theorem directly.
+
+**4. Pushed** [run]. `cursor/proofs-history-d2e7` at `35388bbd54`. Nothing unpushed. Since `4d5a24fe63`: `187f5fb312` (the `Apart` docstrings); a clean merge of CUT's `8cf4d46672` (changes `CutFirst.lean`, `CutAccept.lean` and two lock roots only [run: `git diff --stat`]); `35388bbd54` (`DeviceAccept.lean`, its name at the end of the lakefile's roots and of the lock's `roots`).
+- The roots rule's two halves, checked by script at `35388bbd54` [run]: 20 two-stage names in the lock's `roots`, every one a quoted name of the lakefile's roots; every lakefile root has its file. Five two-stage lakefile roots are not in the lock's `roots`: `Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutOrder` (CUT's; you said ASSEMBLY adds them).
+- NOT merged: TWOLEG's tip `870cc9da1b`. Its last four commits say "not compiled", and you said TWOLEG names the head in a title. My files will need one more try over it then.
+
+**5. Runs** (vy-nebius-2, pool `proofs`; my build tree is warm there) [run].
+- `r20261113-063038-455a` at `187f5fb312`: `Device.lean`, `DeviceRead.lean`, `DeviceOrder.lean` after the docstring change. Took a Lean slot at 06:31Z, running. [guess] Ends about 07:05Z.
+- `r20261113-063309-7f9b` at `35388bbd54`: `DeviceAccept.lean` alone, launched 06:33Z. [guess] Ends about 07:00Z.
+- [derived] `455a`'s verdict carries to `35388bbd54` for the three files: between the two heads only `CutFirst.lean`, `CutAccept.lean`, `DeviceAccept.lean` and the two root lists change, and none of the three imports those.
+
+STOP RULE: not reached. Lock edits: root names only. No listed guarantee, named assumption, accept switch, `RunSetup` or `History` changed; no device lines built.
+
+NEEDS: 1. Your word on the `Apart` wording (section 2). 2. TWOLEG's named head, when it exists.
+
+To post: nothing.
+
+Not established: that `DeviceAccept.lean` compiles (`7f9b`); that the three files compile after the docstring change (`455a`; no proof term changed). `LedgerInOrder` and `Apart` at any deployment (taken). My files over TWOLEG's tip. The known hole: on the play's own two windows the history holds exactly this play's runs.
