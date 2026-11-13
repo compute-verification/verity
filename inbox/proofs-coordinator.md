@@ -155688,3 +155688,34 @@ stands as table 5 says: it is a search, not a build.
 - That the candidate builds: `8613` is out.
 - That the one-stage suite, the adapter's tests and `two_stage_small.sh` pass at the mended tip rather than one commit below it (3).
 - A kernel replay at any head of the join.
+
+## HELDOF, Fri 13 Nov 18:28Z: `CopyAt` and `heldOfAt_of_desc` are deleted (`794613a89ee`); what the blob line needs to sit on the carried join `02e3d5f39ec1`; no carry line yet
+
+Head of `cursor/proofs-heldof-blob-f083`: `794613a89ee41033eff792d9c883216061292a6a`, pushed, **not compiled** (six tries out). This is not the carry line: it comes when the building tries pass.
+
+**Done since 18:17Z**
+- `794613a89ee`: `CopyAt` and `heldOfAt_of_desc` of `HeldOfAtDesc.lean` deleted, a commit of its own; the module docstring names what is left. One level only: after it `DescAt`, `DecodesAt`, `CopyOf` and `fields_of_accept` are each read by `RefsOfSent.lean`, so the deletion leaves nothing read by nothing [run: `git grep -w` over the tree at the head; the only other `CopyAt` is `CheckedRun.CopyAt`].
+- `c9f755cfbe9`, beyond your order, say if you want it out: the field `JoinsAt.partsSizedAt` goes, and `joinedOfLaw` reads `hParts` as `partsHeldAt_of_accepts hHeld (partsSizedAt_of_formAccepts hHeld)` at the kept case, the theorem the join already uses at `C`; `partsSizedAt_goodCase` goes with it (read by nothing after). Why: it was the one conflict with the carried join that changes a proof, and this way it is compiled on my line and not resolved untested in the carry. `JoinsAt` loses a hypothesis; no statement gains one.
+
+**Runs** [run]
+- At `2020fb28815` (the three old forms deleted): WiredUnits, JoinedForm, CopyOfOne, ProjectionOf, JoinsAt, WiredScope each `lean exit 0`, no sibling clash, axiom probe clean (2, 2, 2, 10, 11, 1 theorems). Undecodable `r20261113-181528-25fe` and JoinedCoupling `r20261113-181528-5f06` had not reported at 18:27Z.
+- At `c9f755cfbe9`: JoinsAt `r20261113-182229-970c`, GoodCaseHeld `r20261113-182229-f5a0` (vy-nebius-cpu-8), waiting for a slot. I cancelled the three other tries of that head before they started (`-705a`, `-0778`, `-3afe`): the head moved.
+- At `794613a89ee` (vy-nebius-cpu-3): WiredUnits `r20261113-182607-2e19`, JoinedForm `-da8b`, Undecodable `r20261113-182608-b27d`, CopyOfOne `r20261113-182607-85b8` (the four build every module the line changes or reaches), HeldOfAtDesc `r20261113-182608-ee57`, RefsOfSent `r20261113-182608-de72`.
+
+**What `cursor/proofs-heldof-blob-f083` needs to sit on `02e3d5f39ec180f5df5b3de8c31e503d6f1b6c1c`** [run: `git merge-tree --write-tree` of the two heads, which touches no ref and no tree; nothing merged, nothing compiled]
+- Everything merges by itself but four hunks in two files (`lakefile.toml`, `JoinedCoupling.lean` and the new `GoodCaseHeld.lean` among what merges). In each hunk the blob line's side is the text to keep:
+  1. `JoinsAt.lean`, module docstring, the bullet "The run of record's accept": both sides say `partsSizedAt` is now a theorem; mine also says what `heldOfAt` is now.
+  2. `JoinsAt.lean`, the structure's fields: mine has `heldOfAt : HeldOfAtOr A C (V.registered θ)` and no `partsSizedAt`; the join's has `heldOfAt : HeldOfAt A C` and no `partsSizedAt`.
+  3. `JoinsAt.lean`, `joinedOfLaw`'s proof: the join's one line `have hParts …` against my block from `have hCut` to `have hReached`, whose `hParts` is already the join's theorem.
+  4. `JoinedForm.lean`, module docstring, the paragraph on `joinedCoupling`: mine, with its last words "of the law" written "of the sampling design". That is the only word of the join's that taking my side loses.
+- Check of that rule [run]: with my side taken in the three hunks, `JoinsAt.lean` is my head's file but for seven docstring lines outside the hunks where the join's renames landed ("draw" to "sample", "the law" to "the sampling design"); `JoinedForm.lean` is my head's file.
+- Names [run, a heuristic over the declarations' names]: no identifier my added lines use is declared at `a7319a232b31` and gone on `02e3d5f39ec1`, and the eight declarations the new block of `joinedOfLaw` calls (`playAccepts_form`, `reachedAccepts`, `partsHeldAt_of_accepts`, `partsSizedAt_of_formAccepts`, `cutBound_and`, `cutOrder_dev₂`, `freshWide_play`, `sourcesFit`) have the same signature text on both.
+- Not mine, seen on the way [run]: on `02e3d5f39ec1`, `JoinsAt.lean` lines 29 and 30 are 130 and 126 characters after the rename.
+
+**STOP RULE**: not hit. No statement gains a hypothesis, `B₀` is free in none, no file under `verity/` and no lock record changes.
+
+**NEEDS**: none.
+
+**Not established**: that `794613a89ee` or `c9f755cfbe9` compiles; that the merged tree compiles (the merge is the carry's).
+
+**Branches**: `cursor/proofs-heldof-blob-f083` at `794613a89ee41033eff792d9c883216061292a6a`.
