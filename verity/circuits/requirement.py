@@ -12,7 +12,7 @@ run's values (`inputs`, as the reference's `Trace` holds them). Without them `re
 `upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
 credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
 before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
-`../../circuits/tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
+`tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
 
 `execution` is the gate pass: `Accounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
 the registered values, each produced value's engine step, each gate's operands and those it uses, the run's values and
@@ -27,7 +27,7 @@ tick at which each device begins each engine step), an `Execution` also has `Pla
 census value (a run of a root node's output leaves read alike), and a schedule's steps are whole root Calls. A census
 holds no run values, so a gather's candidates (the census's `selects`) stay unresolved (`upper`): `reads(t)` refuses a
 step whose candidates from before `t` aren't otherwise read, since an upper bound would over-credit the audit, and
-`reads_upper(t)` counts them. `../../circuits/tests/test_requirement.py` holds it to `upper_bound` gate by gate.
+`reads_upper(t)` counts them. `tests/test_requirement.py` holds it to `upper_bound` gate by gate.
 
 A step is always an engine step, never a device tick: the ticks a step spans on each device are the placement's.
 

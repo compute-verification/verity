@@ -7,7 +7,7 @@ evaluators the theorems are over, and `fmaxfRule`, `fminfRule` and `rzByteRule` 
 functions on (`f32MaxMin_f32Rows`, `f32RzByte_rzRows`, `rules_ruleRows`, `rzByteRule_rzRuleRows`), and the tests here
 recompute each row from the Python: `scalar.F32Fmaxf` and `F32Fminf`, `cvt.rzi.u32.f32`'s low byte by the float's
 truncation (the evaluator of record, `dsv4_qnorm_insert.f32_to_u32_rz_byte`, is in `verity_vllm`, which `verity` doesn't
-import), and property/v1's rules where `verity.definitions.circuits.stacking` exists. An f32 is its encoding read as s32.
+import), and property/v1's rules where `verity.circuits.stacking` exists. An f32 is its encoding read as s32.
 
 `Accounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
 LUT softmax table on all 256 entries: `fixtures/exp2_lut127.json` pins `engine.int8_attention.LUT` as vLLM
@@ -105,7 +105,7 @@ def test_exp2_lut127_agrees_with_vllm() -> None:
 
 
 def test_rules_agree_with_property_v1() -> None:
-    stacking = pytest.importorskip("verity.definitions.circuits.stacking")
+    stacking = pytest.importorskip("verity.circuits.stacking")
     fmaxf, fminf, rz = (stacking.RANGES[f"{g}_v1"] for g in ("F32Fmaxf", "F32Fminf", "F32ToU32RzByte"))
     for a, b, mx, mn in lean_rows("ruleRows"):
         assert fmaxf(a, b) == mx, (a, b)
