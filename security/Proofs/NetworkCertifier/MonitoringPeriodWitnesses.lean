@@ -8,7 +8,7 @@ public import Proofs.NetworkCertifier.WitnessToys
 
 `PooledLeakAccepted`'s `honest` and `nontrivial` lemmas are in `Witnesses`: its two inputs (`hesc`, `hleak`) at the toy
 code, and its bound failing at an audit that always accepts where the incorrect set and the observations are empty.
-`PeriodLeakAccepted`'s pair is there too. This file holds two more instances of `PooledLeakAccepted`, each at what
+`MonitoringPeriodLeakAccepted`'s pair is there too. This file holds two more instances of `PooledLeakAccepted`, each at what
 those two leave out:
 
 * `PooledLeakAccepted_schedules`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and

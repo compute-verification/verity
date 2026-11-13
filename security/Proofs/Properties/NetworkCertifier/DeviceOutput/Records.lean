@@ -62,18 +62,18 @@ def OfGrid (c : Config) (r : BlockGrid) : Prop :=
     (r.link = c.ingressLink ∧ r.grid.size = c.ingress.buckets ∧ ∀ row ∈ r.grid, Packed c.ingress row)
 
 /-- The windows of the records of `P` on link `l`, in order. -/
-def windowsOn (l : String) (P : List BlockGrid) : List Nat :=
+def executionPhasesOn (l : String) (P : List BlockGrid) : List Nat :=
   (P.filter fun r => decide (r.link = l)).map BlockGrid.window
 
-theorem windowsOn_append (l : String) (P Q : List BlockGrid) :
-    windowsOn l (P ++ Q) = windowsOn l P ++ windowsOn l Q := by
-  simp [windowsOn, List.filter_append]
+theorem executionPhasesOn_append (l : String) (P Q : List BlockGrid) :
+    executionPhasesOn l (P ++ Q) = executionPhasesOn l P ++ executionPhasesOn l Q := by
+  simp [executionPhasesOn, List.filter_append]
 
-theorem windowsOn_eq {l : String} {r : BlockGrid} (h : r.link = l) : windowsOn l [r] = [r.window] := by
-  simp [windowsOn, h]
+theorem executionPhasesOn_eq {l : String} {r : BlockGrid} (h : r.link = l) : executionPhasesOn l [r] = [r.window] := by
+  simp [executionPhasesOn, h]
 
-theorem windowsOn_ne {l : String} {r : BlockGrid} (h : r.link ≠ l) : windowsOn l [r] = [] := by
-  simp [windowsOn, h]
+theorem executionPhasesOn_ne {l : String} {r : BlockGrid} (h : r.link ≠ l) : executionPhasesOn l [r] = [] := by
+  simp [executionPhasesOn, h]
 
 /-- What a run's prefix is: the device's state, the bucketer of the ingress grid's shape, both counts within their
 horizons, and the records published so far, `P`, one per window each grid closed, in order, each of its grid. -/
@@ -82,16 +82,16 @@ structure Inv (c : Config) (st : State) (P : List BlockGrid) : Prop where
   bu : BuGood c st.bucketer
   sh_le : st.shaper.t ≤ gridTicks c
   bu_le : st.bucketer.t ≤ c.windows * c.ingress.buckets
-  eg : windowsOn c.egressLink P = List.range (st.shaper.t / c.egress.buckets)
-  ig : windowsOn c.ingressLink P = List.range (st.bucketer.t / c.ingress.buckets)
+  eg : executionPhasesOn c.egressLink P = List.range (st.shaper.t / c.egress.buckets)
+  ig : executionPhasesOn c.ingressLink P = List.range (st.bucketer.t / c.ingress.buckets)
   grid : ∀ r ∈ P, OfGrid c r
 
 theorem init_inv (c : Config) : Inv c (init c) [] := by
   have hb : (init c).bucketer.t = 0 := by simp [init]
   refine ⟨init_good c, init_buGood c, by rw [init_t]; exact Nat.zero_le _, by rw [hb]; exact Nat.zero_le _, ?_, ?_,
     fun r hr => nomatch hr⟩
-  · rw [init_t]; simp [windowsOn]
-  · rw [hb]; simp [windowsOn]
+  · rw [init_t]; simp [executionPhasesOn]
+  · rw [hb]; simp [executionPhasesOn]
 
 theorem publishes_egress (p q : Prop) [Decidable p] [Decidable q] (w : ByteArray) (r : BlockGrid) (g : Params) :
     publishes ((if p then [Action.writeLink w] else []) ++ if q then [Action.publish r g] else []) =
@@ -120,8 +120,8 @@ theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List BlockGrid
       have hl : rec.link = c.egressLink := by rw [← hrec]
       have hw : rec.window = st.shaper.t / c.egress.buckets := by rw [← hrec]
       refine ⟨e1, h.bu.rel hb, by rw [e2]; exact ht, by rw [hb.2]; exact h.bu_le, ?_, ?_, ?_⟩
-      · rw [windowsOn_append, windowsOn_eq hl, h.eg, e2, range_close hm, hw]
-      · rw [windowsOn_append, windowsOn_ne (by rw [hl]; exact hd), h.ig, hb.2, List.append_nil]
+      · rw [executionPhasesOn_append, executionPhasesOn_eq hl, h.eg, e2, range_close hm, hw]
+      · rw [executionPhasesOn_append, executionPhasesOn_ne (by rw [hl]; exact hd), h.ig, hb.2, List.append_nil]
       · intro r hr
         rcases List.mem_append.1 hr with hr | hr
         · exact h.grid r hr
@@ -160,8 +160,8 @@ theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List BlockGrid
         rw [hb0.2] at hm hw
         rw [Option.toList_some]
         refine ⟨hgood, e1 ▸ k1, by rw [hst]; exact h.sh_le, by rw [hbt]; exact ht, ?_, ?_, ?_⟩
-        · rw [windowsOn_append, windowsOn_ne (by rw [hlink]; exact Ne.symm hd), h.eg, hst, List.append_nil]
-        · rw [windowsOn_append, windowsOn_eq hlink, h.ig, hbt, range_close hm, hw]
+        · rw [executionPhasesOn_append, executionPhasesOn_ne (by rw [hlink]; exact Ne.symm hd), h.eg, hst, List.append_nil]
+        · rw [executionPhasesOn_append, executionPhasesOn_eq hlink, h.ig, hbt, range_close hm, hw]
         · intro r' hr'
           rcases List.mem_append.1 hr' with hr' | hr'
           · exact h.grid r' hr'
@@ -184,8 +184,8 @@ theorem inv_after {c : Config} (hd : Distinct c) :
 
 /-- **A closed run's records**: on each link, one of each window `w < W`, in order; each of its link's grid. -/
 theorem closed_records {c : Config} {tr : List Event} (hT : Ticking c) (hd : Distinct c) (hc : Closed c tr) :
-    windowsOn c.egressLink (published c tr) = List.range c.windows ∧
-      windowsOn c.ingressLink (published c tr) = List.range c.windows ∧ ∀ r ∈ published c tr, OfGrid c r := by
+    executionPhasesOn c.egressLink (published c tr) = List.range c.windows ∧
+      executionPhasesOn c.ingressLink (published c tr) = List.range c.windows ∧ ∀ r ∈ published c tr, OfGrid c r := by
   have h := inv_after hd tr (init c) [] (init_inv c)
   rw [List.nil_append] at h
   change Inv c (after (init c) tr) (published c tr) at h
@@ -212,7 +212,7 @@ theorem range_filter_eq {W w : Nat} (hw : w < W) : (List.range W).filter (fun x 
       simp
 
 /-- **One record of each window**: if the windows on `l` are `0, …, W − 1`, window `w < W` has exactly one. -/
-theorem filter_one {P : List BlockGrid} {l : String} {W w : Nat} (h : windowsOn l P = List.range W) (hw : w < W) :
+theorem filter_one {P : List BlockGrid} {l : String} {W w : Nat} (h : executionPhasesOn l P = List.range W) (hw : w < W) :
     ∃ r, P.filter (fun r => decide (r.link = l ∧ r.window = w)) = [r] := by
   have e : P.filter (fun r => decide (r.link = l ∧ r.window = w)) =
       (P.filter fun r => decide (r.link = l)).filter fun r => decide (r.window = w) := by
@@ -226,7 +226,7 @@ theorem filter_one {P : List BlockGrid} {l : String} {W w : Nat} (h : windowsOn 
       (l := P.filter fun r => decide (r.link = l))
     rw [show ((fun x => decide (x = w)) ∘ BlockGrid.window) = (fun r : BlockGrid => decide (r.window = w))
       from rfl] at e2
-    unfold windowsOn at h
+    unfold executionPhasesOn at h
     rw [← e2, h, range_filter_eq hw]
   obtain ⟨r, hr, -⟩ := List.map_eq_singleton_iff.1 hm
   exact ⟨r, hr⟩
