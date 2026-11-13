@@ -97,7 +97,7 @@ def test_the_word_rules_prefetch_budgets_its_share_of_that_headroom(host, monkey
 
     monkeypatch.setattr(M, "_pool_lock", lock)
     monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {} if d == "bare" else {"Gemm_v1{K=4,N=4}": 1})
-    monkeypatch.setattr(M.word_query, "prefetch", lambda specs, X, W, extras, *, max_gates, jobs, budget: budgets.append(budget) or 0)
+    monkeypatch.setattr(M.word_query, "prefetch", lambda specs, X, W, extras, *, max_gates, jobs, budget, specialize: budgets.append(budget) or 0)
     host(str(96 * GiB), head=90 * GiB)
     M.prefetch_word_rules(["row"], "16/32", jobs=2)
     host("max", head=70 * GiB)

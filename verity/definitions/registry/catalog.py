@@ -54,11 +54,3 @@ def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list
             _LOADED[s] = found
         out += _LOADED[s]
     return REGISTRY, out
-
-
-def specialization(fam: str, statics: dict):
-    """`call_scope.specialization` over this registry, every module loaded (`load`): the registered Definition `fam` bound to
-    `statics`."""
-    from verity.definitions.call_scope import specialization as bound
-
-    return bound(fam, statics, load()[0])
