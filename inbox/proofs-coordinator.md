@@ -130160,3 +130160,49 @@ Run `r20261113-082637-50ae` on vy-nebius-2, launched 08:26Z: `verity lean try se
 - **Unchanged:** no `GAP`; no records run at my head and no ready line; FRAME's `portsOnce` clause is FRAME's to decide.
 
 I end the turn on `50ae` with one timer; its ETA is about 08:40Z if it gets a slot at once, as the last two did.
+
+## FRAME, Fri 13 Nov 08:30Z: records GREEN at `013955525dbe`, the regenerated lock is `cursor/proofs-frame-l1-9c4e` `954d2f26a6fb4c172a7c5c7316b00d606b292d3e` (one record moved, no `unwitnessed` entry added or moved); the `repository` suite is RED there by two tests, both from `OwnReads.lean`'s two imports (it reaches the network certifier's Lean, and a file the public export does not copy): on my line and on the join, not on the base; Friday's twenty files pass the model's own `wiresMoveRows`
+
+**In plain words.** Three things. (1) The check that regenerates the lock passed at my head, and the regenerated lock is committed. One record moved, the one that holds the changed check. (2) The quick tests found something I should have found hours ago: a file of OWNREADS's that I merged into my line imports, through two steps, the network certifier's Lean, which SPOT[Flock] must never import, and it imports a file the public export leaves out. Two tests of the whole tree fail for it. They pass at the base. The join has the file too. I am cutting the first import now; the second needs your ruling. (3) The registration of Friday's size passes every clause of the changed check, the new one included.
+
+### 1. Records: `r20261113-070739-f8f8` at `013955525dbe` (ended rc 0)
+
+- [run] "RECORDS_EXIT 0 at 3233s". "AUDIT …/security/Proofs: PASS  205046 declarations in 4078 modules; axioms propext, Classical.choice, Quot.sound". "AUDIT …/security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees". "AUDIT …/security/Properties: PASS  3480 declarations in 107 modules". Outcome: `security` regenerated, the other two pass.
+- [run] The regenerated `security/lean-audit.json` has sha256 `732f76ddc680247e3ee02fc144b7c10c7897c992b5517532b8e9411845b3e0e5`; committed as `954d2f26a6fb`, which differs from the audited commit in that file alone. No records run ran at `954d2f26a6fb` itself.
+- [run: a script over the two locks] Against the base's lock, one entry differs: `reads["Proofs.Flock.SpotFlock.Code"]`. Its digest moved; `SpotFlock.wiringOk`'s hash moved; sixteen definitions are new there (`sourceRows`, `sourceRowsNamed`, `writtenRows`, `writtenRowsUnwired`, `writtenRowsRead`, `portsOnce`, `outsComputed`, `outsOk`, `sourceCells`, `outBit`, `wireBit`, `bitGoes`, `cellGoes`, `wireGoes`, `rowGoes`, `wiresMoveRows`); four left (`wiresMove`, `returnedWhole`, `writtenUnwired`, `writtenRead`: no guarantee's statement reads them now). `SpotFlock.two`'s own hash did not move. `unwitnessed`, `witnesses`, `witnesses_assumed`, `open`, `domain`, `assumptions`, `deployed`, `trust_gap` and `roots` are the base's, entry for entry.
+- [run] The audit names the guarantees that read the changed definitions: "read by Flock.SecurityProofs.SpotExfilTwo, Flock.SecurityProofs.SpotFirstHitTwo, Flock.SecurityProofs.SpotKSTwo". [mine, wrong] My entries and the body's draft said two guarantees. It is three: `SpotFirstHitTwo` is stated at `SpotFlock.two` too. The body says three now.
+
+### 2. The `repository` suite is red at this head: two tests, one file
+
+- [run: `f8f8`, `suites.py --changed HEAD^2 --quick`] "5 suites: 4 passed (0 cached), 1 failed". Passed: `verity-graph` 220, `verity/definitions/ops` 949, `benchmarks/two_stage` 9 (7 skipped), `verity/protocols/pouw/verifier` 2006. Failed: `repository`, "2 failed, 380 passed": `tests/test_boundaries.py::test_spot_never_imports_the_network_certifier_in_lean` and `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`.
+- [run on my VM: each test's function called alone, at `954d2f26a6fb` and at the base `3b05c3a3b1a7`] Both pass at the base. At my head both name `security/Proofs/Flock/SpotFlock/OwnReads.lean` and nothing else:
+  - the first: 31 files of the certifier reached, every chain through "`Properties/Verity/Sampled/RecordDraw.lean <- Flock/SpotFlock/OwnReads.lean`" (by `Properties/Challenger/Coins.lean` and by `Properties/Verity/Sampled/Assembled.lean`);
+  - the second: "OwnReads.lean:9: lean import Proofs.Properties.Challenger.CanonLine" and "OwnReads.lean:10: lean import Proofs.Properties.Verity.Sampled.RecordDraw", "2 edges, 2 new".
+- [read] What `OwnReads.lean` takes from them: `Verity.Sampled.sortedKeys_of_wf` from `RecordDraw.lean` (a well-formed value's objects hold their keys in order; twenty lines, on `CanonRead`'s lemmas and `Claims.Json.Wf`), and `CanonLine.canon_inj` and `CanonLine.field?_equiv` (two sorted values with one canonical text are equivalent, field by field). `ownReads_of` needs all three, and `wiring_of_wiringOk` needs `ownReads_of`.
+- [mine] This has been on my line since I merged OWNREADS's branch (`d7c892af87`), and I ran no suite on the line before this run. [read: ASSEMBLY's 07:39Z entry] The join holds my `013955525dbe`, so it holds the file.
+- **What I do now, without asking:** move `sortedKeys_of_wf` out of `RecordDraw.lean` into a file that reaches no certifier module (beside `CanonRead`, which it reads), and point `OwnReads.lean` and `SpecTie.lean` (its one other reader) at it. [run: the test's own reach function] `CanonLine.lean` reaches 159 files and none of the certifier's, so that cut clears the first test. It touches two files under `Properties/Verity/Sampled/`: `RecordDraw.lean` loses the theorem and gains an import, `SpecTie.lean:298` names it where it now is.
+- **What I do not decide:** the second test's other edge, `OwnReads.lean -> CanonLine.lean`. `public_boundary.toml` lets `security/{Properties,Proofs/Properties}/{Spot,Challenger}` out only where a file of the `spot` group needs it; `OwnReads.lean` is in the `flock` group. And `CanonLine.lean` itself imports `Proofs/Properties/Composition.lean`, `Properties/Composition.lean` and `Proofs/Properties/Pouw/LiveSalt/Canon.lean`. The ways I see: (a) a boundary decision: the entry's `from` gains `flock`, and whatever of `Composition` `CanonLine` needs goes out with it; (b) the two lemmas and what they stand on (`CanonRead.lean`, about 650 lines, `CanonLine.lean`, about 450, and the escapes they read) move to the public side, under `Flock/Claims`; (c) `ownReads_of` takes the canonical text's injectivity as a hypothesis, and a file on the private side gives it: the public theorems (`addressesConnected_of_held`, `ksTwo_of_facts`) then carry one more hypothesis. I would do (b) after the paths have moved and not tonight; (a) is one line and yours or ci's to rule.
+
+### 3. `r20261113-065524-464b` (at `792e9b6086e8`; its last step, the guard's tests, still running at 08:26Z)
+
+- [run: `out/guard-0.log`] The guard's `files` mode on Friday's twenty files: "GUARD_EXIT 0 at 2397s"; "GUARD wiresMoveRows = true", "GUARD wiresMoveRows: 891 ms"; every clause true (`membersScoped`, `namesOnce`, `writersFirst`, `sourceRowsNamed`, `wiresMoveRows`, `wiresAlike`, `writtenRowsUnwired`, `writtenRowsRead`, `refReadsOwn`, `interiorValuesEmpty`, `portsOnce`, `outsOk`); "filesFitOk":true, "twoFilesOk":true, "unmoved":[], "unnamed":[], "unread":[]. "GUARD held: 453062 ms", "twoFilesOk_ms":518275. This is `wiringOk` and `membersScoped` as the model has them now, at a rehearsal's registration of Friday's size (`r20261113-041053-1338`'s export), not at a served audit's.
+- [run] The five tries, each "lean exit 0" with "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound": `WiresMoveRows.lean` (16 theorems, 369 s), `AddressesGive.lean` (7, 994 s), `AddressesHeld.lean` (4, 99 s), `Facts.lean` (33, 34 s), `WiredCode.lean` (6, 47 s).
+
+### 4. Your 07:39Z ask: `wiresChecked` on the toy and on Friday's files
+
+- Next: a mode of the guard that reads the registration alone and says `wiresChecked` (ADDRROW's text, word for word) true or false, and at which wire where false. It goes on a branch of its own off my head, not on the line the pull request takes, so no second definition of ADDRROW's lands with mine. I change nothing in `wiringOk` for it. The answer comes in its own entry.
+
+### State
+
+- Pushed: `cursor/proofs-frame-l1-9c4e` `954d2f26a6fb4c172a7c5c7316b00d606b292d3e`. ASSEMBLY: the regenerated lock is that commit, on `013955525dbe` which the join holds.
+- **The base is NOT moved** (`3b05c3a3b1a7`), and the second move's pull request is not opened as ready for anything: I move the base at the head where the certifier import is cut and has compiled. #9681 is open at `3b05c3a3b1a7`, unmarked.
+- Your 07:22Z and 07:28Z mail: read. No merge of `main` on my branches; tries go with `--on auto`; none of my runs is on vy-nebius-cpu-12.
+- One loop, the pen is mine. A timer of yours for another worker's run and eleven more of your own timers reached this conversation between 07:27Z and 07:33Z; by your 04:19Z rule I did nothing with any of them.
+
+**Not established.**
+- That the cut compiles: nothing of it is written yet.
+- The guard's test file's verdict: `464b`'s last step has not ended.
+- `wiresChecked` at either registration.
+- That no other file of the join's workers imports across either boundary: I ran the two tests at my head and at the base only.
+
+NEEDS: your ruling on the `OwnReads.lean -> CanonLine.lean` edge of the public boundary: (a), (b) later, or (c). Until it is ruled, the second test stays red on my line and on the join, and I write no ready line.
