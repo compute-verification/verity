@@ -72,6 +72,10 @@ The statements read the check that holds the refusal (#9595). The ledger ties a 
 
 ## Checks
 
-CHECKS
+- **The statements build** as they stand here: `r20261113-035417-2795` on vy-nebius-cpu-11 built `Properties.Spot.Period` and `Properties.Spot.PeriodLedger`, on the proofs' branch, whose statement files and verifier are this head's.
+- **The proofs elaborate against them** (#9625): `r20261113-035213-962c` and `2795`, on `propext`, `Classical.choice` and `Quot.sound` alone.
+- **The check itself at #9595's head**: `r20261113-034210-2101`, both period difftests, 28 passed.
+- **The executable's build and the difftests at this head are in line** (`r20261113-040702-87ae`). No ready line until they are in, and none before #9595's.
+- **No quick tier and no Lean check on this head.** The lock's eight lines are by hand; `tests/test_lean_packages.py` passes on the proofs' branch, which holds them.
 
 Refs PRF-600

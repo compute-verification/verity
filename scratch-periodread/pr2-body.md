@@ -24,6 +24,7 @@ Issue: PRF-600. The second of its pull requests: the audits' half of a monitorin
 | the parameters at the window are one-stage v2's, and the case's public file shares no rows | `names` |
 | one-stage v2 accepts the case at those parameters | `audit` |
 
+- **The period's codes** (`Spot.Period.Code`, in the ledger's half's file) gain four: `members`, `evidence`, `names` and `audit`.
 - **A reject of one-stage v2 refuses the period. An undecided leaves the period undecided**, unless a later window refuses it.
 - **On acceptance it publishes** the lane, the monitoring period, this registration's circuit, each window with the registration audited and what one-stage v2 published for it, and the lane's sessions that are another registration's, each as `{registration, session}` and nothing else.
 
@@ -60,7 +61,7 @@ A case supplies nothing of one-stage v2's parameters that the check does not hol
 - **Parameters one-stage v2 would refuse at every window are refused before the check**, as the request's fault.
 - **A public file whose header names `shared_rows` is refused** (`names`). The check does not hold a file's references into rows its members share to the registration.
 
-## One change outside the new files, and no record moves
+## One change outside the period's files, and no record moves
 
 The period checks a ledger once and reads every window from the result, which `Challenger.auditedOpen` does not offer: it checks the ledger at every call.
 
@@ -91,4 +92,7 @@ The reference and the Lean share an author.
 
 ## Checks
 
-CHECKS
+- **The Lean builds and the difftests pass at this head**: `r20261113-034210-2101` on vy-nebius-2. `lake build Spot sampled-proofs-difftest`, 501 jobs, with `Spot.ChallengerSession` and its `rfl` tie; both period difftests, 28 passed in 120 s. The three slowest (53 s, 38 s, 19 s) are marked `slow`; the next takes 3 s.
+- **The refusal first ran** at the head before the `auditedIn` copy: `r20261113-031857-3061`, 28 passed.
+- **The quick tier at this head is in line** (`r20261113-040405-1199`). No ready line until it is in.
+- **No records run on this head.** That no record moves is read from the diff, in which nothing under `security/` differs from #9537's head, not from a run.

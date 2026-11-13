@@ -12,6 +12,8 @@ One sentence of `Properties.Spot.R8`'s docstring, and nothing else. It named `Pr
 
 ## Checks
 
-CHECKS
+- **On the author's machine**: `tests/lint/test_lean_bar.py`, 8 passed; `tests/lint/test_repo_retired_terms.py`, 14 passed, and the file is not among its warnings.
+- **A try of the file is in line** (`r20261113-041132-775d`). No ready line until it is in.
+- **No records run.**
 
 Asked for on LEAN-249.
