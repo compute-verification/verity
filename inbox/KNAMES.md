@@ -190,3 +190,49 @@ then `records-proofs`):
    (condition 3), not for a mark.
 
 Your return stays Fri 04:00Z.
+
+## Fri 13 Nov 00:02Z: LEAN'S FIXED HEAD IS UP: #9375 is at `34c5cbb3705c`. Merge it, run the records again on a node with no line, diff the security locks, open the pull request
+
+Read: your 22:11Z return and both comments on HASH-125 (proofs is rung with the branch and the
+map, 22:14Z). By me now: your dry run `r20261112-213515-507c` ended at 22:36Z, `records-spot`
+exit 1 and `records-proofs` exit 1; every `error:` line in both outputs names
+`Proofs/Properties/Verity/Sampled/Instance.lean` (lines 799 to 823 among them) or is "build
+failed". **I have not held them to compute-accounting's ten, line for line; the new head makes
+that moot only if the rerun is clean, so the rerun is the judge.**
+
+**The new head, by me (`git log bafae2eaec2e..origin/cursor/lean-remote-merge-onmain-fc8d`):**
+two commits over the old marked head, two files:
+- `67b2c67919` "Sampled.Instance: the idle base sets macs at its own signer"
+  (`security/Proofs/Properties/Verity/Sampled/Instance.lean`, +1): the Lean fix. It was the
+  marked head for a while this evening (memory-accounting on LEAN-249, 23:24Z).
+- `34c5cbb370` "The record difftest's helper takes Blocks.of's one value" (one Python test
+  line, pushed 23:58Z). **At 00:00Z the queue reads #9375 "not marked ready at 34c5cbb3":
+  lean's mark at this head is still to come, and a further line is possible.** Read LEAN-249's
+  newest comments before you launch, and `git fetch` the branch again before the pull request
+  opens; if the head moved in a Lean file, merge and run again.
+
+**Do, in order:**
+1. Merge `34c5cbb3705c` into `cursor/kernels-names-move-680d`. Neither file is among your 35,
+   so the map's rows should stand: `stage.py`, `move_check` and `resolve_check` again, and say
+   so. Push.
+2. **The records, on a node with no check line** (by me at 00:01Z: cpu-13 load 0.3 and no line;
+   cpu-2, cpu-6 and cpu-7 no line; cpu-12 and cpu-4 one each): `records-spot` and
+   `records-proofs` with `--update --moved` and the six-entry moves file, as `dryrun.sh` has
+   them. **Zero errors is the bar now.** Any error at all: it is the move's or the base's new
+   head's; say which, with the line, and stop.
+3. **Diff each regenerated lock against its base, record by record** (`security`,
+   `security/Properties`, `security/Proofs`, SPOT's and the certifier's again). proofs'
+   condition 1: each record that moved did so by its own name and the names it reads, and
+   nothing else. **If any record changes beyond that: stop, say so on HASH-125, end your turn.**
+4. The pull request, unmarked: base #9375's branch while it has not landed (`main` once it
+   has), `Lane proofs`, `Move: tools/move/kernels_names_map.toml`, `Refs HASH-125`. Its body:
+   the table of the 45, the moves file, which records moved and how you checked, the runs' ids,
+   the one row whose path depends on the order with lean's stages, the retired-terms prune left
+   to the lint pull request, and what is not shown.
+5. One worker comment on HASH-125 that it is open (at most 100 words). **Tell me: I ring proofs
+   (its condition 3) and lean.**
+
+If a run would wait or build more than 40 minutes, end your turn naming it, as before; I resume
+you at its end.
+
+Return by Fri 13 Nov 04:00Z.
