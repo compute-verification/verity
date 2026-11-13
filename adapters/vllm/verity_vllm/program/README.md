@@ -12,7 +12,7 @@ a registered Definition. The package's docstring and each module's say what it h
   `protocols` packages and its tools, `circuit-check`, and the benchmarks that build or read a Program.
 - **Loads:** `verity.circuits` and `verity.definitions`; torch, and vLLM inside functions; the integration's
   `engine`, `config` and `correspondence`; and, inside functions, its `check`, `observe` and `settings` and
-  `verity.protocols.pouw.prover`.
+  `verity.protocols.accounting.pouw.prover`.
 - **Names other packages read:** a top-level module that states `__all__` lists there every name another package or
   a benchmark reads from it; its other names are its own. The modules read that way: `model` (a checkpoint's
   configuration, the type of its weights Record and its rotary table), `compact` (operand references as run
