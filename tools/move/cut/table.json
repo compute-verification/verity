@@ -177,11 +177,23 @@
    "new": "- **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below)."
   },
   {
-   "file": "benchmarks/network_traces/runner_parts.py",
-   "old": "form (warden's \\\"The lengths rows\\\"): the network certifier hands each \"",
-   "new": "form (the network certifier's \\\"The lengths rows\\\"): it hands each \"",
-   "why": "a split adds an import line of the same names to each new module, so the retired terms' total would grow by one: the help's prose says the term the glossary gives"
+   "file": "benchmarks/network_traces/tests/test_warden_serve.py",
+   "old": "OLDER_FORM_READS = {\"certifier_serve\": {\"certified_from_json\", \"certified_json\", \"served_model\"},\n                    \"active_replay\": {\"_quiet_runtime\", \"_usage\", \"pack_record\", \"unpack_record\"},\n                    \"active\": {\"id_request\"}}\n",
+   "new": "OLDER_FORM_READS = {\"certifier_serve\": set(), \"active_replay\": set(), \"active\": {\"id_request\"}}\n",
+   "why": "the relay's runner imports nothing of the older runner or its replay after the cut, and the test holds the list to what it imports"
+  },
+  {
+   "file": "benchmarks/network_traces/tests/test_warden_serve.py",
+   "old": "#: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the\n#: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,\n#: and the id request's writer from the older form's protocol file. Each leaves its file in a change of its own, so this\n#: only shrinks.\n",
+   "new": "#: what the relay's runner still imports from the older form's files, by the file: the id request's writer from the\n#: older form's protocol file, and nothing from the older runner or its replay. Each leaves its file in a change of its\n#: own, so this only shrinks.\n",
+   "why": "the comment says what the list holds"
   }
  ],
- "files": {}
+ "files": {},
+ "own": {
+  "repo_retired_terms": {
+   "count": 2,
+   "why": "a split writes an import of the same names into each new module: nine sites on the lines that import `WardenParams`, `warden_rows` and the certifier's module again, seven fewer where an import of the runner is no longer read; no definition's body and no prose adds one"
+  }
+ }
 }

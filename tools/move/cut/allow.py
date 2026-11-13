@@ -1,6 +1,6 @@
 """Record in the counted lints' lists what a cut moved from one file to another.
 
-    python allow.py ROOT BASE [--dry]
+    python allow.py ROOT BASE [--table TABLE.json] [--dry]
 
 Run after ``cut.py`` on the same tree, with BASE the commit the cut was applied on and the interpreter the one that has
 the tree's pinned ruff.  The ratchet gate lets a file's count rise, or a new file's appear, only when the same list's other
@@ -10,8 +10,10 @@ under ``tests/lint/allowlists/`` this counts, with the tree's own lint, every fi
 BASE, before and after, and adds each file's difference to its entry; a file that moved whole takes its entries with
 it first, as the lint's ``--move`` does.
 
-It writes nothing and exits 1 when a list's total would grow: the cut then added a finding of its own, and the lines
-it prints name the files that gained more than the others lost.  Nothing here reads history beyond BASE's files.
+It writes nothing and exits 1 when the files hold more of a lint's sites after the cut than before, beyond what the
+table's ``own`` allows that lint with its reason (a split writes an import line of the same names into each new
+module): the cut then added a finding of its own, and the lines it prints name the files that gained more than the
+others lost.  Nothing here reads history beyond BASE's files.
 """
 from __future__ import annotations
 
@@ -157,8 +159,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("root", type=Path)
     ap.add_argument("base")
+    ap.add_argument("--table", type=Path, help="the cut's table: its `own` says what the cut may add of its own")
     ap.add_argument("--dry", action="store_true", help="print what would be written and write nothing")
     a = ap.parse_args()
+    own = {k: v["count"] for k, v in (json.loads(a.table.read_text()).get("own", {}) if a.table else {}).items()}
     root = a.root.resolve()
     was, renames = changes(root, a.base)
     before_text = {p: (git(root, "show", f"{a.base}:{old}") if old else None) for p, old in was.items()}
@@ -190,11 +194,12 @@ def main() -> int:
                     delta[key] = after[key] - before[key]
         total = sum(delta.values())
         rows = {str(k): n for k, n in sorted(delta.items(), key=str)}
-        out[name] = {"total": total, "files": rows}
-        if total > 0:
-            grown.append(f"{name}: the cut adds {total} of its own "
+        out[name] = {"total": total, "own": own.get(name, 0), "files": rows}
+        if total > own.get(name, 0):
+            grown.append(f"{name}: the cut adds {total} of its own, and the table's `own` allows {own.get(name, 0)} "
                          f"({', '.join(f'{k} {n:+d}' for k, n in rows.items())}): mend them in the script's table "
-                         f"(a module's `doc`, an `edits` row) or in the code before the cut, never in the list")
+                         f"(a module's `doc`, an `edits` row) or in the code before the cut, or say in `own` why the "
+                         f"cut must add them; never in the list alone")
             continue
         want = Counter(have)
         for key, n in delta.items():

@@ -7,9 +7,10 @@ The table (JSON) names:
   read what stays of it (``reads_source``) and end in text of its own (``tail``, with the ``imports`` it reads);
 * ``whole``: the files that move whole, old path to new;
 * ``edits``: exact replacements, each of which must match its file once (what no rule here writes: a command's parser,
-  a word of prose), a new module's text as the cut wrote it among them;
+  a list a test holds the tree to), a new module's text as the cut wrote it among them;
 * ``files``: new files given whole;
-* ``bare``: the directory whose files import each other by a bare name.
+* ``bare``: the directory whose files import each other by a bare name;
+* ``own``: for ``allow.py``, the sites of each counted lint the cut may add of its own, with why.
 
 A definition is its statement, its decorators and the comment lines right above it. Nothing in a definition's body
 changes but the name it reads another moved definition by, and what an ``edits`` row names. Every tracked Python file that reads a moved definition,
@@ -61,6 +62,25 @@ def loads(node: ast.AST | None) -> set[str]:
     return set() if node is None else {x.id for x in ast.walk(node) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
 
 
+def _parts(node: ast.AST) -> list[str] | None:
+    """[a, b, c] of the dotted name `a.b.c`."""
+    out: list[str] = []
+    while isinstance(node, ast.Attribute):
+        out.append(node.attr)
+        node = node.value
+    return [node.id, *reversed(out)] if isinstance(node, ast.Name) else None
+
+
+def _renames(stmt: ast.Assign) -> list[tuple[str, list[str]]]:
+    """(NAME, [a, b, c]) for `NAME = a.b.c`, and for each pair of `N1, N2 = a.b, c.d`."""
+    target, value = stmt.targets[0], stmt.value
+    if isinstance(target, ast.Name):
+        return [(target.id, parts)] if (parts := _parts(value)) else []
+    if isinstance(target, ast.Tuple) and isinstance(value, ast.Tuple) and len(target.elts) == len(value.elts):
+        return [(t.id, parts) for t, v in zip(target.elts, value.elts) if isinstance(t, ast.Name) and (parts := _parts(v))]
+    return []
+
+
 class File:
     """One file's text, parsed: its top-level definitions, its import statements and what each binds where."""
 
@@ -81,6 +101,8 @@ class File:
         self.imports: list[tuple[ast.stmt, ast.AST | None]] = []
         self.functions: list[ast.AST] = []
         self.calls: list[tuple[ast.Assign, ast.AST | None]] = []  # NAME = f(...), where f may load a file by its path
+        #: NAME = a.b.c, alone or in a tuple: another name for a module, perhaps; (statement, NAME, [a, b, c], scope)
+        self.renames: list[tuple[ast.Assign, str, list[str], ast.AST | None]] = []
 
         def walk(node: ast.AST, inside: ast.AST | None) -> None:
             for child in ast.iter_child_nodes(node):
@@ -90,6 +112,8 @@ class File:
                         and isinstance(child.value, ast.Call) and (isinstance(child.value.func, ast.Name)
                                                                    or getattr(child.value.func, "attr", "") == "import_module"):
                     self.calls.append((child, inside))
+                elif isinstance(child, ast.Assign) and len(child.targets) == 1 and (pairs := _renames(child)):
+                    self.renames += [(child, name, parts, inside) for name, parts in pairs]
                 elif isinstance(child, SCOPES):
                     self.functions.append(child)
                     walk(child, child)
@@ -103,6 +127,13 @@ class File:
         #: the names an import or a call's result binds anywhere: only these start a read of another file
         self.roots = {a.asname or (a.name.split(".")[0] if isinstance(s, ast.Import) else a.name)
                       for s, _ in self.imports for a in s.names} | {s.targets[0].id for s, _ in self.calls}
+        grew = True
+        while grew:  # and the names given to what one of them holds
+            grew = False
+            for _, name, parts, _ in self.renames:
+                if parts[0] in self.roots and name not in self.roots:
+                    self.roots.add(name)
+                    grew = True
 
     def scopes(self) -> dict[tuple[str, int], symtable.SymbolTable]:
         if self._table is None:
@@ -155,6 +186,11 @@ class File:
                         near = [r for r in hits if r in (path, f"{BARE}/{path}", str(Path(self.rel).parent.parent / path))]
                         if len(near or hits) == 1:
                             return (near or hits)[0]
+                for x in args:  # the path as the call's own argument
+                    if isinstance(x, ast.Constant) and isinstance(x.value, str) and x.value.endswith(".py"):
+                        hits = [r for r in TEXT if r == x.value or r.endswith("/" + x.value)]
+                        if len(hits) == 1:
+                            return hits[0]
         return None
 
     def loaded(self, name: str, line: int) -> tuple[ast.Assign, str, ast.AST | None] | None:
@@ -169,6 +205,15 @@ class File:
                     self._loaded[key] = (hit, rel, scope) if rel else None
                     break
         return self._loaded[key]
+
+    def renamed(self, name: str, line: int) -> tuple[ast.Assign, list[str], ast.AST | None] | None:
+        """The assignment `name = a.b.c` that binds `name` for a read at `line`, with the dotted name's parts."""
+        for scope in self.chain(line):
+            hit = next(((s, parts, inside) for s, n, parts, inside in reversed(self.renames)
+                        if inside is scope and n == name), None)
+            if hit is not None:
+                return hit
+        return None
 
     def span(self, node: ast.stmt) -> tuple[int, int]:
         """The 1-based lines of `node`, its decorators and the comment lines right above it."""
@@ -259,7 +304,16 @@ def resolve(rel: str, name: str, seen: frozenset = frozenset()) -> tuple[str, st
         return None
     if name in f.top:
         got = f.loaded(name, 10 ** 9)
-        return (got[1], None) if got else (rel, name)
+        if got:
+            return got[1], None
+        given = f.renamed(name, 10 ** 9)
+        if given is not None and given[2] is None:  # another name for a module, perhaps
+            cur = resolve(rel, given[1][0], seen | {(rel, name)}) if given[1][0] != name else None
+            for attr in given[1][1:]:
+                cur = resolve(cur[0], attr, seen | {(rel, name)}) if cur is not None and cur[1] is None else None
+            if cur is not None and cur[1] is None:
+                return cur
+        return rel, name
     for stmt, inside in reversed(f.imports):
         if inside is None:
             for a in stmt.names:
@@ -307,9 +361,34 @@ def place(rel: str) -> str:
     return WHOLE.get(rel, rel)
 
 
+ROOTED_AS = BARE.replace("/", ".")
+_own = {Path(rel).stem for rel in TEXT if str(Path(rel).parent) == BARE}
+#: the modules of `bare` that some file imports from the root: the tree lets a module have one name, so these have that one
+ROOTED: set[str] = {Path(dest).stem for dest, m in TABLE["modules"].items() if m.get("rooted")}
+for _rel, _text in TEXT.items():
+    if ROOTED_AS in _text:
+        ROOTED |= set(re.findall(rf"""["']{re.escape(ROOTED_AS)}\.(\w+)["']""", _text))
+        for _stmt, _ in (file(_rel).imports if file(_rel) else []):
+            for _a in _stmt.names:
+                _mod = _a.name if isinstance(_stmt, ast.Import) else f"{_stmt.module}.{_a.name}"
+                if _mod.startswith(ROOTED_AS + "."):
+                    ROOTED.add(_mod[len(ROOTED_AS) + 1:].split(".")[0])
+ROOTED &= _own | {Path(dest).stem for dest in TABLE["modules"]}
+#: the files outside `bare` that import a module of it by its bare name: they have the directory on their path
+_bare_import = re.compile(rf"(?m)^[ \t]*(?:import|from)[ \t]+({'|'.join(map(re.escape, sorted(_own)))})\b")
+BARE_READERS = {rel for rel, text in TEXT.items() if not rel.startswith(BARE + "/")
+                and any(module_file(stem, rel) == f"{BARE}/{stem}.py" for stem in set(_bare_import.findall(text)))}
+NAMED: dict[str, dict[bool, set[str]]] = {}  # each module of `bare` an import is written for: bare or not -> the files
+
+
 def import_of(dest: str, at: str, name: str | None = None, asname: str | None = None) -> tuple[str, str, str | None]:
-    """(module, name, asname) of the `from module import name [as asname]` that reads `dest`, or a name of it, in `at`."""
-    bare = str(Path(dest).parent) == BARE and at.startswith(BARE + "/")
+    """(module, name, asname) of the `from module import name [as asname]` that reads `dest`, or a name of it, in `at`.
+    A module of `bare` is read by its bare name where no file reads it from the root and `at` has the directory on its
+    path (a file of it, or one that imports another of its modules so)."""
+    bare = str(Path(dest).parent) == BARE and Path(dest).stem not in ROOTED \
+        and (at.startswith(BARE + "/") or at in BARE_READERS)
+    if str(Path(dest).parent) == BARE:
+        NAMED.setdefault(Path(dest).stem, {}).setdefault(bare, set()).add(at)
     if name is None:
         stem = Path(dest).stem
         return ("" if bare else dotted(dest).rsplit(".", 1)[0]), stem, (asname if asname != stem else None)
@@ -372,7 +451,8 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
     edits: list[tuple[tuple[int, int], tuple[int, int], str]] = []
     need: dict[int, list[tuple[str, str, str | None]]] = {}  # id of a binding statement -> the imports to put after it
     loads_at: dict[int, tuple[ast.Assign, ast.AST | None]] = {}
-    taken_names = {t.string for t in toks if t.type == tokenize.NAME}
+    # a name after a dot is an attribute and takes no name of this file's
+    taken_names = {t.string for n, t in enumerate(toks) if t.type == tokenize.NAME and not (n and toks[n - 1].string == ".")}
     count = {"reads": 0, "imports": 0}
 
     chosen: dict[str, str] = {}
@@ -392,6 +472,29 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
                 chosen[dest] = cands[0]
         return chosen[dest]
 
+    def module_at(name: str, line: int, depth: int = 0) -> tuple[tuple[str, str | None] | None, ast.stmt | None, tuple | None]:
+        """(the module `name` is at `line`, the statement that binds it, and that statement with its scope where the
+        new module's import goes after it: a load by path, or a name given to a module another name holds)."""
+        hit = f.bound(name, line)
+        if hit:
+            cur = alias_target(hit[0], hit[1], origin)
+            if cur is not None and cur[1] is not None:  # a name of another file: a module there, perhaps
+                there = resolve(*cur)
+                cur = there if there is not None and there[1] is None else None
+            return cur, hit[0], None
+        by_path = f.loaded(name, line)
+        if by_path:
+            return (by_path[1], None), by_path[0], by_path
+        given = f.renamed(name, line) if depth < 4 else None
+        if given is not None and given[1][0] != name:
+            stmt, parts, scope = given
+            cur = module_at(parts[0], stmt.lineno, depth + 1)[0]
+            for attr in parts[1:]:
+                cur = resolve(cur[0], attr) if cur is not None and cur[1] is None else None
+            if cur is not None and cur[1] is None:
+                return cur, stmt, (stmt, None, scope)
+        return None, None, None
+
     i = 0
     while i < len(toks):
         t = toks[i]
@@ -405,13 +508,7 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
         if not lost and not any(toks[x].string in MOVED for x in range(i + 2, j + 1, 2)):
             i = j + 1
             continue
-        hit = f.bound(t.string, t.start[0])
-        by_path = f.loaded(t.string, t.start[0]) if hit is None else None
-        cur = alias_target(hit[0], hit[1], origin) if hit else (by_path[1], None) if by_path else None
-        if cur is not None and cur[1] is not None:  # a name of another file: a module there, perhaps
-            there = resolve(*cur)
-            cur = there if there is not None and there[1] is None else None
-        binder = hit[0] if hit else by_path[0] if by_path else None
+        cur, binder, by_path = module_at(t.string, t.start[0])
         k, to, k_to = i, None, i
         while cur is not None and k < j:  # a module: its next attribute
             k += 2
@@ -478,8 +575,9 @@ def redirect(rel: str, text: str, origin: str, self_dest: str | None = None, use
             return "  # noqa: E402"
         return ""
 
-    scope_of = {id(s): inside for s, inside in [*f.imports, *f.calls]}
-    line_of = {id(s): s.lineno for s, _ in [*f.imports, *f.calls]}
+    binders = [*f.imports, *f.calls, *((s, inside) for s, _, _, inside in f.renames)]
+    scope_of = {id(s): inside for s, inside in binders}
+    line_of = {id(s): s.lineno for s, _ in binders}
     seen: dict[int, list] = {}
     # one import of a new module a scope, and none in a function for what the module's own level imports: a name a
     # function imports is its local from its first line, so a read above the import there would find it unbound
@@ -609,9 +707,17 @@ for dest, m in TABLE["modules"].items():
         for n in ast.parse(line).body:
             wanted += [("" if isinstance(n, ast.Import) else n.module, a.name, a.asname) for a in n.names]
     head = [f'"""{m["doc"]}"""', "from __future__ import annotations", ""]
+    by_root = sorted({w for w in wanted if w[0] == ROOTED_AS or w[0].startswith(ROOTED_AS + ".")})
+    if by_root and str(Path(dest).parent) == BARE:  # the root on its path first, as the directory's files have it
+        wanted += [("", "sys", None), ("pathlib", "Path", None)]
+    else:
+        by_root = []
     plain = sorted({w for w in wanted if w[0] == ""}, key=lambda w: w[1])
-    froms = sorted({w for w in wanted if w[0] != ""})
+    froms = sorted({w for w in wanted if w[0] != ""} - set(by_root))
     head += [line for w in plain for line in render("", [w], "")] + ([""] if plain and froms else []) + render("", froms, "")
+    if by_root:
+        head += ["", f"sys.path.append(str(Path(__file__).resolve().parents[{len(Path(dest).parts) - 1}]))"
+                     f"  # the root, for {ROOTED_AS}", "", *render("", by_root, "")]
     text = "\n".join(head) + "\n"
     for k, (is_def, rel, a, b, piece) in enumerate(body):
         before = body[k - 1] if k else None
@@ -775,9 +881,20 @@ for rel, text in TABLE.get("files", {}).items():
         problems.append(f"{rel}: the table gives it whole and it exists: name another file")
     new_modules[rel] = text
 
+for stem, how in sorted(NAMED.items()):
+    if len(how) == 2:
+        problems.append(f"{BARE}/{stem}.py would be imported by its bare name ({', '.join(sorted(how[True])[:3])}) and from "
+                        f"the root ({', '.join(sorted(how[False])[:3])}), and the tree lets a module have one name: set "
+                        f"`rooted` for it in the table, and see that the files of {BARE}/ that import it have the root "
+                        f"on their path")
+_by_root = re.compile(rf"(?m)^[ \t]*(?:from|import)[ \t]+{re.escape(ROOTED_AS)}\b")
 for rel, text in {**CHANGED, **new_modules}.items():
     if not rel.endswith(".py"):
         continue
+    if str(Path(rel).parent) == BARE and _by_root.search(text) and not _by_root.search(TEXT.get(rel, "")) \
+            and "sys.path" not in text:
+        problems.append(f"{rel}: it comes to import a module of {BARE}/ from the root and never puts the root on its "
+                        f"path: give it the line the directory's other files have, in a change before the cut")
     try:
         ast.parse(text, filename=rel)
     except SyntaxError as e:
