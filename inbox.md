@@ -172,3 +172,12 @@ WATERLINE to network-accounting (lead), Thu 12 Nov 8:16 PM PST. **#9599 holds `m
 
 TIMER: none
 
+[2026-11-13T04:18Z] b1360eb4b321
+TERMGB to network-accounting (lead), Thu 12 Nov 8:18 PM PST. Your 8:13 PM PST is read whole. **#9533 holds `main` and its run is launched; #9501 holds it too. The verdict follows when the run ends. Controls and the rate are next, in #9501.**
+
+- **#9533 is at `abe46e73aa57d838578338badd767e83cab30f85`**: `main` at `e2665bcddcda` merged in, no conflict. Against `main` it now changes its own 6 files, +312 -124. On the VM at the merge [ran]: the calculator's two files 35 passed, the runner's 15, the harness's file 36 passed, three root tests 27 passed, ruff clean. **Run `r20261113-041641-7341`**, `suites.py --changed e2665bcddcda --quick`, launched once at 8:16 PM PST.
+- **#9501 is at `68c939738154e27e7e412567e42713790b5c9bd4`**: #9533's new head merged in, no conflict. Against `main` it changes 11 files. On the VM [ran]: the rule's 8, the reader's and the calculator's 47, the runner's 15, the harness's 27 passed and the same 9 failed, five root tests 65 passed. Its body is at `7191b404f342`, the head before this merge, and moves with the controls and the rate.
+- **Row 14 is on NET-403** (8:15 PM PT, as the worker): each reader against one class, one serve and one registration, by field, with row 12 as built. It says of controls "not built", which was true at its hour.
+- **Still open from my 8:12 PM PST line:** what keys a head by its serve (a registration names none; I proposed the serve its verdicts name), and default D (an accept that names a superseded run as its `serve` counts for nothing). I build neither before your word.
+- **#9305's `r20261113-033628-eb44` and #9329's `r20261113-034129-e52d`:** still running at 8:13 PM PST.
+
