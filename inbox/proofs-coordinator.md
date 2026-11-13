@@ -116556,3 +116556,28 @@ Both of us acting on your 03:00Z rulings (the order refusal, the named `null` re
 What I have that its entry does not [run]: at 03:02Z `aed4` had built all 11,404 imports and was still elaborating `DevAgrees.lean`, with no verdict yet.
 
 STOP RULE: not reached. NEEDS: the coordinator ends one TWOLEG session. To post: nothing. Not established: `aed4`'s verdict.
+
+## RUNSAS, Fri 03:03Z: nothing on the running path calls `Spot.Bits.check`: a finding, as you asked; and at the moved base `Round2.lean` and the bridge build again in `r20261113-023136-9f47`, while my new file failed on a layout slip, fixed and rerunning as `r20261113-025932-9528`
+
+Your question first. The layout check that refuses a unit returning an input or its constant is never called by the verifier that runs. It is called only by its own examples. The running verifier never opens a template's circuit file at all: it holds each file by its hash. So no accept of the second stage depends on that check, and my bridge cannot get the new clause from the running side. It stays inside the premise that the model's design evaluates, which is decided on the auditor's copies.
+
+The check, and who calls it:
+- [read] `Spot.Bits.check` is defined at `verity/protocols/spot/verifier/lean/Spot/Bits.lean:773`. The clause NEEDEDBITS names is its lines 807 to 809: "a returned output bit of the circuit file's unit sits on no computed row (an input or the constant)".
+- [read] Its only callers are the `#guard` examples in the same file, lines 917 to 1065. I searched `verity/`, `benchmarks/`, `integrations/`, `tools/`, `security/Definitions`, `security/Models`, `security/Properties`, `security/Proofs/Flock` and `security/Proofs/Properties` for `Bits.check` and `Spot.Bits.check`: the only other hits are two docstrings, `Spot/Returned.lean:9` and `verity/protocols/spot/verifier/second_stage.py:744`.
+- [read] The files that open or sit in the namespace `Spot.Bits`, where an unqualified `check` could mean it, are `security/Properties/Nci/Record.lean`, seven files under `security/Proofs/Properties/Nci/` and `security/Proofs/Properties/Core/Evaluate.lean`. None applies it; their `check` is `Spot.Wires.check` or prose.
+
+The running path:
+- [read] `Spot.Run.run` (`Spot/Run.lean:284-325`, read whole, with `interiorSteps` and `interiorAudit`) calls `Service.checkPublic`, `Registration.check`, `Slots.popOk`, `Select.select`, `Select.selectSecond`, `coinsHold`, `Draw.checkDraw`, `Service.checkVerdicts`, `Record.record` and `SecondStage.check`. None reads a circuit file.
+- [read] `Run.Interior.circuits` is `Array (String × String × Json × Json)`: the template's name, its circuit file's SHA-512 as hex, the reference header and the reference reads. `templateCircuits` checks the hex's form only. The docstring of `templateReads` says of the template check that it "ran where the params were made; the verifier runs none".
+- [read] `Spot/SecondStage.lean` names none of `Bits`, `circuitFile`, `parseStmt` or `readOf`. `SecondStage.check` reads the `Own` and the statements' JSON.
+- [read] `benchmarks/two_stage/tests/TwoGuard.lean` evaluates `templateOk h t` and the design's clauses at built copies, and uses `Spot.Bits.prog` and `Spot.Bits.keyProg`. It does not call `Spot.Bits.check`.
+- [derived] So the running accept is conditional on `Spot.Bits.check` nowhere, and on no clause of `templateOk` or `two h` either: both read the reference statement's circuit file, which the running verifier does not hold. In my statements all of `two h` is the premise `TwoHolds h`. When FRAME adds the clause to `templateOk`, `TwoHolds h` gets stronger and my proofs do not change. Whoever decides `two h` at the built copies owes the new clause: HELDOF's check, or the guard.
+
+The runs:
+- [run] `r20261113-023136-9f47` (vy-nebius-cpu-12, still running), its build step at `67cdd06418`, against the base `6c1a87cc54`: `RunsAs.Statements`, `RunsAs.Round2`, RUNCOINS's `RunsAs.Statement` and the bridge `RunsAs.RoundTwoOf` built (stdout lines 2119, 2120, 9949, 9950). So the three files compile against FRAME's new `Code.lean`. Their axiom probes at this head are the run's later steps, not yet reported.
+- [run] The same step failed on my new `RunsAs/SecondStageOf.lean`, in one lemma, `two_of_twoHolds`: a structure literal whose second line was indented left of its first field, which Lean does not parse (line 97, "expected '}'"). No other declaration of the file errored.
+- [read] Fixed in `9dabbed580`, pushed: the statement is built with `AuditStatement.mk`. Rerun `r20261113-025932-9528` on vy-nebius-cpu-12, waiting for a place at 03:02Z. [guess] It reports by about 03:40Z.
+
+NEEDS: none of mine. For FRAME and HELDOF: the new `templateOk` clause has no source on the running side, so it is HELDOF's to decide at the built copies.
+
+Not established: whether Flock's own session verifier, or `Desc.parseStmt`, refuses such a circuit by another route; I read neither for this. Whether the Python that stages a run calls a layout check; I read only its one docstring. That `SecondStageOf.lean` compiles. The axiom probes of `Round2.lean` and the bridge at the new head.
