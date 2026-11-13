@@ -178,7 +178,9 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
-  "Proofs.Properties.Verity.Recursive.Audit"
+  "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.SampledTwo.SessionLogged",
+  "Proofs.Properties.Verity.SampledTwo.SessionCut"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
