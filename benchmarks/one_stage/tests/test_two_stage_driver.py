@@ -240,9 +240,9 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     c = _class()
     pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
-    stage1 = json.loads(json.dumps(got.stage1()))
-    assert stage1["family"] == mine and "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
-    for handoff in (stage1, {**stage1, "window_root": pub["run"]}, {k: v for k, v in stage1.items() if k != "family"}):
+    hand = json.loads(json.dumps(got.stage1()))
+    assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
+    for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
         assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
         assert again.stream.family(again.sample) == mine
@@ -250,21 +250,21 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     assert FC.LABEL != mine != AC.family(0)
     with pytest.raises(ValueError, match="a class is sampled once, on its own family"):
         TS.first(pub, PAIR, RULE, FC.Challenger("another sample"), window_root=pub["run"])
-    for handoff in ({**stage1, "family": FC.LABEL}, {**stage1, "family": AC.family(0)}):
+    for handoff in ({**hand, "family": FC.LABEL}, {**hand, "family": AC.family(0)}):
         with pytest.raises(ValueError, match="does not choose among the families the session reserved"):
             TS.resume(handoff, PAIR, window_root=pub["run"])
 
     with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
-        TS.first_root({**stage1, "window_root": elsewhere})
+        TS.first_root({**hand, "window_root": elsewhere})
     with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
-        TS.resume({**stage1, "window_root": elsewhere}, PAIR)
+        TS.resume({**hand, "window_root": elsewhere}, PAIR)
     with pytest.raises(ValueError, match="the registration is held to the session root abababab"):
-        TS.resume(stage1, PAIR, window_root=elsewhere)
-    window = stage1["record"]["window"]
-    moved = {**stage1, "record": {**stage1["record"], "window": {**window, "run": elsewhere}}}
+        TS.resume(hand, PAIR, window_root=elsewhere)
+    window = hand["record"]["window"]
+    moved = {**hand, "record": {**hand["record"], "window": {**window, "run": elsewhere}}}
     with pytest.raises(ValueError, match="the record's window is of run abababab"):
         TS.resume(moved, PAIR, window_root=elsewhere)
-    resized = {**stage1, "record": {**stage1["record"], "window": {**window, "outputs": 8}}}
+    resized = {**hand, "record": {**hand["record"], "window": {**window, "outputs": 8}}}
     with pytest.raises(ValueError, match="the record's window names another class than its commitment's layout"):
         TS.resume(resized, PAIR, window_root=pub["run"])
 
