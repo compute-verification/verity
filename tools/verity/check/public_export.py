@@ -22,7 +22,7 @@ owner, an issue or a due date. An entry that lists witnesses goes with a witness
 naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
 names what no copied file has.
 
-A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
+A fetched fixture (an entry of `artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
 public tree's tests read it with no store. Each of its files must fit a tracked file (`tests/test_repository.py`'s
 `BLOB_LIMIT`), or the export refuses it by name. The report lists the other public fetched fixtures, which a public test
