@@ -123177,3 +123177,73 @@ Nothing of you.
 ### To post
 
 Nothing.
+
+## COINMAP, Fri 13 Nov 05:46Z: try17 failed in `CoinMapAgree.lean` at line 381 (`law_freshA`: `rfl` hit the recursion limit unrolling `List.ofFn` at 512) and line 612 (`coinMapHolds`: `if_congr` took the wrong `Decidable` instance); both mended at `76b8cca332`, which try18 `r20261113-051829-4e08` is testing; `CoinStages.lean`'s ten errors found and mended locally at `860f3a7969`; no statement the join reads changed
+
+In plain words: try17 found two errors in the agreement file, and I fixed both. Try18 is checking that fix now,
+and should end at about 05:50Z. I also ran the last file, `CoinStages.lean`, on this VM against copies of the
+definitions it reads. That run found ten errors, and I fixed all ten. Neither file has compiled in the real tree yet.
+
+### try17 [run: `research fetch r20261113-033625-67ea --all --on vy-nebius-2`, `stdout.log`]
+
+Two errors, both in `CoinMapAgree.lean`, at `21830e1f9e`:
+- 381:6, `law_freshA`: "maximum recursion depth has been reached". The `rfl` made the unifier unroll `List.ofFn` at 512.
+  The fix is `dsimp only [widthOf]`, then `exact ofFn_freshVal _ _`. Before committing, I reproduced the error and
+  checked the fix in a core-only model with local `lean`.
+- 612:40, `coinMapHolds`: "synthesized type class instance is not definitionally equal" (`instDecidableAnd` against
+  `Classical.propDecidable`). The fix is `ite_inst`, which takes both instances. I checked it in the same model.
+- The try's 2241 s was the slot tree's cold rebuild of 750 changed files, not my file. The time the log prints is
+  counted from the start of the try (`lean_changed.py`).
+
+### `CoinStages.lean` [run: local `lake env lean`, Mathlib only]
+
+I ran a scratch copy as a `module` file with `[leanOptions]` and verbatim copies of the definitions it reads. Four
+repo lemmas were stubbed with `sorry`: `F128.bitU64`, `toBytes_size`, `bit_elemOfBits` and `usedOf_snoc`.
+`freshWide_play` was left out (it needs `Vocab` and `game_eq`); its steps after `rw [game_eq]` passed on a stub of
+`finish`. The run found ten errors, and after the fixes it ends with exit 0 in about 15 s. Two of them would have
+cost a try each:
+- The kernel unrolled `Array.ofFn` at `SpotFlock.L` (1048576 steps) in `src_getElem`. `bytesOf_getElem` and
+  `size_bytesOf` are now stated at every length.
+- A `show` reduced `List.finRange 65536` in `coinByte_testBit`. It now uses `unfold` and `dsimp only` instead.
+
+The file is pushed at `860f3a7969`, not compiled.
+
+### Your 05:41Z questions [read: `rg` over my four files and their imports]
+
+- **Old last step:** neither `CoinMap.lean` nor `CoinMapLaw.lean` reads `OneStage.checkAt`, and neither do
+  `CoinMapAgree.lean` and `CoinStages.lean`. No file of mine names `checkAt`, `secondLawOf`, `secondCheck` or the
+  form's accept. Of the modules they import, `Reading.lean` uses only `Spot.OneStage.commitmentOf`, which decodes
+  the commitment. The coin map is a statement over every play of the period's game, so TWOLEG's new last step
+  doesn't touch it.
+- **Roots:** all four files are already on the join (`72c589ad29`), and its `lean-audit.json` lists them. So the
+  roots are ASSEMBLY's, and I edit no lock.
+- **PRF-490:** `devFirst_stage` and `devSecond_stage` feed STAGECOINS's statements at the form's accept, which are
+  empty until a play is accepted. I list nothing in a lock.
+
+### Running
+
+Try18 `r20261113-051829-4e08` is on vy-nebius-2, building `CoinMapAgree.lean` at `76b8cca332` on build/15. At
+05:43Z it had built 11395 of 11414 modules [run]. I expect it to end at about 05:50Z [guess]. The next try is
+`CoinStages.lean` at `860f3a7969`, which I launch when try18 ends, one try at a time.
+
+### NEEDS
+
+1. STAGECOINS: `FreshWide o.log` in `DevSecond` is still open (entry 7).
+
+### STOP RULE
+
+Kept. I touched no lock and listed no guarantee.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- `CoinMapAgree.lean` and `CoinStages.lean` have not compiled in the tree. `freshWide_play`'s `rw [game_eq]` is
+  untested.
+- The axioms of `coinMapHolds` and `lawAt` have not been probed. The probe covers only a try's target, so `lawAt`
+  needs a try on `CoinMapLaw.lean`.
+- The VM was replaced at 05:41Z. Everything was pushed, and I lost only the local scratch.
+
+Branch `cursor/proofs-coinmap-8b0c` at `860f3a7969`, pushed; nothing unpushed.
