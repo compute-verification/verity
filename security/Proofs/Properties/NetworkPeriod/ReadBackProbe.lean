@@ -48,7 +48,9 @@ import all Init.WF
 Two builds, each on the code as written, with digests and strings as terms:
 
 * the profile reads back: `Core.Ratio.ofString` of `Core.Ratio.toString`, and `Core.Integrity.ofJson` of
-  `Core.Integrity.toJson` at one level sampled `subset:k` with δ = 1/n (`ofString_toString`, `integrity_of`);
+  `Core.Integrity.toJson` at the profile honest one-stage writes for a scan: one program, nothing prescribed or
+  covered, not linked, one level `unit` with its query sampled `subset:k`, and δ = 1/n (`ofString_toString`,
+  `integrity_of`);
 * the link-window's rows have a domain: `rowsDomain` is defined, and 64 bytes, for a 64-byte schedule digest and a
   32-byte session (`rowsDomain_ok`), its manifest's canonical text written out with the hex strings as terms
   (`canon_manifest`) and bounded (`text_fits`).
@@ -185,10 +187,10 @@ theorem ofString_toString (r : Core.Ratio) (ctx : String) (h : r.den = 1 ∨ (2 
 
 /-! ## The profile reads back -/
 
-def lvl (size k : Nat) : Core.Level := ⟨"unit", none, size, some (.subset k)⟩
+def lvl (q : String) (size k : Nat) : Core.Level := ⟨"unit", some q, size, some (.subset k)⟩
 
-def honest (p : String) (size k n : Nat) : Core.Integrity :=
-  { programs := #[p], prescribed := #[], linked := true, covered := #[], levels := #[lvl size k],
+def honest (p q : String) (size k n : Nat) : Core.Integrity :=
+  { programs := #[p], prescribed := #[], linked := false, covered := #[], levels := #[lvl q size k],
     delta := ⟨1, n⟩, drawn := #[("unit", k)] }
 
 theorem exactly_self {α : Type} (toJson : α → Json) (a : α) (ctx : String) (h : IntJ (toJson a) = true) :
@@ -205,55 +207,55 @@ theorem design_of (k : Nat) (ctx : String) :
     Core.SamplingDesign.ofJson (Core.SamplingDesign.subset k).toJson ctx = .ok (.subset k) := by
   rw [design_step, exactly_self _ _ _ (by kernel_rfl)]
 
-theorem level_step (size k : Nat) (ctx : String) :
-    Core.Level.ofJson (lvl size k).toJson ctx =
+theorem level_step (q : String) (size k : Nat) (ctx : String) :
+    Core.Level.ofJson (lvl q size k).toJson ctx =
       ((some <$> Core.SamplingDesign.ofJson (Core.SamplingDesign.subset k).toJson (s!"{ctx}.{"draw"}")) >>= fun d =>
-        exactly Core.Level.toJson (lvl size k).toJson ctx ⟨"unit", none, size, d⟩) := by kernel_rfl
+        exactly Core.Level.toJson (lvl q size k).toJson ctx ⟨"unit", some q, size, d⟩) := by kernel_rfl
 
-theorem level_of (size k : Nat) (ctx : String) : Core.Level.ofJson (lvl size k).toJson ctx = .ok (lvl size k) := by
+theorem level_of (q : String) (size k : Nat) (ctx : String) : Core.Level.ofJson (lvl q size k).toJson ctx = .ok (lvl q size k) := by
   rw [level_step, design_of]
   exact exactly_self _ _ _ (by kernel_rfl)
 
-theorem levels_of (p : String) (size k n : Nat) (ctx : String) :
-    Flock.J.arr (honest p size k n).toJson "levels" ctx = .ok #[(lvl size k).toJson] := by kernel_rfl
+theorem levels_of (p q : String) (size k n : Nat) (ctx : String) :
+    Flock.J.arr (honest p q size k n).toJson "levels" ctx = .ok #[(lvl q size k).toJson] := by kernel_rfl
 
-theorem drawn_of (p : String) (size k n : Nat) (ctx : String) :
-    Flock.J.get (honest p size k n).toJson "drawn" ctx = .ok (Json.mkObj [("unit", Json.num k)]) := by kernel_rfl
+theorem drawn_of (p q : String) (size k n : Nat) (ctx : String) :
+    Flock.J.get (honest p q size k n).toJson "drawn" ctx = .ok (Json.mkObj [("unit", Json.num k)]) := by kernel_rfl
 
-theorem has_unit (size k : Nat) : Flock.J.has (Json.mkObj [("unit", Json.num k)]) (lvl size k).name = true := by kernel_rfl
+theorem has_unit (q : String) (size k : Nat) : Flock.J.has (Json.mkObj [("unit", Json.num k)]) (lvl q size k).name = true := by kernel_rfl
 
-theorem nat_unit (size k : Nat) (ctx : String) :
-    Flock.J.nat (Json.mkObj [("unit", Json.num k)]) (lvl size k).name ctx = .ok k := by kernel_rfl
+theorem nat_unit (q : String) (size k : Nat) (ctx : String) :
+    Flock.J.nat (Json.mkObj [("unit", Json.num k)]) (lvl q size k).name ctx = .ok k := by kernel_rfl
 
-theorem programs_of (p : String) (size k n : Nat) (ctx : String) :
-    strs (honest p size k n).toJson "programs" ctx = .ok #[p] := by kernel_rfl
+theorem programs_of (p q : String) (size k n : Nat) (ctx : String) :
+    strs (honest p q size k n).toJson "programs" ctx = .ok #[p] := by kernel_rfl
 
-theorem prescribed_of (p : String) (size k n : Nat) (ctx : String) :
-    strs (honest p size k n).toJson "prescribed" ctx = .ok #[] := by kernel_rfl
+theorem prescribed_of (p q : String) (size k n : Nat) (ctx : String) :
+    strs (honest p q size k n).toJson "prescribed" ctx = .ok #[] := by kernel_rfl
 
-theorem covered_of (p : String) (size k n : Nat) (ctx : String) :
-    strs (honest p size k n).toJson "covered" ctx = .ok #[] := by kernel_rfl
+theorem covered_of (p q : String) (size k n : Nat) (ctx : String) :
+    strs (honest p q size k n).toJson "covered" ctx = .ok #[] := by kernel_rfl
 
-theorem linked_of (p : String) (size k n : Nat) (ctx : String) :
-    Flock.J.bool (honest p size k n).toJson "linked" ctx = .ok true := by kernel_rfl
+theorem linked_of (p q : String) (size k n : Nat) (ctx : String) :
+    Flock.J.bool (honest p q size k n).toJson "linked" ctx = .ok false := by kernel_rfl
 
-theorem delta_of (p : String) (size k n : Nat) (ctx : String) :
-    Flock.J.str (honest p size k n).toJson "delta" ctx = .ok (Core.Ratio.toString ⟨1, n⟩) := by kernel_rfl
+theorem delta_of (p q : String) (size k n : Nat) (ctx : String) :
+    Flock.J.str (honest p q size k n).toJson "delta" ctx = .ok (Core.Ratio.toString ⟨1, n⟩) := by kernel_rfl
 
-theorem intJ_honest (p : String) (size k n : Nat) : IntJ (honest p size k n).toJson = true := by kernel_rfl
+theorem intJ_honest (p q : String) (size k n : Nat) : IntJ (honest p q size k n).toJson = true := by kernel_rfl
 
 theorem ratio_of (n : Nat) (hn : 2 ≤ n) (ctx : String) :
     Core.Ratio.ofString (Core.Ratio.toString ⟨1, n⟩) ctx = .ok ⟨1, n⟩ :=
   ofString_toString ⟨1, n⟩ ctx (Or.inr ⟨hn, Nat.gcd_one_left n⟩)
 
-theorem integrity_of (p : String) (size k n : Nat) (hn : 2 ≤ n) (ctx : String) :
-    Core.Integrity.ofJson (honest p size k n).toJson ctx = .ok (honest p size k n) := by
+theorem integrity_of (p q : String) (size k n : Nat) (hn : 2 ≤ n) (ctx : String) :
+    Core.Integrity.ofJson (honest p q size k n).toJson ctx = .ok (honest p q size k n) := by
   unfold Core.Integrity.ofJson
   rw [levels_of]
   simp only [bind, Except.bind, List.push_toArray, List.nil_append, List.forIn_toArray, List.forIn_cons, List.forIn_nil, level_of, drawn_of, has_unit,
     nat_unit, programs_of, prescribed_of, covered_of, linked_of, delta_of, ratio_of n hn, pure, Except.pure, if_true]
   first
-    | exact exactly_self Core.Integrity.toJson (honest p size k n) ctx (intJ_honest p size k n)
+    | exact exactly_self Core.Integrity.toJson (honest p q size k n) ctx (intJ_honest p q size k n)
     | trace_state
 
 
