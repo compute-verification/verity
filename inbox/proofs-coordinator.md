@@ -137699,3 +137699,86 @@ My listing commit is not in the pass: the tip's order names remote, onsite and c
 - `security`'s lock on this head holds lean's renamed names, so a refusal there would be the records commit's matter, not our moves'. I say which when it ends.
 
 **Next, at 12:30Z:** the Lean run's verdict, and the checks job on the posted head if there is one. No head of mine moved.
+
+## ASSEMBLY, Fri 13 Nov 11:26Z: THE JOIN's PACKAGE IS NOT KNOWN TO BUILD. The records run `9715` FAILED IN THE BUILD, at a PoUS file, since my merge of RUNCOINS's `66bbbd6266` at 10:05Z; one import line mends that file (`e4a00b6b85`, `4e2e`); A SECOND PoUS FILE, `Properties/Pous/Component.lean`, FAILS ITS TRY, at `e4a00b6b85` AND at `0df461b1b2` (`530b`), so not from any merge; whether the build passes it is the records run `76c3`'s to say, and it is out. THE TWO-STAGE LEG COMPILES with `firstSized` gone, 22 fields (`abe9`, `bdeb`, rc 0). HONEST2's `191488fbab` and SESSIONOF2's `9a548b2f97` are merged; three of `d3d8`'s seven tries are in, rc 0, four are out. The join is at `6247d2ddfc`
+
+**In plain words.** The records check you asked for did not get as far as the two lines: the package failed to build, in a file of PoUS's memory challenger that nobody had compiled since RUNCOINS moved an import under it. I merged that head at 10:05Z, so my titles of 10:26Z and 10:47Z that said "the join compiles" were true of the files I tried and not of the package. One import line mends that file. Behind it a second PoUS file fails when tried alone. It fails the same way at the head before RUNCOINS's merge, so the join did not break it; what I do not know is whether the package's build, which compiles it differently from a try, passes it. The records run out now says. Apart from that: the join's theorem compiles with `firstSized` deleted, the three heads you named are merged, and `Live₂.KS`'s docstring says what the hypothesis is.
+
+**1. `r20261113-103758-9715`, the records run at `4a4d22b644`: failed, rc 1, in the build** [run: vy-nebius-cpu-9, 10:38:19Z to 10:53:23Z; lines from its `stdout.log` and `lean-audit/audit-Proofs/build.log`].
+- `security/Proofs`: "AUDIT … security/Proofs: FAIL; built in the sandbox", "build: exit 1", "Some required targets logged failures: - Proofs.Properties.Pous.MemoryChallenger.Inputs", "error: build failed".
+- The first error: "../Proofs/Properties/Pous/MemoryChallenger/Inputs.lean:26:92: Unknown constant `Properties.NetworkCertifier.Bytes.ofBytes`". The other fifteen errors are in the same file and follow from it ("Unknown identifier `bs`", `bs_length`, `split_bytes`): line 26 is one `open … (…)` of eight names, and it fails whole.
+- `security` and `security/Properties`: each "FAIL; built in the sandbox", as requirers: "Proofs's build did not pass (its report says why), so its facts are not read".
+- **The audit of `security/Proofs` did not run, so this run says nothing about the two `escapes` lines.**
+- **The cause** [read]. RUNCOINS's `66bbbd6266` changed `Properties/Pous/MemoryChallenger/Tree.lean`'s import from `Properties/NetworkCertifier/Check/Bytes` to `Flock/Bytes`. `Inputs.lean` imports `Tree.lean` and opens `ofBytes` and `ofBytes_be`, which are declared in `Check/Bytes.lean` (lines 39 and 47). `Inputs.lean` is not in that commit, was not among the twelve files `53f6` compiled, and was not among my nine tries of `681d`.
+- **Not built behind it:** the 17 files that import `Inputs.lean`, directly or through another [derived from the import lines; run: none of the 17 has a "Built" line in the build log]. The four at the top are `Proofs/Accounting.lean`, `Proofs/Pous.lean`, `Properties/Pous/Component.lean` and `Properties/Pous/WipeSigned.lean`. PoUS's period guarantees are among the 17. `JoinsAt`, `JoinedCoupling` and `JoinedForm` did build there.
+- **RUNCOINS's branch has the same break** [read: `cursor/proofs-runcoins-2d88` is at `66bbbd6266`, `Inputs.lean` unchanged there].
+- **My part.** A try compiles one file and what it imports. I merged `66bbbd6266` on its twelve tries and mine, and wrote "the join compiles". The package was last seen to build whole at `0df461b1b2` (`adf2`). No head of the join since `75f438d9f7` is known to build whole.
+
+**2. The mend, and the second file** [run].
+- `e4a00b6b85`: `Inputs.lean` gains `public import Proofs.Properties.NetworkCertifier.Check.Bytes`, the import it had through `Tree.lean` before. No statement changes. On my VM with it: `pytest tests/test_boundaries.py tests/test_lean_packages.py`, "94 passed", so SPOT still imports none of the network certifier; `public_boundary.py`, "8 edges, 8 new", the same eight.
+- **It is PoUS's file and RUNCOINS's change, not mine.** I wrote it on the join because the records need a build. If RUNCOINS wants the other mend (moving `ofBytes` and `ofBytes_be` down to `Flock/Bytes.lean`), say and I revert this commit and merge that head.
+- **`r20261113-110214-4e2e`** (vy-nebius-cpu-2, at `e4a00b6b85`, started 11:02Z), five tries:
+  - `MemoryChallenger/Inputs.lean`: "lean exit 0 in 18 s", 15 theorems, probe clean. **The import line mends it.**
+  - `Pous/WipeSigned.lean`: "lean exit 0 in 65 s", 38 theorems, probe clean.
+  - `Proofs/Pous.lean`: "lean exit 0 in 66 s", 97 theorems, probe clean; its build of what it imports built `Pous/Period`, `PeriodDeployed`, `PeriodAt` and `PeriodGame`.
+  - **`Properties/Pous/Component.lean`: "lean exit 1 in 186 s".** "Component.lean:381:8: error: (deterministic) timeout at `whnf`, maximum number of heartbeats (200000) has been reached"; "1 of its 57 theorems failed … Pous.Component.SecurityProofs.wverdict_eq". Line 381 is the last `rfl` of that theorem, which unfolds the grader's `StreamedWipe.verdict`.
+  - `Proofs/Accounting.lean`: "lean exit 0 in 864 s"; it has no theorem of its own.
+  - The run ended 11:22Z, rc 1, on `Component.lean` alone.
+- **The same try fails the same way before RUNCOINS's merge.** `r20261113-111608-530b` (vy-nebius-cpu-5, 11:16:33Z to 11:19:50Z, rc 1): the try of `Component.lean` at `0df461b1b2`, from a detached worktree (nothing is pushed for it). The same error at 381:8, "lean exit 1 in 196 s", the same one theorem of 57. **So the failure is not from `66bbbd6266`, my line or any merge of the join.**
+- **No run I hold has compiled `Component.lean` from source and passed** [read]. The file is unchanged since `main`, and nothing imports it, so no other try reaches it. `adf2`'s build at `0df461b1b2` took it from the artifact cache ("staged: 5239 of its 5443 keyed modules from the artifact cache", and no line for the file in its build log).
+- **What I do not know:** whether the package's build passes the file compiled from source. The try and the build give Lean the same three options (the lakefile's); the try compiles a copy of the file with `lake env lean`, the build compiles it as its module. If the build fails it too, it would fail at `0df461b1b2` as well, and the break is older than the join's merges.
+- **`r20261113-110329-76c3` says** (vy-nebius-cpu-11, started 11:03Z): the records run at `e4a00b6b85`. Its build compiles the file from source, since six files it imports changed (five in `66bbbd6266`, and my line). No verdict at 11:25Z: it is still in the build of `security/Proofs`, beside `d3d8` on the same node.
+- **I change nothing in `Component.lean` before your word.** If the build fails it, the mend is PoUS's owner's to choose; the two I see are finding what costs that `rfl` its heartbeats, and raising the limit on that one theorem.
+
+**3. `r20261113-095636-adf2`, the records run at `0df461b1b2`: failed, rc 1, on the two escapes alone** [run: vy-nebius-cpu-1, 09:58Z to 10:46Z]. Word for word:
+- "AUDIT … security/Proofs: FAIL  209677 declarations in 4213 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees", with the two `escape:` lines for `jpBody` and `walkGoal` and no other failure line.
+- "AUDIT … security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees".
+- "AUDIT … security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees".
+- Each of the two fails as a requirer for one reason: "requires security/Proofs, and its records fail on this build".
+
+**4. The two-stage leg: compiled at `701559cfdc`** [run].
+- `bcb6d556d8`: ACCEPTS's `f3462236a6` merged, no conflict, only `AcceptsTop.lean` differs.
+- `a95e2c24e0`: **`firstSized` is deleted.** `joinedOfLaw` takes `partsHeldAt_of_accepts h.heldOfAt h.partsSizedAt` (as a term, in place of the two tactic lines). `JoinsAt` has 22 fields.
+- **`r20261113-105130-abe9`, rc 0** (vy-nebius-cpu-2, at `a95e2c24e0`, 10:51:53Z to 11:01:09Z): `JoinsAt.lean` "lean exit 0 in 400 s", 11 theorems; `JoinedCoupling.lean` "lean exit 0 in 91 s", 1 theorem; `JoinedForm.lean` "lean exit 0 in 64 s", 2 theorems; each probe line clean.
+- `701559cfdc`: **ADDRROW2's `784042d103` merged** at 10:55Z, when its 10:53Z title named it compiled. No conflict. `RowTable.lean:26` imports `SampledTwo/ScopeTable`.
+- **`r20261113-105600-bdeb`, rc 0** (vy-nebius-cpu-9, at `701559cfdc`): `AddressFacts/RowFirst.lean` "lean exit 0 in 86 s", 3 theorems, probe clean. It reaches the three `Row*` files the merge changes; `JoinedForm.lean`'s imports reach none of them [derived], so `abe9` stands for the three top files at `701559cfdc`.
+- **The certifier test is green on the join. The public boundary still has eight edges:** edge 1 now ends at `SampledTwo/ScopeTable.lean`. I merge ADDRROW2's second head, the one that moves that file, when it is named compiled.
+
+**5. Your 11:04Z and 11:06Z: done, at `6247d2ddfc`, pushed; HONEST2's files compile, SESSIONOF2's are out** [read; run for the tests and the tries].
+- `5df9515780`: **HONEST2's `191488fbab` merged.** No conflict. `Honest/Runs.lean` and `Honest/Written.lean` are gone with their two roots; nothing under `security/`, `verity/`, `tools/` or `tests/` names either.
+- `c3bea98887`: **SESSIONOF2's `9a548b2f97` merged.** No conflict. One new file, `Sampled/Record/ReadsSame.lean`, one new root.
+- `731db80abe`: the PoUS pin, regenerated for the lakefile's root lines.
+- `6247d2ddfc`: **`Live₂.KS`'s docstring.** It now says: knowledge soundness of the compiled two-stage verifier at `SpotFlock.code`, `SpotFlock.two` and `SpotFlock.rs` of the held copies; the leg takes it as a hypothesis and no guarantee concludes it; `SpotKSTwo` concludes at the connected program and no lemma carries that here; `ksTwo_spot` proves it at this code from `Built` and `Addresses`, and where `Addresses` is false. **No lock record reads it:** no lock names `Live₂`, `TwoLeg` or the module but as a root, and the records hash statements and definitions, not docstrings.
+- **Three more docstring lines in the same file, which you did not ask for.** `Live₂.L`'s docstring ended "as `Flock.Guarantees.SpotKSTwo` states it", and the module's called `Live₂.KS` "`SpotKSTwo`'s conclusion": the same claim, so I changed both. The module's also said "no module imports this one"; `Projection.lean` does, so those words are gone. Docstrings only, 15 lines in, 7 out. Say if you want any of the three back.
+- After the merges: `lock_roots.py --check` finds nothing; `dup_names.py` the same 17 names; `pytest tests/test_lean_packages.py tests/test_boundaries.py tests/test_lean_vocabulary.py`, "109 passed"; `public_boundary.py`, "8 edges, 8 new". The vocabulary test's warning names one file of the join, `SampledTwo/Projection.lean`, for `Verity.SampledTwo.Coins` beside `Verity.Coins`; it warns and does not fail.
+- **`r20261113-111312-d3d8`** (vy-nebius-cpu-11, at `6247d2ddfc`, started 11:13Z), seven tries: `SampledTwo/Leg`, `Honest/Sits`, `Honest/Wiring`, `Sampled/Record/PartReadsBack`, `Sampled/Record/KS`, `Sampled/Record/Pass`, `SampledTwo/MemberChecks`. Nothing imports the last six, and together they reach the six files the two merges change and the seven above them [derived]. In at 11:25Z: `Leg.lean` "lean exit 0 in 419 s", 3 theorems; `Honest/Sits.lean` "lean exit 0 in 179 s", 9 theorems; `Honest/Wiring.lean` "lean exit 0 in 59 s", 16 theorems; each probe clean. The four of SESSIONOF2's merge are out.
+- **For the pull request's body, under "Not established", ready to paste:**
+
+  > **`A.KS`, the leg's first premise, has no proof on the join.** `TwoLeg` takes, at each session of record, knowledge soundness of the compiled two-stage verifier at `SpotFlock.code`, `SpotFlock.two` and `SpotFlock.rs` of the held copies: the members' programs side by side. `Flock.Guarantees.SpotKSTwo` concludes at the connected program (`SpotFlock.codeConnected`, `twoConnected`, `rsConnected`), and no lemma carries that conclusion to the code the leg reads. At the leg's code the theorem is `SpotFlock.ksTwo_spot`, from `SpotFlock.Built` and `SpotFlock.Addresses`. `SpotFlock.CheckedRun.not_addresses_of_input_readsInterior` refutes `Addresses` at a held code with an accepted run in which a checked unit needs an input gate and round 2 reads every registered read of the unit's session off the interior record. The join proves the coupling and nothing of this premise.
+
+  I read the join only: "on any branch" is yours to say.
+
+**6. The table: two rows change; 22 fields** [read].
+- **Row 10, one row, in place of 10a and 10b:**
+
+| # | field | ranges over | reads | kind | what makes it true; owner; compiled? |
+|---|---|---|---|---|---|
+| 10 | `partsSizedAt` | every accept, at each number `K` of replay blocks the held first stage samples | the parameters only (the interior program and query); no byte of the play | instance (θ), as rows 11 and 12 are | an accepted run does not decide it: the run never checks the parts' order or offsets against the held copies'. One refusal in the run would make it a lemma; ACCEPTS drafts that refusal on its own branch, not on the join. That each accepted play's held first stage samples such a `K` is no longer a field: `firstK_of_formAccepts` (ACCEPTS, `a3a7`; on the join in `abe9`) proves it from `heldOfAt` |
+
+- **Row 9, last cell, in place of "(a) and (b) not written":** "(a) is stated and not yet written in Lean (MESSAGES's 09:55Z: `LocatedRising`, with the one hypothesis `HeldSize`); its proof lacks one lemma of SESSIONOF2's, `runMembers_sessions`. (b) is not written." My 10:26Z table did not have MESSAGES's 09:55Z entry in it.
+- Soundness's tie of the spec's streams to `repStreams`, "carried as a named play field" (your 10:54Z): it is not on the join. I add no field for it until MESSAGES names a compiled head or you say which statement.
+
+**7. Your 10:54Z, read.** Nothing is written for the `[[needed]]` block; it is one commit at the carry, on `main` after chain 2, with the report top asked for. Nothing of rule B is on the join. STAGECOINS's row 7 comparison and the `sessionMatches` lemma: merged when it names a compiled head.
+
+## Not established
+
+- That `security/Proofs` builds at any head of the join after `0df461b1b2`. `Component.lean` fails its try at `e4a00b6b85` and at `0df461b1b2`; whether the build passes it is `76c3`'s to say.
+- Why the try fails that file where a build once passed it: I have a guess only (the file has ten `import all` lines, and the try compiles a copy outside its module's place), and I tested nothing for it.
+- That the two `escapes` lines pass the check: no audit of `security/Proofs` has run with them.
+- The records of any package at any head after `0df461b1b2`.
+- That the files of SESSIONOF2's merge compile on the join: four tries of `d3d8` are out.
+- That nothing else of PoUS's or the accounting's broke with RUNCOINS's move, beyond what `4e2e` tried.
+- The quick tier at any head after `0df461b1b2`: not run.
+- That `A.KS` holds at any session of record, and that any instance of `JoinsAt` exists: all 22 fields are premises.
+
+**Runs out:** `r20261113-110329-76c3` (records at `e4a00b6b85`, vy-nebius-cpu-11), 11:50Z [guess]; `r20261113-111312-d3d8` (tries at `6247d2ddfc`, vy-nebius-cpu-11), 11:40Z [guess]. The records run at `6247d2ddfc` goes out when `76c3` says the package builds: if it does not, a second one fails the same way. **Timer:** one, 20 minutes from this entry, for both. **Next entry:** when `76c3` has a verdict, with `530b`'s and `d3d8`'s.
