@@ -146032,3 +146032,45 @@ Nothing.
 ### Branches
 - `cursor/proofs-heldof-couples-f083` at `ff6ea109e06` (no commit yet).
 - `cursor/proofs-heldof-join9441-f684` at `b755ba133f9`, now on the join.
+
+## ASSEMBLY, Fri 13 Nov 14:26Z: THE TIP MOVED BEFORE YOUR 14:18Z REACHED ME: it is `ff6ea109e06` since 14:11Z (HELDOF's `b755ba133f9` merged first and alone, on your 14:07Z); the build of all 89 `SampledTwo` modules at it PASSES and its five mended files pass their tries; nothing else is on top; `1520` runs at `757ef18fdc`, now the tip's first parent
+
+**1. What happened, in order** [read: my shell's log and `git log`]
+
+- 14:05Z my 14:06Z entry went out: I hold the tip until `1520` is read.
+- 14:10Z your 14:07Z mail reached me: merge HELDOF's head into the new tip and build. I took it as your answer and merged.
+- 14:11Z pushed: the join's tip is `ff6ea109e06`, the merge of `b755ba133f9` into `757ef18fdc`. No conflict.
+- 14:20Z your 14:18Z mail reached me ("holding the tip: yes"). By then the tip had moved.
+- So **`1520`'s verdict will be of `757ef18fdc`, the batch of five, and not of the tip.** I cannot take the push back. Nothing else has been pushed since, and nothing goes on top until `1520` is read.
+
+**2. The build at `ff6ea109e06`** [run `r20261113-141151-dec7`, vy-nebius-cpu-11, 14:11:51Z, rc 0]
+
+- `lean_changed.py --build` on all 89 files under `SampledTwo/` and six under `Flock/SpotFlock/` (`HeldOfWires`, `HeldOfDesc`, `Honest/Any`, `AtHeldOf`, `Instance`, `Sits`): `Build completed successfully (11984 jobs).`, then `lean-build: {"built": {"security/Proofs": 0}, "failed": {}, "skipped": {}}`.
+- It compiled 55 of the 89 `SampledTwo` modules; the other 34 were already built on that tree. The batch of five's files are among the 55 (`Leg`, `AcceptsTop`, `PremisesAt`, `SessionRecordRounds`, `JoinsAt`, `JoinedForm`), so they build over #9441.
+- Tries in the same run, each `lean exit 0` with a clean axiom probe: `MemberChecks` (17 theorems), `SessionHeld` (21), `CutHeld` (10), `RoundsRise` (48), `RefsOfSent` (18). HELDOF had probed `RefsOfSent` alone.
+- On the VM at `ff6ea109e06`: 119 passed in the five named test files; the same 7 public edges; `lock_roots.py --check` clean; 17 names; no pin stale.
+- It is a build of the `SampledTwo` modules and those six, not of `security/Proofs`.
+
+**3. The tries at `757ef18fdc` all ended rc 0** [runs `r20261113-135641-c19b`, `r20261113-135722-4e85`]
+
+- Clean probes in all twelve: `Leg`, `PremisesAt`, `Honest/AtHeldOf`, `Honest/Any`, `Honest/Instance`, `Honest/Sits`, `AcceptsTop`, `SessionRecordRounds`, `PrefixFixed`, `SessionExtra`, `SpotFlock/HeldOfWires`, `JoinedForm`.
+- `1520` so far: `security/Proofs: PASS  210385 declarations in 4236 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, `check.py exit 0 in 891 s`. `security` and `security/Properties` are still out; end about 14:40Z.
+
+**4. What I had made locally before your 14:18Z, and what became of it**
+
+- STAGECOINS's `761e99eaeb9`: merged, no conflict, **local commit `4824a13de87`, not pushed.** I push it when `1520` is read. The fixture's path is in three files, for the carry: `fixtures/artifacts.json` (the `art:ed3b2d96…` line), `.gitignore`, and `composition/tests/test_sampled_two_difftest.py` (the fetch message; `CASE` is built from the test's own directory).
+- MESSAGES's `74bb74b46cb4`: I had merged it locally (no conflict). **Dropped, never pushed.**
+- The field for (a): I had written it with the Python's rule as its own Lean text. **Dropped, never pushed**; the patch is in my store. I write it against `Spot.Place.family` and `Place.run` when you say TWOLEG's head agrees with STOPDRIVER's rows.
+- One run on that text, for TWOLEG's 15:30Z head [local, `lean` on 21 windows, with copies of `Spot.nat?`, `getD` and `field?`]: my text and STOPDRIVER's `of` (as at `b7e15e1d4cc`) give the same answer on all 21. TWOLEG's `Spot.Place` as its 14:08Z entry prints it differs on five of them, each an odd `stopped` or `population`, as you say: `population` "span", `population` "span" with `stopped` true, `stopped` null, `stopped` 1, and `population` null with `stopped` true. On each the Python has no place and that text names one.
+
+**5. Not established**
+
+- **That the form at the tip accepts any play.** The tip holds #9441, which changed the members' check, and STAGECOINS's kept case was made before it. HELDOF built and ran no play; neither have I. My one attempt [run `r20261113-142236-53ef`] failed on my own job line (`research data fetch` has no remote on a node) before any test ran. When STAGECOINS's merge is pushed I run its accept test in its suite at the tip, as STAGECOINS ran it (`suites.py verity-core-composition --fresh -- tests/test_sampled_two_difftest.py`), and say its line.
+- A whole build of `security/Proofs` at the tip: the records run after this batch.
+
+**6. Next, unless you say otherwise**
+
+- When `1520` is read: its three lines word for word; push `4824a13de87`; the accept test at the new tip; ACCEPTS's commit if it is named by then; then the one records run.
+- Not merged: MESSAGES's head, TWOLEG's refusal, ADDRROW2's `d5889c79d6cd`, the parser switch, `main`.
+
+To post: nothing. Head pushed: `ff6ea109e06`; unpushed: `4824a13de87` (STAGECOINS's merge). Run going on: `r20261113-135551-1520`. My timer is set for 14:42Z.
