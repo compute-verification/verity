@@ -29,7 +29,8 @@ def no_store(monkeypatch):
     monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
 
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
-#: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
+#: open logged; a report on each package it is named under `--out` as `--no-replay` leaves them (no replay time);
+#: `--update` writing each one's record
 FAKE_AUDIT = """\
 import json, os, sys
 held = []
@@ -42,18 +43,21 @@ with open(os.environ["AUDIT_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "threads": os.environ.get("LEAN_NUM_THREADS"),
                         "locks": sorted(p for p in held if p.endswith(".lock")),
                         **({"lean_slot": os.environ["LEAN_SLOT"]} if "LEAN_SLOT" in os.environ else {})}) + "\\n")
-out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
-rc = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
-rep = {"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if rc else []}
-os.makedirs(os.path.join(out, "audit-x"), exist_ok=True)
-with open(os.path.join(out, "audit-x", "report.json"), "w") as f:
-    json.dump(rep, f)
+out, pkgs = sys.argv[sys.argv.index("--out") + 1], sys.argv[sys.argv.index("--out") + 2:]
+reps = []
+for pkg in pkgs:
+    bad = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
+    reps.append({"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if bad else []})
+    os.makedirs(os.path.join(out, "audit-" + os.path.basename(pkg)), exist_ok=True)
+    with open(os.path.join(out, "audit-" + os.path.basename(pkg), "report.json"), "w") as f:
+        json.dump(reps[-1], f)
+    if "--update" in sys.argv:
+        with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
+            f.write('{"guarantees": {"A.t": {}}}')
+failed = [r["package"] for r in reps if r["failures"]]
 with open(os.path.join(out, "audit.json"), "w") as f:
-    json.dump({"passed": not rc, "failed": [pkg] if rc else [], "packages": [rep]}, f)
-if "--update" in sys.argv:
-    with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
-        f.write('{"guarantees": {"A.t": {}}}')
-sys.exit(rc)
+    json.dump({"passed": not failed, "failed": failed, "packages": reps}, f)
+sys.exit(int(os.environ.get("AUDIT_RC", "0")) or int(bool(failed)))
 """
 
 
@@ -168,7 +172,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
                                                  "--out", str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
-    assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
+    assert json.loads((run / "lean-audit" / "audit-p" / "report.json").read_text())["kind"] == LC.FAST_KIND
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "passed"
     assert res.doc["outcome"] == LC.PASS and res.doc["records"]["p"]["outcome"] == LC.PASS
@@ -538,14 +542,17 @@ def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse
     """`security` and `security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
     `--records Security`, whose requirer `security/Properties` failed, is not that requirer's: taken as its, `--records
     security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
-    path and `p` is proved in `a`."""
+    path and both are proved in `c`, which requires both by path."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
-    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
-    (reuse / "p" / "lean-audit.json").write_text('{"proved_in": ["../a"], "guarantees": {"P.t": {}}}')
+    (reuse / "a" / "lean-audit.json").write_text('{"proved_in": ["../c"], "guarantees": {"A.t": {}}}')
+    (reuse / "p" / "lean-audit.json").write_text('{"proved_in": ["../c"], "guarantees": {"P.t": {}}}')
+    (reuse / "c" / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "p", "type": "path", "dir": "../p"},
+                                                                             {"name": "a", "type": "path", "dir": "../a"}]}))
     files = LC.LA.COMMON.tracked_files()
     assert LC.closure_inputs("a", files) == LC.closure_inputs("p", files)
     monkeypatch.setenv("AUDIT_FAILS", "a")
-    assert LC.audit_records("p", deps, tree) == 1 and len(_calls(tmp_path)) == 2, "p passes, its requirer a fails"
+    assert LC.audit_records("p", deps, tree) == 1 and len(_calls(tmp_path)) == 1, \
+        "of the one check.py that audits both, p passes and its requirer a fails"
     capsys.readouterr()
     assert LC.audit_records("a", deps, tree, update=True) == 1
     assert [c["argv"][-1] for c in _calls(tmp_path)] == [str(tree / "a")], "a runs; p, which passed on these inputs, doesn't"

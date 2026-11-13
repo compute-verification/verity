@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -41,6 +42,11 @@ def no_store(monkeypatch):
 
 
 OLD = json.dumps({"guarantees": {"G": {"owner": "@lean"}}}) + "\n"
+
+
+def named(argv: list[str]) -> list[str]:
+    """The packages a check.py command line names: what follows its `--out DIR`, as `check_argv` writes it."""
+    return argv[argv.index("--out") + 2:]
 NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) + "\n"
 
 
@@ -79,8 +85,8 @@ def fast(tmp_path, monkeypatch):
 
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
-        if "--update" in argv:
-            (Path(argv[-1]) / "lean-audit.json").write_text(NEW)
+        for at in named(argv) if "--update" in argv else []:
+            (Path(at) / "lean-audit.json").write_text(NEW)
         return type("P", (), {"returncode": 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
@@ -154,8 +160,7 @@ def test_a_refused_build_slot_takes_the_dev_cache_path_on_the_checkout_and_its_r
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", update=True, log=said.append) == 0
-    assert [(a[a.index("--out") + 2:], cwd) for a, cwd in calls] == [([str(root / "pkg")], root),
-                                                                       ([str(root / "pkg/Req")], root)]
+    assert [(named(a), cwd) for a, cwd in calls] == [([str(root / "pkg")], root), ([str(root / "pkg/Req")], root)]
     assert all("--dev-cache" in a and "--no-replay" in a for a, _ in calls), "both steps take the --dev-cache path"
     assert "--update" in calls[0][0] and "--update" not in calls[1][0], "a requirer is checked, never updated"
     assert calls[1][0][calls[1][0].index("--out") + 1] == str(run_dir / "lean-audit" / "requirer-pkg_Req")
@@ -171,30 +176,31 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
-    assert [a[-1] for a, _ in calls] == [str(tree / "pkg"), str(tree / "pkg/Req")]
+    assert [named(a) for a, _ in calls] == [[str(tree / "pkg"), str(tree / "pkg/Req")]], "one check.py audits both"
     assert not any("--dev-cache" in a for a, _ in calls)
     assert any("taking the slot path" in s for s in said)
 
 
+@pytest.mark.parametrize("rc", [0, 1, -9], ids=["passed", "failed", "killed"])
 def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_build_whatever_its_check_came_to(
-        fast, tmp_path, monkeypatch):
-    """A module is stored for what its compile read, which a failure elsewhere in its package doesn't change: the package
-    that passed, the requirer that failed and the one whose check.py was killed each put what they built, on check.py's
-    word that the build ran in the sandbox (its report; for the killed one, what it wrote as the build began)."""
+        fast, tmp_path, monkeypatch, rc):
+    """A module is stored for what its compile read, which a failure elsewhere in its package doesn't change: whether the
+    check.py that built the run's packages passed them, failed one of them or was killed, the run puts what each built, on
+    check.py's word that the build ran in the sandbox (its report; for a killed one, what it wrote as each build began)."""
     _, tree, calls = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-    monkeypatch.setattr(LC, "requirers", lambda *_: ["pkg/Req", "pkg/Killed"])
+    monkeypatch.setattr(LC, "requirers", lambda *_: ["pkg/Req", "pkg/Other"])
     put = []
 
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
-        if argv[-1].endswith("Killed"):
-            work = Path(argv[argv.index("--out") + 1]) / "audit-pkg_Killed"
+        for at in named(argv) if rc < 0 else []:
+            work = Path(argv[argv.index("--out") + 1]) / f"audit-{Path(at).name}"
             work.mkdir(parents=True)
-            (work / LC.LA.BUILDING).write_text(json.dumps({"package": argv[-1], "sandbox": True}))
-            return type("P", (), {"returncode": -9})()
-        _reported(argv, True)
-        return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
+            (work / LC.LA.BUILDING).write_text(json.dumps({"package": at, "sandbox": True}))
+        if rc >= 0:
+            _reported(argv, True, failing=("Req",) if rc else ())
+        return type("P", (), {"returncode": rc})()
 
     def fake_put(self, reports, since=None, log=print):
         put.append((self.store, reports, since))
@@ -203,15 +209,16 @@ def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_b
     monkeypatch.setattr(LC.subprocess, "run", run)
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put", fake_put)
     said = []
-    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == rc
     store = (tmp_path / "lean-artifacts").resolve()
-    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 3
-    assert [(s, p) for s, p, _ in put] == [(store, {tree / q: {"package": str(tree / q), "sandbox": True}})
-                                           for q in ("pkg", "pkg/Req", "pkg/Killed")]
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)], "one check.py builds the three"
+    assert [(s, {at: (r["package"], r["sandbox"]) for at, r in p.items()}) for s, p, _ in put] == [
+        (store, {tree / q: (str(tree / q), True) for q in ("pkg", "pkg/Req", "pkg/Other")})]
     assert all(isinstance(since, float) for _, _, since in put)
     assert [s for s in said if "new in the artifact cache" in s] == [
-        f"lean-records: {q}: 3 module version(s) new in the artifact cache" for q in ("pkg", "pkg/Req", "pkg/Killed")]
-    assert "since" not in json.loads((tree / LC.DIRTY).read_text()), "the killed check's build is stored: nothing is left to"
+        "lean-records: pkg+pkg/Req+pkg/Other: 3 module version(s) new in the artifact cache"]
+    if rc < 0:
+        assert "since" not in json.loads((tree / LC.DIRTY).read_text()), "the killed check's build is stored: nothing is left to"
 
 
 def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it_syncs_the_tree(fast, tmp_path,
@@ -247,11 +254,15 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     assert f"lean-records: {tree}: of what r-old left: 2 module version(s) new in the artifact cache" in said
 
 
-def _reported(argv: list[str], sandbox: bool) -> None:
-    """check.py's report on the package ``argv`` names, under its `--out`, built in the sandbox or not."""
+def _reported(argv: list[str], sandbox: bool, failing: tuple[str, ...] = ()) -> None:
+    """check.py's reports on the packages ``argv`` names, under its `--out`, each built in the sandbox or not, those whose
+    directory's name is in ``failing`` failed."""
     out = Path(argv[argv.index("--out") + 1])
     out.mkdir(parents=True, exist_ok=True)
-    (out / "audit.json").write_text(json.dumps({"packages": [{"package": argv[-1], "sandbox": sandbox}]}))
+    reps = [{"package": at, "sandbox": sandbox, "failures": ["fresh.rejected: x"] if Path(at).name in failing else []}
+            for at in named(argv)]
+    failed = [r["package"] for r in reps if r["failures"]]
+    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
 
 
 def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(fast, tmp_path, monkeypatch):
@@ -264,9 +275,10 @@ def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(
     monkeypatch.setattr(LC.subprocess, "run", lambda argv, **kw: _reported(argv, False) or fake(argv, **kw))
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
-    assert [s for s in said if "artifact cache" in s] == [s for q in ("pkg", "pkg/Req") for s in (
-        f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
-        "artifact cache", f"lean-records: {q}: 0 module version(s) new in the artifact cache")]
+    assert [s for s in said if "artifact cache" in s] == [
+        *(f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
+          "artifact cache" for q in ("pkg", "pkg/Req")),
+        "lean-records: pkg+pkg/Req: 0 module version(s) new in the artifact cache"]
     assert not (tmp_path / "lean-artifacts" / "keys").exists()
 
 
@@ -276,7 +288,7 @@ def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append, dev_cache=True) == 0
-    assert [a[-1] for a, _ in calls] == [str(root / "pkg"), str(root / "pkg/Req")]
+    assert [named(a) for a, _ in calls] == [[str(root / "pkg"), str(root / "pkg/Req")]]
     assert all("--dev-cache" in a for a, _ in calls) and any("asks for it; taking the --dev-cache path" in s for s in said)
     for argv in (["--dev-cache"], ["--records", "pkg", "--dev-cache", "--tree", str(tree)]):
         with pytest.raises(SystemExit):
@@ -322,7 +334,9 @@ def pair(tmp_path, monkeypatch):
     `BUILT`'s, fail on a record difference otherwise (`regenerated` in the report names `BUILT`'s, which check.py wrote
     there), and `--update` writes `BUILT`'s; a package in the returned set fails for another reason (with `writes` in it,
     `--update` writes its record all the same, as check.py does), and with `proofs` in it `s/proofs`, audited beside `s`,
-    fails on a record difference. Each call is (package, `--update`, both locks as it saw them)."""
+    fails on a record difference. It audits every package it is named and, once, each package their locks name under
+    `proved_in`; one `BUILT` has no record of passes on the lock it has. Each call is (package, `--update`, both locks as
+    its check.py saw them), and `LC.subprocess.run.audits` lists, for each check.py, the packages it audited."""
     root = tmp_path / "root"
     files = dict(PAIR)
     for f, text in files.items():
@@ -342,32 +356,42 @@ def pair(tmp_path, monkeypatch):
     def run(argv, **kw):
         if argv[1:2] != [str(LC.AUDIT_PY)]:
             return real(argv, **kw)
-        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
-        p = os.path.relpath(at, kw["cwd"])
-        calls.append((p, update, {q: (Path(kw["cwd"]) / q / LC.LOCK).read_text() for q in (S, P)}))
-        fails, regen = [], None
-        if p in other:
-            fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
-            if update and "writes" in other:
-                (at / LC.LOCK).write_text(BUILT[p])
-        elif update:
-            (at / LC.LOCK).write_text(BUILT[p])
-        elif (at / LC.LOCK).read_text() != BUILT[p]:
-            fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], out / "audit-x" / LC.LOCK
-            regen.parent.mkdir(parents=True, exist_ok=True)
-            regen.write_text(BUILT[p])
-        reps = [{"package": str(at.resolve()), "failures": fails, **({"regenerated": str(regen)} if regen else {})}]
-        if p == S and "proofs" in other:
-            (side := out / "audit-proofs" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
-            side.write_text(PROOFS)
-            reps.append({"package": str((at / "proofs").resolve()), "regenerated": str(side),
-                         "failures": ["assumptions.unread: proofs: an assumption no guarantee reads"]})
-        elif p == S:
-            reps.append({"package": str((at / "proofs").resolve()), "failures": []})
+        out, update = Path(argv[argv.index("--out") + 1]), "--update" in argv
+        ats = [Path(a) for a in named(argv)]
+        locks = {q: (Path(kw["cwd"]) / q / LC.LOCK).read_text() for q in (S, P)}
+        reps = []
+        for at in ats:
+            p = os.path.relpath(at, kw["cwd"])
+            calls.append((p, update, locks))
+            fails, regen, built = [], None, BUILT.get(p, (at / LC.LOCK).read_text())
+            if p in other:
+                fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
+                if update and "writes" in other:
+                    (at / LC.LOCK).write_text(built)
+            elif update:
+                (at / LC.LOCK).write_text(built)
+            elif (at / LC.LOCK).read_text() != built:
+                fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], out / f"audit-{at.name}" / LC.LOCK
+                regen.parent.mkdir(parents=True, exist_ok=True)
+                regen.write_text(built)
+            reps.append({"package": str(at.resolve()), "failures": fails, **({"regenerated": str(regen)} if regen else {})})
+            for q in (at / x for x in json.loads((at / LC.LOCK).read_text()).get("proved_in", [])):
+                if q.resolve() in [a.resolve() for a in ats] or str(q.resolve()) in [r["package"] for r in reps]:
+                    continue
+                if "proofs" in other:
+                    (side := out / "audit-proofs" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
+                    side.write_text(PROOFS)
+                    reps.append({"package": str(q.resolve()), "regenerated": str(side),
+                                 "failures": ["assumptions.unread: proofs: an assumption no guarantee reads"]})
+                else:
+                    reps.append({"package": str(q.resolve()), "failures": []})
+        run.audits.append([os.path.relpath(r["package"], Path(kw["cwd"]).resolve()) for r in reps])
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not any(r["failures"] for r in reps), "packages": reps}) + "\n")
-        return type("P", (), {"returncode": 1 if any(r["failures"] for r in reps) else 0})()
+        failed = [r["package"] for r in reps if r["failures"]]
+        (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if failed else 0})()
 
+    run.audits = []
     monkeypatch.setattr(LC.subprocess, "run", run)
     return root, calls, other
 
@@ -417,6 +441,178 @@ def outcome_line(said: list[str]) -> dict:
     return json.loads(said[-1][len(LC.OUTCOME_LINE):])
 
 
+@pytest.fixture()
+def proved(pair, monkeypatch):
+    """`pair` with `s/props` proved in `s/proofs` too, as `security/Properties` is in `security/Proofs` beside `security`,
+    and both locks as the build has them."""
+    root, calls, other = pair
+    monkeypatch.setitem(BUILT, P, record("new", ["../proofs"]))
+    for q in (S, P):
+        (root / q / LC.LOCK).write_text(BUILT[q])
+    return root, calls, other
+
+
+def test_a_records_run_audits_the_package_that_proves_its_packages_guarantees_once(proved, tmp_path):
+    """`security` and `security/Properties` each name `security/Proofs` under `proved_in`, and a check.py for each built,
+    sampled, sealed and judged it once for each. One check.py is named both and audits it once, and each package keeps
+    an `audit.json` of its own, a requirer's under `requirer-<path>/`: its report and that of the package proving it."""
+    root, calls, _ = proved
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 0
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]], "one check.py, which audits s/proofs once for both"
+    tree = (tmp_path / "cache" / LC.RECORDS / "local").resolve()
+    own = {q: json.loads((d / "audit.json").read_text()) for q, d in ((S, out), (P, out / "requirer-s_props"))}
+    assert {q: [os.path.relpath(r["package"], tree) for r in doc["packages"]] for q, doc in own.items()} == {
+        S: [S, "s/proofs"], P: [P, "s/proofs"]}
+    assert all(doc["passed"] and doc["failed"] == [] for doc in own.values())
+    assert {q: r["outcome"] for q, r in outcome_line(said)["records"].items()} == {S: LC.PASS, P: LC.PASS,
+                                                                                   "s/proofs": LC.PASS}
+    assert sum("check.py exit 0 in" in s for s in said) == 1 and any(s.startswith(f"lean-records: {S}+{P}: check.py exit 0")
+                                                                     for s in said)
+
+
+@pytest.mark.parametrize("fails", [S, P])
+def test_each_package_one_check_py_audits_has_its_own_verdict(proved, tmp_path, fails):
+    """check.py exits 1 when any package it audited fails. Of the one check.py that audits PKG and its requirer, the
+    package that failed fails the run, and the other, whose own report and its prover's list no failure, passes: its
+    outcome is `pass`, its pass is kept, and its own `audit.json` says so."""
+    root, calls, other = proved
+    other.add(fails)
+    passes = P if fails == S else S
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 1
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]]
+    got = outcome_line(said)
+    assert got["outcome"] == LC.FAILED
+    assert {q: got["records"][q]["outcome"] for q in (S, P, "s/proofs")} == {fails: LC.FAILED, passes: LC.PASS,
+                                                                             "s/proofs": LC.PASS}
+    assert set(got["passes"].values()) == {passes}, "only the package that passed is kept"
+    own = {q: json.loads((d / "audit.json").read_text()) for q, d in ((S, out), (P, out / "requirer-s_props"))}
+    assert (own[passes]["passed"], own[fails]["passed"]) == (True, False)
+    assert any(s == f"lean-records: {passes}: {LC.PASS} (of that check.py, its own records exit 0)" for s in said)
+    assert any(s == f"lean-records: {fails}: {LC.FAILED} (of that check.py, its own records exit 1)" for s in said)
+
+
+def test_of_the_facts_documents_one_check_py_keeps_only_pkgs_stays(proved, tmp_path, monkeypatch):
+    """check.py keeps the facts document of each package it is named (`--facts named`), and a records run keeps PKG's alone:
+    its requirer's is dropped, as when a check.py of its own kept none, and one beside no report that can be read stays
+    and is said."""
+    fake, kept = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] == [str(LC.AUDIT_PY)]:
+            kept.append(argv[argv.index("--facts") + 1])
+            out = Path(argv[argv.index("--out") + 1])
+            for at in map(Path, named(argv)):
+                (out / f"audit-{at.name}").mkdir(parents=True, exist_ok=True)
+                (out / f"audit-{at.name}" / LC.AUDIT.FACTS).write_bytes(b"facts")
+                (out / f"audit-{at.name}" / "report.json").write_text(json.dumps({"package": str(at.resolve())}))
+            (out / "audit-torn").mkdir()
+            (out / "audit-torn" / LC.AUDIT.FACTS).write_bytes(b"facts")
+        return got
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 0
+    assert kept == ["named"]
+    assert sorted(f.parent.name for f in out.glob(f"audit-*/{LC.AUDIT.FACTS}")) == ["audit-s", "audit-torn"]
+    assert sum("audit-torn" in s and "stays" in s for s in said) == 1
+
+
+def rewritten(monkeypatch, change):
+    """The pair's check.py, its `audit.json` and exit status as ``change`` (the document, the status) returns them."""
+    fake = LC.subprocess.run
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] != [str(LC.AUDIT_PY)]:
+            return got
+        at = Path(argv[argv.index("--out") + 1]) / "audit.json"
+        doc, rc = change(json.loads(at.read_text()), got.returncode)
+        at.write_text(json.dumps(doc))
+        return type("P", (), {"returncode": rc})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+
+
+def test_a_package_one_check_py_leaves_no_report_of_fails(proved, tmp_path, monkeypatch):
+    """A package the check.py that was named it leaves no report of has no verdict: it fails, though check.py exited 0."""
+    rewritten(monkeypatch, lambda doc, rc: (doc | {"packages": [r for r in doc["packages"]
+                                                                if not r["package"].endswith("/props")]}, rc))
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    got = outcome_line(said)["records"]
+    assert (got[S]["outcome"], got[P]["outcome"]) == (LC.PASS, LC.FAILED)
+
+
+@pytest.mark.parametrize("why", ["nothing listed", "a failure listed beside exit 0", "a failure that is no package's",
+                                 "a sealed file changed"])
+def test_a_check_py_whose_failure_is_not_only_its_packages_own_fails_each_of_them(proved, tmp_path, monkeypatch, why):
+    """check.py's exit 1 is taken as other packages' failure only when its reports explain it whole. One that lists no
+    failed package, one that exits 0 and lists one, one that lists a failure no report of a package holds (its
+    controls'), and one in which a file the process had sealed changed (`tamper`, in the report of whichever package was
+    being audited) fail every package the check.py audited: none passes on its own clean report."""
+    def change(doc, _rc):
+        if why == "nothing listed":
+            return doc | {"failed": []}, 1
+        if why == "a failure listed beside exit 0":
+            return doc | {"failed": [doc["packages"][-1]["package"]], "passed": False}, 0
+        if why == "a failure that is no package's":
+            return doc | {"failed": ["controls (tamper)"], "passed": False}, 1
+        last = doc["packages"][-1]
+        last |= {"failures": ["tamper: a file changed while s/props was built and audited"], "failure_codes": ["tamper"]}
+        return doc | {"failed": [last["package"]], "passed": False}, 1
+
+    rewritten(monkeypatch, change)
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    got = outcome_line(said)
+    assert (got["records"][S]["outcome"], got["records"][P]["outcome"], got["passes"]) == (LC.FAILED, LC.FAILED, {})
+    assert any("is not only its packages' own failures" in s for s in said)
+
+
+def test_a_requirer_one_check_py_fails_only_on_record_differences_still_gets_its_update(proved, tmp_path):
+    """`--records s/proofs --update`: PKG's check.py takes `--update`, so the two packages whose guarantees it proves share
+    the next, which audits `s/proofs` once for both. The one that fails there only on record differences is audited
+    again with `--update`, in a check.py of its own, and its record is kept; the other passed and is not audited again."""
+    root, calls, _ = proved
+    (root / P / LC.LOCK).write_text(record("old", ["../proofs"]))
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records("s/proofs", tmp_path / "deps", update=True, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [("s/proofs", True), (S, False), (P, False), (P, True)]
+    assert LC.subprocess.run.audits == [["s/proofs"], [S, "s/proofs", P], [P, "s/proofs"]]
+    assert (out / "record" / P / LC.LOCK).read_text() == BUILT[P] and not (out / "record" / S / LC.LOCK).exists()
+    assert (root / P / LC.LOCK).read_text() == BUILT[P], "outside a recorded run the record is written back"
+    got = outcome_line(said)
+    assert got["outcome"] == LC.REGENERATED
+    assert {q: r["outcome"] for q, r in got["records"].items()} == {"s/proofs": LC.PASS, S: LC.PASS, P: LC.REGENERATED}
+    work = [s for s in said if re.match(r"lean-records: \S+: check\.py exit \d+ in \d+ s on ", s)]
+    assert [s.split(": check.py")[0] for s in work] == ["lean-records: s/proofs", f"lean-records: {S}+{P}",
+                                                        f"lean-records: {P}"], \
+        "one line for each check.py, each in the one form, which `research lean-times` sums"
+    assert "audited again with --update" in work[2]
+
+
+def test_packages_whose_reports_check_py_would_write_in_one_directory_never_share_a_check_py(monkeypatch):
+    """check.py names a package's reports by its directory's name where the package is outside its checkout, as a slot
+    tree's is. Two packages of that name, or one and a package proving the other's guarantees, are audited by a check.py
+    each; a package proving the guarantees of both is the same package, and they share one."""
+    provers = {"x/lean": ["x/proofs"], "y/lean": ["x/proofs"], "z/a": ["x/proofs"], "z/b": ["x/proofs"], "w/proofs": []}
+    monkeypatch.setattr(LC, "provers", lambda p, *_: provers.get(p, []))
+    assert LC.batches(["x/lean", "z/a", "z/b"], "x/lean", False, None) == [(False, ["x/lean", "z/a", "z/b"])]
+    assert LC.batches(["x/lean", "z/a", "y/lean", "z/b"], "x/lean", False, None) == [(False, ["x/lean", "z/a"]),
+                                                                                    (False, ["y/lean", "z/b"])]
+    assert LC.batches(["z/a", "w/proofs", "z/b"], "z/a", False, None) == [(False, ["z/a"]), (False, ["w/proofs"]),
+                                                                          (False, ["z/b"])]
+    assert LC.batches(["w/proofs", "x/a-b", "y/a.b"], "w/proofs", False, None) == [(False, ["w/proofs", "x/a-b"]),
+                                                                                  (False, ["y/a.b"])]
+    said = []
+    assert LC.batches(["x/lean", "z/a", "z/b"], "x/lean", True, None) == [(True, ["x/lean"]), (False, ["z/a", "z/b"])]
+    assert LC.batches(["x/lean", "z/a"], "x/lean", True, Path("MOVES.json"), said.append) == [(True, ["x/lean", "z/a"])]
+    assert len(said) == 1 and "z/a requires x/lean: check.py --update --moved on it from its first audit" in said[0]
+
+
 def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_updated(pair, tmp_path):
     root, calls, other = pair
     other.add(P)
@@ -445,8 +641,9 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
                                                                                                        monkeypatch):
     """A run that found only record differences, here without `--update`, so that check.py fails each package and names
     the record that settles it, exits 0 with `outcome: regenerated`, each record
-    kept under `record/`, the requirer audited on the record kept before it, and `validation.status` passed, which the
-    records gate reads as it does for an `--update` run's kept records; a commit of both records then needs no run."""
+    kept under `record/`, both packages audited by one check.py on the locks the run found, and `validation.status`
+    passed, which the records gate reads as it does for an `--update` run's kept records; a commit of both records then
+    needs no run."""
     root, calls, _ = pair
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -455,7 +652,9 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
     said = []
     assert LC.audit_records(S, tmp_path / "deps", log=said.append) == 0
     assert [(p, up) for p, up, _ in calls] == [(S, False), (P, False)], "nothing is audited again with --update"
-    assert calls[1][2][S] == BUILT[S], "the requirer is audited on the record kept for PKG"
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]], "one check.py audits both, and the package proving S's once"
+    assert calls[0][2] == calls[1][2] == {S: record("old", ["proofs"]), P: record("old")}, \
+        "each is judged on the locks the run found: a package's records read nothing of another's lock"
     out = run_dir / "lean-audit"
     kept = {S: out / "record" / S / LC.LOCK, P: out / "record" / P / LC.LOCK}
     assert {p: k.read_text() for p, k in kept.items()} == BUILT and (out / "record" / LC.LOCK).read_text() == BUILT[S]
@@ -484,10 +683,11 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
 
 
 def test_a_records_run_names_at_launch_the_packages_it_audits_in_order_before_it_takes_a_slot(pair, tmp_path, monkeypatch):
-    """One line, said before the run waits for a `build` slot, names what it audits: PKG, then each package whose records
-    read PKG's build, and with each the package its `proved_in` names, which its check.py audits beside it. A run for
-    `s/props` or `s/proofs` beside a run for `s` is thereby seen to audit what that run already does. A package whose
-    records need no run is not named, and a run that runs nothing says no such line."""
+    """One line, said before the run waits for a `build` slot, names what it audits, a check.py at a time: PKG and each
+    package whose records read PKG's build, `together` where one check.py audits them, and with them the package their
+    `proved_in` names, which that check.py audits beside them, once. A run for `s/props` or `s/proofs` beside a run for
+    `s` is thereby seen to audit what that run already does. A package whose records need no run is not named, and a
+    run that runs nothing says no such line."""
     _, calls, _ = pair
     said, held = [], []
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: held.append((list(said), list(calls))))
@@ -497,13 +697,15 @@ def test_a_records_run_names_at_launch_the_packages_it_audits_in_order_before_it
         return [s for s in said if "this run audits" in s]
 
     assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
-    assert launched() == [line.format(f"{S} (with s/proofs), then {P}")]
+    assert launched() == [line.format(f"{S} and {P} together (with s/proofs)")]
     assert held == [(launched(), [])], "it is the only line said before the slot is asked for, and nothing has run"
     said.clear()
     assert LC.audit_records(P, tmp_path / "deps", out=tmp_path / "out2", log=said.append, rebuild=True) == 0
-    assert launched() == [line.format(f"{P}, then {S} (with s/proofs)")], "a requirer's run audits PKG's records too"
-    assert LC.audits(["s/proofs", S, P]) == f"s/proofs, then {S} (with s/proofs), then {P}", \
-        "a prover's own run audits it once more beside each package that names it"
+    assert launched() == [line.format(f"{P} and {S} together (with s/proofs)")], "a requirer's run audits PKG's records too"
+    assert LC.audits(["s/proofs", S, P], "s/proofs") == f"s/proofs and {S} and {P} together", \
+        "a prover's own run audits it once, beside the packages that name it"
+    assert LC.audits([S, P], S, update=True) == f"{S} (with s/proofs), then {P}", \
+        "under --update PKG has a check.py of its own, and its requirers the next"
     monkeypatch.setattr(LC, "reused", lambda todo, files, log: {S: ("its records ran on these inputs", None)})
     said.clear()
     assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out3", log=said.append) == 0
@@ -571,28 +773,33 @@ def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_upda
     fake, mine = LC.subprocess.run, []
 
     def run(argv, **kw):
-        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+        if argv[1:2] != [str(LC.AUDIT_PY)] or str(at := Path(kw["cwd"]) / P) not in named(argv):
             return fake(argv, **kw)
-        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        out, update = Path(argv[argv.index("--out") + 1]), "--update" in argv
         moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
         mine.append((update, moved))
         if moved is not None and not update:
             return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        reps = []
+        if rest := [a for a in named(argv) if a != str(at)]:               # the pair's check.py on the others it names
+            fake([*argv[:argv.index("--out") + 2], *rest], **kw)
+            reps = json.loads((out / "audit.json").read_text())["packages"]
         entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
         same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
         fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
         if update and same:
             (at / LC.LOCK).write_text(unwitnessed("new"))
+        reps.append({"package": str(at.resolve()), "failures": fails})
+        failed = [r["package"] for r in reps if r["failures"]]
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
-            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
-        return type("P", (), {"returncode": 1 if fails else 0})()
+        (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if failed else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     said, out = [], tmp_path / "out"
     assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
     assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
-        "the requirer's one audit takes --update --moved"
+        "the requirer's one audit takes --update --moved, in PKG's check.py: both take the same flags"
     assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
     got = outcome_line(said)
     assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
@@ -948,13 +1155,14 @@ def test_a_killed_check_leaves_the_mark_for_the_next_run(fast, tmp_path, monkeyp
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-killed")
 
     def run(argv, **_):
-        return type("P", (), {"returncode": -9 if argv[-1].endswith("Req") else 0})()
+        return type("P", (), {"returncode": -9 if "--update" not in argv else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == -9
     left = json.loads((tree / LC.DIRTY).read_text())
-    assert (left["run"], left["package"], left["phase"], left["killed"]) == ("r-killed", "pkg/Req", "check", -9)
+    assert (left["run"], left["package"], left["packages"], left["phase"], left["killed"]) == (
+        "r-killed", "pkg", ["pkg", "pkg/Req"], "check", -9), "the one check.py that audited both was killed"
     monkeypatch.setattr(LC.subprocess, "run", lambda argv, **_: type("P", (), {"returncode": 0})())
     said.clear()
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
@@ -1380,6 +1588,99 @@ def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audite
     said: list[str] = []
     assert LC.mismatched(tmp_path, tree, said.append) == {} and len(said) == 1 and "can't be read" in said[0], \
         "reports that can't be read name no module, and the run says so"
+
+
+def sampled_in(monkeypatch, which: set[int]) -> list[list[str]]:
+    """The pair's check.py, whose runs number ``which`` (from 0) fail `s/proofs` on its sampled recompile of module `P.M`
+    and, with it, each package whose guarantees it proves (`proved_in.unpassed`), as check.py does; every report names
+    its failures' codes. The command line of each run, as it is made."""
+    fake, argvs = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] != [str(LC.AUDIT_PY)]:
+            return got
+        argvs.append(argv)
+        at = Path(argv[argv.index("--out") + 1]) / "audit.json"
+        doc = json.loads(at.read_text())
+        for r in doc["packages"]:
+            if len(argvs) - 1 in which:
+                proofs = r["package"].endswith("/proofs")
+                r["failures"] = [*r["failures"], MISMATCH if proofs else "proved_in.unpassed: s/proofs did not pass"]
+                r["sampled"] = {"mismatched": {"P.M": r["package"]}} if proofs else {}
+            r["failure_codes"] = [f.split(":")[0] for f in r["failures"]]
+        doc["failed"] = [r["package"] for r in doc["packages"] if r["failures"]]
+        at.write_text(json.dumps(doc | {"passed": not doc["failed"]}))
+        return type("P", (), {"returncode": 1 if doc["failed"] else 0})()
+
+    run.audits = fake.audits
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    return argvs
+
+
+def test_a_sampled_mismatch_in_the_check_py_several_packages_share_runs_it_once_more_for_all_of_them(proved, tmp_path,
+                                                                                                    monkeypatch):
+    """The one check.py that audits PKG and its requirer samples the package proving both once. When its recompile there
+    compiles a kept module to other outputs, each of the two fails with it (`proved_in.unpassed`); the run forgets the
+    module and runs that check.py once more, on both packages and without the artifact cache, and each package's verdict
+    and own `audit.json` are the second one's. The first one's reports are kept apart, under its first package's path."""
+    tree = tmp_path / "cache" / LC.RECORDS / "local"
+    mine, others = kept_module(tree / "s" / "proofs")
+    argvs = sampled_in(monkeypatch, {0})
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 0
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]] * 2, "the same check.py once more, never a third"
+    assert named(argvs[0]) == named(argvs[1]) and len(named(argvs[0])) == 2
+    assert "--artifacts" in argvs[0] and "--artifacts" not in argvs[1], "nothing is restored for the second"
+    assert [f for f in mine if not f.exists()] == [f for f in mine if f.name.endswith((".trace", ".hash", ".c.o.export"))]
+    assert all(f.exists() for f in others)
+    aside = out / "mismatched" / "s"
+    assert len(json.loads((aside / "audit.json").read_text())["failed"]) == 3, "the first one failed all three"
+    own = {q: json.loads((d / "audit.json").read_text()) for q, d in ((S, out), (P, out / "requirer-s_props"))}
+    assert all(doc["passed"] and doc["failed"] == [] for doc in own.values()), "each package's own report is the second's"
+    assert {q: r["outcome"] for q, r in outcome_line(said)["records"].items()} == {S: LC.PASS, P: LC.PASS,
+                                                                                   "s/proofs": LC.PASS}
+    assert sum("compiled P.M to other outputs" in s and f"audits {S} and {P} once more" in s and str(aside) in s
+               for s in said) == 1
+    work = [s for s in said if re.match(r"lean-records: \S+: check\.py exit \d+ in \d+ s on ", s)]
+    assert len(work) == 1 and work[0].startswith(f"lean-records: {S}+{P}: check.py exit 0") and "audited twice" in work[0]
+
+
+def test_a_second_sampled_mismatch_in_the_check_py_several_packages_share_fails_each_package_it_proves(proved, tmp_path,
+                                                                                                      monkeypatch):
+    tree = tmp_path / "cache" / LC.RECORDS / "local"
+    kept_module(tree / "s" / "proofs")
+    sampled_in(monkeypatch, {0, 1})
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]] * 2, "one check.py more, never a third"
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][S]["outcome"], got["records"][P]["outcome"], got["passes"]) == (
+        LC.FAILED, LC.FAILED, LC.FAILED, {})
+
+
+@pytest.mark.parametrize("which, runs, status, outcome", [
+    ({1, 3}, [(True, True), (True, False), (False, False), (False, True)], 1, LC.FAILED),
+    ({2}, [(True, True), (True, False), (True, True), (False, True)], 0, LC.REGENERATED),
+], ids=["after-the-shared-check-py-ran-twice", "after-it-ran-once"])
+def test_a_requirers_update_runs_once_more_only_when_the_check_py_it_shared_did_not(proved, tmp_path, monkeypatch, which,
+                                                                                    runs, status, outcome):
+    """`--records s/proofs --update` with one requirer's record to regenerate: PKG's check.py, the one its two requirers
+    share, then that requirer's own with `--update`. A requirer's own check.py goes on from the one it shared. After the
+    shared one ran twice on a sampled mismatch, the requirer's reads no artifact cache either, and a mismatch there is
+    the second: it fails the requirer. After the shared one ran once, the requirer's runs once more on a mismatch."""
+    root, calls, _ = proved
+    (root / P / LC.LOCK).write_text(record("old", ["../proofs"]))
+    kept_module(tmp_path / "cache" / LC.RECORDS / "local" / "s" / "proofs")
+    argvs = sampled_in(monkeypatch, which)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records("s/proofs", tmp_path / "deps", update=True, out=out, log=said.append) == status
+    assert [("--artifacts" in a, "--update" in a) for a in argvs] == runs, \
+        "each check.py: whether it reads the artifact cache, whether it takes --update"
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][P]["outcome"], got["records"][S]["outcome"]) == (outcome, outcome, LC.PASS)
+    twice = [s for s in said if s.startswith(f"lean-records: {P}: check.py exit") and "audited again with --update, twice" in s]
+    assert len(twice) == (which == {2}) and (out / "mismatched" / "s_props").is_dir() == (which == {2})
 
 
 @pytest.fixture()
