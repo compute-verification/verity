@@ -239,7 +239,7 @@ theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB
   rfl
 
 theorem period_every {Ω : Type} {N : ℕ} {P : (Fin N → Bool) → SplitStages Bool (Fin N) 1 → Prop}
-    (h : P (fun _ => true) (stages N)) : ∀ n, (period Ω N n).EveryWindow P
+    (h : P (fun _ => true) (stages N)) : ∀ n, (period Ω N n).EveryExecutionPhase P
   | 0 => trivial
   | n + 1 => ⟨h, fun _ => period_every h n⟩
 
@@ -263,7 +263,7 @@ theorem paid_share {N : ℕ} (s : Mode) (hs : s ≠ .paid) (t : Fin N) (c : Bool
 theorem every_perLiveTile {Ω : Type} {N : ℕ} {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
     (h : ∀ k (t : Fin N), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
-    (period Ω N n).EveryWindow (fun live W => PerLiveTile Honest.scheme (circuit N) live W P) :=
+    (period Ω N n).EveryExecutionPhase (fun live W => PerLiveTile Honest.scheme (circuit N) live W P) :=
   period_every (Ω := Ω) (N := N) (P := fun live W => PerLiveTile Honest.scheme (circuit N) live W P)
     ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩ n
 
@@ -345,7 +345,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
       monitoringPeriodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
         (liveCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) 1 1 (k sT)
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
-    (period (Ω1 σ sT) (tileCount σ sT) n).EveryWindow
+    (period (Ω1 σ sT) (tileCount σ sT) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) ∧
     PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
