@@ -359,6 +359,14 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
         "the deployment record's key's SHA-512 is not the one the check was handed",
         "the deployment record's session is not the one the check was handed", "requests window 0 isn't certified"]
     assert sum("is not the one the check was handed" in p for p in both) == 2 and not file.exists()
+
+    def another_digest() -> None:
+        dep = json.loads((out / "deployment.json").read_text())
+        (out / "deployment.json").write_text(json.dumps(dep | {"digest": "00" * 64}))
+
+    assert [p.split(":")[0] for p in refused(out, another_digest, file, (key, other))] == [
+        "the deployment record's session is not the one the check was handed",
+        "the deployment's digest isn't its parameters'"] and not file.exists()
     # the connection rows' check alone: it names the two first, writes no file, and repeats none its caller found
     dep, records = json.loads((out / "deployment.json").read_text()), ws.read_records(out, ROWS)
     rows = [out, dep, ROWS, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS], ws.LINK, file]
@@ -368,6 +376,8 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     assert crr.check(*rows, alone[1:], (wrong, other))[1] == alone[:1] and not file.exists()
     assert crr.check(*rows, alone, (wrong, other))[1] == [] and not file.exists()
     assert crr.check(*rows, (), (key, session))[1] == [] and file.exists()
+    # under a schedule without lengths rows it has no summary and names the two all the same
+    assert crr.check(out, dep, PLAIN, [], [], [], ws.LINK, None, (), (wrong, other)) == (None, alone)
 
 
 def test_a_registrations_file_without_the_hash_or_the_session_is_refused_before_the_run_is_read(tmp_path):
