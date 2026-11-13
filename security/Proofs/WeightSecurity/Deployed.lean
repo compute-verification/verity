@@ -51,9 +51,9 @@ noncomputable def servedRec (w : JointAuditV5) (τ : Strategy (servedGame w (Rel
 
 /-- The deployment's run over `T` windows at the datacenter's strategy `s`. -/
 noncomputable def servedRun (W : ℕ → JointAuditV5) (T : ℕ)
-    (s : Strategy (periodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T)) :
+    (s : Strategy (monitoringPeriodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T)) :
     Game (List (Served O V Tick Adv)) :=
-  periodRun (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t)) 0 T s
+  monitoringPeriodRun (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t)) 0 T s
 
 theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
@@ -86,13 +86,13 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
     (W : ℕ → JointAuditV5) (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (s : Θ → R → Strategy (periodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T))
+    (s : Θ → R → Strategy (monitoringPeriodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T))
     (hhon : HonestUseHard C gen Stolen T A p)
     (hsim : Simulable A Ou (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)))
     (hA3 : ∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (hpa : ∀ t < T, ∀ B, (W t).pa B ≤ x ^ B.card)
     (hT : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      PeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
           (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
@@ -100,7 +100,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
           (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS)
     (hL : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      PeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))
@@ -126,7 +126,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
       ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))
       (cont ((W t).memberSim (servedAudit (W t) τ) k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M
       ((W t).ms.get k).t'
-  have hs : PeriodGood (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t τ => t < T ∧ cr t τ) 0 T (s θ r) :=
+  have hs : MonitoringPeriodGood (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t τ => t < T ∧ cr t τ) 0 T (s θ r) :=
     periodGood_mono _ T 0 (s θ r) (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (periodGood_of_plays (fun t => servedGame (W t) (Release O V Tick Adv)) cr T 0 (s θ r)
         fun t τ hp => ⟨hT θ r t τ hp, hL θ r t τ hp⟩)
