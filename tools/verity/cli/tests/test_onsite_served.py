@@ -98,7 +98,8 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert hooks["POUS_ARGS"].startswith("--rounds 320 --challenger-host auditor-1 --challenger-address 192.0.2.1:7000")
-    assert hooks["SERVE_ARGS"] == "--remote-verifier 192.0.2.2:7002"
+    assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
+            if "SERVE_ARGS" in e["hooks"]} == {"bandwidth": "--remote-verifier 192.0.2.2:7002", "certifier": T.ID_FORM}
     assert (hooks["WIPE_CHALLENGER"], hooks["WIPE_ADDRESS"], hooks["WIPE_COMMAND"], hooks["WIPE_KEY_SHA512"]) == (
         "auditor-1", "192.0.2.1:7001", "start-wipe", "1" * 128)
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
@@ -206,6 +207,21 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["WIPE_KEY_SHA512"] == "1" * 128
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "auditor-1" not in json.dumps(json.loads((state / "run.json").read_text()))
+    assert hooks["SERVE_ARGS"] == "--remote-verifier 192.0.2.2:7002 --protocol ids --id-payload 503"
+
+
+def test_serve_openais_flags_are_every_listed_pieces():
+    cfg = R.load(CONFIG, REG)
+    poub, ids = "--remote-verifier 192.0.2.2:7002", "--protocol ids --id-payload 503"
+    assert T.ID_FORM == ids and T.variables(cfg, BINDINGS)["SERVE_ARGS"] == f"{poub} {ids}"
+    listing = {without: {**cfg, "protocols": [c for c in cfg["protocols"] if c != without]}
+               for without in ("bandwidth", "certifier")}
+    assert T.variables(listing["bandwidth"], BINDINGS)["SERVE_ARGS"] == ids
+    assert T.variables(listing["certifier"], BINDINGS)["SERVE_ARGS"] == poub
+    neither = {**cfg, "protocols": [c for c in cfg["protocols"] if c not in listing]}
+    assert "SERVE_ARGS" not in T.variables(neither, BINDINGS)
+    # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS
+    assert " --protocol ids " in f" {T.variables(cfg, BINDINGS)['SERVE_ARGS']} "
 
 
 def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys, monkeypatch):

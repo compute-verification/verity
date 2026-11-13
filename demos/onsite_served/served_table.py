@@ -260,9 +260,15 @@ def _poub_session(cfg, params, bound):
     return {"SERVE_ARGS": shlex.join(["--remote-verifier", bound["address"]])}
 
 
+#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: 503-byte payload of the front's 512-byte cells; every other request is answered as before
+ID_FORM = "--protocol ids --id-payload 503"
+
+
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
-    return {"CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
+    return {"SERVE_ARGS": ID_FORM,
+            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
             "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
 
 
@@ -356,12 +362,18 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
 
 
+#: the runner's variables that are serve-openai's flags, which each piece adds its own to
+JOINED = ("SERVE_ARGS",)
+
+
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The served window's runner's variables: every listed piece's hooks, whichever party's they are, since the
-    prover's pieces reach the auditor's sides through their bindings."""
+    prover's pieces reach the auditor's sides through their bindings. A variable of `JOINED` is every piece's flags,
+    in the pieces' order; any other is one piece's."""
     out: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
-        out.update(p.variables(cfg, bindings))
+        for k, v in p.variables(cfg, bindings).items():
+            out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
 
 
