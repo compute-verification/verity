@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parents[5]
-LEAN = Path(__file__).parents[2] / "lean"
+LEAN = Path(__file__).parents[5] / "tools" / "pous_grader"
 #: the suite's `pyproject.toml`, whose directory and declared inputs the read guard allows
 PYPROJECT = ROOT / "verity/protocols/pous/verifier/pyproject.toml"
 #: how deep `lean/` is below the root, which a copy of it under another root keeps
@@ -74,7 +74,7 @@ def test_trusted_hashes_are_current():
     assert not problems, ("lean/TRUSTED.sha256 is not what its regeneration command writes (grade.sh refuses every "
                           "submission while a listed file differs, and never hashes an unlisted one):\n  " +
                           "\n  ".join(problems) + "\nRegenerate it, then run the audit (`bash check.sh`):\n"
-                          f"  cd verity/protocols/pous/lean && {cmd}")
+                          f"  cd tools/pous_grader && {cmd}")
 
 
 def declared_inputs() -> list[str]:
