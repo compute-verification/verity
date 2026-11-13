@@ -137,10 +137,16 @@ theorem canon_obj_ne {m : Std.TreeMap.Raw String Json} {text : String} (hc : Flo
   simp [String.length_append] at this
 
 theorem fromUTF8_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
-  have h : s.toUTF8.IsValidUTF8 := s.isValidUTF8
+  rw [String.toUTF8_eq_toByteArray]
+  have h : s.toByteArray.IsValidUTF8 := s.isValidUTF8
   unfold String.fromUTF8?
   rw [dite_eq_left_of_eq_true (eq_true h)]
   rfl
+
+/-- A text that is not empty has bytes. -/
+theorem utf8_ne {s : String} (h : s ≠ "") : s.toUTF8.size ≠ 0 := by
+  rw [String.toUTF8_eq_toByteArray, String.size_toByteArray]
+  exact fun hz => h (String.utf8ByteSize_eq_zero_iff.mp hz)
 
 /-! ## The Commit record -/
 
@@ -159,13 +165,13 @@ theorem commit_read {d : Json} {m : Std.TreeMap.Raw String Json} {text : String}
     have hg := Entry.same_getD hs "registered"
     rw [hr] at hg
     obtain ⟨b, hb, hsz, -⟩ := FlockComplete.JsonRT.same_arr hg
-    rw [get_getD, hb, Array.eq_empty_of_size_eq_zero (by simpa using hsz.symm)]
+    have hb0 : b = #[] := Array.eq_empty_of_size_eq_zero (by simpa using hsz.symm)
+    rw [get_getD, hb, hb0]
   have h3 : PouwCheck.Credit.isObj e = true := by
     subst ho
     obtain ⟨n, rfl⟩ := Entry.same_obj_eq hs
     rfl
-  have hne : text.toUTF8.size ≠ 0 := fun hz =>
-    canon_obj_ne (ho ▸ hc) (String.utf8ByteSize_eq_zero_iff.mp hz)
+  have hne : text.toUTF8.size ≠ 0 := utf8_ne (canon_obj_ne (ho ▸ hc))
   have ha : (#[] : Array Json).all PouwCheck.Credit.isObj = true := Array.all_empty
   unfold commitOf?
   simp only [PouwCheck.str?, PouwCheck.hex?, isHexBytes_hex hne, pyFromHex_hex, fromUTF8_toUTF8, hpe, hpy, h1, h2, h3,
@@ -207,7 +213,6 @@ theorem key_read {pub : ByteArray} (hs : pub.size = 80) :
   unfold ChallengerKey.ofJson
   rw [hk, hH, hW, hp, beq_self_eq_true]
   simp only [hm, hs, PUBLIC_BYTES, beq_self_eq_true, bind, Except.bind, pure, Except.pure]
-  rfl
 
 /-- A key `Lms.key` derives at the deployed parameters has a public key of 80 bytes. -/
 theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
@@ -233,11 +238,6 @@ theorem root_ok {key salt commit draw : Json} {k : ChallengerKey} {s rc : ByteAr
     List.forIn_nil, Option.elim, ite_true, List.append_nil]
   rfl
 
-theorem one_beq (a : ByteArray) : ([a] == [a]) = true := by
-  show (a == a && ([] : List ByteArray) == []) = true
-  rw [Steps.bytes_beq]
-  rfl
-
 /-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
 theorem draw_ok {ledger pins main draw : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
     {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get draw "root") = some (Flock.hexOf root))
@@ -250,7 +250,7 @@ theorem draw_ok {ledger pins main draw : Json} {k : ChallengerKey} {root : ByteA
     rw [List.lookup_cons, beq_self_eq_true]
     rfl
   unfold Internal.creditedDraw
-  simp only [hroot, hsess, hopen, hlive, hl, one_beq, beq_self_eq_true, bind, Except.bind, pure, Except.pure,
+  simp only [hroot, hsess, hopen, hlive, hl, beq_self_eq_true, bind, Except.bind, pure, Except.pure,
     List.isEmpty_cons, ite_false, Bool.false_eq_true]
   rfl
 
