@@ -10,7 +10,7 @@ from verity.circuits.types import Array, RecordType, Tuple, Type
 from verity.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
-from verity_vllm.check.fold_compare import WeightSource
+from verity_vllm.check.fold_compare import _WEIGHT_FIELDS, WeightSource, _layernorm_family_fields
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, INTER, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
@@ -163,3 +163,17 @@ def test_a_top_field_is_its_checkpoint_tensors_and_cos_sin_is_the_fixture(tmp_pa
                           ("norm_b", "gpt_neox.final_layer_norm.bias"), ("lm_head", "embed_out.weight")):
         np.testing.assert_array_equal(ws._field_words(field), words[tensor], err_msg=field)
     np.testing.assert_array_equal(ws._field_words("cos_sin"), fixture)
+
+
+def test_the_cos_sin_rows_hold_none_for_their_checkpoint_tensors_and_a_row_of_none_read_through_the_table_is_a_type_error(tmp_path):
+    """Both tables of top-level fields, the base one and the GPT-NeoX family's, hold None where `cos_sin`'s checkpoint tensors would
+    be named. No read reaches it, since `cos_sin` is the fixture's; a field whose row holds None and is read through the table raises
+    `TypeError`."""
+    assert _WEIGHT_FIELDS["cos_sin"] == ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None)
+    family = _layernorm_family_fields({"NORM": "layernorm"})
+    assert family is not None and family[0]["cos_sin"] == ("w=layers.0.attention.rotary_emb.cos_sin_cache", None)
+    _write(tmp_path / "base.safetensors", _tensors())
+    ws = WeightSource(_mla_weights_type(), [tmp_path / "base.safetensors"], tmp_path / "cos_sin.npy")
+    ws._weight_fields["embed"] = ("w=embed_tokens.weight", None)
+    with pytest.raises(TypeError):
+        ws._field_words("embed")

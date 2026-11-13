@@ -233,11 +233,11 @@ def _extent(v: ViewDesc) -> tuple[int, int]:
 
 # --- weights (parameter words by leaf interval of the weights Record) ----------------------------------------
 
-# circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0: none for the fixture's cos_sin)
-_WEIGHT_FIELDS: dict[str, tuple[str, list[str]]] = {
+# circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0: None for the fixture's cos_sin)
+_WEIGHT_FIELDS: dict[str, tuple[str, list[str] | None]] = {
     "embed": ("w=embed_tokens.weight", ["model.embed_tokens.weight"]),
     "norm": ("w=norm.weight", ["model.norm.weight"]),
-    "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", []),
+    "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None),
 }
 _LAYER_FIELDS = {
     "ln1": ("w=layers.{L}.input_layernorm.weight", ["model.layers.{L}.input_layernorm.weight"]),
@@ -280,7 +280,7 @@ def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
     return f32_to_bf16_words(np.ascontiguousarray(w, dtype=np.uint16).view(np.float16).astype(np.float32))
 
 
-def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[str]]], dict[str, tuple[str, list[str]]]] | None:
+def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[str] | None]], dict[str, tuple[str, list[str]]]] | None:
     """Checkpoint sources of the `analytic.layernorm_layer_weights_type` fields (GPT-NeoX / Pythia,
     `C["NORM"] == "layernorm"`): `(top_fields, layer_fields)` in the `_WEIGHT_FIELDS` / `_LAYER_FIELDS` shape, with vLLM's
     GPT-NeoX parameter names (= the HF checkpoint names: `gpt_neox.layers.{L}.attention.query_key_value.weight`, ...).  The fused
@@ -292,7 +292,7 @@ def _layernorm_family_fields(C: dict | None) -> tuple[dict[str, tuple[str, list[
            "norm": ("w=final_layer_norm.weight", ["gpt_neox.final_layer_norm.weight"]),
            "norm_b": ("w=final_layer_norm.bias", ["gpt_neox.final_layer_norm.bias"]),
            "lm_head": ("w=embed_out.weight", ["embed_out.weight"]),
-           "cos_sin": ("w=layers.0.attention.rotary_emb.cos_sin_cache", [])}
+           "cos_sin": ("w=layers.0.attention.rotary_emb.cos_sin_cache", None)}
     layer = {f: (f"w=layers.{{L}}.{hf}", [f"gpt_neox.layers.{{L}}.{hf}"]) for f, hf in (
         ("ln1", "input_layernorm.weight"), ("ln1_b", "input_layernorm.bias"),
         ("qkv_w", "attention.query_key_value.weight"), ("qkv_b", "attention.query_key_value.bias"),
@@ -372,7 +372,10 @@ class WeightSource:
             H = self.weights_type.fields[self.weights_type.index("norm")][1].n
             w = np.array([analytic.normalizer_word(int(H))], dtype=np.uint16)
         elif name in self._weight_fields:
-            w = np.concatenate([self._tensor_words(t, name) for t in self._weight_fields[name][1]])
+            tensors = self._weight_fields[name][1]
+            if tensors is None:
+                raise TypeError(f"{name!r} names no checkpoint tensor")
+            w = np.concatenate([self._tensor_words(t, name) for t in tensors])
         elif self._mla is not None and MLA_LAYER_FIELD.match(name):
             w = mla_field_words(self._mla, name, self._tensor_words)
         elif name.startswith("layers["):
