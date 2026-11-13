@@ -389,7 +389,9 @@ def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch
 def test_no_pack_pod_starts_or_claims_from_1210z_and_none_runs_past_1235z(monkeypatch, path, drain):
     before = dict(os.environ)
     mod = _load(NEBIUS / path, f"windows_{drain[1]}", monkeypatch)
-    assert dict(os.environ) == before                    # on node 1 its dispatch.env would reach the next tests
+    after = dict(os.environ)
+    differ = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    assert differ == []                                  # on node 1 its dispatch.env would reach the next tests
     day = 1790812800                                     # 2026-10-01T00:00:00Z
 
     def at(h: int, m: int) -> float:
