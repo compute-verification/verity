@@ -137603,3 +137603,45 @@ Clock: `date -u` read 11:21Z. Mailbox: read at 11:15Z, nothing since your 09:52Z
 **7. The Lean half: I keep it.** It is the registration's check and its property, not the form's Lean, so a worker in `SampledTwo` now has no head start on it, and it would take STAGECOINS off rule B. The risk I can name is `check_eq_checkRef`'s `simp` running out of its budget; if it or `registration_nil` has not closed after three tries on a node, I say so here and ask you to hand it over then.
 
 **Order of work from here**, each its own commit on the trial branch: the audit's call of the twin (Python only); R3's Lean and its Python twin with the difftest cases; the play of two and of twenty again at that head, without `--interior-trees`; the records by the fast path. No pull request, no mark, no merge of `main`, neither of Friday's branches moved.
+
+## MEMBERS, Fri 13 Nov 11:24Z: what a file must leave behind: a summary for a member the sample missed, the bytes for a sampled one; 480 GB stays while the main hands all blobs at once
+
+Your 11:09Z question, sizing only. Switch head pushed: `29ef15c438b` (nothing unpushed).
+
+**1. What the check must hold of a file after its once-a-file work** [read: `Spot/OneStageZk.lean`, `Flock/ProvedScope.lean`, `PortRoots.lean`, `KsScope.lean`, `HmRow.lean`]
+
+| file | read | what must stay after |
+|---|---|---|
+| the four lookup tables | at every circuit's parse | the bytes, for the whole run |
+| a circuit file | once a file: its digest, its length, its META's lookups and mask size, its parse, the circuit's own verdicts | **a summary** (below), for the members that name it. The bytes and the parse: only if a sampled member names it, at that member's session, which parses for itself (`sessionAt`) |
+| a member's public file | once a member, against its circuit's summary | nothing, unless the member is sampled: then the bytes, at its session |
+| a session's files | at the session | nothing |
+
+The summary: the circuit's verdicts (scope and wire order, ports' form, unit's form, the caller's own check), its public input ports, and the parsed circuit without its rows (digest, class, ports, units a proof block, META). No public-file check reads a row [read]; the try of the lemmas that say so is queued (item 4).
+**Correction to my 11:07Z size**: as written the summary keeps META whole, so it is about the size of the file's META line, not "kilobytes to a megabyte". How large META is against the file on Thursday's circuits: not known to me; FIRSTACCEPT has the files.
+
+**2. Would a check that reads a file, keeps the summary and drops the bytes accept exactly what `checkBlobs` accepts?** Yes [derived], on four conditions:
+- The summary is the function of the parse the equality lemma is about (the same `membersFiles' = membersFiles` shape as the compiled one).
+- A sampled member's circuit and public file are kept, or read a second time and hashed again (same SHA-512: the same bytes, or two of the files sent collide). The sample is fixed before the files' pass (`sampledHeld` runs before it; it reads the evidence and the sessions' records, not a member's files), so the check knows which to keep.
+- The lookup tables come first, and the check refuses at the end if a later blob hashes to a pinned table it did not have: `tablesHeld` compares the circuit's lookups with the pinned tables among *all* blobs.
+- A public file is read after its circuit (the feed's order). A feed in another order is refused or undecided, never accepted wrongly.
+On a rejection the reason is `checkBlobs`' only if the checks are reported in its order (members in order, then sessions).
+
+**3. What stands in the way** [read: `CoreProtocol/Blobs.lean`]
+- `BlobProtocol.main` reads every blob file before the check starts (`blobs.toArray.mapM IO.FS.readBinFile`, line 96) and `answer` takes them as one array.
+- `checkBlobs : Params → Commitment → Evidence → Blobs → Outcome` is a function of the whole set. `Blobs` is one array of (digest, bytes); a pure function cannot release an entry of it, and the caller holds the array to the end.
+- `Blobs.ofArray` hashes every blob before anything else (355 GB of SHA-512 once; its rate in the compiled check: not known to me).
+- Every guarantee is stated on `checkBlobs` at a `Core.Blobs`. So "this change" is a new main and one theorem, not an edit of `checkBlobs`: a step taken once a file, a finish, and `finish (fold step) = checkBlobs` on the blobs fed. That is FIRSTACCEPT's streamed step, on your list after the switch. It adds to the interface (`BlobProtocol.main`); nothing of `Blobs.get` changes. The interface's lock names no owner [read: `verity/protocols/interface/lean-audit.json`]; whose it is: yours to say.
+
+**4. The figure for your 14:00Z line** [derived from FIRSTACCEPT's relayed 355 GB and 123 GB]
+- **With the main as it is: about 480 GB** (355 GB of files + the largest circuit's parse, once), with the summary or without. The summary changes only this: memory no longer depends on the members' order. With the parses kept as compiled at `bac046004bb6` and one circuit's members not adjacent, every distinct parse can be held at once, on top of the 355 GB (3 to 4 bytes a byte of all distinct circuit files; their total: not known to me).
+- **With the streamed main and the summary: about 160 GB** [guess from the 3 to 4 bytes a byte]: the largest circuit file (about 30 to 40 GB) and its parse (123 GB), one file at a time, plus the tables and the summaries.
+- So: "the first real accept of Thursday's window needs about 480 GB of memory, or a streamed main with its theorem (about 160 GB)". The summary alone does not lower the 480.
+
+**5. One cost I put in myself, and its fix** [read]: `KeptParses.after` scans the members still to come at every member, so the compiled pass makes about members² / 2 digest compares (5 × 10⁹ at 102,781 members). With the summary kept for the whole run that scan goes; it is in the layer I am writing.
+
+**State**
+- `29ef15c438b` adds `Spot/CircuitKept.lean` (the summary, the three checks on it, their equalities with Flock's), **not compiled**. Its proof scripts pass locally on a stand-in for Flock's names [run: local `lean`, no run id]; the five lemmas that a public-file check reads no row are `rfl` on Flock's own definitions and are tried only by the remote try. It is in no root and nothing imports it yet.
+- The queue stopped waiting (rc 79, not a failure) on `Sampled/Record/Pass.lean`, `r20261113-110041-4813` on vy-nebius-cpu-1, still running at 11:21Z [run]; the queue takes `CircuitKept.lean` when it ends. One try at a time.
+- Suites `r20261113-110236-7a94` on vy-nebius-cpu-7: running [run], due about 11:45Z.
+- Still needed from you: where the served-cases fix (`96193ee1080`) lands, (a) or (b) of my 11:07Z entry.
