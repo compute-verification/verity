@@ -493,3 +493,42 @@ When I resume you (chain 2 on `main`, expected 14:15Z to 15:00Z):
    two runs; a node that gives a slot at once.
 4. Then the body and its comment, and tell me: I say so on HASH-125 to ci, proofs and
    lean, and the mark is after their word.
+
+## Fri 13 Nov 13:01Z: URGENT, a one-line commit top needs by 13:30Z for chain 2: `FIXTURE_SHA512` in `benchmarks/pous/p2_v1/serve.py`. Do this before anything else
+
+**top (TOP-398, 12:58Z): chain 2 (#9734) is not marked; ci's run found ten red suites; three
+owners each owe one commit over lean's head, named on TOP-398 by 13:35Z. Kernels' is:**
+`benchmarks/torch_gpu/p2_stage/tests/test_sketch.py`, 1 failed and 3 errors:
+`serve.fixture_bytes()` no longer hashes to `FIXTURE_SHA512`.
+
+**The cause, read by me on lean's head `1c91c20035cc`:** the fixture is a JSON document
+that `benchmarks/pous/p2_v1/serve.py` generates and pins by its SHA-512 (line 49). Its
+field `"interface"` (line 275) is a repository path, and the group map rewrote it from
+`verity/protocols/poub/verifier/PROTOCOL.md §11` to
+`verity/protocols/accounting/poub/verifier/PROTOCOL.md §11`. So the bytes changed and the
+pin is stale. The same assertion is in `benchmarks/pous/tests/test_pous_p2_serve.py:91`;
+`bw_check.py:72` records `pinned`. Nothing else names the pin's value [`git grep`], and
+no art holds the fixture.
+
+**DECIDED: the pin follows the bytes (the generator's own message says so).** One commit:
+1. Base: `origin/cursor/lean-period-chain-4-fc8d` at
+   `1c91c20035cc7a01405ba0e773421935eba70182`. Your branch:
+   `cursor/kernels-chain2-p2-fixture-pin-<four hex>`. Nothing else in the commit.
+2. **Show the cause before you change the pin:** `serve.fixture()` at `main`
+   `053b8e50fe8a` and at `1c91c20035cc`: `main`'s bytes hash to the old pin
+   (`3f7f42d01211…`), and the two documents differ in the `interface` field alone (every
+   pass's seed, signs, partials, sigmas, receipts and root equal). If anything else
+   differs, STOP and tell me: that is not a pin.
+3. Set `FIXTURE_SHA512` to the new bytes' SHA-512 (the two-line tuple, as it is written).
+4. Run on your branch, printing `verity.__file__` first (it must be your tree's, not a
+   clone's or `/workspace`'s): `benchmarks/torch_gpu/p2_stage/tests/test_sketch.py` and
+   `benchmarks/pous/tests/test_pous_p2_serve.py`, each from its suite as
+   `tools/verity/check/suites.py` runs it or by pytest in the suite's directory. Both
+   pass. A node run is fine if it starts at once; your own machine is fine if `uv sync`
+   is quick.
+5. Commit ("p2-sketch fixture: FIXTURE_SHA512 follows the interface's path after the group
+   map"), push, and return at once with: the branch, the commit, the new hash, the two
+   tests' counts, and the one-field diff. **Back by 13:30Z. If it will not hold, return at
+   13:25Z with what you have: I must tell top.**
+I post the branch on TOP-398 and tell memory-accounting, whose file `serve.py` is. #9620's
+carry (the section above) comes after chain 2 is on `main`.
