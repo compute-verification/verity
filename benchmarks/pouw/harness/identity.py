@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import re
 
+#: what `bench.py`, `characterize.py`, `native.py` and the tests read
+__all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
+
 UUID_RE = re.compile(r"GPU-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
@@ -89,16 +92,14 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     known = next((c for c in CARDS if c in name), None)
     if known is None:
         raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    want_cap, want_sms, min_driver, arch = CARDS[known]
+    want_capability, want_sms, min_driver, arch = CARDS[known]
     problems = []
-    if capability != want_cap:
-        problems.append(f"compute capability {capability}, not {want_cap}")
+    if capability != want_capability:
+        problems.append(f"compute capability {capability}, not {want_capability}")
     if sms != want_sms:
         problems.append(f"{sms} SMs, not {want_sms}")
-    try:
-        major = int(driver.split(".")[0])
-    except ValueError:
-        major = -1
+    head = driver.split(".")[0]
+    major = int(head) if head.isdecimal() else -1
     if major < min_driver:
         problems.append(f"driver {driver!r}, need {min_driver} or later")
     if problems:

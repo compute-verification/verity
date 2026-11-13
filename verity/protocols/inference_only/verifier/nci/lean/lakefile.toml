@@ -24,6 +24,11 @@ path = "../../../../../circuits/lean"
 name = "core_protocol"
 path = "../../../../interface"
 
+# SPOT's reader of an execution phase's circuit record (`Spot.Wires`), the one parse the record form reads it through.
+[[require]]
+name = "core_spot"
+path = "../../../../spot/verifier/lean"
+
 [[lean_lib]]
 name = "NciCheck"
 
@@ -42,6 +47,10 @@ root = "NciCheck.DescLivenessMain"
 [[lean_exe]]
 name = "nci-desc-fuzz"
 root = "NciCheck.DescFuzzMain"
+
+[[lean_exe]]
+name = "nci-record-difftest"
+root = "NciCheck.RecordDifftestMain"
 
 [[lean_exe]]
 name = "nci-baseline-difftest"

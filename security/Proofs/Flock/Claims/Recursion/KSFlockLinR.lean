@@ -42,6 +42,7 @@ public import Proofs.Flock.Claims.Recursion.CallsAgree
 public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Proofs.Flock.Claims.Recursion.SetupCalls
 public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
 
 /-!
 # `KSFlockLin` at the deployed reader's bound record (U3)

@@ -1,4 +1,4 @@
-"""Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
+"""The per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
 (``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
@@ -34,9 +34,9 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the sampling design is read off builds at every V in
-  :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
-- ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
+  V in :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
+- ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_excess`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
   the first block's fit alone. Not exact.
 
@@ -65,11 +65,41 @@ import ast
 import json
 import math
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import census
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.evaluation.reference import resolve, signature_of
+from verity.definitions.ops.boolean import attention as AT
+from verity.definitions.registry import sampling_boolean as SB
+from verity.protocols.pouw.prover.circuit.plan import record_k
+from verity_flock import ir_lower, lowerings
+from verity_flock import subcircuit_templates as TM
+
+__all__ = [
+    "METRICS",
+    "affine",
+    "argmax_scan_counts",
+    "argmax_step",
+    "argmax_tree",
+    "at",
+    "attention_steps",
+    "block_excess",
+    "build",
+    "inventory",
+    "main",
+    "registered",
+    "render",
+    "retree",
+    "sample_count",
+    "sample_size",
+    "work",
+]
 
 METRICS = ("inputs", "ands", "output_copies", "committed", "nnz_AB", "lookups")
 EPSILON = Fraction(1, 1000)
@@ -88,8 +118,8 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
-#: token-select's V − 1 ArgmaxStep scan: the sampling design (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
-#: checked against an exact build at SCAN_CHECK
+#: token-select's V − 1 ArgmaxStep scan: its counts' recurrence (:func:`argmax_scan_counts`) is read off builds at every V in
+#: SCAN_POINTS and checked against an exact build at SCAN_CHECK
 SCAN_POINTS = tuple(range(2, 140))
 SCAN_CHECK = 1030
 #: templates whose Definition has a structured reduction (chunks, thread blocks): built only at the census parameters
@@ -108,12 +138,6 @@ BLOCK_CHECKS = (1, 2)
 
 def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The subcircuit's Definition lowered whole into a CSE'd forms Circuit: ``counts()`` plus the live table reads by table."""
-    from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
-    from verity_flock import subcircuit_templates as TM
-
     d = resolve(TM.subcircuit(template, **params).definition(**dict(statics or {})))
     sig, _ = signature_of(d)
     C = Circuit(cse=True)
@@ -148,8 +172,6 @@ def _key(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | 
 def run_builds(jobs: Iterable[tuple], n_jobs: int, fn: Callable[[tuple], tuple] = _build_job) -> dict[tuple, dict[str, Any]]:
     """Each build in its own spawned process (a build's forms are only freed with its process, and two registered lowerings
     register kernels that collide); a worker that dies (the OOM killer) raises BrokenProcessPool rather than hanging."""
-    from concurrent.futures import ProcessPoolExecutor
-
     jobs = list(dict.fromkeys(jobs))
     if n_jobs <= 1:
         return dict(fn(j) for j in jobs)
@@ -170,9 +192,6 @@ def registered(template: str, params: Mapping[str, Any], T: int | None = None) -
     """The template's registered Flock lowering (``verity_flock.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
-    from verity_flock import lowerings
-    from verity_flock import subcircuit_templates as TM
-
     mod = lowerings.registry("C-Flock").module(template)
     if mod is None:
         return {"none": "no registered C-Flock lowering"}
@@ -234,12 +253,6 @@ def registered_costs(types: Sequence[UnitType], n_jobs: int, log: Callable[[str]
 def argmax_step() -> dict[str, Any]:
     """token-select has no registered lowering. Its scan's middle ArgmaxStep as one unit, the carry (best, best_i, i) as cut
     words like gumbel's registered lane: the layout a cut lowering would give per step (the first and last steps differ)."""
-    from verity.circuits.evaluation.reference import resolve
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
-    from verity_flock import subcircuit_templates as TM
-
     _p, call = ir_lower.standalone(resolve(TM.subcircuit("token-select-greedy", V=8).definition()))
     gates = ir_lower.live_gates(call)
     gt = sorted((g for g in gates if g.prim.id == "Bf16GtStrict_v1"), key=lambda g: g.index)[3]
@@ -261,10 +274,6 @@ def argmax_step() -> dict[str, Any]:
 
 def _layout(d: Any) -> dict[str, int]:
     """A Boolean Definition laid out whole as one unit (CSE'd forms Circuit): rows, ANDs, nnz_a, nnz_b."""
-    from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
     d = resolve(d)
     sig, _ = signature_of(d)
     C = Circuit(cse=True)
@@ -284,10 +293,6 @@ def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     """The argmax tree over V logits (``sampling_boolean.stages``): each stage is separable
     (``verity.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
-    from verity.circuits.cut import separable
-    from verity.circuits.evaluation.reference import resolve
-    from verity.definitions.registry import sampling_boolean as SB
-
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}
     for st in SB.stages(V, getattr(SB, stage)):
@@ -345,10 +350,6 @@ CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 3
 
 
 def _f32mul() -> dict[str, Any]:
-    from verity.circuits.boolean.forms import Circuit
-    from verity.definitions.ops.boolean import attention as AT
-    from verity_flock import ir_lower
-
     out: dict[str, Any] = {}
     for cse in (False, True):
         C = Circuit(cse=cse)
@@ -416,7 +417,7 @@ def _pow2(x: int) -> bool:
     return x > 0 and x & (x - 1) == 0
 
 
-def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], dict[str, int]]:
+def argmax_scan_counts(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], dict[str, int]]:
     """token-select's counts at any V, from builds at consecutive V. Its step counter i is a constant, so a step's select of
     i costs one AND per bit of i that is not constant zero, and the running (best, best_i) are linear forms that grow by one
     term a step, never re-committed: with b = bit_length(V − 2), going from V − 1 to V adds ``alpha + b`` ANDs, the nonzeros'
@@ -425,7 +426,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
     consecutive V given (ValueError naming the first that breaks it); nonzeros are quadratic in V."""
     vs = sorted(builds)
     if len(vs) < 8 or vs != list(range(vs[0], vs[-1] + 1)) or vs[0] < 2:
-        raise ValueError(f"the scan law is read off at least 8 consecutive V >= 2, not {vs[:3]}..")
+        raise ValueError(f"the scan's recurrence is read off at least 8 consecutive V >= 2, not {vs[:3]}..")
     c = {v: builds[v] for v in vs}
     d = lambda v, m: c[v][m] - c[v - 1][m]  # noqa: E731
     v0 = vs[0] + 2
@@ -438,10 +439,10 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
         got = {"ands": d(v, "ands"), "d2nnz": d(v, "nnz_AB") - d(v - 1, "nnz_AB"), "output_copies": d(v, "output_copies"),
                "inputs": d(v, "inputs"), "lookups": d(v, "lookups")}
         if got != want or c[v]["committed"] != c[v]["inputs"] + c[v]["ands"] + c[v]["output_copies"]:
-            raise ValueError(f"the argmax scan law breaks at V = {v}: {got} != {want}")
+            raise ValueError(f"the argmax scan's recurrence breaks at V = {v}: {got} != {want}")
     top = vs[-1]
 
-    def law(V: int) -> dict[str, int]:
+    def counts(V: int) -> dict[str, int]:
         if V < vs[0]:
             raise ValueError(f"V = {V} is below the builds")
         if V <= top:
@@ -456,15 +457,13 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
             r["inputs"] += di
         r["committed"] = r["inputs"] + r["ands"] + r["output_copies"]
         return {m: r[m] for m in METRICS}
-    law.constants = {"alpha": alpha, "beta": beta, "inputs_per_V": di}  # type: ignore[attr-defined]
-    return law
+    counts.constants = {"alpha": alpha, "beta": beta, "inputs_per_V": di}  # type: ignore[attr-defined]
+    return counts
 
 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.protocols.pouw.prover.circuit.plan import record_k
-
     return record_k(epsilon, delta)
 
 
@@ -472,7 +471,7 @@ def _log_comb(n: int, k: int) -> float:
     return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
 
 
-def draw_count(N: int, n: int, K: int, tail: float = float(DELTA)) -> tuple[float, int]:
+def sample_count(N: int, n: int, K: int, tail: float = float(DELTA)) -> tuple[float, int]:
     """A type's units in a uniform K-subset of N units, n of them the type's: ``(mean, q)``, q the least k with P(X > k) <= tail
     (hypergeometric, the upper tail summed term by term from the largest possible count down)."""
     if not 0 <= n <= N or not 0 <= K <= N:
@@ -591,7 +590,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             jobs += [_key(template, params, {"T": T}) for T in attention_t if T <= int(params["BN"])]
         elif template not in EXCLUDED:
             jobs.append(_key(template, params))
-    log(f"stage 1: {len(set(jobs))} small builds")
+    log(f"first pass: {len(set(jobs))} small builds")
     built = run_builds(jobs, n_jobs)
 
     out: dict[tuple, dict[str, Any]] = {}
@@ -630,19 +629,19 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
                 r.update(method="missing", reason=err)
                 continue
             try:
-                law = argmax_scan_law({v: res[v] for v in SCAN_POINTS})
+                scan = argmax_scan_counts({v: res[v] for v in SCAN_POINTS})
             except ValueError as e:
                 r.update(method="missing", reason=str(e))
                 continue
-            check = law(SCAN_CHECK)
+            check = scan(SCAN_CHECK)
             agree = check == _plain(res[SCAN_CHECK])
             V = int(params["V"])
             r.update(method="exact" if V in res else "scan law", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
-                     counts=law(V), law=law.constants, tables=res[SCAN_POINTS[-1]]["tables"],
+                     counts=scan(V), law=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
                      definition=res[SCAN_POINTS[-1]]["definition"],
                      exact_check={"V": SCAN_CHECK, "result": "agrees" if agree else {m: [check[m], res[SCAN_CHECK][m]] for m in METRICS}})
             if not agree:
-                r.update(method="missing", reason=f"the scan law disagrees with the exact build at V = {SCAN_CHECK}")
+                r.update(method="missing", reason=f"the scan's recurrence disagrees with the exact build at V = {SCAN_CHECK}")
         elif template in EXACT_ONLY:
             probe = PROBE[template]
             if probe:
@@ -692,7 +691,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             else:
                 r.update(method="exact", counts=_plain(c), tables=c["tables"], definition=c["definition"])
 
-    log(f"stage 2: {len(exact_jobs)} builds at the census parameters and {len(block_jobs)} attention heads past the first key "
+    log(f"second pass: {len(exact_jobs)} builds at the census parameters and {len(block_jobs)} attention heads past the first key "
         f"block (nonzeros <= {exact_nnz:.2e})")
     big = run_builds([*exact_jobs.values(), *(job for *_, job in block_jobs)], n_jobs)
     checks: dict[tuple, dict[int, tuple[int, dict[str, Any]]]] = {}
@@ -704,8 +703,8 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             r.setdefault("notes", []).append(f"a build past the first key block failed: {[c.get('error') for _, c in by_j.values()]}")
             continue
         r["block_checks"] = {T: {"built": _plain(c)} for T, c in by_j.values()}
-        block_law(r)
-    log("stage 2: done")
+        block_excess(r)
+    log("second pass: done")
     for key, job in exact_jobs.items():
         r, c = out[key], big[job]
         if "error" in c:
@@ -722,7 +721,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
     return out
 
 
-def block_law(r: dict[str, Any]) -> None:
+def block_excess(r: dict[str, Any]) -> None:
     """An attention head's cost past its first key block, from ``r["block_checks"]`` (builds at T = j BN + 16, j in
     :data:`BLOCK_CHECKS`): each metric's excess over the first block's fit is ``lin j + curv j (j − 1) / 2``. A metric with
     ``curv`` 0 is affine in the block count, checked on j = 0, 1, 2; when every metric is, the head is ``affine``. Otherwise
@@ -747,7 +746,8 @@ def block_law(r: dict[str, Any]) -> None:
 
 
 def reuse(path: str) -> dict[tuple, dict[str, Any]]:
-    """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and block laws re-derived."""
+    """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and each attention head's cost past
+    its first key block re-derived."""
     subs = {}
     for s in json.loads(open(path).read())["subcircuits"]:
         s = {k: v for k, v in s.items() if k not in ("per_extra_block", "block_curvature", "notes")}
@@ -755,7 +755,7 @@ def reuse(path: str) -> dict[tuple, dict[str, Any]]:
             s["method"] = "model"
             s["_fit"] = {m: (Fraction(a), Fraction(b)) for m, (a, b) in s["fit"].items()}
             if s.get("block_checks"):
-                block_law(s)
+                block_excess(s)
         subs[_key(s["template"], s["params"])] = s
     return subs
 
@@ -837,7 +837,7 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
                                          "committed": (V - 1) * step["rows"]}
             wk = work(t.template, t.params, t.T["mean"] if t.T else None)
             for gran, n, N, mult in (("vu", t.vus, N_vu, t.per_vu), ("subcircuit", t.vus * t.per_vu, N_sub, 1)):
-                mean, q = draw_count(N, n, K)
+                mean, q = sample_count(N, n, K)
                 g: dict[str, Any] = {"units": n, "population": N, "share": n / N, "sampled_mean": mean, "sampled_q": q,
                                      "ops": None if wk["ops_per_input"] is None else wk["ops_per_input"] * mult,
                                      "bytes": None if wk["bytes_per_input"] is None else wk["bytes_per_input"] * mult}
@@ -881,7 +881,7 @@ SOURCE_MARK = {"registered": "R", "generic": "G", "tree": "T"}
 
 
 def render(inv: Mapping[str, Any]) -> str:
-    lines = [f"# F6 unit costs: K = {inv['K']} draws (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
+    lines = [f"# F6 unit costs: K = {inv['K']} sampled proof blocks (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
              "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
              "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
              "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
@@ -973,8 +973,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--reuse", help="an earlier run's unit-costs.json: take its subcircuit results instead of building")
     ap.add_argument("--retree", help="an earlier run's unit-costs.json: only re-price its samplers at the argmax tree (retree)")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
     if a.retree:
         inv = json.loads(Path(a.retree).read_text())
         inv["retreed"] = a.retree

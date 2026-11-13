@@ -615,16 +615,23 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
 
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
-    which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
-    read that fails, or every node unreachable, is the monitor's error."""
+    which the nodes can't): one incident per node and kind.  A node whose null device isn't the character device 1,3 with mode
+    666 is a page of its own, with the command that repairs it: every redirect to /dev/null fails there for a user who isn't
+    root.  A node ssh can't connect to (a stopped VM) is skipped; any other read that fails, or every node unreachable, is the
+    monitor's error."""
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
+    broken = []
     for n, rep in sorted(reps.items()):
         if "error" in rep:
             continue
+        if null := rep.get("null_device"):
+            broken.append(Finding(f"{n}:null-device", f"*{n}: {null['what']}*. Repair it on the node: `{null['fix']}`.",
+                                  severity="page", cleared=f"*Cleared:* {n}'s null device is the character device 1,3 with "
+                                                           "mode 666 again."))
         for e in rep["entries"]:
             if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
                 groups.setdefault((n, e["state"]), []).append(e["path"])
@@ -632,8 +639,9 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
                 groups.setdefault((n, "restart"), []).append(e["path"])
         for p in rep["strays"]:
             groups.setdefault((n, "stray"), []).append(p)
-    return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
-                    + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
+    return broken + [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
+                             + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".")
+                     for (n, kind), ps in sorted(groups.items())]
 
 
 def asks(ctx: Ctx) -> list[Finding]:
@@ -754,6 +762,16 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     hours = int(behind // 3600)
     return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
                     f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
+
+
+def stranded(ctx: Ctx) -> list[Finding]:
+    """A job waiting in one machine's line while a place that could run it stands free on another, for 10 minutes: a check
+    job rings ci, one incident a job; any other pool infra, one a pool. Then infra's: a pool not read or shut by a disk floor, a
+    line stalled on memory, a wait for a Lean slot, and one incident for every machine whose /etc/vy/peers is missing or short
+    (`research.stranded`)."""
+    from . import stranded as s
+
+    return s.findings(ctx)
 
 
 #: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
@@ -1522,6 +1540,18 @@ MONITORS: list[Monitor] = [
             "infra/control/README.md's watchers steps; one stuck on a run that never ends gives it up an hour past the run's "
             "timeout. The log's `launch:` line is the command, to run a night by hand.",
             every_s=600, for_s=1800, unread_s=3600),
+    Monitor("stranded", "infra", "warn", "relay", stranded,
+            "`research queue stranded --moves` prints each stranded job, the machines with a place for it and its move. A "
+            "check job (ci): launch its shard's twin on the first machine of its move, with the same pair, once every waiter "
+            "carries one. A check job that is the loop's heavy shard (one the loop pins to a machine for its memory) can "
+            "read as stranded, because its ticket records no memory need yet; that is cured in slot.py's asker, ci's. "
+            "A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
+            "pool's machine (its disk floor, or why it can't be read). Stalled: where the pool's slots carry `peaks=`, the "
+            "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
+            "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
+            "`peaks=` on them. Lean: the machine's Lean slots. "
+            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

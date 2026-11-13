@@ -20,19 +20,26 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    period's K), grouped by call: a call's sampled proof blocks are one statement (a ``--registered`` port holds one root).
 2. Each sampled call's ``--registered`` file is credit's own (`credit.registered_file` of the record's entries, the
    window's root, its rounds and its Program salt, `challenger.program_salt_of`), so the statement opens every row where
-   credit's verifier reads it.
+   credit's verifier reads it. Every port of the statement's circuit must be one of its ports (`complete`, the Lean
+   verifier's ``registered reads (complete)``), o0 the unit's receipt among them: the window must register each call's
+   receipt table ``receipt@<c>`` (serve-openai ``--h1-receipts``), else the stage is refused.
 3. The values those ports read are rebuilt as serve-openai committed them (`served.Served.commit`): step s's
    ``a/<K>@<s>`` its calls of K's codes over M slots (`Served.a_words`) at `served.nonce` of its first call, call c's
    ``zy@<c>`` its records (`zy_words`) at c's, both under the prover's key and bound to the window's root, and ``b/<K>``
    K's linears' weight rows (`chunk_words`, from ``--checkpoint``'s safetensors through ``checkpoint_weights``, or
    ``--weights``) at ``B_NONCE`` plus K's place under the auditor's key (``--weights-key``, or the gate's ``model-key
-   --model ROLE --circuit C``; a server with neither kept no key). Each must have credit's root and domain, else the stage
-   is refused; ``pub@<c>`` and ``ok`` are credit's own (`credit.public_table`, `credit.ok_table`).
+   --model ROLE --circuit C``; a server with neither kept no key); then call c's ``receipt@<c>``, each of its units'
+   receipt as J10-R's word reference computes it on those rows (`receipt_table`), at ``RECEIPT_NONCE`` + c under the
+   prover's key. Each must have credit's root and domain, else the stage is refused; ``pub@<c>`` and ``ok`` are credit's
+   own (`credit.public_table`, `credit.ok_table`).
 4. Each call is staged as a shared-row statement (`statement_tables`) on --circuits' ``k<K>`` file, whose SHA-512 must be
    the manifest's (the one the period-open committed), read and never composed (`FileStager`: the K 2048 J10-R
-   composition takes hundreds of GB), each unit's outputs J10-R's word reference's (`h1zy.reference`) and its ok 1.
+   composition takes hundreds of GB), each unit's outputs J10-R's word reference's (`h1zy.reference`), its ok 1 and both
+   outputs the rows the window registered (`outputs_held`), o0 opened at receipt@<c> as ok is at ``ok``.
    ``--recompose`` builds K's flat statement (`stager`, bound to the manifest's bind) instead, its lowered outputs held to
-   the word reference's. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt; W/plan.json lists them.
+   the word reference's and to those rows. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt, and program.json
+   and partition.json, the window Program and `credit.partition_of`'s object credit verifies it under (`bind_files`);
+   W/plan.json lists them.
 
 **The lanes form** (`credit`'s, `leaf_lanes`): at a K --circuits' manifest commits as ``lane<K>`` and ``combine<K>``
 (`credit.form_of`; `pouw_h1_circuits --lanes K`), each sampled proof block is a leaf proved as its (R/4)(C/8) lanes and the combine
@@ -44,19 +51,22 @@ rows) are committed after the sample, ``<prefix>partials@<u>`` under the window'
 (`receipt_value`, `h1zy.reference` of each of the call's units) and held to the root the window registered; each
 statement's ``--registered`` file is credit's own (`credit.leaf_registered_file`), its known rows (``pub``, ``admit`` and
 ``o0``) committed under `leaf_lanes.known_salt`, and its ok the word reference's (`h1zy.lane_reference`,
-`h1zy.combine_reference`), refused unless 1. W/u<unit>-<statement>/ gets each statement's files; W/plan.json lists them
+`h1zy.combine_reference`), refused unless 1. W/u<unit>-<statement>/ gets each statement's files, its program.json and
+partition.json its leaf Program and `credit.leaf_partition_of`'s object (`bind_files`); W/plan.json lists them
 under ``leaves`` beside the record (``produced``) and each leaf Program's descriptor (``leaf_programs``, the manifest's
 ``<file>.program.json``).
 
 ``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
-one session, all its instances sampled), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
+one session, all its instances sampled, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
+statements file: each call's `challenger.statement` (circuit, pub.bin, its
 session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
 with each leaf statement's ``unit`` and ``statement``).
 
 ``check``: credit's own verification of those statements over the window's sampled proof blocks under its sample (``verified``:
 the CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
-`PouwCheck.Verified`) refuses the lanes form until its Lean mirror; this is the Python reference's.
+`PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
+answered as credit asks for it (`answers.Answers`), one ``LEAN-ANSWER`` line a verdict, and judged in credit's order.
 """
 from __future__ import annotations
 
@@ -82,11 +92,12 @@ from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.verifier.one_stage import produced as PR
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, held, leaf_rows,
-                                                     leaf_statement, operands, partials, receipt_value,
-                                                     receipt_words, split_record, split_row)
+from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
+                                                     leaf_rows, leaf_statement, operands, outputs_held, partials,
+                                                     receipt_value, receipt_words, split_record, split_row)
 
 NAME = "unit/pouw-h1-tile"
 RECORD = "h1/w{w}/pouw-h1-calls.json"
@@ -338,7 +349,7 @@ def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[st
               ok: G.Registered) -> dict[str, np.ndarray]:
     """The statement's rows of call `call`'s sampled `units` as `statement_tables` takes them (``w_``, ``s_``, and for a
     registered port ``r_``, ``v_``, ``p_``): each port of credit's file `reg` at the row it reads, from `values` (each
-    value's rebuilt tree), the public table `pub` and the ok rows `ok`; o0's salts fresh (no entry reads it)."""
+    value's rebuilt tree, the call's receipt table among them for o0), the public table `pub` and the ok rows `ok`."""
     ports = reg["ports"]
     u0 = ports[CR.PUB_PORT][G.READS_FROM]
     z: dict[str, Any] = {"units": np.array(units)}
@@ -352,7 +363,6 @@ def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[st
         z[f"r_{port}"] = np.array(at, np.int64)
         z[f"v_{port}"] = np.array([e["value"]] * len(at))
         z[f"p_{port}"] = np.array([src.path(x).hex() for x in at])
-    z["s_o0"] = np.frombuffer(_random(SALT_BYTES * len(units)), np.uint8).reshape(len(units), SALT_BYTES)
     z["u0"] = np.array(u0)
     return z
 
@@ -389,6 +399,32 @@ def reference_check(z: dict, outs: dict, win: dict, k: int, roots: tuple[bytes, 
         bad = np.flatnonzero((np.asarray(outs[p], np.uint16) != want[p]).any(axis=1))
         if bad.size:
             raise Refused(f"unit {int(z['units'][bad[0]])}: the lowered circuit's {p} is not the word reference's")
+
+
+def call_receipts(z: dict, win: dict, k: int, roots: tuple[bytes, bytes],
+                  outputs: Callable = unit_outputs) -> np.ndarray:
+    """The receipts (u16 words, one row a unit) of the units of `z`'s rows: `unit_outputs`' o0, J10-R's word reference,
+    whatever stands in for the staged units' outputs."""
+    return outputs(z, win, k, roots)["o0"]
+
+
+def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: dict[str, G.Registered]) -> G.Registered:
+    """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
+    receipt (`call_receipts` of the unit's A rows, B rows and record at the rows credit's file `reg` reads them, in
+    `values`), at ``RECEIPT_NONCE`` + c under the prover's key `key`, bound to the window's root."""
+    from verity_vllm.protocols.pouw.h1 import registered as NR
+    from verity_vllm.protocols.pouw.h1 import served as SV
+    size = CR.call_work(win["layout"])[call][0]
+    u0 = reg["ports"][CR.PUB_PORT][G.READS_FROM]
+    units = list(range(u0, u0 + size))
+    z: dict[str, Any] = {"units": np.array(units), "u0": np.array(u0), "call": np.array(call)}
+    for port, e in reg["ports"].items():
+        if port not in (CR.PUB_PORT, CR.OK_PORT, CR.RECEIPT_PORT):
+            z[f"w_{port}"] = np.array([values[e["value"]].rows[CC.port_reads(e)[u]] for u in units], np.uint16)
+    roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
+    e = reg["ports"][CR.RECEIPT_PORT]
+    return NR.commit(win["program"], e["value"], call_receipts(z, win, k, roots), key, SV.RECEIPT_NONCE + call,
+                     keep_rows=True, window=win["root"])
 
 
 class FileStager:
@@ -444,6 +480,13 @@ class FileStager:
                  public_words={}, digests=(self.pin, self.class_sha512), indices=[int(u) for u in indices],
                  share_rows=True, tables=tables, refs=refs, registered=registered, meta=self.meta)
         return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
+
+
+def bind_files(d: Path, program: bytes, partition: dict) -> None:
+    """A statement's ``program.json`` and ``partition.json`` in `d`: the Program and partition object credit verifies it
+    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_FIREWALL_HELLO_ARGS``)."""
+    (d / "program.json").write_bytes(program)
+    (d / "partition.json").write_text(json.dumps(partition))
 
 
 # -- the lanes form ---------------------------------------------------------------------------------------------------------
@@ -506,7 +549,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
         for st in LL.statements(*lay["tile"]):
             kind, ln = st
             rows, salts, registered, reg = leaf_statement(win, u, st, x, values, tree, {name: tree.root.hex()}, draw_root)
-            stager, circuit, _desc = stagers[kind]
+            stager, circuit, desc = stagers[kind]
             tag = f"u{u}-{kind}" + ("" if ln is None else str(ln))
             d = work / tag
             got = stager.stage(rows, d, _random(32), salts=salts, indices=[0], set_name=f"pouw-h1-w{a.window}-{tag}",
@@ -515,6 +558,11 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
             (d / "circuit.txt").unlink(missing_ok=True)
             (d / "circuit.txt").symlink_to(circuit)
             (d / "registered.json").write_text(json.dumps(reg))
+            leaf_program, unit_id = bytes.fromhex(desc), CR.leaf_unit_id(win["shape"], k, kind)
+            if unit_id is None:
+                raise Refused(f"K = {k}'s {kind} leaf: the window's template at K is not the zy unit, so credit names no "
+                              "leaf partition to verify it under")
+            bind_files(d, leaf_program, CR.leaf_partition_of(hashlib.sha512(leaf_program).hexdigest(), unit_id))
             plan["leaves"].append({"unit": u, "statement": [kind, ln], "k": k, "dir": str(d.resolve()), "instances": 1,
                                    "circuit": str(circuit), "pin": got["circuit_sha512"]})
         print(f"STAGED leaf {u}: its {LL.lanes(*lay['tile'])} lanes and combine", flush=True)
@@ -566,30 +614,6 @@ def stage(a: Any) -> int:
                           f"its lanes (pouw_h1_circuits --lanes {k})")
         if f"k{k}" not in manifest.get("files", {}):
             raise Refused(f"--circuits has no k{k} file: build it (pouw_h1_circuits --strata {k})")
-        regs = {}
-        for c in calls:
-            reg, why = CR.registered_file(win["program"], lay, win["shape"], c, win["roots"], win["root"], win["steps"],
-                                          win["salt"])
-            if why is not None:
-                raise Refused(f"call {c}: credit builds no registered file: {why[1]}")
-            regs[c] = reg
-            for port, e in reg["ports"].items():
-                v, name = e["value"], e["value"][len(win["shape"]["prefix"]):]
-                if port in (CR.PUB_PORT, CR.OK_PORT) or v in values:
-                    continue
-                if name == f"b/{k}":
-                    b = b or held(b_value(win, k, bkey, a.checkpoint and Path(a.checkpoint), a.weights and Path(a.weights),
-                                          a.checkpoint_weights), e, f"the served weights under {bwhose}")
-                    values[v] = b
-                elif name == f"zy@{c}":
-                    values[v] = held(zy_value(win, prover, pkey, c), e, "the prover's records")
-                elif name.startswith(f"a/{k}@"):
-                    values[v] = held(a_value(win, prover, pkey, c), e, "the prover's A codes")
-                else:
-                    raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn doesn't rebuild (a "
-                                  "receipt table: stage it as the window registered it)")
-        print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
-        from verity.protocols.spot.verifier.one_stage import proofs as PF
         circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
         if a.recompose:
             built = work / f"k{k}.circuit.txt"
@@ -604,6 +628,32 @@ def stage(a: Any) -> int:
             raise Refused(f"K = {k}'s statement circuit (SHA-512 {got[:16]}...) is not --circuits' k{k} file "
                           f"({manifest['files'][f'k{k}'][:16]}...), the one the period-open committed")
         out_ports = [p.name for p in st.ports if p.name not in st.row_ports]
+        regs = {}
+        for c in calls:
+            reg, why = CR.registered_file(win["program"], lay, win["shape"], c, win["roots"], win["root"], win["steps"],
+                                          win["salt"])
+            if why is not None:
+                raise Refused(f"call {c}: credit builds no registered file: {why[1]}")
+            complete([p.name for p in st.ports], reg, c)
+            regs[c] = reg
+            for port, e in reg["ports"].items():
+                v, name = e["value"], e["value"][len(win["shape"]["prefix"]):]
+                if port in (CR.PUB_PORT, CR.OK_PORT, CR.RECEIPT_PORT) or v in values:
+                    continue
+                if name == f"b/{k}":
+                    b = b or held(b_value(win, k, bkey, a.checkpoint and Path(a.checkpoint), a.weights and Path(a.weights),
+                                          a.checkpoint_weights), e, f"the served weights under {bwhose}")
+                    values[v] = b
+                elif name == f"zy@{c}":
+                    values[v] = held(zy_value(win, prover, pkey, c), e, "the prover's records")
+                elif name.startswith(f"a/{k}@"):
+                    values[v] = held(a_value(win, prover, pkey, c), e, "the prover's A codes")
+                else:
+                    raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn doesn't rebuild")
+            e = reg["ports"][CR.RECEIPT_PORT]
+            values[e["value"]] = held(receipt_table(win, pkey, k, c, reg, values), e,
+                                      "the word reference's receipts of the call's units")
+        print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
         for c in calls:
             reg, units = regs[c], drawn[c]
             pv = reg["ports"][CR.PUB_PORT]
@@ -615,9 +665,13 @@ def stage(a: Any) -> int:
             tabs = statement_tables(z, st.row_ports, out_ports)
             roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
             if a.recompose:
-                st.reference_check = lambda _rows, outs, z=z, roots=roots: reference_check(z, outs, win, k, roots)
+                def lowered(_rows: dict, outs: dict, z: dict = z, roots: tuple = roots) -> None:
+                    reference_check(z, outs, win, k, roots)
+                    outputs_held(z, outs)
+                st.reference_check = lowered
             else:
                 st.outs = unit_outputs(z, win, k, roots)
+                outputs_held(z, st.outs)
             d = work / f"c{c}"
             got = st.stage({p: z[f"w_{p}"] for p in st.row_ports}, d, _random(32), salts=tabs["salts"],
                            indices=units, set_name=f"pouw-h1-w{a.window}-c{c}", tables=tabs["tables"], refs=tabs["refs"],
@@ -626,6 +680,7 @@ def stage(a: Any) -> int:
             (d / "circuit.txt").unlink(missing_ok=True)
             (d / "circuit.txt").symlink_to(circuit)
             (d / "registered.json").write_text(json.dumps(reg))
+            bind_files(d, win["raw"], CR.partition_of(win["program"], win["shape"]))
             plan["calls"].append({"call": c, "k": k, "dir": str(d.resolve()), "units": units, "instances": len(units),
                                   "circuit": str(circuit), "pin": got["circuit_sha512"]})
             print(f"STAGED call {c}: units {units}", flush=True)
@@ -672,8 +727,7 @@ def check(a: Any) -> int:
         raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
     win = window_of(serve_dir, a.window)
-    k = draw_k(serve_dir, a.k)
-    drawn = drawn_calls(win, k)
+    drawn = drawn_calls(win, draw_k(serve_dir, a.k))
     units = sorted(u for us in drawn.values() for u in us)
     files = json.loads((Path(a.circuits) / MANIFEST).read_text())["files"]
     sts = json.loads(Path(a.statements).read_text())

@@ -12,10 +12,10 @@ stack, and the challenge round trips, so the fill time and the challenger's GPU 
   loopback when perftest is installed.  Between the nodes only TCP 22 passes, so no inter-node stream is measured.
 - `rtt`: a prover process holding `2^28` labels (16 GiB, dumped by the GPU) in memory answers `k = 74,000` challenges
   over loopback TCP at batch sizes 1 (the sequential reveal the guarantee covers) to 74,000, every answer checked.
-- `session`: one whole session of the reference (`streamed_wipe.Challenger`, test signer) against the honest prover in its
-  own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed, and judged by
-  `wipe_verdict.judge` (the Lean verdict, `streamed-wipe-verdict`, unless `--verdict` says otherwise), each side's verdict
-  recorded.
+- `session`: one whole session of the reference (`streamed_wipe.WipeMemoryChallenger`, test signer) against the honest
+  prover in its own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed, and
+  judged by `wipe_verdict.judge` (the Lean verdict, `streamed-wipe-verdict`, unless `--verdict` says otherwise), each
+  side's verdict recorded.
 """
 
 from __future__ import annotations
@@ -297,7 +297,7 @@ def session(port: int, verdict: str) -> dict:
     params = sw.WipeParams(n, k, 1, 50_000_000, (("host-dram", n * sw.LABEL_BYTES),))
     with tempfile.TemporaryDirectory(prefix="streamed-wipe-bench-") as scratch:
         signer = ts.TestSigner(b"streamed-wipe bench", height=2, directory=scratch)
-        c = sw.Challenger(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
+        c = sw.WipeMemoryChallenger(SECRET, SERVER, SESSION, params, signer, log=ts.session_log(scratch))
         prover = _spawn_prover(port, labels=n)
         s = _connect(port)
         try:

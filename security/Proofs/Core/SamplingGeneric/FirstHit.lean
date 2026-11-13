@@ -2,6 +2,7 @@ module
 
 public import Definitions.Core.Interaction
 public import Definitions.Core.Rewinding
+public import Definitions.Core.FirstHit
 public import Proofs.Flock.Claims.Prob
 
 /-!
@@ -67,6 +68,9 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
 `finder`, `tapeFinder`, `sampleFinder` and `sampleFinderAt` take their output `out` as a function of the whole seed
 and charge the runs the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those
 runs, as `outOf` and `outOfAt` do (`le_loopCost`, `le_loopCostOn`, `le_loopCostAt`).
+
+`firstIdx`, `loopCostAt`, `sampleFinderAt` and `outOfAt` are defined in `Definitions.Core.FirstHit`: a guarantee that
+takes `ExpectedCR` at a first-hit finder names them in its statement.
 -/
 
 @[expose] public section
@@ -666,11 +670,6 @@ theorem pr_off_le_of_forall_expectedCR [Fintype Ω] [Nonempty Ω] [Fintype P] [D
   linarith
 
 /-! ## The pair the finder outputs, from the runs it is charged for -/
-
-/-- **The first tape that opens `p`**, of the tapes `ρ 0, ρ 1, …`. -/
-def firstIdx (op : Ω → P → Option V) (p : P) : (K : ℕ) → (Fin K → Ω) → Option (Fin K)
-  | 0, _ => none
-  | K + 1, ρ => if (op (ρ 0) p).isSome then some 0 else (firstIdx op p K fun i => ρ i.succ).map Fin.succ
 
 /-- The first hit is the opening of the first tape that opens the node. -/
 theorem firstIdx_of_firstHit (op : Ω → P → Option V) (p : P) {w : V} :
@@ -1308,15 +1307,6 @@ nodes `J` of those still waited for: a run, read only where it opens nodes of `J
 then at most `E[c + Σ_{p ∈ sample} c₁(·, p)]`: the first run, read whole, and a further run by the nodes of its
 sample. `loopCostOn` is this at `c₂ ω J = c ω` where `J` is nonempty and `c₁ ω p = c ω`. -/
 
-/-- **The further runs' calls, by position**: a further tape's, at the nodes of `need` that its sample holds and that
-have not been opened again. -/
-def loopCostAt (op : Ω → P → Option V) (chk : Ω → P → Bool) (c₂ : Ω → Finset P → ℕ) :
-    (K : ℕ) → Finset P → (Fin K → Ω) → ℕ
-  | 0, _, _ => 0
-  | K + 1, need, ρ =>
-    c₂ (ρ 0) (need.filter fun p => chk (ρ 0) p) +
-      loopCostAt op chk c₂ K (need.filter fun p => (op (ρ 0) p).isNone) fun i => ρ i.succ
-
 /-- The further runs cost at most what waiting for each node of `need` costs, counting for a node the tapes whose
 sample holds it, each at what that node costs there. -/
 theorem loopCostAt_le (op : Ω → P → Option V) (chk : Ω → P → Bool) (c₂ : Ω → Finset P → ℕ) (c₁ : Ω → P → ℕ)
@@ -1470,17 +1460,6 @@ theorem ex_costAt_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [
           ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) :=
         (ex_tape fun t ω => ((c t ω + ∑ p ∈ univ.filter (fun p : P => chk t ω p), c₁ t ω p : ℕ) : ℝ)).symm
 
-/-- **The first-hit finder that pays by position**, with the kept part in its seed: the seed and the output are
-`sampleFinder`'s; its cost is the first run's calls and, at each further run, what the nodes still waited for that its
-sample holds cost there (`c₂`). -/
-noncomputable def sampleFinderAt {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
-    (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (c₂ : T → Ω → Finset P → ℕ) (K : ℕ)
-    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) : Finder where
-  S := T × (Ω × (Fin K → Ω))
-  out := out
-  cost q :=
-    c q.1 q.2.1 + loopCostAt (op q.1) (chk q.1) (c₂ q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2
-
 /-- **The by-position finder's expected calls**: at most `E[c + Σ_{p ∈ sample} c₁(·, p)]`, whatever it outputs and
 whatever its cap. -/
 theorem ex_cost_sampleFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
@@ -1491,17 +1470,6 @@ theorem ex_cost_sampleFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype �
       Ex (fun q : T × Ω =>
         ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) :=
   ex_costAt_tape_le_ex op chk c c₂ c₁ hsub K
-
-open Classical in
-/-- **The pair the by-position finder outputs**, from `coll`, which reads two runs' tapes and a node: `coll` at the
-first run, a further run that is the first to open some node the first run opened, and that node, where that is a
-pair. What it reads of the further run is what that node costs there, which the loop charges (`le_loopCostAt`). -/
-noncomputable def outOfAt (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
-    (ρ : Fin K → Ω) : Option (Msg × Msg) :=
-  if h : ∃ jp : Fin K × P, ((op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1) ∧
-      (coll ω (ρ jp.1) jp.2).isSome then
-    coll ω (ρ h.choose.1) h.choose.2
-  else none
 
 /-- When `coll` outputs a pair at two runs and a node they open to two values, and only collisions of `H`, the
 by-position finder outputs a collision of `H` whenever it finds a pair. -/

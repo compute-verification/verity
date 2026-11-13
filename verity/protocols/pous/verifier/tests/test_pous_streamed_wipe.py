@@ -32,13 +32,14 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
-               server: bytes = SERVER) -> sw.Challenger:
-    return sw.Challenger(SECRET, server, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
-                         log=log or ts.session_log(), clock=clock or Clock(1_000_000), coin_secret=b"coins",
-                         mark_source=mark_source)
+               server: bytes = SERVER) -> sw.WipeMemoryChallenger:
+    return sw.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
+                                   signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
+                                   clock=clock or Clock(1_000_000), coin_secret=b"coins", mark_source=mark_source)
 
 
-def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lambda b: 20_000) -> sw.SignedWipe:
+def run(c: sw.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
+        spend=lambda b: 20_000) -> sw.SignedWipe:
     prover = sw.Prover(c.params)
     for start, data in c.fill(100):
         prover.receive(start, data)
@@ -146,12 +147,12 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-DEFAULT_CLOCK = sw.Challenger.__init__.__kwdefaults__["clock"]
-"""`Challenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
+DEFAULT_CLOCK = sw.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
+"""`WipeMemoryChallenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
 
 
 def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypatch):
-    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `Challenger`, of the
+    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `WipeMemoryChallenger`, of the
     wipe's party and of an in-process wipe, and a challenger on it is refused where that clock ticks too coarsely."""
     asked = []
     monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
@@ -181,7 +182,7 @@ class Reads:
         return self.now
 
 
-def stream(c: sw.Challenger, how: str, sent: list) -> None:
+def stream(c: sw.WipeMemoryChallenger, how: str, sent: list) -> None:
     """The whole fill, by `fill` or by `fill_by`, each thing streamed noted in `sent`."""
     if how == "fill":
         for first, _ in c.fill(100):
@@ -473,17 +474,18 @@ def least_reads(r: int) -> int:
 
 
 def test_h200_at_5GB() -> None:
-    """`StreamedWipeMeets141GB5`: at 141·10^9 bytes with 2.3 GB of driver reserve, `r = 59` is the least ratio whose
-    threshold is at most 5 GB, `k = 5231` the least read count for it, and the threshold `39,721,768,854` bits; the
-    family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
-    n, reserve, cap = 2_203_125_000, 23 * 10**8 * 8, 5 * 10**9 * 8
-    assert least_reads(59) == 5231 and least_reads(24) == 2101
-    assert reads_threshold(n, 59, 5231, reserve) == 39_721_768_854 <= cap
-    assert reads_threshold(n, 59, 5231) == 21_321_768_854 <= cap - reserve
-    assert reads_threshold(n, 58, least_reads(58), reserve) > cap
+    """`StreamedWipeMeetsH200`: an H200 of 141 GiB (151,397,597,184 bytes) filled whole, `R = 0`: `r = 33` is the least
+    ratio whose threshold is at most 5 GB, `k = 2906` the least read count for it, and the threshold `39,068,035,213`
+    bits; the family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
+    device, cap = 141 << 30, 5 * 10**9 * 8
+    n = device // sw.LABEL_BYTES
+    assert device == 151_397_597_184 and n * sw.LABEL_BYTES == device and n == 2_365_587_456
+    assert least_reads(33) == 2906 and least_reads(32) == 2817 and least_reads(24) == 2101
+    assert reads_threshold(n, 33, 2906) == 39_068_035_213 <= cap
+    assert reads_threshold(n, 32, least_reads(32)) == 40_214_986_381 > cap
     assert reads_threshold(n, 24, 2152) == sw.LABEL_BITS * (-(-n // 24) - 1) + n + 141
-    q, _ = sw.retained_bits(n, 5231, n * sw.LABEL_BITS + reserve, 0, -128)
-    assert q <= reads_threshold(n, 59, 5231, reserve)  # the exact count needs less
+    q, _ = sw.retained_bits(n, 2906, n * sw.LABEL_BITS, 0, -128)
+    assert q <= reads_threshold(n, 33, 2906)  # the exact count needs less
 
 
 def log2_floor(x: int) -> int:

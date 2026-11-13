@@ -6,9 +6,10 @@ record's fields and the fill's times integers of either sign, a start mark empty
 exactly the canonical JSON of what it decodes to. Past decoding every reference is the Python's own function on the
 decoded objects.
 
-Sessions are run by `streamed_wipe.Challenger` itself against `streamed_wipe.Prover`, on an injected clock, with a mark
-source that returns the start certificate a test gives or with none, and signed by a test signer's key at a leaf the test
-picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`). No real key is read."""
+Sessions are run by `streamed_wipe.WipeMemoryChallenger` itself against `streamed_wipe.Prover`, on an injected clock,
+with a mark source that returns the start certificate a test gives or with none, and signed by a test signer's key at a
+leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`). No real key is
+read."""
 
 from __future__ import annotations
 
@@ -111,12 +112,12 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
         start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(),
         coins: bytes = b"coins", certificate: bytes | None = None) -> Session:
-    """One session of `Challenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and the batches in
-    `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
+    """One session of `WipeMemoryChallenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
+    the batches in `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
     and the session signs its SHA-512 as its start mark; with none the mark is empty."""
     clock = M.Clock(start)
-    c = sw.Challenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock, coin_secret=coins,
-                      mark_source=None if certificate is None else lambda m: certificate)
+    c = sw.WipeMemoryChallenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+                                coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
     prover = sw.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         prover.receive(first, data)

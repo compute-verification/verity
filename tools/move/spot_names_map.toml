@@ -1,0 +1,51 @@
+# SPOT's code names: what `tools/move/rename.py --map tools/move/spot_names_map.toml` renames, the sampled proof system's
+# older name in paths, Python and Lean (GLOSSARY.md, Older names; `tests/test_retired_terms.py`'s `SPOT_NAMES` holds what
+# is left from growing). `sampled_proofs` becomes `spot` in paths and Python names, so the package
+# `verity.core.protocols.sampled_proofs` becomes `verity.core.protocols.spot` and the Lake package `core_sampled_proofs`
+# becomes `core_spot`; `SampledProofs` becomes `Spot` in Lean's modules, namespaces and names. The prose's words are
+# `spot_term_map.toml`'s.
+#
+# The protocol's id keeps its name until a format version: `sampled-proofs`, in its protocol entries
+# (`sampled-proofs:rows-sha512`, which a recorded `TargetProfile`'s digest hashes), its record, component and executable
+# names, and the ids under `verity/sampled-proofs/` (with the constants `SAMPLED_PROOFS` and `SAMPLED_PROOFS_V1` that
+# hold one). No word here spells it, and [keep] holds the ids.
+#
+# It renames declarations the Lean locks record (`Properties.SampledProofs.SecurityProofs.*` among them): their records
+# follow in a commit of their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
+
+[words]
+"SampledProofs" = "Spot"
+"sampled_proofs" = "spot"
+
+# The lowerCamel theorems, whole: `spot` and `SPOT` already stand as words elsewhere, so only whole names are new.
+[[words_in]]
+files = ["*"]
+[words_in.words]
+"sampledProofsRecursive" = "spotRecursive"
+"sampledProofsRecursive_at" = "spotRecursive_at"
+"sampledProofsRecursive_honest" = "spotRecursive_honest"
+"sampledProofsRecursive_nontrivial" = "spotRecursive_nontrivial"
+"sampledProofsRecursive_of_ks" = "spotRecursive_of_ks"
+"sampledProofsSound_of" = "spotSound_of"
+"sampledProofsSound_of_honest" = "spotSound_of_honest"
+"sampledProofsSound_of_nontrivial" = "spotSound_of_nontrivial"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
+# of older names, the retired-terms lint's own examples, the frozen backends, files whose bytes a digest pins
+# (`rename.py` repins a `TRUSTED.sha256` line itself), move_check's own tests, and the Lean tools' fixtures, locks as
+# they were on a past tree, which their tests read as such. The root `uv.lock` is rewritten: its one line naming
+# `verity/core/service/sampled_proofs`, a workspace member's directory, moves with it (`uv lock` refuses a lock whose
+# member moved).
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "benchmarks/**/uv.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+# The ids above; `served_verdicts.py`'s `a.sampled_proofs`, argparse's attribute of its `--sampled-proofs` flag, which
+# keeps the protocol id's spelling; and the two-stage vectors' exporter's docstring, which keeps its text as it moves:
+# `exfiltration_two_lean.json` pins its digest, which only `generate.sh` rewrites.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+', '\ba\.sampled_proofs\b',
+            'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage']
+strings = []

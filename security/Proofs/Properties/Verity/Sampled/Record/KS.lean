@@ -45,8 +45,9 @@ theorem record_binds (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A
 
 set_option synthInstance.maxSize 1024 in
 /-- **Knowledge soundness at the record**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's reads, as
-`sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeOk`) and a reference
-draw file (`RefOk`), the record's compiled sampled verifier is knowledge sound (`SamplingDeploy.ks_compiled`). -/
+`sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeOk`), a reference
+draw file (`RefOk`) and equal roots at the leaf map having one domain (`hroots`), the record's compiled sampled
+verifier is knowledge sound (`SamplingDeploy.ks_compiled`). -/
 theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
@@ -55,13 +56,13 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     (hpart : A.I.partition = some p.own.partition)
     (hidx : _root_.Spot.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
-    (href : ∃ d, RefOk A o d) :
+    (href : ∃ d, RefOk A o d) (hroots : Flock.Bridge.RootFixesDomainL A.D.unroll A.Lm) :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
       (fun _ _ _ => A.roots)).KS sha512Msg :=
   SamplingDeploy.ks_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code A o e)
     (fun _ _ _ => A.roots) sha512Msg FlockDeploy.KS.zk_KS_untrim (Claims.Sampling.listWithin_deployZk _)
     (record_binds A o e hv2) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope) (interiorFixed A o e)
     (drawFixed A o e) (sessionRuns A o e) (innerNumbers e href)
-    (sessionOpens A o e hsu hn hpl hrd hpart hidx (record_commit A o e hv2) he _)
+    (sessionOpens A o e hsu hn hpl hrd hpart hidx (record_commit A o e hv2) he hroots _)
 
 end Verity.Sampled.Record

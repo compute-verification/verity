@@ -1,4 +1,4 @@
-description = "one-sided everywhere, no U: adopted-bd-lm with the linears' and lm_head's weights and Q rounded on +-127, only the activations and K dithered (the record's sides without its U and +-63 caps); P V as in adopted-bd-lm"
+description = "one-sided everywhere, no U: adopted-bd-lm with the linears' and lm_head's weights and Q rounded on +-127, only the activations and K dithered (the record's sides without its U and +-63 limits); P V as in adopted-bd-lm"
 
 [[linear]]
 step = "smooth"

@@ -509,7 +509,7 @@ def MemberFits (ci : _root_.Flock.Circuit × Array ℕ) : Prop :=
 
 /-- **The replay layout fills the members' files**: each unit `x` of each member `t` is in some request slot `ρ`'s run,
 `ρ·n_t` to `(ρ + 1)·n_t`. -/
-def FilesFill (ns : Array ℕ) (l : Spot.Slots.Layout) : Prop :=
+def FilesFill (ns : Array ℕ) (l : Spot.Slots.SlotOrder) : Prop :=
   ∀ t (ht : t < ms.length), ∀ x < ms[t].2.size, ∃ ρ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ ∧
     ρ * ns.getD t 0 ≤ x ∧ x < (ρ + 1) * ns.getD t 0
 
@@ -517,7 +517,7 @@ def FilesFill (ns : Array ℕ) (l : Spot.Slots.Layout) : Prop :=
 
 section files
 
-variable {ns : Array ℕ} {l : Spot.Slots.Layout}
+variable {ns : Array ℕ} {l : Spot.Slots.SlotOrder}
 
 theorem nodup_slotFiles (hfit : FilesFit ms ns l) (ρ : ℕ) : (slotFiles ms ns l ρ).Nodup := by
   unfold slotFiles
@@ -620,7 +620,7 @@ theorem scopeOk_complete {C : Prog} {Pt : Partition} {d : Design.Two} (htopo : C
 /-- **`scopeOk` accepts the members**, their proof blocks and their replay partition, for members that fit
 (`MemberFits`), a replay layout that fits and fills their files (`FilesFit`, `FilesFill`), a well-formed first-stage
 design and a second-stage count of at least `1` for each member. -/
-theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.Layout} {d : Design} {k : List ℕ}
+theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.SlotOrder} {d : Design} {k : List ℕ}
     (hm : ∀ ci ∈ ms, Flock.Bridge.Members.MemberFits ci) (hfit : Flock.Bridge.Members.FilesFit ms ns l)
     (hfill : Flock.Bridge.Members.FilesFill ms ns l) (hd : d.WellFormed (filesReplay ms ns l))
     (hk : k.length = ms.length) (hk1 : ∀ x ∈ k, 1 ≤ x) :
@@ -640,7 +640,7 @@ theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slot
 /-- **`two` returns the members' replay design** for members that fit, a replay layout that fits (`filesOk`) and fills
 their files, a well-formed first-stage design, second-stage counts of at least `1`, one for each member, and templates
 whose reference statements each read as a member's (`templateOk`). -/
-theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
+theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)
@@ -651,7 +651,7 @@ theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.Layou
   rw [hl, hd]
   simpa [hs, hf] using ht
 
-theorem isSome_two (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
+theorem isSome_two (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)

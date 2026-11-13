@@ -14,13 +14,13 @@ from types import ModuleType
 
 import pytest
 
+from verity.protocols.poub.verifier import p2, p2_case, p2_party
+from verity.protocols.poub.verifier import period as P
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period as pous
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.poub.verifier import p2, p2_case, p2_party
-from verity.protocols.poub.verifier import period as P
 
 HERE = Path(__file__).resolve().parent
 SIGNER = Path(__file__).resolve().parents[5] / "verity/protocols/pous/verifier/tests/pous_test_signer.py"
@@ -58,14 +58,14 @@ def _entropy(label: bytes):
     """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
     count = 0
 
-    def draw(n: int) -> bytes:
+    def take(n: int) -> bytes:
         nonlocal count
         out = b""
         while len(out) < n:
             out += hashlib.sha512(label + count.to_bytes(8, "big")).digest()
             count += 1
         return out[:n]
-    return draw
+    return take
 
 
 def _committed() -> p2.Store:
@@ -100,10 +100,10 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     store = _committed()
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    held = pous.Store(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt), store.blocks,
-                      b"".join(mc.block_digest(b) for b in store.blocks),
-                      pous.setup_case(q, reg.commitment, reg.salt,
-                                      [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
+    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+                             store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
+                             pous.setup_case(q, reg.commitment, reg.salt,
+                                             [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
     space = pous.audit("n0", held, COINS, **kw)
     other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)

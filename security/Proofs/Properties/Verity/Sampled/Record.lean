@@ -91,7 +91,7 @@ def drawBytes (cs : List FlockDeploy.Coin) : ByteArray := ⟨(cs.flatMap FlockDe
 /-- **The units the coins' bytes `src` draw** under the session's law over its population, as v2's challenger draw
 reads them (`Spot.Draw.drawUnits`); a draw that fails draws every unit (`Live.L`). -/
 def drawn (A : Live) (src : ByteArray) : List ℕ :=
-  match _root_.Spot.Draw.drawUnits A.law A.n src with
+  match _root_.Spot.Draw.drawUnits A.design A.n src with
   | .ok (d, _) => d.toList
   | .error _ => List.range A.n
 
@@ -173,7 +173,7 @@ noncomputable def sessionOf (A : Live) (o : Own) (v : Seen) : Msg × Seen :=
 
 /-- The statement's audit statement: V5's at the session (`Live.extract`'s). -/
 noncomputable def stmtA (A : Live) : AuditStatement :=
-  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩ A.roots
+  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots
 
 /-- The statement's partition: V5's at the session's population. -/
 noncomputable def partA (A : Live) : Claims.Sampling.Partition :=
@@ -189,7 +189,7 @@ noncomputable def partSlots (A : Live) : Claims.Sampling.Partition :=
 
 /-- **v2's design** (`slotDesign`'s two rules): the law's one-stage rule over the population, then every input slot. -/
 def designSlots (A : Live) : Claims.Sampling.Design :=
-  ⟨[_root_.Properties.Spot.oneStageOf A.law, .all]⟩
+  ⟨[_root_.Properties.Spot.oneStageOf A.design, .all]⟩
 
 /-- The statement's audit statement at v2's design. -/
 noncomputable def stmtSlots (A : Live) : AuditStatement := { stmtA A with design := designSlots A }
@@ -207,7 +207,7 @@ the lowered program, and the law's one-stage rule is well formed over the popula
 `all`, is well formed at every class. -/
 def ScopeSlotsOk (A : Live) : Prop :=
   (partSlots A).Partitions (stmtSlots A).prog ∧
-    (_root_.Properties.Spot.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+    (_root_.Properties.Spot.oneStageOf A.design).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **What the record takes as given**: what a session's Flock witness reveals and how many openings at most
 (`reveal`, `reveals`), and the reference prover's framing (`step`, `reads`, `wit`). -/

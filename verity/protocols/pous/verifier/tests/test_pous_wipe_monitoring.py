@@ -2,7 +2,8 @@
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
 meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
-egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing."""
+egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the
+periods are the reporting grid's `PERIODS`."""
 
 from __future__ import annotations
 
@@ -87,6 +88,10 @@ def test_the_cadence_is_a_parameter(counted):
     assert [half[n]["wipes"] for n in ("week", "month", "year")] == [28, 120, 1460]
     rare = WM.table(counted, 2, 30 * 86400)["periods"]
     assert "doesn't fit a week" in rare["week"]["why"] and rare["month"]["wipes"] == 2
+
+
+def test_the_periods_are_the_reporting_grids():
+    assert WM.PERIODS is reporting.PERIODS
 
 
 def test_the_table_pools_at_the_answers_eps(counted):

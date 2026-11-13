@@ -1,4 +1,4 @@
-"""pipes.cu's verdict from a run's rows.jsonl: whether sm_120 runs each lane opcode the coverage table places on alu or
+"""pipes.cu's verdict from a run's rows.jsonl: whether sm_120 runs each lane opcode the opcode table places on alu or
 sfu (machine_model/data/cover/rows.toml) within that pipe's ρ, alone and beside the pipe's own partner.
 
     python3 pipes_verdict.py OUT/rows.jsonl
@@ -45,7 +45,7 @@ def verdict(rows: dict[str, dict]) -> tuple[bool, list[str]]:
             failed.append(f"no row for {name}")
         return rows.get(name)
 
-    for name, cap, pipe, mix in [(n, ALU, "alu", "lop3") for n in ON_ALU] + [(n, XU, "sfu", "mufu") for n in ON_XU]:
+    for name, rho, pipe, mix in [(n, ALU, "alu", "lop3") for n in ON_ALU] + [(n, XU, "sfu", "mufu") for n in ON_XU]:
         alone, beside = need(name), need(f"mix_{name}_{mix}")
         if alone is None or beside is None:
             continue
@@ -55,10 +55,10 @@ def verdict(rows: dict[str, dict]) -> tuple[bool, list[str]]:
         pair = sum(bx.values()) + bp
         what = "+".join(own)
         said.append(f"{what} {x:.4f} alone, {sum(bx.values()):.4f} + {bp:.4f} = {pair:.4f} beside {mix.upper()}")
-        if x > cap * SLACK:
-            failed.append(f"{what} alone {x:.4f} > {pipe}'s {cap:g}")
-        if pair > cap * SLACK:
-            failed.append(f"{what} beside {mix.upper()} {pair:.4f} > {pipe}'s {cap:g}")
+        if x > rho * SLACK:
+            failed.append(f"{what} alone {x:.4f} > {pipe}'s {rho:g}")
+        if pair > rho * SLACK:
+            failed.append(f"{what} beside {mix.upper()} {pair:.4f} > {pipe}'s {rho:g}")
 
     alone, beside = need("bar_or"), need("mix_bar_or_lop3")
     if alone is not None and beside is not None:

@@ -10,15 +10,15 @@ import functools
 import hashlib
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, schedule
 from verity.protocols.poub.verifier.audit import AuditRun, Params
 from verity.protocols.poub.verifier.receipts import Plan
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 8
-CAP = 256
+SCHEDULE_CAP = 256
 """The cap on its schedule's bits that a test session commits before its coins (`Params.schedule_cap`): above
 `HONEST_SCHEDULE`'s 200, so a ledger crediting the schedule's own bits instead would show."""
 NODE = b"node-under-test"
@@ -60,11 +60,11 @@ class Run:
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
-    parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
+    parameters commit `schedule_cap` (`SCHEDULE_CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
-                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = CAP) -> None:
+                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = SCHEDULE_CAP) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred,
@@ -128,14 +128,14 @@ class Run:
         self.clock.now = self.s.deadline(len(self.s.windows) - 1) + 1
         out = []
         for t in range(self.p.windows):
-            draws = self.s.close(t)
-            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in draws]))
+            sampled = self.s.close(t)
+            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in sampled]))
             if not out[-1].accepted:
                 break
         return out
 
 
-def honest_session(schedule_cap: int | None = CAP) -> Run:
+def honest_session(schedule_cap: int | None = SCHEDULE_CAP) -> Run:
     """Window 0: a pass over the registered store; 4 pages appended (8 … 11) and read; one of them and a registered
     block released and dropped from the plan.  Window 1: 2 more pages (12, 13) read with the rest, then a pass sent
     whole."""
@@ -215,7 +215,8 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
     assert none.steering is None and none.to_json()["steering_bits"] is None
     held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096), schedule=scheduled)
-    assert HONEST_SCHEDULE.bits == 200 and held.steering == scheduled.cap == CAP == held.to_json()["steering_bits"]
+    assert HONEST_SCHEDULE.bits == 200
+    assert held.steering == scheduled.cap == SCHEDULE_CAP == held.to_json()["steering_bits"]
     assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
     assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
     assert held.sample == none.sample and held.counting == none.counting
@@ -233,7 +234,7 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 class Link:
     """A requirement link that holds or not, the circuit reading `reads[step]` bits from complete blocks at a step
     (none otherwise), its memory-map unit's verdict `maps` on the records it is asked about, each kept in `asked`, and
-    its units' draw leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
+    its units' sample leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
     holds: bool
     reads: dict
     maps: object = True
@@ -561,7 +562,7 @@ def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_ste
 
 
 def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
-    """The plan and memory-map units are sampled: a link whose draw leaves ε of its credit unproved, except with δ,
+    """The plan and memory-map units are sampled: a link whose sample leaves ε of its credit unproved, except with δ,
     credits 1 − ε of the session's linked credit, 37 blocks (each plan read whole, less its uncredited post-seed
     blocks), and each window its own (23 and 14) less ε of the session's,
     since all of the unproved share may be one window's.  Its δ adds to both readings' error, which is otherwise every
@@ -672,24 +673,24 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     decode.  A registered block's opening with a digest is malformed."""
     r = honest_session()
     r.clock.now = r.s.deadline(1) + 1
-    draws = r.s.close(0)
-    n = next(n for n, (i, q) in enumerate(draws) if (r.passes[0, i].plan.block(q) >= N) == appended)
-    opened = [r.prover.open(r.passes[0, i], q) for i, q in draws]
+    sampled = r.s.close(0)
+    n = next(n for n, (i, q) in enumerate(sampled) if (r.passes[0, i].plan.block(q) >= N) == appended)
+    opened = [r.prover.open(r.passes[0, i], q) for i, q in sampled]
     opened[n] = dataclasses.replace(opened[n], digest=digest)
-    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
+    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, sampled[n])
 
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
 def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
-    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose samples are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""
     r = Run(store(), windows=1)
     assert r.run() is None
     r.boundary()
     r.clock.now = r.s.deadline(0) + 1
-    draws = r.s.close(0)
-    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    sampled = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in sampled][:opened]
     r.s.windows[0].draws = ()
     assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
 

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+__all__ = ["check"]
+
 
 def check(d: Path) -> dict:
     meta = json.loads((d / "meta.json").read_text())

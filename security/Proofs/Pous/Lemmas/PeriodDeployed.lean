@@ -38,8 +38,8 @@ the deployed budget (each answer is a lookup, no query, and the state is `C`'s `
 every tick), and the instantiation (`Instantiates`) holds (the code's sample never fails, and a lookup returns the
 challenged block of `C`); the certificate `HONEST_S` is positive and fits `S₀` beside the device's on-chip state and its
 side channel's capacity over a round; and the budget is the deadline's at the measured floor:
-`DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds taking at least 1.995 × `LIMIT_NS` at `ROUND_NS`. `CoinCommitHides`
-and `P2RingAuditSecure` are a named assumption and an open conjecture, not facts of the instance. -/
+`DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds taking at least 1.995 × `LIMIT_NS` at `ROUND_NS`.
+`P2RingAuditSecure` is an open conjecture, not a fact of the instance. -/
 def PeriodHeldHonest : Prop :=
   (∀ P : Audits Unit Unit, P.sid.size = 32 →
       DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy) ∧

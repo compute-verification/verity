@@ -1,5 +1,6 @@
 """Route `subset`: train the parameters `trainable` names (comma-separated patterns over the start's parameter names,
-fnmatch, `blocks.5.*,norm`), the rest frozen.
+fnmatch, `blocks.5.*,norm`), the rest frozen. The forward runs under bf16 autocast on every device, so a job on a CPU
+runs the program a job on a GPU does.
 
 - `opt`: the optimizer. Four train every one of them, the embedding included, under `weight_decay`: `adamw` (betas
   0.9, 0.95), `sgd` (torch's, Nesterov momentum 0.9, its decay added to the gradient), `lion` and `adafactor`
@@ -141,7 +142,7 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
         for g in o.param_groups:
             g["lr"] = g.get("initial_lr", dials["lr"]) * schedule(dials, t, n)
     for x in rows.chunk(dials["micro_batches"]):
-        with torch.autocast(x.device.type, dtype=torch.bfloat16, enabled=x.device.type == "cuda"):
+        with torch.autocast(x.device.type, dtype=torch.bfloat16):
             logits = model(x[:, :-1])
         loss = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
         (loss * (len(x) / len(rows))).backward()

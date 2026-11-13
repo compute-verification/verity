@@ -32,4 +32,6 @@ inputs = [
     "adapters/vllm/verity_vllm/engine/step_trace.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
+    # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
+    "adapters/vllm/verity_vllm/settings.py",
 ]

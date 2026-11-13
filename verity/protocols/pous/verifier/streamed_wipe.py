@@ -97,7 +97,7 @@ DEPLOYED_K = 74_000
 
 
 def raw_clock_ns() -> int:
-    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `Challenger` reads unless a clock is injected."""
+    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryChallenger` reads unless a clock is injected."""
     return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
 
 
@@ -292,10 +292,10 @@ def end_message(signed: SignedWipe) -> bytes:
     return _sha512(END_TAG, len(m).to_bytes(8, "big"), m, len(signed.signature).to_bytes(8, "big"), signed.signature)
 
 
-class Challenger:
-    """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
-    into `log` before anything else.  `coin_secret` is sampled from the OS when the fill completes unless a test gives
-    it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
+class WipeMemoryChallenger:
+    """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
+    docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
+    completes unless a test gives it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
     with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
     whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
 
@@ -547,7 +547,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
-           "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord", "Challenger",
-           "Prover", "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for",
-           "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of", "message",
-           "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]
+           "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord", "Prover",
+           "SignedWipe", "Verdict", "WipeCommitment", "WipeMemoryChallenger", "WipeParams", "batch_digest",
+           "challenges_for", "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
+           "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

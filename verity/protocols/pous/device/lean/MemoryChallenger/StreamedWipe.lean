@@ -120,7 +120,7 @@ def Batch.value (r : Batch) : E ByteArray := do
 def recordsRoot (session : ByteArray) (batches : Array Batch) : E ByteArray := do
   let d := domain RECORD_BINDING session batches.size
   let values ← batches.mapM Batch.value
-  pure (FrameV3Sha512.root d ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
+  pure (d.root ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
 
 /-- The signed header: the commitment's header with how the session ended, the start mark as hex (the empty string for
 none), the fill's times and the number of batches, as `json.dumps(sort_keys=True, separators=(",", ":"))`. -/

@@ -3,17 +3,23 @@
 
 - `lean-build:verity/protocols/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
   the tree it requires by path; its outputs are the executables its lakefile's
-  `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
+  `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look), and
+  the rest of the build, each of those packages' `.lake/build` in one archive (`TREE`, its var `builds` the packages).
 - `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/protocols/flock/agreement`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
-  verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
+  verifier on the upstream build and inputs `upstream.json` pins; its inputs are its directory less its Markdown, which no
+  script there reads, and what check.py reads; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
-  `lean_suites`, whose test files the test-file family leaves out), on every executable lean-build outputs, and
+  `lean_suites`, whose test files the test-file family leaves out), on every executable lean-build outputs and the build they
+  were linked in, unpacked into the tree, where the tests' own `lake build`s find it, and
   `lean-suites:SUITE:K/M` on part K of M of one split by test file (`PARTS`) or by test id (the `parts` it declares), so a
   task holds about ten minutes of a suite where its tests allow; its inputs are the whole tree, as tasks/v1 keys a job that
-  declares none, since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite
+  declares none, since those suites build and run Lake packages no tracer follows, less its Markdown but that under the
+  suite's directory and its declared inputs when it lists a `.md` (`suites.markdown`, as suites.py keys it: no Lake build
+  reads Markdown, and the guard fails a test that opens a `.md` undeclared), so a README edit elsewhere reruns none of them;
+  its output is suites.py's report. A suite
   that declares `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its
   `worker_gb`); its timeout is its own `timeout_s`, else the family's.
 - `flock-circuit-build:verity/protocols/flock/prover/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
@@ -30,6 +36,7 @@ import json
 import tomllib
 from pathlib import Path
 
+from ..runners.lean_build import TREE
 from .test_file import Imports, Layout, Tree, discover
 
 LEAN = "verity/protocols/flock/verifier"
@@ -46,12 +53,15 @@ PARTS = {"verity-flock": 6, "verity-vllm": 2, "pous-check": 3, "verity-pouw-chec
          "verity/protocols/certifier/verifier": 2}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
+#: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work
+#: directory
+TREE_PATH = "lean-build/lake-build.tar.gz"
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
 #: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
 #: (`tests/test_build.py` holds this list to what an audit hook sees it open)
 CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
-                                                     "policy.toml", "settings.py", "shards.py", "slot.py", "spans.py",
-                                                     "suites.py", "verdicts.py")),
+                                                     "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
+                                                     "spans.py", "suites.py", "verdicts.py")),
                ".agents/skills/using-slack/registry.json")
 
 
@@ -70,8 +80,8 @@ def required(root: Path, files: list[str]) -> list[str]:
 
 def package(root: Path, files: list[str]) -> list[str]:
     """The files `lake build` of the Lean verifier can read: its package's and those of the packages of the tree it requires
-    by path (`required`), less each one's lock (`lean-audit.json`, which only the Lean check reads) and any Lake package
-    nested in the verifier's while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
+    by path (`required`), less each one's lock (`lean-audit.json`, which only the Lean check reads), their Markdown and any
+    Lake package nested in the verifier's while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
     pre = LEAN + "/"
     lakefiles = [f for f in files if f.startswith(pre) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     top = [f for f in lakefiles if f.count("/") == pre.count("/")]
@@ -80,7 +90,7 @@ def package(root: Path, files: list[str]) -> list[str]:
         nested = ()
     packages = (pre, *required(root, files))
     locks = {p + "lean-audit.json" for p in packages}
-    return [f for f in files if f.startswith(packages) and f not in locks and not f.startswith(nested)]
+    return [f for f in files if f.startswith(packages) and f not in locks and not f.startswith(nested) and not f.endswith(".md")]
 
 
 def executables(root: Path, files: list[str]) -> list[str]:
@@ -143,16 +153,24 @@ def suite_tasks(root: Path, files: list[str], build: str, bin_: str, exes: list[
         gb = (s.mem_gb if s else None) or one_gb
         resources = {"disk_gb": SUITES_DISK_GB} if tests.get("parallel") is True else {
             "cores": 1, **({"mem_gb": gb} if gb else {}), "disk_gb": SUITES_DISK_GB}
-        task = {"kind": "lean-suites", "env": "py", "inputs": list(files), "reads": [{"task": build, "output": e} for e in exes],
+        if s is None:
+            prose = set(files)
+        elif s.markdown:
+            prose = {f for p in (s.dir, *s.inputs) for f in tree.under(p.strip("/")) if f.endswith(".md")}
+        else:
+            prose = set()
+        task = {"kind": "lean-suites", "env": "py", "inputs": [f for f in files if f in prose or not f.endswith(".md")],
+                "reads": [*({"task": build, "output": e} for e in exes), {"task": build, "output": TREE}],
                 "outputs": [{"name": "report", "path": "suites-lean.json"}], "resources": resources,
                 **({"timeout_s": s.timeout_s} if s and s.timeout_s else {})}
         by_id = tests.get("parts") if type(tests.get("parts")) is int else None
+        staged = {"bin": bin_, "tree": TREE_PATH}
         if m := by_id or PARTS.get(s.name if s else name):
             of = f"{name}'s tests by id" if by_id else f"{name}'s test files (one in {m}, by path)"
-            out += [{"id": f"lean-suites:{name}:{k}/{m}", **task, "vars": {"suites": name, "files": f"{k}/{m}", "bin": bin_},
+            out += [{"id": f"lean-suites:{name}:{k}/{m}", **task, "vars": {"suites": name, "files": f"{k}/{m}", **staged},
                      "about": f"suites.py --lean-built on part {k} of {m} of {of}"} for k in range(1, m + 1)]
         else:
-            out.append({"id": f"lean-suites:{name}", **task, "vars": {"suites": name, "bin": bin_},
+            out.append({"id": f"lean-suites:{name}", **task, "vars": {"suites": name, **staged},
                         "about": f"suites.py --lean-built on {name}, as check's lean-suites step runs it"})
     return out
 
@@ -177,7 +195,9 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     build = f"lean-build:{LEAN}"
     bin_ = f"{LEAN}/.lake/build/bin"
     out.append({"id": build, "kind": "lean-build", "env": "lean", "about": f"lake build the Lean verifier ({LEAN})",
-                "inputs": package(root, files), "outputs": [{"name": e, "path": f"{bin_}/{e}"} for e in exes]})
+                "vars": {"builds": " ".join([LEAN, *(d.rstrip("/") for d in required(root, files))])},
+                "inputs": package(root, files), "outputs": [*({"name": e, "path": f"{bin_}/{e}"} for e in exes),
+                                                            {"name": TREE, "path": TREE_PATH}]})
     if "flock-verify" in exes and UNIT_CUT in files:
         out.append({"id": f"lean-unit-cut:{UNIT_CUT}", "kind": "lean-unit-cut", "env": "py",
                     "about": "the Lean partition check's codes against verity.circuits.partition's on random cuts",
@@ -189,7 +209,8 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
         out.append({"id": f"lean-agreement:{VERIFIER}", "kind": "lean-agreement", "env": "py",
                     "about": "agree with upstream's Rust verifier on the pinned upstream build and inputs (ci.py)",
                     "vars": {"verify": f"{bin_}/flock-verify"},
-                    "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/")), *(f for f in CHECK_READS if f in files)}),
+                    "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/") and not f.endswith(".md")),
+                                      *(f for f in CHECK_READS if f in files)}),
                     "reads": [{"task": build, "output": "flock-verify"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
     return out + suite_tasks(root, files, build, bin_, exes)

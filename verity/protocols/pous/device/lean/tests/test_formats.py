@@ -316,7 +316,7 @@ def test_wipe_end_message(server):
 
 
 def test_wipe_messages_of_sessions(server):
-    """On sessions `Challenger` ran, with a start mark and with none, the Lean's signed message, start message and end
+    """On sessions `WipeMemoryChallenger` ran, with a start mark and with none, the Lean's signed message, start message and end
     message are the Python's own, and the signed header carries the certificate's SHA-512."""
     params = sw.WipeParams(8, 3, 1, 1_000, (("gpu", 3 * sw.LABEL_BYTES), ("host-dram", 5 * sw.LABEL_BYTES)))
     seen = set()

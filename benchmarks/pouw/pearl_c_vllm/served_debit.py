@@ -12,8 +12,9 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 - **Per tile:** the verdict at the scheme's cap; the debit and the cap of its credited cells and their ratio (over 1 is a
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
-  later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
+  later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.tile_debit`, rev1's
+  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each
+  fs·|cols|/n of inert work).  Under a format with the row cap (-h3) the rule also caps each
   credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
@@ -120,13 +121,13 @@ def _recorded(*args, **kwargs):
 
 
 _CHAINS: list = []
-_CHAIN_DEBIT = CW.D.chain_debit
-#: the debit's implementation `_chain_recorded` calls: the scalar reference, or `fast_tile`'s batch form
-_IMPL = {"chain_debit": _CHAIN_DEBIT}
+_TILE_DEBIT = CW.D.tile_debit
+#: the debit's implementation `_tile_debit_recorded` calls: the scalar reference, or `fast_tile`'s batch form
+_IMPL = {"tile_debit": _TILE_DEBIT}
 
 
-def _chain_recorded(*args, **kwargs):
-    out = _IMPL["chain_debit"](*args, **kwargs)
+def _tile_debit_recorded(*args, **kwargs):
+    out = _IMPL["tile_debit"](*args, **kwargs)
     _CHAINS.append(out)
     return out
 
@@ -164,8 +165,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, _ = PD.manifest_epoch(man, coins, recorded=True)
-    records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
-                             tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
+    records = VR.records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
@@ -190,8 +190,8 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
 
 
 def credited_macs(record: PW.UnitRecord) -> int:
-    real = record.real_rows - sum(1 for i in set(record.excluded_a) if i < record.real_rows)
-    return real * (record.matmul.shape.n - len(set(record.excluded_b))) * record.k_kept
+    real = record.real_rows - sum(1 for i in set(record.excluded_a) | set(record.voluntary_a) if i < record.real_rows)
+    return real * (record.matmul.shape.n - len(set(record.excluded_b) | set(record.voluntary_b))) * record.k_kept
 
 
 def sample(job: dict, per_stratum: int, seed: int) -> tuple[dict, list[int]]:
@@ -231,12 +231,12 @@ def one(item) -> dict:
     every = _JOB.get("cross_check", 0)
     if _JOB.get("undo") is not None and every and (item if isinstance(item, int) else item[2]) % every == 0:
         _JOB["undo"]()
-        _IMPL["chain_debit"] = _CHAIN_DEBIT
+        _IMPL["tile_debit"] = _TILE_DEBIT
         try:
             ref = _measure(item)
         finally:
             _JOB["undo"] = FT.install(_JOB["scheme"], debit=False)
-            _IMPL["chain_debit"] = FT.chain_debit
+            _IMPL["tile_debit"] = FT.tile_debit
         diff = {k: [out.get(k), ref.get(k)] for k in set(out) | set(ref) if k not in ("seconds", "replay") and out.get(k) != ref.get(k)}
         out["cross_checked"] = True
         if diff:
@@ -272,7 +272,7 @@ def _measure(item) -> dict:
     s = u.shape
     out = {"tile": tid, "matmul": ref.matmul, "m": s.m, "k": s.k, "n": s.n, "row0": ref.tile.rows[0], "rows": len(ref.tile.rows),
            "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
-           "replay": "scalar" if j.get("undo") is None or _IMPL["chain_debit"] is _CHAIN_DEBIT else "batch"}
+           "replay": "scalar" if j.get("undo") is None or _IMPL["tile_debit"] is _TILE_DEBIT else "batch"}
     opened, h = j["prover"].open(epoch, tid), commitment_hash(scheme)
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     if fresh is not None:
@@ -306,7 +306,7 @@ def _measure(item) -> dict:
         tile, chains = _SEEN[0] if _SEEN else (_DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
-            out["atoms"], out["later_zero_promotions"] = _CHAINS[chains - 1]
+            out["atoms"], out["later_zero_promotions"], out["forming_elements"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
             widen = CW.row_cap_multiple(scheme, u.shape.k)
             out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
@@ -434,7 +434,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     _JOB.update(job, cross_check=opts.get("cross_check", 0), undo=None)
     if not opts.get("scalar"):
         _JOB["undo"] = FT.install(job["scheme"], debit=False)
-        _IMPL["chain_debit"] = FT.chain_debit
+        _IMPL["tile_debit"] = FT.tile_debit
     gc.collect()
     # the workers share the parent's tile enumeration copy-on-write; frozen, no collection in them touches its pages
     gc.freeze()
@@ -460,7 +460,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
         gc.unfreeze()
         if _JOB.get("undo") is not None:
             _JOB["undo"]()
-        _IMPL["chain_debit"] = _CHAIN_DEBIT
+        _IMPL["tile_debit"] = _TILE_DEBIT
     if failed:
         raise RuntimeError(f"{label}: the batch replay differs from the scalar reference on tiles {failed}")
     return got
@@ -693,18 +693,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
-        CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
+        CW._debit_cap, CW.D.tile_debit = _recorded, _tile_debit_recorded
         try:
             rows = [r for path, label in zip(a.manifests, labels)
                     for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
-            CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+            CW._debit_cap, CW.D.tile_debit = _DEBIT_CAP, _TILE_DEBIT
         return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir, fresh)
-    CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
+    CW._debit_cap, CW.D.tile_debit = _recorded, _tile_debit_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]
     finally:
-        CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+        CW._debit_cap, CW.D.tile_debit = _DEBIT_CAP, _TILE_DEBIT
     summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")

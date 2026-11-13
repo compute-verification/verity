@@ -12,7 +12,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             after-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
-                                                            shard's with those no shard holds (ratchet-gate) (drive's
+                                                            shard's with those no shard holds (ratchet-gate, where its
+                                                            plan doesn't name it) (drive's
                                                             `after_landing_shards`: one run per shard, at once, once the
                                                             records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
@@ -45,8 +46,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
-                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites or
-                                                            circuit-check
+                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites,
+                                                            circuit-check, flock-circuit-build, lean-build or lean-audit
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build's URLs whatever it changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -108,7 +109,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
 targets by the hash of each one's id, `lean-suites` by suite, one that declares `[tool.verity.tests] parts = P` into its P
-parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it), so one
+parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it, and
+`pytest` by suite as lean-suites in a plan that names one of its suites, `pytest:SUITE`, else whole), so one
 commit's check runs on N pods at once and takes about as long as its longest shard. Its result is a `check-shard/v1`
 (`SHARD_KIND`) that names the shard, the commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
@@ -201,8 +203,8 @@ doesn't name:
                     the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
                     run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
                     verified `main`); one that names no commit here skips it.  Off the
-                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
-                    job, runs it
+                    gate: a recorded check skips it, and the after-landing run, `--deferred` with every job, runs it
+                    (sharded, in the shard its plan names, else in the last)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -223,7 +225,8 @@ local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical i
                     result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
                     replay
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/protocols/flock/agreement/'s
-                    tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
+                    tracked files but its Markdown, which pin the upstream build and inputs, the verifier's Lean packages, the
+                    interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
                     the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
                     for the Rust tests
@@ -334,6 +337,8 @@ JOBS = DECLARATION.load()
 
 #: the verdict packs (`verdicts.py`)
 VERDICTS = _load("verdicts")
+#: circuit-check's binding records, named in the packs and carried through the store (`records.py`)
+RECORDS = _load("records")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
 #: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
@@ -435,17 +440,20 @@ RATCHET_BASE_FILE = "check-ratchet-base.txt"
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
-#: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
-#: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
-#: runs one target at a time: two to four times a train slot's wall time
+#: the least slot memory a train check that runs one of `TRAIN_STEPS` takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
+#: lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check runs one target
+#: at a time: two to four times a train slot's wall time
 TRAIN_GB = 200
-#: the steps that need a train slot's memory
-TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
+#: the steps that need a train slot's memory: the suites and circuit-check, which divide the slot's mem= among their workers, and
+#: the Rust and Lean builds and the audit, whose parallel builds and replays hold tens of GB (`SIBLINGS_GB`). Every other step
+#: but ratchet-gate needs one of these, which a plan puts on its shard, so no shard of a plan takes a small slot a lighter run
+#: (ratchet-gate, the preflights) fits
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check", "flock-circuit-build", "lean-build", "lean-audit")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
-    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
-    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs one of
+    `TRAIN_STEPS`, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -659,12 +667,14 @@ def _trees(doc: dict) -> set[str]:
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
-          now=time.time, min_mem: int | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+          now=time.time, min_mem: int | None = None,
+          shard: str | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
     """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
-    no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
+    no machine shows yet (PLACED) as waiters on theirs; ``commit`` (with ``shard``, its `--shard` spec: a candidate's shards
+    are launched together, and each must count the others) is recorded on its pick."""
     import fcntl
 
-    path = path or PLACED
+    path, commit = path or PLACED, f"{commit} {shard}" if shard else commit
     with open(path.with_name(path.name + ".lock"), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         docs = (read or read_slots)(names)
@@ -1315,7 +1325,7 @@ def record(argv: list[str]) -> int:
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem)
+        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem, shard=spec)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -1601,9 +1611,11 @@ def _only(only: str | tuple[str, ...] | None) -> str:
     return f" (only {', '.join((only,) if isinstance(only, str) else only)})" if only else ""
 
 
-def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | None = None) -> dict:
+def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | None = None,
+                named: dict[str, int] | None = None) -> dict:
     """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`;
-    with ``only``, just its entries under that pack path (or those)."""
+    with ``only``, just its entries under that pack path (or those).  ``named`` takes the circuit records it names
+    (`records.named_in`)."""
     try:
         here = pack.exists()
     except PermissionError:                  # the launcher's path, under a directory this machine can't read (its /root)
@@ -1611,6 +1623,8 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | tuple[str, ...] | 
     if not here and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
         pack = run_dir / "inputs" / pack.name
     added, kept = VERDICTS.import_(pack, only)
+    if named is not None:
+        named.update(RECORDS.named_in(pack))
     print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{_only(only)}", flush=True)
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept, **({"only": only} if only else {})}
 
@@ -1637,11 +1651,13 @@ def fetch_signed(p: dict, dest: Path) -> str | None:
     return None
 
 
-def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = None) -> list[dict]:
+def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = None,
+                     named: dict[str, int] | None = None) -> list[dict]:
     """Fetch each pack ``listed`` (`take_verdict_urls`, newest first) and import it before the steps run (`verdicts.import_`, which
     never replaces an entry here, so where two packs hold one entry the newer's is kept); with ``only``, just its entries under
     that pack path (or those).  A pack that can't be fetched, isn't the one listed or that import refuses is passed over by
-    name, so its verdicts are recomputed.  Each pack's record for the result's `verdicts`."""
+    name, so its verdicts are recomputed.  ``named`` takes the circuit records each pack imported names (`records.named_in`).
+    Each pack's record for the result's `verdicts`."""
     got, t0 = [], time.monotonic()
     with tempfile.TemporaryDirectory(prefix="check-verdicts-") as d:
         pack = Path(d) / "verdicts.tar.gz"
@@ -1652,6 +1668,8 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
                 except VERDICTS.UNREADABLE as e:
                     why = f"import refuses it ({type(e).__name__}: {e})"
                 else:
+                    if named is not None:
+                        named.update(RECORDS.named_in(pack))
                     got.append({"run": p["run"], "sha256": p["sha256"], "added": added, "already": kept,
                                 **({"only": only} if only else {})})
                     continue
@@ -1660,6 +1678,51 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
     taken = [g for g in got if "skipped" not in g]
     print(f"check: verdicts: {sum(g['added'] for g in taken)} imported, {sum(g['already'] for g in taken)} already here, from "
           f"{len(taken)} of {len(listed)} recorded checks' packs{_only(only)} in {time.monotonic() - t0:.0f} s", flush=True)
+    return got
+
+
+#: the suite whose session builds circuit-check's binding records apart, as its step does (`records.py`)
+CIRCUIT_SUITE = "tools/verity/circuit_check"
+
+
+def builds_records(only: list[str] | None) -> bool:
+    """Whether a check of the parts ``only`` (all of it when None) runs circuit-check's step or `CIRCUIT_SUITE` (its part, or the
+    whole of `pytest`), the two that read and write its binding records."""
+    if only is None:
+        return True
+    names = {"", *(s.name for s in SUITES.discover() if s.path == CIRCUIT_SUITE)}
+    return any(p.partition(":")[0] == "circuit-check" or (p.partition(":")[0] == "pytest" and SHARDS.suite_part(p)[1] in names)
+               for p in only)
+
+
+def cc_manifests() -> bool:
+    """Whether this tree's circuit-check writes the manifest of the records its catalog took or built (`records.RUN_MANIFESTS`:
+    the step's `--records-manifest`, a session's `records.SESSION_ENV`); a tree whose circuit-check predates it is checked too."""
+    cli = ROOT / CIRCUIT_SUITE / "src" / "circuit_check" / "cli.py"
+    return cli.is_file() and "--records-manifest" in cli.read_text()
+
+
+def store_remote():
+    """The store's remote through the run's custody key (`custody_dir`), else None, with the reason printed."""
+    if (custody := custody_dir()) is None:
+        print("check: circuit records: no custody key here, so none is fetched or published", flush=True)
+        return None
+    try:
+        return LIVE.custody_remote(custody)
+    except Exception as e:  # noqa: BLE001  (no remote: circuit-check builds what the packs held no record of)
+        print(f"check: circuit records: no store remote ({type(e).__name__}); none is fetched or published", flush=True)
+        return None
+
+
+def records_fetched(named: dict[str, int], remote) -> dict:
+    """Fetch the circuit records ``named`` that circuit-check's cache lacks from ``remote`` (`records.fetch`), before the steps:
+    the counts for the result's `verdicts`, printed.  Nothing here fails the check: what isn't fetched is built."""
+    try:
+        got = RECORDS.fetch(named, cache_dir() / "circuit-check", RECORDS.getter(remote), base=cache_dir())
+    except Exception as e:  # noqa: BLE001  (a fetch that breaks costs the builds, never a verdict)
+        print(f"check: circuit records: fetching failed ({type(e).__name__}: {e}); circuit-check builds them", flush=True)
+        return {"named": len(named), "error": type(e).__name__}
+    print(RECORDS.fetch_line(got), flush=True)
     return got
 
 
@@ -1680,10 +1743,14 @@ OPT_IN = {
     "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
         "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
+    "verity/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
+        "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
+    "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
+        "tests/test_figures.py::test_figures_writes_every_figure",)},
     "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
+        "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
-        "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
@@ -1698,6 +1765,9 @@ OPT_IN = {
             "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
+    "benchmarks/prove_path": {"VERITY_SLOW": (
+        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
+        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"
@@ -1977,12 +2047,18 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
               *after_lean, *tail]
     if cold:
         pytest = ["bash", "-c", then_opt_in(pytest, out, "pytest" if len(lean) > 1 else "all", tail)]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
-          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
-          *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    manifests = circuit_cache and cc_manifests()
+
+    def cc_argv(tag: str) -> list[str]:
+        return [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+                *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
+                *(["--records-manifest", str(out / f"circuit-records.{tag}.json")] if manifests else []),
+                *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
+                *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    cc = cc_argv("step")
     if held := circuit_shards(only):
-        each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
+        each = [[*cc_argv(f"step-{s.partition('/')[0]}"), "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])]
+                for s in held]
         cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
     build = ["bash", str(ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
@@ -2030,10 +2106,11 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
-    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
-    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's where the plan doesn't name it, so the N shards together run every part drive's
+    after-landing run passes), "all": every part a recorded unsharded check covers (`gated_parts`; pytest's by suite in a plan
+    that names one, `_parts_of`)}, on this tree's Lake packages, each spec's audit on its provers' shard (`declaration.resolve`,
+    `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K
+    of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -2041,7 +2118,7 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
-    parts_of = _parts_of()
+    parts_of = _parts_of(plans[n])
     shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
@@ -2317,15 +2394,21 @@ def suite_parts() -> dict[str, int]:
         raise DECLARATION.DeclarationError(str(e)) from None
 
 
-def _parts_of() -> dict[str, list[str]]:
+def _parts_of(plan: DECLARATION.Plan = ()) -> dict[str, list[str]]:
     """The split jobs' parts on this tree (`declaration.job_parts`): lean-audit's Lake packages, lean-suites' suites (`AFTER_LEAN`),
-    each one in `suite_parts` as its parts `SUITE:K/P`."""
+    and where ``plan`` names one of pytest's (`pytest:SUITE`), pytest's (the others), each one in `suite_parts` as its parts
+    `SUITE:K/P`."""
     files = tracked_files(ROOT)
     if files is None:
         raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
     by = suite_parts()
-    return {"lean-audit": _lean_audit().packages(files),
-            "lean-suites": [x for s in AFTER_LEAN for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]}
+
+    def each(names: list[str]) -> list[str]:
+        return [x for s in names for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]
+
+    pytest = any(s.startswith("pytest:") for shard in plan for s in shard)
+    return {"lean-audit": _lean_audit().packages(files), "lean-suites": each(list(AFTER_LEAN)),
+            **({"pytest": each([s.name for s in SUITES.discover() if s.name not in AFTER_LEAN])} if pytest else {})}
 
 
 def shard_parts() -> list[str]:
@@ -2581,9 +2664,11 @@ def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/flock/agreement/, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
     nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), and less each of those packages'
+    package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
-    verifier's lakefile mention it)."""
+    verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
+    test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
+    keeps the agreement's pass."""
     pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
@@ -2592,7 +2677,8 @@ def agreement_closure(files: list[str]) -> list[str]:
         nested = ()
     packages = (lean, *required_in_tree(lean))
     locks = {p + "lean-audit.json" for p in packages}
-    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))]
+    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))
+            and not f.endswith(".md")]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
@@ -2826,12 +2912,12 @@ class Packs:
     SIGTERM (`_terminated`), each time in place of the last (`os.replace`), so a check stopped at any moment leaves the passes it
     had stored by then.  Custody uploads it whatever way the run ends: `record` declares it an output."""
 
-    def __init__(self, out: Path, before: dict[str, str]):
-        self.out, self.before = out, before
+    def __init__(self, out: Path, before: dict[str, str], records=None):
+        self.out, self.before, self.records = out, before, records
         self.lock = threading.Lock()
         self.want = threading.Event()
         self.closed = False
-        self.written: dict[str, str] | None = None
+        self.written: tuple | None = None
         self.entries = 0
         self.thread = threading.Thread(target=self._loop, daemon=True, name="verdict-packs")
         self.thread.start()
@@ -2848,13 +2934,23 @@ class Packs:
                 self.write()
 
     def write(self) -> int:
-        """Write the pack unless it holds what is new already; the number of entries it holds."""
+        """Write the pack unless it holds what is new already; the number of entries it holds.  With ``records`` (a
+        `records.Publisher`), the circuit records it names are put on the store first, except once a SIGTERM came (its SIGKILL
+        follows in seconds), and those the store holds are named in the pack in place of their bytes."""
         with self.lock:
             try:
                 new = VERDICTS.changed(self.before)
-                if {k: d for k, (d, _) in new.items()} != self.written:
-                    self.entries = VERDICTS.export(self.out, self.before, new)
-                    self.written = {k: d for k, (d, _) in new.items()}
+                drop, manifest = set(), None
+                if self.records is not None:
+                    try:
+                        drop, manifest = self.records.pack(publish=not TERMINATED)
+                    except Exception as e:  # noqa: BLE001  (the records then go in the pack as they are)
+                        print(f"check: circuit records: naming them failed ({type(e).__name__}: {e}); the pack holds them",
+                              flush=True)
+                state = ({k: d for k, (d, _) in new.items()}, manifest)
+                if state != self.written:
+                    self.entries = VERDICTS.export(self.out, self.before, new, drop, (manifest,) if manifest else ())
+                    self.written = state
             except OSError as e:
                 print(f"check: verdicts: writing {self.out.name} failed ({type(e).__name__}: {e}); the last one written stands",
                       flush=True)
@@ -3016,6 +3112,8 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
     t0 = time.monotonic()
     hit = None
     key = STEP_KEYS[name](e) if cache and name in STEP_KEYS else None
+    if name == "pytest" and cc_manifests():
+        e = e | {RECORDS.SESSION_ENV: str(out / "circuit-records.session.json")}
     if key:
         entry = cache_dir() / name / f"{key}.json"
         if entry.exists():
@@ -3432,10 +3530,14 @@ def main(argv: list[str], script: bool = False) -> int:
             return 2
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
-    listed, verdicts = take_verdict_urls(out), {}
+    listed, verdicts, named = take_verdict_urls(out), {}, {}
     if pack or listed:
         part = None if cache else ((CIRCUIT_ENTRIES, COMPARED) if circuit_cache else COMPARED)
-        verdicts["in"] = [*([verdicts_in(pack, run_dir, part)] if pack else []), *(verdicts_fetched(listed, part) if listed else [])]
+        verdicts["in"] = [*([verdicts_in(pack, run_dir, part, named)] if pack else []),
+                          *(verdicts_fetched(listed, part, named) if listed else [])]
+    cc_remote = store_remote() if run_dir is not None and circuit_cache and builds_records(only) else None
+    if cc_remote is not None and named:
+        verdicts["records"] = records_fetched(named, cc_remote)
     if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
         why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
                else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")
@@ -3447,7 +3549,9 @@ def main(argv: list[str], script: bool = False) -> int:
     TERMINATED.clear()
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
-    packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
+    publisher = (RECORDS.Publisher(cache_dir() / "circuit-check", CIRCUIT_ENTRIES, time.time_ns(), RECORDS.putter(cc_remote),
+                                   cache_dir(), out=out) if cc_remote is not None and before is not None else None)
+    packs = Packs(run_dir / "verdicts.tar.gz", before, publisher) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
     live = live_record(out, run_dir, sharded, picked)
     live.start()
@@ -3470,6 +3574,8 @@ def main(argv: list[str], script: bool = False) -> int:
     if run_dir is not None:
         if packs is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": packs.close()}
+            if publisher is not None:
+                verdicts["out"]["records"] = publisher.stats
             if (got := reused.close()) is not None:
                 verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
