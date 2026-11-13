@@ -32,6 +32,11 @@ in any bundle (`-lc`), `env [VAR=VALUE...] CMD`, `xargs CMD`, `eval` and `watch`
 heredoc fed to a shell, `find -exec`, `su -c`, `flock`, `script -c` and `parallel`. A pane's command blocks no tool call, so
 the block rule leaves tmux alone.
 
+Each reads a command, typed or carried, as the shell runs it (`words_of`): a comment hides the rest of its own line and
+nothing after it, a `#` inside a word or a quoted string (`issue#12`, a URL's fragment) hides nothing, and a `\\` at a line's
+end joins the next line to it. Quotes are what shlex takes for them, so three things are read otherwise than the shell reads
+them: a comment inside backticks, a quote nested in a `$(...)` inside another, and a `$'...'` that holds an escaped quote.
+
 Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a `preToolUse` event's for the Shell tool
 (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key names, and of its values the model it
 names and its turn's id, go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
@@ -134,6 +139,13 @@ FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\
 LISTING_FALLBACK = re.compile(r"(^|[\s|;&(`'\"])(ps\s+[^|;&\n]*(\b(args|cmd|command)\b|-\w*[fF]|(^|\s)[a-zA-Z]+(\s|$))|"
                               r"pgrep\s+[^|;&\n]*(-\w*a|--list-f)|htop|btop)|cmdline", re.M)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
+#: a command's comments, continued lines and line ends, as the shell reads them. A word's pieces come first (an escaped
+#: character, a quoted string, a `${...}` on one line with no quote in it, a run of other characters; a quote nothing closes
+#: and the text's last `\` are pieces too), each with the `#`s straight after it, through continued lines: those are the
+#: word's own. Outside a word: the `\` and newline of a continued line, a comment, from the `#` that begins a word to its
+#: line's end, and a line's end
+SHELL_PIECE = re.compile(r"""(\\(?:[^\n]|\Z)|'[^']*'|"(?:\\.|[^"\\])*"|\$\{[^}\n'"]*\}|[^ \t\n;&|()<>#\\'"$]+|['"$])"""
+                         r"""((?:(?:\\\n)*\#)*)|\\\n|\#[^\n]*|(\n)""", re.S)
 
 #: what a refused command would print: `refused_text`'s verdicts, each with its refusal
 ENVIRONMENT, ARGV = "environment", "argv"
@@ -163,13 +175,29 @@ def secret(name: str) -> bool:
     return name in listed or bool(PATTERN.search(name))
 
 
-def words_of(text: str) -> list[tuple[list[str], str]]:
-    """`text`'s simple commands, each as its words and the operator after it, split at pipes, lists, subshells, newlines and
-    backticks."""
-    text = HEREDOC.sub(" ", text).replace("`", " ; ").replace("\n", " ; ")
+def as_read(found: re.Match) -> str:
+    """What the shell reads of one match of SHELL_PIECE: a word's piece with the `#`s after it, the continued lines between
+    them joined; a ` ; ` for a line's end outside a word; and of a comment or a continued line there, nothing. Inside double
+    quotes the shell joins a continued line too. A quote nothing closes and the text's last `\\` are left out, which shlex
+    can't split: what stands before them is read all the same, and what follows such a quote, which the shell never runs,
+    as words."""
+    if found[3]:
+        return " ; "
+    piece = found[1] or ""
+    if piece in ("'", '"', "\\"):
+        piece = ""
+    elif piece.startswith('"'):
+        piece = re.sub(r"(?<!\\)((?:\\\\)*)\\\n", r"\1", piece)
+    return piece + (found[2] or "").replace("\\\n", "")
+
+
+def split_commands(text: str, commenters: str) -> list[tuple[list[str], str]]:
+    """shlex's split of `text` into simple commands, each as its words and the operator after it. A character of
+    `commenters` outside quotes ends shlex's reading of the whole text."""
     text = re.sub(r"(?<![\w-])\d+(?=[<>])", " ", text)      # `2>/dev/null`: the fd number is not an argument
     lex = shlex.shlex(text, posix=True, punctuation_chars=True)
     lex.whitespace_split = True
+    lex.commenters = commenters
     commands, current = [], []
     for tok in lex:
         if tok and set(tok) <= set("|&;()<>") and (set(tok) & set("()") or not set(tok) & set("<>")):
@@ -179,6 +207,24 @@ def words_of(text: str) -> list[tuple[list[str], str]]:
             current.append(tok)
     commands.append((current, ""))
     return [c for c in commands if c[0]]
+
+
+def words_of(text: str) -> list[tuple[list[str], str]]:
+    """`text`'s simple commands, each as its words and the operator after it, split at pipes, lists, subshells, newlines and
+    backticks. A comment and a continued line are read as the shell reads them (SHELL_PIECE): a `#` that begins a word hides
+    the rest of its line and no more, a `#` inside a word or a quoted string hides nothing, and a `\\` at a line's end joins
+    the next line to it, though never to a comment. A quoted string then keeps its lines as the shell hands them on: a carrier
+    may have it run, and it is read in turn. A text with no `#` and no `\\` at a line's end takes none of this: shlex splits
+    it, each line's end in it a ` ; `, in a quoted string too. A text shlex can't split that way is a ValueError with a
+    comment in it as without one, and each rule then judges its raw text: a quote nothing closes or a `\\` at the very end,
+    unless a `#` outside quotes stands before it. Not as the shell: a comment inside backticks runs to its line's end, past
+    the closing one; a quote is what shlex takes for one (`$'it\\'s'` is not, nor one nested in a `$(...)` inside another);
+    and a heredoc a comment opens is still taken out."""
+    text = HEREDOC.sub(" ", text).replace("`", " ; ")
+    commands = split_commands(text.replace("\n", " ; "), "#")
+    if "#" in text or "\\\n" in text:
+        commands = split_commands(SHELL_PIECE.sub(as_read, text), "")
+    return commands
 
 
 def strip_redirections(words: list[str]) -> list[str]:
@@ -404,6 +450,11 @@ def tmux_carrier(name: str) -> str:
                                            if c.startswith(name) and name.startswith(least)), "")
 
 
+def tmux_words(text: str) -> list[str]:
+    """The words of the tmux commands `text` holds (a branch of `if-shell`, `run-shell -C`), each line's end in it a `;`."""
+    return shlex.split(text.replace("\n", " ; "))
+
+
 def tmux_carried(args: list[str]) -> list[str]:
     """The shell commands `tmux ARGS` has run (or types into a pane, `send-keys`), each as one text: global `-c CMD`, and each
     command of TMUX_CARRIERS, by its name, alias or a prefix that names one; `run-shell -C` and `if-shell`'s branches are tmux
@@ -425,9 +476,9 @@ def tmux_carried(args: list[str]) -> list[str]:
         text = "".join(typed(k, "l" in given) for k in rest)
         return [text] if text.strip() else []
     if canon == "run-shell" and "C" in given:
-        return [t for c in rest for t in tmux_carried(shlex.split(c))]
+        return [t for c in rest for t in tmux_carried(tmux_words(c))]
     if canon == "if-shell":
-        tmux = [t for c in rest[1:] for t in tmux_carried(shlex.split(c))]
+        tmux = [t for c in rest[1:] for t in tmux_carried(tmux_words(c))]
         return tmux if "F" in given else rest[:1] + tmux
     if not rest:
         return []
@@ -454,7 +505,7 @@ def tmux_kills(words: list[str]) -> list[tuple[str, dict[str, str]]]:
         elif (canon := tmux_carrier(name)) in ("run-shell", "if-shell"):
             i, given = options_end(rest, TMUX_CARRIERS[canon][1])
             inner = rest[i + 1:] if canon == "if-shell" else rest[i:] if "C" in given else []
-            out.extend(k for c in inner for k in tmux_kills(shlex.split(c)))
+            out.extend(k for c in inner for k in tmux_kills(tmux_words(c)))
     return out
 
 
