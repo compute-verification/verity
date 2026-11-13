@@ -120496,3 +120496,45 @@ Not established:
 - the clause on Friday's 20 circuit files by a run.
 
 I wait on `r20261113-033047-0355`: its verdict about 04:40Z [guess]. Then on `r20261113-040920-80e2`: about 05:05Z [guess].
+
+
+## OWNREADS, Fri 13 Nov 04:32Z: all four files of mine have compiled (`OwnReads`, `HeldOfReads`, `ReadsCheck`, `Apart`), nothing of my brief is left to write; one try now builds the three SpotFlock files at the head the join should take; one theorem of mine (`binds_of_own`) is stated at the form's accept and is empty until a play is accepted
+
+In plain words. My brief asked for one lemma, from the wiring check's clause on reference reads to the fact the address proof uses about runs. It compiled hours ago, and so have the three pieces you added (the reference reads being well-formed trees, the decided check of that, and the split of the two sessions' apartness into a per-session condition). Nothing is left for me to write. What is left are premises other workers own, listed below, and one more compile: at a head holding HELDOF's newest commit with the moved base under it. One correction to your 04:27Z message: `r20261113-030222-643a` is the try of `Apart.lean`, not of `HeldOfReads.lean`. `HeldOfReads.lean` compiled in `r20261113-032403-1fd4`.
+
+**1. What compiled, by run** [run]
+- `r20261113-030222-643a` (vy-nebius-2): `Apart.lean` at `9179aaea5a` (on HISTORY's `f54420243d`), "lean exit 0 in 633 s", 3 theorems, none uses an axiom beyond propext, Classical.choice and Quot.sound.
+- `r20261113-032403-1fd4` (vy-nebius-2): `HeldOfReads.lean` at `2793282dc9` (on HELDOF's last compiled commit `e310d9d623`), "lean exit 0 in 1703 s", "none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `r20261113-022017-7cd5` (vy-nebius-2): `ReadsCheck.lean` at `f167a566e1`, lean exit 0, 6 theorems, the same three axioms.
+- `OwnReads.lean`: compiled at `90bbf657c8` (my entries before 02:00Z), and it built again inside `7cd5` and `1fd4`; its text is unchanged since.
+
+**2. The try in flight** [run]
+- `r20261113-041449-e358` (`OwnReads.lean` against the moved base, vy-nebius-2) waited 15 minutes for a check place and never started; I cancelled it at 04:30Z.
+- In its place, `r20261113-043114-0733`, launched with `--on auto` at 04:31:14Z, went to **vy-nebius-cpu-6**'s research pool ("vy-nebius-2 takes no `--on auto` job until 2026-11-14T02:00Z"). It tries `OwnReads.lean`, `HeldOfReads.lean` and `ReadsCheck.lean` in turn, at `cursor/proofs-refreadswf-a64c` = `ba8cc8ab0c`. Expected end about 05:15Z to 05:35Z if the tree is cold [guess, from `1fd4`'s 1703 s].
+- `ba8cc8ab0c` is HELDOF's head `42fbb506b3` (which holds RUNCOINS's `d3cb96c006` and so the base `e033bfc14be4`) with `cursor/proofs-ownreads-9a1c` merged; no conflict. Against HELDOF's head it adds only my three files, the roots `HeldOfReads` and `ReadsCheck` in `security/Proofs/lakefile.toml` beside HELDOF's, and `OwnReads` as a line of `security/Proofs/Flock.lean` after `WiringOk`, where FRAME put it on L1 [run: git, and a script comparing the root lists].
+
+**3. Your question (1), in one line each**
+- `Apart.binds_of_own` **is stated at the form's accept**: its conclusion `Binds (dev₂ S₁ S₂ cut) θ` (`Cut.lean` line 320) quantifies over `Accepts o.sent`, which is `checkBlobsAtWith true` (`Cut.lean` line 88), and that check reads `OneStage.checkAt p.audit.base c₂ (some ξ₂) …` at the interior (`SampledTwo.lean` line 306). It is true and empty until one honest play is accepted by a run. My text does not name `OneStage.checkAt`: the proof only applies HISTORY's `binds_dev₂` to `apart_of_own`. So TWOLEG's change of that step leaves my statement's text as it is, and it stays proved as long as `binds_dev₂` does [read].
+- `OwnReads.lean`, `HeldOfReads.lean` and `ReadsCheck.lean` **are not stated at the form's accept, and none reads `OneStage.checkAt`** [read: none names `Accepts`, `checkAt` or `checkBlobsAtWith`]. `OwnReads h` speaks of accepted checked runs of the held code, and `refReadsWf_form` and `ownReads_form` take `heldOfForm … = some h`, which `inputOf` builds without the check. A theorem of the join that composes them under the form's accept is empty until then, like the rest [derived].
+
+**4. What the join reads of mine, and who owns each premise**
+- `SpotFlock.ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h`. `hc` is no premise at an accepted run: FRAME's `wiring_of_wiringOk` takes it from `wiringOk` (L1, `f00922d4e9`) [read].
+- `SpotFlock.HeldOf.refReadsWf_form (hh : heldOfForm p c ξ ξ₂ e received₂ vs u = some h) (hw : ReadsWf p.circuits) : RefReadsWf h`. `hh` is HELDOF's construction. `ReadsWf p.circuits` is **the named premise you ruled for Friday** (02:13Z). It is discharged by `ReadsJson.wf_of_checked` once `readsChecked` is checked: in `heldOf`'s `decided` (**HELDOF**, `bc-3ddfb587-549a-5964-9ddf-80547065f684`: then `refReadsWf_of` needs no premise) or in the form (**TWOLEG**: a new refusal, so a STOP-RULE change, its to make).
+- `Verity.SampledTwo.Sessions.binds_of_own`: `OpensOwn (S₁ o) w₁`, `OpensOwn (S₂ o) w₂` and `(S₁ o).id ≠ (S₂ o).id` at every play after `θ`. These are facts of the two-session device, not of the check. Stating them at the live device is **HISTORY**'s model (its (a), (b), (c), 03:53Z: none follows from `dev₂` as defined) [relayed]. Making the device behave so (it opens the parameters' windows in order, or refuses the swap) is soundness's, on PRF-490, as you put it at 02:43Z [relayed].
+
+**5. Which heads ASSEMBLY should merge** [run: `git merge-tree` against `cursor/proofs-join-42b8` = `4970a223e9`]
+- `cursor/proofs-apart-a64c` = `9179aaea5a`: compiled. It merges with no conflict and brings only `Apart.lean` and its root, since HISTORY's `f54420243d` is already in the join and `Apart` and `binds_dev₂` read the same there.
+- `cursor/proofs-refreadswf-a64c` = `ba8cc8ab0c`, **once `0733` passes**. It merges with no conflict and drops no root, but it also brings what the join lacks of HELDOF, RUNCOINS and the moved base (52 files, `security/lean-audit.json` among them). If ASSEMBLY wants mine without those, it should wait for HELDOF to be in the join first. `cursor/proofs-ownreads-9a1c` (`aef755c9e3`), `cursor/proofs-refreadswf-e310-a64c` and `cursor/proofs-ownreads-frame-a64c` are retired; ba8cc8ab0c holds the first.
+
+**6. My brief's owed items** [read: the brief]. "By 10:00Z Fri: the proof compiled": done. "By 15:00Z Fri: your word on what compiles by Sat 02:00Z": all four files, at the heads above, if `0733` passes. If it fails in a file of mine, I mend it in the same turn. If it fails in another's, I report it under NEEDS.
+
+### NEEDS
+- **HELDOF**: when you take `readsChecked it.circuits` into `decided`, tell me, and I restate `refReadsWf_of` without `hw` (one line, a new theorem beside the old).
+- **TWOLEG**: nothing new.
+
+### To post
+Nothing.
+
+Machine note [run]: this session's machine was a fresh clone at 04:27Z. Nothing was lost: every head of mine was on the remote, and I re-made the worktrees from it.
+
+Not established: that `OwnReads.lean`, `HeldOfReads.lean` or `ReadsCheck.lean` compile at `ba8cc8ab0c` (`0733` in flight); `ReadsWf` at any real parameters; `OpensOwn` at any device; that any play is accepted, so that `binds_of_own` or anything composed over the form's accept is more than true and empty. The package's Lean check with its lock has run on none of my heads.
