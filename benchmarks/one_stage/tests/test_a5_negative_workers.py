@@ -142,6 +142,31 @@ def test_a_worker_starts_only_while_its_estimate_fits_and_one_over_the_budget_ru
         assert [x[:2] for x in lines(log)] == [[x, n] for n in ("a", "b", "c") for x in ("start", "end")]
 
 
+@pytest.mark.parametrize("budget, free, held", [
+    (1000 * GB, a5.Free(500 * GB, 10 * GB - 1, "/job.slice/audit.scope"),
+     {"free": 10 * GB - 1, "node_mem_available": 500 * GB, "cgroup_room": 10 * GB - 1,
+      "cgroup_level": "/job.slice/audit.scope", "binds": "cgroup"}),
+    (1000 * GB, a5.Free(10 * GB - 1),
+     {"free": 10 * GB - 1, "node_mem_available": 10 * GB - 1, "cgroup_room": None, "cgroup_level": None, "binds": "node"}),
+    (GB + 2 * 10 * GB - 1, a5.Free(500 * GB), {"binds": "budget", "budget": GB + 2 * 10 * GB - 1, "running": 11 * GB}),
+    (1000 * GB, a5.Free(500 * GB, 400 * GB, "/"), None)])
+def test_the_workers_say_the_memory_they_start_with_and_once_what_held_one_back(tmp_path, capsys, budget, free, held):
+    """Three tasks on three workers, each estimated at 10 GB beside the audit's 1 GB. `run` prints one line of the
+    memory it starts with: the budget, the estimate, the audit's own, the node's MemAvailable, the cgroup's room and
+    its level, and which binds. Where memory holds a worker back it prints one more, once for the whole run: the
+    estimate and the term that held it, the cgroup's room, the node's or the budget with what runs within it. A run
+    nothing holds back prints the first alone."""
+    log = tmp_path / "log"
+    w = workers(3, budget=budget, free=free, need=10 * GB, own=GB)
+    tasks = [w.submit(n, lambda n=n: logged(log, n)) for n in ("a", "b", "c")]
+    assert list(w.entries(tasks)) == ["a", "b", "c"]
+    said = [json.loads(x[3:])["memory"] for x in capsys.readouterr().out.splitlines() if x.startswith('A5 {"memory"')]
+    assert all(x.pop("pool") == "negatives" for x in said)
+    assert said[0] == {"workers": 3, "budget": budget, "need": 10 * GB, "audit": GB, **a5.memory_terms(free)}
+    assert said[1:] == ([] if held is None else [{"waits": "worker", "need": 10 * GB, **held}])
+    assert not multiprocessing.active_children()
+
+
 @pytest.mark.parametrize("fail, said", [("raise", "raised:"), ("die", "died (exit -9)")])
 def test_a_worker_that_raises_or_dies_ends_the_run_and_nothing_is_retried_or_run_in_the_audits_process(tmp_path, fail, said):
     """The second of three tasks fails once the first has ended; the third waits for a byte that never comes. `run`

@@ -7,6 +7,7 @@ shared archive (`a0.archiving`), under which one circuit is put once."""
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 import threading
@@ -172,6 +173,182 @@ def test_the_budget_is_the_audits_memory():
     assert a5.audit_memory(argparse.Namespace(audit_mem_gb=290), lambda: 0) == 290 * GB
     assert a5.audit_memory(argparse.Namespace(), lambda: 500 * GB) == 500 * GB
     assert a5.audit_memory(argparse.Namespace(audit_mem_gb=None), lambda: 400 * GB) == 400 * GB
+
+
+def _machine(tmp_path: Path, free_gb: int, here: str | None, levels: dict[str, tuple]) -> tuple[Path, Path, Path]:
+    """A machine's three readings as files: MemAvailable of ``free_gb``, the process's cgroup v2 line for ``here`` (None:
+    no such file), and under the hierarchy's mount each of ``levels`` (its path from the mount, "" the mount itself)
+    with its `memory.max`, its `memory.current` in GB and, where a third is given, a `memory.stat` holding that many GB
+    of file cache, split between its two lists, beside as much shared memory."""
+    meminfo, cgroup, root = tmp_path / "meminfo", tmp_path / "cgroup", tmp_path / "sys"
+    meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {free_gb * GB // 1024} kB\n")
+    if here is not None:
+        cgroup.write_text(f"0::{here}\n")
+    for path, (limit, used, *cache) in levels.items():
+        (root / path).mkdir(parents=True, exist_ok=True)
+        (root / path / "memory.max").write_text(f"{limit}\n")
+        (root / path / "memory.current").write_text(f"{used * GB}\n")
+        for gb in cache:
+            (root / path / "memory.stat").write_text(f"anon {GB}\nfile {2 * gb * GB}\nshmem {gb * GB}\n"
+                                                     f"inactive_file {gb * GB - GB // 2}\nactive_file {GB // 2}\n")
+    return meminfo, cgroup, root
+
+
+SCOPE = "/job.slice/audit.scope"
+
+
+@pytest.mark.parametrize("here, levels, room, level", [
+    (SCOPE, {"job.slice": ("max", 300), "job.slice/audit.scope": ("max", 200)}, None, None),
+    (SCOPE, {"job.slice": ("max", 300), "job.slice/audit.scope": (str(290 * GB), 200)}, 90, SCOPE),
+    (SCOPE, {"job.slice": (str(320 * GB), 300), "job.slice/audit.scope": (str(290 * GB), 200)}, 20, "/job.slice"),
+    (SCOPE, {"job.slice": (str(320 * GB), 300), "job.slice/audit.scope": ("max", 200)}, 20, "/job.slice"),
+    ("/", {"": (str(64 * GB), 60)}, 4, "/"),
+    (SCOPE, {"job.slice/audit.scope": (str(100 * GB), 130)}, 0, SCOPE),
+    (SCOPE, {"job.slice/audit.scope": (str(290 * GB), 290, 60)}, 60, SCOPE),
+    (SCOPE, {"job.slice": (str(320 * GB), 318, 8), "job.slice/audit.scope": (str(290 * GB), 290, 60)}, 10, "/job.slice"),
+    (SCOPE, {"": ("max", 1), "other.slice": (str(GB), 1)}, None, None),
+    ("/../audit.scope", {"": (str(64 * GB), 14), "audit.scope": (str(GB), 1)}, 50, "/"),
+    (None, {"job.slice": (str(GB), 1)}, None, None),
+])
+def test_what_is_available_is_the_tightest_of_the_nodes_and_each_limit_over_the_process(tmp_path, here, levels, room,
+                                                                                        level):
+    """`a5.available_memory` on a machine's files, never this one's: with no limit over the process the node's
+    MemAvailable; with one at its own level, or a tighter one above it, the least room (`memory.max` less
+    `memory.current`, not under 0) and the level it is read at, where a scope that sits at its limit on file cache
+    still has that cache's room and its shared memory's none; a limit on a cgroup the process is not under is not
+    read, a path that leaves the mount reads the mount's own limit alone, and with no cgroup v2 file it is MemAvailable
+    as before. The number carries its terms and names the one that binds."""
+    files = _machine(tmp_path, 500, here, levels)
+    assert a5.cgroup_room(*files[1:]) == (None if room is None else (room * GB, level))
+    free = a5.available_memory(*files)
+    assert free == (500 if room is None else room) * GB and isinstance(free, int)
+    assert (free.node, free.room, free.level) == (500 * GB, None if room is None else room * GB, level)
+    assert free.binds == ("node" if room is None else "cgroup")
+    assert a5.memory_terms(free) == {"free": free, "node_mem_available": 500 * GB, "binds": free.binds,
+                                     "cgroup_room": None if room is None else room * GB, "cgroup_level": level}
+    (tmp_path / "small").mkdir()
+    small = a5.available_memory(*_machine(tmp_path / "small", 3, here, levels))
+    assert small == (3 if room is None else min(3, room)) * GB
+    assert small.binds == ("cgroup" if room is not None and room < 3 else "node")
+
+
+def test_a_scope_without_a_memory_stat_counts_all_it_holds(tmp_path):
+    meminfo, cgroup, root = _machine(tmp_path, 500, SCOPE, {"job.slice/audit.scope": (str(290 * GB), 250, 60)})
+    assert a5.available_memory(meminfo, cgroup, root) == 100 * GB
+    (root / "job.slice/audit.scope/memory.stat").unlink()
+    assert a5.available_memory(meminfo, cgroup, root) == 40 * GB
+    (root / "job.slice/audit.scope/memory.stat").write_text("inactive_file many\n")
+    assert a5.available_memory(meminfo, cgroup, root) == 40 * GB
+
+
+def _memory_lines(out: str, pool: str) -> list[dict]:
+    """The lines a pool printed of its memory, each without the pool's name."""
+    said = [json.loads(x[3:])["memory"] for x in out.splitlines() if x.startswith('A5 {"memory"')]
+    return [{k: v for k, v in x.items() if k != "pool"} for x in said if x["pool"] == pool]
+
+
+def test_the_pool_says_the_memory_it_starts_with_and_which_term_binds(tmp_path, capsys):
+    """One line as the pool starts: its workers and budget, the node's MemAvailable, the cgroup's room and the level it
+    is read at, and which of the two binds; a caller's own reading is the bytes alone."""
+    files = _machine(tmp_path, 500, SCOPE, {"job.slice": (str(320 * GB), 318, 8), "job.slice/audit.scope": ("max", 1)})
+    with a5.LeanPool(2, 290 * GB, lambda: a5.available_memory(*files)):
+        pass
+    assert _memory_lines(capsys.readouterr().out, "lean") == [{
+        "workers": 2, "budget": 290 * GB, "free": 10 * GB, "node_mem_available": 500 * GB, "cgroup_room": 10 * GB,
+        "cgroup_level": "/job.slice", "binds": "cgroup"}]
+    (tmp_path / "bare").mkdir()
+    bare = _machine(tmp_path / "bare", 7, None, {})
+    with a5.LeanPool(1, 290 * GB, lambda: a5.available_memory(*bare)):
+        pass
+    with a5.LeanPool(1, 290 * GB, lambda: 5 * GB):
+        pass
+    assert _memory_lines(capsys.readouterr().out, "lean") == [
+        {"workers": 1, "budget": 290 * GB, "free": 7 * GB, "node_mem_available": 7 * GB, "cgroup_room": None,
+         "cgroup_level": None, "binds": "node"},
+        {"workers": 1, "budget": 290 * GB, "free": 5 * GB}]
+
+
+def test_a_check_held_back_by_memory_is_said_once_with_its_estimate_and_the_term_that_held_it(tmp_path, capsys):
+    """A scope with 4 GB of room on a node with 500 GB free: the second check, estimated at 8 GB, waits for the first,
+    and the pool says so in one line however often it is asked, naming the cgroup's level; a third held after it adds
+    no line. The same wait under a budget names the budget and what runs within it; a pool that never waits says
+    nothing but its start. (The test asks the gate itself, so the line is there whether or not the pool's own thread
+    has asked yet.)"""
+    files = _machine(tmp_path, 500, SCOPE, {"job.slice/audit.scope": (str(64 * GB), 60)})
+    c = Checks(3)
+    p = a5.LeanPool(3, 100 * GB, lambda: a5.available_memory(*files))
+    try:
+        for i, need in enumerate([GB, 8 * GB, 9 * GB]):
+            p.submit(c, i, need)
+        c.started[0].wait()
+        for _ in range(3):
+            with p.cv:
+                assert not p._fits(1, 8 * GB)
+        assert not c.started[1].is_set()
+        c.release[0].set()
+        c.started[1].wait()
+        with p.cv:
+            assert not p._fits(2, 9 * GB)
+        c.release[1].set()
+        c.started[2].wait()
+    finally:
+        for e in c.release:
+            e.set()
+        p.ex.shutdown(wait=True)
+    start, *held = _memory_lines(capsys.readouterr().out, "lean")
+    assert start["binds"] == "cgroup" and held == [{
+        "waits": "check", "need": 8 * GB, "free": 4 * GB, "node_mem_available": 500 * GB, "cgroup_room": 4 * GB,
+        "cgroup_level": SCOPE, "binds": "cgroup"}]
+
+    c = Checks(2)
+    with pool(c, [6 * GB, 6 * GB], budget=10 * GB) as p:
+        c.started[0].wait()
+        for _ in range(2):
+            with p.cv:
+                assert not p._fits(1, 6 * GB)
+        c.release[0].set()
+        c.started[1].wait()
+    assert _memory_lines(capsys.readouterr().out, "lean")[1:] == [
+        {"waits": "check", "need": 6 * GB, "binds": "budget", "budget": 10 * GB, "running": 6 * GB}]
+
+    c = Checks(2)
+    with pool(c, [GB, GB]) as p:
+        c.started[1].wait()
+    assert len(_memory_lines(capsys.readouterr().out, "lean")) == 1
+
+
+def test_a_session_that_waits_for_the_running_checks_is_said_too(capsys):
+    """A session of 5 GB beside a check of 8 GB under a budget of 10 GB waits for the check, and the pool says so once
+    before it waits. The check is released as the session reaches its wait, so the session enters either way."""
+    c = Checks(1)
+    with pool(c, [8 * GB], budget=10 * GB) as p:
+        c.started[0].wait()
+        wait_for = p.cv.wait_for
+
+        def released(fits):
+            c.release[0].set()
+            return wait_for(fits)
+
+        p.cv.wait_for = released
+        with p.session(5 * GB):
+            assert not p.running and p.held == 5 * GB
+    assert _memory_lines(capsys.readouterr().out, "lean")[1:] == [
+        {"waits": "session", "need": 5 * GB, "binds": "budget", "budget": 10 * GB, "running": 8 * GB}]
+
+
+def test_a_machine_with_only_cgroup_v1_lines_reads_memavailable_alone(tmp_path):
+    meminfo, cgroup, root = _machine(tmp_path, 500, None, {"": (str(GB), 0)})
+    cgroup.write_text("12:memory:/job\n1:name=systemd:/job\n")
+    assert a5.cgroup_room(cgroup, root) is None and a5.available_memory(meminfo, cgroup, root) == 500 * GB
+    meminfo.write_text("MemTotal: 1 kB\n")
+    with pytest.raises(OSError, match="MemAvailable"):
+        a5.available_memory(meminfo, cgroup, root)
+
+
+def test_the_audit_reads_this_machines_own_files_by_default():
+    """The audit hands `available_memory` to its pools with no argument, so its defaults are the kernel's files."""
+    assert [str(p.default) for p in inspect.signature(a5.available_memory).parameters.values()] == [
+        "/proc/meminfo", "/proc/self/cgroup", "/sys/fs/cgroup"]
 
 
 def test_the_estimates_are_the_circuit_files_bytes_times_their_factors(tmp_path):

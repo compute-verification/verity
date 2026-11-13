@@ -1619,7 +1619,8 @@ class LeanPool:
     start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates and the
     running session's (`session`) within ``budget`` bytes, and ``available()`` bytes free now. With no check and no session
     running the next starts whatever its estimate, so one over the budget runs alone. `results` are the checks' in the
-    order submitted."""
+    order submitted. It prints the memory it starts with (`say_memory`: the budget and ``available()``'s terms) and, the
+    first time a check's or a session's start waits for memory, one line with the estimate and the term that held it."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float]):
         self.budget, self.available = budget, available
@@ -1629,6 +1630,8 @@ class LeanPool:
         self.next = self.running = 0
         self.used = 0.0
         self.held: float | None = None
+        self.said = False
+        say_memory("lean", {"workers": workers, "budget": budget, **memory_terms(available())})
 
     def __enter__(self) -> LeanPool:
         return self
@@ -1641,6 +1644,8 @@ class LeanPool:
         """The caller's session, its memory estimate ``need`` held from the budget while it runs: it starts once the running
         checks leave ``need`` within the budget, or none runs, and no check starts beside it that doesn't fit with it."""
         with self.cv:
+            if self.running and self.used + need > self.budget:
+                self._waits("session", need, None)
             self.cv.wait_for(lambda: not self.running or self.used + need <= self.budget)
             self.held = need
         try:
@@ -1656,9 +1661,27 @@ class LeanPool:
     def results(self) -> list:
         return [f.result() for f in self.futures]
 
+    def _waits(self, what: str, need: float, free: float | None) -> None:
+        """The pool's one line on a start that waits for memory, the first time one does: what waits, its estimate,
+        and the term that holds it: the budget with what is running within it, else ``free``'s (`memory_terms`)."""
+        if not self.said:
+            self.said = True
+            say_memory("lean", {"waits": what, "need": need, **(
+                {"binds": "budget", "budget": self.budget, "running": self.used + (self.held or 0)} if free is None
+                else memory_terms(free))})
+
     def _fits(self, turn: int, need: float) -> bool:
-        return turn == self.next and ((not self.running and self.held is None) or
-                                      (self.used + (self.held or 0) + need <= self.budget and self.available() >= need))
+        if turn != self.next:
+            return False
+        if not self.running and self.held is None:
+            return True
+        if self.used + (self.held or 0) + need > self.budget:
+            self._waits("check", need, None)
+            return False
+        free = self.available()
+        if free < need:
+            self._waits("check", need, free)
+        return free >= need
 
     def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
         with self.cv:
@@ -1673,12 +1696,86 @@ class LeanPool:
                 self.cv.notify_all()
 
 
-def available_memory() -> int:
-    """The node's available memory now, in bytes (/proc/meminfo's MemAvailable)."""
-    for line in Path("/proc/meminfo").read_text().splitlines():
+def cgroup_room(cgroup: Path = Path("/proc/self/cgroup"), root: Path = Path("/sys/fs/cgroup")) -> tuple[int, str] | None:
+    """The room under the tightest memory limit over this process now, in bytes, and the cgroup it is read at, as its
+    path from the hierarchy's mount: at each level from the process's own cgroup (``cgroup``'s cgroup v2 line,
+    `0::PATH`) up to ``root``, the mount, where the level states a limit, `memory.max` less what the level holds that
+    the kernel can't give back, and never under 0. What it holds is `memory.current` less its file cache
+    (`file_cache`), which the kernel drops under the limit before it kills, as it does the node's, where MemAvailable
+    counts it free; shared memory and anonymous memory stay counted. A dirty page is in that cache and is freed only
+    once written, so the room can read high for a moment. None where no level states a limit or the machine has no
+    cgroup v2 file."""
+    try:
+        here = next(x[3:] for x in cgroup.read_text().splitlines() if x.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    parts = [x for x in here.split("/") if x]
+    rooms = []
+    for n in range(0 if ".." in parts else len(parts), -1, -1):
+        level = root.joinpath(*parts[:n])
+        try:
+            limit = (level / "memory.max").read_text().strip()
+            if limit != "max":
+                rooms.append((max(0, int(limit) - int((level / "memory.current").read_text()) + file_cache(level)),
+                              "/" + "/".join(parts[:n])))
+        except (OSError, ValueError):
+            pass
+    return min(rooms, default=None)
+
+
+def file_cache(level: Path) -> int:
+    """The file cache a cgroup holds, in bytes: its `memory.stat`'s `inactive_file` and `active_file` (shared memory is
+    in neither); 0 where the file can't be read, so all of the level's `memory.current` then counts as held."""
+    try:
+        stat = dict(x.split() for x in (level / "memory.stat").read_text().splitlines() if len(x.split()) == 2)
+        return int(stat.get("inactive_file", 0)) + int(stat.get("active_file", 0))
+    except (OSError, ValueError):
+        return 0
+
+
+class Free(int):
+    """What `available_memory` reads: the bytes this process can still take now, with the two terms it is the least
+    of. ``node``: the node's MemAvailable. ``room`` and ``level``: the room under the tightest cgroup memory limit over
+    the process and the cgroup it is read at (`cgroup_room`; None where no limit is over it). `binds` names the least."""
+
+    node: int
+    room: int | None
+    level: str | None
+
+    def __new__(cls, node: int, room: int | None = None, level: str | None = None) -> Free:
+        self = super().__new__(cls, node if room is None else min(node, room))
+        self.node, self.room, self.level = node, room, level
+        return self
+
+    @property
+    def binds(self) -> str:
+        return "node" if self.room is None or self.node <= self.room else "cgroup"
+
+
+def memory_terms(free: float) -> dict[str, Any]:
+    """A reading of free memory as a pool's lines say it: the bytes free and, of `available_memory`'s (`Free`), the
+    node's MemAvailable, the cgroup's room and the level it is read at (None: no cgroup memory limit over the audit)
+    and which of the two binds; of a caller's own reading, the bytes alone."""
+    if not isinstance(free, Free):
+        return {"free": free}
+    return {"free": int(free), "node_mem_available": free.node, "cgroup_room": free.room, "cgroup_level": free.level,
+            "binds": free.binds}
+
+
+def say_memory(pool: str, what: dict[str, Any]) -> None:
+    print("A5 " + json.dumps({"memory": {"pool": pool, **what}}), flush=True)
+
+
+def available_memory(meminfo: Path = Path("/proc/meminfo"), cgroup: Path = Path("/proc/self/cgroup"),
+                     root: Path = Path("/sys/fs/cgroup")) -> Free:
+    """The memory this process can still take now, in bytes: the tightest of the node's (``meminfo``'s MemAvailable)
+    and the room under each cgroup memory limit over it (`cgroup_room`), so an audit run inside a memory scope is held
+    to the scope's room and not the node's. With no limit over it, or no cgroup v2 file, the node's alone. The number
+    carries its two terms (`Free`)."""
+    for line in meminfo.read_text().splitlines():
         if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) * 1024
-    raise OSError("/proc/meminfo has no MemAvailable")
+            return Free(int(line.split()[1]) * 1024, *(cgroup_room(cgroup, root) or ()))
+    raise OSError(f"{meminfo} has no MemAvailable")
 
 
 def audit_memory(a: argparse.Namespace, available: Callable[[], float]) -> float:
@@ -1818,7 +1915,9 @@ class NegativeWorkers:
     most ``workers`` at once, with its own Lean verifier process (`_work`). A worker starts, in the order submitted,
     only while its memory estimate ``need()`` (`worker_need`, read when `run` starts) fits: with the running workers'
     and what the audit holds (``own()``) within ``budget`` bytes, and ``available()`` bytes free now; with none
-    running the next starts whatever its estimate, so one over the budget runs alone. A task's `entries` are its own,
+    running the next starts whatever its estimate, so one over the budget runs alone. `run` prints the memory it
+    starts with (`say_memory`) and, the first time memory holds a worker's start back, one line with the estimate and
+    the term that held it. A task's `entries` are its own,
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
     killed. No worker is forked beside another Python thread of the audit's, whose locks would stay held in it: `run`
@@ -1874,12 +1973,30 @@ class NegativeWorkers:
         ctx = multiprocessing.get_context("fork")
         t0, need, own = time.time(), self.need(), self.own()
         self.stage.update(need=need, audit=own, memory={"audit": process_memory(), "lean": lean_server_memory()})
+        say_memory("negatives", {"workers": self.workers, "budget": self.budget, "need": need, "audit": own,
+                                 **memory_terms(self.available())})
         running: dict[Any, tuple[Negative, Any]] = {}
+        said = False
+
+        def fits() -> bool:
+            """Whether the next worker starts beside the running ones; the first time memory holds one back, one line
+            with the estimate and the term that held it."""
+            nonlocal said
+            over = own + (len(running) + 1) * need > self.budget
+            free = None if over else self.available()
+            if not over and free >= need:
+                return True
+            if not said:
+                said = True
+                say_memory("negatives", {"waits": "worker", "need": need, **(
+                    {"binds": "budget", "budget": self.budget, "running": own + len(running) * need} if over
+                    else memory_terms(free))})
+            return False
+
         gc.freeze()  # the audit's objects stay out of a worker's collections, which would write to, and so un-share, each
         try:
             while self.waiting or running:
-                while self.waiting and len(running) < self.workers and (not running or (
-                        own + (len(running) + 1) * need <= self.budget and self.available() >= need)):
+                while self.waiting and len(running) < self.workers and (not running or fits()):
                     task = self.waiting.pop(0)
                     recv, send = ctx.Pipe(duplex=False)
                     worker = ctx.Process(target=_work, args=(task.fn, send, os.getpid()), daemon=True)
@@ -1936,7 +2053,9 @@ def lean_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--audit-mem-gb", type=float,
                    help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
                         f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
-                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start)")
+                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start, the least "
+                        f"of the node's MemAvailable and the room under each cgroup memory limit over the audit, its "
+                        f"file cache counted free)")
     p.add_argument("--negative-workers", type=positive, default=1,
                    help="the negatives after the audit record at once (`NegativeWorkers`): 1, one after another in the "
                         "audit's own process; more, each in a worker process forked from the audit with its own Lean "

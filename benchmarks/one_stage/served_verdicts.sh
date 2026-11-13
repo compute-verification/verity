@@ -112,7 +112,14 @@
 #     shares within V3C_AUDIT_MEM_GB beside the running session's estimate (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`); in a
 #     follow-on, which passes the flag only where V3C_LEAN_WORKERS is set and else leaves a5's own default
 #     (`a5.LEAN_WORKERS`, 1), within the V3C_AUDIT_MEM_GB its command sets, else what its node has free, beside
-#     that estimate (`a5.LeanPool`); its negatives after the audit record one after another, or with
+#     that estimate (`a5.LeanPool`). What the audit reads as free (`a5.available_memory`) is the least of two: its
+#     node's MemAvailable, and under each cgroup memory limit over it memory.max less what the cgroup holds that the
+#     kernel can't give back. A cgroup's file cache (memory.stat's inactive_file and active_file) is counted free, as
+#     MemAvailable counts the node's; its anonymous memory and its shared memory are not. So a follow-on inside a
+#     memory scope is held to the scope's room. A set V3C_AUDIT_MEM_GB is the audit's memory in place of that reading
+#     as its sessions start; each check and worker still starts only while its estimate is free by it. Each pool
+#     prints the two terms and which binds as it starts, and once what held a start back. Its negatives after the
+#     audit record run one after another, or with
 #     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
 #     while its memory estimate, read then, fits that memory (`a5.NegativeWorkers`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
