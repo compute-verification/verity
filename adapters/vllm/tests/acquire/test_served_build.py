@@ -10,11 +10,14 @@ __models__ = ("unsloth/Llama-3.2-1B",)
 
 import dataclasses
 import json
+import os
 import re
 import shutil
 import tarfile
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -216,6 +219,32 @@ def test_a_file_with_no_runner_call_has_no_launch(tmp_path: Path) -> None:
     (tmp_path / "w.py").write_text("x = 1\n")
     doc = C.parse_wrapper(str(tmp_path / "w.py"))
     assert (doc["launches"], doc["returns"], doc["unparsed_runs"], doc["signatures"]) == ([], [], 0, {}) and not doc["args"] and not doc["arg_kinds"]
+
+
+def _path_readers(art: Path) -> dict[str, tuple[Path, Callable[[Any], Any]]]:
+    """Each function of the Build that reads a file by its path, with a file of the fixture it reads."""
+    graph = art / "computation_graph.py"
+    wiring = C.split_graph_wiring(str(graph))
+    wired = {"returns": [[{"value": f"c{w['piece']:02d}.r{i}"} for i in range(w["n_ret"])] for w in wiring["wiring"]]}
+    return {"parse_wrapper": (sorted((art / "inductor").rglob("*.py"))[0], C.parse_wrapper),
+            "split_graph_wiring": (graph, C.split_graph_wiring), "_graph_output": (graph, SV._graph_output),
+            "_final_value": (graph, lambda path: SV._final_value(path, wiring, wired))}
+
+
+@pytest.mark.parametrize("reader", ["parse_wrapper", "split_graph_wiring", "_graph_output", "_final_value"])
+def test_a_file_is_opened_at_the_path_as_given(art: Path, reader: str) -> None:
+    """A wrapper's or a split graph's path is opened as it is given, nothing normalised on the way: bytes name the same file, a
+    file's name with a slash after it names no directory, and the empty path names nothing."""
+    path, read = _path_readers(art)[reader]
+
+    def less_path(doc: Any) -> Any:
+        return {k: v for k, v in doc.items() if k != "path"} if isinstance(doc, dict) else doc
+
+    assert less_path(read(os.fsencode(path))) == less_path(read(str(path)))
+    with pytest.raises(NotADirectoryError):
+        read(f"{path}/")
+    with pytest.raises(FileNotFoundError):
+        read("")
 
 
 def _wrapper(kernel: str) -> dict:

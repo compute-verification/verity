@@ -50,7 +50,6 @@ import hashlib
 import json
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -381,7 +380,8 @@ _GRAPH_RETURN = re.compile(r"^\s*return \((\w+),\)\s*$", re.M)
 
 
 def _graph_output(path: str) -> str:
-    top = Path(path).read_text().split("\n    class submod_", 1)[0]
+    with open(path) as f:
+        top = f.read().split("\n    class submod_", 1)[0]
     m = _GRAPH_RETURN.search(top)
     if m is None:
         raise Unmodelled(f"{path}: the split graph returns no single value")
@@ -660,7 +660,8 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:
     """The backbone's output: the split graph's return, a piece's return that is a value."""
     out = _graph_output(split_graph)
-    src = Path(split_graph).read_text().split("\n    class submod_", 1)[0]
+    with open(split_graph) as f:
+        src = f.read().split("\n    class submod_", 1)[0]
     m = re.search(rf"^\s*{out} = (submod_\d+)\[(\d+)\]", src, re.M)
     pieces = [w["submod"] for w in graph["wiring"]]
     if m is None or m.group(1) not in pieces:
