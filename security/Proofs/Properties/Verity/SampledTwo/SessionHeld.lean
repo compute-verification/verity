@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
+public import Proofs.Properties.Verity.SampledTwo.SessionCoins
 public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Verity.Sampled.LinkFirst
@@ -33,8 +33,9 @@ The sessions' coins take two facts about a play the two-stage form accepts as pr
   tree after it; an opening of session `t`'s tree comes after openings of the trees of sessions at or before `t` only;
   and before any opening of a session's tree, each earlier session has an opening answering its evidence's SHA-512
   (`Verity.Sampled.MemberForm.members_read`).
-* **The piece at the form's acceptance** (`located_own_accepted`, `located_one_accepted`, `sessionsAgree_accepted`):
-  `LocatedOwn`, one release a round and `SessionsAgree` with `InteriorReads` and `MembersAccepted` discharged.
+* **The piece at the form's acceptance** (`located_own_accepted`, `located_one_accepted`): `LocatedOwn` and one
+  release a round with `MembersAccepted` discharged; `SessionAgrees.lean` gives `SessionsAgree` with `InteriorReads`
+  discharged (`sessionsAgree_accepted`).
 
 **The earlier signature.** Nothing here reads a signature: the trees and the lines are the ones the check read under
 the parameters' challenger key, and a strategy replaying an earlier period's genuine signature shows in the cut's
@@ -395,13 +396,5 @@ the check read on each round. -/
 theorem located_one_accepted (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) :
     ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ n, (located (locOf A tab) n [] l).length ≤ 1 :=
   located_one A C tab (membersAccepted (membersNamed C hsz))
-
-/-- **The sessions' releases agree with the run's coins** (`SessionsAgree`), at the form's acceptance: from the coin
-map's agreement at the session-round locator (`DevElems`) and the cut's `InteriorLogged`. -/
-theorem sessionsAgree_accepted (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
-    (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
-    (hsz : HeldSize) (hlog : InteriorLogged C Good) (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :
-    SessionsAgree A x (withCoins A C tab dev Ms) dev (FormAccepts C) Good Ag :=
-  sessionsAgree A x C Ms tab dev Good Ag (interiorReads C hsz) hlog hE
 
 end Verity.SampledTwo.SessionCoins

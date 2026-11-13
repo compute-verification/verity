@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionHeld
+public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
 /-!

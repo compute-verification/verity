@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionCoins
+public import Proofs.Properties.Verity.SampledTwo.SessionHeld
 public import Proofs.Properties.Verity.SampledTwo.DevAgrees
 
 /-!
@@ -16,6 +16,7 @@ releases the session-round locator puts on the round carry, in the log the check
 * `located_widths`: the elements a round's releases carry are the same in two logs of the same frames.
 * `slot_exists`: a round past the statements' and before the sessions' end is in one session's rounds.
 * `sessionsAgree`: `SessionsAgree` from `InteriorReads`, the cut's `InteriorLogged` and `DevElems`.
+* `sessionsAgree_accepted`: the same at the form's acceptance, `InteriorReads` from `SessionHeld.interiorReads`.
 -/
 
 @[expose] public section
@@ -98,5 +99,13 @@ theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionR
   simp only [List.nil_append]
   rw [located_widths hF hS]
   exact he
+
+/-- **The sessions' releases agree with the run's coins** (`SessionsAgree`), at the form's acceptance: from the coin
+map's agreement at the session-round locator (`DevElems`) and the cut's `InteriorLogged`. -/
+theorem sessionsAgree_accepted (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+    (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
+    (hsz : HeldSize) (hlog : InteriorLogged C Good) (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :
+    SessionsAgree A x (withCoins A C tab dev Ms) dev (FormAccepts C) Good Ag :=
+  sessionsAgree A x C Ms tab dev Good Ag (interiorReads C hsz) hlog hE
 
 end Verity.SampledTwo.SessionCoins
