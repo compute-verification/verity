@@ -88,8 +88,9 @@ Verified [ran]:
   registered reads are identical (`r20261113-055056-8688`). At 64 ids the repeat is the decode step's split chain
   (`T=65, places=26, repeated_keys=9`).
 - the value check at 4 layers, patched, 43 ids, 2 outputs: the window's digest `61b9f8d8516fe67f…`, 105 templates, 39,273
-  units checked, 0 mismatches, no undeclared input, no row two pieces hold (`r20261113-062219-2777`). At 150 ids:
-  VALUES150.
+  units checked, 0 mismatches, no undeclared input, no row two pieces hold (`r20261113-062219-2777`). At 150 ids, the
+  length the unpatched tree refuses: `e6cb06d1467931fe…`, 135 templates, 47,781 units checked, 0 mismatches, none
+  undeclared, 8.5 GiB at peak (`r20261113-053624-1cb7`).
 
 It touches neither `node_window.py` nor `node_window_dense.py` nor their tests.
 
@@ -218,7 +219,7 @@ What it changes:
   unmixed form is unchanged;
 - two unit orders in one lowering, where today there is one [inferred].
 
-Its value check at 86 ids, 4 layers [ran, `r20261113-060524-d1f6`]: every template but one matches, and
+Its value check at 86 ids, 4 layers [ran, `r20261113-060524-d1f6`]: 134 of 135 templates match, and
 `BatchedGemm_v1{B=1,K=512,N=1}` mismatches 1,013 of 1,024 sampled units. The cause is the check's stand-in for a free `w`
 (`node_window_values.py:311-320`), which assumes the tree's unit order `a + (b N + n) M + t` [read]; the form's mixed nodes
 are member-slowest. With the stand-in taught the form's order (scratch only, `p3_bgform.py`): BGVALUES2.
@@ -291,7 +292,7 @@ would cut it [inferred, not built]:
 | `r20261113-052948-b2a8` | `p3_cycle.py bisect`: 129 at 2 outputs; at 3 it assumed monotone and is superseded by the sweep | unpatched |
 | `r20261113-053624-689e` | `test_node_window_sparse.py`; `p3_fixcheck.py` at 2 outputs for 43-256, at 3 for 43, 127, 128 and 150 | patched |
 | `r20261113-053624-c962` | `p3_fixcheck.py` at 2 outputs for 43-129, at 3 for 127 and 128 | unpatched |
-| `r20261113-053624-1cb7` | `p3_values.py` at 4 layers, 150 and 43 ids | patched |
+| `r20261113-053624-1cb7` | `p3_values.py` at 4 layers, 150 ids (its 43-id part ran past the timeout) | patched |
 | `r20261113-054823-8279` | `p3_cycle.py analyze 126 3` | unpatched |
 | `r20261113-054824-e596`, `r20261113-054824-5b84` | the sweep 87-150 at 2 and 3 outputs | unpatched |
 | `r20261113-054823-6dc1`, `r20261113-054824-a177` | the sweep 87-150 at 2 and 3 outputs | patched |
@@ -302,6 +303,7 @@ would cut it [inferred, not built]:
 | `r20261113-060202-5a6b` | `p3_bgform.py`: BatchedGemm a run of like members at a time | patched |
 | `r20261113-060524-d1f6` | `p3_values.py` with `p3_bgform.py`'s lowerings, 4 layers, 86 ids | patched |
 | `r20261113-062219-2777` | `p3_values.py` at 4 layers, 43 ids | patched |
+| `r20261113-070239-36f1` | `p3_values.py` with `p3_bgform.py`'s lowerings and its stand-in for a free w, 4 layers, 86 ids | patched |
 | `r20261113-062721-313e` | the test at 129 ids: passes without the fix (too weak) | unpatched |
 | `r20261113-062914-322f` | `test_chain_place_ranges` at 150 ids, without and with the fix; the whole file with it | both |
 
