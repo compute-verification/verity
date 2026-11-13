@@ -10,6 +10,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["FILE", "PredictedRow"]
+
 SCHEMA = "verity-vllm/predicted-row/v1"
 #: its name in the Build's dir, beside ``manifest.json``
 FILE = "predicted.json"

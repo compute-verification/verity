@@ -1542,10 +1542,10 @@ MONITORS: list[Monitor] = [
             every_s=600, for_s=1800, unread_s=3600),
     Monitor("stranded", "infra", "warn", "relay", stranded,
             "`research queue stranded --moves` prints each stranded job, the machines with a place for it and its move. A "
-            "check job (ci): launch its shard's twin on the first machine of its move, with the same pair, once every waiter "
-            "carries one. A check job that is the loop's heavy shard (one the loop pins to a machine for its memory) can "
-            "read as stranded, because its ticket records no memory need yet; that is cured in slot.py's asker, ci's. "
-            "A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
+            "check job (ci) is one that carries no twin, since a queue shard runs only on the machines the loop launched it "
+            "on: place its next launch on the first machine of its move. A check job that is the loop's heavy shard (one the "
+            "loop pins to a machine for its memory) can read as stranded, because its ticket records no memory need yet; "
+            "that is cured in slot.py's asker, ci's. A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
             "pool's machine (its disk floor, or why it can't be read). Stalled: where the pool's slots carry `peaks=`, the "
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "

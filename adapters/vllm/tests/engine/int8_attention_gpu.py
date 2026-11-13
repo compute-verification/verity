@@ -27,12 +27,12 @@ from pathlib import Path
 from typing import Any
 
 import torch
-
-from tests.engine import fattn_oracle as O
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.engine import int8_attention as A
 from verity.definitions.registry import int8_exact as X
+
+from tests.engine import fattn_oracle as O
+from verity_vllm.engine import int8_attention as A
 
 #: fattn_ref.py reads 128-wide rows (fattn.cu's head dimension); at any other the oracle and the Definitions are the checks
 FATTN_REF_HEAD_DIM = 128

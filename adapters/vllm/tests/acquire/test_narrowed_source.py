@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import types
+from typing import Any
 
 import pytest
 
@@ -51,9 +52,15 @@ def _model(ret) -> torch.nn.Module:
 
 
 class Committer:
+    external_acquisition: bool
+
     def __init__(self, model=None, gather: bool = False) -> None:
-        self.model, self.name, self.errors, self.sources, self.events = model, "rec", [], [], []
-        self._cur, self._plan_shape, self.gather = None, None, gather
+        self.model, self.name, self.gather = model, "rec", gather
+        self.errors: list[str] = []
+        self.sources: list = []
+        self.events: list[tuple] = []
+        self._cur: types.SimpleNamespace | None = None
+        self._plan_shape: Any = None
         self._nc = types.SimpleNamespace(flush=lambda: self.events.append(("flush",)))
 
     def attach_source(self, src) -> None:

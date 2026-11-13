@@ -4,9 +4,8 @@ no hand-written static field beyond the repo id and the pinned revision.  Laptop
 at MAX_POS 131072 dominates)."""
 from __future__ import annotations
 
-import importlib
-
 import hashlib
+import importlib
 import json
 import shlex
 import subprocess
@@ -15,20 +14,35 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.definitions.registry import b1
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.patterns import GemmLaunch, members
 from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
 from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    resolve_step,
+)
+from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program import model as analytic
 
 L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
-from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.observe.events import ViewDesc
-from verity.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
