@@ -826,6 +826,49 @@ KEYED: dict[str, str] = {
     "a template keyed as an input bound at registration": "RegisteredInput7",
 }
 
+#: the history table the cases of `HISTORIES` declare
+HISTORY = "history/hidden"
+
+
+def _history(d: dict, **fields) -> None:
+    """The record `d` with one history table more: `Norm`'s output rows, a position a unit, as
+    `verity.commitments.windows.interface` records one (`History.doc`). `fields` replace its own, and one that is
+    None is left out."""
+    n = dict(d["templates"])[NORM]
+    h = {"name": HISTORY, "program": d["program"], "writer": NORM, "out": "o0", "words": 2,
+         "runs": [{"start": 0, "count": n, "writer": NORM, "out": "o0", "radix": [n], "base": 0, "step": [1]}],
+         "capacity": IF.HT.CAPACITY, **fields}
+    d["registered"].setdefault("histories", []).append({k: v for k, v in h.items() if v is not None})
+
+
+def _opened_from_history(d: dict) -> None:
+    """The record `d` with the history table, its table reads and its opening naming it in place of the weights'
+    table."""
+    _history(d)
+    for x in (*d["registered"]["roots"], *d["registered"]["openings"]):
+        x["table"] = HISTORY
+
+
+#: `lowered(2, 3)`'s record with `registered.histories`, a case each: the stage that refuses the record, None where
+#: the form takes it, and the edit that makes it. `LOOSE` names the one the form takes that
+#: `verity.commitments.windows.interface` refuses: the form reads a history's keys and its name, and nothing of its
+#: writer, rows and runs.
+HISTORIES: dict[str, tuple] = {
+    "histories, none of them": (None, lambda d: d["registered"].update(histories=[])),
+    "a history no row reads": (None, _history),
+    "a history that states no capacity": (None, lambda d: _history(d, capacity=None)),
+    "the opening against a history": (None, _opened_from_history),
+    "a history of no template's rows": (None, lambda d: _history(d, writer="Nope_v1")),
+    "a history under a table's name": ("inputs", lambda d: _history(d, name=TABLE)),
+    "a history under a registered parameter's name": ("inputs", lambda d: _history(d, name="weights/norm")),
+    "two histories of one name": ("inputs", lambda d: (_history(d), _history(d))),
+    "a history with a key more": ("inputs", lambda d: _history(d, rows=6)),
+    "a history that states no runs": ("inputs", lambda d: _history(d, runs=None)),
+    "a history named by no string": ("inputs", lambda d: _history(d, name=3)),
+    "histories that are no list": ("inputs", lambda d: d["registered"].update(histories=3)),
+}
+LOOSE = "a history of no template's rows"
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -871,7 +914,14 @@ def shaped() -> list[dict]:
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
     it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
-    (`templates`): a root node of a composite is no input, whatever its key reads as."""
+    (`templates`): a root node of a composite is no input, whatever its key reads as.
+
+    Then the accepted case with `registered.histories` (`HISTORIES`). With none of them, with a history table of
+    `Norm`'s output rows that no row reads, stating its capacity or not, and with one of a writer the circuit has no
+    template of, the record counts as the accepted case does. With its table reads and its opening naming the history
+    in place of the weights' table, they are fresh and the rate refuses: a history is over no registered parameter.
+    A history under a table's name, a registered parameter's or another history's, one with a key more or a key
+    less, one named by no string, and histories that are no list are refused with the declarations (`inputs`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1011,6 +1061,9 @@ def shaped() -> list[dict]:
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
         first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
         first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+    for k, (what, (stage, declare)) in enumerate(HISTORIES.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k, edit=declare,
+              broken=stage)
     return out
 
 
@@ -1625,7 +1678,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES)
 
 
 def results(case: dict) -> dict:

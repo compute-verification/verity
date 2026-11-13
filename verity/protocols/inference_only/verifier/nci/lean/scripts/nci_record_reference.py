@@ -72,6 +72,8 @@ ROWS_LIMITS = ("table", "gamma", "alpha")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
+#: a history table's keys; it may state its `capacity` beside them
+HISTORY = {"name", "program", "writer", "out", "words", "runs"}
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
@@ -395,13 +397,31 @@ def _objects(xs, keys: set[str]) -> list[dict]:
     return xs
 
 
+def histories_of(reg: dict) -> list[str]:
+    """The Lean's `RecordText.historiesOf`: the record's history tables, by name, in order; none where `registered`
+    has no `histories`. Refused (`inputs`) unless `histories` is a list of objects of a history's keys (`HISTORY`, with
+    or without `capacity`), each named by a string that is no registered parameter's name, no table's (the `name` of
+    each entry of `tables` that has one) and no other history's. Nothing else of a history is read."""
+    hs = reg.get("histories", [])
+    if not (isinstance(hs, list) and all(isinstance(h, dict) and set(h) - {"capacity"} == HISTORY
+                                         and isinstance(h["name"], str) for h in hs)):
+        raise Malformed("inputs")
+    names = [h["name"] for h in hs]
+    tables = reg["tables"] if isinstance(reg["tables"], list) else []
+    taken = {*reg["params"], *(t["name"] for t in tables if isinstance(t, dict) and isinstance(t.get("name"), str))}
+    if len(set(names)) != len(names) or taken & set(names):
+        raise Malformed("inputs")
+    return names
+
+
 class Inputs:
     """What the record declares to fill its units' input rows beside its wires, each declaration refused (`inputs`)
     unless it is well formed for the templates and cuts, and unless no row is filled twice (`fill`, row by row):
-    `params`, the registered parameters' leaves; `tables`, by name; `reads`, the registered reads; `roots`, the table
-    reads; `openings`; and `fill`, by `(template, port)`, each filled `(unit, row)` with what fills it:
-    `("wire", index)`, `("read", parameter)`, `("root", table, what it reads of it)`, `("opening", index)` or
-    `("ingress",)`."""
+    `params`, the registered parameters' leaves; `tables`, by name, each over its `param`: the entries of
+    `registered.tables`, then the history tables (`histories_of`), each over a parameter of its own name, which is no
+    registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`; and `fill`, by
+    `(template, port)`, each filled `(unit, row)` with what fills it: `("wire", index)`, `("read", parameter)`,
+    `("root", table, what it reads of it)`, `("opening", index)` or `("ingress",)`."""
 
     def __init__(self, templates: list[Template], cuts: dict, wires: list[dict], rec: dict) -> None:
         by = {t.tid: t for t in templates}
@@ -430,10 +450,11 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "histories"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
+        histories = histories_of(reg)
         self.params = reg["params"]
         self.tables: dict[str, dict] = {}
         for t in _objects(reg["tables"], TABLE):
@@ -443,6 +464,7 @@ class Inputs:
                     and t["offset"] + t["words"] * t["rows"] <= self.params[t["param"]]):
                 raise Malformed("inputs")
             self.tables[t["name"]] = t
+        self.tables.update({name: {"name": name, "param": name} for name in histories})
         self.reads = [pattern(r, READ) for r in reg["reads"]]
         for r in self.reads:
             words, k = port(r["reader"], r["port"], outs=True)
@@ -615,7 +637,11 @@ def expand(inst, tr) -> dict:
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
-    is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
+    thetas = {p: theta(T, x.params, p) for p in x.params}
+
+    def is_theta(p: str) -> bool:
+        """Whether `p` is a registered parameter that is θ: a history table's parameter, its own name, is none."""
+        return thetas.get(p, False)
     digests = {t.tid: closure_digest(desc, t.tid) for t in templates}
     pins = {tid: d if d in i["pins"] else None for tid, d in digests.items()}
 
