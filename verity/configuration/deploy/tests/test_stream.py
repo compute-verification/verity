@@ -1,7 +1,9 @@
-"""The side (`stream.Side`): where `period.json` puts it, and one session with a side in a process of its own."""
+"""The side (`stream.Side`): where `period.json` puts it, one session with a side in a process of its own, and one
+request such a side answers with no session."""
 
 from __future__ import annotations
 
+import json
 import sys
 
 import pytest
@@ -50,3 +52,21 @@ def test_one_session_with_a_side_of_its_own() -> None:
     refuse = "import sys; sys.stdin.readline(); print('{\"refused\": \"a second session\"}'); sys.exit(1)"
     with pytest.raises(RuntimeError, match="the side on auditor refused: a second session$"):
         Side("auditor", (sys.executable, "-c", refuse)).talk({}, _shout)
+
+
+ANSWER = """
+import json, sys
+request = json.loads(sys.stdin.readline())
+print(json.dumps({"asked": request}), flush=True)
+sys.exit(request["rc"])
+"""
+
+
+def test_one_request_a_side_answers_with_no_session() -> None:
+    side = Side("auditor", (sys.executable, "-c", ANSWER))
+    assert side.ask({"rc": 0}) == ({"asked": {"rc": 0}}, '{"asked": {"rc": 0}}\n', 0)
+    assert side.ask({"rc": 2})[2] == 2
+    assert Side("auditor", (sys.executable, "-c", "import sys; sys.exit(3)")).ask({}) == ({}, "", 3)
+    # a side that listens instead of answering is ended by one connection, and its line is what the caller reads
+    doc, line, rc = Side("auditor", (sys.executable, "-c", ECHO)).ask({"rc": 0})
+    assert set(doc) == {"listening"} and json.loads(line) == doc and rc == 0

@@ -7,7 +7,7 @@ one stream and prints its report as its last line, or prints `{"refused": REASON
 where the stream connects, None for this machine at the port the side prints. `Side.of` reads which machine from a node's `period.json`: its `challenger_host` (the node itself
 by default), and `challenger.<key>`'s `command` and `address` (`"HOST:PORT"`), which infra writes once that host serves
 the side. `talk(request, drive)` starts the side, hands `drive` the connected socket, and returns the side's report
-with what `drive` returned.
+with what `drive` returned. `ask(request)` starts it for one request it answers on its stdout, with no session.
 """
 
 from __future__ import annotations
@@ -45,6 +45,23 @@ class Side:
                                "(infra's)")
         h, _, p = entry["address"].rpartition(":")
         return cls(host, tuple(entry["command"]), (h, int(p)))
+
+    def ask(self, request: Mapping[str, Any]) -> tuple[dict[str, Any], str, int]:
+        """One request this side answers on its stdout, with no session: `request` sent, then the line it printed as
+        JSON (`{}` for none), the line itself and its exit code. A side that listens instead (an older one, waiting
+        for a session's prover and holding its host's gate) is ended by one connection, made and closed."""
+        p = subprocess.Popen(list(self.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        try:
+            p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
+            p.stdin.close()
+            line = p.stdout.readline()
+            doc = json.loads(line) if line.strip() else {}
+            if "listening" in doc:
+                with socket.create_connection(self.address or ("127.0.0.1", doc["listening"])):
+                    pass
+        finally:
+            rc = p.wait()
+        return doc, line, rc
 
     def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]:
         """One session with this side: `request` sent, `drive` handed the stream once it connects, and the side's

@@ -42,9 +42,7 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 from __future__ import annotations
 
 import hashlib
-import json
 import socket
-import subprocess
 import sys
 import time
 from collections import deque
@@ -126,12 +124,13 @@ T = TypeVar("T")
 
 class Side(Protocol):
     """The challenger's side as what starts a run hands it to PoUS (the runtime's `Side` is one): the machine it runs
-    on, the argv that starts it there, where its stream connects, and `talk(request, drive)`, one session with it:
-    `request` sent, `drive` handed the connected socket, the side's report back with what `drive` returned."""
+    on; `ask(request)`, one request it answers with no session: the line it printed as JSON, the line and its exit
+    code; and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the
+    side's report back with what `drive` returned."""
 
     host: str
-    command: tuple[str, ...]
-    address: tuple[str, int] | None
+
+    def ask(self, request: Mapping[str, Any]) -> tuple[dict[str, Any], str, int]: ...
 
     def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
 
@@ -300,18 +299,7 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
     """The salt's source for the audit `audit`, which the challenger's side `side` samples after `commitment` and logs
     (`give_salt`); RuntimeError with the side's refusal, or when it answers anything else or exits nonzero."""
-    p = subprocess.Popen(list(side.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    try:
-        p.stdin.write(json.dumps({"salt": {"audit": audit.hex(), "commitment": commitment.hex()}}, sort_keys=True) + "\n")
-        p.stdin.close()
-        line = p.stdout.readline()
-        doc = json.loads(line) if line.strip() else {}
-        if "listening" in doc:
-            # a side older than the salt request waits for a session's prover, holding the host's gate: end it now
-            with socket.create_connection(side.address or ("127.0.0.1", doc["listening"])):
-                pass
-    finally:
-        rc = p.wait()
+    doc, line, rc = side.ask({"salt": {"audit": audit.hex(), "commitment": commitment.hex()}})
     if rc == 0 and isinstance(doc.get("source"), str):
         return bytes.fromhex(doc["source"])
     why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
