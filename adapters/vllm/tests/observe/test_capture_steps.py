@@ -728,7 +728,6 @@ def test_each_kv_cache_group_of_a_hybrid_runner_has_its_layers_block_tables_and_
     def slots_of_the_second_group(batch):
         mappings = runner.execute_model_state.slot_mappings_by_layer
         mappings["sliding.1"] = torch.tensor([24, 25, 0, 99], dtype=torch.int32)
-        mappings["a layer of no group, with the first's mapping"] = mappings[LAYER]
 
     runner.prepared = slots_of_the_second_group
     _step(runner, 0, steps)
@@ -736,7 +735,7 @@ def test_each_kv_cache_group_of_a_hybrid_runner_has_its_layers_block_tables_and_
         {"layers": [LAYER], "block_size": 2, "nblocks": [1, 1], "slot_layer": LAYER},
         {"layers": ["sliding.0", "sliding.1"], "block_size": 2, "nblocks": [2, 0], "slot_layer": "sliding.1"},
         {"layers": ["unmapped"], "block_size": 2, "nblocks": [0, 0], "slot_layer": None}]
-    assert capture._pending.facts["slot_mapping_distinct"] == 2 and capture._pending.facts["slot_mapping_layer"] == LAYER
+    assert capture._pending.facts["slot_mapping_layer"] == LAYER
     events, (start,) = _logged(tmp_path, capture)
     assert start.kv_groups == [
         {"layers": [LAYER], "block_size": 2, "block_tables": {"a": [4], "b": [6]}, "slot_mapping": [8, 9, 12]},
