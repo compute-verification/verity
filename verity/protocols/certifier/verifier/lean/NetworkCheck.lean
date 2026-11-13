@@ -9,6 +9,7 @@ public import NetworkCheck.RecordsGrid
 public import NetworkCheck.RecordsBytes
 public import NetworkCheck.Period
 public import NetworkCheck.LinkWindow
+public import NetworkCheck.ScanFiles
 
 /-!
 # The network certificate's checks
@@ -36,4 +37,9 @@ by `tests/test_network_period_protocol.py`. Code: it imports only Lean, Flock's 
 `NetworkCheck.LinkWindow` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
+
+`NetworkCheck.ScanFiles` holds the circuit file of each template of the scan's root to that template: read as the
+sampled verifier reads a statement's circuit (`Flock.ProvedScope.circuitOf`), laid out as Bits lays it out
+(`Spot.Bits.check`), its ingress rows read by its unit's rows. Beyond the above it imports the sampled verifier's
+`Spot.Bits` and Flock's circuit parse.
 -/
