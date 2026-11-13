@@ -20,11 +20,11 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
-def lake_packages() -> list[Path]:
+def lake_packages(fixtures: bool = False) -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and (fixtures or not Path(d).is_relative_to(FIXTURES)):
             out.append(Path(d))
     return out
 
@@ -52,6 +52,22 @@ def test_every_package_module_is_a_module():
     assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
         "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
         "\n  ".join(lakefiles)
+
+
+def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
+    """`check.py`'s builds (`lake_env`) and the suites' uncached runs (`suites.py`'s `UNCACHED_ENV`) turn Lake's artifact
+    cache off by `LAKE_ARTIFACT_CACHE` alone. That is enough while no lakefile names `enableArtifactCache`, a package's own
+    setting, which Lake reads before the environment. The Lean tools' fixtures are held to it too: their tests build them."""
+    pkgs = lake_packages(fixtures=True)
+    assert any(p.is_relative_to(FIXTURES) for p in pkgs), "the walk reached no fixture's lakefile"
+    named = [str(f.relative_to(ROOT)) for p in pkgs for f in (p / "lakefile.toml", p / "lakefile.lean")
+             if f.exists() and "enableArtifactCache" in f.read_text()]
+    assert not named, (
+        f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
+        "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
+        "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
 
 
 def test_one_toolchain():
@@ -160,12 +176,14 @@ def test_every_lock_is_owned():
 
 
 def test_every_record_merges_with_the_driver():
-    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and each record's `reads` digests are the ones
-    the driver recomputes from their definitions."""
+    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
+    `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
     spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(merge)
-    assert f"lean-audit.json merge={merge.NAME}" in (ROOT / ".gitattributes").read_text().splitlines()
+    attributes = (ROOT / ".gitattributes").read_text().splitlines()
+    assert f"lean-audit.json merge={merge.NAME}" in attributes
+    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.CAPS}" in attributes
     stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
              for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
@@ -354,10 +372,11 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
-                      f"larger of their caps while the count took both: raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
+                      f"under it, the merge kept the lowering while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -664,9 +683,9 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
     assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
 
 
-def test_every_cap_merges_as_the_larger_of_its_sides():
+def test_every_cap_merges_key_by_key():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as the larger of the two sides' caps instead of conflicting."""
+    three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]

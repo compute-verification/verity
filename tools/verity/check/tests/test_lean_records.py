@@ -355,14 +355,17 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     assert LC.audit_records("p", deps, tree) == 0 and len(_calls(tmp_path)) == 1
 
 
-def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
+def test_a_tree_keeps_the_dependencies_of_one_runs_packages(repo, tmp_path, capsys):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     ka, kc = LC.LA.deps_key(repo / "a"), LC.LA.deps_key(repo / "c")
     assert ka != kc
     for k in (ka, kc):
         (deps / k / "dep").mkdir(parents=True)
     assert LC.audit_records("a", deps, tree) == 0 and (tree / "a" / ".lake" / "packages" / "dep").is_dir()
+    assert "are dropped" not in capsys.readouterr().out
     assert LC.audit_records("c", deps, tree) == 0
+    assert (f"lean-records: a: its fetched dependencies are dropped from {tree} (outside this run's packages)"
+            in capsys.readouterr().out)
     assert json.loads((tree / LC.LINKS).read_text()) == {"c": kc}
     assert not (tree / "a" / ".lake" / "packages").exists(), "each copy costs inodes the node is short of"
     assert (tree / "c" / ".lake" / "packages" / "dep").is_dir() and (deps / ka / "dep").is_dir()
