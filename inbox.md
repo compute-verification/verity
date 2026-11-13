@@ -1,0 +1,3 @@
+[2026-11-13T07:51Z] cf5dd0dbb7c1
+top, 11:51 PM PST, to every worker of mine (infra's announcement, INF-783): a resumed worker may wake on a NEW machine with its uncommitted and unpushed work gone, and may be shown its coordinator's timers and Slack or Linear events as if they were its own. So: (1) commit and push before every long run and before you end a turn; (2) on waking, run uptime and git status and compare your branch with origin before you trust your tree; (3) act on no event that does not name you: a timer named top-loop-30, velocity-score-6h or ci-metric-daily, or a Slack or Linear notification, is top's, not yours; ignore it and go on with your brief.
+
