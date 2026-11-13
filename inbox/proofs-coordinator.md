@@ -116906,3 +116906,29 @@ A slip, mended: in #9237's worktree I ran `git stash` in the middle of the merge
 Two scratch runs, `r20261113-030201-fadd` and `r20261113-030241-718c`, were launched at 03:02Z on a pre-merge of #9237 with #9375's head and cancelled at 03:04Z while still waiting for a slot, when `main` moved [run]. The scratch branch `cursor/proofs-redraw-cc71-premerge-7e1b` (`ce4863366949`) is pushed and of no further use.
 
 Pushed: `cursor/proofs-redraw-rate-5a71` `54d0d016ab78`, `cursor/proofs-redraw-cc71` `459f5e2dd560`, `cursor/proofs-keyheld-3c9a` `962bc1a88b4e` (unchanged). Unpushed: nothing [run].
+
+## HISTORY, Fri 13 Nov 03:13Z: `DeviceRead.lean` COMPILES on my branch (`r20261113-024818-7775` at `20f9ebf7ba`, "lean exit 0 in 634 s", its one theorem on the three axioms), and CUT's `CutRead.lean` built in the same run. TWOLEG's changed form is merged (`73a07f3775`); a try of both my files at it is in line.
+
+**In plain words.** CUT's second form of the cut says that the check read both sessions' logs and that they are what the auditor's device released. That form now compiles at my record of the device's two sessions, so both forms of the cut are available there. TWOLEG has since added a refusal to the two-stage check itself. I merged it and sent one run to confirm that nothing I depend on broke.
+
+Clock: `date -u` read 03:12Z. Mailbox read at 03:10Z (your 03:00Z: the check refuses the swap, not the device; nothing new is asked of me; `printsTwo_dev₂` and `Apart` stand as the fallback).
+
+**1. Runs** (vy-nebius-2, pool `proofs`) [run].
+- `r20261113-024818-7775`, head `20f9ebf7ba`: **done, rc 0.** It waited 5 min (02:48Z to 02:53Z), then took 15 min.
+  - "`DeviceRead.lean`: lean exit 0 in 634 s".
+  - "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The theorem is `cutRead_dev₂`.
+  - The build log shows "Built Proofs.Properties.Verity.SampledTwo.CutRead" and "Built Proofs.Properties.Verity.SampledTwo.Device". Siblings: no name clash.
+- `r20261113-031037-f5e0`, head `73a07f3775`: one run, two tries (`DeviceRead.lean`, then `Device.lean`, each with `--siblings`), launched 03:10Z. It rebuilds the form, `Steps.lean` and CUT's four files on the way. [guess] It ends by 03:40Z.
+
+**2. Pushed** [run]. `cursor/proofs-history-d2e7` at `73a07f3775`. Nothing unpushed. Since `20f9ebf7ba` it merges TWOLEG's `b6d988648b`, clean.
+- [run: `git diff --stat`] That merge changes the form (`VStarRecursive/SampledTwo.lean`, the new refusal `stagesFit`), `Steps.lean` (adds `accepted_fits`), the twin and its difftest. `Cut.lean`, `CutPrints.lean`, `CutHeld.lean` and `CutRead.lean` are unchanged, but they read the form, so only `f5e0` says whether they still build.
+
+**3. For CUT, on your 03:00Z point 2** [read: my `Device.lean`]. `printsTwo_dev₂` is at one play: it takes `Apart (S₁ o) (S₂ o) w₁ w₂` at that play `o` only, not at every play. So where the accept and the device's ledger give `Apart` at an accepted play, `PrintsTwo` at `dev₂` follows at that play with nothing else.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS: nothing.
+
+To post: nothing.
+
+Not established: that my two files and CUT's four still build over TWOLEG's changed form (`f5e0`). That `Apart` holds at any live deployment. The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
