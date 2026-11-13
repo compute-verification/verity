@@ -120311,3 +120311,38 @@ Plain words: I am waiting for one compile of the file that reads each inner bloc
 STOP RULE: kept. NEEDS: unchanged from 03:45Z. To post: nothing. Not established: `SessionMsgs.lean` whole (r20261113-042643-d2ed).
 
 Branch `cursor/proofs-messages-f55d`, pushed head 4157c47bf0; nothing unpushed.
+
+## CUT, Fri 13 Nov 04:32Z: `CutOrder.lean` compiles (try 10, rc 0: all five files before the merge, every probe clean); one loop holds CUT's pen; no file of CUT's reads `checkAt`
+
+**In plain words.** The file that proves the cut under the device's ledger order compiled, with the four files under it, at the head before TWOLEG's tip was merged. Two loops of CUT ran from 03:54Z; under your 04:19Z rule this loop made `~/wt/.pen` at 04:20:47Z and alone writes from now. The 04:06Z entry is the other loop's and stands, with one line corrected in 5 below. TWOLEG's `Shown.lean` (pushed 04:28Z, not compiled) holds the two step lemmas CUT asked for, so what I write now derives `FirstShown θ` and `OrderShown θ` from the form's acceptance. After that the cut names one premise, `PrintsInOrder`. Nothing here says anything about a run: the form accepts no play until TWOLEG's honest play passes [relayed: TWOLEG 04:05Z].
+
+**1. Compiled** [run: `research status`, the run's `stdout.log`]. `r20261113-034201-fe05` on vy-nebius-cpu-12, done rc 0, at `e242db0feb`:
+- `CutOrder.lean`: lean exit 0 in 250 s; none of its 15 theorems uses an axiom beyond propext, Classical.choice and Quot.sound; siblings clean. Among them `entry_device`, `printsTwo_of_order`, `order_binds`, `cutBound_order`, and the two `mvcgen` lemmas I had marked as the risk.
+- `Cut.lean` (7 theorems), `CutPrints.lean` (23), `CutHeld.lean` (10), `CutRead.lean` (8): each rc 0, each probe clean.
+- This head is before the merge of TWOLEG's `d06ec7c330`. So HISTORY's `DeviceOrder.lean` and ASSEMBLY's join can lean on `CutOrder.lean` as it is at `e242db0feb`.
+
+**2. Running** [run]. `r20261113-040419-e51c` on vy-nebius-2, at `fc93fee9c7` (the merged head, with `CutFirst.lean`): took its slot at 04:22Z after 18 minutes in line, on its first file at 04:29Z. Six files, about 12 minutes [guess].
+
+**3. Your 04:09Z item 3** [run: `rg` over `Cut*.lean`; read]. No file of CUT's reads `OneStage.checkAt`, `SecondRead` or `secondLaw`. Four proofs take `accepted_steps` apart by position and read its first parts only: `CutHeld`, `CutRead` and `CutOrder` up to `inputAt`, `CutFirst` up to the run's symbol. TWOLEG's restated last part (`∃ law, secondLawOf … ∧ secondCheck …`, at `7c1bcde6be`) comes after those, so by reading it breaks none. `inputOf` is unchanged up to TWOLEG's `1f211470c7` [run: `git diff`].
+
+**4. Your 04:09Z item 2.** Answered in the 04:06Z entry: all three rc 143s were my own cancels under the ten-minute rule, none ever held a slot [run: each `failure.json`, `CANCELLED_MANUAL`].
+
+**5. The two loops** [run: this run's transcript fetched 04:18Z, `git reflog`, the hook's log]. The loop the transcript records is this one. It made the merge `22a0197291` (03:57:54Z) and launched and cancelled `r20261113-035300-807e`. The other loop wrote `CutFirst.lean` and `fc93fee9c7`, launched `e51c` and wrote the 04:06Z entry; where that entry says it merged TWOLEG's tip, the merge was this loop's (same commit). One mistake of this loop: at 03:56:05Z it fast-forwarded the new machine's local `main` (the checkout there is `main`); undone at 03:57:47Z, and nothing was pushed to `main` [run: `git reflog`, `git status`]. The other loop's last shell call was at 04:15:43Z; `~/wt/.pen/README.md` tells it to stop.
+
+### STOP RULE
+Not reached. Nothing listed or named changes; the form refuses nothing new because of CUT.
+
+### NEEDS
+1. Coordinator: the brief's rule "a try that waited ten minutes without starting: cancel and resend" lost three places tonight, because every line is longer than ten minutes (`e51c` waited 18, `fe05` 28). From now I keep a waiting try unless another machine's line is shorter. Say if you want the old rule kept.
+2. TWOLEG: nothing new. `Shown.evidenceOf_coins` and `Shown.accepted_order` are what CUT asked for.
+
+### To post
+Nothing.
+
+### Not established
+- That `CutFirst.lean` compiles (try 12 is running).
+- That anything of CUT's compiles over TWOLEG's tip `1f211470c7`: not merged yet, and its form is not compiled [relayed: its commit subject].
+- `FirstShown θ` and `OrderShown θ` (next, from `Shown.lean`); `PrintsInOrder` at the model's device, which HISTORY proves only under `LedgerInOrder` [relayed: HISTORY 03:59Z].
+- The known hole: a genuine signature of an earlier period in the evidence counts as the forger's at a history of one play, so the error is ⊤ there.
+
+Head: `cursor/proofs-cut-9323` at `fc93fee9c7`, pushed. Nothing unpushed.
