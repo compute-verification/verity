@@ -10,7 +10,7 @@
   },
   "Accounting.Assumptions.SketchHashRandom": {
    "owner": "@memory-accounting",
-   "digest": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896"
+   "digest": "6e79010bd69179335cf616b30f200eeb5bc8bc4d7b27f0df3201fb604b369355"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -9094,12 +9094,11 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
      "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -9332,10 +9331,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9364,10 +9362,9 @@
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9383,10 +9380,9 @@
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundRun : Accounting.Guarantees.Remote.SketchBoundRun"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9404,9 +9400,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "536e79c1a4e47601f47be4f38a108432b21eda20c75cc846be32a2ce0ea0b73a",
@@ -9420,9 +9416,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "4a5a58ee406eed68b1df9a17e84c7d825595776e35e61625ee64e5f868f377e5",
@@ -9433,9 +9429,9 @@
    "signature": ["Accounting.SecurityProofs.RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "710a58bb8553d9dfb7234fee438799b8d8916e8e2f0cf27874ece9e8ddbf0912",
@@ -9448,9 +9444,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "0df531dcf2757bdbf7d543cb9dd84c74996aa8020632a81bb5f78a125d48d059",
@@ -9463,9 +9459,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "d463d3c434f9a27a7851fed0f05fd42bfbae3dfe7a2a55be351bc40316b8f6c1",
@@ -9507,9 +9503,9 @@
    "signature": ["Accounting.SecurityProofs.RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "0747c8953485538cbd4e85c2239aa37f20476b751c26332838b2fc5dc07afce1",
@@ -9910,11 +9906,10 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -9933,14 +9928,12 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding", "Accounting.Assumptions.WorkHardness"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SquaringCeiling",
-     "Accounting.Assumptions.SquaringFloor",
-     "Accounting.Assumptions.WorkHardness"
+     "Accounting.Assumptions.SquaringFloor"
     ],
     "reads": []
    },
@@ -9955,11 +9948,10 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor"
@@ -34204,10 +34196,10 @@
    }
   },
   "Definitions.Assumptions.Accounting": {
-   "digest": "bef8d52836ec639ee7d129d126871cc08fef055b272a04d4d18f0de4806c63fb",
+   "digest": "024bfa65b08d3670a756f6f5bb80a333dcf2d386f43d3e1f0c65c85b5ec1e726",
    "definitions": {
     "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
-    "Accounting.Assumptions.SketchHashRandom": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896",
+    "Accounting.Assumptions.SketchHashRandom": "6e79010bd69179335cf616b30f200eeb5bc8bc4d7b27f0df3201fb604b369355",
     "Accounting.Assumptions.WorkHardness": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec",
     "Accounting.BudgetAbort": "8a37c1d7984c1cb00a729b34d360d5f97bba4ef1b11e31e3b216fa76bf8b4be1",
     "Accounting.BudgetAbortPearlC": "62a36c498a423d1faf10977b5259a7277dcd6a31dda7ee60c639ce1025984a5e"
