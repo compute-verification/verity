@@ -25956,7 +25956,6 @@
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
     "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hready : I.SessionsReady)",
     "  (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered Verity.Registration.Composite.onsite)",
-    "  (hOR : I.LogOpensRecorded Verity.Registration.Composite.onsite)",
     "  (hW : I.base.PouwSound Verity.Registration.Composite.onsite)",
     "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.onsite)",
     "  (hP : I.base.PousSound Verity.Registration.Composite.onsite)",
@@ -25971,7 +25970,6 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Verity.Sampled.Instance.LogOpensRecorded",
      "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
      "Verity.Sampled.Instance.SessionsReady",
@@ -26000,8 +25998,8 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "01f53d82f719f5ef306e4ba9ede46c4a75c97b61d5149eb8fa36c981835ea4e3",
-   "unfolded_hash": "a04ce9990e7e6111302f4d4106bac94c6775e46d6274f03d28ac7e86f1e95751"
+   "type_hash": "43372cd67f4975341f31de6ba3bbcaafadad1a04fda36a110607d64457b75ca3",
+   "unfolded_hash": "84705513ad87f2872e1b8254c1bfd6add0573d150f4857d776681a235117d8e8"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_honest": {
    "owner": "@soundness",
@@ -26013,27 +26011,23 @@
     "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
     "          Verity.Registration.Composite.onsite)",
     "        (And",
-    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).LogOpensRecorded",
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
     "            Verity.Registration.Composite.onsite)",
     "          (And",
-    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
+    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
     "              Verity.Registration.Composite.onsite)",
     "            (And",
-    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
     "                Verity.Registration.Composite.onsite)",
     "              (And",
-    "                ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
+    "                ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.BandwidthAuditSound",
     "                  Verity.Registration.Composite.onsite)",
     "                (And",
     "                  ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x =>",
-    "                          Option.none).base.BandwidthAuditSound",
+    "                          Option.none).base.NetworkCertifierSound",
     "                    Verity.Registration.Composite.onsite)",
-    "                  (And",
-    "                    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x =>",
-    "                            Option.none).base.NetworkCertifierSound",
-    "                      Verity.Registration.Composite.onsite)",
-    "                    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
-    "                      Verity.Registration.Composite.onsite)))))))))"
+    "                  ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
+    "                    Verity.Registration.Composite.onsite))))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -26055,7 +26049,7 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "c9a7552fb9f8929cd698e62aa5dceb0da0baf12e19237dfb4712558b9dc2920b"
+   "type_hash": "54fa5297c0934bbc381794a8ec9141fd9ece801ca4d8ee72d6b68c89fba301f9"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_nontrivial": {
    "owner": "@soundness",
@@ -29959,9 +29953,9 @@
     "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
     "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
