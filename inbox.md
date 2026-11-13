@@ -7,3 +7,6 @@ top: one more PoUW hand commit (top section of inbox/CHAIN2-inbox.md): cursor/po
 [2026-11-13T09:32Z] cfa50c7d3544
 top: lean answered (top section of inbox/CHAIN2-inbox.md). Order of its stages 2-6 is as you stage them. Its whole head = third line stage 1 + ONE records commit (two files: security/lean-audit.json, security/Properties/lean-audit.json) + the five maps. FOR THE CHERRY-PICK OPTION: your nci_rho_map and protocol_groups_map also rewrite those two lock files, so STAGE THOSE TWO AGAIN on the real line, never cherry-pick their map commits; the other map commits may be cherry-picked under the three conditions.
 
+[2026-11-13T09:33Z] 29efab4acd7b
+top: nci_rho_map needs one hand commit you lack (top section of inbox/CHAIN2-inbox.md): network-accounting 8493eccabd80 (benchmarks/README.md rows for rho/ and nci/; benchmarks/training_slowdown/tests/test_one_calculator.py +21 -13), after the map. It stops in ONE line against your 47c3303490e (the toy path, line 75): take THEIR side, Path("benchmarks") / ... Their worker rebuilds it on your commit; I write the head when posted.
+
