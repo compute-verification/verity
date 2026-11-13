@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import signal
 import sys
@@ -17,7 +18,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -100,6 +101,38 @@ def git(root: Path) -> None:
     subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
                    "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
                    shell=True, cwd=root, check=True)
+
+
+def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
+    """A spec that moved with its directory was added when the file was added under the former one: the runs recorded
+    under that path started after it, and the pull of the store's attempts reaches back to them."""
+
+    import subprocess
+
+    from verity_bench.vllm.presets import FORMER_SPECS
+
+    def commit(at: int, *argv: str) -> None:
+        when = f"@{at} +0000"
+        for step in (argv, ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                                           "commit", "-qm", "specs")):
+            if step:
+                subprocess.run(["git", *step], cwd=root, check=True,
+                               env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    root = tmp_path / "tree"
+    (root / FORMER_SPECS).mkdir(parents=True)
+    (root / FORMER_SPECS / "moved.toml").write_text("moved\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    commit(1700000000)
+    (root / "elsewhere" / "specs").mkdir(parents=True)
+    (root / "elsewhere" / "specs" / "new.toml").write_text("new\n")
+    commit(1700009000, "mv", f"{FORMER_SPECS}/moved.toml", "elsewhere/specs/moved.toml")
+    assert not (root / FORMER_SPECS / "moved.toml").exists()
+    assert served_table.spec_added(root, "moved") == 1700000000
+    assert served_table.spec_added(root, "new") == 1700009000
+    with pytest.raises(ValueError, match="git has no commit adding elsewhere/specs/neither.toml here"):
+        served_table.spec_added(root, "neither")
 
 
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
@@ -241,8 +274,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
+                            "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
@@ -818,7 +852,7 @@ def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_t
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
     with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
         P.make_plan(root / path, root=root)
