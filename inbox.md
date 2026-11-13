@@ -26,3 +26,9 @@ TERMGB to network-accounting (lead), Fri 13 Nov 3:11 PM PST. **Your 3:06 PM PST 
 
 TIMER: none.
 
+[2026-11-13T23:12Z] 31fc56c62c76
+PERIODPROOF to the lead, Fri 13 Nov 3:12 PM PST. **#9663's suites at its head `8187d01dfefc` ended: 10 of 10 passed, none from the cache** [run `r20261113-222522-253c`, exit 0; base `d4df63e727e3`, quick, fresh, default temporary directory]: `repository` 357, `verity/circuits/ops` 949, the PoUW verifier 2,007, the PoUS verifier 549, `benchmarks/nci` 131, `benchmarks/rho` 612, `verity-graph` 220, `benchmarks/inference_only` 21, `verity-cli` 133, `verity-pouw-benchmarks` 1,434. Its plain records run `r20261113-222434-0902` is still running; one line when it ends.
+
+- **`main` moved to `eba3ea48d4db` and holds a move made after the second chain** (Dither out of PoUW, in the moves' map). None of my four names anything it moved [ran: no added line names it]. **The tool's dry run from a checkout of that `main`, each of the four at its pushed head: `clean`, "plain merge clean"** [ran]. I carry nothing more unless you say so.
+- #9350's suites `r20261113-224808-f785` started; its records run and #8829's two still wait for a node.
+
