@@ -402,10 +402,8 @@ def PORTS_ORDER : String :=
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). Refused unless the ports' keys are strictly
 increasing (`PORTS_ORDER`), as in every object `Json.parse` builds: proofs can't see inside `Json.parse`, and this is
 what tells them each port is named once. -/
-def paramsParsed (j : Json) : V Params := do
-  let p ← paramsRead j
-  if !increasing (p.verifier.ports.toList.map (·.1)) then throw PORTS_ORDER
-  pure p
+def paramsParsed (j : Json) : V Params :=
+  paramsRead j >>= fun p => if increasing (p.verifier.ports.toList.map (·.1)) then pure p else throw PORTS_ORDER
 
 /-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Draw.bernoulli`): the
 sampled audit's soundness statement covers none. -/

@@ -56,16 +56,15 @@ theorem paramsParsed_portsNodup {j : Json} {p : Spot.OneStage.Params} (h : Spot.
     (p.verifier.ports.map (·.1)).toList.Nodup := by
   unfold Spot.OneStage.paramsParsed at h
   obtain ⟨q, -, h⟩ := bind_eq_ok.1 h
-  obtain ⟨u, hu, h⟩ := bind_eq_ok.1 h
-  obtain rfl : q = p := by simpa only [pure, Except.pure, Except.ok.injEq] using h
-  split at hu
-  · cases hu
+  try dsimp only at h
+  split at h
   · rename_i hinc
+    obtain rfl : q = p := by simpa only [pure, Except.pure, Except.ok.injEq] using h
     rw [Array.toList_map]
-    refine List.Pairwise.imp (fun hab he => ?_) (Properties.Challenger.CanonRead.increasing_iff.1 ?_)
-    · subst he
+    exact (Properties.Challenger.CanonRead.increasing_iff.1 hinc).imp fun hab he => by
+      subst he
       exact String.lt_irrefl _ hab
-    · simpa using hinc
+  · cases h
 
 /-- **The form's parameter reader is `paramsParsed`**: `paramsAt` returns what `paramsParsed` returns at some value. -/
 theorem paramsAt_parsed {j : Json} {q : Spot.OneStage.Params} (h : VStar.Recursive.SampledTwo.paramsAt j = .ok q) :
