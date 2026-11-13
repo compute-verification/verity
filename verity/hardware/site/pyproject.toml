@@ -4,6 +4,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# What the tests import of `verity`: the Site, and the wire's canonical JSON its digests are taken over.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/configuration/wire",
+# What the tests import of `verity`: the Site, the wire whose canonical JSON its digests are taken over, and what the
+# wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys. Each module
+# is named by its file, so it stays an input wherever it sits; the handshake's package is read when it is imported.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/site/__init__.py",
+          "verity/configuration/wire/__init__.py", "verity/configuration/wire/handshake.py",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/configuration/__init__.py", "verity/hardware/__init__.py"]
