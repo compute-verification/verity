@@ -124871,3 +124871,44 @@ Not established:
 - The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
 
 Head: `8cf4d46672` (`cursor/proofs-cut-9323`), pushed; nothing unpushed. No run of mine is running.
+
+## ADDRROW, Fri 13 Nov 06:26Z: `RowOf.lean` is WRITTEN and pushed, NOT compiled: FRAME's `RowFact` at `addressOf` from `Wiring h` at each accepted run and four named premises; one try is running, `r20261113-062432-9095` on vy-nebius-cpu-12 (24 GB asked, slot taken 06:24:58Z), over `RowRead`, `RowKind`, `RowDraw`, `RowOf`; all eight row modules are now lock roots and lakefile roots
+
+**In plain words.** The theorem FRAME's assembly asks of me is written: at every accepted run, at each gate the checked inner block's proof needs, the slot the address map gives that gate has the right leaf count and opens the row the session really reads. It is written by the same cases as FRAME's entry theorem, and no line of it has been compiled yet: one run is compiling it now, with the two files I mended three hours ago. It does not stand alone: it takes four statements as given, each named and stated in the file, none proved. I am late again: my last entry was 04:06Z. The writing took the whole gap and I pushed nothing in it, which is the fault.
+
+Clock: `date -u` read 06:26Z. Branch `cursor/proofs-addrrow-d318` at `5cc811a8c9`, with the base `3b05c3a3b1a7` merged (the lock of `security` alone, no conflict). Mailbox read at 06:25Z: your 05:50Z and 06:09Z messages, FRAME 06:21Z, HONEST2 05:30Z, ADDRWC 05:58Z.
+
+**1. What is written** [read: my own file; nothing here is compiled].
+- `security/Proofs/Flock/SpotFlock/AddressFacts/RowOf.lean` (`848e516701`), importing FRAME's `EntryRoots` and my `RowRead`:
+  - `rowFact_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hS : AddressRow.Sits h) (hPR : AddressRow.PortReads) (hL : AddressRow.OwnLeaves h) (hPub : AddressRow.PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`. Its first argument is the `hW'` that `addressesConnected_of_runs` builds, and its conclusion is that theorem's `hRow`, name for name.
+  - `rowFact_of_wiring (W : Wiring h) …`, the same from one `Wiring h`.
+- The cases, as in `holds_of_wiring`:
+  - A port a link names (a source bit or a written one): the slot is not sized and counts no units, so its leaf is its position, and the second stage holds the read to that row (`linkedRow`). The check's other arm is the one `second-inputs` excludes (FRAME's `registeredEntry_none_of_inputs`).
+  - A source bit at a port a wire names: the slot is the writer's port of the interior record, on a stride of the writer's inner blocks an outer block. The second stage holds the read to the writer's row (`wiredRow`), and `readOk_wired`'s `pw.n = r.per` makes the stride the row count.
+  - A written bit at a template's own port: with a registered read, each slot is held to its own first row (`rowsOk`); with none, the row is the published tree's.
+- One lemma more in `RowRead.lean` (`b2317b4f0d`): `placedOk_leaves`, the leaf count of an entry `placedOk` passes, with no read at hand.
+
+**2. The four premises it takes** [read; each is a `def … : Prop` in `RowOf.lean`, unproved].
+- `Sits h`: at an accepted run the checked inner block is one of its session's instances, the instances are labelled by their slots, and the instance's place in its template's part divides as (the outer block's place among the first stage's record's blocks, the inner block's place in its cell). The first three clauses are my `InstanceFact`'s; the last three replace its `blockAt … = r.u`. **A limit:** `InstanceFact` takes `∀ v, h.reg.always v = false` and `Sits` takes nothing, because `RowFact` takes nothing. So at a registration with an inner block that is always checked, `Sits` can be false, as `Counted` can (the module note of FRAME's `SlotsAt.lean` says so of the instance). A proof of `Sits` will need that hypothesis or a registration without such blocks.
+- `PortReads`: Flock's parse of a registered-reads file keeps each port's reads. It is FRAME's `portsOf_entries` with one clause more (`reg.readAt u = some (some pos) → readsAt e u = some pos`); no run in it, a fact of the parser alone.
+- `OwnLeaves h`: a registered read at a template's own written port has (sample size) × (the template's count) leaves.
+- `PublishedRows h`: at such a port with no registered read, the public file's tree has that many leaves and the drawn inner block's row is its own place.
+- [derived] So what the try can establish is `RowFact` under those four and `Wiring h`. It establishes none of the four.
+
+**3. The roots rule, both halves** [run: `python3` over `security/Proofs/lean-audit.json` and `security/Proofs/lakefile.toml` at `5cc811a8c9`].
+- I was at fault on the first half: the lakefile listed my seven row modules and the lock's `roots` listed none. `f848c83a06` appends the seven at the end of `roots`; `848e516701` appends `…AddressFacts.RowOf` to both, in the commit that adds the file.
+- The check's output: 186 roots, no duplicate; the file equals `check.py`'s `text` of itself, byte for byte; my eight names are each a quoted name of the lakefile; the lakefile parses.
+- No records run of `security/Proofs` has run at this head, so no ready line.
+
+**4. The run** [run: the launcher's lines; `slot.json`].
+- `r20261113-062432-9095`, vy-nebius-cpu-12, pool `proofs`, `--mem-gb 24`, `--timeout 10800`, at `5cc811a8c9`. Slot `p1` taken at 06:24:58Z, no wait. It tries `RowRead`, `RowKind`, `RowDraw`, `RowOf` in that order and goes on past a failure.
+- Expected end about 08:00Z [guess: `25a2` took 93 minutes on that node for five files; `RowOf` builds FRAME's `EntryRoots` first].
+- I chose cpu-12 by your 05:50Z rule: I do not know my tree to be warm on vy-nebius-2.
+
+**5. `AddressRow.RowGoal` stays.** My 04:06Z entry said I delete it once `RowOf.lean` compiles. HONEST2's `honest_of_goal` reads it [relayed: HONEST2 05:30Z], so I do not: it goes when HONEST2 says no file of theirs reads it.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** That `RowOf.lean` compiles, or the changed `RowRead.lean`, or the two mends (`RowKind`, `RowDraw`): all four are in `9095`. Each of the four premises, and that `Sits` can hold at all where an inner block is always checked. That `security/Proofs` builds whole or passes its records audit at `5cc811a8c9`.
