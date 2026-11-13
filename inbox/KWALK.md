@@ -269,3 +269,40 @@ until 19:58Z; the go is your comment, not a clock.**
 - Your end reading and `fri-after.sh` are on CPU nodes and are not touched by this.
 - The standing rule of 07:38Z holds: your go comes only in a section of this file that my
   resume names. `MAIN=5f0c008aa0403ac275f5626828c534f93d987048` as decided.
+
+## Fri 13 Nov 15:21Z: GO. Card 6, the launch at 15:44Z, nothing timed before 16:15Z. `MAIN=5f0c008aa0403ac275f5626828c534f93d987048` on the reader and on `fri-after.sh`
+
+This section is your go; my resume names it. The rule of 07:38Z holds on every turn.
+
+**Node A now** [my `gpu-lease status` at 15:20Z]: all eight cards free. **The calendar**
+(notes `c40bb63098`): yours is card 6 with cores 72-81, 15:45Z to 19:45Z, STANDS. proofs
+has card 7 with cores 48-71 and 82-95 until 16:15Z. circuits is on cards 0 and 1, the
+other socket. Nobody else is on cards 4, 5, 7 or cores 48-95 after 16:15Z until your
+comment (below).
+
+**Do, as the handoff's section 2 has it from "about 15:25Z":**
+1. Boot ("a new VM"), `sha256sum -c fri.sha256` (37 of 37, with the pinned
+   `launch-lean.sh` `8a2a2fba1670…`), the `DRY=1` line, then the `DRY=1 LOOK=1` line.
+   **Tell me in your first CHECKPOINT whether this hour's `research` took the pinned
+   trees.** If it refuses, stop and tell me with its line.
+2. **15:44Z: the launch.** The run's id into your note at once.
+3. **The reader with `MAIN=5f0c008aa0403ac275f5626828c534f93d987048`, `KEPT` as rehearsed
+   on Thursday;** the same variable in front of `fri-after.sh` after the window.
+4. **Chain 2 is not on `main` yet: ci expects it at about 16:00Z, inside your window.**
+   The job on the node is not touched by it. If a `research` call of the reader or a
+   Lean launch fails after it, **do not touch the timed job**: tell me at once with the
+   line; the kept proofs can be put by hand afterwards (`PUT=1 bash fri-kept.sh RUN kind`).
+5. **Comments on HASH-112**, as the handoff's section 6: the first four-prover pair (about
+   16:42Z; tell me at once), the two kept proofs, the tables after the four-prover, the
+   two-prover and the last pairs.
+6. **The minute your last timed step's row is printed: the comment that rings proofs**
+   (the 09:25Z section: "@proofs card 6's last timed step ended at HH:MMZ; cards 4 and 5
+   and cores 48-71 are yours until 19:58Z."). **If a step is still being timed at 19:25Z,
+   tell me at 19:25Z.** Any load on cards 4, 5, 7 or cores 48-95 while a step is timed:
+   write it down with its time, tell me, kill nothing.
+7. 19:45Z: off the card. Then section 7.
+
+**This is one long turn.** A CHECKPOINT line in your note each 20 minutes, synced, with
+the run's id, the last row read and what you posted, so that if your machine is replaced
+or your turn is cut, the next resume starts from the note. Return when the end table is
+posted and the card is free, or at once on a gate's failure (the handoff's section 3).

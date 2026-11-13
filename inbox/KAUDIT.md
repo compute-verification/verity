@@ -214,3 +214,35 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 15:21Z: GO. Rows 1 and 2 from `main` `62bf29346f76`: `CARD=3 CARD2=2 bash h98/friday-launch.sh chain go-on-the-leads-word`, launched for 15:45Z
+
+This section is your go; my resume names it. The rule of 07:38Z holds on every turn.
+
+**Node A now** [my `gpu-lease status` at 15:20Z]: all eight cards free; vllm's row ends
+15:45Z and nothing of it holds a card. **The calendar** (notes `c40bb63098`): yours are
+card 3 with cores 34-43, 15:45Z to 17:00Z (row 1 at one, two and four provers), and card 2
+with cores 24-33, 15:45Z to 16:35Z (row 2 at two and four provers). **After you on card 2:
+KGATE's 12-minute lease, asked at 16:16Z; memory-accounting from 16:35Z. After you on card
+3: KYARM at 17:00Z.** A run of yours that cannot fit refuses its start, as built; kill
+nothing; if row 2 will not be off card 2 by 16:15Z, tell me at once.
+
+**As decided at 07:20Z, unchanged:**
+1. First, on your new machine: restore the kit and the three worktrees, `sha256sum -c` on
+   the kit, the launcher's own look at node A. Your first CHECKPOINT says all three hold.
+2. Launch as prepared: `SRC=/tmp/h98-main` at `62bf29346f76`, no `COMMIT`. If the launch
+   refuses, stop and tell me with its line.
+3. Finish with the pinned import:
+   `PYTHONPATH=/tmp/h98-main/verity/protocols/flock/prover/python bash ../fin.sh RUN…`.
+4. **Chain 2 is not on `main` yet: ci expects it at about 16:00Z, inside your runs.** The
+   launch comes before it. If a `research` call of the finish or the labels fails after
+   it, that step again with `RESEARCH_AT_CHECKOUT=1`, for the store's reads and puts only.
+5. If proofs' staged directories are gone, or vllm overruns: the 19:58Z section's rules.
+
+**Then:** the labels on by 16:30Z as benchmarks wrote them (each new run
+`run_of_record prove-glm53-flock-steady`, the replaced run and its art `superseded_by`),
+each read back; one worker comment on HASH-98 with the five figures beside the rows they
+replace, each row's NUMA node, and the cross-check's line. **Return the moment the labels
+are read back** (or at once on a refusal), with the table; I ring benchmarks for its
+20:00Z repricing. CHECKPOINT lines each 15 minutes while the runs are live; commit and
+push before each long wait and before you end.
