@@ -61,7 +61,7 @@ def test_gpu_registry_keeps_namespaces_distinct():
 
 
 def test_package_imports_the_standard_library_and_the_settings_machinery_alone():
-    """``verity.settings``, which is stdlib only itself, is the one module it takes from ``verity``."""
+    """``verity_config.verity_settings``, which is stdlib only itself, is the one module it takes from ``verity``."""
     package = Path(__file__).parents[1] / "verity_config"
     imports = set()
     for source in package.glob("*.py"):
@@ -71,4 +71,4 @@ def test_package_imports_the_standard_library_and_the_settings_machinery_alone()
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 imports.update(f"{node.module}.{alias.name}" if "." not in node.module else node.module for alias in node.names)
     assert not {name for name in imports if name.partition(".")[0] not in sys.stdlib_module_names
-                and name not in ("__future__", "verity.settings")}
+                and name not in ("__future__", "verity_config.verity_settings")}
