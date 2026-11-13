@@ -5,7 +5,9 @@ over the sampled replay blocks' proof blocks sampled once more on a challenger s
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
 refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
+refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). No command of a party's
+dispatches to this module: `VStar.Recursive.Sampled` refuses the form by name. The package's root imports it, so the
+package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
