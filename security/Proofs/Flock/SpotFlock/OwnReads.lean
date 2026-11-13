@@ -6,8 +6,8 @@ public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Flock.SpotFlock.Opens
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Complete.Json.Record
-public import Proofs.Properties.Challenger.CanonLine
-public import Proofs.Properties.Challenger.CanonWf
+public import Proofs.Flock.Claims.CanonLine
+public import Proofs.Flock.Claims.CanonWf
 import all Lean.Data.Json.Basic
 
 /-!
