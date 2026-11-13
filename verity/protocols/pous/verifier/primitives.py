@@ -43,14 +43,14 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cache, lru_cache
 from typing import Protocol
 
 from verity.commitments.randomness import Key, derive
 
 from .labels import mask
 from .oracle import HQuery, KeyQuery, PiInvQuery, PiQuery, Query, Tweak
-from .params import TAG_BITS, Params
+from .params import Params
 
 CAPACITY_BITS = 512
 HEADER = b"pous-p3-v1-H"
@@ -96,16 +96,6 @@ def pi2_call_ns(m: int) -> int:
 def key_query(params: Params, tag: int, layer: int, node: int, labels: Mapping[int, int] | Sequence[int]) -> KeyQuery:
     """Node `node`'s key query: Lean `parentsOf L v = fun u => if u ∈ G.par v then some (L u) else none`."""
     return KeyQuery(tag, layer, node, tuple((u, labels[u]) for u in params.parents(node)))
-
-
-def check_key_query(params: Params, q: KeyQuery) -> None:
-    if not 0 <= q.tag < 1 << TAG_BITS or q.layer not in (0, 1) or not 0 <= q.node < params.n:
-        raise ValueError("key query outside KQ'")
-    last = -1
-    for u, label in q.parents:
-        if not last < u < params.n or not 0 <= label < 1 << params.m:
-            raise ValueError("key query parents must be increasing nodes with m-bit labels")
-        last = u
 
 
 class KeyStepper(Protocol):
@@ -445,7 +435,7 @@ def _expand(label: bytes, n: int) -> bytes:
     return bytes(out[:n])
 
 
-@lru_cache(maxsize=None)
+@cache
 def diffusion_stages(words: int) -> int:
     """The fewest butterfly stages after which every output word depends on every input word."""
     if words < 2:
@@ -547,7 +537,7 @@ def bit_diffusion_stages(name: str, words: int, bits: Sequence[int] | None = Non
     return max(_bit_reach(name, words, b, limit) for b in bits)
 
 
-@lru_cache(maxsize=None)
+@cache
 def butterfly_stages(name: str, words: int) -> int:
     """Twice the bit-level count, and at least twice word-level diffusion plus 12 (20 stages at 256 words, the top of
     the measured 16–20)."""
@@ -718,3 +708,7 @@ def ideal(params: Params, seed: bytes) -> Primitives:
     """The two-permutation model: the overwrite chain over an ideal `Π₂`, and an ideal tweakable `P`."""
     return Primitives(OverwriteChain(params, IdealPermutation(2 * params.m + CAPACITY_BITS, seed, "pi2")),
                       IdealTweakablePermutation(params.m, seed))
+
+
+__all__ = ["CAPACITY_BITS", "HEADER", "KECCAK_F_NS", "PI_DOMAIN", "P_DOMAIN", "SHAKE256_RATE", "FeistelP", "FeistelPi",
+           "pad_block", "pi2_keccak_f", "reference"]
