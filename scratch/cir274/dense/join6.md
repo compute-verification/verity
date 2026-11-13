@@ -126,4 +126,17 @@ MYPY_RUN
 
 ## The value check
 
-VALUE_RUN
+Run `r20261113-105451-a1b3` (`f2bd805cd8`, nothing patched): `values_join6.py --ids 43 --layers 4`, seed 274, at most
+1,024 units a template. It uses the new names (`made_up(fn, prompt, rng)`, `sample_key`, `sample`).
+
+- Window `04fcba36…` both ways, 129 templates, 5,190,089 units, 2,381 stood ports, unlowered `StopCheck` 1.
+- Units: 42,737 checked, 0 mismatches, 0 undeclared, 0 rows two pieces hold, 788 tables committed. Part 1 checked
+  42,785 under the old sampling.
+- 52 of 129 templates are not checked directly, and `unchecked_unevaluated` is empty.
+- The select: 20 templates, 40 units checked, 0 mismatches; tokens 2639 and 569, each the twin's and `TokenSelect_v4`'s.
+- The read: 1,024 of 1,408 units checked, 0 mismatches.
+- EMBED's read plant (block 1's table over block 0's) gave 33 mismatches in 33 sampled planted units, none with undeclared
+  inputs.
+- The select plant (chunk 0's logits wire moved to the row beside its best lane's) gave 1 mismatch in 2: unit 0 expected
+  `[16512, 2639, 0]` and got `[16479, 7438, 0]`.
+- 2,095.5 s, 11.42 GiB peak.
