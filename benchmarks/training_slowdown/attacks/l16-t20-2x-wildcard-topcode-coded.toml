@@ -6,11 +6,12 @@
 # quarter. The forward's code crosses as bytes, so the trace reads the forward's plane at its width; the backward's
 # rounding stays floats on its own grid. The output is the grown model, scored without the code; E is every tensor of
 # it. The dials are `m-t20-2x-wildcard-topcode-coded`'s, at six forwards of 32 rows as the other 238M entries.
-# The steps are 1.9 C0 in the plan's unit, a step's MACs (the route's trace of the grown step) times 1,480.7 gates.
+# The steps are the plan's cap for this point, 1.0084763e22 gates, over a step's gates in the plan's unit: its MACs
+# (the route's trace of the grown step) times 1,480.7.
 start = "l16-t20"
 route = "topcode"
 target = { gain = 2.0 }
-budget = { steps = 20236, batch = 192, minutes = 3060 }
+budget = { steps = 20205, batch = 192, minutes = 3060 }
 seeds = { search = [0] }
 policy = "console"
 honest = "l16-t20-2x-fullmuon-fe-wsd-40326"
