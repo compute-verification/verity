@@ -264,6 +264,17 @@ def test_with_no_block_in_use_or_no_block_count_a_tensor_over_the_limit_is_liste
     assert [(x["event"], x["skipped"]) for x in listed] == [(1000, "spanned bytes 64 > snapshot_max_bytes 32")]
 
 
+def test_a_tensor_with_the_caches_block_count_first_copied_after_the_forward_is_listed_as_skipped(tmp_path, syncs):
+    """What the capture does today, and no requirement of it: `_after_forward` replaces the step's facts, the new ones name
+    no scheduled request, and so the blocks in use, where the forward did not read them, are none after it.  The tensor is
+    listed as skipped with its reason and none of it is copied; before the forward ends its blocks in use are copied."""
+    capture, runner = _in_step(tmp_path, snapshot_max_bytes=32)
+    assert capture._kv_num_blocks == 16 and capture._kv_blocks_in_step == []
+    capture._after_launch(1000, "a kernel", {"x": torch.arange(64, dtype=torch.uint8).reshape(16, 4)})
+    assert capture._kv_blocks_in_step == [] and _taken(capture) == [] and capture.errors == []
+    assert [(x["event"], x["shape"], x["skipped"]) for x in capture._snap_index] == [(1000, [16, 4], "spanned bytes 64 > snapshot_max_bytes 32")]
+
+
 def test_the_blocks_in_use_are_those_of_the_steps_requests_in_every_group_read_once_a_step(tmp_path, syncs):
     steps = [dict(S.STEPS[0], **{"more blocks": [{S.A: [13, 12, 4], S.B: []}]}), S.STEPS[1]]
     capture, runner = S._capture(tmp_path, ObserverConfig(triton=False, snapshot_steps=frozenset({0, 1}), snapshot_dir=tmp_path / "snap",
