@@ -327,7 +327,7 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
       monitoringPeriodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
         (liveCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) 1 1 (k sT)
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
-    (period (Ω1 σ sT) (tileCount σ sT) n).EveryWindow
+    (period (Ω1 σ sT) (tileCount σ sT) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) ∧
     PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))

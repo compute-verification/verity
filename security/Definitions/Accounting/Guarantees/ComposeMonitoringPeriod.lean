@@ -65,7 +65,7 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
   soundness jointly over each window's samples at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
 * the four claims: (H-μ), B′ and the guess bound per live credited tile of every window, whatever the past
-  (`ExecutionPhasePlay.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
+  (`ExecutionPhasePlay.EveryExecutionPhase` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
   tile and every window past the accepted prefix skipped whole (`monitoringPeriodMode`) and the tiles' words. `UnitFixed` at
   `monitoringPeriodMode` follows from `UnitFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
   both its sums;
@@ -216,13 +216,13 @@ def CircuitWorkMonitoringPeriod : Prop :=
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 ≤ a → 0 ≤ b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
     Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (Cd.monitoringPeriodLayer hr hK pr) Pl.game →
     (∀ w, prob (fun x => (Cd.monitoringPeriodLayer hr hK pr).MovedIn x w) ≤ δbind) →
     (Cd.monitoringPeriodLayer hr hK pr).JointSound δks → (Cd.monitoringPeriodLayer hr hK pr).Pins →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (Cd.monitoringPeriodLayer hr hK pr) (monitoringPeriodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
@@ -259,13 +259,13 @@ def CircuitCreditMonitoringPeriod : Prop :=
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 < a → 0 < b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
     Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (Cd.monitoringPeriodLayer hr hK pr) Pl.game →
     (∀ w, prob (fun x => (Cd.monitoringPeriodLayer hr hK pr).MovedIn x w) ≤ δbind) →
     (Cd.monitoringPeriodLayer hr hK pr).JointSound δks → (Cd.monitoringPeriodLayer hr hK pr).Pins →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (Cd.monitoringPeriodLayer hr hK pr) (monitoringPeriodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
