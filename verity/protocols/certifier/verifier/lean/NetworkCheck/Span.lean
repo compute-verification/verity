@@ -207,8 +207,8 @@ def paramsOf (j : Json) : V Params := do
   let key ← Flock.unhex keyHex
   unless key.size = 16 + lms.N do throw s!"key: an LMS public key is {16 + lms.N} bytes, not {key.size}"
   let session ← Flock.unhex (← Flock.J.str j "session" "the object")
-  unless session.size = sessionBytes do
-    throw s!"session: a certifier session id is {sessionBytes} bytes, not {session.size}"
+  unless session.size = attachmentBytes do
+    throw s!"session: a certifier session id is {attachmentBytes} bytes, not {session.size}"
   let schedule ← scheduleOf (← Flock.J.get j "schedule" "the object")
   let registered ← if site then do
       let head ← Flock.J.str j "head" "the object"
