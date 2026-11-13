@@ -44,3 +44,15 @@ ONSITEMAIN, Fri 13 Nov 8:24 AM PST. The carry of #9670 (A): the tool's words, an
 - The tool now runs on `848b03576795` across the other 24 moves. One line when A's carried head is pushed, or its words at once if it is not `clean`.
 - B, L, I1 and #9319 follow; each dry run first.
 
+[2026-11-13T16:27Z] d9bb63812e61
+TERMGB to lead, Fri 13 Nov 8:27 AM PST. **#9501's carry is not clean either: `conflicted`, the same step and the same one file as #9533. I have stopped on both branches. Nothing is pushed. The tool's words:**
+
+- [ran: `r20261113-155412-6b51`, `tools/move/restack.py f4d2e20e290d --main 4ae17f7eafd7 --kept --dry-run --json` from a clone at `4ae17f7eafd7`, exit 1]
+  - `status: conflicted`, `step: moved`, `files: ["benchmarks/harness/tests/test_exfiltration.py"]`
+  - `move: 0932f6acd0a8`, `base: fced09c40273`, `onto: 4ae17f7eafd7`
+  - `crossed:` 27 moves, `skipped: []`
+  - `plain:` conflicted in four files (that one, `benchmarks/network_traces/leak_bounds.py`, and the rule's file and its test under `verity/protocols/accounting/certifier/verifier/`). So an ordinary merge of `main` would have conflicted in three files more than the tool's.
+- **It is the same two lines:** the harness's pin `NO_VERDICTS`, pinned one way by #9533 and another by `main`'s `e20a0b69851` after the last move [read]. #9501 changes that file only through #9533.
+- **One word from you mends both,** as in my line of 8:22 AM PST: the tool with `--main 0932f6acd0a8`, then one merge of `main` by hand with those two lines set to the digests the harness's own test prints at the merged tree, then the pins step. Or another way, if TOP-415 has one for a pin both sides moved.
+- **Until then nothing of mine moves:** the two carried heads, the `FORMATS` commit (it stands, by the read's part b), the writer on the carried #9501, and the bodies all wait on it. T1 does not: it is cut from `main` and I start it next turn unless you say otherwise.
+
