@@ -20,6 +20,8 @@ import numpy as np
 import torch
 
 from tests import fake_vllm
+from verity_vllm.acquire import served_moe
+from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.check.replay import served_check
 from verity_vllm.pipeline import served_match as sm
 
@@ -168,8 +170,12 @@ def test_each_moe_layer_is_named_by_its_runner_with_its_weights_under_their_firs
     model = _model(_block(4, name="layers.0.mlp", top_k=2),
                    _block(64, name="layers.1.mlp", top_k=8, router=_Router(top_k=8, renormalize=False, scoring_func="softmax"),
                           routed_scaling_factor=2.5))
-    assert _same(sm.moe_facts(model), {"layers.0.mlp": _layer(0, 4, 2, 4),
-                                       "layers.1.mlp": _layer(1, 64, 8, 8, renormalize=False, routed_scaling=True)})
+    facts = sm.moe_facts(model)
+    assert _same(facts, {"layers.0.mlp": _layer(0, 4, 2, 4), "layers.1.mlp": _layer(1, 64, 8, 8, renormalize=False, routed_scaling=True)})
+    # the expansion's own reader takes the first layer's facts, (E, top-k, H, I), and refuses the second's for its scaling
+    assert served_moe._block("layers.0.mlp", facts["layers.0.mlp"], {"width": 2}) == (4, 2, 2, 3)
+    with pytest.raises(Unmodelled, match="routed_scaling"):
+        served_moe._block("layers.1.mlp", facts["layers.1.mlp"], {"width": 2})
 
 
 @pytest.mark.parametrize(("block", "flags"), [
@@ -209,9 +215,12 @@ def test_the_experts_kernel_its_bias_and_its_clamp_each_have_a_flag(monkeypatch,
     ({"router": _Router(top_k=2, renormalize=True)}, {"softmax_router": None}),
     ({"router": _OtherRouter(top_k=2, renormalize=True)}, {"softmax_router": False}),
 ])
-def test_a_flag_the_layer_does_not_let_it_read_is_none(monkeypatch, block, flags):
+def test_a_flag_the_layer_does_not_let_it_read_is_none_and_the_expansion_refuses_the_layer(monkeypatch, block, flags):
     _vllm(monkeypatch)
-    assert _same(sm.moe_facts(_model(_block(**block))), {"layers.0.mlp": _layer(0, 4, 2, 4, **flags)})
+    facts = sm.moe_facts(_model(_block(**block)))
+    assert _same(facts, {"layers.0.mlp": _layer(0, 4, 2, 4, **flags)})
+    with pytest.raises(Unmodelled, match=next(iter(flags))):
+        served_moe._block("layers.0.mlp", facts["layers.0.mlp"], {"width": 2})
 
 
 def test_experts_with_no_kernel_to_read_are_not_tritons_and_their_bias_and_clamp_are_none(monkeypatch):
