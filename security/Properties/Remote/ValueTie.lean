@@ -304,12 +304,12 @@ def hashed (x : Fin n → Ω) : List ByteArray :=
         Properties.Pouw.PearlPlus.rowsHashed d e.opening ++ Properties.Pouw.PearlPlus.rowsHashed d o'
       | _, _ => []
 
-/-- **The tie's finder**: on the period's coins, the first SHA-512 collision (`Properties.Challenger.collisionIn`)
+/-- **The tie's finder**: on the period's coins, the first SHA-512 collision (`Properties.Pouw.PearlPlus.collisionIn`)
 among the messages checking the shown rows and the tables' hash (`hashed`), its cost declared at the budget `q` for the
 period's whole SHA-512 work, SPOT's openings included, as `Properties.Pouw.PearlPlus.Runs.finder`'s is. -/
 noncomputable def finder [Fintype Ω] [Nonempty Ω] (q : ℕ) : _root_.Claims.Finder where
   S := Fin n → Ω
-  out x := (_root_.Properties.Challenger.collisionIn (P.hashed x)).map Properties.Pouw.PearlPlus.msgPair
+  out x := (Properties.Pouw.PearlPlus.collisionIn (P.hashed x)).map Properties.Pouw.PearlPlus.msgPair
   cost _ := q
 
 /-- **Phase `k` is tied** on the period's coins `x`: by its run (`Commit.TiedBy`). -/
