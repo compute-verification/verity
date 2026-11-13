@@ -14,7 +14,7 @@ from verity.circuits import boundary
 from verity.definitions.circuits import requirement as R
 from verity.definitions.circuits.census import census, step_ends
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.definitions.ops import fp32
+from verity.circuits.ops import fp32
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of

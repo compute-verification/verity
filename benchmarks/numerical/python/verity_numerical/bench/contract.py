@@ -89,7 +89,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.definitions.circuits.targets.target import FIRST, TARGETS, Target
-from verity.definitions.silicon.instructions import INSTRUCTIONS
+from verity.circuits.silicon.instructions import INSTRUCTIONS
 from verity_numerical.bench import census
 
 __all__ = [

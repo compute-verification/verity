@@ -88,7 +88,7 @@ def test_shape_of_reads_a_definitions_body():
     from pathlib import Path
 
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm, prims
+    from verity.circuits.ops import gemm, prims
 
     pins = json.loads((Path(prims.__file__).parent / "prims.circuit-check.json").read_text())["pieces"]
     pieces = {k: v["and"] for k, v in pins.items()}
