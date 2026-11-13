@@ -1154,6 +1154,34 @@ def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_r
     assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 1, "runs": 1}
 
 
+def test_serve_openai_names_a_header_as_the_network_certifier_does():
+    """A request with a client's own release headers, one byte (each of the 256) before each one's name or between the
+    name and its colon, on which the network certifier then puts release 3 (`release.with_release`), dropping those of
+    the client's it takes for release headers. Whichever it kept, the server's headers (`so.header_fields`) give the
+    certifier's release, as the certifier's own reader does. Then one such request over HTTP (its body not JSON, so it
+    is answered at once): the frontend has read the certifier's release of it, not the client's."""
+    run = bytes.fromhex(RUN)
+
+    def stamped(pre: bytes, post: bytes, n: int, rest: bytes = b"\r\n") -> bytes:
+        own = b"".join(pre + h + post + b": " + v + b"\r\n" for h, v in ((REL.RELEASE_HEADER, b"7"), (REL.RUN_HEADER, b"cd"),
+                                                                        (REL.BUCKET_HEADER, b"9")))
+        return REL.with_release(b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n" + own + rest, n, run, 1)
+
+    for b in range(256):
+        for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
+            line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
+            assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
+            assert sa.release_of(so.header_fields(fields)) == (RUN, 3, 1), (pre, post)
+    sent = stamped(b"\xa0", b"", 0, b"content-length: 1\r\n\r\n{")
+    assert b"\xa0x-verity-release: 7\r\n" in sent
+    with tick_endpoint() as e:
+        c = socket.create_connection(e.address)
+        c.sendall(sent)
+        answer = read_all(c)
+    assert answer.startswith(b"HTTP/1.1 400") and b"the body is not JSON" in answer
+    assert e.admit.seen == {RUN: {0}}
+
+
 def test_the_flag_takes_tick_with_the_engine_class_step_times():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
     opts = cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "27.5", "--tick-free-ms", "41"], environ={})

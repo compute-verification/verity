@@ -285,6 +285,15 @@ def request_line(line: bytes) -> tuple[str, str] | None:
     return method, target
 
 
+def header_fields(fields: Sequence[bytes]) -> dict[str, str]:
+    """A request's header fields by name, the last of a name. A name is the field's bytes before its colon, lower-cased,
+    less the ASCII whitespace around it: what the network certifier names a field when it drops a client's own release
+    headers (`verity.protocols.certifier.verifier.release.with_release`). Named more loosely (`str.strip` takes ``\\xa0``
+    too, for one), a field the certifier kept would be read here as its release, after its own."""
+    return {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
+            for k, _, v in (f.partition(b":") for f in fields if f)}
+
+
 class Server:
     """The OpenAI-compatible endpoint: one request per connection (``connection: close``), the engine behind
     ``loop_submit`` (`EngineLoop.submit`), the protocol `PlainProtocol` or `VllmProtocol`."""
@@ -309,7 +318,7 @@ class Server:
             if first is None:
                 return await self._json(writer, 400, error_body(NO_REQUEST_LINE, 400, "BadRequestError"))
             method, path = first
-            headers = {k.strip().lower(): v.strip() for k, _, v in (f.decode("latin-1").partition(":") for f in fields if f)}
+            headers = header_fields(fields)
             if method == "POST" and path.split("?", 1)[0] == WATERMARK_PATH and isinstance(self.order, TickAdmit):
                 return await self.watermark(reader, writer, headers)
             body = await reader.readexactly(int(headers.get("content-length") or 0))
