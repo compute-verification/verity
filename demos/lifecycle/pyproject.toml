@@ -12,7 +12,7 @@ inputs = [
     # reference (verity/protocols/compose/verifier/lean/tests/reference.py), which the demo runs
     "verity",
     # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
-    "verity/difftest/python/verity_difftest",
+    "tools/difftest/python/verity_difftest",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
