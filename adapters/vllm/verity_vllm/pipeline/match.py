@@ -406,9 +406,9 @@ def write_realized(plan: Plan) -> dict | None:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
     except (OSError, ValueError, RecursionError):
         ctl = None
-    src = cap or ctl
-    if src is None:
+    if cap is None and ctl is None:
         return None
+    src: Any = cap or ctl   # an empty capture document beside no control's is no record's source: its read below raises
     reqs = []
     for r in src.get("requests", []):
         prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
