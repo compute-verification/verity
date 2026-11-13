@@ -402,6 +402,8 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
                               "the module's cutlass_scaled_mm launch (computed from its scales)"))
         else:
             refuse("native_tap", module, v.output_member, "the linear module is not a module of the runtime tree")
+        return legal, refused
+
     if route == "call_boundary_tap":
         owner = module.rsplit("/", 1)[0]
         if rt.has_module(owner):

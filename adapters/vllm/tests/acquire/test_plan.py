@@ -210,7 +210,7 @@ def test_a_tap_family_whose_module_is_in_the_tree_has_one_site(family, op, membe
     plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
     v, = (v for v in plan.values if v.family == family)
     assert plan.complete and [(s.kind, s.module, s.slot) for s in v.sites] == [site] and v.chosen == v.sites[0] and v.why == "one legal site"
-    assert v.rejected == [] or family == "scale_products"       # the scale-products rule alone runs on past its site; what it then refuses is not held here
+    assert v.rejected == []
 
 
 @pytest.mark.parametrize("family,op,member,extra,kind,slot,why", [
@@ -233,8 +233,22 @@ def test_a_value_with_no_site_names_the_candidate_it_refused(family, op, member,
     plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
     v, = plan.unsupported
     assert (v.family, v.op_path, v.sites, v.chosen) == (family, op, [], None) and not plan.complete
-    assert v.rejected[0] == {"kind": kind, "module": op, "slot": slot, "why": why}
+    assert v.rejected == [{"kind": kind, "module": op, "slot": slot, "why": why}]
     assert v.why.startswith(f"no legal site: {kind} at {op}/{slot}: {why}")
+
+
+def test_a_scale_products_values_refused_candidates_are_under_its_plans_digest():
+    """A plan's digest covers each Value's refused candidates, and a scale-products Value given its site has none. So the plan
+    digests otherwise than the same plan with a refusal among that Value's candidates: a rule that ran on past its site to
+    the last refusal of `sites_of` would change the digest of every plan that holds such a Value, and of no other."""
+    plan, _, _ = make_plan(base_rows() + [row("scale_products", PROJ, "out")])
+    body = plan.body()
+    held, = (v for v in body["values"] if v["family"] == "scale_products")
+    assert held["rejected"] == [] and P.plan_digest(body) == plan.digest
+    held["rejected"].append({"kind": "?", "module": PROJ, "slot": "out", "why": "family 'scale_products' has no site rule"})
+    assert P.plan_digest(body) != plan.digest
+    without, _, _ = make_plan(base_rows())
+    assert all(v["family"] != "scale_products" for v in without.body()["values"]) and without.digest != plan.digest
 
 
 def test_sampler_without_runner_is_unsupported():
