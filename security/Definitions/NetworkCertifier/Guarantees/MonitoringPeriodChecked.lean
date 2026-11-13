@@ -4,8 +4,8 @@ public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Assumptions.RegisteredInputs
 public import Definitions.NetworkCertifier.Carried
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
-public import Definitions.NetworkCertifier.PeriodChecked
-public import Definitions.NetworkCertifier.PeriodConditions
+public import Definitions.NetworkCertifier.MonitoringPeriodChecked
+public import Definitions.NetworkCertifier.MonitoringPeriodConditions
 public import Definitions.NetworkCertifier.Tap
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -42,7 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leak through the network certifier over a monitoring period, with the checked inputs left out
 
-`PeriodLeakAccepted` with each window's checked inputs `chk` left out of the count
+`MonitoringPeriodLeakAccepted` with each window's checked inputs `chk` left out of the count
 (`Definitions.NetworkCertifier.Checked`), and the client's view read back from the windows' records under a registered
 parameter (`RecordFormat.ReadsBy`) in place of the whole schedule.
 
@@ -58,8 +58,8 @@ meets its good event is recovered from one parameter and the windows' records, e
 accepts with a valid run. So the secrets number at most `#Θ` times the windows' count (`windowsCount`) with the
 registered and the checked inputs pinned; no factor counts the schedules or a connection's cells.
 
-**The registered inputs.** `reg` is as `PeriodLeakAccepted` has it. The good event (`WindowGoodChecked`, stated here:
-`WindowGood` with the leak relation at a valid run and the window's check the registration's) reads that the trace
+**The registered inputs.** `reg` is as `MonitoringPeriodLeakAccepted` has it. The good event (`ExecutionPhaseGoodChecked`, stated here:
+`ExecutionPhaseGood` with the leak relation at a valid run and the window's check the registration's) reads that the trace
 holds the registration's values there as the named premise `RegisteredInputsHeld`, open: the registration's openings
 discharge it under the commitment's binding. Where no input is registered it holds of every trace.
 
@@ -83,7 +83,7 @@ the leak relation at the network certifier's rows holds with a valid run (the ne
 `x` is in the audit's scope and registered as `s₀`, with `s₀`'s check, the trace holds `ρ` at the registered inputs
 (`RegisteredInputsHeld`), and the run's observations `o` have the horizon's length, jitter below `Dj` and every status
 complete. -/
-def WindowGoodChecked (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+def ExecutionPhaseGoodChecked (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool)) (x : Msg) (w : Wit)
     (o : List (Obs L K S)) : Prop :=
@@ -115,20 +115,20 @@ operator `op` fixed before the period and the covert sender's secrets, window `i
 certifier that runs its code by `trusted-host`, its one run giving the cells the client receives and the observations
 of the monitoring period's windows (its record of those cells, in the format `f`), which reads back under a registered
 parameter (`RecordFormat.ReadsBy`); and a covert sender in the server over the registered parameters `Θ`, whose secrets
-a decoder recovers from the client's view of the server side (`PeriodChannelReg`):
+a decoder recovers from the client's view of the server side (`MonitoringPeriodChannelReg`):
 
 * each window's audit, at a statement in its scope where the two checks miss on the run at the network certifier's rows
   with probability at most `ε₁` and `ε₂` (`CheckedWitness` at `certifierRun`), has
   `Pr[acc ∧ ¬RLeakCertifierChecked δ] ≤ δ + ε_ks + ε_bind + ε₁ + ε₂ + Pr[B_tap]`;
 * where at every window's statement the network certifier registers its observations at that window's operator at the
-  run's observations (`CertifierRegisters`), for the secrets whose every window meets `WindowGoodChecked`, at that
+  run's observations (`CertifierRegisters`), for the secrets whose every window meets `ExecutionPhaseGoodChecked`, at that
   window's statement `x z i` and extracted witness `wit z i`:
   * **held**: the cells the client receives are read from the windows' records under a registered parameter of `Θ`,
     and each window's record is a sequence its registered Program accepts with a valid run at the registration's
     values (`AccSeqsChecked`);
   * **counted**: they number at most
     `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #faultySets_i(δ) · 2^β_i · Dj^k_i` (`windowsCount`). -/
-def PeriodLeakChecked : Prop :=
+def MonitoringPeriodLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
@@ -147,7 +147,7 @@ def PeriodLeakChecked : Prop :=
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H),
     (∀ m, ScopeAcc D lay k m →
@@ -162,7 +162,7 @@ def PeriodLeakChecked : Prop :=
           (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
           (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) →
-        (∀ z ∈ Zs, (∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+        (∀ z ∈ Zs, (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)) →
             ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
               ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈
@@ -170,7 +170,7 @@ def PeriodLeakChecked : Prop :=
                   (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i))
                   (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r) δ
                   (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
-          {z | z ∈ Zs ∧ ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+          {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
             Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞))
 
