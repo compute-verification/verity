@@ -35,9 +35,9 @@ from types import SimpleNamespace
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cache_pool_vectors as CPV
 import pool_row_trace as PRT
 import replay as RP
+import replay_input as RI
 
 from verity.protocols.certifier.verifier import compile_slice as CS
 from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v6 as V6
@@ -128,7 +128,7 @@ def cut_replay(engine: RP.Engine, requests: Sequence[RP.RequestIO], admit: Seque
 # --- CompileSlice_v6's pool window -----------------------------------------------------------------------------------
 
 
-def statics(inp: CPV.Input, windows: Sequence[Sequence[int]]) -> dict[str, int]:
+def statics(inp: RI.Input, windows: Sequence[Sequence[int]]) -> dict[str, int]:
     """`pool_row_trace.statics`' class for the trace, its arrival slots K the most members a window has, CU the most
     blocks a request's tokens fill, holders to the most requests the engine runs and stream and M run widths no window
     passes."""
@@ -262,7 +262,7 @@ def streamed(win: Window):
 # --- the drive -------------------------------------------------------------------------------------------------------
 
 
-def drive(inp: CPV.Input, *, every: int) -> dict[str, Any]:
+def drive(inp: RI.Input, *, every: int) -> dict[str, Any]:
     """The trace ``inp`` (its engine, requests and admission steps) cut every ``every`` scheduled steps, with the three
     pools held to each other (the module's docstring); the counts and each edge's root. Raises AssertionError where
     they disagree."""
@@ -289,7 +289,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     a = ap.parse_args(argv)
     for t in a.traces:
         for every in a.every:
-            got = drive(CPV.replay_input(t), every=every)
+            got = drive(RI.replay_input(t), every=every)
             print(json.dumps({"trace": t.name, "every": every, **{k: v for k, v in got.items() if k != "roots"}}))
 
 

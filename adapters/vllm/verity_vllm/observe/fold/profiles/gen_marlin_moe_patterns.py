@@ -31,24 +31,60 @@ from __future__ import annotations
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
-from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
 from verity.definitions.numerics import marlin_moe_rows as MR
 from verity.definitions.registry import marlin_moe as MM
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (SCRATCH_INT_FILLS, SiluAndMulWithClamp, as_float, bound_args, find_descendants, is_row_major,
-                                               op_name, target_of, triton_name, unsupported, vocab_kind)
-from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported, WeightField,
-                                               scratch_view)
+from verity_vllm.observe.fold.patterns import (
+    SCRATCH_INT_FILLS,
+    SiluAndMulWithClamp,
+    as_float,
+    bound_args,
+    find_descendants,
+    is_row_major,
+    op_name,
+    target_of,
+    triton_name,
+    unsupported,
+    vocab_kind,
+)
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    K_ALIGN_KERNELS,
+    K_SUM,
+    _contig,
+    _flat,
+    _same,
+)
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (
+    K_DYN_MM,
+    SHARED_OP,
+    _weight_root,
+    scope_gate,
+    scope_group,
+    scope_hidden,
+    shared_expert,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    PerRow,
+    Pieces,
+    Resolution,
+    Shared,
+    StepContext,
+    Unsupported,
+    WeightField,
+    scratch_view,
+)
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_ALIGN_KERNELS, K_SUM, _contig, _flat, _same
-from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (K_DYN_MM, SHARED_OP, _weight_root, scope_gate, scope_group, scope_hidden,
-                                                                 shared_expert)
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
+from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
 
 K_HASH_ROUTER = "topk_softplus_sqrt"
 K_TOPK = "_dsv4_topk_kernel"
@@ -246,7 +282,7 @@ class MoEMarlinSharedExperts:
                 hint: str) -> list[tuple[int, Any]] | Unsupported:
         """The align's schedule, w13, the clamped activation, w2 and moe_sum over the (token, slot) pairs."""
         C = self.config
-        E, TOPK, H, I, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
+        E, TOPK, H, INTER, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
         P, tp = M * TOPK, target_of(ctx)[0]
         aa = bound_args(sc.align)
         bufs = tuple(aa.get(k) for k in ("sorted_token_ids", "experts_ids", "num_tokens_post_pad"))
@@ -270,10 +306,10 @@ class MoEMarlinSharedExperts:
             (at, Compute(blocks, 1, (Shared(ids_flat), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (at,),
                          hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name))]
         prev = hidden
-        for launch, K, N, routed in ((sc.up, H, 2 * I, False), (sc.down, I, H, True)):
+        for launch, K, N, routed in ((sc.up, H, 2 * INTER, False), (sc.down, INTER, H, True)):
             if routed:
                 act = SiluAndMulWithClamp().match(sc.rsilu, ctx)
-                want = {"I": I, "LIMIT": float(C["SWIGLU_LIMIT"])}
+                want = {"I": INTER, "LIMIT": float(C["SWIGLU_LIMIT"])}
                 if not isinstance(act, Compute) or act.rows != P or any(act.spec.bindings.get(k) != v for k, v in want.items()):
                     return unsupported(node, f"the routed {K_CLAMP} did not resolve as SiluMulClamp{want} on the pair rows", child_id=sc.rsilu.id,
                                        child_reason=getattr(act, "reason", None))

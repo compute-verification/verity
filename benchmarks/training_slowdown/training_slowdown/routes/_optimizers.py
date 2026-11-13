@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import torch
 
+from ._codes import round_bf16, round_int8
+
 
 def newton_schulz(g: torch.Tensor) -> torch.Tensor:
     a, b, c = 3.4445, -4.7750, 2.0315
@@ -24,25 +26,52 @@ def newton_schulz(g: torch.Tensor) -> torch.Tensor:
 
 
 class Muon(torch.optim.Optimizer):
-    """Nesterov momentum, the update orthogonalized by five Newton-Schulz steps in bf16, `weight_decay` decoupled."""
+    """Nesterov momentum, the update orthogonalized by five Newton-Schulz steps in bf16, `weight_decay` decoupled.
 
-    def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0):
-        super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
+    With `low_state` each parameter is a bf16 matrix and its state is low-width: the momentum is kept as int8 codes at
+    one bf16 scale a row, decoded for the step and coded again stochastically (`_codes.round_int8`), and the
+    parameter's update is rounded to bf16 stochastically (`_codes.round_bf16`). For each parameter in turn the step
+    takes the buffer's random values, then the parameter's, from torch's global generator."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0, low_state: bool = False):
+        super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay}
+                         | ({"low_state": True} if low_state else {}))
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        """torch's load, which casts each state tensor of a float parameter to the parameter's dtype, with the
+        momentum's codes kept int8."""
+        super().load_state_dict(state_dict)
+        for st in self.state.values():
+            if "codes" in st:
+                st["codes"] = st["codes"].to(torch.int8)
 
     @torch.no_grad()
     def step(self):
         for g in self.param_groups:
+            low = g.get("low_state", False)
             for p in g["params"]:
                 if p.grad is None:
                     continue
                 st = self.state[p]
-                if "buf" not in st:
-                    st["buf"] = torch.zeros_like(p)
-                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
+                if low:
+                    if "codes" not in st:
+                        st["codes"] = torch.zeros_like(p, dtype=torch.int8)
+                        st["scales"] = torch.zeros(p.shape[0], 1, dtype=torch.bfloat16, device=p.device)
+                    buf = (st["codes"].float() * st["scales"].float()).mul_(g["momentum"]).add_(p.grad.float())
+                    for held, new in zip((st["codes"], st["scales"]), round_int8(buf)):
+                        held.copy_(new)
+                else:
+                    if "buf" not in st:
+                        st["buf"] = torch.zeros_like(p)
+                    buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
                 u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
                 if g["weight_decay"]:
                     p.mul_(1 - g["lr"] * g["weight_decay"])
-                p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
+                alpha = -g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5
+                if low:
+                    p.copy_(round_bf16(p.float().add_(u.float(), alpha=alpha)))
+                else:
+                    p.add_(u, alpha=alpha)
 
 
 class Lion(torch.optim.Optimizer):

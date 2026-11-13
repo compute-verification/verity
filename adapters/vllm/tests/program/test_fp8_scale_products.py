@@ -9,11 +9,10 @@ import random
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
-from verity.definitions.registry import fp8
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import fp8_twins
+from verity.definitions.registry import fp8
 from verity.definitions.registry import prims as P
 
 NAN = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FA00000, 0xFFBFFFFF]
@@ -41,7 +40,7 @@ def _class(u: int) -> str:
 
 
 def test_every_ordered_edge_pair_is_f32mul():
-    xs = np.asarray(EDGE, dtype=np.uint32)                       # x_s[kb] = EDGE[kb]
+    xs: np.ndarray = np.asarray(EDGE, dtype=np.uint32)                       # x_s[kb] = EDGE[kb]
     ws = np.repeat(xs[:, None], len(EDGE), axis=1)               # w_s[nb][kb] = EDGE[nb]: every ordered pair (x_s, w_s) once
     got = fp8_twins.scale_products(xs, ws)
     assert got.shape == (len(EDGE), len(EDGE)) and got.dtype == np.uint32
@@ -64,8 +63,8 @@ def test_the_pairs_reach_every_case_and_the_operand_order_matters():
 
 def test_rows_and_shapes():
     rng = random.Random(0x5CA1E)
-    ws = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(4)], dtype=np.uint32)
-    xs = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(5)], dtype=np.uint32)
+    ws: np.ndarray = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(4)], dtype=np.uint32)
+    xs: np.ndarray = np.asarray([[rng.choice(EDGE) for _ in range(3)] for _ in range(5)], dtype=np.uint32)
     got = fp8_twins.scale_products(xs, ws)
     assert got.shape == (5, 4, 3)
     for r in range(5):

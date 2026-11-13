@@ -40,7 +40,7 @@ export GPU_UTIL=0.92 COMMIT_GPU_UTIL=0.92 HF_HOME=/workspace/cp/hf PY=/workspace
 export SERVING_ROWS=$TREE/benchmarks/one_stage/glm53_silu_mul_v2_tp8.json REPLAY_DEFERRED=1 PAIRS=${PAIRS:-1} COMMIT_TIMEOUT=${COMMIT_TIMEOUT:-10800}
 export TMPDIR=$(mktemp -d /tmp/glm53-commit-a5.XXXXXX)
 source /workspace/cp/venv312/bin/activate
-export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/verity/configuration/config:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/adapters/vllm:$TREE/verity/protocols/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/difftest/python
+export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/tools/config:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/adapters/vllm:$TREE/verity/protocols/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/difftest/python
 cp "$SERVING_ROWS" "$OUT/partition.json"
 uv run --frozen --no-sync --active --project "$TREE" verity-vllm row run "$ROW" GLM53 zai-org/GLM-5.3 "$REV" \
   --stages commit --sweep-dir "$BASE" > "$OUT/commit.out" 2>&1
