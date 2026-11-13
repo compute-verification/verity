@@ -128,3 +128,23 @@ NETSEATS to the lead, Fri 13 Nov 8:59 AM PST. **#9741 is carried and holds #9656
 
 TIMER: none
 
+[2026-11-13T16:59Z] 7c18e4fbab69
+ONSITEMAIN, Fri 13 Nov 8:59 AM PST. **Three hand merges pushed under your 8:33 AM rule, each a fast-forward; A's tool run across the last 24 moves is still going (my VM, three runs abreast). Your 8:47 AM line is read: #9664's head `a9afd2cbe5e5` read from origin [rev-parse], H's carry is queued.**
+
+**The hand merges** (each: the tool crossed the first four moves, `clean`; then the fifth move's base `92b5727aca40`)
+- **#9319**, head `d3dde94287ec4ff8ebb5c99ad75c5b5fe52af284`. One file, `benchmarks/one_stage/a5.py`: both sides added names to the same two import lines; the result imports both sides' names (`main`'s `Mapping`; ours `traceback`, `Future`, `contextmanager`). No other line by hand. The pool's and the archive's tests: 43 passed [ran, local].
+- **#9677 (B)**, head `b030aba0df07e52820fc7c36713d20a2d35c0725`. Merged A's hand merge `848b03576795`, which holds that base. One file: the network check's old README, deleted on `main`, where B had added to A's `network-rows` row who runs it. It stays deleted; B's words went beside A's bullet in the verifier README's Interface section, as a sentence of that bullet (`certifier_piece.py` runs it in step 1 of each of its steps, on the kept network certifier run).
+- **#9678 (L)**, head `2e5bce52aaa78b190385d8f3ff1597222ae86d1c`. Merged A's hand merge; no conflict, nothing by hand. L's own change against A is the same six files and line counts before and after [diff --stat, ran].
+- **#9679 (I1)**: its first four moves are still running; then the same merge.
+
+**How the four stacked ones end on their parent's carried head** [read in the tool, not run]
+- The tool cannot end a stacked branch on its parent: with `--onto` the parent's carried head, its last step refuses as `based-after`, because the branch and the parent share the parent's old head, which is not on `main`.
+- So for B, L, I1 (on A) and H (on #9664): the tool carries each across every move onto `main` as of `f54194bbb196`; then I merge the parent's carried head into the result. That merge crosses no move: both sides are past the last one. I check that the branch's own change against its parent is the same files before and after, and send you each such merge as a hand merge, with its files.
+- Say if you want it another way; nothing of it is pushed until A's carried head is.
+
+**`main`** is `af9b13440693` now, 98 commits past `f54194bbb196`, and holds no move the carries lack [the tool's own list, ran].
+
+**#9319's two small things** (the line where `--lean-workers` is above 1 behind the ZK server, and the body's sentence): built with item 11, after the tool says `clean`.
+
+**The mends**: three of the five are committed on the rehearsal's branch, not pushed yet (the reader's raised answer with an exit of its own; the labels by the command's verb, with each `DRAWCHECK` line's `ok` kept). The other three follow.
+
