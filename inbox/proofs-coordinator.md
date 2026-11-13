@@ -124410,3 +124410,49 @@ Mailbox read at `f0ead86120` (06:11:45Z): your 06:09Z (the lakefile half of the 
 - One timer, for 07:00Z. If `8c61` or `ec73` is red I say so in that entry's title.
 
 Not established: the three runs' verdicts; everything my 06:06Z entry lists.
+
+## STAGECOINS, Fri 06:17Z: everything of mine COMPILES at `41720dd161` (for ASSEMBLY; replaces `91de14e478` on the join), with `FirstRead` reading `Run.coinsCode` and `SessionMatches` narrowed to two conjuncts; try `r20261113-060344-5094` rc 0
+
+All seven of my files compile together at `41720dd161`, which holds TWOLEG's `9b300c2d3ea2`. The run is `r20261113-060344-5094` on vy-nebius-2, rc 0. `coinsAgree_first_log`, `coinsAgree_second_log` and `coinsAgree_second_matches` use only `propext`, `Classical.choice` and `Quot.sound` [run]. Two statements the join reads changed since `91de14e478`: `FirstRead` now reads the run's `coinsCode`, and `SessionMatches` keeps only the record's digest and the four session fields. The recompile that failed (`r20261113-052130-1915`, as you read it) failed on a name my file didn't open, and that's mended. On COINMAP's open line: `FreshWide o.log` in `DevSecond` is not mine to prove and needs no change to my statements. The join takes `DevSecond` at `goodCase C JoinGood`, where every accepted play already carries `FreshWide`.
+
+Head pushed: `41720dd161` on `cursor/proofs-stagecoins-71b1`. Nothing unpushed. The machine was replaced again before this turn; I rebuilt `~/wt` from the pushed branch.
+
+**The run** [run]
+`r20261113-060344-5094`, vy-nebius-2, build directory `build-10` (warm, 39 files changed), started at once at 06:04Z, rc 0 at 06:16Z. The end lock took no visible wait. It printed:
+- `Built … SampledTwo.FirstCoins`, `StageLog`, `SecondCoins`, `StageCut`, `StageAlone` and `CoinBytes`; `Build completed successfully (11640 jobs).`
+- `'Verity.SampledTwo.coinsAgree_first_log' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for `coinsAgree_second_log` and `coinsAgree_second_matches`.
+- `lean exit 0 in 666 s`; siblings: no clash (31 imported, peak 4518 MB).
+- `axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+
+**The mend** [read]
+`StageAlone.lean:231` unfolded `oneStageZkSource` and `oneStageSource`, which live in `Properties.Challenger` (`security/Properties/Challenger.lean`, exposed). My file doesn't open that namespace, so I qualified both names. The same line's closing step now takes either form of the goal (`first | rfl | assumption`).
+
+**`FreshWide` in `DevSecond` (COINMAP's NEEDS 1)** [read, derived; not compiled]
+It is not mine to prove, and `DevSecond` stays as stated.
+- At the join, my theorems are applied at `goodCase C JoinGood`, so the premise is `DevSecond A (goodCase C JoinGood) dev`. It quantifies over `FormAccepts (goodCase C JoinGood) o`. By ASSEMBLY's `formAccepts_goodCase`, that gives `JoinGood o`, and so `FreshWide o.log`.
+- So COINMAP's `devSecond_stage` (`CoinStages.lean:660`) gives it directly at `Acc := FormAccepts (goodCase C JoinGood)`, with `hw` from `formAccepts_goodCase`. It also needs `StageDraws Acc draw ℓ₂` (TWOLEG's), with `draw` being `(goodCase C JoinGood o).bind secondDraw`.
+- That instantiation is a few lines at the join, ASSEMBLY's or COINMAP's to place. It can be written now; it waits on nothing of mine.
+- `freshWide_play` doesn't serve here, because the form's accept isn't tied to a play.
+
+**CUT's 05:44Z answers** [relayed]
+`firstLabel` already reads the boundary's family at CUT's head. My `firstDraw` follows it when I next merge CUT. `LogRead` has one case, as I read.
+
+**Roots** [read]
+All seven files (`FirstCoins`, `SecondCoins`, `CoinBytes`, `StageLog`, `StageCut`, `StageCoins`, `StageAlone`) are roots of `security/Proofs/lakefile.toml` on my branch. None is in `security/Proofs/lean-audit.json`'s `roots`. All seven are on the join (since `91de14e478`), so by the 05:37Z rule ASSEMBLY adds them. I touched no lock, and my branch's lock has no two-stage root without a lakefile root.
+
+Every theorem over the form's accept here (`coinsAgree_*`, `FirstUnshown`, `SessionMatches`, `secondAlone_of_matches`) is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test. Its 05:36Z acceptance was with the switch on, at TWOLEG's `b53983fdab`, which I have not merged.
+
+## STOP RULE
+Kept: no listed guarantee's statement or premises changed, nothing the verifier accepts changed, no switch, no lock, nothing wired into `Sampled.lean`. No piece rests on the switch being off. The earlier-period signature hole is noted, not worked around. The device's ledger facts stay hypotheses, and I built no device lines. I listed no guarantee and added no `unwitnessed` entry.
+
+## NEEDS
+- ASSEMBLY: move the join to `41720dd161`. Add my seven roots to the lock's `roots`. Write the `Good` weakening (`JoinGood → LogIsDevice`) and the `DevSecond` instantiation above.
+- TWOLEG: name the head to merge (after the coin-tree line refusal and `RecordsRead`). I merge it then.
+
+## To post
+Nothing.
+
+## Not established
+- The `DevSecond` instantiation at `goodCase C JoinGood` is not written or compiled anywhere.
+- `SessionMatches`' two conjuncts are hypotheses, not proved.
+- Nothing of mine is compiled at TWOLEG's `b53983fdab` or later.
