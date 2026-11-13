@@ -222,7 +222,10 @@ What it changes:
 Its value check at 86 ids, 4 layers [ran, `r20261113-060524-d1f6`]: 134 of 135 templates match, and
 `BatchedGemm_v1{B=1,K=512,N=1}` mismatches 1,013 of 1,024 sampled units. The cause is the check's stand-in for a free `w`
 (`node_window_values.py:311-320`), which assumes the tree's unit order `a + (b N + n) M + t` [read]; the form's mixed nodes
-are member-slowest. With the stand-in taught the form's order (scratch only, `p3_bgform.py`): BGVALUES2.
+are member-slowest. With the stand-in taught the form's order (scratch only, `p3_bgform.py`), the same window (`c08b1dd17424ad2d…`)
+checks clean: 135 templates, 46,671 units checked, 0 mismatches, none undeclared, 7.8 GiB at peak
+(`r20261113-070239-36f1`) [ran]. So the form computes what the tree's lowering does at 86 ids; landing it would also change
+that stand-in, in `node_window_values.py` (DENSE's, not REQBLOCK's) [inferred].
 
 The alternative is a frame change: `_whole` gathering the mixed members by one step per template. That is REQBLOCK's file.
 
@@ -292,7 +295,7 @@ would cut it [inferred, not built]:
 | `r20261113-052948-b2a8` | `p3_cycle.py bisect`: 129 at 2 outputs; at 3 it assumed monotone and is superseded by the sweep | unpatched |
 | `r20261113-053624-689e` | `test_node_window_sparse.py`; `p3_fixcheck.py` at 2 outputs for 43-256, at 3 for 43, 127, 128 and 150 | patched |
 | `r20261113-053624-c962` | `p3_fixcheck.py` at 2 outputs for 43-129, at 3 for 127 and 128 | unpatched |
-| `r20261113-053624-1cb7` | `p3_values.py` at 4 layers, 150 ids (its 43-id part ran past the timeout) | patched |
+| `r20261113-053624-1cb7` | `p3_values.py` at 4 layers, 150 ids (its 43-id part was cut by the run's timeout) | patched |
 | `r20261113-054823-8279` | `p3_cycle.py analyze 126 3` | unpatched |
 | `r20261113-054824-e596`, `r20261113-054824-5b84` | the sweep 87-150 at 2 and 3 outputs | unpatched |
 | `r20261113-054823-6dc1`, `r20261113-054824-a177` | the sweep 87-150 at 2 and 3 outputs | patched |
