@@ -215,8 +215,8 @@ def dgrad(dials: dict) -> dict:
     own as a sign too, and the root codes its own), and sends the sum on, coded; the root's sum over the blocks is
     the step's gradient. The update rule is the program's, on that gradient: the sign, the sign of a momentum or
     Muon of the gradient plus the momentum (the momentum coded at its bits), or AdamW with its bias correction; its
-    step is added to the store's codes; the gains step under torch's AdamW. Every draw is from the global
-    generator in the order the route's docstring states. The output is θ with the store's matrices, an adapter's
+    step is added to the store's codes; the gains step under torch's AdamW. Every random value comes from the
+    global generator in the order the route's docstring states. The output is θ with the store's matrices, an adapter's
     factors rounded as E rounds them."""
     torch.manual_seed(0)
     model = LM.of(SHAPE)
