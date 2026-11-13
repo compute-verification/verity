@@ -192,14 +192,12 @@ def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(m
                                     "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
 
 
-def test_the_programs_are_freed_where_the_resident_set_cannot_be_read(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_host_that_gives_no_reading_of_the_resident_set_raises_after_the_programs_are_freed_as_on_main(monkeypatch: pytest.MonkeyPatch) -> None:
     readings(monkeypatch, None, None, None)
     sr, held = Record(), {"programs": object()}
-    C2.free_programs(sr, held, 0)
-    assert held == {}
-    assert {k: v for k, v in sr["programs_freed"].items() if k not in ("malloc_trim", "when")} == {
-        "rss_before_kb": None, "rss_after_gc_kb": None, "rss_after_kb": None, "freed_mib": None, "freed_by_gc_mib": None,
-        "freed_by_malloc_trim_mib": None}
+    with pytest.raises(TypeError):
+        C2.free_programs(sr, held, 0)
+    assert held == {} and sr == {}
 
 
 @pytest.mark.parametrize("replay, linkage, before, after", [
@@ -257,7 +255,7 @@ def test_a_replay_whose_sample_is_null_or_empty_is_kept_with_no_seed_and_counts_
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample: Any) -> None:
     sr, lk = evaluated()
     evaluates(monkeypatch, (sr | {"sample": sample}, lk))
-    readings(monkeypatch, None, None, None)
+    readings(monkeypatch, 4096, 2048, 1024)
     s, cache = sources(tmp_path, **CACHED), Cache()
     C2.run(s, cache)
     (kept,) = cache.values()
