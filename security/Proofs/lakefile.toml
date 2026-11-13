@@ -105,6 +105,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Flock.SpotFlock.HeldOfRun", "Proofs.Flock.SpotFlock.RunsAs.OfCheck", "Proofs.Flock.SpotFlock.RunsAs.Parsed",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
   "Proofs.Flock.SpotFlock.HeldOfWires",
+  "Proofs.Flock.SpotFlock.DoWalk", "Proofs.Flock.SpotFlock.ParamsWf",
+  "Proofs.Properties.Verity.SampledTwo.PortsOfParams",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
@@ -171,7 +173,10 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Record.ReadsSame", "Proofs.Properties.Verity.Sampled.Record.PartReadsBack",
   "Proofs.Properties.Verity.SampledTwo.OfRun", "Proofs.Properties.Verity.SampledTwo.Fits",
   "Proofs.Properties.Verity.SampledTwo.Within", "Proofs.Properties.Verity.SampledTwo.AcceptsTop",
-  "Proofs.Properties.Verity.SampledTwo.PremisesAt",
+  "Proofs.Properties.Verity.SampledTwo.PremisesAt", "Proofs.Properties.Verity.SampledTwo.WiredParse",
+  "Proofs.Properties.Verity.SampledTwo.WiredScope", "Proofs.Properties.Verity.SampledTwo.CouplesWired",
+  "Proofs.Properties.Verity.SampledTwo.Undecodable", "Proofs.Properties.Verity.SampledTwo.WiredUnits",
+  "Proofs.Properties.Verity.SampledTwo.BlobFinder",
   "Proofs.Properties.Verity.SampledTwo.RuleTwo", "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead", "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
   "Proofs.Properties.Verity.SampledTwo.Apart", "Proofs.Properties.Verity.SampledTwo.FirstCoins",
@@ -199,4 +204,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.RefsOfSent", "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed", "Proofs.Properties.Verity.SampledTwo.SessionPrefix",
   "Proofs.Properties.Verity.SampledTwo.SessionExtra", "Proofs.Properties.Verity.SampledTwo.SessionRecordRounds",
-  "Proofs.Properties.Verity.SampledTwo.SessionAsk", "Proofs.Properties.Verity.SampledTwo.LastSlot"]
+  "Proofs.Properties.Verity.SampledTwo.SessionAsk", "Proofs.Properties.Verity.SampledTwo.LastSlot",
+  "Proofs.Properties.Verity.SampledTwo.SessionReplay", "Proofs.Properties.Verity.SampledTwo.RoundPrefix",
+  "Proofs.Properties.Verity.SampledTwo.MessagesOpen"]

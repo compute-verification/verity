@@ -23,8 +23,8 @@ auditor's held copies (`Live₂.KS`, a hypothesis, which `Flock.Guarantees.SpotK
   program (`Live₂.R`).
 * **The session's error at a prover** (`Live₂.errAt`): what `CompiledTwo.KS` bounds `PrBad` by at a prover `P`,
   `κ_δ(x) + √(γ(x)·Pr[B^P])` plus the binding finder's collision (`Live₂.prBad_le`).
-* **The coupling at the two-stage form** (`CouplingTargetTwo`): where the claim fails on the vocabulary's transcript,
-  some statement and some prover of the two-stage verifier's run make the sampled verdict at most as likely as `PrBad` at the session's
+* **The coupling at the two-stage form** (`CouplingTargetTwo`, at each commitment and strategy `CouplingTwoAt`): where
+  the claim fails on the vocabulary's transcript, the sampled verdict never accepts, or some statement in scope and some prover of the two-stage verifier's run make the sampled verdict at most as likely as `PrBad` at the session's
   relation plus `terms` (the device's coin trees, its log's read, its signature and the messages' two-continuation
   finders), and where `error`'s premises hold, the session's error at that prover plus `terms` is at most the published
   `δ`. It holds three pieces in one statement: the projection of the period's game onto the two-stage verifier's
@@ -138,21 +138,28 @@ theorem prBad_le (A : Live₂) (hKS : A.KS) (x : Msg) (hs : A.L.Scope x) (hδ : 
 
 end Live₂
 
+/-- **The coupling at one commitment `c` and strategy `σ`, at terms `t`**: the sampled verdict never accepts, or
+some statement `x` in the session's scope (the boundary registration's record the commitment carries) and some prover
+of the two-stage verifier's run at it make the sampled verdict at most as likely as `PrBad` at the session's relation
+plus `t`, and where `error`'s premises hold the session's error at `x` and that prover plus `t` is at most the
+published `δ` at the strategy's calls. Where the verdict never accepts no prover is named, as none is read. -/
+def CouplingTwoAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (t : ℝ≥0∞) : Prop :=
+  Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0 ∨
+    ∃ (x : Msg) (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
+      A.L.Scope x ∧
+      Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
+          ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + t ∧
+        (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+          ENNReal.ofReal (A.errAt x P) + t ≤ V.delta θ .sampled (V.cost θ F c σ))
+
 /-- **The coupling at the two-stage form, at the session of record `A`**: where the claim fails on the vocabulary's
-transcript at a strategy, some statement `x` (the boundary registration's record the commitment carries) and some
-prover of the two-stage verifier's run at it make the sampled verdict at most as likely as `PrBad` at the session's
-relation plus `terms`, `x` is in scope or the sampled verdict never accepts, and where `error`'s premises hold the
-session's error at `x` and that prover plus `terms` is at most the published `δ` at the strategy's calls. -/
+transcript at a strategy, the coupling holds there at `terms` (`CouplingTwoAt`). -/
 def CouplingTargetTwo (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) (terms : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞) : Prop :=
   ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
-      ∃ (x : Msg) (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
-        (A.L.Scope x ∨ Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0) ∧
-        Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
-            ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + terms c σ ∧
-          (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
-            ENNReal.ofReal (A.errAt x P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ))
+      CouplingTwoAt V k A θ F c σ (terms c σ)
 
 /-- **The deployment's sessions `S₂` cover the two-stage form at composite `k`**: where `S₂` holds no session and the
 parameters name the two-stage form (`TwoAt`), each strategy that meets the further finders' premises makes the sampled
@@ -197,12 +204,14 @@ theorem twoLeg (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : Byt
   | some A =>
     obtain ⟨hks, hδ⟩ := hKS θ F A hS
     obtain ⟨terms, hT⟩ := hC θ F A hS
-    obtain ⟨x, Ω, _, _, P, hs | h0, hle, hdelta⟩ := hT c σ hI
+    have hT' := hT c σ hI
+    unfold CouplingTwoAt at hT'
+    obtain h0 | ⟨x, Ω, _, _, P, hs, hle, hdelta⟩ := hT'
+    · rw [h0]
+      exact zero_le
     · calc _ ≤ ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + terms c σ := hle
         _ ≤ ENNReal.ofReal (A.errAt x P) + terms c σ :=
             add_le_add (ENNReal.ofReal_le_ofReal (A.prBad_le hks x hs hδ P)) le_rfl
         _ ≤ _ := hdelta hfs hpr
-    · rw [h0]
-      exact zero_le
 
 end Verity.SampledTwo
