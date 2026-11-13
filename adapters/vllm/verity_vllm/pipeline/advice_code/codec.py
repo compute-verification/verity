@@ -5,7 +5,7 @@ the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a pr
 
 `encode(advice, record, registered) -> bytes` and `decode(bytes, record, registered) -> I1.Advice`, with
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`AdviceCodeError`),
-deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
+deterministically. A string longer than the cap ℓ (`Registered.cap_bits`) is refused unread, and `encode` writes none.
 
 **Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile unit holds them as witness):
 - the network certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
@@ -698,9 +698,10 @@ def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
 def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
     """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
-    ones). `check` decodes the string back and holds it to the advice."""
+    ones) and a string over the cap ℓ, which no reader reads (`window_code.capped`). `check` decodes the string back
+    and holds it to the advice."""
     wins, rp, order = _residual_of(advice, record, reg)
-    data = CV.pack(string_of(wins, reg, length_tails(record, reg))[0])[0]
+    data = _total(lambda: CV.capped(*string_of(wins, reg, length_tails(record, reg)), reg.cap_bits))
     if check:
         index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]

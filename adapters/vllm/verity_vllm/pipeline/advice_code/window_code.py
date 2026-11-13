@@ -63,14 +63,15 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
+from itertools import accumulate
 from dataclasses import asdict, dataclass
 from typing import Any, NamedTuple
 
 from verity.protocols.certifier.prover.window_charge import Window
 from verity_vllm.pipeline.advice_code import arith as C
 
-__all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows", "Decoder",
-    "DEFAULT_CAPS", "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
+__all__ = ["Book", "capped", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",
+    "Decoder", "DEFAULT_CAPS", "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
 
 
 @dataclass(frozen=True)
@@ -180,6 +181,19 @@ def pack(bits: Sequence[int]) -> tuple[bytes, int]:
 
 def unpack(data: bytes, nbits: int) -> list[int]:
     return list(C.BitReader.from_bytes(data, nbits).bits)
+
+
+def capped(bits: Sequence[int], lens: Sequence[int], cap_bits: int) -> bytes:
+    """`pack`'s bytes of a string whose windows are charged `lens`, for a reader that refuses unread a string of more
+    than `cap_bits` bits (the registered cap ℓ): refuses (ValueError) to write one that reader would not read, and says
+    how many of its windows' charges fit."""
+    data, n = pack(bits)
+    if 8 * len(data) > cap_bits:
+        fit = [c for c in accumulate(lens) if (c + 7) // 8 * 8 <= cap_bits]
+        raise ValueError(f"the string is {8 * len(data)} bits, over the cap ℓ = {cap_bits}: its {len(lens)} windows are charged "
+                         f"{n} bits, and the first {len(fit)} of them {fit[-1] if fit else 0}, the most that fit under ℓ; end "
+                         f"the session by then, or register a larger ℓ")
+    return data
 
 
 # ------------------------------------------------------------------------------------------------------- the coder
