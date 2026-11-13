@@ -49,7 +49,8 @@ def capture(path: Path) -> Iterator[None]:
 def assemble(run: Mapping[str, Any], members: Mapping[str, Any]) -> dict[str, Any]:
     """The form's case of the run of record's input ``run`` and the interior audit's per-member case ``members``:
     {params, commitment (hex), evidence (hex), blobs (paths)}. ValueError where the run is not one the form decides:
-    public outputs, or no challenger key or family for a stage."""
+    public outputs, no challenger key or family for a stage, or an interior partition other than the one the members'
+    sessions are verified against (the interior's parameters carry that object: the members' check refuses null)."""
     it = run["interior"]
     if run.get("outputs"):
         raise ValueError(f"the check reports public outputs {run['outputs']}: the two-stage form refuses them")
@@ -58,12 +59,15 @@ def assemble(run: Mapping[str, Any], members: Mapping[str, Any]) -> dict[str, An
     ev = json.loads(bytes.fromhex(members["evidence"]))
     if ev.get("coins") != it.get("coins"):
         raise ValueError("the interior audit's coins are not the second stage's the run of record read")
+    part = members["params"].get("partition")
+    if part is None or it["params"].get("partition") not in (None, part):
+        raise ValueError("the interior's partition is not the object its members' sessions are verified against")
     key = run["key"]
     params = {
         "form": FORM, "boundary": {**run["params"], "challenger": {"key": key, "label": run["family"]}},
         "challenger": run["challenger"], "delta": run["delta"], "outputs": [], "public": run["public"],
         "rule": run["rule"], "values": run["values"],
-        "interior": {"params": {**it["params"], "challenger": {"key": key, "label": it["family"]}},
+        "interior": {"params": {**it["params"], "challenger": {"key": key, "label": it["family"]}, "partition": part},
                      "members": members["params"]["proofs"]["members"], "replay": it["replay"],
                      "values": it["values"]}}
     evidence = {"form": FORM, "coins": run["coins"], "interior": ev, "received": run["received"],
