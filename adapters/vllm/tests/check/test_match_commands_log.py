@@ -105,7 +105,7 @@ def test_batch_decomp_reads_the_capture_log_that_its_log_option_names(memory, tm
     assert cli.main([*args, "--log", log, "--out", str(named)]) == 0
     a, b = json.loads(in_place.read_text()), json.loads(named.read_text())
     assert (a["log"], b["log"]) == (os.path.join(d, "capture", "log.jsonl.gz"), log) and a["verdict"] == b["verdict"] == "PASS"
-    varies = ("log", "seconds", "phases")
+    varies = ("log", "utc", "seconds")                                         # the path given, and when and how long each run was
     assert {k: v for k, v in b.items() if k not in varies} == {k: v for k, v in a.items() if k not in varies}
     assert b["engine_steps"] == 3 and [e["request_id"] for e in b["requests"]] == ["r0", "r1"]
 
