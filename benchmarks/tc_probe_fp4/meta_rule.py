@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     import argparse
     from multiprocessing.pool import Pool
 
-    from verity.definitions.silicon.models import BlockScaledAlignAdd
+    from verity.circuits.silicon.models import BlockScaledAlignAdd
 
 INSTRUCTIONS = {"sp_nvf4_meta": "sp_nvf4", "sp_mxf4_meta": "sp_mxf4"}
 K_STORED, K_LOGICAL, CHUNKS = S.K_STORED, S.K_LOGICAL, S.CHUNKS

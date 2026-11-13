@@ -6,11 +6,11 @@ public import Proofs.Properties.Pouw.PearlPlus.Verdict
 public import Definitions.Pouw.PearlC.TileDraw
 
 /-!
-# Pearl+'s bridge, the draw: the run's tickets and acceptance as the game's draw reads them
+# Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them
 
-`Definitions/Pouw/PearlC/TileDraw.lean` states γ for the draw the run makes: each tile's tickets from the declarations
-its unit's record makes before the coin (`drawTickets`), and an audit that accepts a drawn tile that is good and whose
-declaration is consistent with it (`goodDeclTiles`). This file reads the code's draw and acceptance in those terms.
+`Definitions/Pouw/PearlC/TileDraw.lean` states γ for the sample the run makes: each tile's tickets from the declarations
+its unit's record makes before the coin (`drawTickets`), and an audit that accepts a sampled tile that is good and whose
+declaration is consistent with it (`goodDeclTiles`). This file reads the code's sample and acceptance in those terms.
 
 * (c) A passed tile's declaration is consistent: a tile that `checkTile` passes, or finds only over its inert-work
   bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (a loaded pass's records
@@ -671,7 +671,7 @@ theorem wrefRowRev1_h100 (k n : ℕ) : wrefRowRev1 devH100 k n =
   unfold wrefRowRev1
   rw [ite_eq_right (by rw [hG]; decide), hadd, hbf, hfs, hqa, hr, hG]
 
-/-- The code's `wref(1, k, n)` is the draw's `wrefRowRev1 devH100 k n`, the natural subtraction's cut at zero
+/-- The code's `wref(1, k, n)` is the sample's `wrefRowRev1 devH100 k n`, the natural subtraction's cut at zero
 included. -/
 theorem wref_one_eq (k n : ℕ) : (wref 1 k n : ℚ) = wrefRowRev1 devH100 k n := by
   rw [wref_one_cast, wrefRowRev1_h100]
@@ -693,7 +693,7 @@ theorem num_den_div (x n : ℕ) (hn : 0 < n) :
   have := Rat.den_div_eq_of_coprime hb hc
   exact_mod_cast this
 
-/-- The weight of a tile with `cr` credited rows and `cc` credited columns, as the draw weighs it. -/
+/-- The weight of a tile with `cr` credited rows and `cc` credited columns, as the sample weighs it. -/
 def tileWeight (r : UnitRecord) (rows cols : List ℕ) : ℚ :=
   ((wref 1 r.kKept r.matmul.n * (r.credited rows cols).1.length * (r.credited rows cols).2.length : ℕ) : ℚ) /
     r.matmul.n
@@ -1115,7 +1115,7 @@ theorem gOf_inj (hL : RunLayout passes U τ) {c c' : Cell} (hc : c ∈ cells pas
   obtain ⟨rfl, rfl⟩ := ht
   rfl
 
-/-- **The code's tickets are the draw's.** Over a run laid out on the game's workload (`RunLayout`), with each unit's
+/-- **The code's tickets are the sample's.** Over a run laid out on the game's workload (`RunLayout`), with each unit's
 declaration read from its record (`decOf`), each of `Run.tickets`' entries is a tile of its pass on a game tile, whose
 `drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
 every game tile with a ticket has an entry. -/

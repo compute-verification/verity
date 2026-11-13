@@ -18,11 +18,11 @@ import pytest
 pytest.importorskip("torch")
 
 from verity.circuits import partition_object as PO
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import live as L
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC
@@ -32,7 +32,7 @@ from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import served as SV
 
-AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py"
+AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata
 SHAPES, MODULES, ROWS, STEPS = [(64, 64), (64, 128), (32, 64)], {0: "q", 1: "down", 2: "o"}, 32, 1
 
