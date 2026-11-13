@@ -134,7 +134,7 @@ def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_th
     plan that doesn't name it runs it in its last shard."""
     for n, plan in CHECK.DECLARATION.plans().items():
         got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
-        assert sorted(p for s in got for p in s) == sorted(CHECK.shard_parts()), n
+        assert sorted(p for s in got for p in s) == sorted(CHECK.DECLARATION.all_parts(CHECK.JOBS, CHECK._parts_of(plan))), n
         named = [k for k, s in enumerate(plan) if "ratchet-gate" in s]
         assert "ratchet-gate" in got[named[0] if named else -1]
         assert all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
