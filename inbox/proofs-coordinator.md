@@ -127309,3 +127309,68 @@ Mailbox read at `49dfbc816d` (07:07Z); nothing new for me since 06:11Z. No `~/wt
 - [derived] What is left of (c), in order: the pins log's one line (`pinOf?`), the release log's three lines (their events, lengths and reads), the ledger's two lines (plain, their length under `MAX_LEDGER_LINE`, their messages), then the assembly at `⟨Lms.deployed, k.publicKey⟩` and the two witnesses. [guess] 400 to 600 more lines.
 - [run] Two kernel facts found on scratch copies, both worked around: `String.all` does not reduce in the kernel, so `isHost`, `isName` and `isSessionId` on a literal go through `String.all_bool_eq` and then `decide`; `simp` cannot generate equations for the match on `.arr #[.str l, n]` in `layoutOf`, so that proof rewrites and uses `dsimp only`, never `simp` under that binder.
 - Unpushed: nothing. I wait on: r20261113-071805-594f (first verdict; a cold build, end not known), r20261113-054723-4bcf (then (a)'s suites run and its pull request).
+
+## ASSEMBLY, Fri 13 Nov 07:23Z: RUNCOINS (`RunsAs/Statement.lean:163`, and `Steps`, `Coins`, `Released` on `coinsHold`) and STAGECOINS (`StageCut.lean:125`, `firstLabel e` against CUT's `firstLabel p`) hold the whole compile; both are theirs to mend. `6e8c` and `4aa9` failed on those two only. The join is at `c8d19ee874`, with `OtherRoots` a field; its next whole compile is `r20261113-072145-1d79`, about 08:00Z
+
+**In plain words.** Neither run reached a file of the join's own. Both stopped on the same two modules, each a worker's file written against an older verifier or an older cut. RUNCOINS has already started its restatement (its 07:10Z entry). STAGECOINS's `firstDraw_of` is stated at the old `firstLabel` and can't be proved as written. I took every head you listed except CUT's rename, whose try never compiled; I took CUT's compiled `680b549018` instead, for `CutRoots.lean`. Then I wrote your ruled change: `OtherRoots` is a field, and each stage's one root is CUT's. The new compile tries the new file first, because it is the only one the two failures don't block.
+
+Clock: `date -u` read 07:23Z. Pen: `~/wt/.pen` is this loop's (07:09:54Z); the loop before mine left `from-other-loop.md` (07:12Z), and it pushed nothing after `28d27c389e`. Remote `cursor/proofs-join-42b8` held only my pushes. Mailbox: newest your 06:58Z; your 07:09Z came as my prompt.
+
+**1. `r20261113-064510-6e8c`** (whole compile at `8c1063fb59`): **failed, rc 1** [run: its `stdout.log`].
+- `JoinsAt`: deps exit 1 in 609 s. `JoinedCoupling`: deps exit 1 in 530 s. `JoinedForm`: deps exit 1 in 416 s. Each said "Some required targets logged failures: Proofs.Flock.SpotFlock.RunsAs.Statement, Proofs.Properties.Verity.SampledTwo.StageCut". None of the three join files was elaborated.
+- **RUNCOINS / RUNSAS:** `RunsAs/Statement.lean:163:32` "Application type mismatch: The argument coins has type Json but is expected to have type Spot.Challenger.ChallengerKey in the application Spot.Challenger.coinsReason coins", then `163:53` "Type mismatch none". The join's `coinsReason` takes `key main coins window label after read`, from `42698aa01a`. The join's `Spot.Run` has no `coinsHold` (`coinsCode` replaces it), so `RunsAs/Steps.lean` (4 lines), `Coins.lean` (46, 58) and `Released.lean` (1) fail next [read; not reached]. `Coins` is a lock root, so the records run fails on it too. RUNCOINS's 07:10Z entry has taken this.
+- **STAGECOINS:** `SampledTwo/StageCut.lean:125:28` "Application type mismatch: The argument e has type VStar.Recursive.SampledTwo.Evidence but is expected to have type VStar.Recursive.SampledTwo.Params in the application firstLabel e", then unsolved goals at `126:13` and `128:69`, in `firstDraw_of`. CUT's `fc93fee9c7` made `firstLabel (p : Params) := p.boundary.challenger.map (·.2)`; STAGECOINS's `firstDraw` reads the family from `e.coins.segment.label`. So `firstDraw_of` (`firstDraws key p c e = some d → firstDraw k = some (d.label, d.after)`) needs the parameters' family to be the evidence's segment label, and nothing on the join says so. STAGECOINS and CUT settle which family the first stage's draw names. If `firstDraw` moves to the parameters' family, `JoinsAt`'s `family₁` and `DrawRoots.firstDraw_label` follow it; I mend those.
+- Not attempted, behind the two [derived: import graph]: `RunsAs.{OfCheck,Outcome,Parsed,Proved,Released,RoundTwoOf,Steps,Top}`, `SampledTwo.{AcceptsTop,OfRun,RuleTwo,Within,StageAlone,JoinsAt}`.
+
+**2. `r20261113-064609-4aa9`** (PROBE's records run at `3daff389fc`, vy-nebius-cpu-2, 64 GB): **failed, rc 1** [run]. `AUDIT FAIL` for `security/Proofs`: its build failed on the same two modules. `security` and `security/Properties` fail as a result. No record was written.
+
+**3. Merged, in order** [run: `lock_roots.py --check` clean after each; `git merge`, each with no conflict unless named]:
+- HISTORY `219bc2bd1f` (`28d27c389e`), then its cleanup `d77791cc13` (`528337faf0`; HISTORY's `c350` rc 0, `DeviceOrder` 5 theorems and `DeviceAccept` 1, probes clean).
+- SESSIONCOINS `49dbe8d36f` [run: `7ab0` and `9684`, `ALL rc=0`].
+- RUNCOINS `0210e36675` [run: `143e`, `RunsAs.lean` "lean exit 0 in 346 s", "no theorems in it"], with `Proofs.Flock.SpotFlock.RunsAs.Within` dropped from the lock's roots (`f379427d55`). `143e` compiled over main's `coinsHold`, so its verdict doesn't carry to the join (item 1).
+- STAGECOINS `bfac82043c` in place of `41720dd161` [run: `cdad` rc 0].
+- COINMAP `41ff648dbd` [run: `93b6`, `CoinPrefix.lean` "lean exit 0 in 272 s", 22 theorems, probe clean].
+- ADDRWC `e05417eec6`: `AddressFacts/OfRuns.lean`, with `widthFact_of_runs` and `copyFact_of_runs`.
+- `JoinsAt.lean`'s `sessionsRun` and `sessionMsgs` docstrings, for the mended layout (`fb36163f2c`).
+- **CUT `680b549018`** (`cursor/proofs-cut-9323`; CUT's 07:03Z names it compiled, `9958`) in place of `4d24802945`. CUT's 07:22Z entry says `4159` never ran and was cancelled, and its try of `4d24802945` is now `r20261113-071814-640b`, expected about 07:50Z. The merge holds `FirstCoinsShown` (your ruling); the only difference from `4d24802945` is the three rewrapped docstring lines, which I take when `640b` passes. One thing mended: CUT's own merge of the base reordered `security/lean-audit.json` and `tests/lint/allowlists/repo_retired_terms.json`. They hold the same entries [run: compared as data], so I kept the join's order (`6685c4d867`). No record changed.
+
+**4. The ruled change: `OtherRoots` is a field** (`70d3ff2a11`, roots `c8d19ee874`) [not compiled; `1d79` tries it].
+- `draws₁` and `draws₂` are gone. In their place: `family₁` (each accepted `JoinGood` play's first draw names `ℓ₁`), `family₂` (second draw, `ℓ₂`) and `otherRoots : ∀ o, FormAccepts C o ∧ JoinGood o → OtherRoots o.sent`.
+- New `SampledTwo/DrawRoots.lean`, with roots in the lakefile and the lock. `firstDraw_label` and `secondDraw_parts` read a draw back to its parts. `stageDraws_first` and `stageDraws_second` give `CoinMap.StageDraws` from the family alone, through CUT's `oneRoot_first hg hx hcase hl` and `oneRoot_second hg hx hcase h5 hch`. `hcase` is `CaseIsSent`'s first conjunct, and `OneRootIn` unfolds to `CoinMap.OneRoot`'s body. It imports `CutRoots`, `FirstCoins`, `SecondCoins` and `CoinStages`, none of which reaches either failing module, so it compiles at this head whatever the owners do.
+- `joinedOfLaw` reads `stageDraws_goodCase (stageDraws_first hcase hA h.family₁)` and the same for the second stage. The module docstring says so. Nothing written for CUT's two refusals. MESSAGES's three conditions not added.
+
+**5. `import_all`** at `c8d19ee874` [run: `pytest tests/test_lean_packages.py -k import_all`]: 1 failed, 1 passed. One line left: `SampledTwo/FirstSample.lean: Spot.Run`, **TWOLEG's**. RUNCOINS reads it as public at TWOLEG's `1874fb25cc`, which is not compiled.
+
+**6. ADDRWC and FRAME.** I take ADDRWC's `widthFact_of_runs` and `copyFact_of_runs` (on the join since the ADDRWC merge) over HONEST2's two in its own namespace: they are on the join and compiled on ADDRWC's head, and taking HONEST2's would put a second copy of each beside them. **No join head holds FRAME's `addressesConnected_of_held` yet.** It is in `SpotFlock/AddressesHeld.lean` on `cursor/proofs-frame-l1-9c4e`, which FRAME's 07:15Z entry says compiles at `013955525dbe`. You haven't listed that head; say so and I merge it, and that head is the one holding both.
+
+**7. `JoinsAt`'s fields at `c8d19ee874`** (the list for soundness):
+
+| field | whose | state |
+|---|---|---|
+| `ledgerInOrder` | HISTORY | taken (`Sessions.LedgerInOrder`; PRF-490) |
+| `distinctFamilies` | TWOLEG | until the form refuses equal labels |
+| `family₁`, `family₂` | TWOLEG | the form's to show; `family₁` waits on item 1's STAGECOINS/CUT settlement |
+| `otherRoots` | CUT | new; the form's accept does not give it |
+| `firstDrawn`, `sessionMatches` | CUT, STAGECOINS | taken |
+| `firstTreeless` | TWOLEG, SESSIONCOINS | until the form refuses a coin tree's line in the first session on two windows |
+| `msgOpens`, `digestBefore` | MESSAGES | no check gives either |
+| `heldAt`, `twoHolds` | HELDOF | taken |
+| `recordsHeldAt` | HELDOF, ACCEPTS | taken |
+| `recordsRead` | TWOLEG | the form's change |
+| `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` | MESSAGES, sessions' workers | taken |
+| `sessionMsgs` | sessions' workers | taken |
+| `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer` | the instance | the instance's |
+
+**8. Running** [run]: `r20261113-072145-1d79`, `--on auto` (it went to vy-nebius-cpu-1), at `c8d19ee874`, without `ulimit`. It runs four tries one after another: `DrawRoots.lean`, which can pass now, then `JoinsAt`, `JoinedCoupling` and `JoinedForm`, which fail in deps on item 1's two modules until those are mended. Expected end about 08:00Z [guess: `6e8c` took about 26 min for its three]. It is the only run of mine.
+
+**STOP RULE.** The lock's only edits are `roots`: `RunsAs.Within` out, `CutRoots` (CUT's) and `DrawRoots` in. No listed guarantee's statement, no named assumption, no `unwitnessed` entry.
+
+**NEEDS.**
+- **RUNCOINS:** your restated head over the join's `coinsReason` and `coinsCode` (`Statement`, `Steps`, `Coins`, `Released`); I merge it once a try names it compiled.
+- **STAGECOINS and CUT:** which family `firstDraw` names, the segment's `label` or `p.boundary.challenger`; then `firstDraw_of` at it, and a compiled head.
+- **TWOLEG:** `FirstSample.lean`'s `import all Spot.Run`, in a compiled head. CUT's 07:22Z item 4(a) is also yours.
+- **You:** FRAME's `013955525dbe`, yes or no (item 6). CUT's `4d24802945` I take once `640b` passes, unless you say otherwise.
+
+**Not established.** `DrawRoots.lean` and the new `JoinsAt` fields compiled (`1d79`'s first try decides `DrawRoots`; `JoinsAt` waits on item 1). That `family₁` as stated survives item 1's settlement. Any records run at the join.
+
+Branch `cursor/proofs-join-42b8` at `c8d19ee874`, pushed; nothing unpushed. Timer: none held.
