@@ -77,7 +77,9 @@ back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodC
   holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
   (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
   `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
-* **The run of record's accept** (`playAccepts_form`'s premises): `partsHeldAt`, `heldOfAt` (HELDOF);
+* **The run of record's accept** (`playAccepts_form`'s premises): `firstSized` and `partsSizedAt` (ACCEPTS: the held
+  first stage samples one fixed number of replay blocks, and at that number the held copies' parts are the interior
+  program's strata's, which gives the parts at each play's replay sample, `partsHeldAt_of_sized`); `heldOfAt` (HELDOF);
   `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions'
   workers); and `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the
   records the run held, and that the held copies' design evaluates, are theorems (ACCEPTS's `recordsHeldAt_of`,
@@ -255,9 +257,13 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- The held copies' parts are the interior program's strata's at each accepted play's replay sample
-  (`HeldOf.PartsAt`). -/
-  partsHeldAt : PartsHeldAt A C
+  /-- The held copies' first stage samples a uniform subset of one fixed number of replay blocks
+  (`SpotFlock.firstK`): a fact of the held first-stage registration alone. -/
+  firstSized : ∃ K, SpotFlock.firstK A.h.reg.first = some K
+  /-- At that number of replay blocks the held copies' parts are the interior program's strata's (ACCEPTS's
+  `PartsSizedAt`): it reads each accepted play's parameters and none of its bytes. With `firstSized` it gives the
+  parts at each accepted play's replay sample (`partsHeldAt_of_sized`). -/
+  partsSizedAt : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K
   /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
   heldOfAt : HeldOfAt A C
   /-- Each accepted play's registrations list each port once. -/
@@ -374,6 +380,9 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
       (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
+  have hParts : PartsHeldAt A C := by
+    obtain ⟨K, hK⟩ := h.firstSized
+    exact partsHeldAt_of_sized hK (h.partsSizedAt K hK)
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
     (hHolds V A x θ F c σ _ _ (readsAt A.h))
@@ -381,7 +390,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
     (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
-      (playAccepts_form A C _ P' h.partsHeldAt h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
+      (playAccepts_form A C _ P' hParts h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
         h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
