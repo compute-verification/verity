@@ -21,14 +21,14 @@ from verity_bench.vllm.table import render
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--preset", required=True, help="a spec under benchmarks/specs, by name")
+    parser.add_argument("--preset", required=True, help="a spec under benchmarks/harness/specs, by name")
     parser.add_argument("--model-path", type=Path, default=None,
                         help="machine-local checkpoint override; every file is hashed into the result identity")
     parser.add_argument("--arms", default=None,
                         help="comma-separated arm ids; include every arm's control (default: the spec's)")
     parser.add_argument("--arm-module", action="append", default=None,
                         help="experimental pkg.mod:NAME exposing install(target); repeatable (default: the spec's)")
-    parser.add_argument("--sweep", default=None, help="a sweep under benchmarks/specs, by name (default: the spec's)")
+    parser.add_argument("--sweep", default=None, help="a sweep under benchmarks/harness/specs, by name (default: the spec's)")
     parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--warmups", type=int, default=None, help="exactly this many discarded runs of a point before an engine's first timed one")
     parser.add_argument("--out", type=Path, required=True)

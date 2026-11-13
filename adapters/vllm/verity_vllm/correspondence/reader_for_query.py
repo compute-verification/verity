@@ -54,7 +54,6 @@ from typing import Any
 from verity_vllm.correspondence.runtime import (
     SCHEMA,
     CallCorrespondence,
-    RuntimeCorrespondence,
     correspondence_digest,
     occurrence_views,
     read_program_document,
@@ -275,15 +274,14 @@ def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[di
 class Correspondence:
     """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
-    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Calls' names are
-    read off its fields and no record is built (`recorded_names`; what `of` gives: a request Program's table is GBs); neither = the
-    v1-annotation fallback (the Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
+    `document`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), whose Calls' names are read off its
+    fields and no record is built (`recorded_names`: a request Program's records are GBs); without one, the v1-annotation fallback
+    (the Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
 
-    def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), table: RuntimeCorrespondence | None = None,
-                 digest: str | None = None, problem: str | None = None, document: dict | None = None) -> None:
+    def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), document: dict | None = None,
+                 digest: str | None = None, problem: str | None = None) -> None:
         self.P = P
         self._impl_paths = tuple(implementation_paths)
-        self.table = table
         self.problem = problem
         #: the Calls the record lowers to no runtime tensor: every return slot is neither an fx output nor a written argument (a Value
         #: internal to its occurrence's lowering, `runtime.ReturnSlot`); empty under the fallback, which records no return slots
@@ -292,28 +290,14 @@ class Correspondence:
         #: of the row (`call_place`); empty under the fallback
         self.rows: dict[int, int] = {}
         self.columns: dict[int, tuple[int, int]] = {}
-        doc = table.doc if table is not None else document
-        if doc is not None:
-            if table is None:
-                recorded, tensorless, self.rows, self.columns = recorded_names(doc)
-            else:
-                recorded, tensorless = {}, []
-                for rec in table:
-                    recorded[rec.call] = call_name_of(rec)
-                    if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
-                        tensorless.append(rec.call)
-                        continue
-                    r, cols = call_place([(x.leaves, x.view.shape if x.view is not None else None) for x in rec.returns if x.leaves is not None])
-                    if r is not None:
-                        self.rows[rec.call] = r
-                    if cols is not None:
-                        self.columns[rec.call] = cols
+        if document is not None:
+            recorded, tensorless, self.rows, self.columns = recorded_names(document)
             if len(recorded) != len(P.calls):
                 raise ValueError(f"correspondence record has {len(recorded)} Calls, the Program {len(P.calls)}: the record is of another Program")
             self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}
             self.tensorless = frozenset(tensorless)
             self.source = "correspondence"
-            self.digest: str | None = digest or correspondence_digest(doc)
+            self.digest: str | None = digest or correspondence_digest(document)
         else:
             self.names = {c.id: parse_call_name(c.name) for c in P.calls}
             self.source = "v1_annotations"

@@ -61,12 +61,13 @@ from verity_vllm.commit.opened import (  # noqa: F401  -- re-exported
     OpeningNotVerified,
     meta_by_name,
 )
+from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 __all__ = ["MatchOracle", "OpenedReader", "OpeningNotVerified", "SCHEMA", "entry_read_name", "merge_producers",
            "oracle_compare", "producers_of", "producers_of_programs", "promote_handed_down", "query_families_of",
            "runtime_rows_of", "same_name_invocations"]
 
-SCHEMA = "verity-sweep/oracle-compare/v1"
+SCHEMA = ORACLE_COMPARE_SCHEMA
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
 
 

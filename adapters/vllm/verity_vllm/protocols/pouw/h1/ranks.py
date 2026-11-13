@@ -46,7 +46,10 @@ from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.spot.device.challenger import LiveRecord
 
-from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
+from verity_vllm.engine import (
+    handle,
+    int8_ranks,  # noqa: F401  (a worker registers the int8 parts before it builds its model)
+)
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
@@ -239,13 +242,8 @@ class RankExtension:
 
 def executor_of(llm: Any) -> Any:
     """The in-process engine core's executor (``VLLM_ENABLE_V1_MULTIPROCESSING=0``), whose ``collective_rpc`` reaches every
-    worker."""
-    core = getattr(llm.llm_engine, "engine_core", None)
-    inner = getattr(core, "engine_core", None) or core
-    executor = getattr(inner, "model_executor", None)
-    if executor is None or not callable(getattr(executor, "collective_rpc", None)):
-        raise RuntimeError("pouw_h1_ranks: no in-process executor with collective_rpc (is VLLM_ENABLE_V1_MULTIPROCESSING=0?)")
-    return executor
+    worker (`engine.handle.executor`)."""
+    return handle.executor(llm)
 
 
 def _runner(decode_query_len: int) -> Any:
