@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from verity_vllm import config
+from verity_vllm import config, errors
 from verity_vllm import llm as L
 from verity_vllm import protocols as PO
 from verity_vllm.config import RowConfig
@@ -231,6 +231,19 @@ def test_the_door_refuses_a_set_in_the_packages_words():
     assert e.value.reasons == PO.refusals(_serve(ALL[2], enforce_eager=True))
     assert len(e.value.reasons) == 1 and e.value.reasons[0].startswith(f"{ALL[2]}: SPOT runs in the Commit stage")
     assert str(e.value) == "protocol options refused: " + e.value.reasons[0]
+
+
+def test_the_packages_refusal_is_the_adapters_one_refused_named_protocol_options():
+    """`protocols.Refused` is `errors.Refused` under its old name; `refused`, which the package declares, builds it for
+    a caller to raise, named "protocol options"."""
+    assert PO.Refused is errors.Refused and "refused" in PO.__all__
+    r = PO.refused(["a", "b"])
+    assert type(r) is errors.Refused
+    assert (r.reasons, r.what, str(r)) == (("a", "b"), "protocol options", "protocol options refused: a; b")
+    assert PO.refused("a").reasons == ("a",)
+    with pytest.raises(errors.Refused) as e:
+        PO.adapter("zk")
+    assert type(e.value) is errors.Refused and e.value.what == "protocol options"
 
 
 def _no_runner(scheme, settings, llm, epoch):
