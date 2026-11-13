@@ -248,6 +248,7 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | What | Today | At the end | Who | Day |
 | --- | --- | --- | --- | --- |
 | Party, channel, device, protocol, config, runtime | <code>verity/configuration/</code> and <code>verity/hardware/site/</code> | the five files and <code>runtime/</code> | top | Fri 13 Nov, 8 AM; if tonight's landing slips, Sat 14 Nov |
+| The eight protocols in their three groups | flat, each at <code>verity/protocols/</code> | <code>verity/protocols/proofs/</code>, <code>accounting/</code> and <code>policy/</code> | top, with lean for the Lean packages' paths | tonight, in the second chain of moves: on <code>main</code> Fri 13 Nov, 7 AM if the chain holds |
 | Hardware data sheets | <code>verity/hardware/</code> | <code>hardware/</code> | compute-research | Fri 13 Nov, 6:30 PM, behind tonight's landing; the code that loads them into <code>device.py</code> Sat 14 Nov |
 | Remote and onsite | two directories in <code>protocols/</code> | inside <code>protocols/compose/</code> | proofs | Sat 14 Nov with Friday's moves; Sun 15 Nov if it misses them |
 | The circuits of served kernels | <code>verity/definitions/</code> | what a protocol names to <code>verity/circuits/ops/</code>, the rest to <code>adapters/vllm/</code> | top, with vllm and circuits | Sun 15 Nov; the served part may be Mon 16 Nov |
@@ -262,7 +263,7 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under <code>benchmarks/</code> | SPOT's <code>prover/</code> and <code>verifier/</code>, started from a demo's configuration. The measured proving costs stay recorded under <code>benchmarks/</code> and are handed in as data | proofs, with benchmarks and vllm | not dated |
 | The registration check | <code>protocols/interface/</code> and <code>verity/hardware/site/</code> | <code>protocols/compose/verifier/</code>, over <code>device.py</code>'s types | proofs | not dated |
 | The policy's two calculators | inside <code>protocols/inference_only/</code> | two directories under <code>benchmarks/</code>; training renames the slowdown one | network-accounting moves them, training renames | Fri 13 Nov; the rename Mon 16 Nov |
-| The network certifier a served run starts: its serving loop, its keys, its prover | <code>benchmarks/</code>, about 25,000 lines, and the auditor's host runs them from there, which rule 9 forbids | the certifier's <code>device/</code> and <code>prover/</code> | network-accounting | the plan with days Mon 16 Nov |
+| The network certifier a served run starts: its serving loop, its keys, its prover | <code>benchmarks/</code>, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's <code>device/</code> and <code>prover/</code> | network-accounting | the plan with days Mon 16 Nov |
 
 <b>Code that has to be written</b>
 

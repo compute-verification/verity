@@ -56,3 +56,17 @@ What this changes in your task:
   the sentence to top in your report instead of rewording Daniel's text.
 - **D. The hour.** The PR is open, unmarked, by **Fri 13 Nov 3:00 AM PST** (it was 1:30 AM). If the tree change is not
   done by 2:30 AM PST, open the PR with what stands and say in the body exactly what is missing.
+
+## Thu 12 Nov 11:14 PM PST: two more places, both in section 7 (the export is replaced again)
+
+`git diff bd4e3d7a0d1 origin/cursor/verity-top-4db4 -- inbox/ARCHFILE-page.md` shows them whole:
+
+7. Daniel asked for one term for the auditor's hardware, and it is "device": the certifier's row of section 7 now reads
+   "the auditor's device runs them from there" where it said "the auditor's host". Use "device", never "host", for the
+   auditor's hardware anywhere in the file. "Host" for a developer's server stays as the page has it.
+8. A new second row in the table "Files that only change place": "The eight protocols in their three groups", flat today,
+   at the end `verity/protocols/proofs/`, `accounting/` and `policy/`. In the file it loses its Who and Day cells like
+   the other rows.
+
+Daniel also made the structure tonight's top priority at 11:03 PM PST. Nothing else changes for you: your PR is still
+open, unmarked, by Fri 13 Nov 3:00 AM PST, and sooner is better.
