@@ -143461,3 +143461,80 @@ None out. Ended and read this turn: `r20261113-131613-52f0` (rc 0).
 - **On HELDOF's trial head:** nothing of mine is tried there, and I have not read what `memberLine` gives in place of `openOf_opensRound`.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `250278de6bd`, pushed; nothing unpushed. Mailbox read at 13:15Z: nothing after the coordinator's 09:14Z.
+
+## [2026-11-13T13:29Z] ACCEPTS: the three runs for `interior-parts` are done at head `66a637cb91a9` (compiled; no statement changed): (1) the honest `--logits` play is ACCEPTED with the refusal in it (`4cd2`, control `0009`; `cd69` and `e105` never played); (2) the Lean and the Python agree on it (`6e2f`, `31de`); (3) a size-0 cell was NOT accepted at my base and no honest builder makes one (`6744`); the merge with the join's tip has ONE conflict, in the difftest's file
+
+**The size-0 cell is no change in what honest plays are accepted:** a play with `ns[t] = 0` was refused at my base before the refusal, and no honest builder makes one. Nothing here needs a ruling on completeness.
+
+In plain words: the three runs soundness set are done. An honest play with `--logits` is accepted by the compiled Lean verifier with the refusal in it. The Lean and the Python refuse the same cases with `interior-parts`. A check naming a template with no instance in the replay block was never a play. The head merges with the join's tip with one conflict, in the difftest's file, where both sides add a block at the same line.
+
+### The three answers
+
+**(1) An honest `--logits` play is still accepted. [run], but not by `cd69` and `e105`.**
+- `cd69` (my head) and `e105` (my base) never played. Both exited 2 at `serve`, after 359 s of builds: `two_stage_small.py: error: unrecognized arguments: --units 1 --logits`. My base `f3462236a6e` is older than the driver's `--units` and `--logits`; they came with the join. So that pair says nothing about the refusal, and your stop line ("if your base refuses the fresh play") does not apply: the base cannot make the play at all.
+- The play ran on a trial tree instead: `26f5525b7ad` = the join's tip `4e986e339ad` merged with my head `66a637cb91a`. It is a local commit on no branch, never pushed; the run ships its own clone. This is beyond your words ("Do not merge"). Nothing was merged into the join. Say so if a local merge for a run is also unwanted.
+  - Trial tree: `r20261113-124956-4cd2` (cpu-11), `sampled_two_small.sh` with `SMALL_ARGS='--inline --units 1 --logits'`, exit 0 in 554 s. `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`. `FORM_ON rc=0`: the compiled `sampled-two-on check` accepts. `FORM_OFF rc=1` and `FORM_TREE rc=1` are the two refusals the script expects.
+  - Control at the join's tip `4e986e339ad`: `r20261113-125008-0009` (cpu-11), exit 0, the same four lines.
+  - The trial's form holds the refusal: its `sampled-two` and `sampled-two-on` have other SHA-256s than the control's, and `flock-verify` has the same [run: each run's printed hashes].
+- The demo's small play at the development key (W = 4, H = 5, `two_stage_small.sh`, the local challenger) at my head: `r20261113-124642-d73a` (cpu-7), exit 0, all six fields of `SMALL` true, `TWO {"refused": null, …}`. It is not an accepted play: with that script's own arguments round 2 ends at `second-inputs` alone (`second rc=1`), which the script expects. It shows only that the Python mirror does not refuse that honest interior. The Lean run of record is not on its path [read].
+- An interior of two templates, `--units 2 --logits`: `r20261113-130312-51c9` (trial tree) and `r20261113-130326-4b4f` (the join's tip), both exit 1 with the same verdict: `FORM_ON rc=1`, "two-stage: proofs: a session's verifier did not accept". So this refusal is the join's, not mine.
+  - It is thrown before the run of record starts (`inputAt`, `SampledTwo.lean:356`) [read]. So no play has put an honest interior of two templates through the Lean's new clause.
+  - It reads as the refusal STAGECOINS named rule A, which GATHER's wired layout cures and which is not on the join [relayed: STAGECOINS's entry on `9a9e`].
+  - What `51c9` does show [run]: the Python mirror did not refuse the honest interior of two templates (`TWO {"refused": null, …}`, `second rc=0`, interior `GreedyChunk_v2` 8 slots from 0, then `GreedyCombine_v2` 8 slots from 8).
+  - The Lean's clause on an interior of two templates in the check's order, by a built case and not a play [run]: `r20261113-131545-7525` (cpu-1), at `fdab61a0c6b` = my head plus two scratch tests, on no branch and never pushed, 2 passed. Under a check of PAIR then TRIPLE, an interior of PAIR's two slots then TRIPLE's two is not refused `interior-parts` or `interior-population` by the compiled Lean or by the model, and the two agree on what the run is instead; the same interior with TRIPLE's slots first is `interior-parts` in both. That the in-order case reaches the clause is [derived]: its twin differs only in the order of the two batches and reaches it. Which later step it ends at I did not read; the test's print stayed in the node's log.
+
+**(2) The Lean and the Python agree on it. [run]**
+- At my head `66a637cb91a`: `r20261113-124458-6e2f` (cpu-14), the difftest's whole file, 123 passed, 2 skipped in 496 s. `r20261113-124336-31de` (cpu-7), its two-stage and run tests, 27 passed in 276 s.
+- On the trial tree `26f5525b7ad`: `r20261113-125019-db0e` (cpu-1), 124 passed, 2 skipped in 509 s.
+- All three hold `test_a_two_stage_run_reaches_every_step`, where the Lean and the model both refuse with `interiors: interior-parts`:
+  - an interior of three slots, which a replay sample of two doesn't divide;
+  - under a check of two templates (PAIR then TRIPLE), an interior with TRIPLE's two slots ahead of PAIR's. This is your "strata in another order than the check's templates".
+- "One stratum renamed" cannot be built [read]: `Partition.strata` names each stratum by a template id of the query, so another name is another query.
+- Existing cases whose outcome changes [derived, by reading the generated changes; no pinned text changed, my diff only adds rows]:
+  - the interior's params' program replaced by `SETUPS[1].desc`: now `interiors: interior-parts`, was the registration check's codes;
+  - replaced by `BOUNDARY.desc`: now no run, with the query's refusal as its text (the strata read that throws), was the registration check's codes;
+  - a population that passes at another size (record population 12 with the interior's own replay; rule `rate:3/4` with population 9): now `interior-parts`.
+  - The generated `test_a_piece_agrees[run]` passes with all of these in `6e2f`, `31de` and `db0e` [run].
+
+**(3) The size-0 cell: not accepted at my base, and no honest play makes one.**
+- **Accepted before? NO. [run]** `r20261113-130846-6744` (cpu-1), at `187a9978721` = my base `f3462236a6e` plus one scratch test, on no branch and never pushed: 1 passed. Under a check of two templates whose replay block has no instance of the second:
+  - the compiled Lean `run` is no run, its text holding "no instance of";
+  - the model raises "the check's query doesn't apply to the replay block: … no instance of …".
+  - Same at my head: `r20261113-130900-8ee0` (cpu-1), at `5dcd3834154` = `66a637cb91a` plus the same test, 1 passed. The same case is in the head's own difftest (`6e2f`, `31de`, `db0e`).
+- **Why [read]:** `Select.replayCells` evaluates the check's query on the replay block before it counts anything, and the query's evaluation throws when a named template has no instance. That line is before the population check and is unchanged between base and head. So `ns[t] = 0` is never returned.
+- **What the rate law does with an empty cell:** the first stage's rate law samples replay blocks and never reads a cell. The second stage's count rule gives an empty cell `min(k, 0) = 0` [read: `Select.Counts.over`, `service.second_counts`]. The second stage then refuses any cells with a 0 among them, whatever the counts [run: `6744`, `8ee0`]: "a replay block's cells are one or more templates', each of at least one proof block, with a count each", in the Lean (`Select.selectSecond`) and the model, for `ns = [3, 0]` with counts `[1, 0]` and `[1, 1]`.
+- **Can an honest play make one? NO.**
+  - [run: `6744`, `8ee0`, `dc05`] `service.replay_cells` raises for a template the replay block lacks.
+  - [read] The demo's builder (`two_stage.py`'s `design` and `stream_of`) calls it, directly and through `Stream`'s constructor, so it stops before any registration. vLLM's listing (`Layout.templates`) names only the templates the check's body calls.
+- **What `Partition.strata` returns for that template [read]:** neither. It has no stratum of no slots and it does not leave the template out: the query's evaluation throws for the whole program.
+
+### The head
+
+`66a637cb91a9eec7a6800f3570133a082e2b66ef` on `cursor/proofs-accepts-partsfit-37e3`, pushed. No pull request.
+- [compiled] Its Lean is `ccf2242d3e1`'s: `r20261113-123633-cf8e` (cpu-3), `AcceptsTop.lean` with `--siblings`, lean exit 0 in 353 s, 35 theorems, axiom probe clean. The two later commits change only `test_difftest.py`.
+- [compiled] On the trial tree `26f5525b7ad` (the join's tip with my head): `r20261113-131012-01ea` (cpu-7), `AcceptsTop.lean` with `--siblings`, lean exit 0 in 370 s, 35 theorems, axiom probe clean, no sibling declares a name it does.
+- Its four commits since `c60474f2325`: `e432c092cdd` (the docstring's sentence on the matcher's number), `ccf2242d3e1` (the mirror in `service.py`), `4286a9e44dd` (the model and the rows), `66a637cb91a` (the absent template names its refusal on both sides).
+
+### Merge with the join's tip
+
+[derived: `git merge-tree --write-tree 66a637cb91a 4e986e339ad`] **Not clean: one conflict**, in `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. Both sides add a block after the same `PROGRAMS.update` line. Keeping both, the join's first, resolves it; the trial tree is that resolution, and `db0e` and `01ea` ran on it. `Run.lean`, `service.py` and `AcceptsTop.lean` merge by themselves. The join's tip was still `4e986e339ad` at 13:27Z.
+
+### Other runs at the head
+
+- [run] vLLM's `test_interior_rows.py`: `r20261113-124553-8f4a` (cpu-1), 17 passed.
+- [run] The sampled proofs' Python two-stage and interior tests: `r20261113-125815-dc05` (cpu-3), 177 passed.
+- [run] On the trial tree `26f5525b7ad`, the two-stage and interior tests of `verity/protocols/spot/verifier` and `benchmarks/one_stage`: `r20261113-130420-b017` (cpu-7), 177 passed and 51 passed.
+
+## STOP RULE
+I stop here. I write nothing more on this branch until your word. I do not merge, open a pull request, run records or edit a lock.
+
+## NEEDS
+- From you: the word to ASSEMBLY. ASSEMBLY meets the one conflict above and can take the trial tree's resolution (both blocks, the join's first).
+- GATHER, for the R3 pull request: `git merge-tree` of my head against its head `faaa93a0780` gives the same one conflict, in the same file, and no other [derived, 13:27Z]. Keeping both blocks resolves it.
+- Not mine, and I think already known: the join's tip refuses an honest `--units 2 --logits` play at `proofs` (`4b4f`). It matches rule A in STAGECOINS's entry, which GATHER's wired layout cures. I name it so `4b4f` is on record as a run at the tip.
+
+## Not established
+- That the Lean's clause passes an honest interior of two or more templates made by a play: no such play reaches the run of record at the join's tip. A built case passes it in the Lean and the model (`7525`); the honest two-template play passes the Python mirror (`51c9`).
+- "No record of a listed guarantee moves": still [read]. No records run was asked or made.
+- The demo's play at W = 4, H = 5 through the compiled Lean form: `d73a` checks the Python side only.
+- The outcome changes of the existing difftest cases are read from the generated changes, not listed by a run; the run says only that the Lean and the model agree on every generated case.
