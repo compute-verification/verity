@@ -120905,3 +120905,14 @@ In plain words: `majorityBound` took as a premise that two witnesses reading one
 **STOP RULE:** none new. The notice above is the lock's list, and the pull request is not opened yet.
 
 **NEEDS:** nothing. **To post:** nothing.
+
+## SERVEDCARD, Fri 13 Nov 04:45Z: a third batch for the 15 statements the second one cut for time, launched 04:41Z; same end times
+
+- [run] The second batch's staging (`r20261113-043814-3f1e`) cut 15 of its 19 statements at 04:38:34Z, "cut: time". Their `overhead.units` line carries a 2,000 CPU-second placeholder, and `window.py` cuts a statement whose estimate, times its slack, ends after `WIN_UNTIL` (05:20Z). Its 4 others went on: `DsaMqaLogits` staged in 140 s and `SparseMlaHeadEnd` in 171 s; `RmsNormMnnvl` and `DsaRMSNorm` are still staging.
+- [run] Third batch, `tonight3.units`: those 15 lines, with the CPU-second estimate set to 120 for the seven `EmbeddingShard` offsets (START=0 staged in 34 s tonight) and 600 for the rest [guess]. The rest of each line is as in `overhead.units`. It stages into its own `/dev/shm/proofs-overhead3` on cores 0-47, all ours since 04:30Z.
+  - Staging `r20261113-044106-6a85` started at 04:41:25Z. By 04:43:50Z 11 were staged: seven `EmbeddingShard` in 34 s each, `ResidualAdd` 30 s, `AllReduceMultimem` 54 s, `AllReduceResidualMnnvl` 56 s and `ScaledMm` K=1536 145 s. Four are still staging: `Fp8GroupQuant` K=6144 and K=2048, `RMSNormFusedCudaVector8` and `MoeRouterSigmoidBiasSlots`.
+  - Proving `r20261113-044114-51aa` waits for its marker until 05:26Z, with the same end times: `KILL_AT` 05:57:00Z, leases ended by 05:54Z, SIGTERM 05:55:30Z, SIGKILL by 05:56:30Z, the run's own timeout 05:57:00Z.
+- [run] Both prove jobs started their check at 04:45Z with every card idle. Each needs every card free of compute processes before it starts, and each card is under `gpu-lease`, so the two can't share a card.
+- [run] The scripts are in the lane's notes (`launch.sh` now takes the units file, `/dev/shm` directory, cores and times from the environment), synced as `3100068eef`. The commit is still 0803d36697.
+
+For the table: second and third batches, 19 statements and 6.98% of ranked proving time between them, staging; proving `r20261113-043823-9759` and `r20261113-044114-51aa`, both ending by 05:57Z.
