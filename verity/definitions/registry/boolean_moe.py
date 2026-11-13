@@ -17,7 +17,7 @@ bits (I32 = F32 = Array<32, Value<1>>, BF16 = Array<16, Value<1>>).
                                                                                        word view: MoeRouterSigmoidBiasSlots_v1{...}
 
 `MoeSumCoordinate_v2{TOPK}` is traced for each TOPK (`elementwise.specialized`) from ``bf16_rn(((0 + f32(col[0])) + f32(col[1])) +
-...)`` through `verity.definitions.silicon.fp`, the first add written as what it does (``+0 + x`` is x but for -0, which becomes +0). Its
+...)`` through `verity.circuits.silicon.fp`, the first add written as what it does (``+0 + x`` is x but for -0, which becomes +0). Its
 adds make the canonical NaN where `F32Add_v1` keeps an operand's payload; both are NaN on the same inputs, and the cast ends every
 NaN in F2FP's 0x7FFF, so the word is `MoeSumCoordinate_v1`'s. `MoeSum_v2` is `MoeSum_v1`'s body on bits: one coordinate per column of the
 TOPK expert outputs. `MoeSum_v3` is the same function as a batch of `MoeSum_v2{TOPK,64}` over 64-column chunks (the last H mod 64
@@ -26,7 +26,7 @@ binds for `MoeSum_v1`.
 
 The router reads each value in one traced circuit, so that no value is computed twice (`Q_word`'s no-recompute rule): the
 word body's rounds each re-read the probabilities, which on bits would decode each probability once per round. Its Calls are
-cut only at the MUFU, a sub-Call to `verity.definitions.ops.boolean.mufu.MufuEx2Ftz_v2`, which `NvExpf_v1`'s ``ex2.approx.ftz.f32`` is:
+cut only at the MUFU, a sub-Call to `verity.circuits.ops.boolean.mufu.MufuEx2Ftz_v2`, which `NvExpf_v1`'s ``ex2.approx.ftz.f32`` is:
 
     NvExpf_v2                  `NvExpfIn_v1` (x -> the ex2 operand f and the low byte L of the fma.rm magic number jb), then
                                `MufuEx2Ftz_v2` (f), then `NvExpfOut_v1` (``e * 2^(L - 127)``, F32Mul_v1's NaN words)
@@ -61,10 +61,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
 from verity.circuits.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
-from verity.definitions.ops.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.ops.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import prims as P

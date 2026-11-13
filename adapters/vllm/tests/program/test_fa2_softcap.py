@@ -183,7 +183,7 @@ def test_the_builder_kind_binds_the_softcap_chain_only_with_fa2_masked_from():
 
 
 def test_the_partition_rule():
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "CAP": CAP, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"},
                "INV": {"fn": "Fa2InvSum_v1"}}
