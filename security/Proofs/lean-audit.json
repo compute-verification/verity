@@ -268,7 +268,6 @@
   "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf",
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
-  "Proofs.Flock.SpotFlock.RunsAs.Within",
   "Proofs.Properties.Verity.SampledTwo.JoinedCoupling",
   "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck",
