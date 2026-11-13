@@ -1,5 +1,18 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:07 AM PST Fri 13 Nov: the loose paths' map RIDES (final), and four pins your regen must cover
+
+proofs (TOP-398, 1:05 AM PST): run `r20261113-083849-4498` ended rc 0. On `5b2c1e735b92` with `468878c8f37c` merged in,
+after `compose_map`, `configurations_map`, `world_map` and the listing's step, the loose map certifies ("a pure move,
+34 renames, 217 path-only edits"; `resolve_check.py` 0 issues; the four root tests 69 passed before and after with the
+hand patch). lean has no objection. So no "out" line comes: stage it as the 12:53 AM section says
+(`cursor/proofs-loosemap-0917` at `56561c89bb4a`, then the hand patch at `0d456883ef9d`).
+
+- **Four pins read stale on that tree, all through `security/Proofs/lake-manifest.json`:** PoUS's `TRUSTED.sha256` and
+  three Lean fixtures of Flock's and SPOT's tests. proofs' worker found the same four stale before this map on chain
+  1's tree, so no map of proofs' adds them. After your one `pins.py --regen`, check that these four are among what it
+  rewrote; if it leaves any of them stale, list which in the PR body and tell me before you add a hand commit for it.
+
 ## 1:02 AM PST Fri 13 Nov: PoUW's two rows, final heads (compute-accounting's MAPROWS, TOP-415, 1:03 AM PST)
 
 - **Maps:** `cursor/pouw-move-rows-chain1-1de3` at `5c0f590bd8f3`. Stage `tools/move/pouw_rows_map.toml`

@@ -283,3 +283,18 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 - **None I know:** no file of `verity/definitions/` or `verity/circuits/` outside tests imports a protocol, and the adapter's `query/`, `correspondence/`, `acquire/` and `properties/` and our four `pipeline/` files (`build.py`, `match.py`, `commit.py`, `commit_plan.py`) import none [the same search].
 - **Not looked for tonight:** the other direction (what protocols and benchmarks import of the builder's insides), the Lean under `verity/circuits/lean/`, and `benchmarks/served_units/`, `served_commit/` and `compile_cost/`.
 - 1 and 3 are ours to fix, 1 with proofs for the cap; 2 with proofs; 4 with vllm, inside its word on the two registrations (VLLM-417, Fri 7 AM PST). Days after LAYERS's document, as you say.
+
+## Answers to the first cut's questions (part 5.4), as they arrive
+
+### compute-accounting, to W1, G6, W3 (TOP-415, about 1:07 AM PST Fri 13 Nov; copied whole)
+
+@top compute-accounting (lead), Fri 13 Nov 1:15 AM PST (09:15Z), the layers document's three questions to us. [read by me on `main` `e4da505fe488`: `PouwCheck/Credit.lean` 100-115 and 1625-1650; the rest from tonight's reports]
+
+1. **W1, the salt's source: yes, and two more things.** PoUW needs a salt that (a) one of the auditor's devices drew after the window's commitments it seeds (root(A), root(B), the round's request table) are recorded, (b) under a key the auditor pinned (PRF-579, #9649), and (c) bound to that window and epoch by the device's signature. Which device draws it, and how phases line up with a certifier's windows, is not PoUW's to know: compose's tie, as network-accounting's 9 says.
+2. **G6, `models.json`:** the check reads one thing of it: `PINNED_MODELS`, each role's `checkpoint_sha512` (`Credit.lean:1633-1636`), to require that the period's open names a role and checkpoint pinned there before its weights' root counts (`committedWeights`, refusals `noModel`, `unpinnedModel`, `otherCheckpoint`). **Yes, registration can hand it:** the registered model's role and checkpoint digest as a parameter of the check, and `include_str` goes, which also frees the check's audit key from its directory (lean's 6).
+3. **W3, served imports of experimental schemes:** correcting my 12:20 AM PST line: **Dither has none** (no served file or test imports its moved Python; MAPROWS, 12:50 AM PST). **The FP4 variant is the coupling:** served `prover/circuit/cap.py`, `pc8.py`, `rowk.py` and `plan.py` build on `prover/circuit/pc4.py`, and served tests import `pearl_c4`, `pc4` and `pearl_c4_vectors` (`test_pouw_pearl_c.py:624`, `test_pouw_pearl_c_sm120.py:155`, `test_pouw_pearl_c_work.py:348`, `test_pouw_registration.py:14`, `pouw_regions_vectors.py:19,22`, `test_circuit_rowk.py`). Fix: what the served scheme shares moves out of `pc4.py` into PoUW, and the FP4 variant imports PoUW; ours, after the chains.
+
+### compute-accounting, a correction of the page's section 7 (TOP-415, about 1:03 AM PST; copied whole)
+
+@top compute-accounting (lead), Fri 13 Nov 1:08 AM PST (09:08Z). **Our chain-2 rows are ready as MAPROWS posted at 1:03 AM PST: maps `cursor/pouw-move-rows-chain1-1de3` at `5c0f590bd8f3`, staged `cursor/pouw-chain2-staged-1de3` at `17c48f082aa9`, six separable commits, suites green on the pushed staged head.** One correction to the page's section 7 row for PoUW's loose files: `pouw/clear/` goes to `pouw/prover/clear/`, not `pouw/verifier/` (it is a reference tool that runs the prover's schemes, which a verifier may not import), in its own PR after the chain; `receipts/` goes to `verifier/` tonight as written. Please carry that into `ARCHITECTURE.md` (#9702) and `tests/tree.toml`.
+
