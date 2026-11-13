@@ -19,7 +19,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 #: the base packages the verifier requires by path: bytes, hashes and parsing; the circuit format; the commitments
-BASE = [LEAN.parents[2] / d for d in ("circuits/base", "circuits/lean", "commitments/lean")]
+BASE = [LEAN.parents[3] / d for d in ("circuits/base", "circuits/lean", "commitments/lean")]
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 PROOFS = Path(__file__).resolve().parents[6] / "security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
@@ -59,7 +59,7 @@ def test_no_dependencies_from_outside_the_tree():
 
 def test_no_escape_hatches():
     assert sources()
-    hits = [f"{p.relative_to(LEAN.parents[2])}:{i}: {line.strip()}" for p in sources()
+    hits = [f"{p.relative_to(LEAN.parents[3])}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
     assert not hits, ("the verifier of record runs only the definitions its proofs are about: write each of these in "
                       "plain Lean, with no @[extern], @[implemented_by], unsafe or native_decide (reword a comment that "
