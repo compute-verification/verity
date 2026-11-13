@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
+public import Proofs.Properties.Verity.SampledTwo.SessionFits
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
 /-!
@@ -21,9 +22,7 @@ stage's last round. At it:
   that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`);
 * `sessionsFit_of`: on a play the form accepts, the session-round locator puts at most one release on each round
   (`located_one_accepted`), so `SessionsFit` holds where every opening the check read is of at most one coin's elements
-  (`ReadFits`). The check gives that bound, not the device: `Spot.Challenger.coinTreesOf` refuses a tree whose block
-  is above `Spot.Challenger.MAX_BLOCK` and an opening of more coins than its tree's block, where the device's game
-  samples a tree of any block up to `Verity.maxTreeCoins` (`Verity.TreeSpecOk`).
+  (`ReadFits`), which the form's acceptance gives (`readFits`): the check bounds an opening, not the device's game.
 
 At the stages' rounds the run's locator puts what the stages' locator puts, so `CoinMap.devFirst_stage` and
 `CoinMap.devSecond_stage` read the same release there (`dev_congr`).
@@ -198,13 +197,6 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
     exact hfit o hA hG i.val hg
   rw [fitOf_eq_usedOf L i.val [] o.log hle, hu]
   exact he
-
-/-- **Every opening the check read is of at most one coin's elements**: on a play the form accepts, an opening of `n`
-coins in the log the check read has `n ≤ 65536`. It is stated of the read, at the form's acceptance, since the device's
-game alone bounds an opening only by its tree's block, and a tree's block only by `Verity.maxTreeCoins`. -/
-def ReadFits (C : CaseOf) : Prop :=
-  ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
-    ∀ r ∈ l, ∀ i s n, r.frame = .opening i s n → n ≤ 65536
 
 /-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
 check read on each round (`located_one_accepted`), the play's log puts releases of the same frames there
