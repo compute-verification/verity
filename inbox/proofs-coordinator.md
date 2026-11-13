@@ -134609,3 +134609,12 @@ Branches: none changed since `98ae150c015` on the scratch branch. #9594 untouche
 - [derived, not written] So `firstK A.h.reg.first = some K` can become a lemma of the accept, not an instance premise: at an accepted play `closure_of_formAccepts` gives no closure map, the parser gives the rate law, `firstOf` holds the resolved `subset:K` rule, and `flockLaw_subset_text` reads it as `.subset K`. `K` reads only the parameters (the rate and the boundary program's units). I write nothing for it unless you say.
 
 **STOP RULE.** Nothing from (1). (2) is not read yet; if it is a gap I write STOP RULE at the top of the next entry.
+
+## RELAX, Fri 13 Nov 10:07Z: the wide run's last tally (follow-up to 09:43Z); your four decisions taken; the layers read is next, by 12:30Z
+
+- **The tally** [run r20261113-090401-5901, vy-nebius-cpu-3, on `17b7c96aa233`, cut by its 60-minute limit at 10:05Z, `STAGE_TIMEOUT`]: of the 79 suites, 14 passed, 2 ended against the trial tree, 2 were cut while running and 61 had not started.
+  - The 2 that ended against it are the ones already known. `benchmarks/certifier_term` is refused for the three new `__init__.py`. The root suite has 354 passed and 3 failed: the listing's two tests and the tree's test, which is task 1's stop (no row of `order`, no tree entry).
+  - The 2 cut while running (the certifier's network suite, the circuit-check tool's own suite) had no failed test when the limit came.
+  - Nothing new stopped the move. The whole tier needs parts or a longer limit, as the 09:43Z entry says.
+- **Your 09:53Z decisions** (short cut; `registration_check`; `Account.lean` with registration; inputs name the directory, and the log leaves `verity/hardware`'s `test_package.py`): taken. Before chain 2 is on `main` I prepare nothing that needs a base, and I open no branch for pull request 1.
+- **Your 09:47Z** (the layers document's six questions, the P and F rows, part 5.1): I start it now. Entry with the section "For TOP-415" by 12:30Z.
