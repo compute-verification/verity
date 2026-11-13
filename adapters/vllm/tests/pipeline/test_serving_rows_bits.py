@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.gates.embedding import read
