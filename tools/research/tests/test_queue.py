@@ -614,7 +614,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
-POUS = "verity/protocols/pous/lean"
+POUS = "tools/pous_grader"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json"
 UP = posixpath.relpath("security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
