@@ -162,10 +162,10 @@ def _ready(monkeypatch, engine):
 
 
 def _geo_digest(engine) -> bytes:
-    """The committer's geometry digest over ``engine``, as its constructor reads it."""
+    """The collector's geometry digest over ``engine``, as its constructor reads it."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-    return NativeHostCommitter._model_geo_digest(SimpleNamespace(engine=engine, chunk=4096))
+    return NativeHostCommitter._model_geo_digest(SimpleNamespace(engine=engine, chunk=4096, rows=True))
 
 
 def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_names(monkeypatch):
@@ -190,7 +190,7 @@ def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_e
     com = _ready(monkeypatch, direct).committer
     assert (com.engine.runner, com.engine.model) == (runner, runner.model)
     assert com.engine.cp == {"repo": "/models/local", "revision": None}
-    assert len(_geo_digest(com.engine)) == 32
+    assert len(_geo_digest(com.engine)) == 64
 
 
 def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:

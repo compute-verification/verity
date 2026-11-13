@@ -6,25 +6,14 @@ and the arm (psched_arm.py) places a phase filler only beside a split, as a pure
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psched_score as P
+import pytest
 
 A, S, SC = P.A, P.S, P.SC
 ARM = "benchmarks/pouw/filler/psched_arm.py:PhaseSched"
 PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' tag
-
-
-@pytest.fixture(autouse=True)
-def _one_arms_module(monkeypatch):
-    # test_filler_score loads its own copies of arms and scoring into sys.modules; the arm module imports `arms` when
-    # A.load runs it, and its Filler must be the class check_arm tests against
-    monkeypatch.setitem(sys.modules, "arms", A)
-    monkeypatch.setitem(sys.modules, "scoring", S)
 
 
 def ncu_csv(kernel, rows):
