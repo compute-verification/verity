@@ -54,7 +54,7 @@ open Finset Assumptions Pouw.Fp8Atom Matrix
 theorem gapFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
-      P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
+      P.actOK (U.layout.shape u) act → P.inertBoundOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
     (hTT : TTOut CM P D g₀ δ) : GGap CM P D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA
   classical
@@ -87,7 +87,7 @@ theorem ttOut_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
 theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω : ℚ) (hω0 : 0 ≤ ω)
     (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hacc : PearlCAccounting P Params.pi c ρ) :
     ∀ U : Workload, U.InDomain P (pearlCDomainAt Params.pi s) → ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N,
-      ∀ act : Codes, P.actOK (U.layout.shape u) act → P.capOK H s' U u act →
+      ∀ act : Codes, P.actOK (U.layout.shape u) act → P.inertBoundOK H s' U u act →
         P.Wref U.layout u ≤ (ω : ℝ) * P.credit H s' U u act := by
   intro U hU H s' u hu act _ hcap
   have hsh : U.layout.shape u = s := hU.2.2 u hu
@@ -132,13 +132,13 @@ theorem pearlCGap16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     (by norm_num [wrefOf, creditOf, Params.pi, Costs.adopted, sh16384]) (by norm_num) hTT
 
 /-- The chain-only reading at the cap, 8192³: the credit less the forming, less a debit of `ρ·creditOf`. -/
-theorem chainOnlyGap8192Cap :
+theorem chainOnlyGap8192InertBound :
     gapOf (1 / 400) (wrefOf Params.pi Costs.adopted sh8192 /
       (creditChainOnly Params.pi Costs.adopted sh8192 - 1 / 400 * creditOf Params.pi Costs.adopted sh8192)) =
       600473 / 52340000 := by
   norm_num [gapOf, wrefOf, creditChainOnly, creditOf, Params.pi, Costs.adopted, sh8192]
 
-theorem chainOnlyGap16384Cap :
+theorem chainOnlyGap16384InertBound :
     gapOf (1 / 400) (wrefOf Params.pi Costs.adopted sh16384 /
       (creditChainOnly Params.pi Costs.adopted sh16384 - 1 / 400 * creditOf Params.pi Costs.adopted sh16384)) =
       856153 / 103540000 := by
@@ -263,11 +263,11 @@ theorem witness_saltLive (k : ℕ) (x : Fin k → ℚ) (l : Fin k) (hx : x l = 1
 
 open Classical in
 /-- The witness's debit is zero: no atom is flagged, no element is salt-dead, and every element is needed. -/
-theorem witness_debit_zero (H : Unit → Unit) (s : Unit) :
-    (witnessSem.unitDebit H s witnessWorkload 0 (witnessAct 0)).atoms = 0 ∧
-      (witnessSem.unitDebit H s witnessWorkload 0 (witnessAct 0)).elems = 0 := by
+theorem witness_inert_work_zero (H : Unit → Unit) (s : Unit) :
+    (witnessSem.unitInertWork H s witnessWorkload 0 (witnessAct 0)).atoms = 0 ∧
+      (witnessSem.unitInertWork H s witnessWorkload 0 (witnessAct 0)).elems = 0 := by
   constructor
-  · unfold PearlCSem.unitDebit
+  · unfold PearlCSem.unitInertWork
     dsimp only
     apply sum_eq_zero
     intro i _
@@ -278,7 +278,7 @@ theorem witness_debit_zero (H : Unit → Unit) (s : Unit) :
     have ht' : t < 4 := by simpa [witnessWorkload] using mem_range.mp ht
     rw [witness_unitFlags H s i j t ht']
     simp
-  · unfold PearlCSem.unitDebit
+  · unfold PearlCSem.unitInertWork
     dsimp only
     rw [card_eq_zero, filter_eq_empty_iff]
     intro e _
@@ -322,16 +322,16 @@ theorem ttOutPearlCWitness :
       TTOutPearlC (witnessCM (pearlCProtocol witnessSem Costs.adopted (1 / 400))) witnessSem Costs.adopted (1 / 400) ∧
       witnessWorkload.InDomain (pearlCProtocol witnessSem Costs.adopted (1 / 400)) (pearlCDomain Params.pi) ∧
       witnessWorkload.FixedOK (pearlCProtocol witnessSem Costs.adopted (1 / 400)) ∧
-      (pearlCProtocol witnessSem Costs.adopted (1 / 400)).capOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
+      (pearlCProtocol witnessSem Costs.adopted (1 / 400)).inertBoundOK (fun _ => ()) () witnessWorkload 0 (witnessAct 0) ∧
       0 < ∑ u ∈ range witnessWorkload.layout.N,
         (pearlCProtocol witnessSem Costs.adopted (1 / 400)).credit (fun _ => ()) () witnessWorkload u (witnessAct u) := by
   set P := pearlCProtocol witnessSem Costs.adopted (1 / 400)
   have hcr : ∀ H s U u a, P.credit H s U u a =
       ((creditOf Params.pi Costs.adopted (U.layout.shape u) -
-        debitOf Params.pi Costs.adopted (witnessSem.unitDebit H s U u a) : ℚ) : ℝ) := fun _ _ _ _ _ => rfl
-  have hzero : debitOf Params.pi Costs.adopted (witnessSem.unitDebit (fun _ => ()) () witnessWorkload 0 (witnessAct 0)) = 0 := by
-    obtain ⟨ha, he⟩ := witness_debit_zero (fun _ => ()) ()
-    unfold debitOf
+        inertWorkOf Params.pi Costs.adopted (witnessSem.unitInertWork H s U u a) : ℚ) : ℝ) := fun _ _ _ _ _ => rfl
+  have hzero : inertWorkOf Params.pi Costs.adopted (witnessSem.unitInertWork (fun _ => ()) () witnessWorkload 0 (witnessAct 0)) = 0 := by
+    obtain ⟨ha, he⟩ := witness_inert_work_zero (fun _ => ()) ()
+    unfold inertWorkOf
     rw [ha, he]
     simp
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -342,9 +342,9 @@ theorem ttOutPearlCWitness :
     intro u _
     rw [hcr]
     show max (((creditOf Params.pi Costs.adopted (U.layout.shape u) -
-        debitOf Params.pi Costs.adopted (witnessSem.unitDebit H s U u (act u)) : ℚ) : ℝ)) 0 ≤
+        inertWorkOf Params.pi Costs.adopted (witnessSem.unitInertWork H s U u (act u)) : ℚ) : ℝ)) 0 ≤
       (wrefOf Params.pi Costs.adopted (U.layout.shape u) : ℝ)
-    have h0 := debitOf_nonneg Params.pi Costs.adopted (witnessSem.unitDebit H s U u (act u))
+    have h0 := inertWorkOf_nonneg Params.pi Costs.adopted (witnessSem.unitInertWork H s U u (act u))
     have h1 := creditOf_le_wref Costs.adopted (U.layout.shape u)
     have h2 := creditOf_nonneg Costs.adopted (U.layout.shape u)
     apply max_le
@@ -374,7 +374,7 @@ theorem ttOutPearlCWitness :
     norm_num
   · exact fun u _ j hj =>
       ⟨fun l hl => (witness_operandOK 1).1 j hj l hl, fun hj' => (witness_operandOK 1).2 ⟨j, hj'⟩⟩
-  · show debitOf Params.pi Costs.adopted (witnessSem.unitDebit (fun _ => ()) () witnessWorkload 0 (witnessAct 0)) ≤
+  · show inertWorkOf Params.pi Costs.adopted (witnessSem.unitInertWork (fun _ => ()) () witnessWorkload 0 (witnessAct 0)) ≤
       1 / 400 * creditOf Params.pi Costs.adopted (witnessWorkload.layout.shape 0)
     rw [hzero]
     norm_num [creditOf, Params.pi, Costs.adopted, witnessWorkload]

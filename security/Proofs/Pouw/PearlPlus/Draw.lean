@@ -22,9 +22,9 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
   (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
   denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
 * (d) Acceptance is the tolerant audit's (`acceptGivesTheAudit`): when the check accepts, every sample of the game on
-  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overCapTiles`), or SHA-512
+  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overInertBoundTiles`), or SHA-512
   collides on an opened tile. A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration
-  (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`capOK`) and over the bound otherwise.
+  (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`inertBoundOK`) and over the bound otherwise.
   The tile's weight rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
   check holds only credited B rows to the rules (an excluded row must fail them and a voluntary one is unread), where
   `TileGood` reads every column.
@@ -858,7 +858,7 @@ def TilePassGivesTheDecl : Prop :=
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨
-      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
+      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overInertBound why) →
       declOK (tilesH3 saltOf rootOf ρ : TileRules Q R S) U τ dec g
 
 /-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`load_facts`)
@@ -1198,7 +1198,7 @@ structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → Lis
 /-- **(d) Acceptance is the tolerant audit's**: at rules `P`, `TR` that read the deployed tiles, rules and words, when
 the check accepts a run laid out as the game's workload, every sample `c` of the game whose tiles the verdict opened
 (`DrawnOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the tiles over the inert-work bound
-(`overCapTiles`) tolerated, under the records' declarations; or SHA-512 collides on two different messages of an opened
+(`overInertBoundTiles`) tolerated, under the records' declarations; or SHA-512 collides on two different messages of an opened
 tile, one hashed in digesting the words the check forms and one in digesting the commitment's words. -/
 def AcceptGivesTheAudit : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Pouw.PearlC.Protocol Q R S)
@@ -1211,7 +1211,7 @@ def AcceptGivesTheAudit : Prop :=
     P.fixedOK = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).fixedOK →
     (check i opener).accept = true → plan i = .ok pl → RunLayout pl.passes U τ →
     (∀ j, ∃ pi tid, DrawnOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
-    AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) c ∨
+    AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overInertBoundTiles TR U H s τ) c ∨
       ∃ pi tid g o cm, DrawnOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
         τ ((auditTiling 64 64 U.layout).unit g) = some cm ∧
         ∃ x ∈ leafHashed pl.passes[pi]! tid o, ∃ y ∈ commitHashed pl.passes[pi]! tid cm, x ≠ y ∧
@@ -1243,7 +1243,7 @@ theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
   have htile := hd.tile
   rw [hp!] at htile
   obtain ⟨-, -, -, -, hNT, -⟩ := id htile
-  simp only [goodDeclTiles, goodTiles, blankTiles, overCapTiles, Finset.mem_union, Finset.mem_filter,
+  simp only [goodDeclTiles, goodTiles, blankTiles, overInertBoundTiles, Finset.mem_union, Finset.mem_filter,
     Finset.mem_range, hT]
   cases hτ : τ ((auditTiling 64 64 U.layout).unit g) with
   | none => exact Or.inl (Or.inr ⟨hNT, rfl⟩)
@@ -1258,7 +1258,7 @@ theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
     have hw := hW saltOf rootOf ρ H s i.coins man p tid o U g cm hman htile (by rw [← hp!]; exact hd.salt)
       (by rw [← hp!]; exact hd.root) (by rw [← hPw]; exact hd.weights) hop hpass
     rcases hw with hw | ⟨x, hx, y, hy, hne, hxy⟩
-    · by_cases hcap : TR.capOK H s U g cm.act
+    · by_cases hcap : TR.inertBoundOK H s U g cm.act
       · refine Or.inl (Or.inl ⟨⟨hNT, cm, rfl, ?_⟩, ?_⟩)
         · unfold TileGood
           rw [hT, hrow, hPt, hPu]

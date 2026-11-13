@@ -17,7 +17,7 @@ public import Definitions.Pouw.PearlC.SaltDead
   `needed` (`Skip.needed`), and P3's salt-dead elements (`SaltDead.saltDead` at the rows' own `alpha` and `beta`).
 
 Its domain rules are `Defs`' liveness rule (`LiveRow` under `Stat.every8`), finite words, and the noise floor. Its costs
-are `creditOf` minus the replayed debit (`unitDebit`), and `wrefOf`.
+are `creditOf` minus the replayed debit (`unitInertWork`), and `wrefOf`.
 
 `sem` collects the pieces that are not pinned yet, each to be replaced by a shared definition when it lands:
 * `noise`: the unit's noise factors from the oracle, as E4M3 codes: E_A per unit, keyed by (salt, A root, B root, unit
@@ -103,8 +103,8 @@ noise (the same `unitChain` the ticket reads):
 - `elems`: the A′ elements `(i, l)` that are salt-dead (`SaltDead.saltDead`: the code's value is the same at every flat
   noise pair), or not `Skip.needed` (every word `(i, j)` has the atom
   containing `l` flagged), each element once. -/
-noncomputable def PearlCSem.unitDebit (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
-    Debit :=
+noncomputable def PearlCSem.unitInertWork (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
+    InertWork :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
   let AB := sem.unitChain H s U u act
@@ -122,9 +122,9 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
   fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
-    ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
-  capOK := fun H s U u act =>
-    debitOf Params.pi c (sem.unitDebit H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u)
+    ((creditOf Params.pi c (U.layout.shape u) - inertWorkOf Params.pi c (sem.unitInertWork H s U u act) : ℚ) : ℝ)
+  inertBoundOK := fun H s U u act =>
+    inertWorkOf Params.pi c (sem.unitInertWork H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u)
   Wref := fun L u => (wrefOf Params.pi c (L.shape u) : ℝ)
 
 /-- **The named failure probability** `δ(q, N) = (q + N)·2^−128`. Each of the `q` oracle calls, preprocessing included, yields at

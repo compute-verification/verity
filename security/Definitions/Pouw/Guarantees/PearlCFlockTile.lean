@@ -10,10 +10,10 @@ public import Definitions.Pouw.PearlC.FlockTile.Audit
 /-!
 # Pearl-C's gap under Flock's hidden audit (trusted)
 
-`HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` is `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s statement at
+`HiddenFlockSm120v1LoopCast8p72Rev1InertShare1000_8192` is `pearlCHiddenSm120v1LoopCast8p72Rev1InertShare1000_8192`'s statement at
 Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the hidden audit's open obligation
 `TileProofSoundAll` replaced by the two it reduces to there, T3 at the TileRead session and the binding, each a
-hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`.
+hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1InertShare1000_8192`.
 
 The session is `Definitions.Pouw.PearlC.FlockTile`'s, over core's game (`Verity.Game`), the one Flock's soundness is
 stated over.
@@ -42,7 +42,7 @@ The session is a parameter until TileRead's Definition lands. The statement says
 session whose `game` is TileRead's live session and whose `Cls` is T3's CR hypotheses: at a session with an empty `Cls`,
 `F.audit`'s class is empty and both obligations hold with `Bad` everything. It is cited beside the honest prover's
 `HiddenAudit.ProverBounded` at `F.audit` (`HiddenAudit`'s docstring). -/
-def HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+def HiddenFlockSm120v1LoopCast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
     (sem : PearlCSem Q R S) (F : TileReadSession Q R S) (δzk : ℕ → ℝ),
     (∀ q, 0 ≤ δzk q) →

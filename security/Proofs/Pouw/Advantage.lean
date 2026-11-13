@@ -155,10 +155,10 @@ end Pouw.SecurityProofs.NCP
 namespace Pouw.SecurityProofs.PearlC
 
 /-- **Pearl-C's design point at 8192³ on the RTX PRO 6000, in ε form** (not the served point, which is Llama 3.2 1B's
-linears under the H100 record): `GapSm120v1LoopCast8p72Rev1Cap1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
+linears under the H100 record): `GapSm120v1LoopCast8p72Rev1InertShare1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
 `ε = g/(1 − g) = 1648180439/444424569561`. -/
-theorem EpsSm120v1LoopCast8p72Rev1Cap1000_8192 :
-    Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192 := by
+theorem EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 :
+    Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 := by
   intro Q R S _ _ _ _ sha fetch salt sem hTT
   have e : ((1648180439 / 444424569561 : ℚ) : ℝ) =
       ((1648180439 / 446072750000 : ℚ) : ℝ) / (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) := by
@@ -166,7 +166,7 @@ theorem EpsSm120v1LoopCast8p72Rev1Cap1000_8192 :
     norm_num
   rw [e]
   exact (Pouw.PearlC.gGap_iff_gε _ _ _ (by push_cast; norm_num) _).1
-    (GapSm120v1LoopCast8p72Rev1Cap1000_8192 sha fetch salt sem hTT)
+    (GapSm120v1LoopCast8p72Rev1InertShare1000_8192 sha fetch salt sem hTT)
 
 /-- **Pearl-C4's headline at 8192³ in ε form**: `GapFp4Sm120_8192` and `Pouw.PearlC.gGap_iff_gε`, at
 `ε = g/(1 − g) = 9875013901/1366788186099`. -/

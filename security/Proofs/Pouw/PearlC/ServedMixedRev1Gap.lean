@@ -7,7 +7,7 @@ public import Proofs.Pouw.PearlC.ServedRev1Gap
 
 * **A set of linears at any `m`:** `pearlCDomainDevShapes d nks` holds a layout whose units are any linears in `nks`,
   each at any mix of batch sizes, as a served step's layout is. `pearlCGapDevRev1KShapes`,
-  `pearlCSampledDevRev1KShapes` and `pearlCSampledDevRev1KShapes_of_cap` are `ServedRev1Gap`'s one-linear theorems
+  `pearlCSampledDevRev1KShapes` and `pearlCSampledDevRev1KShapes_of_inert_bound` are `ServedRev1Gap`'s one-linear theorems
   with `ω` any bound on the ratio `wrefDevRev1K/((1 − ρ)·creditDevRev1)` over `nks`.
 * **The g is the max of the per-linear g.** `Wins` compares the adversary's online cost with the honest work of its
   correct units `K`, and the adversary picks `K`. The reduction turns TT_OUT's bound on credit into one on `W_ref`
@@ -52,17 +52,17 @@ theorem pearlCGapDevRev1KShapes [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevRev1K d sem ρ c).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevRev1K d sem ρ c).capOK H s' U u act →
+        (pearlCProtocolDevRev1K d sem ρ c).inertBoundOK H s' U u act →
           (pearlCProtocolDevRev1K d sem ρ c).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1K d sem ρ c).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
-    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWorkRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     have h1 : wrefDevRev1K d c (U.layout.shape u) ≤ ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) :=
       hω _ (hU.2.2 u hu) _
     show (wrefDevRev1K d c (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s' U u act : ℚ) : ℝ)
     have : ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) ≤
-        ω * (creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act) :=
+        ω * (creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast h1.trans this
   have key := gapFromTTOut CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) (1 / 400) (ω : ℝ)
@@ -83,7 +83,7 @@ theorem pearlCSampledDevRev1KShapes_gen [Fintype Q] [DecidableEq Q] [Fintype R] 
       (1 - (1 - g₀) / (ω : ℝ)) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
       ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevRev1K d sem ρ c).capOK H s' U g act →
+        (pearlCTilesDevRev1K d sem ρ c).inertBoundOK H s' U g act →
         (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤
           (ω : ℝ) * (pearlCTilesDevRev1K d sem ρ c).credit H s' U g act := by
     intro U hU H s' g hg act _
@@ -121,10 +121,10 @@ theorem pearlCSampledDevRev1KShapes [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   rw [e]
   exact key
 
-/-- `pearlCSampledDevRev1KNK_of_cap` on a set of linears at any `m`: the sampled g at a cap `ρ' ≤ ρ < 1` from TT_OUT
+/-- `pearlCSampledDevRev1KNK_of_inert_bound` on a set of linears at any `m`: the sampled g at a cap `ρ' ≤ ρ < 1` from TT_OUT
 rev1 per tile at `ρ` is the g at `ρ`, `1 − (399/400)/ω` where `0 ≤ wrefDevRev1K d c ≤ ω·(1 − ρ)·creditDevRev1` at every
 `m × n × k` with `(n, k) ∈ nks`. -/
-theorem pearlCSampledDevRev1KShapes_of_cap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+theorem pearlCSampledDevRev1KShapes_of_inert_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' c : ℚ) (nks : Finset (ℕ × ℕ)) (ω g : ℚ)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (hω0 : 0 < ω)
     (hw0 : ∀ nk ∈ nks, ∀ m : ℕ, 0 ≤ wrefDevRev1K d c ⟨m, nk.1, nk.2⟩)
@@ -145,7 +145,7 @@ theorem pearlCSampledDevRev1KShapes_of_cap [Fintype Q] [DecidableEq Q] [Fintype 
           ω * ((1 - ρ) * creditDevRev1 d ⟨m, nk.1, nk.2⟩) := by field_simp
       rw [e]
       exact hω nk hnk m)
-    (ttOutTilePearlCDevRev1_cap_transfer CM d sem ρ ρ' (1 / 400) δPearlC hadd hbf hle hρ1 hTT)
+    (ttOutTilePearlCDevRev1_inert_bound_transfer CM d sem ρ ρ' (1 / 400) δPearlC hadd hbf hle hρ1 hTT)
   have e : (g : ℝ) = 1 - (1 - (1 - (1 - 1 / 400) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ))) /
       ((ω * ((1 - ρ) / (1 - ρ')) : ℚ) : ℝ) := by
     rw [hg]
@@ -212,7 +212,7 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_llama31_8b_le (ρ : ℚ) (hρ : ρ < 1)
 /-- **v1 under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**, its four linears at any `m` in one layout,
 FP32 at 8.376, the honest cast at 8.72: `g = 3045273083/782596025000` (0.38912%), the down projection's, the max of
 the four. -/
-theorem pearlCGapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b
+theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) llama31_8bLinears)
@@ -222,7 +222,7 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 on Llama-3.1-8B's served layout**, FP32 at 8.376, the honest
 cast at 8.72: `g = 3045273083/782596025000` (0.38912%), the down projection's, the max of the four. -/
-theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b
+theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -262,7 +262,7 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_qwen3_8b_le (ρ : ℚ) (hρ : ρ < 1) :
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000 on Qwen3-8B's served layout**, FP32 at 8.376, the honest cast at
 8.72: `g = 74663501/19190030000` (0.38907%), the down projection's, the max of the four. -/
-theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b
+theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_qwen3_8b
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
