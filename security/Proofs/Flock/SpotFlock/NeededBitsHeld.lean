@@ -97,9 +97,10 @@ theorem src_read {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g 
   obtain ⟨hu, i, hi, rfl⟩ := unitOf_some c n hg
   simp only [Spot.Bits.args, keyProg_row?_row c n hu hi, List.mem_append, List.mem_map] at hw
   rcases hw with ⟨col, hc, rfl⟩ | ⟨col, hc, rfl⟩
-  all_goals
-    obtain ⟨hcol, b, hb, he⟩ := keyWire_src c n h2 hlt
-    exact ⟨i, hi, col, by simp [hc], hcol, b, hb, he⟩
+  · obtain ⟨hcol, b, hb, he⟩ := keyWire_src c n h2 hlt
+    exact ⟨i, hi, col, List.mem_append.2 (Or.inl hc), hcol, b, hb, he⟩
+  · obtain ⟨hcol, b, hb, he⟩ := keyWire_src c n h2 hlt
+    exact ⟨i, hi, col, List.mem_append.2 (Or.inr hc), hcol, b, hb, he⟩
 
 /-- **Unit `u`'s source gate at its own key `b`** is unit `u`'s read of `b`'s source. -/
 theorem rowBit_key {u b : ℕ} (hu : u < n) (hbB : b < (bitsRows c).nIn)
@@ -252,13 +253,13 @@ theorem outGate_inj {u k j t u' k' j' t' x : ℕ} (h : Spot.Bits.outGate c n u k
         (show Spot.Bits.outCol c j' t' - (Spot.Bits.Rows.ofNet c.unit).nIn < (Spot.Bits.Rows.ofNet c.unit).nComp by
           omega)
       rw [← hP] at hA hA'
-      have hu := eq_units hA hA' (by omega)
+      have hu := eq_units (u := u) (u' := u') hA hA' (by omega)
       subst hu
       have hd1 : 1 + (Spot.Bits.outCol c j t - (Spot.Bits.Rows.ofNet c.unit).nIn) <
           (Spot.Bits.Rows.ofNet c.unit).nComp + 1 := by omega
       have hd1' : 1 + (Spot.Bits.outCol c j' t' - (Spot.Bits.Rows.ofNet c.unit).nIn) <
           (Spot.Bits.Rows.ofNet c.unit).nComp + 1 := by omega
-      have hk2 := eq_units hd1 hd1' (by omega)
+      have hk2 := eq_units (u := k) (u' := k') hd1 hd1' (by omega)
       subst hk2
       have hoc : Spot.Bits.outCol c j t = Spot.Bits.outCol c j' t' := by omega
       unfold Spot.Bits.outCol at hoc
@@ -303,7 +304,7 @@ theorem member_parsed (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two
 a port bit, its rows fit, and every returned output is an output word. -/
 theorem member_facts (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) :
-    ∃ hU : Built h.ms[t].1.unit, h.ms[t].1.unit.unitLog ≤ 32 ∧
+    ∃ hU : _root_.FlockSoundness.Built h.ms[t].1.unit, h.ms[t].1.unit.unitLog ≤ 32 ∧
       FlockSoundness.Discharge.Layout.KeysRow h.ms[t].1 hU (FlockSoundness.Discharge.Layout.portRowW h.ms[t].1) ∧
         FlockSoundness.Discharge.Hidden.Any.RowsFitS h.ms[t].1 ∧
         h.ms[t].1.leavesOut.size = h.ms[t].1.upv ∧
@@ -381,13 +382,9 @@ theorem writtenOnce_held (h : Held) : WrittenOnce h := by
     exact _root_.Flock.Bridge.NeededBitsOf.posOf_lt_off hxs'
   obtain ⟨rfl, hpq⟩ := _root_.Flock.Bridge.NeededBitsOf.pos_eq h.ms hm hm' hp hp' hab
   rw [_root_.Flock.Bridge.NeededBitsOf.posOf_of_some hab₁, _root_.Flock.Bridge.NeededBitsOf.posOf_of_some hab₂] at hpq
-  have hg2 : 2 < Spot.Bits.gateSize (Spot.Bits.keyProg h.ms[m].1 h.ms[m].2.size) x := by
-    rw [_root_.Flock.Bridge.NeededBitsOf.gateSize_of_some hab₁]
-    omega
-  have hg2' : 2 < Spot.Bits.gateSize (Spot.Bits.keyProg h.ms[m].1 h.ms[m].2.size) x' := by
-    rw [_root_.Flock.Bridge.NeededBitsOf.gateSize_of_some hab₂]
-    omega
-  have hxx := _root_.Flock.Bridge.NeededBitsOf.eq_of_off hxs hxs' hg2 hg2' hpq
+  have hxx := _root_.Flock.Bridge.NeededBitsOf.eq_of_off hxs hxs'
+    (lt_of_lt_of_eq (by decide : 2 < 3) (_root_.Flock.Bridge.NeededBitsOf.gateSize_of_some hab₁).symm)
+    (lt_of_lt_of_eq (by decide : 2 < 3) (_root_.Flock.Bridge.NeededBitsOf.gateSize_of_some hab₂).symm) hpq
   subst hxx
   obtain ⟨rfl, rfl, rfl, rfl⟩ := _root_.Flock.Bridge.NeededBitsOf.outGate_inj _ _ hx hx'
   rw [hr] at hr'
