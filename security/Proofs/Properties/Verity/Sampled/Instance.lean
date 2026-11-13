@@ -378,15 +378,21 @@ theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   read := hr.trans h.read
   share := he.trans h.share
 
-open Classical in
-/-- **The extractor at the deployment's sessions**: at a session, the session's at the projected strategy
-(`Live.extract`), read on the committed files' circuit (`SetsUp.read`); elsewhere the base's. -/
+/-- **The extractor at what the deployment holds at `θ` and `F`**, `o`: at a session `A`, the session's at the
+projected strategy (`Live.extract`), read on the committed files' circuit (`SetsUp.read`); at none, the base's. -/
+noncomputable def extractAt (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy ((I.stage K).game θ F c)) :
+    (o : Option Live) → I.sessions θ F = o → (I.base.read θ F).circuit.Trace
+  | some A, h =>
+      cast (congrArg (fun r : Verity.FileRead => r.circuit.Trace) (I.sessions_some h).2.read.symm)
+        ((K.live A θ F c σ).extract (K.project A θ F c σ))
+  | none, _ => I.base.extract θ F c σ
+
+/-- **The extractor at the deployment's sessions**: `extractAt` at the session the deployment holds
+(`Instance.sessions`). The session is read from the option, not chosen. -/
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((I.stage K).game θ F c)) : (I.base.read θ F).circuit.Trace :=
-  if h : ∃ A, I.sessions θ F = some A then
-    cast (congrArg (fun r : Verity.FileRead => r.circuit.Trace) (I.sessions_some h.choose_spec).2.read.symm)
-      ((K.live h.choose θ F c σ).extract (K.project h.choose θ F c σ))
-  else I.base.extract θ F c σ
+  I.extractAt K θ F c σ (I.sessions θ F) rfl
 
 /-- **The deployed vocabulary**: `stage` with the extractor at the deployment's sessions. -/
 noncomputable def vocab : Vocab d α := { I.stage K with extract := I.extractOf K }
@@ -484,14 +490,12 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
   forger θ F c σ := (hKf θ F c σ).symm
   loss _ _ := rfl
   extract θ F A h c σ := by
-    have he : ∃ A, I.sessions θ F = some A := ⟨A, h⟩
-    have hc : he.choose = A := Option.some.inj (he.choose_spec.symm.trans h)
+    have key : ∀ (o : Option Live) (ho : I.sessions θ F = o), o = some A →
+        HEq (I.extractAt K θ F c σ o ho) ((K.live A θ F c σ).extract (K.project A θ F c σ)) := by
+      rintro _ ho rfl
+      exact cast_heq _ _
     show HEq (I.extractOf K θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))
-    unfold extractOf
-    rw [dif_pos he]
-    refine (cast_heq _ _).trans ?_
-    rw [hc]
-    exact HEq.rfl
+    exact key _ rfl h
   opens θ F A h c := hO θ F A (I.sessions_some h).1 (I.sessions_some h).2 c
   finderCR θ F A h c σ hcr hpr := by
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
