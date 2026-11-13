@@ -3,6 +3,21 @@ module
 public import Properties.Pous
 public import Proofs.Properties.Hash.Identity
 public import Proofs.Flock.Bytes
+public import Proofs.Properties.Pous
+public import Proofs.Properties.Pous.Setup
+public import Proofs.Pous.P2.RingTight
+public import Proofs.Core.CanonUtf8
+import all Init.Data.String.Defs
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # Setup's accepted play, without evaluating SHA-512: the bytes and the key stream
@@ -19,7 +34,16 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
   so every byte but its last two is `0xFF` (`ff_of_ge`), and chunks 0 and 1, which are its first 128 bytes, are equal
   (`chunk01_of_ge`): SHA-512 of two inputs that differ in the counter (`collision_of_ge`);
 * the deployed parameters: `validate` accepts them by reduction (`validate_deployed`) and `packagePrefix` accepts any
-  24-byte salt (`packagePrefix_ok`), its prefix whole blocks (`pad128_size`).
+  24-byte salt (`packagePrefix_ok`), its prefix whole blocks (`pad128_size`);
+* the honest block's value, the one place `PrimeP16448` enters: the code's `d` is the model's `sqE` at the identity
+  labeling (`d_eq_sqE`), so onto `[0, p)` at a prime `≡ 3 mod 4` (`d_surj`); with `σ_K` an involution below `p`
+  (`sigma_sigma`), `honestC p K t = d⁻¹(σ_K(d⁻¹ t))` decodes to 0 (`honestC_spec`, `honestC_deployed`);
+* a loop whose every step yields is the fold of its steps (`forIn'_ok`);
+* `beOfNat` writes base-256 digits (`beOfNat_get`, `beVal_digits`), so `natOfBE (beOfNat c w) = c` below `256^w`
+  (`natOfBE_beOfNat`), and the honest block decodes to `beOfNat 0 2054` (`decodeBlock_honest`);
+* the decoder's loop over 65,536 honest blocks yields the zeros' payload (`decodeSegment_honest`), with every block's
+  keys a `K` and a `t < p` (`KeysOk`), which hold or SHA-512 has a collision (`keysOk_or_collision`);
+* the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`).
 -/
 
 @[expose] public section
@@ -462,5 +486,276 @@ theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j 
     simp only [Nat.zero_mul, Nat.zero_add, Nat.one_mul, h, ↓reduceIte, pure_bind]
     all_goals rfl
   · exact Or.inr (collision_of_ge pre hpre s j Keys.PURPOSE_T (by rw [← deployed_p]; exact Nat.le_of_not_lt h))
+
+/-! ## The honest block's value, under `PrimeP16448` -/
+
+theorem idLabeling_val {p : Nat} [NeZero p] (x : ZMod p) : ((idLabeling p).1 x : Nat) = x.val := by
+  cases p with
+  | zero => exact absurd rfl (NeZero.ne 0)
+  | succ n => rfl
+
+theorem d_eq_sqE {p a : Nat} [NeZero p] (ha : a < p) :
+    P2.d p a = (Pous.sqE (idLabeling p) (a : ZMod p)).val := by
+  have hv : ((idLabeling p).1 (a : ZMod p) : Nat) = a := by
+    rw [idLabeling_val, ZMod.val_natCast, Nat.mod_eq_of_lt ha]
+  simp only [P2.d, P2.square, Pous.sqE]
+  rw [hv, ← Nat.cast_mul]
+  by_cases h : a % 2 = 1
+  · have hb : (a % 2 == 1) = true := beq_iff_eq.mpr h
+    simp only [h, beq_self_eq_true, ↓reduceIte]
+    rw [ZMod.neg_val', ZMod.val_natCast]
+  · have hb : ¬(a % 2 == 1) = true := fun e => h (beq_iff_eq.mp e)
+    simp only [hb, h, Bool.false_eq_true, ↓reduceIte]
+    rw [ZMod.val_natCast]
+
+theorem d_surj {p y : Nat} (hp : p.Prime) (h4 : p % 4 = 3) (hy : y < p) : ∃ c, c < p ∧ P2.d p c = y := by
+  have : NeZero p := ⟨hp.ne_zero⟩
+  obtain ⟨x, hx⟩ := PousP2Ring.sqE_surjective hp h4 (idLabeling p) (y : ZMod p)
+  refine ⟨x.val, ZMod.val_lt x, ?_⟩
+  rw [d_eq_sqE (ZMod.val_lt x), ZMod.natCast_zmod_val, hx, ZMod.val_natCast, Nat.mod_eq_of_lt hy]
+
+/-- A preimage of `y` under `d`, when there is one. -/
+noncomputable def dInv (p y : Nat) : Nat :=
+  if h : ∃ c, c < p ∧ P2.d p c = y then Classical.choose h else 0
+
+theorem dInv_spec {p y : Nat} (hp : p.Prime) (h4 : p % 4 = 3) (hy : y < p) :
+    dInv p y < p ∧ P2.d p (dInv p y) = y := by
+  have h := d_surj hp h4 hy
+  simp only [dInv, h, ↓reduceDIte]
+  exact Classical.choose_spec h
+
+theorem sigma_lt {p r : Nat} (k : Nat) (hr : r < p) : P2.sigma p r k < p := by
+  simp only [P2.sigma]
+  split <;> assumption
+
+theorem sigma_sigma {p r : Nat} (k : Nat) (hr : r < p) : P2.sigma p (P2.sigma p r k) k = r := by
+  by_cases h : r ^^^ k < p
+  · have hx : r ^^^ k ^^^ k = r := by rw [Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
+    simp only [P2.sigma, h, ↓reduceIte, hx, hr]
+  · simp only [P2.sigma, h, ↓reduceIte]
+
+/-- The honest block's value for keys `(K, t)`: `d⁻¹(σ_K(d⁻¹ t))`, which `decodeValue` reads as 0. -/
+noncomputable def honestC (p k t : Nat) : Nat := dInv p (P2.sigma p (dInv p t) k)
+
+theorem honestC_spec {p : Nat} (hp : p.Prime) (h4 : p % 4 = 3) (k : Nat) {t : Nat} (ht : t < p) :
+    honestC p k t < p ∧ P2.decodeValue p k t (honestC p k t) = 0 := by
+  obtain ⟨h1, h2⟩ := dInv_spec hp h4 ht
+  obtain ⟨h3, h5⟩ := dInv_spec hp h4 (sigma_lt k h1)
+  refine ⟨h3, ?_⟩
+  simp only [P2.decodeValue, honestC]
+  rw [h5, sigma_sigma k h1, h2, Nat.add_sub_cancel_left, Nat.mod_self]
+
+theorem honestC_deployed (hP : Pous.P2.Assumptions.PrimeP16448) (k : Nat) {t : Nat}
+    (ht : t < P2.Params.deployed.p) :
+    honestC P2.Params.deployed.p k t < P2.Params.deployed.p ∧
+      P2.decodeValue P2.Params.deployed.p k t (honestC P2.Params.deployed.p k t) = 0 := by
+  rw [deployed_p] at ht ⊢
+  exact honestC_spec hP PousP2Ring.p16448_mod_four k ht
+
+/-! ## Loops -/
+
+/-- A loop over `l` whose every step yields `g s r` returns the fold of `g`. -/
+theorem forIn'_ok {σ ε : Type} (g : Nat → σ → σ) :
+    ∀ (l : List Nat) (init : σ) (f : (s : Nat) → s ∈ l → σ → Except ε (ForInStep σ)),
+      (∀ s (hs : s ∈ l) r, f s hs r = .ok (.yield (g s r))) →
+        forIn' l init f = .ok (l.foldl (fun r s => g s r) init)
+  | [], _, _, _ => rfl
+  | a :: l, init, f, hf => by
+    rw [List.forIn'_cons, hf a (by simp) init]
+    simp only [bind, Except.bind, List.foldl_cons]
+    exact forIn'_ok g l (g a init) _ (fun s hs r => hf s (List.mem_cons_of_mem a hs) r)
+
+/-! ## A value's bytes: `natOfBE (beOfNat c w) = c` -/
+
+theorem L_foldl_push (c : Nat → UInt8) : ∀ (l : List Nat) (init : ByteArray),
+    L (l.foldl (fun out i => out.push (c i)) init) = L init ++ l.map c
+  | [], init => by simp
+  | i :: l, init => by
+    rw [List.foldl_cons, L_foldl_push c l, List.map_cons]
+    simp [L, ByteArray.data_push]
+
+theorem get!_append_left (a b : ByteArray) {i : Nat} (hi : i < a.size) : (a ++ b).get! i = a.get! i := by
+  rw [Properties.Identity.get!_eq, Properties.Identity.get!_eq, getElem?_L_append_left a b hi]
+
+theorem get!_append_right (a b : ByteArray) (k : Nat) : (a ++ b).get! (a.size + k) = b.get! k := by
+  rw [Properties.Identity.get!_eq, Properties.Identity.get!_eq, Properties.Identity.getElem?_L_append_right]
+
+theorem byte_uint64 (n e : Nat) (he : e < 8) :
+    ((n.toUInt64 >>> (8 * e).toUInt64).toUInt8).toNat = n / 256 ^ e % 256 := by
+  have h8 : (8 * e).toUInt64.toNat % 64 = 8 * e := by
+    rw [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)]
+  have h64 : (2 : Nat) ^ 64 = 256 ^ e * 256 ^ (8 - e) := by
+    rw [← Nat.pow_add, Nat.add_sub_cancel' (by omega : e ≤ 8)]
+    rfl
+  rw [UInt64.toNat_toUInt8, UInt64.toNat_shiftRight, h8, Nat.toUInt64_eq, UInt64.toNat_ofNat',
+    Nat.shiftRight_eq_div_pow, Nat.pow_mul, show (2 : Nat) ^ 8 = 256 from rfl, h64, Nat.mod_mul_right_div_self,
+    Nat.mod_mod_of_dvd _ (dvd_pow_self 256 (by omega : 8 - e ≠ 0))]
+
+/-- Bytes that are `n`'s base-256 digits, most significant first, read as `n mod 256^m`. -/
+theorem beVal_digits (b : ByteArray) (lo : Nat) : ∀ (m n : Nat),
+    (∀ i, i < m → (b.get! (lo + i)).toNat = n / 256 ^ (m - 1 - i) % 256) → beVal b lo m = n % 256 ^ m
+  | 0, n, _ => by rw [Nat.pow_zero, Nat.mod_one]; rfl
+  | m + 1, n, h => by
+    have hm := beVal_digits b lo m (n / 256) (fun i hi => by
+      have he : 256 * 256 ^ (m - 1 - i) = 256 ^ (m + 1 - 1 - i) := by
+        rw [← Nat.pow_succ']
+        congr 1
+        omega
+      rw [h i (by omega), Nat.div_div_eq_div_mul, he])
+    have h1 := Nat.div_add_mod (n % (256 * 256 ^ m)) 256
+    rw [Nat.mod_mul_right_div_self, Nat.mod_mul_right_mod] at h1
+    rw [beVal_add, Nat.pow_one, beVal_one, hm, h m (by omega), show m + 1 - 1 - m = 0 by omega, Nat.pow_zero,
+      Nat.div_one, Nat.pow_succ', ← h1]
+    generalize n / 256 % 256 ^ m = X
+    omega
+
+theorem beOfNat_get (w : Nat) :
+    ∀ n i, i < w → ((Prim.beOfNat n w).get! i).toNat = n / 256 ^ (w - 1 - i) % 256 := by
+  induction w using Nat.strong_induction_on with
+  | _ w ih =>
+  intro n i hi
+  rw [Prim.beOfNat]
+  split
+  · rename_i hw
+    simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]
+    change ((List.foldl _ (ByteArray.emptyWithCapacity w) (List.range' 0 [:w].size)).get! i).toNat = _
+    have hsz : [:w].size = w := by simp [Std.Legacy.Range.size]
+    rw [Properties.Identity.get!_eq, L_foldl_push, hsz, show L (ByteArray.emptyWithCapacity w) = [] from rfl,
+      List.nil_append, List.getElem?_map, List.getElem?_eq_getElem (by rw [List.length_range']; exact hi),
+      List.getElem_range', Option.map_some, Option.getD_some, Nat.zero_add, Nat.one_mul]
+    exact byte_uint64 n (w - 1 - i) (by omega)
+  · rename_i hw
+    dsimp only
+    by_cases hlo : i < w - w / 2
+    · rw [get!_append_left _ _ (by rw [beOfNat_size]; exact hlo), ih (w - w / 2) (by omega) _ i hlo,
+        Nat.shiftRight_eq_div_pow, Nat.pow_mul, show (2 : Nat) ^ 8 = 256 from rfl, Nat.div_div_eq_div_mul,
+        ← Nat.pow_add, show w / 2 + (w - w / 2 - 1 - i) = w - 1 - i by omega]
+    · obtain ⟨k, rfl⟩ : ∃ k, i = (w - w / 2) + k := ⟨i - (w - w / 2), by omega⟩
+      have hr := get!_append_right (Prim.beOfNat (n >>> (8 * (w / 2))) (w - w / 2))
+        (Prim.beOfNat (n &&& (2 ^ (8 * (w / 2)) - 1)) (w / 2)) k
+      rw [beOfNat_size] at hr
+      have hsplit : (256 : Nat) ^ (w / 2) = 256 ^ (w / 2 - 1 - k) * 256 ^ (k + 1) := by
+        rw [← Nat.pow_add]
+        congr 1
+        omega
+      rw [hr, ih (w / 2) (by omega) _ k (by omega), Nat.and_two_pow_sub_one_eq_mod, Nat.pow_mul,
+        show (2 : Nat) ^ 8 = 256 from rfl, show w - 1 - (w - w / 2 + k) = w / 2 - 1 - k by omega, hsplit,
+        Nat.mod_mul_right_div_self, Nat.mod_mod_of_dvd _ (dvd_pow_self 256 (by omega : k + 1 ≠ 0))]
+
+theorem natOfBE_beOfNat {n w : Nat} (h : n < 256 ^ w) : natOfBE (Prim.beOfNat n w) = n := by
+  rw [natOfBE_eq, beOfNat_size, beVal_digits _ 0 w n (fun i hi => by rw [Nat.zero_add]; exact beOfNat_get w n i hi),
+    Nat.mod_eq_of_lt h]
+
+/-! ## The honest block -/
+
+theorem honestC_lt (hP : Pous.P2.Assumptions.PrimeP16448) (k : Nat) {t : Nat} (ht : t < P2.Params.deployed.p) :
+    honestC P2.Params.deployed.p k t < 256 ^ 2056 := by
+  have hp : P2.Params.deployed.p < 256 ^ 2056 := by
+    rw [deployed_p, pow_256_2056]
+    have h0 : 0 < (2 : Nat) ^ 16448 := Nat.two_pow_pos _
+    generalize (2 : Nat) ^ 16448 = P at h0 ⊢
+    omega
+  exact Nat.lt_trans (honestC_deployed hP k ht).1 hp
+
+/-- **The honest block decodes to zeros**: `beOfNat (d⁻¹(σ_K(d⁻¹ t))) 2056` is canonical and its payload is
+`beOfNat 0 2054`. -/
+theorem decodeBlock_honest (hP : Pous.P2.Assumptions.PrimeP16448) (j k : Nat) {t : Nat}
+    (ht : t < P2.Params.deployed.p) :
+    P2.decodeBlock P2.Params.deployed j k t (Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056) =
+      .ok (Prim.beOfNat 0 2054) := by
+  obtain ⟨hc, hd⟩ := honestC_deployed hP k ht
+  have hge : ¬(P2.Params.deployed.p ≤ honestC P2.Params.deployed.p k t) := Nat.not_le.mpr hc
+  unfold P2.decodeBlock
+  simp only [beOfNat_size, deployed_blockBytes, deployed_payloadBytes, natOfBE_beOfNat (honestC_lt hP k ht),
+    ge_iff_le, hge, hd, Nat.zero_shiftRight, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
+  all_goals rfl
+
+/-- The keys' prefix at the deployed parameters and a salt (`packagePrefix_ok`). -/
+def keyPrefix (salt : ByteArray) : ByteArray :=
+  Keys.pad128 (Keys.KEYS_TAG ++ FlockSoundness.Randomness.frame (.str Keys.PROTOCOL_ID) ++
+    FlockSoundness.Randomness.frame (.str P2.Params.deployed.primeId) ++ FlockSoundness.Randomness.frame (.bytes salt))
+
+theorem packagePrefix_deployed {salt : ByteArray} (h : salt.size = 24) :
+    Keys.packagePrefix P2.Params.deployed salt = .ok (keyPrefix salt) :=
+  packagePrefix_ok _ h
+
+/-- Every block's keys are a `K` and a `t < p`, the first candidate. -/
+def KeysOk (pre : ByteArray) : Prop :=
+  ∀ s j, ∃ k t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j = .ok (k, t, 0)
+
+theorem keysOk_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) :
+    KeysOk pre ∨ ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+  by_cases h : ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v
+  · exact Or.inr h
+  · refine Or.inl fun s j => ?_
+    obtain ⟨t, ht, hk⟩ := (keys_ok_or_collision pre hpre s j).resolve_right h
+    exact ⟨_, t, ht, hk⟩
+
+/-- Block `j` of segment `s` of the honest `C*`: its keys' `d⁻¹(σ_K(d⁻¹ t))` in 2,056 bytes. -/
+noncomputable def honestBlock (pre : ByteArray) (s j : Nat) : ByteArray :=
+  match (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j with
+  | .ok (k, t, _) => Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056
+  | .error _ => .empty
+
+noncomputable def honestSegment (pre : ByteArray) (s : Nat) : Array ByteArray :=
+  Array.ofFn (n := 65536) fun j => honestBlock pre s j.1
+
+/-- The honest `C*`: eight segments of 65,536 blocks. -/
+noncomputable def honestEncoding (pre : ByteArray) : Array (Array ByteArray) :=
+  Array.ofFn (n := 8) fun s => honestSegment pre s.1
+
+/-- A segment's payload: 65,536 zero payloads. -/
+def segPayload : ByteArray :=
+  (List.range' 0 65536).foldl (fun out _ => out ++ Prim.beOfNat 0 2054)
+    (ByteArray.emptyWithCapacity P2.Params.deployed.segmentBytes)
+
+theorem honestBlock_eq {pre : ByteArray} {s j k t : Nat}
+    (h : (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j = .ok (k, t, 0)) :
+    honestBlock pre s j = Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056 := by
+  unfold honestBlock
+  rw [h]
+
+/-! ## The loops -/
+
+theorem honestSegment_size (pre : ByteArray) (s : Nat) : (honestSegment pre s).size = 65536 := Array.size_ofFn
+
+theorem honestSegment_get (pre : ByteArray) (s j : Nat) (h : j < (honestSegment pre s).size) :
+    (honestSegment pre s)[j] = honestBlock pre s j := by
+  simp only [honestSegment, Array.getElem_ofFn]
+
+/-- **The decoder's loop over 65,536 blocks**, by `forIn'_ok`, for any array of the honest blocks: each decodes to its
+zero payload. -/
+theorem decodeSegment_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
+    (hk : KeysOk (keyPrefix salt)) {s : Nat} (hs : s < 8) {blocks : Array ByteArray} (hsz : blocks.size = 65536)
+    (hblk : ∀ j (h : j < blocks.size), blocks[j] = honestBlock (keyPrefix salt) s j) :
+    Setup.decodeSegment P2.Params.deployed salt s blocks = .ok segPayload := by
+  have hseg : ¬(P2.Params.deployed.segments ≤ s) := by show ¬8 ≤ s; omega
+  have hne : (blocks.size != P2.Params.deployed.blocksPerSegment) = false := by rw [hsz]; rfl
+  unfold Setup.decodeSegment
+  simp only [ge_iff_le, hseg, ↓reduceIte, hne, Bool.false_eq_true, packagePrefix_deployed h24, Except.mapError, bind,
+    Except.bind, pure, Except.pure]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_ok (fun _ out => out ++ Prim.beOfNat 0 2054)]
+  · simp only [hsz, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, segPayload]
+  · intro j hj out
+    obtain ⟨k, t, ht, hkeq⟩ := hk s j
+    have hc := (honestC_deployed hP k ht).1
+    have hge : ¬(P2.Params.deployed.p ≤ natOfBE (Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056)) := by
+      rw [natOfBE_beOfNat (honestC_lt hP k ht)]
+      exact Nat.not_le.mpr hc
+    simp only [hblk, honestBlock_eq hkeq, beOfNat_size, deployed_blockBytes, bne_self_eq_false,
+      Bool.false_eq_true, ↓reduceIte, hge, hkeq, decodeBlock_honest hP j k ht]
+
+/-! ## The commitment's state before `W` -/
+
+/-- The manifest is a flat object, which the kernel evaluates (`Verity.CanonUtf8.canonUtf8_flat`): it is short. -/
+theorem manifest_deployed : ∃ m, Commit.manifest P2.Params.deployed = .ok m ∧ m.size < 1000 := by
+  have h : (match Verity.CanonUtf8.canonFlat (Commit.manifestJson P2.Params.deployed) with
+      | .ok s => decide (s.toUTF8.size < 1000) | .error _ => false) = true := by decide +kernel
+  unfold Commit.manifest
+  rw [Verity.CanonUtf8.canonUtf8_flat _ (by decide +kernel)]
+  revert h
+  cases Verity.CanonUtf8.canonFlat (Commit.manifestJson P2.Params.deployed) with
+  | error e => intro h; cases h
+  | ok s => intro h; exact ⟨s.toUTF8, rfl, of_decide_eq_true h⟩
 
 end PousCheck.Properties.SecurityProofs.Accepts
