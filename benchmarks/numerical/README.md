@@ -89,7 +89,7 @@ Two columns of the finite-domain step are read here: Python `verity.circuits.sil
   integers replace the `int32_t` with its `shift >= 32` guard (equal for every input the step forms; see
   `hawkeye_close.group_sum`).
 - `Spec.lean`'s header calls it "A transcription of `term.py`", of `models.py`'s `group_sum` and of `total.py`, "function for
-  function and branch for branch, on the Python functions' domain". `verity/definitions/evaluate/Evaluate/TC/Spec.lean` is, by
+  function and branch for branch, on the Python functions' domain". `verity/circuits/evaluate/Evaluate/TC/Spec.lean` is, by
   its own header, a copy of that file and of the `Pipeline.lean` beside it, "definition for definition". Neither body is read
   against the Python here.
 
