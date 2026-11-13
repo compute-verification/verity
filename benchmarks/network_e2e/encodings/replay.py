@@ -19,8 +19,8 @@ alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 
 **With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
-classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of its
-own adaptive code, `kept_encode`, or 0 where the audited block derives it).
+classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of
+advice v1's own code for it, `kept_code`, or 0 where the audited block derives it).
 """
 
 from __future__ import annotations
@@ -30,10 +30,11 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
+from verity_vllm.pipeline.advice_code import kept as KP, window_code as CV
 from verity_vllm.pipeline.advice_code.pool import BlockPool as BlockPool
 from verity_vllm.pipeline.advice_code.replay import (
     compare, drive as drive, Emitted, Match as Match, Open, Queue as Queue, Replay, replay,
@@ -804,58 +805,70 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-#: the kept count's code's context for a request's first emitting row, which has no count before it
-_FIRST = -1
+class _Ideal:
+    """`window_code.Encoder`'s `bit`, which also adds up what an ideal coder would spend on the estimates it codes
+    under (`bits`)."""
+
+    def __init__(self, e: CV.Encoder) -> None:
+        self.e, self.bits = e, 0.0
+
+    def bit(self, name: str, b: bool, ctx: Any = 0) -> bool:
+        f0, f1 = self.e.kt.freqs(CV.context_key(name, ctx))
+        self.bits -= math.log2((f1 if b else f0) / (f0 + f1))
+        return self.e.bit(name, b, ctx)
 
 
-def kept_encode(K: int, requests: Sequence[RequestIO]) -> tuple[list[int], float]:
-    """The drafts each emitting row kept (`RequestIO.kept`) under the adaptive binary code: the requests in order, each
-    one's counts in order. A count c is the bits "c > j" for j = 0, 1, ... until one is 0 or j is the most the row can
-    keep (K, or the outputs the request still lacks after the row's own token), each in the context (the request's count
-    before, j). Returns the bit string and what an ideal coder would spend."""
-    model, enc, ideal = _KT(), _Encoder(), 0.0
-    for i, q in enumerate(requests):
-        done, prev = 0, _FIRST
-        for c in q.kept or ():
-            for j in range(min(K, q.output_len - done - 1)):
-                f0, f1 = model.freqs((prev, j))
-                enc.put(c > j, f0, f1)
-                ideal -= math.log2((f1 if c > j else f0) / (f0 + f1))
-                model.update((prev, j), c > j)
-                if c <= j:
-                    break
-            done, prev = done + 1 + c, c
-        if done != q.output_len:
-            raise ValueError(f"request {i}: its rows and the drafts they kept add up to {done} outputs, not its "
-                             f"{q.output_len}")
-    return enc.finish(), ideal
+def kept_code(K: int, kept: KP.Terms) -> tuple[CV.Encoded, float]:
+    """The kept terms `kept` (each window's emitting rows' counts, in the order the replay reads them) under advice
+    v1's own code for them (`verity_vllm.pipeline.advice_code.kept`): each window's counts as its second segment of
+    `window_code`'s coder, after first segments that code nothing, under a book with no prior. Returns the string,
+    whose `lens` are each window's kept bits, its segment's 2 bits of termination among them, and what an ideal coder
+    would spend on the same estimates. Refuses (ValueError) a count no row can have, and counts that with their rows
+    don't add up to a request's outputs."""
+    e = CV.Encoder(CV.Book.uniform())
+    for _ in kept.windows:
+        e.window()
+    ideal, coded = _Ideal(e), KP.coder(K, kept)
+    for w in range(len(kept.windows)):
+        e.segment(w)
+        coded(ideal, w)
+    return e.finish(), ideal.bits
 
 
-def kept_decode(K: int, output_lens: Sequence[int], bits: Sequence[int]) -> list[tuple[int, ...]]:
-    """Each request's `RequestIO.kept` back from `kept_encode`'s bits, K and the certified output lengths alone: a
-    request's counts end where they and its rows add up to its output."""
-    model, dec, out = _KT(), _Decoder(bits), []
-    for n in output_lens:
-        done, prev, kept = 0, _FIRST, []
-        while done < n:
-            c = 0
-            for j in range(min(K, n - done - 1)):
-                f0, f1 = model.freqs((prev, j))
-                bit = dec.get(f0, f1)
-                model.update((prev, j), bit)
-                if not bit:
-                    break
-                c += 1
-            kept.append(c)
-            done, prev = done + 1 + c, c
-        out.append(tuple(kept))
-    return out
+class _Outputs(NamedTuple):
+    """A request as `kept.Reader` reads it, its outputs all released in the one window."""
+
+    output: range
+    release: tuple[int, ...]
+
+
+def kept_read(trace: Trace, code: CV.Encoded) -> KP.Terms:
+    """`kept_code`'s string of one window, read as advice v1 reads it (`kept.Reader`): the replay of the trace's
+    requests, added as the trace has them, asks each emitting row's count off the string in place of
+    `RequestIO.kept`. Beside the string it reads K and each request's output count. Returns the terms read. Refuses
+    (ValueError) a string that isn't the code's own, a count no row can have, and a replay that isn't the trace's
+    steps."""
+    K, outputs = trace.engine.num_speculative_tokens, [q.output_len for q in trace.requests]
+    d = CV.Decoder(code.bits, code.nbits, CV.Book.uniform())
+    d.window()
+    with KP.emitting() as emitted:
+        reader = KP.Reader(d, K, [_Outputs(range(n), (0,) * n) for n in outputs], 1, 1, emitted)
+        rp = replay(trace.engine, [replace(q, kept=None) for q in trace.requests], admit=trace.before_step,
+                    passed=trace.passed, kept=reader)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay on the counts read diverges from the trace at step {m.first_mismatch} "
+                         f"({m.matched}/{m.steps} steps match)")
+    return reader.end(KP.terms(emitted, outputs, [0] * len(emitted), 1))
 
 
 def kept_bits(trace: Trace) -> dict[str, Any]:
     """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the bits of
-    their code (`kept_encode`; `ideal`, what an ideal coder would spend), which `kept_decode` turns back into the
-    trace's counts. `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
+    advice v1's code for them (`kept_code`; `ideal`, what an ideal coder would spend), each emitting row's count in
+    the order the replay reads them, as one window's kept segment; the replay, asked each count off that string
+    (`kept_read`), gives the trace's steps and counts back. Advice v1's string over several windows ends each
+    window's kept segment apart, each with its own 2 bits of termination, so its kept bits are a few more than this.
+    `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
     Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
     a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
     each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
@@ -865,7 +878,8 @@ def kept_bits(trace: Trace) -> dict[str, Any]:
         raise ValueError("the trace's engine serves with no draft, so no row keeps one")
     if trace.emitted is None:
         raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
-    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
+    with KP.emitting() as emitted:
+        rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
@@ -876,18 +890,20 @@ def kept_bits(trace: Trace) -> dict[str, Any]:
                 counts[em[i] - 1] += 1
     rows = sum(counts)
     entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
-    bits, ideal = kept_encode(K, trace.requests)
-    if kept_decode(K, [q.output_len for q in trace.requests], bits) != [q.kept for q in trace.requests]:
+    kept = KP.terms(emitted, [q.output_len for q in trace.requests], [0] * len(emitted), 1)
+    code, ideal = kept_code(K, kept)
+    if kept_read(trace, code) != kept:
         raise ValueError("the kept count's code decodes to other counts than the trace's")
     return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "alone": rows * entropy,
-            "charged": len(bits), "ideal": ideal, "derived": 0}
+            "charged": code.nbits, "ideal": ideal, "derived": 0}
 
 
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
                 window_buckets: int = 600) -> dict[str, Any]:
     """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
     the residual advice under each of `contexts` (`encode`, each decoded back to the trace's steps), which a serve under
-    the certified tick does not send; and `kept_count` (`kept_bits`). Refuses a trace the replay doesn't reproduce."""
+    the certified tick does not send; and `kept_count` (`kept_bits`). `output_tokens` is what the requests emitted,
+    for the bits a token. Refuses a trace the replay doesn't reproduce."""
     kept = kept_bits(trace)
     cert = trace.certified(bucket_s)
     arrivals = {}
@@ -898,7 +914,7 @@ def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s:
             raise ValueError(f"the residual advice ({c}) decodes to another schedule from step {back.first_mismatch}")
         arrivals[c] = sum(len(b) for b in code.bits.values())
     return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
-            "arrivals": arrivals, "kept_count": kept}
+            "output_tokens": sum(q.output_len for q in trace.requests), "arrivals": arrivals, "kept_count": kept}
 
 
 #: advice v0's module (`verity.protocols.certifier.verifier.advice`)
@@ -973,13 +989,13 @@ def main(argv: Sequence[str] | None = None) -> None:
                                             bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets)
             except (ValueError, RuntimeError) as e:
                 out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps)}
-                drafted.append(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {e} |" + " |" * 7)
+                drafted.append(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {e} |" + " |" * 8)
                 continue
             k, n = d["kept_count"], max(d["requests"], 1)
             drafted.append(f"| {name} | {d['requests']} | {d['steps']} | {k['K']} | "
                            f"{' / '.join(str(d['arrivals'].get(c, '-')) for c in CONTEXTS)} | {k['rows']} | "
                            f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']} | {k['charged'] / n:.2f} | "
-                           f"{k['derived']} |")
+                           f"{k['charged'] / max(d['output_tokens'], 1):.4f} | {k['derived']} |")
             continue
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
@@ -1010,7 +1026,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     if drafted:
         print("\n| trace, served with a draft | requests | steps | K | arrivals: bits (" + " / ".join(CONTEXTS) + ") "
               "| rows that verified drafts | kept count: each alone, bits a row (not sent) | at most "
-              "| charged (its code), bits | a request | derived, bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
+              "| charged (advice v1's code), bits | a request | an output token | derived, bits |\n"
+              "|---|---|---|---|---|---|---|---|---|---|---|---|")
         print("\n".join(drafted))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
