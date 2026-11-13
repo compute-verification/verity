@@ -9,8 +9,8 @@ launch contexts a workload's shapes are built under (`verity_vllm.pipeline.launc
 (`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
 log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
 record of a row that ran nothing and the circuit database's index (`verity_vllm.pipeline.config_record`: `record`, `load_index`),
-the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`,
-`main`), the
+the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories and
+its writer (`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs`: `main`, and `build_outputs` for a link, a failed
 replay and a stage it does not know) and the one that writes the rows' digests
@@ -374,6 +374,54 @@ def test_the_timeline_report_command_reports_the_files_last_attempt(tmp_path, ca
     assert (rep["attempt"], rep["attempts_in_file"], rep["events"], rep["spans"]) == ("last", 2, 3, 1)
     assert (rep["t_first_utc"], rep["t_last_utc"], rep["elapsed_s"]) == ("1970-01-01T00:08:20Z", "1970-01-01T00:08:24Z", 4.0)
     assert capsys.readouterr().out == md.read_text() and "a-row" in md.read_text() and "attempt last of 2 in the file" in md.read_text()
+
+
+def test_a_timeline_file_gives_its_events_in_time_order_and_skips_a_line_that_is_none(tmp_path):
+    assert TL.read(tmp_path / "absent.jsonl") == []
+    path = tmp_path / "timeline.jsonl"
+    path.write_text('{"t": 2.0, "stage": "b"}\n\n   \nnot an event\n{"t": 1.0, "stage": "a"}\n{"stage": "untimed"}\n')
+    assert [e["stage"] for e in TL.read(path)] == ["untimed", "a", "b"]
+
+
+def test_the_timeline_report_adds_a_categorys_separate_spans_keeps_a_parallel_span_whole_and_names_what_never_ended():
+    """Two spans of one category that do not overlap add up; a stage under no category's prefix is `other`; a span marked `par` is
+    counted beside a span it contains, where an unmarked one is that span's wrapper and is left out; the row's span and a whole
+    stage's are the envelope, in no category; a start with no end is unclosed.  The table says both."""
+    def span(stage: str, t0: float, t1: float, pid: int = 1, **fields: Any) -> list[dict[str, Any]]:
+        start = {"t": t0, "proc": "row", "pid": pid, "stage": stage, "ev": "start"}
+        return [start, {**start, "t": t1, "ev": "end", **fields}]
+
+    def category(rep: dict[str, Any], name: str) -> tuple[int, float, float]:
+        c = rep["categories"][name]
+        return c["spans"], c["sum_s"], c["union_s"]
+    rep = TL.report([*span("row", 0.0, 60.0), *span("stage.build", 0.0, 14.0),
+                     *span("build.derive_step", 0.0, 4.0), *span("build.derive_request", 10.0, 13.0), *span("mystery", 20.0, 21.0),
+                     *span("work.outer", 30.0, 40.0, par=True), *span("work.inner", 32.0, 35.0, pid=2),
+                     {"t": 50.0, "proc": "row", "pid": 3, "stage": "work.hung", "ev": "start"}])
+    assert list(rep["categories"]) == ["workload", "validation", "other"]
+    assert (category(rep, "validation"), category(rep, "other"), category(rep, "workload")) == ((2, 7.0, 7.0), (1, 1.0, 1.0), (2, 13.0, 10.0))
+    assert rep["envelope"] == [{"stage": "row", "s": 60.0, "proc": "row"}, {"stage": "stage.build", "s": 14.0, "proc": "row"}]
+    assert rep["unclosed"] == [{"proc": "row", "pid": 3, "stage": "work.hung", "t0": 50.0}]
+    table = TL.report_md(rep)
+    assert "envelope: row 60.0 s (row); stage.build 14.0 s (row)" in table
+    assert "unclosed spans (process died / still running): [('row', 'work.hung')]" in table
+    wrapped = TL.report([*span("work.outer", 30.0, 40.0), *span("work.inner", 32.0, 35.0, pid=2)])
+    assert category(wrapped, "workload") == (1, 3.0, 3.0) and (wrapped["envelope"], wrapped["unclosed"]) == ([], [])
+    assert "unclosed" not in TL.report_md(wrapped) and "envelope" not in TL.report_md(wrapped)
+
+
+def test_a_timeline_writer_with_no_path_is_off_and_one_that_cannot_append_gives_no_event(tmp_path):
+    off = TL.Timeline(None)
+    assert off.enabled is False and off.event("build", "start") is None
+    path = tmp_path / "attempt" / "timeline.jsonl"
+    on = TL.Timeline(path, proc="row", hot=False)
+    rec = on.event("build", rc=0, skipped=None)
+    assert on.enabled is True and rec is not None and "skipped" not in rec
+    assert (rec["proc"], rec["stage"], rec["ev"], rec["hot"], rec["rc"], rec["schema"]) == ("row", "build", "mark", False, 0, TL.SCHEMA)
+    assert [json.loads(line) for line in path.read_text().splitlines()] == [rec]
+    path.unlink()
+    path.mkdir()
+    assert on.event("build") is None
 
 
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):

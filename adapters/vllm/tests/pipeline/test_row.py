@@ -508,6 +508,8 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
 def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelope(tmp_path, monkeypatch):
     r, seen = _batch_build(tmp_path, monkeypatch)
     assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
+    for marker in ("derives_done", "derives_failed"):                 # an earlier attempt's markers end nothing of this Build's
+        Path(f"{r.d}/build_workload.{marker}").touch()
     r.build()
     assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
     assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]
