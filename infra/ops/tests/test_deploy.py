@@ -443,6 +443,9 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     (repo / "src/w/run.sh").write_text("r1\n")
     (repo / "src/w/run.sh").chmod(0o755)
     n, path = _whole(world, {"a.py": "a1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"})
+    dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
+    assert {f["changed"] for f in dry["files"]} == {None} and len(dry["files"]) == 4, "a dry run says every file would be installed"
+    assert not os.path.lexists(path) and not (world["node"] / "tree/.deploy-tree").exists(), "and makes nothing on the node"
     done = deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
     v1 = _git(repo, "rev-parse", "origin/main")
     first = Path(os.readlink(path))
@@ -460,6 +463,9 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     os.utime(first / "a.py", (1000, 1000))
     v2 = _push(repo, {"sub/b.py": "b2\n", "sub/gone.py": None, "new.py": "n2\n"})
     seen = tmp_path / "at-the-rename.json"
+    dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
+    assert {Path(f["path"]).name: f["changed"] for f in dry["files"]} == {"a.py": False, "b.py": None, "new.py": None, "run.sh": False}
+    assert Path(os.readlink(path)) == first and [p.name for p in first.parent.iterdir()] == [first.name], "a dry run swaps nothing"
     hook = (f"import json, os\n_rename = os.replace\ndef _look(a, b):\n    d = os.path.realpath(a)\n"
             f"    json.dump({{'files': sorted(os.path.relpath(os.path.join(t, f), d) for t, _, fs in os.walk(d) for f in fs), "
             f"'link': os.readlink(b)}}, open({str(seen)!r}, 'w'))\n    return _rename(a, b)\nos.replace = _look\n")
