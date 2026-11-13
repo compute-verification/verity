@@ -23,7 +23,7 @@ In a NAME, a `-` stands for a `_`.
 | Module | What it holds |
 | --- | --- |
 | `verity_cli/__init__.py` | the dispatch, `verity check` and `verity lean try` |
-| `verity_cli/run.py` | `verity run` and `verity config`, over `verity.configuration.deploy.config` |
+| `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
 | `verity_cli/examples.py` | the examples' ladder, read from each `demos/<name>/example.toml` |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
 

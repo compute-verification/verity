@@ -20,9 +20,9 @@ import os
 import time
 from collections.abc import Callable
 
-from verity.configuration.wire import Body, Int, Message, MessageTypes, Schema
+from verity.channel import Body, Int, Message, MessageTypes, Schema
 
-from .party import Action, Identity, Params, Received, Send
+from verity.party import Action, Identity, Params, Received, Send
 
 CLOCK = MessageTypes([Schema("ClockRead", 1, "private"), Schema("ClockReading", 1, "private", {"ns": Int()}),
                   Schema("ClockAlarm", 1, "private", {"at": Int()}),
