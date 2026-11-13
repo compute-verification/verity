@@ -2,7 +2,7 @@
 
 Definitions, guarantees and proofs for the bucketed certifier's timing channel: how much a covert sender inside a
 spatial unit X can carry across its boundary ∂X through **when** frames leave, once the declared Program fixes their
-content and order. Conventions follow POUS's package (`verity/protocols/pous/lean/`): the same toolchain and Mathlib pin,
+content and order. Conventions follow POUS's package (`tools/pous_grader/`): the same toolchain and Mathlib pin,
 `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
 
 ~~~text

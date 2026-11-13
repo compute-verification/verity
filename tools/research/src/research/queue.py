@@ -3189,7 +3189,7 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/flock/prover/python/",
-                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "verity/protocols/pous/lean/",
+                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "tools/pous_grader/",
                   "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py",
                   "verity/definitions/commitments/", "verity/protocols/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
