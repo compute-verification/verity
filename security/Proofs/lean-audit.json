@@ -198,7 +198,6 @@
   "Proofs.Properties.Verity.SampledTwo.SessionCut",
   "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
   "Proofs.Properties.Verity.Majority",
-  "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.AcceptsProof",
   "Proofs.Properties.Verity.SampledTwo.AcceptsTop",
   "Proofs.Properties.Verity.SampledTwo.Apart",

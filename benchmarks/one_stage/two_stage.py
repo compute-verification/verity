@@ -988,6 +988,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                 planner.start()
             coins.plan(need)
             got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop, **ours)
+            if getattr(a, "first_tree", False) and k == 0:
+                turns.tree(FIRST_TREE_SPEC)
             out[k] = {**got.stage1(), "window_root": root}
         except caught as e:  # its stage1.json says why; the others go on
             out[k] = _refusal(pubs[k], e)
@@ -1049,6 +1051,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
 
 
 HOST_DIR = "challenger-host"
+#: `first --first-tree`'s coin tree: one stream of one round of one coin, which nothing opens
+FIRST_TREE_SPEC = {"block": 1, "rounds_log": 0, "scheme": Ch.CT.SCHEME, "streams": [Ch.CT.SESSION]}
 NO_HOST = ("--challenger local: --challenger-host names the directory the first stage kept its challenger in, and the "
            "second stage reopens it there. One challenger serves both stages, under one key the verifier holds; a "
            "challenger of this command's own would sign under another, and the first stage's coins are refused under it")
@@ -1233,6 +1237,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--ssh-key")
     f.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
                         "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
+    f.add_argument("--first-tree", action="store_true",
+                   help="a negative play: the first class's rank samples a coin tree on the first stage's session after "
+                        "its sample, so the session's log holds a coin tree's line, which the two-stage form refuses "
+                        "on two windows; nothing else of the play changes")
     f.add_argument("--out", required=True)
     g = sub.add_parser("second", help="one class's interior registration, second stage, proofs and outcome")
     g.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
