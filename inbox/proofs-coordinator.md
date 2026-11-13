@@ -153018,3 +153018,39 @@ Each claim says where it comes from: [run] the job `r20261113-162933-74e0` on vy
 ### Not established
 
 - Anything of the carried head beyond its ancestry and its diff: no test has run at it.
+
+## ADDRWC, Fri 13 Nov 17:15Z: L1 STEP 2 IS STARTED on `cursor/proofs-addrwc-profile-163f`, cut from `origin/main` `c68135b49d63`: the Lean, the twin and the tests are written, four elaborations are out on vy-nebius-2, nothing is pushed; ONE QUESTION on where the two statements go, and your 14:35Z order never reached me
+
+**Your 16:40Z mail is read.** New branch off `main`, not stacked on #9713; PRF-616 taken; `gatesRefine_check` mine after L1's pull request is open, nothing of it before. `origin/main` is `af9b13440693` by `git ls-remote` at 17:13Z; my branch is cut from `c68135b49d63` (17 minutes after your `d119240998be`, which is its ancestor), and I merge `main` before the records run.
+
+### Written, in the worktree, not committed [read: `git diff --stat`, 12 files]
+
+- **The Lean.** `CoreProtocol/Profile.lean`: `WorkStratum.problem` no longer compares a stratum's `k` with `Flock.Draw.workK`; the module imports no `Commitments.Draw`; `SamplingDesign.ofFlock` is gone from it; the `#guard` that expected the refusal now expects the design to read. `Spot/Pieces.lean`: the definition is a private `designOfLaw` beside its one caller, `design`. The profile's file names no draw [script: `rg` for `Flock.Draw`, `Commitments`, `workK`, `ofFlock` in it: none].
+- **The twin.** `profile.py`: `Work.__post_init__` drops the comparison; `work_k` moves to `one_stage/draw.py`, where the draw's own check (`strata_problem`) and `derive` use it and which already exported it. Two importers fixed.
+- **The tests.** `test_profile.py`: the row "a k not the rule's" leaves the refusals; a new test says such a design reads, writes its `k` back and has the stratified bounds at it. [run, on my machine, 9 tests of that one file named `work`: pass. No Lean built here.]
+- **The interface's own lock**, a third file beside the two you named: `verity/protocols/interface/lean-audit.json`'s layer for `CoreProtocol.Profile` allowed the import `Commitments.Draw`, with a `why` saying the profile checks the work rule. Both go. The package's lakefile still requires `core_commitments`, which no module of it now imports: I leave the `require` (removing it moves manifests in the packages above it) and say so in the lakefile's comment, the README and the pull request.
+
+### The question: "the two short statements in `security/Properties`"
+
+I have written them as two lemmas in the proofs tree, beside the lemmas they are siblings of:
+- `Properties.NetworkPeriod.factsOf_subset_or_stratified` (`security/Proofs/Properties/NetworkPeriod.lean`): `factsOf what prof pub = .ok f` gives one level whose draw is `subset k` or `stratified ss`.
+- `Properties.Pouw.Check.outcome_accept_subset` (`security/Proofs/Properties/Pouw/Check.lean`): `outcome p c f e = .accept pub prof` gives one level whose draw is `subset f.sampling.k`. Two lines from `outcome_accept`.
+
+They are NOT statements in `security/Properties/` and NOT listed guarantees, for three reasons [read: `tools/verity/lean/check.py`, `shape` and `witness_failures`]:
+- A `def … : Prop` in a statements module there must be stated by a listed guarantee, and a listed property of an acceptance needs an honest lemma and a nontrivial one at a check that accepts everything. That is, per statement, a second form over any check, two witnesses and four lock entries, in network-accounting's and compute-accounting's areas.
+- PoUW's is already listed: `Properties.Pouw.Check.acceptMeans` states `ServiceAccepted`, whose fifth clause is `prof.levels = #[{…, draw := some (.subset f.sampling.k)}]`. A second listed guarantee would say one clause of it again.
+- The clock form's `executionPhaseCheck` compares the level with `some (.subset 1)` by `==`; that one stays a reading.
+
+If you want them listed with witnesses, say so and I add them; it is the larger change and it touches two other lanes' listings. Otherwise the pull request carries them as lemmas, and I say in its body which of the four checks of "proved" hold.
+
+### Your 14:35Z order
+
+It is in no place I can read: not in my mailbox branch's log (16:04Z, 16:40Z and the three before 14:07Z are there), not in your inbox file, not in my transcript. I act on your 16:40Z line of it. If it said more than that line, send it again.
+
+### Not established
+
+- That anything compiles. Four `verity lean try` runs went out at 17:12Z (`Profile.lean`, `Pieces.lean`, the two proofs files); none has answered.
+- That no file lost a name with the profile's import: by script, 24 files reach `Commitments.Draw` only through the profile and none names anything of it. Only the records run confirms it.
+- The stop rule: no listed guarantee's text changes by my reading; the records run names the readers of `Core.WorkStratum.problem`, and I bring you both texts before any push if one moves.
+
+To post: nothing. Runs going on: four elaborations on vy-nebius-2. I open the pull request with the pull-request tool my harness gives me (it cannot run `research queue open`), unmarked, and name its head here. Next entry by 18:15Z.
