@@ -7,10 +7,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.verity.tests]
-# run.py reads the run's output directory through verity_config's SHARED registry, which is built on verity/settings.py
-inputs = ["verity/configuration/config/verity_config", "verity/__init__.py", "verity/settings.py",
+# run.py reads the run's output directory through verity_config's SHARED registry, which is built on tools/config/verity_config/verity_settings.py
+inputs = ["tools/config/verity_config", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           # the shared result: the kit's writer, and capacity from the registered hardware's Site and card files
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
-          "benchmarks/harness/verity_bench/settings.py", "verity/hardware/__init__.py", "verity/hardware/cards",
-          "verity/hardware/site/__init__.py", "verity/errors.py", "verity/configuration/__init__.py",
-          "verity/configuration/wire"]
+          "benchmarks/harness/verity_bench/settings.py", "verity/hardware/__init__.py", "hardware/cards", "verity/hardware/cards.py",
+          "verity/device.py", "verity/errors.py", "verity/runtime/__init__.py",
+          "verity/channel.py", "verity/runtime/handshake.py", "verity/tests/tests/test_channel.py"]

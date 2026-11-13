@@ -15,8 +15,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -88,7 +88,7 @@ def _boundary_window() -> CS.Binding:
 
 def _first(links=LINKS):
     """A window stream over `A` and `B` taking ``links``' values a sampled span (`interior_rows.span_values`), a stand-in
-    boundary registered and its first stage drawn (spans 0 and 2)."""
+    boundary registered and its first stage sampled (spans 0 and 2)."""
     names = {}
     values = IR.link_values(links, Q)
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(MEMBERS, CELLS, "00", [0], values=values))):

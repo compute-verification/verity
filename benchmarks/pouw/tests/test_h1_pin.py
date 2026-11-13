@@ -10,7 +10,7 @@ import h1unit as U
 import pytest
 from verity_config.settings import of
 
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 SETTINGS = of(__file__)
 

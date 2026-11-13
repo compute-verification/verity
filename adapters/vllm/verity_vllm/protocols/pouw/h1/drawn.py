@@ -79,25 +79,45 @@ import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier.one_stage import produced as PR
-from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
-                                                     leaf_rows, leaf_statement, operands, outputs_held, partials,
-                                                     receipt_value, receipt_words, split_record, split_row)
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1.drawn_rows import (
+    LEAF_NAMES,
+    LEAF_OUT_ROWS,
+    LEAF_PROGRAM,
+    complete,
+    held,
+    leaf_rows,
+    leaf_statement,
+    operands,
+    outputs_held,
+    partials,
+    receipt_value,
+    receipt_words,
+    split_record,
+    split_row,
+)
 
 NAME = "unit/pouw-h1-tile"
 RECORD = "h1/w{w}/pouw-h1-calls.json"
@@ -193,7 +213,6 @@ def statement_tables(z: dict, in_ports: Sequence[str], out_ports: Sequence[str])
 def window_of(serve_dir: Path, window: int) -> dict[str, Any]:
     """The window's record, descriptor bytes, layout, shape, and what credit verifies its statements under: the window's
     root, its rounds, its Program salt and each value's registered roots."""
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
     record = json.loads((serve_dir / RECORD.format(w=window)).read_text())
     raw = gzip.decompress((serve_dir / PROGRAM).read_bytes())
     layout, why = CR.layout_of(raw)
@@ -225,9 +244,8 @@ def draw_k(serve_dir: Path, k: int | None) -> int:
 
 def drawn_calls(win: dict, k: int) -> dict[int, list[int]]:
     """Core's sample of the window at K, by call: ``{call: [global unit, ...]}``, ascending."""
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
     units, why = PHC.drawn_of(win["record"], {"root": win["root"]}, k, win["raw"])
-    if why is not None:
+    if why is not None or units is None:
         raise Refused(f"core draws nothing from the window: {why[0]}: {why[1]}")
     starts = list(itertools.accumulate((size for size, _w in CR.call_work(win["layout"])), initial=0))[:-1]
     out: dict[int, list[int]] = {}
@@ -240,7 +258,6 @@ def drawn_calls(win: dict, k: int) -> dict[int, list[int]]:
 
 def _kept(prover: Path, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Call `row`'s kept A codes [served, K], scales [served] and z/y records (None for an empty call)."""
-    from verity_vllm.protocols.pouw.h1 import prover as PV
     k, m = int(row["k"]), int(row["served"])
     if not m:
         return np.zeros((0, k), np.int8), np.zeros(0, "<f4"), None
@@ -251,8 +268,6 @@ def _kept(prover: Path, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray |
 def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
     """Call `call`'s step's ``a/<K>@<s>`` as `Served.commit` registered it: its step's calls of K, each its served codes
     over M slots (`Served.a_words`), at the first one's ``a`` nonce, bound to the window's root."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import served as SV
     lay, prefix = win["layout"], win["shape"]["prefix"]
     per, ks = len(lay["linears"]), {name: k for name, k, _n in lay["linears"]}
     s, k = call // per, ks[lay["calls"][call][0]]
@@ -271,8 +286,6 @@ def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
 def zy_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
     """Call `call`'s ``zy@<c>`` as `Served.commit` registered it (`zy_words` of its records over M slots, zeros for an
     empty call), at its ``zy`` nonce, bound to the window's root."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import served as SV
     lay = win["layout"]
     row = next(r for r in win["record"]["calls"] if int(r["index"]) == call)
     n, tile = int(row["n"]), tuple(lay["tile"])
@@ -307,8 +320,6 @@ def b_value(win: dict, k: int, key: bytes, checkpoint: Path | None, weights: Pat
             read: CheckpointWeights | None = None) -> G.Registered:
     """``b/<K>`` as `served.register_weights` registered it: K's linears' rows in turn (`chunk_words`), at ``B_NONCE``
     plus K's place among the window's K's, under `key`, bound to no window."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import served as SV
     lin = [tuple(x) for x in win["layout"]["linears"]]
     words = np.concatenate([SV.chunk_words(c, s, Wt.chunks(k)) for c, s in linear_weights(lin, k, checkpoint, weights, read)])
     ks = sorted({kk for _n, kk, _x in lin})
@@ -371,7 +382,6 @@ def unit_outputs(z: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> dict
     """Each staged unit's outputs as J10-R's word reference computes them (`h1zy.reference`, chunked by
     `chunks_reference`) on its rows, the window's Program salt, its position, its call's roots and (u0, blocks): ``o0``
     its receipt's u16 words, ``o1`` its ok. Refused when a unit's ok is not 1 (its record is not its rows' product)."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
     lay, (r, c), x = win["layout"], tuple(win["layout"]["tile"]), Wt.chunks(k)
     u0, salt = int(z["u0"]), bytes.fromhex(win["salt"])
     n = next(nn for name, kk, nn in lay["linears"] if name == lay["calls"][int(z["call"])][0])
@@ -438,7 +448,6 @@ class FileStager:
 
     def __init__(self, path: Path, definition: str, in_rows: Sequence[tuple], out_rows: Sequence[tuple],
                  name: str = NAME) -> None:
-        from types import SimpleNamespace
         from verity_flock import circuit as FC
         with open(path, "rb") as f:
             first, second = f.readline(), f.readline()
@@ -461,11 +470,10 @@ class FileStager:
                                    outputs=[port(f"o{j}") for j in outs])
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"),
                                     content_digest=hashlib.sha256(content).hexdigest())
-        self.outs = None
+        self.outs: dict[str, np.ndarray] | None = None
 
     def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
               tables: dict, refs: dict, registered: dict) -> dict:
-        from types import SimpleNamespace
         from verity_flock import circuit as FC
         iset = SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.row_ports[0]])
@@ -579,7 +587,6 @@ def stage(a: Any) -> int:
     if manifest.get("program") != win["program"]:
         raise Refused(f"--circuits' manifest is for Program {str(manifest.get('program'))[:16]}..., not the window's "
                       f"{win['program'][:16]}...")
-    from verity_vllm.protocols.pouw.h1 import prover as PV
     pkey = PV.key_of(prover)
     bkey, bwhose = weights_key(a, win)
     lay, ks = win["layout"], {name: k for name, k, _n in win["layout"]["linears"]}
@@ -697,7 +704,6 @@ def stage(a: Any) -> int:
 # -- statements and their check ---------------------------------------------------------------------------------------------
 
 def statements(a: Any) -> int:
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
     plan = json.loads((Path(a.work) / PLAN).read_text())
 
     def session(x: dict, what: str) -> list[Path]:

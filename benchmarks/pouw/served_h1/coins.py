@@ -76,14 +76,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote as R
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote as R
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 PEER_ENV, SSH_KEY_ENV = "POUW_CHALLENGER_PEER", "POUW_CHALLENGER_SSH_KEY"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -482,7 +482,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     `env_draw`), opened on the sample root when the window asks for its sample (`Coins.draw`)."""
     if at is None:
         if entropy is None:
-            from verity.protocols.pouw.verifier import verifier
+            from verity.protocols.accounting.pouw.verifier import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process", epoch=epoch, entropy=entropy)
     client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
@@ -613,7 +613,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

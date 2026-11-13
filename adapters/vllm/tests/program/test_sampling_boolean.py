@@ -12,21 +12,20 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.circuits.cut import separable
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import word as W
 from verity.definitions.numerics import rows
 from verity.definitions.registry import b1
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -54,7 +53,7 @@ SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x3F80, 0xBF80, 0x7F7F, 0xF
 def first_max(x: np.ndarray) -> np.ndarray:
     """`TokenSelect_v1` on rows of bf16 words: the lowest index of the largest non-NaN value (+0 = -0), and 0 when the first
     logit is a NaN (the scan's best stays a NaN, and nothing compares greater than it)."""
-    w = x.astype(np.int64)
+    w: np.ndarray = x.astype(np.int64)
     mag = w & 0x7FFF
     nan = mag > 0x7F80
     key = np.where(nan, -(1 << 20), np.where(w & 0x8000, -mag, mag))
@@ -67,7 +66,7 @@ def logit_rows(V: int, n: int, rng) -> np.ndarray:
     """``n`` rows of ``V`` bf16 logits: in eight kinds, random words, words from a few values (ties at the maximum), specials,
     a NaN first logit, all NaN, all -inf, +0 and -0 tied at the top, and a planted maximum repeated at random positions."""
     x = rng.integers(0, 1 << 16, (n, V), dtype=np.uint64).astype(np.uint16)
-    kind = np.arange(n) % 8
+    kind: np.ndarray = np.arange(n) % 8
     few = np.array([0x3F80, 0x4000, 0x4040, 0xC000, 0x0000, 0x8000], np.uint16)
     x[kind == 1] = rng.choice(few, (int((kind == 1).sum()), V))
     x[kind == 2] = rng.choice(SPECIALS, (int((kind == 2).sum()), V))
@@ -199,7 +198,11 @@ def test_stages_as_root_calls(V) -> None:
     x = logit_rows(V, 512, _rng("stages", V))
     sts = SB.stages(V)
     emitted = []
-    SB.token_select_calls(lambda fn, arg: emitted.append(fn) or arg, None, V)
+    def emit(fn, arg):
+        emitted.append(fn)
+        return arg
+
+    SB.token_select_calls(emit, None, V)
     assert [s.id for s in emitted] == [s.id for s in sts] == [f"TokenSelectStage_v1{{V={V},L={L}}}" for L in range(len(sts))]
     bits = ((x.astype(np.uint32)[:, :, None] >> np.arange(16, dtype=np.uint32)) & 1).astype(np.uint8)
     for st in sts:
@@ -229,7 +232,7 @@ def test_rows_oracle_with_a_nan_first_logit() -> None:
 
 def f32_first_max(y: np.ndarray) -> np.ndarray:
     """`first_max` on rows of f32 words (`F32GtStrict_v1`'s order: subnormals as they are, +0 = -0, a NaN never taken)."""
-    w = y.astype(np.int64)
+    w: np.ndarray = y.astype(np.int64)
     mag = w & 0x7FFFFFFF
     nan = mag > 0x7F800000
     key = np.where(nan, -(1 << 40), np.where(w & 0x80000000, -mag, mag))
@@ -257,7 +260,7 @@ def f32_argmax(V: int, y: np.ndarray) -> np.ndarray:
 def test_f32_first_max_is_the_word_definition(V) -> None:
     """The f32 restatement against `GumbelSelectF32_v1{V}` at temp 0 (+0 and -0), where it is the first maximum of the logits."""
     y = f32_rows(V, 1024, _rng("f32-oracle", V))
-    zero = np.zeros(len(y), np.uint64)
+    zero: np.ndarray = np.zeros(len(y), np.uint64)
     temp = np.where(np.arange(len(y)) % 2, 0x80000000, 0).astype(np.uint32)
     ref = E.evaluate_batch(bind(SM.GumbelSelectF32, V=V), y, zero, zero, temp).astype(np.int64).reshape(-1)
     bad = np.flatnonzero(f32_first_max(y) != ref)
