@@ -336,11 +336,11 @@ theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
 the form accepts, at a numbering `tree` of the sessions' trees as the read numbers trees, in the log the check read
 
 * session `t`'s tree has an opening of its stream named the session's (`Spot.Challenger.TREE_SESSION`), after one
-  opening of that stream, that answers the bytes of the SHA-512 of session `t`'s evidence
+  opening of that stream, that answers the SHA-512 of session `t`'s evidence
   (`Spot.OneStageZk.sessionEvidence`), with no opening of the tree after it;
 * an opening of session `t`'s tree comes after openings of the trees of sessions at or before `t` only; and
-* before any opening of session `t`'s tree, each earlier session has an opening answering the bytes of its own
-  evidence's SHA-512.
+* before any opening of session `t`'s tree, each earlier session has an opening answering its own evidence's
+  SHA-512.
 
 It is `Verity.Sampled.MemberForm.members_read` at what `membersTreesHeld` named. -/
 theorem closes_after {C : CaseOf} (h : MembersNamed C) :
@@ -352,7 +352,7 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
             c.frame = .opening (tree t) st n ∧
             ((Verity.Sampled.helloSpecs Lc)[tree t]?.bind fun sp => sp.streams[st]?) =
               some Spot.Challenger.TREE_SESSION ∧
-            openedOf Lc (tree t) st = 1 ∧ Flock.unhex (Spot.sha512Hex ev) = .ok c.answers ∧
+            openedOf Lc (tree t) st = 1 ∧ c.answers = Flock.Sha512.hash ev ∧
             ∀ y ∈ L₂, ∀ s' n', y.frame ≠ .opening (tree t) s' n') ∧
         (∀ pre r post, l = pre ++ r :: post → ∀ t, t < (e.statements.toList.flatMap (·.sessions.toList)).length →
           ∀ st n, r.frame = .opening (tree t) st n → ∀ q ∈ pre, ∀ t',
@@ -362,7 +362,7 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
           (e.statements.toList.flatMap (·.sessions.toList))[t]? = some s → r.frame = .opening (tree t) st n →
             ∀ t' s', t' < t → (e.statements.toList.flatMap (·.sessions.toList))[t']? = some s' →
               ∃ ev q, Spot.OneStageZk.sessionEvidence k.blobs s' = .ok ev ∧ q ∈ pre ∧
-                Flock.unhex (Spot.sha512Hex ev) = .ok q.answers := by
+                q.answers = Flock.Sha512.hash ev := by
   intro o hacc l hl
   obtain ⟨k, e, label, after, ξ, lines, trees, records, hk, he, hT, hR, hM, hN⟩ := h o hacc l hl
   obtain ⟨tree, h1, h2, h3⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
@@ -375,15 +375,14 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
   · obtain ⟨x, hx, -, ev, hev, hxe⟩ := forall₂_getElem? hN hs
     rw [Array.getElem?_toList] at hx
     obtain ⟨tr, -, -, -, -, Lc, c, L₂, st, n, hlog, hc, hname, hcount, hun, hlast⟩ := h1 t x hx
-    rw [hxe] at hun
-    exact ⟨ev, Lc, c, L₂, st, n, hev, hlog, hc, hname, hcount, hun, hlast⟩
+    exact ⟨ev, Lc, c, L₂, st, n, hev, hlog, hc, hname, hcount,
+      Verity.Sampled.MemberForm.answers_of_hex hun hxe, hlast⟩
   · obtain ⟨x, hx, -⟩ := forall₂_getElem? hN hs
     obtain ⟨x', hx', -, ev, hev, hxe⟩ := forall₂_getElem? hN hs'
     rw [Array.getElem?_toList] at hx hx'
     have ht : t < records.size := (Array.getElem?_eq_some_iff.1 hx).1
     obtain ⟨q, hq, hun⟩ := h3 pre r post hpre t ht st n hr t' x' hlt hx'
-    rw [hxe] at hun
-    exact ⟨ev, q, hev, hq, hun⟩
+    exact ⟨ev, q, hev, hq, Verity.Sampled.MemberForm.answers_of_hex hun hxe⟩
 
 /-! ## The piece at the form's acceptance -/
 
