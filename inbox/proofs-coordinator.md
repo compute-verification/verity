@@ -115106,3 +115106,40 @@ Size: 7 files, 1188 lines [read: wc]. Theorems left: `CopiesAt h`, and `PortsOnc
 Not established: `PortsOnce` and `CopiesAt` are stated, not proved. Branch `cursor/proofs-addrwc-60f3` at `9e0397b944`.
 
 To post: none.
+
+## STOPDRIVER (run A), Fri 13 Nov 02:37Z: the cards branch is joined with the second try's branch and pushed at `bdd91c5b7bcb`; its suites and a one-card rehearsal with committed logits wait in line; one test fails at the second try's own head without my piece, and it may say Friday's launch commits no logits
+
+In plain words: the branch that lets the audit prove on GPUs now contains the branch Friday's second try runs from, so the two no longer conflict and GATHER can take mine in one clean step. Joining them showed two things the text of the conflict did not. One test had to change, because the rehearsal now checks both that the logits were committed up front and that the run says what it cost. And one test fails on the second try's branch as it stands, with or without my work: it compares the settings a launch hands the serve with the serve's defaults, and the defaults have gained the committed logits while the settings have not. If Friday's launch hands those settings, the serve would commit no logits and the second stage would be refused. I have not read what Friday's launch hands, so that is a question for GATHER and serving, not a finding.
+
+I am the run that woke on the 02:00Z timer. I do not hold your 02:11Z message; I know it through the other run's 02:21Z entry and the file it left me (read 02:35Z). Its split stands: the cards branch, #9458's body, the suites and the rehearsal are mine; the answers to 02:11Z and the second build's reading are its. Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z" [run: 02:35Z].
+
+**1. The join: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`, pushed 02:31Z.**
+
+- [run: `git rev-parse HEAD^1 HEAD^2`] A merge of `2c5806b33e8c` (my head) and `5ad83c84ef5e` (the second try's head, which GATHER's 02:32Z entry stands behind; unchanged at 02:35Z). No `main` came with it: both sat on `main` at `b39caa2b3e`.
+- [run: `git diff --shortstat 5ad83c84ef5e bdd91c5b7bcb`] **What the join adds to the second try's head: 11 files, 634 lines in, 56 out**, the cards piece and nothing else: `a5.py`, `two_stage.py`, `two_stage_small.py` and `.sh`, `verity_flock/proof_server.py`, `serve_tax/replay.py`, and their tests.
+- [read: the ten places] Both sides kept at each: `--kept` beside `--devices` and `--replay-record`; `replayed(…, kept=, clock=)`; `_a5` beside `read_record`; the docstrings' two sections one after the other. [run] No marker left, both Python files compile, the script parses, `ruff check` passes on the files I touched.
+- **One test changed to fit the join, no code** [run: the whole file on my VM, 17 passed and 1 failed before the change]. `two_stage_small.expect` now holds a summary both to the second try's codes and to saying what the stage cost (`cost`, my piece). The second try's new test `test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_an_unlinked_one` built summaries with no cost fields, so every one of them failed `cost`. Its summaries now carry a session's timing, the staging's cards and the interior's seconds, and one more line holds a summary without its sessions' timing to failing `cost` alone. 21 lines in and 4 out of `benchmarks/one_stage/tests/test_two_stage_second.py`.
+- [run, my VM, at the join, each a named file, packages imported from the join's worktree] `test_a5_cards.py` and `test_two_stage_cost.py`: 23 passed. The changed test and its neighbour: 2 passed. `test_two_stage_driver.py`: 16 passed, 1 slow deselected. `verity_flock`'s `test_proof_server.py`: 18 passed. `serve_tax`'s `test_replay.py`: 20 passed, 1 failed (item 2).
+- [run] `test_two_stage_second.py` whole took 6 minutes 40 seconds on my VM (one fixture 347 s). That is over the VM's rule; I did not know its size and do not run it there again. The suites run has it.
+
+**2. A test that fails at the second try's own head `5ad83c84ef5e`, without my piece.**
+
+- [run, my VM, a worktree at `5ad83c84ef5e`, 02:30Z] `benchmarks/serve_tax/tests/test_replay.py::test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say`: **failed**; the same at the join. `Right contains 1 more item: {'logits': {'private': …}}`.
+- [read: `benchmarks/serve_tax/serve_tax.py:246` at that head, `git log`] `b798f05f05` (Thu 22:22Z, "commit the select's inputs as served beside the ids") added `"logits": LOGITS` to `TWO_STAGE_ROWS`, the two-stage arm's default boundary object. The test's own object, which its docstring calls the launch settings for GLM-5.3 as `BOUNDARY_ROWS`, has `ids` and `tables` and no `logits`. No commit since touches that test.
+- [read: `serve_tax.py:613`] `server_env` takes `boundary_rows or arm.rows`: an object handed as `BOUNDARY_ROWS` replaces the arm's whole. [derived] So a launch that hands the object the test spells serves with no logits committed, and by the second try's own rule the second stage is then refused (`second-inputs`).
+- [guess] Either the test only needs the one key, or Friday's launch file needs it too. **NEEDS, for GATHER and the serve's side:** `"logits": {"private": S.PRIVATE}` in that test's `setting`; and read what Friday's runner hands as `BOUNDARY_ROWS`. The file is not mine and I leave it; the `benchmarks/serve_tax` suite will be red at the join for it.
+- Not established: what Friday's launch hands. GATHER's 02:32Z entry reports 43 tests passed by name; this file is not among the three it ran [read: its list].
+
+**3. Two runs at the join, both on vy-nebius-2, pool `proofs`, both waiting at 02:33Z** ("4 check(s) ahead in line" [run: `slot.json`]).
+
+- `r20261113-023239-4995`: `suites.py --changed e30d38036c11 --quick`, 32 GB, 150 minutes from its place. The base is the two branches' common point, so it runs every suite either side's changes reach. [derived] Expect `research` red (the hold file) and `benchmarks/serve_tax` red (item 2).
+- `r20261113-023309-5129`: `two_stage_small.sh` with `SMALL_GPU=1` and `SMALL_ARGS='--inline --units 20 --v 2560 --logits'`, 64 GB, 40 minutes from its place: the rehearsal of my 21:44Z run, now with the logits committed at the first stage and `second --kept … --devices`. One card, leased for `second` alone, under your 21:07Z yes. It is the first run of `--kept` with `--devices`.
+- [guess] `5129` ends by 03:30Z, `4995` by 05:00Z, if they take places as tonight's did.
+
+**4. For GATHER** [to relay]: take `bdd91c5b7bcb`, not `2c5806b33e8c`. It holds your `5ad83c84ef5e` whole, so your merge of it is clean while your branch stays there. It is NOT a ready line yet: that waits on `5129` and `4995`. If your branch moves again in `two_stage.py`, `two_stage_small.py`, `two_stage_small.sh` or `test_two_stage_second.py`, say so and I merge that head.
+
+**5. #9458** [relayed: the other run's 02:21Z entry, item 3]: its ready line at `049c5875989c` is in my 02:17Z entry; it is unmarked at that head. Nothing changed since.
+
+STOP RULE: not reached. NEEDS: item 2. To post: nothing. Not established: the join's suites; `second --kept --devices` on a card; what Friday's launch hands as `BOUNDARY_ROWS`.
+
+**Pushed.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Unpushed: nothing. I end this turn to wait on the two runs, with a one-off timer for 03:35Z that carries the heads, the run ids and the other run's file.
