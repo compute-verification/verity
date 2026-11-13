@@ -5,7 +5,7 @@
 # sampled_two_case.py), then the form's check on it: `sampled-two-on check` (the switch on) must accept, and
 # `sampled-two check` (the shipped switch) must refuse by the switch alone. The case's parameters, commitment and
 # evidence are kept under $OUT/form with its blobs (blobs/, their SHA-512 and sizes in blobs.txt): the directory the
-# form's accept test reads (SAMPLED_TWO_CASE). Then a negative play: the same first stage with a coin tree sampled on
+# form's accept test reads (VERITY_SAMPLED_TWO_CASE). Then a negative play: the same first stage with a coin tree sampled on
 # its session (first --first-tree) and its own second stage, whose case `sampled-two-on check` must refuse by the
 # first session's coin tree's line (kept under $OUT/form-tree). Before either, each kept play's case KEPT_CASES names
 # (directories like $OUT/form, space separated) is checked again: accepted with the switch on, refused by the shipped
@@ -13,6 +13,10 @@
 # negative play is not refused by that line.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/sampled_two_small.sh
 #   SMALL_ARGS, SMALL_FIRST and SMALL_SECOND pass two_stage_small.py serve, `first` and `second` more.
+#   Where the serve commits the select's inputs beside the ids (SMALL_ARGS="--inline --units 1 --logits", at a tree
+#   whose two_stage_small.py takes --logits), its record names the directory it kept them in and both `second` runs
+#   take it as --kept: the interior then registers no value of the prover's. ROUND_TWO prints the second stage's
+#   statement check as the run's summary has it.
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -59,6 +63,8 @@ PY=(uv run --no-sync python)
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
+LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
+KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --deployed-key --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 \
@@ -69,10 +75,12 @@ rc=0
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --deployed-key \
   --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("INTERIOR " + json.dumps(s.get("interior", {}).get("members")))' \
+  "$W/second/summary.json" || true
+"${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO " + json.dumps(s.get("round_two"), sort_keys=True))' \
   "$W/second/summary.json" || true
 for f in summary.json run-input.json coins.json statements.json audit/summary.json audit/case-v2-members.json \
          audit/case-v2-members-error.txt audit/case-v2-error.txt; do
@@ -104,7 +112,7 @@ rc=0
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first-tree/$(basename "$CLASS")/stage1.json" \
   --boundary "$CLASS" --capture "$W/serve/capture" --challenger local --challenger-host "$W/first-tree/challenger-host" \
   --deployed-key --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second-tree" ${SMALL_SECOND:-} > "$O/second-tree.log" 2>&1 || rc=$?
+  --out "$W/second-tree" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second-tree.log" 2>&1 || rc=$?
 echo "second-tree rc=$rc" | tee -a "$O/machine.txt"
 [ -f "$W/second-tree/form/params.json" ] || { tail -30 "$O/second-tree.log"; echo "FORM_TREE no case"; exit 9; }
 mkdir -p "$O/form-tree"

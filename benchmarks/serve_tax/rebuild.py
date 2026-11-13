@@ -93,6 +93,7 @@ sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
 import boundary as B  # noqa: E402 (beside this file)
+import replay as RP  # noqa: E402
 import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402
 import tp_state as T  # noqa: E402
@@ -1636,9 +1637,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--perturb", type=int, default=0, metavar="N",
                     help="with --shape-only, a control: add one dummy of N prompt tokens at the first step, a row serving "
                          "never ran")
-    ap.add_argument("--capture", metavar="TEMPLATE",
+    ap.add_argument("--capture", nargs="?", const="", metavar="TEMPLATE",
                     help="with --served and --shape-only: take the target's logits rows and ids at every rank's sampler "
-                         "into OUT/capture, a span of TEMPLATE's units (a token select's, e.g. TokenSelect_v4{V=154880})")
+                         "into OUT/capture, a span of TEMPLATE's units (default: the check the serve committed under, "
+                         "`replay.capture_template`; a token select's, e.g. GreedySelect_v1{V=154880,N=7744})")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):
@@ -1651,8 +1653,10 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--shape-only starts from an edge or --from-mirror, not with --mirror-out")
     if a.recompute_hits and not a.shape_only:
         raise SystemExit("--recompute-hits goes with --shape-only")
-    if a.capture and not (a.served and a.shape_only):
+    if a.capture is not None and not (a.served and a.shape_only):
         raise SystemExit("--capture takes the sampler rows of --served's --shape-only target")
+    if a.capture is not None:
+        a.capture = RP.capture_template(json.loads((a.served / "meta.json").read_text()), a.capture or None)
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
