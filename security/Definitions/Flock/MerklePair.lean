@@ -43,12 +43,16 @@ def openPair (pos : ℕ) (c c' : Col) (sibs sibs' : List D) : List UInt8 × List
 
 variable {S : Type}
 
-/-- **The pair of two openings under a leaf scheme.** `leaf` is the scheme's leaf of a column under a salt, and `pair`
-is the scheme's own pair for two columns with one leaf. The pair of the two openings is `pair`'s when the two leaves
-agree, and the walk's pair from the two leaves otherwise. -/
-def openPairL (leaf : Col → S → D) (pair : Col → S → Col → S → List UInt8 × List UInt8) (pos : ℕ) (c c' : Col)
-    (s s' : S) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
-  if E.dig (leaf c s) = E.dig (leaf c' s') then pair c s c' s'
-  else walkPair H E sibs sibs' pos (leaf c s) (leaf c' s')
+/-- **The pair of two openings under a leaf scheme**, of position `pos` to the columns `c` and `c'` under the salts
+`s` and `s'`: the scheme's own pair (`Leaf.pair`) when the two leaves agree, and the walk's pair from the two leaves
+otherwise. -/
+def openPairL (Lf : Leaf Col S D H) (pos : ℕ) (c c' : Col) (s s' : S) (sibs sibs' : List D) :
+    List UInt8 × List UInt8 :=
+  if E.dig (Lf.leaf c s) = E.dig (Lf.leaf c' s') then Lf.pair c s c' s'
+  else walkPair H E sibs sibs' pos (Lf.leaf c s) (Lf.leaf c' s')
+
+/-- The members of a list taken two at a time, in the list's order: what a search for two of a run's openings that
+clash goes through. -/
+def pairsOf {γ : Type} (xs : List γ) : List (γ × γ) := xs.flatMap fun x => xs.map fun y => (x, y)
 
 end FlockSoundness.Merkle

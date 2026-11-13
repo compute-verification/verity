@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Flock.Merkle
-public import Proofs.Flock.Soundness.Merkle
+public import Proofs.Flock.Soundness.MerklePair
 import Mathlib.Tactic.Push
 import Mathlib.Tactic.Set
 
@@ -111,7 +111,7 @@ theorem coin_opening_binding (mix : D → Salt → D) (hmix : ∀ y, Function.In
         exact E.salt_inj (List.append_cancel_left hin)
     · exact ⟨_, _, hbc, hleaf⟩
   · -- the leaves differ but the walks meet: a node collides
-    exact walk_binding H MerkleE sibs sibs' idx _ _ hsibs hleaf (h.trans h'.symm)
+    exact ⟨_, _, walkPair_spec H MerkleE sibs sibs' idx _ _ hsibs hleaf (h.trans h'.symm)⟩
 
 /-- **T6 for the keyed coin tree, `coin-tree/hm96-sha512/v2`** (`docs/coin-tree-v2.md` in the Project store). Every hash of
 the v2 tree is SHA-512 of the prover's session nonce `ν` followed by v1's input, so v2 is this file's model with the hash

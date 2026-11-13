@@ -14,11 +14,13 @@ import Mathlib.Tactic.SplitIfs
 
 * `walkPair_spec`: two walks of one length from different digests to one digest;
 * `openPair_spec`: two verifying openings of one position to different columns, under the leaf `H (encode column)`;
-* `openPairL_spec`: the same under a leaf scheme, given that the scheme's own pair is a collision whenever two
-  different columns have one leaf.
+* `openPairL_spec`: the same under a leaf scheme (`Leaf`), whose own pair is a collision whenever two different
+  columns have one leaf (`Leaf.pair_spec`).
 
-Each names its pair, where `walk_binding`, `opening_binding` and `opening_bindingL` (`Proofs.Flock.Soundness.Merkle`)
-conclude only that `H` has a collision.
+This is Merkle binding, the step both reductions to collision resistance use: the straight-line one (a prover that
+knows its table) and the rewinding one (every prover, `Rewinding`). Each lemma names its pair, so a collision finder
+outputs it. The development states it for our tree shape directly; VCVio proves the same fact for its inductive trees
+(`InductiveMerkleTree.getPutativeRootWithHash_binding_collision`).
 -/
 
 @[expose] public section
@@ -65,21 +67,20 @@ theorem openPair_spec (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sib
 variable {S : Type}
 
 /-- **`openPairL` is a collision**: two openings of one position that verify against one tree top under the leaf
-scheme `Lf` and carry different columns, for a `pair` that is a collision whenever two different columns have one
-leaf. -/
-theorem openPairL_spec (Lf : Leaf Col S D H) (pair : Col → S → Col → S → List UInt8 × List UInt8)
-    (hpair : ∀ c c' s s', c ≠ c' → Lf.leaf c s = Lf.leaf c' s' →
-      Hash.Collision H (pair c s c' s').1 (pair c s c' s').2)
-    (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (s s' : S) (sibs sibs' : List D) (hc : c ≠ c')
-    (h : VerifiesL H E Lf top depth pos c s sibs) (h' : VerifiesL H E Lf top depth pos c' s' sibs') :
-    Hash.Collision H (openPairL H E Lf.leaf pair pos c c' s s' sibs sibs').1
-      (openPairL H E Lf.leaf pair pos c c' s s' sibs sibs').2 := by
+scheme `Lf` and carry different columns, under any salts. -/
+theorem openPairL_spec (Lf : Leaf Col S D H) (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (s s' : S)
+    (sibs sibs' : List D) (hc : c ≠ c') (h : VerifiesL H E Lf top depth pos c s sibs)
+    (h' : VerifiesL H E Lf top depth pos c' s' sibs') :
+    Hash.Collision H (openPairL H E Lf pos c c' s s' sibs sibs').1 (openPairL H E Lf pos c c' s s' sibs sibs').2 := by
   obtain ⟨hl, hr⟩ := h
   obtain ⟨hl', hr'⟩ := h'
   have heq : reachL H E Lf pos c s sibs = reachL H E Lf pos c' s' sibs' := hr.trans hr'.symm
   unfold openPairL
   split_ifs with hleaf
-  · exact hpair c c' s s' hc (E.dig_inj hleaf)
+  · exact Lf.pair_spec c c' s s' hc (E.dig_inj hleaf)
   · exact walkPair_spec H E sibs sibs' pos _ _ (hl.trans hl'.symm) (fun e => hleaf (congrArg E.dig e)) heq
+
+theorem mem_pairsOf {γ : Type} {xs : List γ} {x y : γ} (hx : x ∈ xs) (hy : y ∈ xs) : (x, y) ∈ pairsOf xs :=
+  List.mem_flatMap.2 ⟨x, hx, List.mem_map.2 ⟨y, hy, rfl⟩⟩
 
 end FlockSoundness.Merkle
