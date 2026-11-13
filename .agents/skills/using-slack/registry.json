@@ -252,7 +252,7 @@
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
-        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "verity/protocols/pouw/prover/kernels/pouw_cuda/",
         "adapters/vllm/verity_vllm/protocols/pouw/device.py",
         "adapters/vllm/verity_vllm/protocols/pouw/native.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
