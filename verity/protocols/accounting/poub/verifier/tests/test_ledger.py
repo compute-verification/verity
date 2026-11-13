@@ -250,7 +250,7 @@ def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1
     assert ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
     term = {"claim": "prf/sha-512", "term": "Σ_t adv_t", "value": None, "in_total": False,
             "status": "SHA-512 stream as PRF: not priced, not assumed"}
-    assert ledger.NAMED_TERMS == {"prf_advantage": term}
+    assert {"prf_advantage": term} == ledger.NAMED_TERMS
 
     def names(x: object) -> bool:
         """Whether `x` or an object inside it names the term."""

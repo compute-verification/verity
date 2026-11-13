@@ -153,10 +153,10 @@ def variant(kind: str, bind: bool, rows: int) -> dict:
                              "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
             "coins_root": challenger.commitment.root.hex(), "window": challenger.window.hex(),
             "passes": _passes(st, challenge, passes),
-            "openings": {"coin": coins.coin(opening).hex(), "draws": draws(reg, opening)}}
+            "openings": {"coin": coins.coin(opening).hex(), "draws": sampled(reg, opening)}}
 
 
-def draws(reg: audit.Registration, opening: coins.LiveOpening) -> list[int]:
+def sampled(reg: audit.Registration, opening: coins.LiveOpening) -> list[int]:
     key = derive(coins.coin(opening), audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
     return list(key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))
 
@@ -207,7 +207,7 @@ def generate() -> dict:
         "passes": _passes(st, challenge, passes),
         "openings": {"coin": coins.coin(opening).hex(), "label": opening.label, "index": opening.index,
                      "position": c.position(opening.label, opening.index), "after": opening.after.hex(),
-                     "units": sum(p.length for p in PLANS), "draws": draws(reg, opening)},
+                     "units": sum(p.length for p in PLANS), "draws": sampled(reg, opening)},
         "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
                    "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS)},
         "variants": {name(*v): variant(*v) for v in VARIANTS},

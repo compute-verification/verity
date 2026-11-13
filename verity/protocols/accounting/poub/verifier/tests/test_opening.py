@@ -1,5 +1,5 @@
-"""`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
-accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
+"""PoUB's `opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is accepted;
+the same window over a store that lost its first sampled block is rejected on codec at that sample; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
 system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded. The
 opening unit's compression is pinned as the commitments' own."""
@@ -13,10 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
+
 from verity.commitments import gates
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as O, receipts
+from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
+from verity.protocols.accounting.poub.verifier import opening as O
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 
 N, L = 32, 16
@@ -45,7 +46,7 @@ def store() -> audit.Store:
 
 def window(store: audit.Store) -> SimpleNamespace:
     """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call,
-    so the same draws over any store of the same registration."""
+    so the same samples over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()
@@ -83,9 +84,9 @@ def test_an_honest_window_is_accepted(store) -> None:
     assert O.reference(w.session, store, w.passes, w.c3) == [audit.Verdict(0, True)]
 
 
-def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
-    """The store's block at the first draw replaced by other bytes before the passes: the prover receipts what it holds,
-    the coins draw the same positions, and the unit's verdict on that draw is codec."""
+def test_a_lost_block_fails_on_codec_at_its_sample(store) -> None:
+    """The store's block at the first sample replaced by other bytes before the passes: the prover receipts what it holds,
+    the coins sample the same positions, and the unit's verdict on that sample is codec."""
     d0 = window(store).session.drawn(0)[0]
     lost = copy.copy(store)
     lost.blocks = list(store.blocks)
@@ -109,8 +110,8 @@ def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
         st.payload(a.first)
 
 
-def test_a_window_with_no_draws_is_malformed(store) -> None:
-    """A window whose draws are empty (none a session makes) is `malformed` at `decide`, as at `verify`."""
+def test_a_window_with_no_samples_is_malformed(store) -> None:
+    """A window with no samples (none a session makes) is `malformed` at `decide`, as at `verify`."""
     w = window(store)
     w.session.windows[0].draws = ()
     assert w.session.decide(0, []) == audit.Verdict(0, False, "malformed")
