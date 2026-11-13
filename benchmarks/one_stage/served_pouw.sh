@@ -33,7 +33,7 @@ TREE=$PWD TPY=$PWD/.venv/bin/python
 Q=$SD/private/pouw ST=$SD/private/pouw/drawn/statements.json LE=$SD/private/pouw/live/out/live/live-evidence.json
 (umask 077; mkdir -p "$Q") || exit 1
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
-LEAN=$TREE/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
 [ -n "${FLOCK_VERIFY:-}" ] || { [ -x "$LEAN" ] && export FLOCK_VERIFY=$LEAN; }
 say() { echo "POUW $*"; }
 took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
@@ -68,8 +68,8 @@ grep '^POUW-DEV ' "$Q/pouw.log"
 say "piece: served_verdicts.py pouw exit $rc after $(took "$t")$(taken "$P/check/check.log" "its Lean answers: ")"
 
 t=$(date +%s)
-EXE=$TREE/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-period
-(cd verity/protocols/pouw/verifier/lean/check && lake build pouw-period) > "$Q/pouw-period-build.log" 2>&1 \
+EXE=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-period
+(cd verity/protocols/accounting/pouw/verifier/lean/check && lake build pouw-period) > "$Q/pouw-period-build.log" 2>&1 \
   || say "period: pouw-period doesn't build (its log in the serve dir's private/pouw), so its case is answered by the Python reference"
 [ -x "$EXE" ] || EXE=
 rm -rf "$Q/period"

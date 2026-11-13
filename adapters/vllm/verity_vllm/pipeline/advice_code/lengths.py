@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code import arith as C
 from verity_vllm.pipeline.advice_code import derived as D
 
