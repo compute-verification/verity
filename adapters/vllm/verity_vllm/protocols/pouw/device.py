@@ -22,10 +22,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.prover.circuit import ncp2
 from verity.definitions.kernels import SHA512
+from verity.protocols.pouw.prover.circuit import ncp2
 
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
@@ -50,7 +51,7 @@ HASHES = {"sha256": (0, 32), "sha512": (1, 64), "shake256": (2, None), "turbosha
 
 _u8, _u16, _u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint8, np.uint16, np.uint32, np.uint64))
 _i8 = np.ctypeslib.ndpointer(np.int8, flags="C_CONTIGUOUS")
-_COMMIT = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u8, _u16]
+_COMMIT: list[Any] = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u8, _u16]
 
 
 @dataclass
@@ -230,7 +231,7 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH,
     b, t = call.b.rows(0, call.b.n)
     leaves, yleaves = np.zeros(nat.population * 32, np.uint8), np.zeros(nw.population * 32, np.uint8)
     y = np.zeros((sh.m, sh.n), np.uint16)
-    c = lambda v, dt: np.ascontiguousarray(v, dt)
+    c = np.ascontiguousarray
     args = [sh.m, sh.k, sh.n, c(call.a, np.int8), c(call.s, np.uint32), c(b, np.int8), c(t, np.uint32), c(call.bias, np.uint16),
             np.frombuffer(call.salt, np.uint8).copy(), call.forward, call.position, call.weight, c(call.rowids, np.uint32),
             c(call.colids, np.uint32), c(nat.pi, np.uint32), c(nw.inv, np.uint32), leaves, yleaves, y]
@@ -366,14 +367,17 @@ def _stream(tag: str, n: int) -> np.ndarray:
     return np.frombuffer(hashlib.shake_256(b"verity/pouw-device/gate-call\0" + tag.encode()).digest(max(1, n)), np.uint8)[:n]
 
 
-def _values(tag: str, m: int, k: int, n: int) -> dict[str, np.ndarray]:
+def _values(tag: str, m: int, k: int, n: int) -> dict[str, Any]:
     """A call's inputs from `_stream`: int7 A and B uniform on [−64, 63], positive row and column scales, a BF16 bias about
     0 and n distinct column ids."""
     sizes = {"a": m * k, "b": n * k, "s": 2 * m, "t": 2 * n, "bias": 2 * n, "salt": 32, "cols": 4 * 4 * n}
     raw, at, out = _stream(tag, sum(sizes.values())), 0, {}
     for key, size in sizes.items():
         out[key], at = raw[at:at + size], at + size
-    scale = lambda u: (np.float32(1e-3) + u.view("<u2").astype(np.float32) * np.float32(0.01 / 65535)).view(np.uint32)
+
+    def scale(u: np.ndarray) -> np.ndarray:
+        return (np.float32(1e-3) + u.view("<u2").astype(np.float32) * np.float32(0.01 / 65535)).view(np.uint32)
+
     bias = ((out["bias"].view("<u2").astype(np.float32) / np.float32(16384) - np.float32(2)).view(np.uint32) >> 16).astype(np.uint16)
     return {"a": ((out["a"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(m, k),
             "b": ((out["b"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(n, k),
@@ -385,7 +389,10 @@ def gate_call(tag: str, m: int, k: int, n: int, *, a=None, b=None, s=None, t=Non
               site: int = 0, weight: int = 2) -> PC.Call:
     """One call of the gate: its inputs fixed by ``tag`` (`_values`), any of them given instead."""
     v = _values(tag, m, k, n)
-    pick = lambda given, key, dt: v[key] if given is None else np.asarray(given, dt)
+
+    def pick(given, key: str, dt) -> np.ndarray:
+        return v[key] if given is None else np.asarray(given, dt)
+
     return PC.Call(pick(a, "a", np.int8), pick(s, "s", np.uint32), PC.Quantized(pick(b, "b", np.int8), pick(t, "t", np.uint32)),
                    pick(bias, "bias", np.uint16), v["salt"], forward=forward, layer=layer, site=site, weight=weight,
                    rowids=np.arange(1000, 1000 + m, dtype=np.uint32), colids=v["colids"])
