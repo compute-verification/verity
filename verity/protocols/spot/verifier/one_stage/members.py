@@ -644,8 +644,7 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
             strata = e
         descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
         tables = tuple((n, blobs[d]) for n, d in PF.MUFU_SHA512.items() if d in blobs)
-        files = {name: _files(name, m, blobs, descriptor, tables, strata,
-                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
+        files = {name: _files(name, m, blobs, descriptor, tables, strata, _slice(m, roots[name], record), form)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
