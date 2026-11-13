@@ -20,16 +20,16 @@ import pytest
 
 import pous_fakes
 import pous_test_signer as ts
-from verity.configuration.deploy import sources as S
-from verity.configuration.deploy.party import Send
-from verity.configuration.deploy.runtime import run as deploy_run
-from verity.configuration.deploy.stream import Side
+from verity.runtime import sources as S
+from verity.party import Send
+from verity.runtime.runner import run as deploy_run
+from verity.runtime.stream import Side
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period, run
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.configuration.wire import Message
+from verity.channel import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()

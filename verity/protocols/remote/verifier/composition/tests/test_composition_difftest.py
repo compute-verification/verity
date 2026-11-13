@@ -24,7 +24,7 @@ session's proofs granted (R7's domains and outputs, R6's previous) and that remo
 finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
 composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
 their subprotocols and refuses every other set: the same two composites a configuration may list
-(`verity.configuration.deploy.config.COMPOSITES`)."""
+(`verity.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ import verity_difftest as D
 from verity_difftest import canonical
 from verity_difftest import settings as opt
 
-from verity.configuration.deploy import config as K
+from verity import config as K
 from verity.protocols.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 
@@ -713,7 +713,7 @@ def test_onsite_agrees(onsite_server, recorded):
 
 def test_product_names_only_the_two_composites():
     """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.configuration.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
+    configuration's composites (`verity.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
     and refuses every other set of their subprotocols and the wipe (exit 64)."""
     exe = D.build(ONSITE_PACKAGE, "product")
 

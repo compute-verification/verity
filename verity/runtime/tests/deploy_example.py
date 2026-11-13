@@ -12,10 +12,10 @@ import functools
 import hashlib
 from pathlib import Path
 
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Received, LogEntry, Send, Timer
-from verity.configuration.deploy.runtime import ProtocolDef
-from verity.configuration.wire import Body, Bool, Int, Message, Schema
+from verity.protocol import Channel, Manifest, Role
+from verity.party import Finish, Received, LogEntry, Send, Timer
+from verity.runtime.runner import ProtocolDef
+from verity.channel import Body, Bool, Int, Message, Schema
 from verity.commitments.crypto import lms
 
 ID = "verity/example/deadline"
@@ -171,4 +171,4 @@ def config(**extra) -> dict:
 
 PROCESS = {"protocols": {ID: "deploy_example:PROTOCOL"}, "keys": "deploy_example:PartyKey",
            "verify": "deploy_example:verify", "path": [str(HERE)]}
-"""What a local process needs to run a party of the example (`verity.configuration.deploy.process`)."""
+"""What a local process needs to run a party of the example (`verity.runtime.process`)."""
