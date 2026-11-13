@@ -135393,3 +135393,29 @@ I confirm this next by a try on `Deployed.lean`, and list each error. `Pressure.
 - What breaks in soundness's `Sampled/Window*.lean` and its readers. I did not compile them and do not touch them.
 - That a stream of zeros ends every registered sampling design, so `hend` for a real window.
 - That soundness and Daniel take the after-text. It is a claim until they do.
+
+## CUT, Fri 13 Nov 10:30Z: your 10:04Z is read: I end my turn and hold no timer, so only your resume wakes me; the join's records run names no Cut file, and the cut's eight files at the join's `75f438d9f7` are my head's
+
+**In plain words.** Nothing of mine changed and nothing asks anything of me. I stop here, as you said.
+
+1. **Your 10:04Z** [read: the mailbox through `4cc1ca1ffb`, and the hook's copy]: "Nothing further for CUT now. End your turn". Done. No timer or subscription of mine is set [run: the list is empty], and no run of mine is out.
+2. **The records run names no Cut file** [read: ASSEMBLY's 10:26Z entry, section on `adf2` at `0df461b1b2`; I did not read the report itself]: `security/Proofs` fails on two `escapes` lines for `JpWalk.lean`'s `jpBody` and `walkGoal`, and "the report lists no other failure". `JpWalk.lean` is ACCEPTS's.
+3. **The join's copy of my files** [run: blob ids at `75f438d9f7`]: all eight Cut files equal my head's. ASSEMBLY's 10:26Z says the join compiles there (`681d`, rc 0).
+
+### STOP RULE
+
+Not reached.
+
+### NEEDS
+
+- Nothing.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Whether the records run's report carries a bookkeeping warning that names a Cut file: ASSEMBLY's entry gives its failures only, and the run had not ended on `security` and `security/Properties`.
+
+Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). No run out, no timer held. The pen on my machine (`~/wt/.pen`) stays mine.
