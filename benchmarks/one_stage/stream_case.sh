@@ -15,12 +15,12 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/steps.txt"; }
 { hostname; git rev-parse HEAD; nproc; free -g | head -2; } > "$O/machine.txt" 2>&1
 log "uv sync"
 uv sync -q --all-packages --extra torch-cpu > "$O/uv.log" 2>&1
-log "lake build sampled-proofs-one-stage-zk"
+log "lake build: v2's executable"
 (cd "$L" && lake build sampled-proofs-one-stage-zk) > "$O/spot-build.log" 2>&1 \
   || { log "spot build failed"; tail -60 "$O/spot-build.log"; exit 6; }
 from=(--case "${MF_CASE:-}")
 if [ -z "${MF_CASE:-}" ]; then
-  log "lake build flock-verify flock-firewall"
+  log "lake build: the Lean verifier and the ZK server"
   (cd "$F" && lake build flock-verify flock-firewall) > "$O/verifier-build.log" 2>&1 \
     || { log "verifier build failed"; tail -60 "$O/verifier-build.log"; exit 7; }
   log "check_build.sh bin"

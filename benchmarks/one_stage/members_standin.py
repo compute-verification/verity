@@ -123,7 +123,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", type=Path)
     ap.add_argument("flock", type=Path, help="flock-circuit, as check_build.sh bin builds it")
-    ap.add_argument("lean", type=Path, help="the directory of flock-verify and flock-firewall")
+    ap.add_argument("lean", type=Path, help="the directory of the Lean verifier's and the ZK server's executables")
     ap.add_argument("members", type=int, nargs="+", help="a window's members, a window each")
     ap.add_argument("--templates", type=int, default=len(KS), help="the templates the members are spread over")
     a = ap.parse_args()
