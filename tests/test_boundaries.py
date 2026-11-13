@@ -518,7 +518,7 @@ def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
     ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
     library and nothing else: ``verity/__init__.py`` re-exports nothing, and ``verity/errors.py`` and the settings registry
-    ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
+    ``tools/config/verity_config/verity_settings.py`` are shared by every unit, the stdlib-only references included."""
     offenders = []
     for path in _sources():
         if _unit(_dotted(path)) is not None or path.relative_to(SRC).as_posix() in NO_UNIT:
