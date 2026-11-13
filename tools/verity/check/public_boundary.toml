@@ -87,7 +87,7 @@ vllm = ["adapters/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # claims' program, which the bridge reads
 shared = [
     "verity/commitments/{randomness,lms}",
-    "verity/difftest",
+    "tools/difftest", "verity/circuits/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
     "tools/config",
@@ -335,7 +335,7 @@ from = "*"
 why = "the challenger and service code SPOT needs"
 paths = [
     "verity/{claims,commitments,configuration,definitions,hardware,protocols}",
-    "verity/difftest",
+    "tools/difftest", "verity/circuits/difftest",
     "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
