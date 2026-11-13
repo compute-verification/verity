@@ -1780,7 +1780,7 @@ def _library_sha512(server, name: str) -> str:
 def test_the_mufu_tables_are_the_library_tables(server, name):
     """The Lean evaluator's ex2, rcp, rsq and sqrt tables (their interpolants), as the library stores them, have the
     library's SHA-512: every word of each, which the grids reach only a few of (about 6 s a table)."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     assert _library_sha512(server, name) == library.table(name).sha512
 
@@ -1790,7 +1790,7 @@ def test_the_tanh_table_is_the_library_table(server):
     """The Lean evaluator's MUFU.TANH table, as the library stores it (`tanh_mufu`, 2^27 words), has the library's SHA-512:
     all 92 million words of MUFU.TANH's eleven binades, against the measured shard's, which no cheaper test reaches (about
     2 min)."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     assert _library_sha512(server, "tanh_mufu") == library.table("tanh_mufu").sha512
     assert server.call("library_table", {"name": "tanh_rn"})[0] == "reject"
