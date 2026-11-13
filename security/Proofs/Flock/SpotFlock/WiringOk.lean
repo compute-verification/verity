@@ -61,7 +61,8 @@ theorem wiresAlike_spec (hc : wiresAlike h = true) {t : ℕ} (ht : t < h.ms.leng
         _root_.Flock.PortRoots.schemaOf (memberCircuit h tw) (portNamed h tw w.wport) := by
   have hw' : (h.wires.getD #[]).find? (fun w => w.template == h.names.getD t "" && w.port == port) = some w := hw
   have hm : w ∈ h.wires.getD #[] := Array.mem_of_find?_eq_some hw'
-  have hf : (w.template == h.names.getD t "" && w.port == port) = true := Array.find?_some hw'
+  have hf0 := Array.find?_some hw'
+  have hf : (w.template == h.names.getD t "" && w.port == port) = true := hf0
   obtain ⟨hwt, hwp⟩ := Bool.and_eq_true_iff.1 hf
   have hp : w.port = port := eq_of_beq hwp
   have h1 : ((List.range h.ms.length).all fun t => !(w.template == h.names.getD t "") || wireAlike h w t) = true :=
@@ -256,10 +257,7 @@ theorem wireTarget_at {x y t : ℕ} {r : Spot.Bits.RowPos}
     rw [hv] at hxy3
     have hxy4 : (((writtenBits h.ms).find? fun z =>
         z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u r.bit).map (·.1)).filter
-          (fun g => !returned h g) = some y := by
-      first
-        | exact hxy3
-        | simpa using hxy3
+          (fun g => !returned h g) = some y := hxy3
     obtain ⟨hxy5, hret⟩ := Option.filter_eq_some_iff.1 hxy4
     have hret' : returned h y = false := by
       cases hr : returned h y with
