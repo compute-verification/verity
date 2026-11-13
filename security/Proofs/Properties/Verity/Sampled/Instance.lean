@@ -17,8 +17,11 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
 * **The base** (`Instance`): a vocabulary whose signer is the deployed device's (`Device.Deployment.signer`) and whose
   shared names are v2's (its reading of the committed files is `readOf`, its digests `programDigestOf` and
   `publicDigestOf`), whose declared calls cover the deployed device's reading of what the prover sent at its history
-  (`CostsRead` at `Device.dev`, what the read finder and the forger spend beside the strategy), and the deployment's
-  session at each parameters (`Instance.session`), the bound's parameters fixed by `θ`.
+  (`CostsRead` at `Device.dev`, what the read finder and the forger spend beside the strategy), whose pins are the
+  registered ones, SPOT's live challenger the deployment's pin, first, at the sessions the deployment designates, and
+  whose `Q` covers the pinned key's lifetime signatures (`registeredPins`, `pins_eq`, `spot_first`, `sessions_eq`,
+  `signatures`), and the deployment's session at each parameters (`Instance.session`), the bound's parameters fixed
+  by `θ`.
 * **The sessions** (`Instance.sessions`): the deployment's session wherever v2 sets it up on the committed files
   (`SetsUp`).
 * **The sampled names** (`Instance.stage`, at constructions `K` over the base, whose game and declared calls are the
@@ -31,7 +34,7 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
   their targets are the base's (`pouwSound_of_base`, `inferenceOnlySound_of_base`).
 * **The extractor** (`Instance.vocab`): the session's at the projected strategy.
 * **The coupling** (`couplingTarget_at`, at the constructions `constructionsAt` assembles at the deployed device's
-  history): `couplingTargetAt_counts` at the stage, whose signer premise is the base's (`Instance.signer`), whose
+  history): `couplingTargetAt_counts` at the stage, whose pins designate the deployment's sessions (`designated`), whose
   session is one v2 sets up (`sessions_some`), whose digests are v2's (`digestsAt_of`) and whose session reads
   `MAX_COINS` frames' bytes, each coin family the base names sampling `MAX_COINS` coins (`Instance.coins`,
   `lb_of_sessions`).
@@ -155,8 +158,8 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
 digests are v2's (`read`, `programDigest`, `publicDigest`), whose place for each gate is the committed files' (`place`,
 `placeOfRead`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`);
-the pins registered for the period (`registeredPins`), which are the base's (`pins_eq`), SPOT's live challenger the
-deployment's pin, first (`spot_first`), at the sessions the deployment designates (`sessions_eq`), whose `Q` covers the
+the pins registered for the period (`registeredPins`), wired (`wired`), which are the base's (`pins_eq`), SPOT's live
+challenger the deployment's pin, first (`spot_first`), at the sessions the deployment designates (`sessions_eq`), whose `Q` covers the
 pinned key's lifetime signatures (`signatures`); and
 the session the deployment runs at each parameters (`session`), whose bound's parameters `θ` fixes; each coin family
 the base names samples the deployed device's `MAX_COINS` coins (`coins`, its one-stage rounds). A deployed instance fills
@@ -168,6 +171,7 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
   registeredPins : AuditorPins
+  wired : registeredPins.Wired
   pins_eq : base.pins = registeredPins
   spot_first : registeredPins.keys.head? = some deployment.pin
   sessions_eq : registeredPins.sessions .challenger = deployment.sessions
@@ -189,9 +193,7 @@ noncomputable abbrev dev : Exchange → Properties.Challenger.History := I.deplo
 
 /-- SPOT's pinned key is the deployment's. -/
 theorem spotKey_eq : I.base.pins.spotKey = I.deployment.pin.key := by
-  unfold AuditorPins.spotKey
-  rw [I.pins_eq, I.spot_first]
-  rfl
+  simp [AuditorPins.spotKey, I.pins_eq, I.spot_first]
 
 /-- The base's pins designate the deployment's sessions for the challenger. -/
 theorem designated : I.base.pins.sessions .challenger = I.deployment.sessions := by
@@ -847,6 +849,11 @@ noncomputable def inst (δ : ℝ≥0∞) (session : ByteArray → Option Live) :
   deployment := deployment
   signer _ := rfl
   registeredPins := Verity.Idle.pins
+  wired p hp := by
+    simp only [Verity.Idle.pins, List.mem_singleton] at hp
+    subst hp
+    show Role.challenger ≠ Role.memoryChallenger
+    exact nofun
   pins_eq := rfl
   spot_first := rfl
   sessions_eq := rfl

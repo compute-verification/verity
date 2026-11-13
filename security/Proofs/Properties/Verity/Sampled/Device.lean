@@ -1187,7 +1187,9 @@ theorem signedBy_le (fs : ByteArray → Families) (o : Exchange) :
   have hl : ((current (P.setupOf fs) o).ledger P.pub).length ≤ P.ledgerLines o.params := by
     simp only [current]
     split
-    · exact (List.length_append ..).trans_le (P.ledger_le _ _ _ _ _)
+    · show (P.opens o.params o.request ++ P.closes o.params o.request o.log o.close o.drawn).length ≤ _
+      rw [List.length_append]
+      exact P.ledger_le _ _ _ _ _
     · exact Nat.zero_le _
   show (Properties.Challenger.signedBy ⟨fun pk => P.earlier.runs pk ++ (current (P.setupOf fs) o).runs pk,
     fun pk => P.earlier.ledger pk ++ (current (P.setupOf fs) o).ledger pk⟩ P.pub).length ≤ _
@@ -1204,9 +1206,7 @@ theorem printsLog (fs : ByteArray → Families) (o : Exchange) :
   intro pk w id hw ⟨line, hl, rest⟩
   simp only [current] at hl
   split at hl
-  · rename_i hpk
-    subst hpk
-    exact P.opens_run _ _ _ _ _ w id hw ⟨line, hl, rest⟩
+  · exact P.opens_run o.params o.request o.log o.close o.drawn w id hw ⟨line, hl, rest⟩
   · cases hl
 
 /-- **`Binds` at v2's read, at the deployed device's history** (`Binding.binds_of_prints`), at a vocabulary whose

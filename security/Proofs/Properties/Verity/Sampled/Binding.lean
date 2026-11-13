@@ -23,7 +23,8 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   a tree opening only its coins' SHA-512. `Logged reads` is `Vocab.Logged` at reads that show every release's coins
   (`vocab_logged_iff`), so it binds as much wherever the evidence shows the coins, and it can hold on an honest play
   where the evidence doesn't. v2's read (`readsV2`) is `Verity.Sampled.coinsRead`'s, each release's coins where v2
-  read any, and `Vocab.Logged` at it gives `Logged readsV2` (`logged_v2_of_vocab`); the reduction takes any `reads`.
+  read any, and `Vocab.Logged` at it, where the play has no party beside SPOT's challenger (`logged_sampled_iff`),
+  gives `Logged readsV2` (`logged_v2_of_vocab`); the reduction takes any `reads`.
 * **v2's records in what the prover sent** (`records`): the components' parameters and cases the composition decodes
   that decode as sampled proofs' one-stage form, v2's, under parameters naming a challenger and a window, each with what
   its coins are read under (`Properties.Challenger.oneStageZkSource`) and the record its evidence carries. The
@@ -32,21 +33,22 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
   of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
   records to the coin trees it read from it (`Verity.Sampled.Trees.accepted_trees`).
-* **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLog` reads
-  from the lines of a run of the device that the device's ledger opens withheld on the sample's window, whose release
+* **An accepted read is a run's log** (`accepted_run`): the verifier refuses a challenger key or a window the pins
+  don't hold (`SpotPinned`), so where v2's check reads a log, it is what `readLog` reads from the lines of a run of the
+  device that the device's ledger opens withheld on the sample's window, a session the pins designate, whose release
   log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.drawn_log`), or
-  one of the records under `keyOf`'s key carries a break. The records the evidence names each pass the coin trees
+  one of the records under `keyOf`'s key, the pinned one, carries a break. The records the evidence names each pass the coin trees
   `coinTreesOf` reads from that run's log (`trees_of`, `records_of`).
 * **The constructions** at a strategy, on a uniform tape of its play (`Verity.Game.Tape`), at the device's history at
   each play (`dev`). The read finder (`readFinder`) outputs the first collision `findBreak` finds in a record, else a
   pinned lookup table v2 reads on the blobs sent at other bytes than its registered file (`tableCollision`), else the
   first tree opening whose coins v2 read only as a digest and the play released otherwise
-  (`Lines.openCollision`), and the forger (`forger`) the first forgery `findBreak` finds in a record under the
-  parameters' key. Each outputs only two different strings with one digest (`findBreak_valid`, `tableCollision_valid`,
-  `Lines.open_collision`),
-  or a signature that verifies over a message the device didn't sign (`Properties.Challenger.Signed`). The play releases
-  the device's signatures at its close, so the forger had the device sign, on each tape, the messages the play's
-  signatures are on (`forger`'s `signed`), at most `Q` of them (`forger_signed_le`, from `Vocab.signs_le`). Each runs
+  (`Lines.openCollision`), and the forger (`forger`), against SPOT's pinned key, the first forgery `findBreak` finds in
+  a record under the parameters' key. Each outputs only two different strings with one digest (`findBreak_valid`,
+  `tableCollision_valid`, `Lines.open_collision`), or a signature that verifies over a message the device didn't sign
+  (`Properties.Challenger.Signed`). The forger had the device sign, on each tape, every message its history at the play
+  signed under the pinned key, its earlier runs' and ledger lines' included (`forger`'s `signed`), at most `Q` of them
+  over the key's life (`forger_signed_le`). Each runs
   the play once and `findBreak` once per record: its SHA-512 calls are the strategy's, one per string `findBreak`
   hashes and `lmsCalls` per signature it verifies
   (`breakCalls`), and the read finder's one more per blob the prover sent, as v2's read indexes them
@@ -57,14 +59,14 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   is at `lmsVerify`'s parameters and `findBreak` spends at most `recordCalls` per record beside the strings the device
   hashes.
 * **The reduction** (`logged_le`). Suppose every accepted run that isn't `Logged` carries a break under the
-  parameters' key in one of its records, or a tree opening whose read coins collide with the released ones (`Binds`),
-  and the device's history at each play signed under that key every message the play's signatures are on
-  (`SignsPlay`), so a message it didn't sign is none the forger had signed. Then an accepted play that isn't `Logged` is
+  parameters' key, the pinned one, in one of its records, or a tree opening whose read coins collide with the released
+  ones (`Binds`). A message the device's history didn't sign under the key is none the forger had signed, so a break's
+  forgery is the forger's. Then an accepted play that isn't `Logged` is
   at most as likely as the read finder's collision plus the forger's forgery. So is an accepted play that isn't
   `Logged` or whose blobs sent hold a pinned table at other bytes than its registered file (`logged_tables_le`,
   `TablesSent`): the two files have the table's pinned digest (`finder_of_tables`).
 * **Where the device printed its log** (`binds_of_prints`): if at every play under the parameters the device's runs
-  print the play's log as `readLog` reads it, with the play's fresh coins as the runs' released coins wherever a
+  its ledger opens on a designated session print the play's log as `readLog` reads it, with the play's fresh coins as the runs' released coins wherever a
   run's release log reads as its coin commitment's (`Lines.PrintsLog`), `Binds` holds: an accepted read is the log's
   (`Lines.read_run`), so where it isn't `Logged` an opening's read coins differ from the released ones under one
   digest (`Lines.open_collision`).
@@ -549,9 +551,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
             have hspot : d.key.pub.data.toList = pins.spotKey := by
               rw [hdk]
               refine hqk.trans ?_
-              unfold AuditorPins.spotKey
-              rw [Option.mem_def.1 hq]
-              rfl
+              simp [AuditorPins.spotKey, Option.mem_def.1 hq]
             rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
             · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
               refine .inr ⟨d, e, recs, r, hr, ho, hpw d.window (Option.mem_def.2 hdw), hcr, hrecs, ?_, ts,
