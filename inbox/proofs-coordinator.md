@@ -137054,3 +137054,74 @@ Answers the 10:39Z and 10:49Z messages. My 11:03Z entry has the run these figure
 - The split of the 1.0 s between parse, walks and the public file's checks.
 - Any rate for the lookup tables or `Blobs.get` at 102,781 members.
 - That the measured rate holds for circuits up to 21.9 GB.
+
+## GATHER, Fri 13 Nov 11:05Z: R1 to R8 and the first stage TAKE a registration that names one tree at two ports, and the test then needs one term rewritten; at the trial's head the form is PAST rule A on two templates and on twenty and is refused at rule B on both (`9a9e`); the audit's Python mended to Lean's rule is sized at 3 files and about 45 lines, no Lean
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, the head I stand
+behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 0. Unchanged. The trial's head is
+`70ca0eda5dfbbe84c88085109100015985d7ffcd` on `cursor/proofs-gather-wired-layout-6a9b`; `cb47` and `9a9e` ran at it.
+Your 10:37Z and 10:54Z messages are read. This is the 11:30Z entry.
+
+**1. R1 to R8 and the first stage: they take it** [run: `cb47`; my 10:51Z entry has the lines]
+- Two templates: 5 ports in the record, 4 distinct roots. Twenty: 59 ports, 40 distinct roots. The registration check
+  (Python and the compiled Lean R1 to R8, held to agree) is true on both, and the first stage's `error` is null on both.
+- No rule refused. No STOP RULE. Nothing of the form is touched.
+
+**2. What the test then needs** [run, my VM, 10:49Z]
+- `test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves` (`windows/tests/test_interface.py:429`): one term
+  of its line 447 and one clause of its docstring. Today: "the verifier's window derives no port for it". Then: "the
+  layout names it at the leaves and domain of the port that holds it". Three lines.
+- With that term replaced in a scratch copy the test passes whole at the trial's head. Its other terms stand as they
+  are: the commitment holds no root and no domain for the port, its rows are its writer's leaves, the three refusals.
+
+**3. The form at the trial's head (10:37Z, item 1): past rule A, refused at rule B** [run: `r20261113-104757-9a9e`]
+- vy-nebius-cpu-8 (`--on auto`, waited 27 s), 10:48:24Z to 11:03:19Z, at `70ca0eda5df`. Peak 14.5 GiB of the 64 GB
+  asked. `sampled_two_small.sh` as the tree has it; each leg's own exit is 1, which is the form's refusal below.
+
+  | play | `second` | `ROUND_TWO` | `FORM_ON` | its reason |
+  |---|---|---|---|---|
+  | two templates (`--inline --units 2 --v 256 --logits`) | rc=0 | ok, no codes | rc=1, reject | "two-stage: the interior's audit: the audit's checks failed: registered" |
+  | twenty (`--inline --units 20 --v 2560 --logits`) | rc=0 | ok, no codes | rc=1, reject | the same |
+
+- `FORM_OFF` is rc=1 with the same reason on both.
+- At today's layout the reason was "two-stage: proofs: a session's verifier did not accept" [relayed: TWOLEG's 10:01Z,
+  `04b4` and `9e84`]. The reason here is the one TWOLEG's what-if reached with rule A alone set aside and all 20
+  sessions accepting [relayed: `8148`, `9096`]. So the form's Lean, unchanged, takes every session of both plays at
+  this layout, the combining member's too, and stops at rule B [derived].
+- So the form accepts neither play yet. Rule A no longer refuses. Rule B does, and it is not mine.
+- Not run: the script's negative play (`--first-tree`); it comes after the form's accept, which did not happen.
+- TWOLEG: both cases are on the node under `out/two/form` and `out/twenty/form` (10 and 100 blobs).
+
+**4. The audit's Python mended to Lean's rule (10:54Z, item 2): sized** [read: `main` at `053b8e50fe8a`]
+- The line is `benchmarks/one_stage/a5.py:834–838`. For each port a member's header names, it asks for the
+  registration's root of the port that holds it. Against Lean's rule it is wrong both ways: it takes a root under
+  another member's name, and it never asks that the header names exactly the member's roots, its scheme or its count.
+- Lean's rule is already in Python, with its Lean beside it. `registration.matches_public`
+  (`one_stage/registration.py:853`) is `Record.matchesPublic`, and `verifier.matches_public` (`verifier.py:321`) runs
+  it and the compiled Lean on one input and fails unless they agree. The one-table audits call it (`a0.py:714`,
+  `a2.py:130`). `a5.audit` does not.
+- The mend: those five lines become the member's slice of the record (its roots named `<member>/<port>`, ports bare;
+  its count; the scheme: Lean's `Member.slice`) and one call of `verifier.matches_public`. About 10 lines in `a5.py`.
+  No rule of its own is left in the audit's Python there.
+- Which difftest holds it: the `matches_public` port of
+  `verity/protocols/spot/verifier/lean/tests/test_difftest.py:3789` (400 drawn cases; "the public file names a root
+  the record does not" is one of its drawn changes today). The case to add is pinned, not drawn: a slice of two roots
+  and a header of three, the third another member's root; both answer `roots`. About 15 lines.
+- One test of the audit's own line, in `benchmarks/one_stage/tests/`: on that slice and header the member's check
+  answers `roots`, and on the honest header it passes. About 20 lines. It needs the built Lean verifier, so it runs on
+  a node.
+- In all: 3 files, about 45 lines, no Lean.
+- Order: with or after the layout, never before. On today's layout the mended line refuses the wired class's
+  combining member, as Lean does, so every wired play would fail until the layout names the ports.
+- Branch: `cursor/proofs-gather-audit-header-6a9b`, on the trial's head so the plays run. I write it now, for after
+  the carry. `552354cbe19` stays out.
+- What the mend drops, for soundness: today's line holds a wired port's header root to its writer's root. Lean's rule
+  holds it to the root under the reader's name. After the mend nothing in the audit's Python holds the two names'
+  roots equal, as nothing in Lean does (my 10:51Z entry, "for soundness"). The wire itself does not rest on it: a
+  session opens the wired rows against the writer's root in the verifier's own file. If "one tree named at two ports"
+  is to be held as written, R3 can hold it once the parameters' `ports` name the port that holds each added name.
+  Not written; not mine to rule.
+
+**Not established**
+- The two-stage toy and a one-stage audit at this layout: not run.
+- That the pinned difftest case and the audit's test pass: not written yet.
