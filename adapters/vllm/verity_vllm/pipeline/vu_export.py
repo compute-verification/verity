@@ -42,20 +42,20 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+from collections.abc import Callable, Iterator
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 
 import numpy as np
-
 from verity.commitments.randomness import Key, derive
+from verity.definitions.numerics import derived_rows as D
+from verity.definitions.numerics import rows as RK
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import challenge as CH
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics import rows as RK
 from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"
@@ -82,7 +82,7 @@ class Limits:
     workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
     @classmethod
-    def from_dir(cls, out_dir: str | Path) -> "Limits":
+    def from_dir(cls, out_dir: str | Path) -> Limits:
         f = Path(out_dir) / "limits.json"
         return cls(**json.loads(f.read_text())) if f.is_file() else cls()
 

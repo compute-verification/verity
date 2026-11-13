@@ -11,7 +11,13 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from verity_vllm import config
+from verity_vllm import protocols as PO
 from verity_vllm.config import EnginePin
+from verity_vllm.engine import served
+from verity_vllm.engine import spec as engine_spec
+from verity_vllm.engine.class_admission import Admission
+from verity_vllm.engine.profiles import engine_classes as EC
+from verity_vllm.errors import Refused
 
 
 @dataclass(frozen=True)
@@ -87,8 +93,6 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
     if out["tensor_parallel_size"] < 1 or out["max_num_seqs"] < 1:
         raise ValueError("verity_vllm.LLM: tensor_parallel_size and max_num_seqs must be at least 1")
     if out["execution"] is not None:
-        from verity_vllm.engine import served
-
         eager = served.execution(out["execution"])[0]["enforce_eager"]
         if options.get("enforce_eager", eager) != eager:
             raise ValueError(f"verity_vllm.LLM: execution {out['execution']!r} builds with enforce_eager={eager}, not "
@@ -105,9 +109,6 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     if name is None:
         return dict(options)
     resolve_options(options)
-    from verity_vllm.engine.profiles import engine_classes as EC
-    from verity_vllm.errors import Refused
-
     execution = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
     fixed, most = EC.options(name, execution), EC.max_num_seqs(name)
     bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
@@ -133,7 +134,6 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
         if opts["protocols_config"]:
             raise ValueError("verity_vllm.LLM: protocols_config without protocols")
         return None
-    from verity_vllm import protocols as PO
     ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
                      settings=PO.load_settings(opts["protocols_config"]))
     ctx = dataclasses.replace(ctx, filled=PO.engine_fills(ctx))
@@ -248,7 +248,6 @@ class LLM:
         self.engine_overrides = {k: options[k] for k in KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
-            from verity_vllm.engine.profiles import engine_classes as EC
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
         ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
@@ -256,19 +255,16 @@ class LLM:
         engine_args = {k: opts[k] for k in ENGINE_ARGS if k in options}
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
-        env = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
+        env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args,
                                        execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]), **env)
         self.records: list[GenerateRecord] = []
         self.spec_digest: str | None = None
-        self.protocols = None
+        self.protocols: PO.Composition | None = None
         self._explicit, self._installs = dict(options), 0
         self.admission = None
         if opts["engine_class"] is not None:
-            from verity_vllm.engine.class_admission import Admission
-            from verity_vllm.engine.profiles import engine_classes as EC
-            from verity_vllm.errors import Refused
             bad = EC.effective_refusals(opts["engine_class"], self._engine.effective or {}, dict(self._engine.env_flags or {}),
                                         opts["max_model_len"])
             if bad:
@@ -278,7 +274,6 @@ class LLM:
             self._install(ctx)
 
     def _install(self, ctx: Any) -> None:
-        from verity_vllm import protocols as PO
         filled = PO.from_engine(ctx, self._engine.llm, epoch=self._installs)
         self._installs += 1
         self.protocols = PO.install(self._engine.model, filled)
@@ -302,8 +297,6 @@ class LLM:
         """The engine an engine spec describes (`pipeline.engine_spec`: a path to its TOML, or a loaded `EngineSpec`),
         with the spec's digest in ``engine_record["spec_digest"]``.  A spec that isn't strictly of the declared shape raises
         ``verity_config.ConfigError`` before the engine is built."""
-        from verity_vllm.engine import spec as engine_spec
-
         if not isinstance(spec, engine_spec.EngineSpec):
             spec = engine_spec.load(spec)
         llm = cls(spec.model, revision=spec.revision, **spec.options())

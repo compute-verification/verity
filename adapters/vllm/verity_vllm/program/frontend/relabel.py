@@ -21,12 +21,16 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-
 from verity.circuits.defs import Body, Builder
 from verity.circuits.refs import Affine, Coll, runs
 from verity.circuits.types import Value
-from verity_vllm.program.frontend.derive import _finish_report, _flat_definition, fx_arg_nodes
-from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
+
+from verity_vllm.program.frontend.derive import (
+    _finish_report,
+    _flat_definition,
+    fx_arg_nodes,
+)
+from verity_vllm.program.frontend.report import DerivationTail, DeriveReport
 
 COLLECTIVES = ("all_reduce2", "all_gather2", "all_reduce", "all_gather")
 EMBEDDING = "embedding_shard"

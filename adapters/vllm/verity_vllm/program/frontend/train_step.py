@@ -33,20 +33,21 @@ import keyword
 import os
 import re
 import sys
+import types
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
+from typing import cast
 
 import torch
 from torch.func import functional_call, grad_and_value
 from torch.overrides import TorchFunctionMode
-
 from verity.circuits import parts
 from verity.circuits.boundary import gate_width, in_gates
-from verity.definitions.circuits.census import census
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import Program, is_input
 from verity.circuits.query_ast import GateSet
-from verity_vllm.engine import hooks
+from verity.definitions.circuits.census import census
+
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -74,7 +75,7 @@ class AdamW:
     SCALARS = ("decay", "neg_step_size", "bc2_sqrt")
 
     @classmethod
-    def from_torch(cls, opt: torch.optim.Optimizer) -> "AdamW":
+    def from_torch(cls, opt: torch.optim.Optimizer) -> AdamW:
         """The hyperparameters of a `torch.optim.AdamW` with one parameter group and the defaults this function computes."""
         if not isinstance(opt, torch.optim.AdamW) or len(opt.param_groups) != 1:
             raise ValueError("a torch.optim.AdamW with one parameter group")
@@ -150,19 +151,36 @@ class _TF32Seen(TorchFunctionMode):
 
 
 @contextlib.contextmanager
+def _patched(owner, name: str, value):
+    """``owner.name = value`` for the block. Afterwards ``owner`` holds under ``name`` what it held itself before: that attribute
+    again, or none where it inherited the name, which it then inherits again."""
+    absent = object()
+    prior = vars(owner).get(name, absent)
+    setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        if prior is absent:
+            delattr(owner, name)
+        else:
+            setattr(owner, name, prior)
+
+
+@contextlib.contextmanager
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
     meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
-    base = torch._C.TensorBase.is_cuda
+    # read from the class this is the descriptor, where torch's stubs give the bool an instance answers with
+    base = cast(types.GetSetDescriptorType, torch._C.TensorBase.is_cuda)
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    with hooks.patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
+    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
         yield mode.seen
 
 
-def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *,
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
     as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
@@ -170,8 +188,7 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
-    if isinstance(optimizer, torch.optim.Optimizer):
-        optimizer = AdamW.from_torch(optimizer)
+    adamw = AdamW.from_torch(optimizer) if isinstance(optimizer, torch.optim.Optimizer) else optimizer
     wrap = _Loss(model, loss_fn)
     pnames = [n for n, _ in wrap.named_parameters()]
     bnames = [n for n, _ in wrap.named_buffers()]
@@ -187,7 +204,7 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
         grads, loss = grad_and_value(lambda p: functional_call(wrap, (p, bufs), (batch,)))(params)
         new_p, new_m, new_v = [], [], []
         for i, n in enumerate(pnames):
-            p2, m2, v2 = optimizer.update(params[n], grads[n], ms[i], vs[i], decay, neg_step_size, bc2_sqrt)
+            p2, m2, v2 = adamw.update(params[n], grads[n], ms[i], vs[i], decay, neg_step_size, bc2_sqrt)
             new_p.append(p2)
             new_m.append(m2)
             new_v.append(v2)
@@ -206,7 +223,8 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    with sdpa_kernel(SDPBackend.MATH), (_gpu_branches() if gpu else contextlib.nullcontext(set())) as tf32:
+    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches() if gpu else contextlib.nullcontext(set())
+    with sdpa_kernel(SDPBackend.MATH), branches as tf32:
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
     if len(tf32) > 1:
         raise ValueError("export_step: the step changes cuda.matmul.allow_tf32 between its calls, and the rules take one setting "
@@ -228,14 +246,17 @@ class StepSurvey:
     refused: Unsupported | None = None   # a refusal no hole stands in for (outside the rules): no census
 
 
-def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
+def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
+                mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
                 exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...)`, with
     the step's TF32 setting at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
     `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
-    from verity_vllm.program.frontend.rules.training_survey import survey as survey_graph
+    from verity_vllm.program.frontend.rules.training_survey import (
+        survey as survey_graph,
+    )
 
     if rules is not None and cc is not None:
         raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
@@ -288,7 +309,9 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`). `cc` (the compute capability
     `cublas_bf16.TRAIN_CC`): the step as that GPU runs it (`export_step(..., gpu=True)`), its bf16 matrix products as its cuBLAS
     computes them instead, at the shapes its capture covers, and its f32 ones refused under cuda.matmul.allow_tf32 (TF32 GEMMs)."""
-    return step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc).result
+    report = step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc)
+    assert isinstance(report, DeriveReport)  # a refusal is a DeriveReport too; a StepSurvey comes only with survey=True
+    return report.result
 
 
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:

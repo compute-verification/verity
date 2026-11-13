@@ -80,4 +80,4 @@ def test_the_build_predictor_rank_shape_replicates_kv_heads(W, kv):
     C = PB.ModelShape(arch="moe", model_class="Qwen3MoeForCausalLM", H=4096, V=151936, NL=94, NH=64, KVH=4, D=128, I=1536, EPS=1e-6,
                       tie=False, max_pos=40960, rot=128, E=128, TOPK=8)
     r = PB.rank_shape(C, W)
-    assert (r.NH, r.KVH, r.I) == (64 // W, kv, 1536 // W)
+    assert (64 // W, kv, 1536 // W) == (r.NH, r.KVH, r.I)
