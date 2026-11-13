@@ -49,7 +49,7 @@ def _edit(d, name: str, old: str, new: str) -> None:
 def test_a_missing_fetched_table_names_the_fetch(tmp_path):
     d = _copy(tmp_path)
     (d / "corpus.json").unlink()
-    with pytest.raises(FileNotFoundError, match="uv run research data fetch-fixtures benchmarks/pouw/machine_model"):
+    with pytest.raises(FileNotFoundError, match="uv run research data fetch-fixtures benchmarks/machine_model"):
         C.load(d)
 
 

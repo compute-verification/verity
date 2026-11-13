@@ -242,7 +242,7 @@
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
         "verity/protocols/pouw/clear/",
-        "benchmarks/pouw/machine_model/",
+        "benchmarks/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",

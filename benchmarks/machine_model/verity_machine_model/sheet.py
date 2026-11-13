@@ -25,7 +25,7 @@ from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
 ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
 

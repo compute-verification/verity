@@ -58,7 +58,7 @@ The card does no more than 𝓜 at its numbers: for some semantics meeting (P1) 
 `T` seconds, some program of 𝓜 computes on a schedule fixed before the content, within `T` (`Machine.Fits`). It rests on
 one claim: every instruction the card executes is dominated by an ACCEL op (or a branch) that reads and writes at least
 its words, at no more units of each resource. The per-instruction evidence is the opcode table,
-`benchmarks/pouw/machine_model/data/cover/rows.toml`. At a table, the premise also says the cards are that table's SKU
+`benchmarks/machine_model/data/cover/rows.toml`. At a table, the premise also says the cards are that table's SKU
 and firmware.
 
 ## Proved
