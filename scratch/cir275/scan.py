@@ -1,7 +1,8 @@
 """Scan `adapters/vllm/verity_vllm/program/` at one commit: each file's lines, its imports, and whether it loads torch or vllm.
 
-Reads every file with `git show COMMIT:PATH` and parses it with `ast`; it imports nothing of the repository. Writes
-`imports.json` beside itself (the raw scan), which `table.py` joins with the sides into `files.json` and `files.md`.
+Reads every file with `git show COMMIT:PATH` and parses it with `ast`; it imports nothing of the repository. `table.py`
+calls `scan()` and joins it with the sides (`sides.py`) into `files.json`, `files.md` and `size.md`; run alone, this
+writes the raw scan to a path given as the second argument.
 
 An import statement's context is one of:
   module         at module level (a class body counts), unconditional or under an `if` other than TYPE_CHECKING
@@ -14,7 +15,7 @@ to its package. A chain "at import" uses only module, optional and parent edges 
 torch or vllm; a chain "at call" may also use function edges and end at a function-level import. TYPE_CHECKING edges never
 count as loading, and are reported apart.
 
-Usage: python3 scratch/cir275/scan.py [COMMIT]   (default: origin/main)
+Usage: python3 scratch/cir275/scan.py [COMMIT [OUT.json]]   (default: origin/main)
 """
 from __future__ import annotations
 
@@ -160,18 +161,24 @@ def resolve(node, mod: str, is_pkg: bool, known: dict[str, str]):
     return out
 
 
-def scan(commit: str) -> dict:
-    sha = git("rev-parse", commit).strip()
+def modules(sha: str) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """(module -> path, path -> module, the scope's .py files). A circuit-check sidecar (`NAME.circuit-check.py`) is loaded by
+    path, not imported: it gets a sibling pseudo-module name."""
     known = module_index(sha)
     path_to_mod = {p: m for m, p in known.items()}
     scope_files = sorted(f for f in git("ls-tree", "-r", "--name-only", sha, SCOPE).splitlines() if f.endswith(".py"))
-    # a circuit-check sidecar (`NAME.circuit-check.py`) is loaded by path, not imported: a sibling pseudo-module
     for f in scope_files:
         if f not in path_to_mod:
             pkg = path_to_mod[f.rpartition("/")[0] + "/__init__.py"]
             mod = f"{pkg}.{Path(f).name[:-3].replace('.', '__').replace('-', '_')}"
             known[mod] = f
             path_to_mod[f] = mod
+    return known, path_to_mod, scope_files
+
+
+def scan(commit: str) -> dict:
+    sha = git("rev-parse", commit).strip()
+    known, path_to_mod, scope_files = modules(sha)
 
     # every repository module's edges (parsed lazily, as reached), and its direct heavy imports
     parsed: dict[str, dict] = {}
@@ -264,6 +271,7 @@ def scan(commit: str) -> dict:
             "chain_at_import": chain(mod, at_import_e, at_import_h),
             "chain_at_import_own": chain(mod, at_import_e, at_import_h, skip_own_parents=True),
             "chain_at_call": chain(mod, at_call_e, at_call_h),
+            "chain_at_call_own": chain(mod, at_call_e, at_call_h, skip_own_parents=True),
             "chain_type_checking": chain(mod, any_e, any_h),
         }
         d_ctx = {h["ctx"] for h in direct}
@@ -287,7 +295,7 @@ def scan(commit: str) -> dict:
         row["loads_own"] = ("direct-at-import" if own_direct_import else
                             "chain-at-import" if row["chain_at_import_own"] else
                             "direct-at-call" if d_ctx & {"function"} else
-                            "chain-at-call" if row["chain_at_call"] else
+                            "chain-at-call" if row["chain_at_call_own"] else
                             "type-checking-only" if (d_ctx or row["chain_type_checking"]) else "no")
         rows.append(row)
     return {"schema": "cir275/imports/v1", "commit": sha, "scope": SCOPE, "files": rows}
@@ -296,7 +304,8 @@ def scan(commit: str) -> dict:
 def main() -> None:
     commit = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
     out = scan(commit)
-    (HERE / "imports.json").write_text(json.dumps(out, indent=1) + "\n")
+    if len(sys.argv) > 2:
+        Path(sys.argv[2]).write_text(json.dumps(out, indent=1) + "\n")
     rows = out["files"]
     print(out["commit"], len(rows), "files", sum(r["lines"] for r in rows), "lines")
 
