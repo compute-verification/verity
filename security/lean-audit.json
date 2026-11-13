@@ -385,6 +385,11 @@
    "digest": "010176ca7357f449b882b5e04a73a378932601c3e554eee932bd0096237589b3",
    "why": "`SampledKSTwo` is stated over a code, its registration and its design: `RegMatchesTwo` says the registration's samples are the design's, a fact of the code. SPOT[Flock]'s code has it (`regMatchesTwo_wired`). (met by `SampledKSTwo_honest`)"
   },
+  "SpotFlock.Built": {
+   "owner": "@proofs",
+   "digest": "b127ee90592d546378395533b5ffa6452b8b69a90df932b25cdb015cbd28dd9b",
+   "why": "The two-stage guarantees are stated at SPOT[Flock]'s own frame: `Built` says the held code's frame is the one `frameAt` builds from its slots and its reveal code, as the verifier's run sets it. (met by `built_spot`)"
+  },
   "SpotFlock.BuiltWired": {
    "owner": "@proofs",
    "digest": "efe3282e5ca8a279d33994de93b05a28cab7f72104bc6fe55f31190b9494e21d",
@@ -3193,6 +3198,12 @@
   "SamplingDeploy.SessionsIn": {
    "owner": "@proofs",
    "digest": "99857991deb3c674327c159100265d18964d94aaa1e2e9fb073990566e81bcc0",
+   "issue": "PRF-460",
+   "due": "2026-11-30"
+  },
+  "SpotFlock.Addresses": {
+   "owner": "@proofs",
+   "digest": "5a41733162d8750a1f6962991c0d2ef715cd3c4d19fd288b14ea68a2b48accd9",
    "issue": "PRF-460",
    "due": "2026-11-30"
   },
