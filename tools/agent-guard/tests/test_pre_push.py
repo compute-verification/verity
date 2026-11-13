@@ -460,17 +460,74 @@ def test_a_push_by_url_is_held_to_its_lines_alone_and_the_refusal_never_prints_t
     assert str(vm.origin) not in ours[0] and "--remotes=<remote>" in ours[0] and "push to the remote by its name" in ours[0]
 
 
-def test_no_identity_is_let_through_beside_the_checkouts_and_an_allowance_is_one_entry(vm):
-    assert "\nOTHERS: dict[str, str] = {}\n" in (GUARD / "pre_push.py").read_text()
-    sha = vm.commit("a tool's", **TRIAL)
-    code = ("import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1]); import pre_push; "
-            "pre_push.OTHERS.update({who: 'a tool that commits as itself' for who in sys.argv[4:]}); "
+#: the one identity let through beside the checkout's, as `research queue cross` gives it to git for a crossing's commits, and
+#: a name of a lane's own, as a head crossed by hand carries
+QUEUES = "research queue <queue@research.invalid>"
+QUEUE = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
+         "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
+BY_HAND = {"GIT_AUTHOR_NAME": "restack carry", "GIT_AUTHOR_EMAIL": "noreply@invalid",
+           "GIT_COMMITTER_NAME": "restack carry", "GIT_COMMITTER_EMAIL": "noreply@invalid"}
+
+
+def crossed(vm: VM, names: dict[str, str]) -> tuple[str, str, list[str]]:
+    """A head the agent pushed to its branch `mine`, crossed over a move the remote's `main` landed since, as `research queue
+    cross` crosses one: a merge of the move's parent, then the head mapped across the move with the move as a second parent,
+    each made by `commit-tree` with `names` in git's environment. The head as pushed, the crossed head, and the two commits
+    the crossing made."""
+    vm.git("push", "-q", "origin", "main")
+    vm.git("switch", "-q", "-c", "work")
+    old = vm.commit("the lane's own change")
+    assert vm.push("origin", "HEAD:refs/heads/mine").returncode == 0
+    vm.git("switch", "-q", "main")
+    base, move = vm.commit("the move's parent", **TRIAL), vm.commit("the move", **TRIAL)
+    vm.git("push", "-q", "origin", "main")
+    tree = vm.git("rev-parse", f"{old}^{{tree}}").strip()
+    merge = vm.git("commit-tree", tree, "-p", old, "-p", base, "-m", f"Merge {base}", **names).strip()
+    new = vm.git("commit-tree", tree, "-p", merge, "-p", move, "-m", f"Mapped across {move}", **names).strip()
+    assert set(vm.git("rev-list", new, "--not", old, "origin/main").split()) == {merge, new}
+    return old, new, [merge, new]
+
+
+def cross_push(vm: VM, old: str, new: str) -> subprocess.CompletedProcess:
+    """The push `research queue cross --push` makes with the caller's own git, a lease on the old head."""
+    return vm.push(f"--force-with-lease=refs/heads/mine:{old}", "origin", f"{new}:refs/heads/mine")
+
+
+def test_a_head_crossed_as_the_queue_crosses_one_passes_under_the_queues_identity(vm):
+    old, new, _ = crossed(vm, QUEUE)
+    assert vm.who(f"{new} --not {old} origin/main") == {f"{QUEUES} | {QUEUES}"}
+    p = cross_push(vm, old, new)
+    assert p.returncode == 0, p.stderr
+    assert vm.git("rev-parse", "refs/heads/mine", cwd=vm.origin).strip() == new
+
+
+def test_the_same_head_crossed_by_hand_under_a_name_of_a_lanes_own_is_refused_naming_its_commits(vm):
+    old, new, made = crossed(vm, BY_HAND)
+    p = cross_push(vm, old, new)
+    assert p.returncode != 0 and vm.git("rev-parse", "refs/heads/mine", cwd=vm.origin).strip() == old
+    assert "this push adds 2 commits that" in p.stderr
+    assert all(f"{sha[:12]} author and committer restack carry <noreply@invalid>" in p.stderr for sha in made)
+
+
+def test_the_one_identity_let_through_beside_the_checkouts_is_the_queues_and_an_allowance_is_one_entry(vm):
+    load = "import json, sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1]); import pre_push; "
+    listed = subprocess.run(["python3", "-c", load + "print(json.dumps(pre_push.OTHERS))", str(GUARD)], cwd=vm.ws,
+                            capture_output=True, text=True, check=True, env=vm.env).stdout
+    assert list(json.loads(listed)) == [QUEUES] and "research queue cross" in json.loads(listed)[QUEUES]
+    code = (load + "pre_push.OTHERS.update({who: 'a tool that commits as itself' for who in sys.argv[4:]}); "
             "sys.exit(pre_push.main(sys.argv[2:4]))")
 
-    def judged(*others: str) -> int:
+    def judged(sha: str, *others: str) -> int:
         return subprocess.run(["python3", "-c", code, str(GUARD), "origin", str(vm.origin), *others], cwd=vm.ws,
                               input=f"refs/heads/work {sha} refs/heads/work {ZERO}\n", capture_output=True, text=True,
                               env={**vm.env, "CURSOR_CONVERSATION_ID": ME}).returncode
 
-    assert judged() == 1 and judged("trial <other@invalid>") == 1
-    assert judged("trial <trial@invalid>") == 0
+    start = vm.git("rev-parse", "HEAD").strip()
+    for near in ({**QUEUE, "GIT_AUTHOR_EMAIL": "queue@invalid"}, {**QUEUE, "GIT_COMMITTER_NAME": "queue"}, BY_HAND):
+        assert judged(vm.commit("near the queue's, and not it", **near)) == 1, near
+        vm.git("reset", "-q", "--hard", start)
+    assert judged(vm.commit("the queue's", **QUEUE)) == 0
+    vm.git("reset", "-q", "--hard", start)
+    sha = vm.commit("a tool's", **TRIAL)
+    assert judged(sha) == 1 and judged(sha, "trial <other@invalid>") == 1
+    assert judged(sha, "trial <trial@invalid>") == 0

@@ -36,7 +36,8 @@ as new until `git fetch REMOTE` brings a ref that holds it. Author and committer
 an author with another identity (a cherry-pick, a rebase) is refused as one written under it is. A push that adds commits
 is refused as well where the checkout has no configured identity, or where git can't list them (it fails, or takes more
 than `GIT_S`): a push that can't be judged is the one this rule is for. `OTHERS` holds the identities let through beside
-the checkout's own, each with its reason: none.
+the checkout's own, each with its reason: one, the queue's own, under which `research queue cross` makes a crossing's
+commits before the caller's git pushes them. A head crossed by hand under any other name is refused.
 """
 from __future__ import annotations
 
@@ -49,7 +50,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import worktree_guard  # noqa: E402
 
 #: an identity other than the checkout's own whose commits a judged push may add, `"NAME <ADDRESS>": "why it is let through"`
-OTHERS: dict[str, str] = {}
+OTHERS: dict[str, str] = {
+    "research queue <queue@research.invalid>": "the identity `research queue cross` gives a crossing's commits (`IDENTITY` in "
+                                               "tools/research/src/research/queue.py), which the caller's own git then pushes",
+}
 #: seconds one `git` of the hook's may take: the list of what a push adds is the long one
 GIT_S = 30
 #: what git reads a commit's names from before its configuration
