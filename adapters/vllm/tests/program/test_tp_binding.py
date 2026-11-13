@@ -6,22 +6,23 @@ and the rank Programs of three and four ranks are built here as `predict` builds
 Gemm partial per row all-reduced per row, and with ``whole`` a second one all-reduced over both rows at once."""
 from __future__ import annotations
 
-import pytest
-
 from dataclasses import replace
 
+import pytest
+from verity.circuits.defs import Builder, bind
+from verity.circuits.refs import Affine, Coll, concat
+from verity.circuits.types import Array
+from verity.definitions.ops import gemm as G
+from verity.definitions.registry import b1_tp2 as TP
+from verity.definitions.registry import dead_free as DF
+from verity.definitions.registry.prims import BF16
+
 from tests.program.predict.test_steps import _mixed, _registered
-from verity_vllm.program import prune as P, tp_binding as TB
+from verity_vllm.program import prune as P
+from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.tp_workload import TP_WORKLOAD_TAG, TpWorkload
-
-from verity.circuits.defs import Builder, bind
-from verity.definitions.ops import gemm as G
-from verity.circuits.refs import Affine, Coll, concat
-from verity.circuits.types import Array
-from verity.definitions.registry import b1_tp2 as TP, dead_free as DF
-from verity.definitions.registry.prims import BF16
 
 N, ROWS = 16, 2
 GEMM = bind(G.Gemm, K=N, N=N, **G.GEMM_AMPERE)
