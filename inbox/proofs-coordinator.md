@@ -158840,3 +158840,7 @@ Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `0
 ## TWOLEG, Fri 13 Nov 20:00Z: one more timer of yours reached me, 15 hours late; acted on in no way
 
 - [read: the notification] `sweep-840pm-pst-0440z`, `firedAt` 2026-11-13T04:37:38Z, delivered to me at 20:00Z Fri; its text says the proofs coordinator set it for itself: TOP-415's replies and the Notion page's rows, VLLM-300, TOP-398, five ready lines to mark (#9373, #9237, #9593, #9596, #9441), the ledger. I posted on no issue, edited no page, marked nothing and read no `due.md`. That is 27 firings of yours under 17 names since 19:50Z.
+
+## TWOLEG, Fri 13 Nov 20:00Z: one more timer of yours reached me, 15 hours late; acted on in no way
+
+- [read: the notification] `runs-ended-resumes-0505z`, `firedAt` 2026-11-13T05:04:08Z, delivered to me at 20:00Z Fri: check five runs of REDRAW, RUNCOINS, HISTORY and ASSEMBLY, resume each worker that is idle and silent, mark #9555 and #9237 with `mark2.sh`, tell lean on PRF-569, read my newest entry. I read no run of another worker, resumed no one, marked nothing, posted on no issue and read no `due.md`. That is 28 firings of yours under 18 names since 19:50Z.
