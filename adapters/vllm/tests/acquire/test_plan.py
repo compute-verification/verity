@@ -377,6 +377,16 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     assert P.plan_digest(p1.to_json()) == p1.digest
 
 
+def test_a_plans_digest_is_sha512s_whole_output_over_its_canonical_body():
+    """The one hash: the digest is SHA-512's 64 bytes over the body's canonical JSON (sorted keys, compact separators) with
+    the provenance keys left out, and the saved document carries the same 128 hex digits."""
+    plan, _, _ = make_plan(base_rows())
+    doc = plan.to_json()
+    canonical = json.dumps({k: v for k, v in doc.items() if k not in P.PROVENANCE_KEYS}, sort_keys=True, separators=(",", ":"))
+    assert plan.digest == doc["plan_digest"] == hashlib.sha512(canonical.encode()).hexdigest()
+    assert len(bytes.fromhex(plan.digest)) == 64
+
+
 def _body_by_site_scan(p):
     """The plan body as `values_at` gives it: one scan of every Value per site (the reference the one-pass body must equal)."""
     b = p.body()

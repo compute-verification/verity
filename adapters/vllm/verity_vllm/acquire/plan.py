@@ -227,12 +227,12 @@ PROVENANCE_KEYS = ("plan_digest", "runtime_source", "correspondence")
 
 
 def plan_digest(body: Mapping[str, Any]) -> str:
-    """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
+    """SHA-512's whole output over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
     manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
     (the two agreed Value for Value on the reference row; only `runtime_source` differed), and whether the owning modules were read off
     the correspondence record or the v1 annotations (`correspondence.source`)."""
     doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
-    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
