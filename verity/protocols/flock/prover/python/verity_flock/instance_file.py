@@ -117,7 +117,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
     from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
-    from verity.definitions.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
 
     d = Path(set_dir)
     man = json.loads((d / "manifest.json").read_text())
@@ -175,7 +175,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
 
 def _chain_rows(args):
     relation, x, w = args
-    from verity.definitions.silicon.models import tc_dot
+    from verity.circuits.silicon.models import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
     model, k = _model(pipe.model), pipe.k

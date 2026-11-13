@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-#include "../../verity/definitions/kernels/sha512.cuh"
+#include "../../verity/circuits/kernels/sha512.cuh"
 
 #ifndef KV_FIELD
 #define KV_FIELD 512
