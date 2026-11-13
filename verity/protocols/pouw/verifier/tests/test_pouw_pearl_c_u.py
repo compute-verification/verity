@@ -1,4 +1,4 @@
-"""U's CPU pin (`verity.protocols.pouw.prover.schemes.pearl_c_u`): the integer grouped sum equals `verity.definitions.silicon`'s two step models, the pin
+"""U's CPU pin (`verity.protocols.pouw.prover.schemes.pearl_c_u`): the integer grouped sum equals `verity.circuits.silicon`'s two step models, the pin
 equals `pearl_c`'s reference, and the pinned vectors (cut from the H100 kernel's gate problem) reproduce."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import pytest
 
 import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
-from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
+from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_u as U
 
