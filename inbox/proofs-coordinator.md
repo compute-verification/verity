@@ -123962,3 +123962,15 @@ One condition, yours to rule: this head has no records run of its own (see "the 
 #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `e230e76f63423740f73b9e69bff0cfe6a32e3376`; #9625 `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`; #9665 `5edf7e30ee80bb013e16e4fe8386ef6332aee99e`; #9637 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `cursor/proofs-prf600-periodread-scratch-0b7e` at `66826edc6ccc617f932b00eb3c9288ec946fbdcf`.
 
 **Checkpoint: I only wait now.** `r20261113-055510-d3ba` (about 07:00Z, limit 07:56Z) and `r20261113-055441-2c57` (about 07:45Z, limit 08:56Z), both on vy-nebius-2. One one-off timer of my own for 07:00Z. When `d3ba` ends: its verdict, #9625's run launched, and #9665's line only after #9581's and #9625's.
+
+## 06:02Z ADDRWC: base merged at f4fa2fbb2b with HONEST2's line; one try on it, r20261113-060012-22d2 (not compiled yet)
+
+Run `r20261113-060012-22d2` on vy-nebius-2, running since 06:00Z: `verity lean try security/Proofs/Flock/SpotFlock/AddressFacts/PortsOnceOf.lean` at head `f4fa2fbb2b` of `cursor/proofs-addrwc-60f3`. Its dependency build covers `Copy`, `CopyOf`, `CopySrc` and `CopyOut`, and its probe the nine theorems of `PortsOnceOf`.
+
+- **The head.** `f4fa2fbb2b` = `3d9c327d80` + the merge of the base `e033bfc14b` (`a23b8fa639`) + HONEST2's `05c2c4cf0c27` by cherry-pick (`894330e7ec`: the one call of `out_copyH` in `Copy.lean`, with its new argument) + the lock's roots (`f4fa2fbb2b`: my ten files appended to `roots` of `security/Proofs/lean-audit.json`; the ten were already roots in `security/Proofs/lakefile.toml`).
+- **Compiled on the new base: nothing of mine by my own run.** By HONEST2's `r20261113-052844-ede4`, `Width`, `WidthOf`, `BitsIn`, `BitsOwn` and `WrittenOf` build there. `Copy` with the line, `CopyOf`, `CopySrc`, `CopyOut` and `PortsOnceOf` are untried there until this run ends.
+- **Compiled on the old base (tree `3d9c327d80`): all of it.** `r20261113-051652-626b` (`CopyOut.lean`: "lean exit 0", none of its 12 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`) and `r20261113-051652-ae0d` (`PortsOnceOf.lean`: "lean exit 0", the same of its 9), both on vy-nebius-cpu-3, no warning on either file's lines. So `widthFact_of_design` and `copyFact_of_design` hold of a session with `two h s = some d` and `Wiring h` (the copy with `RowFact` too), and `PortsOnce` is proved (`portsOnce_of_rows`), no longer an input. No `GAP`.
+- **HONEST2:** do not follow `f4fa2fbb2b` yet. I name the compiled head in an entry's title when this run passes.
+- **Not done:** no records run of `security/Proofs` at this head, so no ready line.
+
+Next entry by 07:00Z, or when the run ends (it has until 07:00Z by its limit).
