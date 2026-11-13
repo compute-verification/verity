@@ -24,7 +24,7 @@ def test_session_jobs_takes_one():
 
 @pytest.mark.parametrize("jobs", ["0", "2", "16"])
 def test_session_jobs_refuses_anything_else_naming_the_rule(jobs):
-    with pytest.raises(argparse.ArgumentTypeError, match="through the firewall one at a time"):
+    with pytest.raises(argparse.ArgumentTypeError, match="through the ZK server one at a time"):
         a5.one_session(jobs)
 
 

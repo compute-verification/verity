@@ -19,7 +19,6 @@ Applies to stochastic rows only (a greedy row has no match_stoch.json: row_pod's
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 
@@ -81,10 +80,11 @@ def actual(row: resolver.Row) -> dict:
         if ms_p is None:
             return {"source": "candidate", "verdict": resolver.not_applicable("the candidate has no match_stoch.json")}
         run_p = row.candidate("match/run.json")
-        run = json.load(open(run_p)) if run_p is not None else {}
-        return dict(lift(json.load(open(ms_p)), run.get("snapshot_steps")), source="candidate")
-    from verity_vllm.check.replay import stoch_recompute as SR
+        run = resolver.read_json(run_p) if run_p is not None else {}
+        return dict(lift(resolver.read_json(ms_p), run.get("snapshot_steps")), source="candidate")
+    # fold_compare imports torch and stoch_recompute numpy, which only this recompute needs: the module itself loads neither
     from verity_vllm.check.fold_compare import SnapshotStore
+    from verity_vllm.check.replay import stoch_recompute as SR
     capture = [rel for rel in row.files if rel.startswith("match/capture/")]
     if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:
         raise resolver.NotResolvable(f"{row.key}: files.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")
