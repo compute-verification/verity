@@ -420,7 +420,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
     and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
     where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
-    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
+    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record). The coins' record says
+    whose coins `coins_reason` took (``verified``; None where it refused): the SHA-512 of the challenger key the evidence
+    verified under, and the id of the one session the auditor's ledger opens on the window's root under that key
+    (`challenger.pinned_session`, the read `coins_reason` makes)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
@@ -436,8 +439,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     def lean(audit: dict | None) -> dict | None:
         return ((((audit or {}).get("checks") or {}).get("run") or {}).get("detail") or {}).get("disagree", {}).get("lean")
 
+    family = stream.family(draw)
+
     def reason(coins: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(coins, window, after, read, AC.lms_verify)
+        return CC.coins_reason(coins, window, family, after, read, AC.lms_verify)
 
     why = published.get("error") if ev is None else reason(ev)
     try:
@@ -452,7 +457,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
     for name, coins in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
+        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read, family))
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
                                     **registering(a, history)))
@@ -467,7 +472,13 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
                      "lean": side}
     checks = (result or {}).get("checks") or {}
+    verified = None
+    if ev is not None and why is None:
+        key = AC.Ch.ChallengerKey.from_json(ev["key"])
+        held = AC.Ch.pinned_session(ev["ledger"], {"root": root}, key, ev["pins"], ev["main"], AC.lms_verify)
+        verified = {"key_sha512": hashlib.sha512(key.public).hexdigest(), "session": held.session}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
+              "verified": verified,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
 
@@ -682,7 +693,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
-    place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
+    place of a5's own; the audit record and its negatives are then decided as that stream decides the interior's
+    (`verifier.audit_record`'s ``own_reads``: a session's read of one of the registration's own ports at its own root is
+    no registered read, its rows being round 2's to hold), ``audit.json`` says so (``own_reads``), and the summary's
+    ``handed`` is what the audit record took (its verdicts, statement, sessions,
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
     of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
     registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
@@ -1020,7 +1034,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
-                                sessions=sessions, served=sorted(served_units), session_roots=session_roots)
+                                sessions=sessions, served=sorted(served_units), session_roots=session_roots,
+                                own_reads=drawn is not None)
+        if drawn is not None:
+            result["own_reads"] = True
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -1044,17 +1061,19 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
-                           "outcome": summary["coins"]["outcome"]}
+                           "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
                    per_member=members_proof(members, done, not plain(a)),
-                   coins=AC.evidence(a.coins.evidence(), segment) if relay is not None else None, window_root=a.window_root)
+                   coins=AC.evidence(a.coins.evidence(), segment) if relay is not None else None, window_root=a.window_root,
+                   family=stream.family(draw) if relay is not None else None)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
+    result["case_v2"] = case_written(out)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1096,7 +1115,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
                                            tie(a)))
-        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units),
+                                      own_reads=drawn is not None))
         neg.update(coin_neg)
         if linked is not None:
             neg.update(registered_negatives(a, *linked))
@@ -1162,7 +1182,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None,
-               coins: dict | None = None, window_root: str | None = None) -> None:
+               coins: dict | None = None, window_root: str | None = None, family: str | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1175,8 +1195,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit whose sessions ran on the window's challenger
-    session, `window_trees`) and the window's root ``window_root``, the per-member case names the challenger and carries
-    its coins (`case_coins`), as v2 reads the sample and the sessions' trees."""
+    session, `window_trees`), the sample's family ``family`` and the window's root ``window_root``, the per-member case
+    names the challenger and carries its coins (`case_coins`), as v2 reads the sample and the sessions' trees."""
     try:
         RP = own_replay()
 
@@ -1205,10 +1225,20 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                 raise ValueError(per_member)
             pm = case_members(c.case(), **per_member)
             if coins is not None:
-                pm = case_coins(pm, coins, AC.FAMILY, window_root)
+                pm = case_coins(pm, coins, family, window_root)
             (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_written(out: Path) -> dict:
+    """Whether `write_case` left the case for the compiled check, `Spot.OneStageZk`'s, under ``out``
+    (``case-v2.json``): ``{"written": True}``, or ``{"written": False, "why"}`` with why it left none, in the words of
+    the file that says so (``case-v2-error.txt``, or ``case-error.txt`` where the v1 case it is made from failed)."""
+    if (out / "case-v2.json").is_file():
+        return {"written": True}
+    said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
+    return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,

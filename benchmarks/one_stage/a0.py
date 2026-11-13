@@ -358,12 +358,24 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
+#: how Lean's reason opens where a file of the session, its record or a rep's proof, was not there to read (`verify` in
+#: FlockVerify.lean, after the statement is set up and before any check of a proof)
+NO_SESSION_FILES = "session files:"
+
+
 def lean_refused(v: dict, names: str | None = None) -> bool:
-    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
-    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not where it read none: at
+    setup, where a missing or unreadable input is refused, or for want of a file of the session (`NO_SESSION_FILES`);
+    unless the refusal names `names`, a check Lean makes there."""
     why = v.get("why") or ""
     return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
-        names in why if names else not why.startswith("setup:"))
+        names in why if names else not why.startswith(("setup:", NO_SESSION_FILES)))
+
+
+def lean_read_no_proof(v: dict) -> bool:
+    """Lean's own verdict refused the session for want of a file of it (`NO_SESSION_FILES`), so it read no proof: what a
+    prover that sent none, or a ZK server that held one back, leaves. It says no proof left, never that Lean refused one."""
+    return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
@@ -402,15 +414,17 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                           statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
 
 
-def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None, *,
+                    own_reads: bool = False) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`); `agree`
-    is whether the Lean and the Python decided it alike."""
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`, with its
+    ``own_reads`` where the real record was decided with it); `agree` is whether the Lean and the Python decided it
+    alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
-                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots, own_reads=own_reads)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})
