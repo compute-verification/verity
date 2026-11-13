@@ -272,14 +272,14 @@ theorem fileOf_congr {b₁ b₂ : Core.Blobs} {d : String} (hd : Alike b₁ b₂
 
 /-- **A member's files' verdict on the blobs held is its files' verdict on all the blobs fed** (`Member.files`), where
 the stream holds what the files' pass keeps of its circuit file on all the blobs, a program kept as `programOf` keeps
-it, the tables fed, and its public file; the program it keeps after is kept so too. -/
+it under its partition, the tables fed, and its public file; the program it keeps after is kept so too. -/
 theorem memberFiles_eq {C : Ctx} {S : State} {full : Core.Blobs} {m : Member} {tags0 : Flock.Tags}
     (ht0 : C.tags0 = some tags0) (htag : Flock.Tags.find? STATEMENT = some tags0)
     (htab : tablesOf S.blobs = tablesOf full)
     (hfile : ∃ h b, S.file = some (h, b, some (fileOf tags0 (tablesOf full) full m.own.circuit)))
-    (hprog : ∀ pk, S.prog = some pk → pk = programOf pk.bytes) (hp : Alike S.blobs full m.own.pub) :
+    (hprog : ∀ pk, S.prog = some pk → pk = programOf pk.bytes pk.partition) (hp : Alike S.blobs full m.own.pub) :
     (memberFiles C S m).1 = m.files (C.slice m) full ∧
-      ∀ pk, (memberFiles C S m).2 = some pk → pk = programOf pk.bytes := by
+      ∀ pk, (memberFiles C S m).2 = some pk → pk = programOf pk.bytes pk.partition := by
   obtain ⟨h, b, hf⟩ := hfile
   unfold memberFiles
   rw [ht0]

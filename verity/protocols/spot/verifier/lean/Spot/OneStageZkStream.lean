@@ -258,14 +258,15 @@ def State.init (C : Ctx) (roles : Array Role) : State :=
 def State.blobs (S : State) : Core.Blobs :=
   ⟨S.tables ++ (S.file.map fun (d, b, _) => (d, b)).toArray ++ S.pub.toArray ++ S.record.toArray ++ S.reps⟩
 
-/-- A member's files' verdict on the blobs held, read as the files' pass reads it (`Member.filesOn`). -/
+/-- A member's files' verdict on the blobs held, read as the files' pass reads it (`Member.filesOn`): on what is kept
+of its program under its partition (`ProgramKept.next`). -/
 def memberFiles (C : Ctx) (S : State) (m : Member) : V StepAt × Option ProgramKept :=
   match C.tags0 with
   | none => (m.files (C.slice m) S.blobs, S.prog)
   | some tags0 =>
     let tables := tablesOf S.blobs
     let fk := match S.file with | some (_, _, some fk) => fk | _ => fileOf tags0 tables S.blobs m.own.circuit
-    let pk := ProgramKept.next S.prog m.own.program
+    let pk := ProgramKept.next S.prog m.own.program m.own.partition
     (m.filesOn tags0 tables fk pk (C.slice m) S.blobs, some pk)
 
 /-- Statement `st`'s session, once its last file came: kept, and its record and rep files dropped. -/
