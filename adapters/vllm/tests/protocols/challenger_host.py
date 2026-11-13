@@ -49,8 +49,8 @@ TREE = Path(__file__).resolve().parents[4]
 
 @functools.cache
 def models():
-    """Infra's model registry, ``verity/composite/device/live_challenger/models.py``, as a module of its own."""
-    path = TREE / "verity/composite/device/live_challenger/models.py"
+    """Infra's model registry, ``verity/protocols/compose/device/live_challenger/models.py``, as a module of its own."""
+    path = TREE / "verity/protocols/compose/device/live_challenger/models.py"
     spec = importlib.util.spec_from_file_location("live_challenger_models", path)
     assert spec is not None and spec.loader is not None, f"{path} is no module"
     module = importlib.util.module_from_spec(spec)
@@ -144,7 +144,7 @@ def session_id(n: int) -> str:
 
 
 class Gate:
-    """Infra's challenger gate (`verity/composite/device/live_challenger/auditor.py`, v2) in this process, its ledger's entries
+    """Infra's challenger gate (`verity/protocols/compose/device/live_challenger/auditor.py`, v2) in this process, its ledger's entries
     written as the gate's `append` writes them and signed under `private` at rising one-time keys, from `leaf` on:
     `reserve` appends a window's reserve entry (``withheld=True``: ``reserve --withhold``), `open` its open entry
     (two-step after its reserve, else one-step) and returns the gate's open answer (``commitment`` null, as before
