@@ -224,3 +224,44 @@ said; the two lint allowlists merge by themselves.
    (at most 60 words). **Tell me the head: I mark it** (benchmarks' yes is on HASH-127, 00:08Z).
 
 Return by Fri 13 Nov 04:30Z.
+
+## Fri 13 Nov 02:40Z: AFTER #9542's merge is pushed and told: HASH-129, infra's question about 127 October backups on `vy-nebius-2` (544 GiB). A comparison by reading, a list, a proposal; kernels answers infra by Fri 16:00Z
+
+infra asked kernels on INF-767 (02:36Z; read its two comments there, and HASH-129's text, which
+is this brief's): may it remove the `backup/` directories of the 127 hourly `backup.sh` runs on
+`vy-nebius-2` (`r20260930-091913-2c58` to `r20261007-141537-9d6e` under
+`/workspace/research/runs`)? The disk is at 95% and proofs builds Lean there tonight. I
+answered that the yes or no comes by Fri 16:00Z from your comparison.
+
+**What I read on the node** (nothing changed there): `/workspace/pouw/infra/bin/backup.sh` (one
+deterministic tarball a unit; an unchanged unit is a hard link to the previous backup's copy;
+`backup/MANIFEST.tsv`: unit, file, sha256, bytes, chunks; `backup/summary.json`); the newest
+backup: 854 units, 21.8 GB, 41 large units left out, 700 of them `fill-out` jobs; the live
+`/workspace/pouw` (552 GiB, not touched by a yes) has no `gpu3-fp8` at its top level, which the
+newest backup holds (23 units). infra: each run has a custody record, but the remote does not
+cover every file.
+
+**The work, all of it by reading. On the node: no write, no delete, no hashing of the tars, no
+decompressing more than a listing needs, everything niced; proofs' builds have the node.**
+1. **The union.** From the 127 `MANIFEST.tsv` files: every unit path, each version of it
+   (sha256, bytes, the first and last run that hold it), and its newest version.
+2. **Place each unit's newest version in one of three lists:**
+   - **in the store:** a tarball of that sha256 is preserved in some run's custody (the store's
+     own record of each run, as you read attempts for HASH-127; say how you know);
+   - **live:** the same path exists under `/workspace/pouw` today (say whether its newest file
+     is older or newer than the backup);
+   - **only in a backup:** neither. For each: bytes, the last run that holds it, its top
+     directory, and what it is (the tarball's listing of names, the head of it).
+   **Units that an older backup holds and the newest does not** (deleted before 7 Oct) go
+   through the same three lists.
+3. **A search:** does anything on `main`, in `fixtures/artifacts.json`, or in the notes name one
+   of the 127 runs or a path inside its `backup/`?
+4. **Your proposal for the third list**, unit by unit or by directory: preserve (how many
+   bytes; a small `research run --on vy-nebius-2` whose `$OUT` hard-links those tarballs so
+   that custody uploads them is the way, since the node holds no store credential: write its
+   line, do not launch it) or release, with the reason in a line (what it was, what replaced
+   it, why nobody needs it).
+5. One worker comment on HASH-129 (at most 100 words) with the three counts and bytes, and your
+   note with the lists. **Tell me; the yes or no to infra is mine.**
+
+Return by Fri 13 Nov 09:00Z.
