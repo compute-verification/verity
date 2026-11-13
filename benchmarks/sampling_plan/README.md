@@ -1,6 +1,6 @@
 # sampling_plan
 
-The sampling plan for one served workload under Flock, from the planner in `verity.protocols.spot.verifier`
+The sampling plan for one served workload under Flock, from the planner in `verity.protocols.proofs.spot.verifier`
 (`optimize`, `candidates`, `costfit`): the cost model fitted from proving measurements, the cuts the candidate generator
 finds, the frontier of ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the
 break-even granularity, and how the plan moves with each input. A model, not a measurement: every input carries its
