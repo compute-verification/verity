@@ -10,20 +10,19 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch
-
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
 from verity.definitions.numerics import deepgemm_twins as DT
 from verity.definitions.registry import boolean_deepgemm as BDG
 from verity.definitions.registry import boolean_fp8 as BF8
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8 as F8
 from verity.definitions.registry.fp8 import FP8_BLOCK
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
@@ -164,6 +163,7 @@ def test_the_gemm_s_coordinates_of_c_outputs_cover_its_outputs_and_compute_them(
     assert y.reshape(-1).tolist() == x["out"].tolist()
 
 
+@pytest.mark.slow
 def test_a_window_s_caps_make_both_parts_chunks_of_the_stager_s_bit_rows(row):
     """With the partition file's ``chunk_cap`` naming them, the quantisation (``part``) and the GEMM's coordinates (``coord``) are
     each chunks on `UnitStager`'s bit rows, which a5 composes from the template alone; a part that is no chunk needs an input set

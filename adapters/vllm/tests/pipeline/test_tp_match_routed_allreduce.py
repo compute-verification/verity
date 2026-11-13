@@ -7,14 +7,18 @@ import hashlib
 import json
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.observe.events import RunHeader  # noqa: E402
-from verity_vllm.observe.log import LogWriter  # noqa: E402
-from verity_vllm.pipeline.tp import match as M  # noqa: E402
+from verity_vllm.observe.events import RunHeader
+from verity_vllm.observe.log import LogWriter
+from verity_vllm.pipeline.tp import match as M
 
 WORLD, N, PROMPT = 8, 7168, 37
 SITES = [("model.layers.0.attn.wo_b", "all_reduce", N), ("logits_processor", "all_gather", 4)]
@@ -44,7 +48,7 @@ def _make(run: Path, received, headers=range(WORLD)) -> dict:
     g = torch.Generator().manual_seed(3)
     rows: dict[int, list] = {r: [] for r in range(WORLD)}
     for step, m in ((0, PROMPT), (1, 1)):
-        vals = {r: {"part": [], "out": []} for r in range(WORLD)}
+        vals: dict[int, dict[str, list]] = {r: {"part": [], "out": []} for r in range(WORLD)}
         for k, (site, kind, w) in enumerate(SITES):
             m_ = m if kind == "all_reduce" else 1
             parts = [torch.randn(m_, w, generator=g).to(torch.bfloat16) for _ in range(WORLD)]
