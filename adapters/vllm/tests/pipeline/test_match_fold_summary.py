@@ -4,8 +4,9 @@ the unbound roots are the ones the fold's notes name, a step's instances are cou
 request's sampled tokens and their steps are kept in order, and the requests are the result's or else the header's.  The profile
 folds a declared MoE construction through its own hook, a run whose header records a PoUW executor folds PoUW's calls first, and
 the Programs' two options reach the profile and the document.  The peak resident size is in GiB on either platform, and
-`_jsonable` leaves a document that `json` writes.  The instances' stored form is the one the environment names, and a result
-whose digest is not its Program's own is refused before a file is written."""
+`_jsonable` leaves a document that `json` writes.  The instances' stored form is the one the environment names, a result
+whose digest is not its Program's own is refused before a file is written, and the Program written is the fold's own encoding
+under its digest, or else the one made here."""
 from __future__ import annotations
 
 import enum
@@ -239,3 +240,53 @@ def test_a_result_with_no_encoding_of_its_own_whose_digest_is_not_its_program_s_
     with pytest.raises(SystemExit, match="^program.json digest abababababababab != fold digest cdcdcdcdcdcdcdcd$"):
         MF.persist_program(result, tmp_path, profile_name="stand_in", log_path=tmp_path / "log.jsonl.gz")
     assert encoded == [program] and list(tmp_path.iterdir()) == []
+
+
+def _nodes(n):
+    return types.SimpleNamespace(nodes=[object()] * n)
+
+
+@pytest.mark.parametrize("own, stated, digest", [
+    (True, "cd" * 64, "cd" * 64),                                               # the fold's encoding and digest: nothing is made again
+    (True, None, "ab" * 64),                                                    # its encoding and no digest: the encoding's
+    (False, "ab" * 64, "ab" * 64),                                              # no encoding of its own: made here, the digest the Program's
+    (False, None, "ab" * 64),                                                   # neither
+])
+def test_the_program_written_is_the_fold_s_own_encoding_under_its_digest_or_else_the_one_made_here(tmp_path, monkeypatch, own, stated, digest):
+    program, made = types.SimpleNamespace(root=types.SimpleNamespace(body=_nodes(5))), []
+
+    def encode_program(given):
+        made.append(("encoded", given))
+        return {"encoded": "here"}
+
+    def program_digest(given):
+        made.append(("digested", given))
+        return "ab" * 64
+
+    monkeypatch.setattr(codec, "encode_program", encode_program)
+    monkeypatch.setattr(codec, "program_digest", program_digest)
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
+    descriptor = {"encoded": "by the fold"} if own else {"encoded": "here"}
+    result = types.SimpleNamespace(program=program, body=_nodes(2), digest=stated, instances=[], **({"descriptor": descriptor} if own else {}))
+    written = MF.persist_program(result, tmp_path, profile_name="stand_in", log_path=tmp_path / "log.jsonl.gz")
+    assert made == [*([] if own else [("encoded", program)]), *([] if own and stated else [("digested", descriptor)])]
+    text = (tmp_path / "program.json").read_text()
+    assert text == json.dumps({"schema": MF.PROGRAM_SCHEMA, "profile": "stand_in", "log": str(tmp_path / "log.jsonl.gz"), "digest": digest,
+                               "n_input_nodes": 3, "n_instances": 2, "program": descriptor, "params": [], "tp": None, "peers_layout": [],
+                               "witness_layout": [], "supplied": {}}, separators=(",", ":"), sort_keys=True) + "\n"
+    assert written["program"] == {"path": str(tmp_path / "program.json"), "bytes": len(text), "digest": digest, "n_input_nodes": 3}
+    assert list(written) == ["program", "instances"] and sorted(p.name for p in tmp_path.iterdir()) == ["instances.jsonl", "program.json"]
+
+
+def test_the_program_s_document_states_the_result_s_parameters_by_name_its_ranks_its_layouts_and_what_was_supplied(tmp_path, monkeypatch):
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
+    stated = {"params": [("prompt_0", _Opaque()), ("weights", 7)], "tp": {"rank": 1, "world": 2}, "peers_layout": [("peers_0", (0, 1))],
+              "witness_layout": ({"name": "schedule_0"},), "supplied": {"table": (1, 2)}}
+    result = types.SimpleNamespace(program=types.SimpleNamespace(root=types.SimpleNamespace(body=_nodes(1))), body=_nodes(1), digest="cd" * 64,
+                                   instances=[], descriptor={}, **stated)
+    MF.persist_program(result, tmp_path, profile_name="stand_in", log_path="log")
+    doc = json.loads((tmp_path / "program.json").read_text())
+    assert {k: doc[k] for k in stated} == {"params": [["prompt_0", "<opaque>"], ["weights", "7"]], "tp": {"rank": 1, "world": 2},
+                                           "peers_layout": [["peers_0", [0, 1]]], "witness_layout": [{"name": "schedule_0"}],
+                                           "supplied": {"table": [1, 2]}}
+    assert (doc["program"], doc["digest"], doc["n_input_nodes"], doc["n_instances"]) == ({}, "cd" * 64, 0, 1)
