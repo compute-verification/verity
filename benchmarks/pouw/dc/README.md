@@ -140,9 +140,7 @@ that), s4 m16n8k64 a CALL (not timed).
 ## Measured results with no run in the evidence store
 
 These stay here until a rerun's are in the evidence store. `emp.py` prices a timing run on its build run's `sass/`: a
-timing run holds none, and the tree names no build run. The headline under a free uniform route is from an edit of the
-census that no command makes, read on the ACCEL model as it stood: today's `eps` prints other headlines. No B300 has
-run, and the probe `fpx` is not in the tree.
+timing run holds none, and the tree names no build run. No B300 has run, and the probe `fpx` is not in the tree.
 
 ### Combined routes beside wgmma (`emp.sh`, 1× H200)
 
@@ -154,7 +152,9 @@ above a facet:
   SMSP, each with 4 wgmma s8 n128 a group, the honest step's 8 IMMA, 1024 FFMA and K uniform instructions an iteration.
   The chain stays uniform, and the loop's SASS adds only uniform opcodes as K grows. It issues 0.870 / 0.869 / 0.871 a
   SMSP-cycle, and each added uniform instruction costs 1.19 (K 0 → 64) and 1.08 (K 64 → 128) SMSP-cycles. So A2u holds
-  beside async wgmma on the H200, and JI90_0's 0.965 sits below the measured price, the conservative side.
+  beside async wgmma on the H200, and JI90_0's 0.965 sits below the measured price, the conservative side. Beside a
+  saturated async tensor op a co-located uniform chain fills idle issue slots, and with the SMSP's issue saturated it
+  takes one (`UNI_TABLES=async` and `a2u`, and `emp_pack3` on sm_90).
 - **2:4 sparse wgmma reaches A3's sparse line only with A in registers.** `wgsprs_s8` (m64n256k64.sp) runs at its dense
   twin's instruction rate, 4095.6 physical (8191 logical) MACs a SM-clock. With A in shared memory (`wgsp_s8`, `_e4m3`,
   `_f16`) it runs at 0.889 of it: 18 KB of operands an instruction at the dense rate is 144 B a SM-clock against the
@@ -170,15 +170,6 @@ above a facet:
   sheet's 1979), 899.7 f16 TFLOPS and 473.8 tf32. Light loops (scalar, shared memory) read the same on both clocks.
 - **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 8× its MACs: k 256 against 32) and BMMA.168256 at
   0.656, as IMMA.16832; DS-90 prices b1 on issue alone.
-
-### The uniform route beside an async tensor op, priced free
-
-Beside a saturated async tensor op a co-located uniform chain fills idle issue slots, and with the SMSP's issue
-saturated it takes one (`UNI_TABLES=async` and `a2u`, and `emp_pack3` on sm_90). Pricing the H200's
-uniform-beside-async route free anyway moves no headline (`eps`, `credit floor`, `operands free`, q* 1.22,
-`dither-2s-li-l32`): the H200 rises 0.131% → 0.198%. The B200 stays 0.905% either way (its headline binds the issue
-row, which sits above the async joint row). It breaches 1% only if the issue ceiling *itself* is discounted below
-~0.012 of a slot, an >80× discount that the census's issue pricing precludes and `a2u` measures absent.
 
 ### B300 (sm_103a)
 
