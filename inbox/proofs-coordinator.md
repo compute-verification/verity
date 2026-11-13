@@ -117570,3 +117570,55 @@ TWOLEG's shape: on two windows the second stage's copy of the ledger, read under
 **Runs.** Try 8 `r20261113-031548-ee00` (vy-nebius-2): in line for a place since 03:15:48Z, not started; I cancel and resend it at ten minutes, as the rule says. Try 7 `r20261113-024011-f92d`: done, rc 0 (`CutRead.lean`, at `0dc5993463`).
 
 Next: `SampledTwo/CutOrder.lean` (steps (ii) and (iii), and the bound under `OrderShown`), in a try by about 04:30Z [guess]. The next entry by 04:25Z.
+
+## SESSIONOF, Fri 03:28Z: nothing new compiled since 02:13Z; my try `c0e3` grew to 247 GB of memory on vy-nebius-cpu-12 and I cancelled it at 03:17Z; the pushed head is back to exactly what compiled; ACCEPTS's per-member lemma is not a restatement, I take it second, and `stmts` is MESSAGES's
+
+COMPILED, unchanged: `SessionOf.lean` (`r20261112-224310-72d4`), `ZkHiddenM1P.lean` (A12, `r20261112-221059-0a7f`), `AcceptedChecks.lean` with the descriptor's parse as the hypothesis `hdesc` (A13 inside it, `r20261112-231038-d6f5`) [run]. In plain words: the three files the brief names are compiled and the branch's head is again exactly that state. The extra lemma that would remove `hdesc` (the parameters' parser returns the program it parsed) is not proved: its last step ran away in memory on the node, I stopped it, and I took the file out of the tree so that no build of the package can meet it. Of ACCEPTS's two asks: the list of statements is MESSAGES's by your 02:43Z ruling; the per-member session checks I take, after the parser lemma, and it is a new bridge, not my lemma restated.
+
+### 1. The run that ran away (mine, cancelled)
+
+- `r20261113-021208-c0e3`, vy-nebius-cpu-12, slot p0. Lean started on `ParamsProgram.lean` at 02:46Z on one thread. Its resident memory was 185 GB at 03:00Z and 247 GB at 03:14Z, still rising about 4 GB a minute, with no heartbeat stop [run: the run's `resources.jsonl`, the `lean` process's `rss_bytes`].
+- I cancelled it at 03:17Z: state `failed`, exit 143, `CANCELLED_MANUAL` [run: `research status`]. The pod's memory group shows no OOM kill up to 03:14Z (`oom_kill` 0) [run]. I do not know whether another run on the node was slowed.
+- The launch carried `--mem-gb 24`. It did not cap the process [run]. So for a Lean try that flag is a reservation, not a limit [derived].
+- The cause is my own code: a walk tactic I wrote in that file (`ret_walk_zeta`, `Walk.lean`'s `ret_walk` with each `let` substituted instead of generalized). Which step grows I do not know yet [guess: a term whose sharing is lost].
+- What I changed at once: commit `5d37e0ecf4` removes `ParamsProgram.lean` and its lakefile root and puts `AcceptedChecks.lean` back to the form `d6f5` compiled. `security/Proofs` at the head is byte for byte what it was at `0307abb78b` [run: `git diff --stat` is empty]. No branch but mine holds the removed file [run: `git branch -r --contains`].
+- What I do from now: every try of mine runs under a hard address-space limit set in the job's own shell (`ulimit -v`, 48 GB), and I find the growing step first on a toy `do` block with core Lean alone (seconds, no package build), before any node sees the tactic again.
+
+### 2. ACCEPTS's two asks (your 02:17Z and 02:43Z messages)
+
+- **`SessionReading.stmts`:** MESSAGES's, by your 02:43Z ruling. Nothing of it is mine.
+- **The per-member session checks** (`ScopeHeldAt`, and the scope half of `SessionsRun`'s statements): **I take it, second in line** behind the parser lemma. It is not `sessionChecks_of_verdict` restated [read]:
+  - My lemma ends in the one-stage leg's `SessionChecks`, which is about the executable's own setup (`Exec.setupOfP (ZkExec.zkInputs I) …`), and gets there through soundness's `Accepted.checksWitness`.
+  - `sessionOk` is about the statement's bytes: `FlockDeploy.setupOf true x` decodes `x`, builds `Raw.ins` and runs `Ins.setup`, which after the tables' setup makes seven more checks (`checkRegistered`, `noIdentifier`, `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk`, `RecCoins.check`, `RecVStar.checkPubRows`); then `scopeCheck true`, the hidden-outputs tag and `zkOk`'s six bounds.
+  - I found no lemma on my base, on ACCEPTS's branch (`ce21628a5f`) or on RUNCOINS's (`976d713b44`) that gets `FlockDeploy.setupOf true x = some _` from a compiled accept [run: grep for `setupOf`, `Ins.setup`, `setupOfP` over `security/Proofs` on each]. The one-stage leg never needed it.
+  - So the piece is five lemmas: (i) `decode w.encode = some w` (ACCEPTS asked HELDOF or MESSAGES for it); (ii) `Raw.ins` at HELDOF's `memberRaw` is the inputs `stepMember` hands the masked verifier; (iii) each check of `Ins.setup` from the compiled step's accept; (iv) `zkOk`'s bounds, from whichever checks of the step make them, which I have not read; (v) the shape is the reference statement's (asked of HELDOF).
+- **By what hour.** The statement, in a new file on ACCEPTS's base that compiles with (i) and (v) as named hypotheses and (ii) to (iv) as separate lemmas: by 09:00Z. The proofs of (ii) to (iv): I give the hour, or say plainly that they do not make Sat 02:00Z, in my entry before your 07:00Z reading, after I have read `stepMember`'s path to the masked verifier end to end. Until then `ScopeHeldAt` stays the named premise it is.
+
+### 3. The parser lemma (`hdesc`), where it stands
+
+- Compiled in `r20261113-011808-c879`: four of the file's five theorems, each from the one before: `paramsOfJson_program`, `zkParams_program`, `params_program`, `params_desc` [run].
+- Not compiled: `paramsParsed_program`, which they all rest on. It reads `p.verifier.program` back from `OneStage.paramsParsed`'s last lines (`let p : Params := {…}; …; pure p`). `ret_walk` generalizes every `let`, so the value of `p` is lost at the return; my substituting variant is the run of section 1.
+- A second finding of that run [run: lean-audit's line]: a module with an `elab` must be listed under `compile_time` in the package's lock and can hold no theorem a guarantee reads. So the tactic can't live in `ParamsProgram.lean` whichever way it is fixed. If a tactic is needed at all it goes in a module of its own, and its listing is the lean lane's (NEEDS, not asked yet).
+- The file as it was is at `a1890c3b01` in my branch's history.
+- MEMBERS's split of `OneStageZk.paramsOfJson` changes one line of `zkParams_program` (through their `paramsOfJson_parsed`); I apply it when their branch is in the base.
+
+### 4. Other
+
+- **"stage", not "round":** nothing new of mine says "round".
+- **Slack events that were not mine:** at 03:00Z seven events of a subscription I did not set (thread 1790877416.597149 in #agent-coordination, 01:11Z to 01:12Z, about other workers' runs, an agent-watch notice and a vLLM comment) reached my conversation. I acted on none and posted nowhere.
+- #9375 and the soundness rest branch: not re-read this hour.
+
+Branch `cursor/proofs-sessionof-5c1e` at `5d37e0ecf4`, pushed. Nothing is unpushed. No run of mine is live.
+
+**STOP RULE.** Nothing done. No listed guarantee, lock or existing file is touched.
+
+**NEEDS.**
+
+1. Nobody yet. If the parser lemma needs a tactic, the lean lane: one `compile_time` entry for a new module of mine under `Proofs/Flock/Soundness/Refine/`. I ask only when a version compiles.
+2. For item 2: HELDOF or MESSAGES, `decode w.encode = some w` (ACCEPTS's NEEDS 4 already asks it).
+
+**To post** (for #agent-alerts, if you judge it worth a line; I post nowhere):
+
+> A `lean_changed.py --try` run launched with `--mem-gb 24` reached 247 GB resident on vy-nebius-cpu-12 (`r20261113-021208-c0e3`, one `lean` process, a tactic of its owner's in a loop) before its owner cancelled it. The flag reserves, it does not cap. A try could run `lean` under a hard address-space limit.
+
+**Not established.** `paramsParsed_program`, and so `params_desc` without a hypothesis. Which step of my tactic grows. Whether `c0e3` slowed another run. Everything of ACCEPTS's item beyond the reading above: no statement is written. `SetsUp`'s `hfam` against #9566's `families_params` is as my 02:13Z entry left it.
