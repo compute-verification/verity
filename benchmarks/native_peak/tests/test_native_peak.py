@@ -91,7 +91,7 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path: Path
     assert doc["spec_flop_per_second"] == 165.2e12 and abs(doc["fraction_of_spec"] - doc["flop_per_second"] / 165.2e12) < 1e-12
     assert doc["sass"] == "not captured" and doc["clocks_mhz"] == 2520.0 and doc["power_w"] == 430.0 and "8192^3" in doc["sizes"]
     assert doc["method"].startswith("cublas dense gemm 8192^3, median of 5")
-    assert doc["validation"]["status"] == "passed" and {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "gemm_8192_seconds"}
+    assert doc["validation"]["status"] == "passed" and {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "circuits/native-peak.fraction-of-spec", "gemm_8192_seconds"}
     assert doc["validation"]["detail"] == "8192^3 max_rel_err 1.25e-03 (tol 2e-02) ok"
     json.dumps(doc)   # serialisable as written
     skipped = m.build_result("r20260922-000000-abcd", "e4m3", {"device": "NVIDIA A100-SXM4-80GB"}, [], {"sass": "not captured"}, {"n_samples": 0},
@@ -127,7 +127,7 @@ def test_nvfp4_instruction_result_document(tmp_path: Path) -> None:
     assert doc["method"].startswith("instruction microbenchmark: mma.sync") and "mma_m16n8k64_x100000" in doc["sizes"]
     assert doc["validation"]["status"] == "passed" and "sass 32/32" in doc["validation"]["detail"]
     assert doc["validation"]["detail"].startswith(m.NO_REFERENCE) and doc["sizes"]["mma_m16n8k64_x100000"]["max_rel_err"] is None
-    assert {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "mma_m16n8k64_x100000_seconds"}
+    assert {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "circuits/native-peak.fraction-of-spec", "mma_m16n8k64_x100000_seconds"}
     json.dumps(doc)
 
 

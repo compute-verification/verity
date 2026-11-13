@@ -36,7 +36,8 @@ prints afterwards, since that document is how `--from` knows the run's session f
 Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
-alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), `verified` (the bytes
+alone and named in its `inputs` by the record's key: the metric, under its id (`METRIC`), the printed number in its
+unit; `verified` (the bytes
 the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
 ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
 amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
@@ -85,6 +86,8 @@ NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
 #: number is printed at the first
 READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
+#: the metric's id, OWNER/NAME, the name the printed number is written under in the result
+METRIC = "memory-accounting/memory-uncertified-share"
 #: the unit of the result's amounts
 BYTES = "bytes over the session's span"
 #: where a capacity's rate comes from, which its unit says
@@ -394,7 +397,7 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     reports, as the kit writer's measurements, each from the verifier's record alone; its `inputs` are the recorded
     run and the keys of the session's entry in that record it was read from.
 
-    - `metric`: the printed number in its unit.
+    - `METRIC`, the metric's id: the printed number in its unit.
     - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
       reading the number is printed at; none at a share of 1 or more, which certifies nothing.
     - `capacity at READING`, for each reading the ledger holds (`READINGS`): the reading's read rate times the
@@ -411,7 +414,7 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []
     first = next(iter(READINGS))
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}]
+    out = [{"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
                     "inputs": [*run, f"ledger.{first}.certified_bytes"]})

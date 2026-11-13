@@ -6,10 +6,10 @@ With `--out DIR` it also writes its result, through the harness kit's writer for
 nothing else; the kit says where the file is, `DIR/result.json` outside a research run (`benchmarks/harness/README.md`).
 The result holds the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
-figure is the model's and its name says so (`MODELED`); none is computed from a run's K.
+figure is the model's, and its mark and every name but the metric's say so (`MODELED`); none is computed from a run's K.
 
-- `metric`: the term of record as the document gives it, in GB, beside the document's target. Its row is the scan's
-  over the world's year (`RECORD`).
+- `METRIC`, the metric's id: the term of record as the document gives it, in GB, beside the document's target. Its row
+  is the scan's over the world's year (`RECORD`).
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
@@ -19,7 +19,7 @@ figure is the model's and its name says so (`MODELED`); none is computed from a 
 - `verified`: capacity less free, where both have a value.
 - `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases.
 
-A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` where
+A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `METRIC` where
 the row is the term of record's, are written with no value and that reason in their `inputs`; its `error` is written.
 
 Each measurement's `inputs` name what it was computed from, and among them the class the term is at, the most ids a
@@ -41,8 +41,10 @@ from typing import Any, NamedTuple
 
 #: the directory of the calculator of K, which is loaded from its file
 CALCULATOR = Path(__file__).resolve().parents[1] / "network_traces"
-#: what every measurement's name starts with: the benchmark, and that the figure is the model's
+#: what every measurement's name but the metric's starts with: the benchmark, and that the figure is the model's
 MODELED = "certifier_term/modeled"
+#: the metric's id, OWNER/NAME, the name the term of record is written under
+METRIC = "network-accounting/certifier-term"
 #: the row the term of record is read from: the scan, as `main` charges it
 ROW = "scan"
 #: the scope and monitoring period of that row, the document's `value`: the world's year
@@ -158,7 +160,7 @@ def record(lb: Any, argv: Sequence[str], doc: dict) -> dict:
 
 def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> list[dict]:
     """The calculator ``lb``'s document ``doc`` in the fields every resource's benchmark reports, as the kit writer's
-    measurements, each named under `MODELED`: the term of record (`metric`), whose row is ``head`` (`record`), and for
+    measurements: the term of record (`METRIC`), whose row is ``head`` (`record`), and, each named under `MODELED`, for
     each scope and monitoring period the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`),
     the row being the scan's at the release schedules of record (`ROW`). `metric` and `free` stand against the
     document's target, in their own units. Capacity is the scope's machines times a machine's uplink ``up`` one way over
@@ -174,7 +176,7 @@ def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> li
         return None if none else "over target" if value > ceiling else "within target"
 
     none = unbounded(head)
-    out = [{"name": f"{MODELED}/metric", "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
+    out = [{"name": METRIC, "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
             "verdict": stands(doc["value"], target, none), "inputs": [f"modeled: {doc['name']}", *none, *said]}]
     for r in doc["rows"]:
         if r["row"] != ROW:

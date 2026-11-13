@@ -71,6 +71,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SCHEMA = "verity-pous/bench-result/v1"
+#: the effective weight bandwidth's name in the run's result: the metric's id, OWNER/NAME (``.T<t>`` at each thread count)
+EWB = "memory-accounting/pous-ewb"
 WEIGHT_SETS = HERE / "weight_sets.json"
 FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "--pair", "--pair-max-rows", "7500", "--chunked",
                 "--chunked-threads", "64", "--split", "--fused-x", "--whole-chain"]
@@ -484,8 +486,8 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     if run_dir:
         rows = []
         if doc["passed"] and doc.get("metrics"):   # a failed gate publishes no measurement, nor does a --gates-only run
-            rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
-                    else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
+            rows = ([{"name": f"{EWB}.T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
+                    else [{"name": EWB, "value": ewb, "unit": "B/s"}])
             rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]
         result = out.resolve() / "bench-result.json"
         rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)

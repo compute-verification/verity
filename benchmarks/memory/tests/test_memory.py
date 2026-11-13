@@ -36,7 +36,7 @@ SESSION = HERE / "fixtures" / "session.json"
 BENCH = "r20000101-000005-ffff"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 #: the result's measurements, in the order they are written
-SHARED = ["metric", "verified", "capacity at spec", "free at spec", "capacity at measured", "free at measured", "error"]
+SHARED = [M.METRIC, "verified", "capacity at spec", "free at spec", "capacity at measured", "free at measured", "error"]
 
 
 def a_session(k: int = 0, *, accepted: bool = True, gamma=0.25, failure: str | None = None, verdict="lean") -> dict:
@@ -608,9 +608,10 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     got = written(held)
     assert list(got) == SHARED
     assert {n: m["value"] for n, m in got.items()} == {
-        "metric": 0.25, "verified": 6e12, "capacity at spec": 8e12, "free at spec": 2e12,
+        M.METRIC: 0.25, "verified": 6e12, "capacity at spec": 8e12, "free at spec": 2e12,
         "capacity at measured": 6.4e12, "free at measured": 4e11, "error": 2.0 ** -30}
-    assert got["metric"]["value"] == doc["value"] and got["metric"]["unit"] == doc["unit"] == M.UNIT
+    assert M.METRIC == "memory-accounting/memory-uncertified-share"
+    assert got[M.METRIC]["value"] == doc["value"] and got[M.METRIC]["unit"] == doc["unit"] == M.UNIT
     for reading, gamma in (("spec", doc["value"]), ("measured", 0.0625)):
         capacity, free = got[f"capacity at {reading}"]["value"], got[f"free at {reading}"]["value"]
         assert free / capacity == gamma and got["verified"]["value"] + free == capacity
@@ -625,7 +626,7 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), this number its δ" in M.ERROR
     rate, span = "ledger.{}.capacity_bytes_per_s", "ledger.inputs.span_ns"
     assert {n: m["inputs"] for n, m in got.items()} == {
-        "metric": ["measured", RUN, "ledger.spec.gamma"], "verified": ["measured", RUN, "ledger.spec.certified_bytes"],
+        M.METRIC: ["measured", RUN, "ledger.spec.gamma"], "verified": ["measured", RUN, "ledger.spec.certified_bytes"],
         "capacity at spec": ["measured", RUN, rate.format("spec"), span],
         "free at spec": ["measured", RUN, "ledger.spec.gamma", rate.format("spec"), span],
         "capacity at measured": ["measured", RUN, rate.format("measured"), span],
@@ -663,7 +664,7 @@ def test_a_record_that_holds_only_the_share_writes_the_metric_alone(store, monke
     store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.375))})
     held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
-    assert {n: m["value"] for n, m in written(held).items()} == {"metric": 0.375}
+    assert {n: m["value"] for n, m in written(held).items()} == {M.METRIC: 0.375}
 
 
 def test_a_share_of_one_or_more_writes_nothing_verified_and_the_whole_capacity_free(store, monkeypatch, tmp_path):
@@ -672,7 +673,7 @@ def test_a_share_of_one_or_more_writes_nothing_verified_and_the_whole_capacity_f
     held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
     got = {n: m["value"] for n, m in written(held).items()}
-    assert got == {"metric": 1.25, "verified": 0.0, "capacity at spec": 8e12, "free at spec": 8e12,
+    assert got == {M.METRIC: 1.25, "verified": 0.0, "capacity at spec": 8e12, "free at spec": 8e12,
                    "capacity at measured": 6.4e12, "free at measured": 6.4e12, "error": 2.0 ** -30}
 
 
@@ -684,7 +685,7 @@ def test_the_node_runs_session_writes_its_amounts_from_the_fire_run(store, capsy
     assert bench(store, "some-period", run=gate_run(tmp_path, [])) == 0
     _, doc, _ = printed(capsys)
     got = written(held)
-    assert list(got) == SHARED and got["metric"]["value"] == doc["value"] == 0.5
+    assert list(got) == SHARED and got[M.METRIC]["value"] == doc["value"] == 0.5
     assert (got["verified"]["value"], got["free at spec"]["value"]) == (4e12, 4e12)
     assert all(m["inputs"][:2] == ["measured", FIRE] for m in got.values())
 
@@ -733,8 +734,8 @@ def test_a_second_session_printed_in_one_run_keeps_the_first_ones_result_and_say
     _, doc, err = printed(capsys)
     assert doc["value"] == 0.5 and json.loads((held / "out" / "memory.json").read_text()) == doc
     assert f"memory: the result ({', '.join(SHARED)}) is not written: " in err
-    assert "already holds a measurement named metric" in err
-    assert (held / "result.json").read_bytes() == kept and written(held)["metric"]["inputs"][1] == RUN
+    assert f"already holds a measurement named {M.METRIC}" in err
+    assert (held / "result.json").read_bytes() == kept and written(held)[M.METRIC]["inputs"][1] == RUN
 
 
 class Local:

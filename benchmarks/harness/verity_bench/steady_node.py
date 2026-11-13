@@ -77,6 +77,8 @@ NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
 CARDS = ("nvidia-smi", "--query-gpu=index,pci.bus_id", "--format=csv,noheader")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
+#: the name a passed point's rate is written under in its result: the metric's id, OWNER/NAME
+RATE = "benchmarks/flock-steady.statements-per-s"
 
 #: a command's exit code, its output to a log file
 Runner = Callable[[Sequence[str], Path], int]
@@ -429,7 +431,7 @@ def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, wh
         if host is None:
             raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
                              "measurement is written under")
-        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s", mark="measured")
+        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement(RATE, rate, "1/s", mark="measured")
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,

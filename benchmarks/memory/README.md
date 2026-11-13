@@ -56,8 +56,8 @@ reason in place of a number, and the session's number still prints.
 Under `research run`, an accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json`, where `research` reads a run's result, through the harness kit's writer
 (`benchmarks/harness/verity_bench/kit.py`), in the five fields every resource's benchmark reports. Each is read from
-the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the
-printed number in its unit); `verified` (the bytes the verifier certified read over the session's span, its
+the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from:
+`memory-accounting/memory-uncertified-share` (the metric's id: the printed number in its unit); `verified` (the bytes the verifier certified read over the session's span, its
 `certified_bytes`); `capacity at spec` and `capacity at measured` (for each reading the ledger holds, the data sheet's
 read bandwidth and the measured read rate, that rate times the span); `free at spec` and `free at measured` (γ of that
 capacity, so free over capacity is the reading's γ, the printed number at the first, and verified and free are the

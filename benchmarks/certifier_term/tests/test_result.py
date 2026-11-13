@@ -147,18 +147,19 @@ def test_the_result_is_the_kits_and_nothing_else_is_written(tmp_path, capsys, mo
 def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
     bench(capsys, "--out", str(tmp_path), *GIVEN)
     got = result(tmp_path)
-    assert list(got) == ["certifier_term/modeled/metric",
+    assert R.METRIC == "network-accounting/certifier-term"
+    assert list(got) == [R.METRIC,
                          *(f"certifier_term/modeled/{scope}/{period}/{amount}"
                            for scope in LB.SCOPES for period in LB.PERIODS for amount in AMOUNTS)]
-    assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got)
+    assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got if name != R.METRIC)
     assert all(m["mark"] == "modeled" and m["inputs"][0].startswith("modeled") for m in got.values())
     assert all(m["unit"] == AMOUNTS.get(name.rsplit("/", 1)[1], "GB") for name, m in got.items())
     # the shared fields' last words, the error's among them
     assert R.ERROR == "error"
-    assert {name.rsplit("/", 1)[1] for name in got} == {"metric", "free", "capacity", "verified", "error"}
+    assert {name.rsplit("/", 1)[1] for name in got if name != R.METRIC} == {"free", "capacity", "verified", "error"}
     # only the rows the command was asked for, with the term of record
     bench(capsys, "--out", str(tmp_path / "one"), *GIVEN, "--scope", "datacenter", "--period", "month")
-    assert list(result(tmp_path / "one")) == ["certifier_term/modeled/metric",
+    assert list(result(tmp_path / "one")) == [R.METRIC,
                                               *(f"certifier_term/modeled/datacenter/month/{amount}" for amount in AMOUNTS)]
 
 
@@ -183,7 +184,7 @@ def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_p
         assert got[f"{name}/free"]["inputs"][1:] == [R.at_delta(LB, doc) if k == "scan_delta" else R.stated(k, i)
                                                      for k, i in doc["inputs"].items()]
     # the term of record: the world's year's, in GB
-    metric, year = got["certifier_term/modeled/metric"], got["certifier_term/modeled/world/year/free"]
+    metric, year = got[R.METRIC], got["certifier_term/modeled/world/year/free"]
     assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
     assert metric["value"] == float(exact["world", "year"].terms[2].certifier / LB.GB)
     assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
@@ -199,7 +200,7 @@ def test_the_metric_and_free_stand_against_the_documents_target(tmp_path, capsys
             free = got[f"certifier_term/modeled/{scope}/{period}/free"]
             assert free["target"] == target_gb * LB.GB
             assert free["verdict"] == ("over target" if multiple > 1 else "within target")
-        metric = got["certifier_term/modeled/metric"]
+        metric = got[R.METRIC]
         assert (metric["target"], metric["verdict"]) == (
             target_gb, "over target" if said["world", "year"] > 1 else "within target")
         # a target under every row's term, and one over every row's
@@ -282,7 +283,7 @@ def test_a_row_whose_error_is_1_or_more_carries_no_amount(tmp_path, capsys):
             assert (verified["value"], absent(verified)) == (None, why)
         assert none == {"datacenter", "world"}
         # the term of record's row is the world's year's, so the metric has no value either
-        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
+        metric, year = got[R.METRIC], scans(doc)["world", "year"]
         assert (metric["value"], metric["verdict"], metric["unit"]) == (None, None, "GB")
         assert absent(metric) == [f"absent: no bound at this period: the row's error, {year['eps']}, is 1 or more"]
     assert "request count plan" in got["certifier_term/modeled/world/year/free"]["inputs"][0]
@@ -308,8 +309,8 @@ def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(
         text = bench(capsys, "--out", str(tmp_path / str(at)), *argv, *asked)
         assert LB.main([*argv, *asked]) == 0 and capsys.readouterr().out == text
         got, doc = result(tmp_path / str(at)), document(capsys, *argv)
-        metric, year = got["certifier_term/modeled/metric"], scans(doc)["world", "year"]
-        assert list(got) == ["certifier_term/modeled/metric", *(f"certifier_term/modeled/node/week/{a}" for a in AMOUNTS)]
+        metric, year = got[R.METRIC], scans(doc)["world", "year"]
+        assert list(got) == [R.METRIC, *(f"certifier_term/modeled/node/week/{a}" for a in AMOUNTS)]
         assert got["certifier_term/modeled/node/week/free"]["value"] > 0
         assert (year["eps"] < 1) is bounded and metric["value"] == (doc["value"] if bounded else None)
         assert absent(metric) == ([] if bounded else [f"absent: no bound at this period: the row's error, {year['eps']}, "
@@ -332,7 +333,7 @@ def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
     bench(capsys, "--out", str(tmp_path), "--registration", str(log(tmp_path)), *argv)
     got, doc = result(tmp_path), document(capsys, *argv)
     assert len(got) == EVERY and all(m["value"] is not None and not absent(m) for m in got.values())
-    assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
+    assert got[R.METRIC]["value"] == doc["value"]
     errors = {at: got[f"certifier_term/modeled/{at[0]}/{at[1]}/error"]["value"] for at in scans(doc)}
     assert errors["world", "year"] == max(errors.values()) <= float(AT_MOST) and min(errors.values()) > 0
     assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
@@ -387,7 +388,7 @@ def test_refusals(tmp_path, capsys):
     assert capsys.readouterr().out == "" and not out.exists()
     bench(capsys, "--out", str(out), *GIVEN)
     first = (out / kit.RESULT).read_bytes()
-    with pytest.raises(SystemExit, match="already holds a measurement named certifier_term/modeled/metric"):
+    with pytest.raises(SystemExit, match=f"already holds a measurement named {R.METRIC}"):
         R.main(["--out", str(out), *GIVEN])
     assert capsys.readouterr().out == "" and (out / kit.RESULT).read_bytes() == first
 

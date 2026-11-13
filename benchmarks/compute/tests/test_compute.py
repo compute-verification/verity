@@ -456,8 +456,9 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert list(got) == ["metric", "verified", "capacity", "free", "error"]
-    assert (got["metric"]["value"], got["metric"]["unit"], got["metric"]["target"], got["metric"]["verdict"]) == (
+    assert C.METRIC == "compute-accounting/compute-credited-share"
+    assert list(got) == [C.METRIC, "verified", "capacity", "free", "error"]
+    assert (got[C.METRIC]["value"], got[C.METRIC]["unit"], got[C.METRIC]["target"], got[C.METRIC]["verdict"]) == (
         0.75, C.UNIT, 0.97, "below target")
     assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
     why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
@@ -492,7 +493,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     assert C.capacity(h200_site(2), Fraction(600)) == {"tensor": tensor, "sm": sm}
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
     got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
-    assert list(got) == ["metric", "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
+    assert list(got) == [C.METRIC, "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
                          "free at clock.sm", "error"]
     assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
         tensor, tensor - CREDITED, sm, sm - CREDITED]

@@ -1108,7 +1108,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert result["workload_fingerprint"]["identity"] == node.identity
     assert result["schema"] == kit.RESULT_SCHEMA
     assert result["measurements"] == [{
-        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
+        "name": "benchmarks/flock-steady.statements-per-s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
         "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"],
         "host": STAMP}], "the kit's writer's"
 

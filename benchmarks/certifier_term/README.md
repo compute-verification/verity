@@ -36,9 +36,10 @@ With `--out DIR` the runner also writes its result, through the harness kit's wr
 and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
 (`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
 term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
-it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+it prints doesn't change. Every measurement is the model's, and its mark (`modeled`) and every name but the metric's
+say so; none is computed from a run's K.
 
-- `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
+- `network-accounting/certifier-term`, the metric's id: the term of record, the document's `value`, in GB, against the document's target.
   Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
   scan's over the world's year, whichever rows the command prints.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
@@ -58,7 +59,7 @@ it prints doesn't change. Every measurement is the model's and its name says so;
   as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
 
 A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
-`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so is `metric`
+`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so is the metric
 where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
 enters. What the command prints is the calculator's still, those rows' terms among it.
 
