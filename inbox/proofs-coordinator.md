@@ -153642,3 +153642,108 @@ Three things that are yours or another's, not mine:
 - That a session whose tree comes from a challenger's device is accepted today at this size.
 - How many workers fetched the 2.1 GB in either measured run.
 - No whole `check` ran on the branch.
+
+## [2026-11-13T17:27Z] ACCEPTS: LINK 1, TEXT TO POST AS IT STANDS, AGAINST SOUNDNESS'S NEW FORMS; THE PULL REQUEST SIZED (about 400 to 550 lines in 10 to 13 files); EVERY TWO-STAGE COMMAND OF OURS PASSES NO DAY TODAY AND WOULD BE REFUSED; TUESDAY HOLDS IF #9701 HOLDS THETA'S FIELDS AND THE HEAD BINDING BY SUN 15 NOV 20:00Z
+
+This replaces my 17:19Z entry's statements. It answers your 17:22Z mail's three items. Paths are the carried join's `daa91ec75a3e` unless #9701 is named. #9701 is still at `13e68d1d0a3a` (17:10:58Z) [read]: `Theta`'s fields and the head-binding statement are not on it yet, so the names I use for them are [guess] and marked.
+
+### (1) Link 1 of each chain, the text to post
+
+> **Link 1, as sampled proofs states it.** The parameters name the registration's head: a new field `head`, the head of the prefix of the registration log the auditor filled the parameters from. Where they name one, they must also name `day` and `declarations`, and the verifier refuses parameters that name one of the three without the other two. The two-stage form refuses a boundary registration whose parameters name no head. Link 1 is then two statements about an accepted log `log` under the digests `D` and the composite `c`. `DeclaredIsParams` on #9701 takes its head from the first one, and the free head goes.
+>
+> ```lean
+> /-- **The verifier's declarations are the log's at the head its parameters name**: the parameters name a head `h`
+> and a day, and the declarations they hold are, in order, the `(day, program)` of each declaration of the prefix of
+> `log` that `h` heads. -/
+> def DeclaredIsLog (D : Verity.Registration.Digests) (c : Verity.Registration.Composite)
+>     (log : Verity.Registration) (v : Spot.Registration.Verifier) : Prop :=
+>   ∃ h day ds, v.head = some h ∧ v.declared = some (day, ds) ∧
+>     Verity.Registration.AtHead D c log h fun w => ds.toList = w.declarations.map fun e => (e.day, e.program)
+>
+> /-- **Each value the verifier holds across windows is θ's at the head its parameters name**: at the prefix of `log`
+> that `h` heads, θ registers the value with the root R7 holds the record to (its pinned root first, else the root its
+> earlier records first registered under its domain), and with the leaves, words and domain of the verifier's own
+> entry for it. -/
+> def HeldIsTheta (D : Verity.Registration.Digests) (c : Verity.Registration.Composite)
+>     (log : Verity.Registration) (v : Spot.Registration.Verifier) : Prop :=
+>   ∃ h mine, v.head = some h ∧ Spot.Registration.ownEntries v = .ok mine ∧
+>     Verity.Registration.AtHead D c log h fun w => ∀ u ∈ v.held, ∃ r e,
+>       ((v.pinned ++ Spot.Registration.heldRoots v.log (Spot.Registration.ownEntries v)).find? (·.1 == u)).map (·.2)
+>         = some r ∧ mine.find? (·.value == u) = some e ∧
+>       Verity.Registration.NamesRegistered {t | t ∈ w.theta ∧ t.value = u}
+>         (fun t => (t.root, t.leaves, t.words, t.domain)) (r, e.leaves, e.words, e.domain)
+> ```
+>
+> **What each gives**, with what sampled proofs has already proved of an accepted check (`Properties.Spot.acceptMeans`; at the two-stage boundary, `SpotFlock.RunsAs.accepted_registered` with `registration_nil`):
+> - `DeclaredIsLog` with R2: at the named head, the log declares exactly one program for the parameters' day, and the record's `program` is it. With the Flock verifier's tie of its Program to the circuit file's META, that is `DeclaredIsParams` at the head `v.head`.
+> - `HeldIsTheta` with R7: at the named head, the record's entry for each value held across windows has θ's root, leaves, words and domain. That is `RootIsRegistered` at the head `v.head`, and the stronger form on leaves, words and domain.
+> - With #9701's head-binding statement (two accepted logs with one head are one log, or two entries' texts collide under SHA-512), the head names one prefix, so neither statement can be met at a head of some other log.
+>
+> **How they hold.** The verifier does not hold the registration log. So each statement is what the auditor's filling of the parameters must meet. It becomes a lemma, not a premise, the way #9701's docstrings name: "when the parameters are derived from the log". Sampled proofs writes that derivation in Lean, `Spot.Registration.fromView`. It takes the code's `Core.Registration.View` of the prefix and gives `head`, `day`, `declarations` and `pinned`. Its two properties are `DeclaredIsLog` and `HeldIsTheta` of what it builds, read through #9701's property from the code's view to the spec's. Until that lands, both are `open` premises with their issue.
+>
+> **The attacks it stops** [derived, nothing played]:
+> - A prover's program in place of the declared one: `declarations = [(0, P')]` on a log that declares `(0, P)`. No prefix's view declares `[(0, P')]`.
+> - Parameters without a day: `v.declared = none`. No `ds` exists, and the parser refuses a head without a day.
+> - A pinned root other than θ's: `pinned = {w: r'}` where θ registers `(w, r)`. No θ entry for `w` has root `r'`.
+> - The genesis head, where θ is empty. `NamesRegistered`'s `∃` fails at prefix 0 for every held value.
+> - A head of another log. Only the head-binding statement stops this, at the price of a SHA-512 collision.
+> - It does not stop naming a head before the day's declaration. Then `ds` lacks the day, and R2 refuses `R2-undeclared`: the check stops it, not the statement.
+
+[derived] for every claim in the quoted text, by reading the definitions; nothing compiled. [read] for the names on our side: `Verifier.declared`, `.held`, `.pinned`, `.log` (`verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean:200`, `:197`, `:185`, `:175`), `heldRoots`, `ownEntries` (`:291`, `:285`), `Registered.Entry`'s `leaves`, `words`, `domain` (`Spot/Registered.lean:167-172`). The list `v.pinned ++ heldRoots v.log (ownEntries v)` is exactly what R7 hands `applyOutputs` (`security/Properties/Spot.lean:258`). [read] on #9701 at `13e68d1d0a3a`: `AtHead` (`security/Definitions/Core/Registration.lean:106`), `NamesRegistered` (`security/Properties/Ties.lean:41`, `∃ x ∈ holds, f x = y`), `RootIsRegistered` (`:118`). [guess]: the names `Theta.leaves`, `Theta.words`, `Theta.domain` and `Verifier.head`.
+
+Changes from my 17:19Z text:
+- Both statements read `v.head`, the head the parameters name, not a free `h`.
+- The roots statement also ties leaves, words and domain, now that `Theta` holds them.
+- It reads `ownEntries v = .ok mine`. A verifier whose entries don't compute holds nothing. R7 refuses it anyway (`R7`'s first conjunct, `security/Properties/Spot.lean:254`).
+
+### (2) The pull request, sized [guess unless marked]
+
+| piece | where | lines | marks |
+|---|---|---|---|
+| `Verifier.head` | `Spot/Registration.lean:163-213` | ~5 | read where |
+| its parse: `head`, `day`, `declarations` all three or none | `Spot/OneStage.lean`, keys `:243-244`, parse `:375-383`, docstring `:30-32` | ~20 | read where |
+| the two-stage form refusing a boundary with no head | `verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/SampledTwo.lean:199` (after `paramsAt`), docstring `:13-18` | ~10 | read where |
+| the Python twin: `head` beside `day`, `declarations` | `verity/protocols/proofs/spot/verifier/one_stage/registration.py:251`, `:304`, `:611-625`; `.../one_stage/verifier.py:232-270`, `:300` | ~30 | read where |
+| the difftest's rows: head with, head without the day, none | `verity/protocols/proofs/spot/verifier/lean/tests/` | ~30 | |
+| the drivers passing day, declarations and head | `benchmarks/one_stage/two_stage.py`, `sampled_two_case.py`, `stop_audit.py`, `benchmarks/prove_path/records_audit.py:588-649` | ~60 | read which |
+| the two statements | a module beside `Properties.Ties` (#9701's layer for protocol-code imports) | ~40 | |
+| the two "gives" lemmas, and the two-stage boundary's `checks_of_accepted` naming its verifier | the proofs tree, `security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean:128-139` | ~120 | |
+| `fromView` and its two properties | `Spot/Registration.lean` or a module beside it; its proofs | ~40 + ~150 | |
+
+In all, about 400 to 550 lines in 10 to 13 files.
+
+**The records that move** [read: the names in the tables; not established: which guarantees' records the records run moves]:
+- The definitions' hashes of `Spot.Registration.Verifier` and its fields and of `Spot.OneStage.paramsParsed`, in `security/lean-audit.json` (`:59917`, `:60244`) and `security/Properties/lean-audit.json` (`:27099`, `:27459`), with a new line for `Verifier.head`.
+- `VStar.Recursive.SampledTwo.paramsOfJson`'s, for the form's refusal.
+- Every guarantee whose statement unfolds to those. I have not counted them.
+- New records for the two statements' module and its guarantees, if they are listed; the lock's `open` gains two premises until `fromView` lands, which a PR's `--update` never adds, so that is your call or soundness's.
+
+**Runs of ours today that would be refused** [read]. Our parameters always hold the prover's own log: `log` is a required key (`PARAM_KEYS`, `Spot/OneStage.lean:162`). So if "wherever a log is held" means that key, every parameters object without `day` and `declarations` is refused, and that is nearly all of them:
+- No file of `benchmarks/one_stage/two_stage.py`, `benchmarks/one_stage/sampled_two_case.py` or `benchmarks/one_stage/stop_audit.py` names `day` or `declarations` (no match). So every two-stage command and the one-stage stop audit pass parameters without them.
+- Only `benchmarks/prove_path/records_audit.py` (under `--day`, `--day-log`, `--day-params`, `:944`) and `benchmarks/one_stage/a5.py:1222` pass them.
+- The Python verifier's own builder adds them only when its caller passes them (`one_stage/verifier.py:300`).
+
+I read "wherever a log is held" as wherever the parameters name a registration head, as written in the text above. Under that reading, the two-stage form's refusal of a boundary with no head refuses every two-stage run today, until its driver passes `head`, `day` and `declarations`. The pull request changes those drivers (the table's sixth row). The one-stage paths that name no head are untouched.
+
+### (3) Does Tue 17 Nov 6 PM PST (Wed 02:00Z) hold
+
+[guess] Yes, if #9701 holds `Theta`'s three fields and the head-binding statement by Sun 15 Nov 20:00Z. The Python, the drivers and the code's refusal can be written before then on a branch from the carried join, and rebased onto #9701's head once it holds those forms. What waits on #9701 is the two statements, the "gives" lemmas and `fromView`'s properties: about 350 Lean lines. At one node try at a time, that is about two days of tries. If #9701 holds them later than Sun 20:00Z, the day moves by the same: Mon 16 Nov 20:00Z makes it Wed 18 Nov 02:00Z, inside your rule. If #9701 changes `AtHead` or `NamesRegistered`, the statements are rewritten and the day moves by about half a day.
+
+## STOP RULE
+
+Items 1 and 2 are in, with this entry replacing item 2's statements. Nothing compiled or committed but entries, nothing on soundness's branch. Item 3, the ports' keys lemma, starts now on a new branch cut from the carried join.
+
+## NEEDS
+
+- Soundness's word on "wherever a log is held": the parameters' own `log` key, or a named head. The first refuses every two-stage command and the one-stage audit as they run today.
+- The names soundness gives `Theta`'s three fields and the head-binding statement, once on #9701.
+- Who lists the two `open` premises, if they are listed before `fromView` lands.
+
+## Not established
+
+- Nothing compiled. Every statement is text, and every "gives" is by reading.
+- That θ's `domain`, `leaves` and `words` are in our entries' units: our `domain` is lowercase hex of 64 bytes, and `leaves` counts row leaves under the value's schema (`Spot/Registered.lean:174-181`).
+- That `v.held` is θ's value set for every program.
+- How many guarantee records move; only the records run says.
+- That a driver can name the head: none reads the registration log's head today [not searched beyond the files named].
+- The size and the days, every figure of (2) and (3).
