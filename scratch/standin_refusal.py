@@ -43,16 +43,16 @@ def probed(argv: list[str], env: dict | None = None) -> dict:
     return got
 
 
-def audit_argv(window: Path, out: Path, main: Path, bin_: Path, leanb: Path) -> list[str]:
+def audit_argv(window: Path, out: Path, main: Path, bin_: Path, leanb: Path, ports: int) -> list[str]:
     """`v3c_audit`'s argv at this commit, less ``--registered`` (the stand-in reads no registered value), plus
-    ``--deployed-key``."""
+    ``--deployed-key``, with a port a member (``ports``): every member is sampled."""
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/flock/prover/python",
                                                   "adapters/vllm"))
     return [str(ROOT / ".venv" / "bin" / "python"), str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit",
             "--window", str(window), "--law", T.DESIGN, "--circuit",
             hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", T.RUN, "--challenger", "local",
             "--main", str(main), "--m0-pythonpath", m0, "--bin", str(bin_), "--lean", str(leanb / "flock-verify"),
-            "--firewall", str(leanb / "flock-firewall"), "--ports", "2", "--out", str(out), "--deployed-key"]
+            "--firewall", str(leanb / "flock-firewall"), "--ports", str(ports), "--out", str(out), "--deployed-key"]
 
 
 def one(out_root: Path, ks: tuple[int, ...], bin_: Path, leanb: Path) -> dict:
@@ -66,7 +66,7 @@ def one(out_root: Path, ks: tuple[int, ...], bin_: Path, leanb: Path) -> dict:
     main = work / "main.txt"
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
-    argv = audit_argv(window, work / "audit", main, bin_, leanb)
+    argv = audit_argv(window, work / "audit", main, bin_, leanb, len(ks))
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FC_", "FLOCK_")) and k != "PYTHONPATH"}
     env.update(RAYON_NUM_THREADS=str(os.cpu_count()), RUST_MIN_STACK=str(64 << 20), FLOCK_CHALLENGER="1")
     res: dict = {"ks": list(ks), "audit_command": "FLOCK_CHALLENGER=1 " + " ".join(argv)}
@@ -108,6 +108,7 @@ def one(out_root: Path, ks: tuple[int, ...], bin_: Path, leanb: Path) -> dict:
                  "session": sum(b.stat().st_size for b in blobs if b.name != "circuit.txt" and not b.name.startswith("pub-")),
                  "case_files": sum(p.stat().st_size for p in paths)}
         sizes["total"] = sum(sizes.values())
+        sizes["circuits"] = sorted(b.stat().st_size for b in blobs if b.name == "circuit.txt")
         line = (r["stdout"].strip().splitlines() or [""])[-1]
         res["refusal"] = {"command": " ".join([exe.name, "refusal", "PARAMS", "COMMITMENT", "EVIDENCE",
                                                f"[{len(blobs)} blobs]"]),
@@ -123,7 +124,7 @@ def one(out_root: Path, ks: tuple[int, ...], bin_: Path, leanb: Path) -> dict:
 
 def main() -> int:
     out, bin_, leanb, *sets = sys.argv[1:]
-    for s in sets:
+    for s in (x for part in sets for x in part.split("/")):
         try:
             one(Path(out), tuple(int(k) for k in s.split(",")), Path(bin_), Path(leanb))
         except Exception as x:  # noqa: BLE001 -- a larger window's failure leaves the smaller windows' results
