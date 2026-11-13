@@ -45,7 +45,7 @@ env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-no
 [[loop]]
 name = "monitors-relay"
 argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "vy-nebius-cpu-1",
-        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check",
+        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check", "stranded",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]

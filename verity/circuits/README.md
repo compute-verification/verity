@@ -5,9 +5,9 @@ evaluates or checks a circuit: this package and its subpackages, the served work
 (`verity.definitions`), the private circuits (`verity.definitions.private_circuits`) and `circuit-check`. It says what the
 words mean, names the one front door for each job, and links each part's README.
 
-Everything in this package is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`): the verifiers in
-`verity/protocols/` (each protocol's `verifier/`) read Programs, their digests and these semantics. The descriptor
-format, its canonical bytes and its digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and
+Everything in this package is on the soundness path (the trusted places of `tests/import_order.toml` reach it): the
+verifiers in `verity/protocols/` (each protocol's `verifier/`) read Programs, their digests and these semantics. The
+descriptor format, its canonical bytes and its digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and
 `tests/format_vectors.json` pins them.
 
 ## Terms
@@ -81,7 +81,10 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   `circuit-check --combine` joins them. A sharded check can first build every catalog binding's record once, in check's
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
   (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`): a candidate's
-  check runs it, and its red holds nothing.
+  check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
+  that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
+  either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
+  a store carries them to another run.
 - The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
   `circuit-catalog` task, which builds those records, one `circuit-binding` task per catalog binding, which checks only that
   binding's targets from them (`circuit-check --all --catalog-units --binding NAME`), and a `circuit-coverage` task, which
