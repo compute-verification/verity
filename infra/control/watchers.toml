@@ -13,6 +13,8 @@ heartbeat_table = "store_private.control_heartbeat"
 cloud_watch_state = "/data/cloud-watch/state.json"
 
 [env]
+# {src}/infra/control/bin comes first: its `gh` runs {dir}/bin/gh with the pod's read-only App token of that call
+# (/data/infra/gh_read_token.sh --cached), so no loop reads GitHub with a token from an env file or from its start
 PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
 HOME = "/root"
