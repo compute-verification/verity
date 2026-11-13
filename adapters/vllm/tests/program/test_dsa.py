@@ -23,12 +23,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import prims as P
+
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF
@@ -170,7 +170,7 @@ def _butterfly(lanes: list[int], op, offsets) -> int:
     """`shfl.sync.bfly` at each offset in turn, lane l becoming op(own, partner); lane 0's word."""
     v = list(lanes)
     for o in offsets:
-        v = [op(v[l], v[l ^ o]) for l in range(len(v))]
+        v = [op(v[lane], v[lane ^ o]) for lane in range(len(v))]
     return v[0]
 
 
@@ -181,7 +181,7 @@ def _block_sum(lanes: list[int], first=None) -> int:
     for g in range(len(lanes) // 32):
         w = lanes[32 * g:32 * g + 32]
         if first is not None:
-            w = [first(w[l], w[l ^ 16]) for l in range(32)]
+            w = [first(w[lane], w[lane ^ 16]) for lane in range(32)]
             warps.append(_butterfly(w, _fadd, (8, 4, 2, 1)))
         else:
             warps.append(_butterfly(w, _fadd, (16, 8, 4, 2, 1)))
@@ -568,7 +568,7 @@ def test_logit_against_vllm_reference() -> None:
     w = _f32(rng, 32, 0.0, 0.05)
     ks = [_e4m3_row(rng, 128) for _ in range(N)]
     sc = [D.f32_bits(2.0 ** -int(rng.integers(0, 6))) for _ in range(N)]
-    got = np.asarray(_flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w,
+    got: np.ndarray = np.asarray(_flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w,
                                     [v for r in ks for v in r], sc)), np.uint32).view(np.float32).astype(np.float64)
     qt = torch.tensor(q, dtype=torch.uint8).view(torch.float8_e4m3fn).double()
     kt = torch.tensor(ks, dtype=torch.uint8).view(torch.float8_e4m3fn).double()

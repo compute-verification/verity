@@ -13,19 +13,26 @@ import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
-
-from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
-from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity.circuits.program import Program
 from verity.circuits.codec import program_digest
-from verity.circuits.refs import Coll
-from verity.definitions.registry import b1, prims as P
+from verity.circuits.defs import REGISTRY
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array as Arr_
+from verity.circuits.types import Tuple as Tup_
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1, serve3
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import stop_check as SC
 
+from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import examples
-from verity_vllm.program.frontend.correspond import correspond_rebound
-from verity_vllm.program.frontend.torch_frontend import export as fe_export, function
+from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend.correspond import compare_bodies, correspond_rebound
+from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
+from verity_vllm.program.frontend.rules import DEFAULT_RULES
+from verity_vllm.program.frontend.rules.family import DecoderLayerT
+from verity_vllm.program.frontend.torch_frontend import export as fe_export
+from verity_vllm.program.frontend.torch_frontend import function
 
 REF = dict(mode="reference")
 PROF = dict(mode="profile", profile="b1-eager")
@@ -134,7 +141,7 @@ def test_s1_mlp_reference_mode_evaluates_and_matches_stated_semantics():
     with torch.no_grad():
         ref = m(x)
     ref_f = ref.numpy().reshape(-1)
-    got_f = got.view(np.float32).reshape(-1)
+    got_f: np.ndarray = got.view(np.float32).reshape(-1)
     ulp = np.abs(got.reshape(-1).astype(np.int64) - _f32_bits(ref).reshape(-1).astype(np.int64))
     assert np.allclose(got_f, ref_f, rtol=1e-5, atol=1e-6)
     assert ulp.max() <= 64
@@ -143,9 +150,6 @@ def test_s1_mlp_reference_mode_evaluates_and_matches_stated_semantics():
 def test_s1_gemm_structure_corresponds_to_examples_gemm():
     """Profile-mode Linear (bf16) derives to exactly the registered `Gemm_v1{K,N}` + `BiasAdd_v1{N}` kinds — the same
     definitions `examples.py`'s authored Gemm uses, so the derived body equals the authored body node for node."""
-    from verity.circuits.defs import bind as ir_bind
-    from verity_vllm.program.frontend.correspond import compare_bodies
-
     m = torch.nn.Linear(16, 8, device="meta", dtype=torch.bfloat16)
     rep = derive_report(m, (_meta(1, 16),), **PROF, name="Linear")
     assert rep.ok, rep.unsupported
@@ -196,7 +200,6 @@ def test_gpt2_mlp_block_reference_mode_layernorm_conv1d_gelu():
     x = torch.randn(3, 16)
     rep = derive_report(m, (torch.empty(3, 16),), **REF, name="GPT2MLP")
     assert rep.ok, rep.unsupported
-    ids = [n.fn.id for n in rep.flat_definition.body.nodes]
     bases = [n.fn.base_id for n in rep.flat_definition.body.nodes]
     assert bases[:3] == ["LayerNormRef_v1"] * 3 and bases.count("LinearRef_v1") == 6, bases
     assert bases.count("GeluRef_v1") == 1 and bases.count("AddRef_v1") == 1
@@ -206,7 +209,7 @@ def test_gpt2_mlp_block_reference_mode_layernorm_conv1d_gelu():
     assert set(rep.provenance["rules_applied"]) == {"LayerNorm[reference]_v1", "Linear[reference]_v2", "Elementwise[reference]_v3"}
     apps = {a["node"]: a for a in rep.provenance["applications"] if a["rule"] == "Linear[reference]_v2"}
     assert all(a["preconditions_checked"]["W_transposed_view"] for a in apps.values())
-    got = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(3, 16)
+    got: np.ndarray = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(3, 16)
     with torch.no_grad():
         ref = m(x).numpy()
     assert np.allclose(got, ref, rtol=1e-4, atol=1e-5), np.abs(got - ref).max()
@@ -229,7 +232,7 @@ def test_gpt2_tiny_lm_reference_mode_end_to_end():
     ws = rep.provenance["weights"]
     assert ws[0]["name"] == "wte.weight" and ws[0]["aliases"] == ["lm_head.weight"]
     ids = torch.tensor([3, 17, 5, 30])
-    got = _evaluate(rep.program, ws, ids, m, x_bits=[int(v) for v in ids.tolist()]).view(np.float32).reshape(4, -1)
+    got: np.ndarray = _evaluate(rep.program, ws, ids, m, x_bits=[int(v) for v in ids.tolist()]).view(np.float32).reshape(4, -1)
     with torch.no_grad():
         ref = m(ids).numpy()
     assert np.allclose(got, ref, rtol=1e-4, atol=1e-5), np.abs(got - ref).max()
@@ -246,7 +249,6 @@ def test_gpt2_greedy_request_reference_mode_tokens_match_torch():
     assert kinds["ArgmaxRef_v1"] == 3 and kinds["I64ToI32_v1"] == 4 and kinds["EagerAttentionRef_v1"] == 2 * (2 + 3 + 4)
     assert "IntCatNarrow[reference]_v1" in rep.provenance["rules_applied"]
     ids = torch.tensor([3, 17])
-    from verity.definitions.numerics.serve3_reference import materialize
     wbits = np.concatenate([_bits(dict(g.named_parameters())[w["name"]]) for w in rep.provenance["weights"]])
     t = materialize(rep.program, [[int(v) for v in ids.tolist()], [int(v) for v in wbits]])
     got = [int(t[o]) for o in rep.program.circuit.root_outputs()]
@@ -272,7 +274,7 @@ def test_xfer_conv1d_matmul_layout_and_bias_broadcast():
     rep = derive_report(m, (torch.empty(4, 16),), **REF, name="XConv1D")
     assert rep.ok, rep.unsupported
     assert set(rep.provenance["rules_applied"]) == {"Matmul[reference]_v1", "BroadcastBiasAdd[reference]_v1"}
-    got = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(4, 8)
+    got: np.ndarray = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(4, 8)
     with torch.no_grad():
         assert np.allclose(got, m(x).numpy(), rtol=1e-5, atol=1e-6)
 
@@ -304,8 +306,6 @@ def test_literal_written_into_a_tensor_is_a_mutation():
 
 
 def _layer_oracle_digest(C, L0: bool, T: int, T0: int = 0) -> str:
-    from verity.circuits.defs import bind as ir_bind
-    from verity_vllm.program.frontend.rules.family import DecoderLayerT
     return program_digest(Program(ir_bind(DecoderLayerT, C=C, L0=L0, T=T, T0=T0)))
 
 
@@ -358,7 +358,6 @@ def test_s2_allowed_dims_refuses_other_shapes():
 
 
 def _serve_oracle_digest(C, LP, STEPS) -> str:
-    from verity.circuits.defs import bind as ir_bind
     return program_digest(Program(ir_bind(b1.Serve, C=C, LP=LP, STEPS=STEPS)))
 
 
@@ -390,9 +389,6 @@ def test_s3_tiny_greedy_serve_matches_serve_v1():
 def test_s3_a_stop_config_returns_the_length_rule_as_the_programs_last_check():
     """With a `stop` config (the Build's `--stop`) the derived Program returns `StopCheck_v1` over its outputs as its last check,
     the Call `predict.build` makes for the same config, and claims no family; a config the rule can't take is refused."""
-    from verity.circuits.defs import bind as ir_bind
-    from verity.definitions.registry import stop_check as SC
-    from verity_vllm.program.frontend import stop_rule as SR
     LP, STEPS = 3, 2
     C, stop = _tiny_config(), SR.spec([7, 9], max_tokens=8, prompt_len=LP, max_model_len=64, outputs=STEPS + 1, finish=1)
     with torch.device("meta"):
@@ -531,8 +527,8 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):
     """The rule asks its selector for the served M=4 block and binds one CUDA vector-8 call per token."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
     monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
     m = ex.RMSNorm(6144, 1e-5)
@@ -554,7 +550,6 @@ def test_returned_parameter_is_recorded_explicitly():
 
 def test_unsupported_is_never_a_partial_program():
     """Unsupported carries no program; nothing is registered by a failed derivation."""
-    from verity.circuits.defs import REGISTRY
     before = set(REGISTRY.defs)
     r = derive(ex.NegUnknownOp(), (torch.empty(2, 8),), **REF)
     assert isinstance(r, Unsupported)
@@ -578,7 +573,6 @@ PROF_V2 = dict(mode="profile", profile="b1-eager-v2")
 
 
 def _serve_v3_oracle_digest(C3, LP, D_MAX) -> str:
-    from verity.definitions.registry import serve3
     return program_digest(Program(serve3.serve_v3(C3, LP, D_MAX)))
 
 
@@ -610,7 +604,6 @@ def test_pad_tiny_padded_serve_matches_serve_v3():
     rewrites = [a for a in rep.provenance["applications"] if a["rule"] == "CacheRowWrite[vllm]_v1"]
     assert len(rewrites) == C3["NL"] * D_MAX and all(a["preconditions_checked"]["slot"] == a["preconditions_checked"]["history_rows"] - 1 for a in rewrites)
     # output: (D_MAX+1 token slots i32, D_MAX+1 live bits); the live vector is on the return type, designation is PAD-INT's manifest
-    from verity.circuits.types import Array as Arr_, Tuple as Tup_
     _, ret = fsd.signature()
     assert isinstance(ret, Tup_) and ret.fields[0] == Arr_(D_MAX + 1, P.I32) and ret.fields[1] == Arr_(D_MAX + 1, P.BIT)
 

@@ -12,8 +12,8 @@ read-modify-write of one memory, under offline memory checking (`MemCheck_v1`, `
          l_en, l_tag, l_a, l_v0, l_v, l_t (NE of each)) -> (ok: Value<1>, head', tail', calls: Array<TW, Value<1>>, P: F)
         F = Array<128, Value<1>>, an element of GF(2^128); NW = bitlen(NB − 1), CW = KW + 1
 
-`CacheStep_v2` (`cache_step_v2`) holds vLLM's pool as a trie in one table, which every call reads and writes whole, so
-its price grows with the table. Here the pool is the five memories vLLM's `BlockPool` is made of, each call a fixed
+A pool held as one table, which every call reads and writes whole, costs each call the whole table. Here the pool is
+the five memories vLLM's `BlockPool` is made of, each call a fixed
 sequence of accesses to them, and a window's calls run in one stream of NS slots that each perform one access: which
 call runs where is private, so every slot can perform any call's access at any position. A window costs NS slots,
 whatever the pool's size. `Stream` is the specification in Python; `benchmarks/mempool/stream.py` holds it to the
