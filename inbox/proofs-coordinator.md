@@ -119349,3 +119349,22 @@ Next: when `7f6f` ends, open the pull request unmarked at this head and give you
 Not established: the properties lock at this head; the last six suites.
 
 For the table: R7 at `a287d4bf1247`; nine tries pass; waiting on `r20261113-030533-7f6f` (about 04:20Z) and `r20261113-030458-e51a` (about 04:45Z); pull request next, ready line by 06:00Z on track.
+
+
+## COUNT, Fri 13 Nov 04:06Z: #9479's ready line: `main` with #9454 is merged in, the pin is the one computed, three test files pass; its suites are out
+
+**In plain words, for Daniel.** The pull request that prints the security level beside each figure of the exfiltration command is merged with the main branch again, which a minute earlier took the network team's change to the same pinned print. The one line that had to move is the one computed beforehand. Its three test files pass; the full suites for this merge are running, and the suites of the merge before it passed.
+
+**Ready line.** #9479, head `03307c405574d5d48bc2d469b266cdf411bba6e9` on `cursor/proofs-count-70d5`:
+
+- It holds `main` at `d1a5cb986a2c`, which holds #9454 (MERGED 04:02Z) and #9521 [run: `gh pr view`, `git merge-base`]. It merges onto `main` with no conflict [run: `git merge-tree`, 04:05Z].
+- One conflict in the merge, the pin `NO_VERDICTS` in `benchmarks/harness/tests/test_exfiltration.py`, set to text `d3827f13c6936a3a5f218211d4e8110abb74c4075f154a1606f99e7ea329fafa`, json `627912cb87733f1cd4036f35d27de37aad9707700b5a686d2a678b5a8e5abbf0`: the digests the 03:58Z entry gave, and the test passes on them [run].
+- Tests at this head, on my VM, one file a command [run]: `benchmarks/harness/tests/test_exfiltration.py` 36 passed; `benchmarks/spot_figures/tests/test_binding.py` 63 passed; `benchmarks/spot_figures/tests/test_headline.py` 25 passed. `ruff check` on the two merged files of the harness: clean.
+- Suites at this head: `r20261113-040507-8074` on vy-nebius-cpu-4, launched 04:05Z, out; expected by about 04:35Z [guess: the last one took 28 minutes].
+- Suites at the head before this merge, `72b1a8a4a2b4`: 6 of 6 passed, none cached, in `r20261113-033239-bbbf`, 03:33Z to 04:01Z [run]: `benchmarks/certifier_term` 14, `verity-bench` 587, `repository` 392, `verity-network-traces` 682, `verity-graph` 246, `benchmarks/spot_figures` 255 passed and 1 skipped.
+- #9476 is still OPEN, its head moved to `dfff13dbf2d0`. It does not conflict with this head [run: `git merge-tree`], and at its earlier heads it did not move the pinned print [run]; I have not recomputed the print at `dfff13dbf2d0`.
+- Its diff against `main`: 8 files, 411 lines in, 9 out, as before [run].
+
+Whether to mark it before `8074` ends is yours: the line above says which suites ran at which head. I say `8074`'s result in my next entry.
+
+**Since the 03:58Z entry.** Your 03:58Z message came by the hook; read. Its fourth point, a verdict record's class, `serve` and `registration`: the section of #9621 reads no verdict record, but it prints one, the audit's own, held to the command's reader. I am adding the three names to that record from the served run's files (the class as the run's files name it, the serve's run, the registration the second stage read), each null and said so where a file is not given. I use the key `class` for the first, network's name; say if the driver's writer uses another. #9551 moved to `f7cfb5c09b62` and holds #9476's "a fix may be a range" now; I merge it into #9621's branch with that change and relaunch its suites once, so `r20261113-034848-bc7f` will be cancelled as superseded.
