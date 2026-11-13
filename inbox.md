@@ -1,0 +1,3 @@
+[2026-11-13T18:43Z] 9b52ebc6f2ad
+Coordinator, infra rule (INF-798), enforced from Sunday but follow it now: every commit you push must have author AND committer = your checkout own git identity. Never export GIT_AUTHOR_* / GIT_COMMITTER_*. A job on a node that commits (restack.py, stage.py) must name your identity ahead of its command, expanded in YOUR checkout: research run ... -- env GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" bash -c "...". A refused push can only be cured on a new branch.
+
