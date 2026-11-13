@@ -110742,3 +110742,17 @@ The proof that every gate an inner block needs is one of its own unit's bits, gi
 NEEDS: unchanged from 23:40Z (FRAME on `MembersRowed h`). None of HELDOF, HISTORY or OWNREADS's pieces are needed here.
 
 Not established: that the file elaborates.
+
+## REDRAW, Fri 13 Nov 00:40Z: CORRECTION to section 3 of my 00:34Z entry: I read the wrong branch for #9375; its head moved by one commit only, and the close is cut again at `92b97c953cbb` (pushed), its last run in line
+
+**What I got wrong.** [run] At 00:30Z I fetched `cursor/lean-remote-merge-landing-fc8d` (at `f3ffe4e2bbcb`, a commit of Thu 16:36Z) and took it for #9375's head. [run] `gh pr view 9375` says its head branch is `cursor/lean-remote-merge-onmain-fc8d`, at `34c5cbb3705c` since Thu 23:58Z, open, not merged. [derived] So these sentences of my 00:34Z entry are false: that #9375's branch "went from `67b2c6791982` to `f3ffe4e2bbcb`", that the old close "no longer merges", and the count of eleven stops with one of them ours. Nothing was pushed on the wrong reading.
+
+**What is true.**
+- [run] #9375's head `34c5cbb3705c` is `67b2c6791982` plus one commit, "The record difftest's helper takes Blocks.of's one value", one line of `verity/protocols/certifier/verifier/network/tests/test_nci_record_difftest.py`. [read] Its message names `test_a_pinned_readers_layout`, one of the two certifier tests that failed in my quick run of the old close (`r20261112-231039-07d2`). [derived] So that failure was the base's, and lean has mended it.
+- [run] #9373's head `e11d786b3477` against `34c5cbb3705c` stops in the same two files as before and no other: `security/Definitions/NetworkCertifier/Guarantees/Pooled.lean` and `verity/protocols/pous/lean/TRUSTED.sha256`. [run] `34c5cbb3705c` merges with `main` at `4f0154e42026` with no conflict, and so does #9373's head.
+- [run] **The new close: `92b97c953cbb3a02fe420e968a853bebb3f21b1e` on `cursor/proofs-redraw-9373-close-a41d`, pushed 00:37Z.** Its first parent is #9375's head `34c5cbb3705c`, its second the old close `50e5d9fcc06b`; #9373's head is an ancestor. [run] The merge was clean, `python3 tools/verity/check/pins.py --regen` changed nothing after it, and it differs from the old close in that one test file only. [run] Against #9375's head it changes 23 files, #9373's own.
+- [run] On my VM at the new close: the two certifier tests that failed (`test_a_pinned_readers_layout`, `test_the_reference_reads_a_record_as_the_interface_does`) pass, and so do the two of `tools/research/tests/test_auto.py` that failed (`KeyError: 'error'`); the close changes no file under `tools/research`. [guess] The `test_auto.py` pair reads the machine it runs on: it is about a node 2 that takes runs only through a check slot, and `07d2` ran in a check slot on vy-nebius-2.
+- Runs: [run] `r20261112-230953-7cde`, the old close's records run, printed `AUDIT: PASS` for `security/Properties` at 00:31Z and was still running at 00:40Z (the other packages' records). [run] `r20261113-003920-522c`, the two suites that failed, at the new close, vy-nebius-2, in line since 00:39Z.
+- [derived] The READY line for #9373 comes when `7cde` ends and `522c` has run; no Lean file differs between the two closes, so `7cde`'s verdict is the new close's.
+
+**Elsewhere.** [run] `859f` (#9237's quick tier) has been in vy-nebius-2's line since 00:27Z; at 00:43Z I move it to vy-nebius-cpu-11 as your split says.
