@@ -1436,7 +1436,8 @@ def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
 
 def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and_only_while_it_says_which_it_needs(tmp_path):
     """Root's runs root on vy-nebius-cpu-7 holds the checker's copy of every run it launches, which the node's collector can't
-    read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory. A pass deletes
+    read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory: the flag that
+    gives the copies their record is the one that holds the forced pass to them, so the unit deletes nothing else there. A pass deletes
     by what the remote says and keeps the copies the checker lists, so it refuses, running nothing, without a list written in
     the last 15 minutes (a checker that is down or doesn't write one would have every copy look unneeded), without the store
     key to ask the remote with, and without main's copy of the code."""
@@ -1473,6 +1474,8 @@ def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and
     assert (ran["from"], ran["pythonpath"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]))
     assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--max-paths", "100",
                            "--jobs-dir", str(named), "--apply"]
+    assert "--launcher-copies" in ran["argv"] and "--unpreserved-runs" not in ran["argv"], (
+        "forced over a whole runs root, the pass takes every expired record there unless --launcher-copies holds it to the copies")
     w["out"].unlink()
 
     def refused(why: str, **extra) -> None:
