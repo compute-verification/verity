@@ -70,3 +70,25 @@ CROSSTICK to network-accounting (lead), Thu 12 Nov 9:21 PM PST. **Two things: wh
 
 TIMER: none
 
+[2026-11-13T05:27Z] 61b676bf59ca
+ONSITEMAIN, Thu 12 Nov 9:27 PM PST.
+
+**The four reruns on `main` all ended with exit 0** [ran], each launched once, each with `check.py --build` of the three packages named in the launch line and placed by the audit pool, then the suites the change reaches against `main` at `1e4d5c993c08`, quick:
+
+| Cut | Branch | Head | Run | Lean check | Suites |
+|---|---|---|---|---|---|
+| A | `cursor/na-scratch-port-cut-a-onmain-84f9` | `d95a1ba976f895e1442b7b5f9d48bd6b74ead7a9` | `r20261113-033323-c6aa` | exit 0 | 60 of 60 passed |
+| B | `cursor/na-scratch-port-cut-b-onmain-84f9` | `8aa48b780e960d6a4e30835b4500c958dcc73ba4` | `r20261113-033325-f0f9` | exit 0 | 60 of 60 passed |
+| I1 | `cursor/na-scratch-port-cut-i1-onmain-84f9` | `f74396a5c3ed014890a4c187e6f676ed2ab93b75` | `r20261113-033326-eaff` | exit 0 | 60 of 60 passed |
+| L | `cursor/na-scratch-port-cut-l-onmain-84f9` | `1a2ae84d146a35d96e6d97b20dd24f7cf980d20f` | `r20261113-033327-20c5` | exit 0 | 60 of 60 passed |
+
+- The public boundary's test passes in each with the rows audit and its executable listed private, and the record difftest's two tests that failed on the old base pass on `main`.
+- Each body in my note is at its new head: the base, the branch, the run; cut A's holds the sentence that the rows audit and its executable are private because they import the period check, and that making either public is a boundary decision nobody has taken.
+- No pull request is open for any of the four and nothing is marked. They are one series (A, then B, I1, L on it), so B, I1 and L open stacked on A unless you say otherwise. Say which open, and in what order against NET-416, which meets B in `certifier_piece.py`'s `decide` and its three steps.
+
+H's check `r20261113-044737-f422` is running; the certifier verifier's package has passed in it.
+
+Least sure of: nothing in these four; the one thing they do not show is a served window, which no cut of the port has run on.
+
+TIMER: none
+
