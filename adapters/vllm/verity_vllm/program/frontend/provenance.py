@@ -30,12 +30,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.circuits.codec import canonical_json
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
 RULE_KINDS = ("hierarchy-around-unchanged-gates", "region-replacement")
 
 
-def registry_version(registry=REGISTRY) -> dict:
+def registry_version() -> dict:
     """The primitive-vocabulary version: ids + signatures + conformance of every primitive, ids + statics of
     every composite, and the SHA-256 of the registry sources; `digest` is the SHA-256 of that record."""
     from verity.definitions.registry import b1, prims  # registration

@@ -1,18 +1,32 @@
 """install_from_plan on a TINY nn.Module tree installs exactly the plan's sites -- and nothing a class table would have added."""
 from __future__ import annotations
 
+import types
+from typing import TYPE_CHECKING
+
 import pytest
 
-torch = pytest.importorskip("torch")
-nn = torch.nn
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
+else:
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
 
-from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.acquire import plan as P  # noqa: E402
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_of  # noqa: E402
-from verity_vllm.acquire.install import IncompletePlan, OccurrenceSink, install_from_plan  # noqa: E402
+from verity_vllm.acquire import plan as P
+from verity_vllm.acquire.install import (
+    IncompletePlan,
+    OccurrenceSink,
+    install_from_plan,
+)
+from verity_vllm.correspondence.reader_for_acquire import (
+    AnnotationCorrespondence,
+    runtime_tree_of,
+)
+from verity_vllm.query.manifest import format as RM
 
 PD = "0" * 64
-TABLES = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
+TABLES: dict[str, set[str]] = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
 
 
 class TwoOut(nn.Module):
@@ -107,8 +121,10 @@ def test_installs_exactly_the_sites_and_observes_them():
     doc = sink.to_json()
     assert [(s["module"], s["kind"], s["slot"]) for s in doc["sites"]] == expect and all(s["occurrences"] == 2 for s in doc["sites"])
     inst.remove()
-    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0 and runner.sample.__func__ is Runner.sample
-    model(ids); runner.sample(out)
+    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0
+    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
+    model(ids)
+    runner.sample(out)
     assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
@@ -167,7 +183,7 @@ def test_promoted_consumer_pre_hook_only():
     assert plan.complete
     sink = OccurrenceSink()
     inst = install_from_plan(plan, model, runner, sink=sink)
-    assert ("logits", "consumer_input", "in[0]") in inst.keys() and not any(s.module == "blocks.0" for s in inst.installed)
+    assert ("logits", "consumer_input", "in[0]") in set(inst.keys()) and not any(s.module == "blocks.0" for s in inst.installed)
     model(torch.tensor([[1, 2]]))
     assert sink.counts[("logits", "consumer_input", "in[0]")] == 1 and sink.shapes[("logits", "consumer_input", "in[0]")] == [[1, 2, 4]]
     inst.remove()

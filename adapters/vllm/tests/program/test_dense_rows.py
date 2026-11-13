@@ -11,15 +11,14 @@ import sys
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import self_check
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import self_check
 from verity.definitions.numerics import dense_rows as DR
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics import rows
 from verity.definitions.registry import b1, dense
 
-ALL_BF16 = np.arange(1 << 16, dtype=np.uint16)
+ALL_BF16: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
 #: the 256 bf16 words with an all-ones exponent field (+-inf, NaN), 16 per instance of N=16 over `ALL_BF16`
 NONFINITE_INSTANCES = 16
 EDGE_F32 = np.array([0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000,
@@ -114,7 +113,7 @@ def test_mean_triton_follows_the_body_reduction_order(N):
 
 
 def test_mean_triton_declines_an_overflowing_sum():
-    x = np.full((2, 20), 0x7F7FFFFF, dtype=np.uint32)
+    x: np.ndarray = np.full((2, 20), 0x7F7FFFFF, dtype=np.uint32)
     x[1] = _f32(np.arange(20.0))
     sc = _check(bind(dense.MeanTriton, N=20), [x], declined=1)
     assert sc.n == 2
@@ -304,7 +303,11 @@ def test_gemm_v2_row_kernel_takes_the_k16_chain_of_its_dot(monkeypatch, chain_pa
     slow = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
     calls = []
-    monkeypatch.setattr(DR, "_claimed", lambda *a, _c=DR._claimed: calls.append(a[2]) or _c(*a))
+    def counted(*a, _c=DR._claimed):
+        calls.append(a[2])
+        return _c(*a)
+
+    monkeypatch.setattr(DR, "_claimed", counted)
     fast = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     assert calls and set(calls) == {DR.STEPS["HopperBF16WgmmaDot16_v1"]}
     assert np.array_equal(fast, slow)

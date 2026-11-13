@@ -10,6 +10,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "admit_rows_check.py"
 _spec = importlib.util.spec_from_file_location("admit_rows_check", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 AR = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("admit_rows_check", AR)
 _spec.loader.exec_module(AR)
