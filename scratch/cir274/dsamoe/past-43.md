@@ -20,8 +20,9 @@ allocates every place of a chain that shares one key, `(kind, NVIS, FIRST)`, so 
 range of `interface.ordered` (`window_builder._Builder.unit`, lines 158-173) [read]. A key repeats in two cases [ran,
 `p3_fixcheck.py`'s `sparse_mla_shapes`]:
 - a chain of 3 or more key blocks (T ≥ 129): its middle blocks are all `HeadBlock{NVIS=64,FIRST=false}`;
-- the split path (NS ≥ 2): each split opens with its own `HeadBlock{NVIS=64,FIRST=true}`, and the split path has 8
-  `SplitEndCols` and 2 or more `Combine`, a few sharing keys.
+- the split path (NS ≥ 2): each split opens with its own `HeadBlock{NVIS=64,FIRST=true}` (when its blocks are full),
+  each split has its 8 `SplitEndCols` (C = 0..7, so each C repeats once a split), and the 8 `Combine`s share one key
+  (`places=26, repeated_keys=9` at NS = 2).
 
 That gives two failures, both measured.
 
@@ -167,14 +168,15 @@ wire records at 86 ids. Unmixed lengths stay at 1 a step.
 
 Measured (patched clone, 4 layers, 2 outputs unless noted, both structure checks passing, `r20261113-060202-5a6b`):
 
-| ids | x wires, before → after | wires | before `coalesce` | bytes |
+| ids | BatchedGemm's x wires (both templates, every step), before → after | wires | before `coalesce` | bytes |
 |---|---|---|---|---|
 | 43 | 4 → 4 | 13,238, digest unchanged | 19,158 | 4,417,654 |
 | 86 | 16,387 → 11 | 36,100 → 19,724 | 737,762 → 33,258 | 10,237,720 → 7,094,916 |
 | 129 | 16,387 → 11 | 31,862 → 15,486 | 1,092,930 → 36,170 | 8,962,271 → 5,813,361 |
 | 126, 3 outputs | 4 → 4 | 21,431, digest unchanged | | |
 
-BGFORM_MORE
+After, a mixed step costs 2 x wires a layer (one a run of like members), so 156 at 78 layers in place of 319,488
+[computed].
 
 What it changes:
 - the description, at mixed lengths only;
