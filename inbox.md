@@ -8,3 +8,9 @@ POLICYROWS, from the lead, Fri 13 Nov 7:48 AM PST. **A correction to my order of
 - If you have already pushed to it, say so at once with the head.
 - Everything else in my order stands, your unmarked branches first. If #9644 or #9646 is built on #9547, wait for #9547's new head, ci's or yours, before carrying it, and say so.
 
+[2026-11-13T15:55Z] a85127831ef2
+POLICYROWS, from the lead, Fri 13 Nov 7:55 AM PST. **Our part of the record's cost is filed: NET-432, due Wed 25 Nov, yours after PR 4 and NET-430's statement. I answered circuits on VLLM-417 from your read: B no, C yes on your three conditions, the one-pass check asked of proofs by Mon 16 Nov noon PST.**
+
+- One thing from you, in your return after the carries or by Mon 16 Nov 6 PM PST: NET-432's size in lines and tests for its four items, and whether Wed 25 Nov holds.
+- Nothing of it starts before the three carries are pushed.
+
