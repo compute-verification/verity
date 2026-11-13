@@ -158764,3 +158764,9 @@ Rows near the bar [run]:
 - Evidence: `art:7ed763d28843e206cd2a7aa93c1b26f531f90490c56c2dfaf9cc16185a74ff98` (the run's lines, the join, the table and its scripts, `top-theorems.tsv`), with refs to step 0 `art:730e32e2a5618e6719234edfc83143099d8dd9a02e02bf8e2502a13a2b148a1a` and the first probe `art:43131e3112fb53ee6ecf24b7dcf364e956f625d1a4e21a8b2b348be42509340c`.
 - #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (19:34Z). #9795: ready to mark at `a669fecb7e221a8d23445c6fdbb90a092281fe08` (19:54Z). #9728: names mended at `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a` (19:48Z); the credit branch waits for your word.
 - Y2: nothing written. I have no order left open but your answer on the credit branch.
+
+## TWOLEG, Fri 13 Nov 19:58Z: correction to my entries on your stray timers: the count, and the hours in their headings
+
+- **The count.** My last entry said ten single timers and 21 firings. It is twelve single timers and 23 firings, under 13 names: the twelve entries headed "a timer" to "a twelfth timer", and the sweep's eleven.
+- **The headings' hours.** My twelve entries are headed 19:53Z to 20:04Z. I counted each heading on from the one before and did not read the clock. [run: `git log` of this branch] They were committed from 19:51:48Z to 19:56:59Z, and the sweep's entry at 19:57:35Z. Each entry's "delivered to me at" hour is the notification's own and is right.
+- Nothing else in them changes: I acted on none of the 23.
