@@ -21,15 +21,18 @@ Three facts are needed, and the join is `Messages.session_prefix_fixed`:
 * **Every round an earlier release continues is an earlier round** (`used_below`): a release before one put on the
   session's round `i` is put on a session's round below `i` (`LogRising`), or on a round at most the statements',
   which is below every session's.
-* **Each of those rounds shows its coin** (`Messages.ShowsPlaced`, a hypothesis here): the history shows a round's
-  coin only where the verifier's answer at that round is the coin's bytes (`Messages.shownAt`). `Messages.CoinAnswered`
-  says so of one round; `Messages.coinAnswered_stage` proves it at the first and second stages' rounds, where the
-  form's reading reads the empty message past round 1 (`Messages.coinAnswered_formStage`).
+* **Each of those rounds shows its coin** (`Messages.ShowsPlaced`): the history shows a round's coin only where the
+  verifier's answer at that round is the coin's bytes (`Messages.shownAt`). `Messages.CoinAnswered` says so of one
+  round. It holds at the first and second stages' rounds, where the form's reading reads the empty message past
+  round 1 (`Messages.coinAnswered_formStage`), and at a session's round where the session's statement sets up and the
+  session's messages up to that round are of tag `0` (`Messages.coinAnswered_session`). The run's locator puts no
+  release on the statements' round (`locAt_run_ne_stmt`), so at the run's locator and the form's reading
+  `ShowsPlaced` follows from `Messages.SessionsAsk` (`Messages.showsPlaced_run`).
 
-What this does not prove: `ShowsPlaced` at the sessions' rounds. The statements' round and a session's last round
-answer with no coin, so it needs that no release is put on either. The run's locator puts none on the statements'
-round (`locAt_run_ne_stmt`); that an accepted play has no release on a session's last round, and that a session's
-earlier rounds answer with their coins, are not proved here.
+What this does not prove: `Messages.SessionsAsk`, that on an accepted play each session's round a release is put on
+is one whose session's statement sets up and whose session's messages up to it are of tag `0`. The verifier answers
+a session's round with a coin only before the round the session is decided on, so it says too that no release of
+such a play is put on that round.
 -/
 
 @[expose] public section
@@ -145,8 +148,8 @@ theorem logRising_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {tab 
 
 theorem sessions_of_lt {A : Live₂} {n : ℕ} (h : A.h.stage + 1 < n) : groupOf A n = .sessions := by
   unfold groupOf
-  rw [if_neg (show ¬ n = 0 by omega), if_neg (show ¬ n ≤ A.h.stage by omega),
-    if_neg (show ¬ n = A.h.stage + 1 by omega)]
+  rw [ite_eq_right (show ¬ n = 0 by omega), ite_eq_right (show ¬ n ≤ A.h.stage by omega),
+    ite_eq_right (show ¬ n = A.h.stage + 1 by omega)]
 
 /-- A round the log `q` gives elements has a release of `q` put on it. -/
 theorem exists_of_usedOf {L : CoinMap.Locate} {j : ℕ} : ∀ (q pre : List Release),
@@ -161,7 +164,7 @@ theorem exists_of_usedOf {L : CoinMap.Locate} {j : ℕ} : ∀ (q pre : List Rele
         apply h
         show (if CoinMap.locAt L pre rl.frame rl.answers = some j then CoinMap.widthOf rl.frame else 0) +
           CoinMap.usedOf L j (pre ++ [rl]) q = 0
-        simp only [if_neg hl, e, Nat.add_zero]
+        simp only [ite_eq_right hl, e, Nat.add_zero]
       obtain ⟨a, r, b, rfl, hr⟩ := exists_of_usedOf q (pre ++ [rl]) h'
       exact ⟨rl :: a, r, b, rfl, by rw [show pre ++ rl :: a = pre ++ [rl] ++ a by simp]; exact hr⟩
 
@@ -211,6 +214,15 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The coins the history shows -/
 
+/-- The history of pairs `(m l, g l)` shows the coin `c` at a round `j` before its end where `g j` is `c`'s bytes. -/
+theorem shownAt_range_map (m g : ℕ → Msg) {i j : ℕ} {c : FlockDeploy.Coin} (hji : j < i) (h : g j = c.bytes) :
+    shownAt ((List.range i).map fun l => (m l, g l)) j = some c := by
+  unfold shownAt
+  rw [List.getElem?_map, List.getElem?_range hji, Option.map_some, Option.bind_some]
+  show shownCoin (g j) = some c
+  rw [h]
+  exact shownCoin_of c
+
 /-- **The play's history shows a round's coin where the verifier answers with it**: at a round `j` before the
 history's end whose answer, at the play's messages and the run's coins, is the round's coin's bytes. -/
 theorem shownAt_playHist (A : Live₂) (x : Msg) (r : Coins A x) (ms : ℕ → Msg) {i : ℕ}
@@ -218,9 +230,9 @@ theorem shownAt_playHist (A : Live₂) (x : Msg) (r : Coins A x) (ms : ℕ → M
     (h : msgOf ((A.L.V.next x ((List.range (j.val + 1)).map ms)
       ((List.range (j.val + 1)).map (coinSeq r))).eval FlockDeploy.sha512).1 = (r j).bytes) :
     shownAt (playHist A x r ms i) j.val = some (r j) := by
-  unfold shownAt playHist
-  rw [List.getElem?_map, List.getElem?_range hji]
-  exact (congrArg shownCoin h).trans (shownCoin_of _)
+  unfold playHist
+  exact shownAt_range_map ms (fun l => msgOf ((A.L.V.next x ((List.range (l + 1)).map ms)
+    ((List.range (l + 1)).map (coinSeq r))).eval FlockDeploy.sha512).1) hji h
 
 /-- **The log before a release, and the release's frame and bytes, are fixed by the coins a history shows**, where
 the history `hist` shows the coin of every round a release before it continues: any coins `r'` that agree with what
@@ -235,18 +247,78 @@ theorem prefix_shown (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
       q ++ ⟨rl.frame, rl.answers, cs⟩ :: rest' :=
   CoinMap.place_prefix_used L V θ F c σ r r' ω h fun j hj => (hs j _ (hq j hj)).symm
 
+/-! ## The verifier's step where it answers with the round's coin
+
+A coin's bytes are a list over its `65536` field elements, so these steps are stated at any lists of messages and
+coins and then rewritten into the run's, never compared by unfolding. -/
+
+/-- SPOT[Flock]'s verifier's step is `SpotFlock.next`. -/
+theorem V_next (h : SpotFlock.Held) : (SpotFlock.V h).next = SpotFlock.next h := rfl
+
+/-- **A round up to the second stage's last answers with the last coin's bytes**, where the round is 0 or 1 or its
+message is empty (`SpotFlock.next_coin`). -/
+theorem next_stage_coin (h : SpotFlock.Held) (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : as ≠ [])
+    (hcs : cs.length = as.length) (hle : as.length ≤ h.stage + 1)
+    (hc : as.length ≤ 2 ∨ as.getD (as.length - 1) [] = []) :
+    msgOf ((SpotFlock.next h x as cs).eval FlockDeploy.sha512).1 = (cs.getD (as.length - 1) default).bytes := by
+  rw [SpotFlock.next_coin h x h0 hcs hle, ite_eq_left hc]
+  simp only [OC.eval, msgOf]
+
+/-- **A session's round answers with the last coin's bytes** where Flock's step on the session's messages so far is a
+coin request and no shorter prefix of them is decided (`SpotFlock.sessStep_eval`). -/
+theorem next_session_coin (h : SpotFlock.Held) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) {t : ℕ}
+    (has : h.stage + 2 < as.length) (hcs : cs.length = as.length) (hslot : SpotFlock.slotOf h as.length = some t)
+    (hund : ∀ j, 0 < j → j < as.length - SpotFlock.off h t →
+      SpotFlock.decidedAt (SpotFlock.stmtAt h (as.getD (h.stage + 1) []) t) (as.drop (SpotFlock.off h t))
+        (cs.drop (SpotFlock.off h t)) j = false)
+    {c : FlockDeploy.Coin}
+    (hc : FlockDeploy.act true (SpotFlock.stmtAt h (as.getD (h.stage + 1) []) t) (as.drop (SpotFlock.off h t))
+      (cs.drop (SpotFlock.off h t)) = .coin c) :
+    msgOf ((SpotFlock.next h x as cs).eval FlockDeploy.sha512).1 = (cs.getD (as.length - 1) default).bytes := by
+  rw [SpotFlock.next_long h x as cs has hcs, hslot]
+  dsimp only
+  rw [SpotFlock.sessStep_eval h _ t _ as cs hund]
+  dsimp only
+  unfold FlockDeploy.next
+  rw [hc]
+  simp only [OC.eval, Claims.Sampling.markOut, msgOf]
+  rw [← hcs, getD_of_getLast?_drop default (Claims.Bridge.act_coin hc)]
+
+/-- The last of the first `j` entries past `o` of `f`'s first `N` values is `f (o + j - 1)`. -/
+theorem getLast?_take_drop_range_map {β : Type} (f : ℕ → β) {N o j : ℕ} (hj0 : 0 < j) (hj : o + j ≤ N) :
+    ((((List.range N).map f).drop o).take j).getLast? = some (f (o + j - 1)) := by
+  rw [List.getLast?_eq_getElem?, List.length_take, List.length_drop, List.length_map, List.length_range,
+    Nat.min_eq_left (by omega), List.getElem?_take_of_lt (by omega), List.getElem?_drop, List.getElem?_map,
+    List.getElem?_range (by omega), Option.map_some, show o + (j - 1) = o + j - 1 by omega]
+
+/-- The last of the entries past `o` of `f`'s first `N` values is `f (N - 1)`. -/
+theorem getLast?_drop_range_map {β : Type} (f : ℕ → β) {N o : ℕ} (h : o < N) :
+    (((List.range N).map f).drop o).getLast? = some (f (N - 1)) := by
+  rw [List.getLast?_eq_getElem?, List.length_drop, List.length_map, List.length_range, List.getElem?_drop,
+    List.getElem?_map, List.getElem?_range (by omega), Option.map_some, show o + (N - o - 1) = N - 1 by omega]
+
 /-! ## The rounds that answer with their coin -/
 
-/-- **The verifier answers round `j` with the round's coin**, at the messages `ms`, whatever the run's coins are. -/
-def CoinAnswered (A : Live₂) (x : Msg) (ms : ℕ → Msg) (j : ℕ) : Prop :=
-  ∀ (r : Coins A x) (hj : j < A.L.V.k x),
-    msgOf ((A.L.V.next x ((List.range (j + 1)).map ms) ((List.range (j + 1)).map (coinSeq r))).eval
+/-- **The verifier `Vr` answers round `j` with the round's coin**, at the messages `ms`, whatever the run's coins
+are. -/
+def CoinAnsweredAt (Vr : Verifier FlockDeploy.Coin) (x : Msg) (ms : ℕ → Msg) (j : ℕ) : Prop :=
+  ∀ (r : Fin (Vr.k x) → FlockDeploy.Coin) (hj : j < Vr.k x),
+    msgOf ((Vr.next x ((List.range (j + 1)).map ms) ((List.range (j + 1)).map (coinSeq r))).eval
       FlockDeploy.sha512).1 = (r ⟨j, hj⟩).bytes
 
+/-- **The session of record's verifier answers round `j` with the round's coin**, at the messages `ms`. -/
+def CoinAnswered (A : Live₂) (x : Msg) (ms : ℕ → Msg) (j : ℕ) : Prop := CoinAnsweredAt A.L.V x ms j
+
+theorem coinAnswered_of (A : Live₂) (x : Msg) (ms : ℕ → Msg) (j : ℕ)
+    (h : CoinAnsweredAt (SpotFlock.V A.h) x ms j) : CoinAnswered A x ms j := by
+  unfold CoinAnswered
+  rw [L_V]
+  exact h
+
 /-- **The first and second stages' rounds answer with their coin**: rounds 0 and 1, and a later round up to the
-second stage's last whose message is empty (`SpotFlock.next_coin`). -/
-theorem coinAnswered_stage (A : Live₂) (x : Msg) (ms : ℕ → Msg) {j : ℕ} (hj : j ≤ A.h.stage)
-    (hm : j ≤ 1 ∨ ms j = []) : CoinAnswered A x ms j := by
+second stage's last whose message is empty (`next_stage_coin`). -/
+theorem coinAnsweredAt_stage (h : SpotFlock.Held) (x : Msg) (ms : ℕ → Msg) {j : ℕ} (hj : j ≤ h.stage)
+    (hm : j ≤ 1 ∨ ms j = []) : CoinAnsweredAt (SpotFlock.V h) x ms j := by
   intro r hjk
   have hl : ((List.range (j + 1)).map ms).length = j + 1 := by simp
   have hne : (List.range (j + 1)).map ms ≠ [] := List.ne_nil_of_length_pos (by omega)
@@ -255,18 +327,67 @@ theorem coinAnswered_stage (A : Live₂) (x : Msg) (ms : ℕ → Msg) {j : ℕ} 
       ((List.range (j + 1)).map ms).getD (((List.range (j + 1)).map ms).length - 1) [] = [] := by
     rw [hl, Nat.add_sub_cancel, getD_range_map ms (Nat.lt_add_one j)]
     exact hm.imp (fun h => by omega) id
-  show msgOf ((SpotFlock.next A.h x ((List.range (j + 1)).map ms)
-    ((List.range (j + 1)).map (coinSeq r))).eval FlockDeploy.sha512).1 = (r ⟨j, hjk⟩).bytes
-  rw [SpotFlock.next_coin A.h x hne hcl (by rw [hl]; omega), if_pos hc]
-  simp only [OC.eval, msgOf]
-  rw [hl, Nat.add_sub_cancel, getD_range_map (coinSeq r) (Nat.lt_add_one j), coinSeq_lt r hjk]
+  rw [V_next, next_stage_coin h x hne hcl (by rw [hl]; omega) hc, hl, Nat.add_sub_cancel,
+    getD_range_map (coinSeq r) (Nat.lt_add_one j), coinSeq_lt r hjk]
+
+theorem coinAnswered_stage (A : Live₂) (x : Msg) (ms : ℕ → Msg) {j : ℕ} (hj : j ≤ A.h.stage)
+    (hm : j ≤ 1 ∨ ms j = []) : CoinAnswered A x ms j :=
+  coinAnswered_of A x ms j (coinAnsweredAt_stage A.h x ms hj hm)
+
+/-- **A session's round answers with its coin where the session's messages up to it are coin requests**: at a round
+`n` of template `t`'s session whose statement, read off the statements' round's message, sets up, where each of the
+session's messages up to round `n` is of tag `0` (`next_session_coin`). The round the session is decided on has a
+message of another tag, so this is about the rounds before it. -/
+theorem coinAnsweredAt_session (h : SpotFlock.Held) (x : Msg) (ms : ℕ → Msg) {t n : ℕ} (ht : t < h.ms.length)
+    (h1 : SpotFlock.off h t ≤ n) (h2 : n < SpotFlock.off h t + SpotFlock.k₀ h t)
+    (hset : (FlockDeploy.setupOf true (SpotFlock.stmtAt h (ms (h.stage + 1)) t)).isSome = true)
+    (htag : ∀ l, SpotFlock.off h t ≤ l → l ≤ n → ∃ u, ms l = 0 :: u) : CoinAnsweredAt (SpotFlock.V h) x ms n := by
+  intro r hnk
+  have hso := SpotFlock.stage_le_off h t
+  have hl : ((List.range (n + 1)).map ms).length = n + 1 := by simp
+  have hlc : ((List.range (n + 1)).map (coinSeq r)).length = n + 1 := by simp
+  have hcl : ((List.range (n + 1)).map (coinSeq r)).length = ((List.range (n + 1)).map ms).length := by
+    rw [hl, hlc]
+  have hxS : SpotFlock.stmtAt h (((List.range (n + 1)).map ms).getD (h.stage + 1) []) t =
+      SpotFlock.stmtAt h (ms (h.stage + 1)) t := by
+    rw [getD_range_map ms (show h.stage + 1 < n + 1 by omega)]
+  have hslot : SpotFlock.slotOf h ((List.range (n + 1)).map ms).length = some t := by
+    rw [hl]
+    exact SpotFlock.slotOf_eq h ht (by omega) (by omega)
+  have hund : ∀ j, 0 < j → j < ((List.range (n + 1)).map ms).length - SpotFlock.off h t →
+      SpotFlock.decidedAt (SpotFlock.stmtAt h (((List.range (n + 1)).map ms).getD (h.stage + 1) []) t)
+        (((List.range (n + 1)).map ms).drop (SpotFlock.off h t))
+        (((List.range (n + 1)).map (coinSeq r)).drop (SpotFlock.off h t)) j = false := by
+    intro j hj0 hj
+    rw [hl] at hj
+    obtain ⟨u, hu⟩ := htag (SpotFlock.off h t + j - 1) (by omega) (by omega)
+    refine decidedAt_false_iff.2 (act_coin_iff.2 ⟨by rw [hxS]; exact hset, ⟨u, ?_⟩, ?_⟩)
+    · rw [getLast?_take_drop_range_map ms hj0 (by omega), hu]
+    · exact List.ne_nil_of_length_pos (by
+        rw [List.length_take, List.length_drop, hlc]
+        omega)
+  obtain ⟨u, hu⟩ := htag n h1 (Nat.le_refl n)
+  obtain ⟨c, hc⟩ := act_coin_iff.2 ⟨show (FlockDeploy.setupOf true (SpotFlock.stmtAt h
+      (((List.range (n + 1)).map ms).getD (h.stage + 1) []) t)).isSome = true by rw [hxS]; exact hset,
+    ⟨u, show (((List.range (n + 1)).map ms).drop (SpotFlock.off h t)).getLast? = some (0 :: u) by
+      rw [getLast?_drop_range_map ms (show SpotFlock.off h t < n + 1 by omega), Nat.add_sub_cancel, hu]⟩,
+    show ((List.range (n + 1)).map (coinSeq r)).drop (SpotFlock.off h t) ≠ [] from
+      List.ne_nil_of_length_pos (by rw [List.length_drop, hlc]; omega)⟩
+  rw [V_next, next_session_coin h x _ _ (by rw [hl]; omega) hcl hslot hund hc, hl, Nat.add_sub_cancel,
+    getD_range_map (coinSeq r) (Nat.lt_add_one n), coinSeq_lt r hnk]
+
+theorem coinAnswered_session (A : Live₂) (x : Msg) (ms : ℕ → Msg) {t n : ℕ} (ht : t < A.h.ms.length)
+    (h1 : SpotFlock.off A.h t ≤ n) (h2 : n < SpotFlock.off A.h t + SpotFlock.k₀ A.h t)
+    (hset : (FlockDeploy.setupOf true (SpotFlock.stmtAt A.h (ms (A.h.stage + 1)) t)).isSome = true)
+    (htag : ∀ l, SpotFlock.off A.h t ≤ l → l ≤ n → ∃ u, ms l = 0 :: u) : CoinAnswered A x ms n :=
+  coinAnswered_of A x ms n (coinAnsweredAt_session A.h x ms ht h1 h2 hset htag)
 
 /-- The form's reading reads the empty message at the second stage's rounds past round 1. -/
 theorem playMsgs_stage (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) {j : ℕ} (h1 : 1 < j)
     (hj : j ≤ A.h.stage) : playMsgs (formReading A C S dev) o j = [] := by
-  simp only [playMsgs, formReading, if_neg (show ¬ j = 0 by omega), if_neg (show ¬ j = 1 by omega), if_pos hj,
-    Option.getD_some]
+  simp only [playMsgs, formReading, ite_eq_right (show ¬ j = 0 by omega), ite_eq_right (show ¬ j = 1 by omega),
+    ite_eq_left hj, Option.getD_some]
 
 /-- **At the form's reading, the first and second stages' rounds answer with their coin.** -/
 theorem coinAnswered_formStage (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
@@ -285,6 +406,37 @@ def ShowsPlaced (A : Live₂) (x : Msg) (Rd : Reading A) (Acc Good : Verity.Exch
     Prop :=
   ∀ o, Acc o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ j, CoinMap.locAt L a rl.frame rl.answers = some j →
     CoinAnswered A x (playMsgs Rd o) j
+
+/-- **Each session's round a release is put on is one whose session's messages so far are coin requests**: on a play
+accepted (`Acc`) whose log the check read is the device's (`Good`), each round past the statements' the locator `L`
+puts a release of the play's log on is a round of some template's session whose statement, read off the statements'
+round's message the reading `Rd` reads, sets up, and each message `Rd` reads of that session up to the round is of
+tag `0`. The verifier answers a session's round with a coin only before the round the session is decided on, so
+this says too that no release of such a play is put on that round. -/
+def SessionsAsk (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (L : CoinMap.Locate) : Prop :=
+  ∀ o, Acc o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ j, CoinMap.locAt L a rl.frame rl.answers = some j →
+    A.h.stage + 1 < j →
+      ∃ t, t < A.h.ms.length ∧ SpotFlock.off A.h t ≤ j ∧ j < SpotFlock.off A.h t + SpotFlock.k₀ A.h t ∧
+        (FlockDeploy.setupOf true (SpotFlock.stmtAt A.h (playMsgs Rd o (A.h.stage + 1)) t)).isSome = true ∧
+        ∀ l, SpotFlock.off A.h t ≤ l → l ≤ j → ∃ u, playMsgs Rd o l = 0 :: u
+
+/-- **At the run's locator and the form's reading, every round a release is put on answers with its coin**, where the
+sessions' rounds a release is put on are coin requests (`SessionsAsk`): a round up to the second stage's last by
+`coinAnswered_formStage`, none on the statements' round (`SessionCoins.locAt_run_ne_stmt`), a session's round by
+`coinAnswered_session`. -/
+theorem showsPlaced_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate)
+    (tab : ℕ → String)
+    (hAsk : SessionsAsk A (formReading A C S dev) (FormAccepts C) Good (SessionCoins.runLocate A Ls tab)) :
+    ShowsPlaced A x (formReading A C S dev) (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) := by
+  intro o hacc hgood a rl b hlog j hj
+  by_cases h1 : j ≤ A.h.stage
+  · exact coinAnswered_formStage A x C S dev o h1
+  by_cases h2 : j = A.h.stage + 1
+  · subst h2
+    exact absurd hj (SessionCoins.locAt_run_ne_stmt A Ls tab a rl.frame rl.answers)
+  obtain ⟨t, ht, ho, hk, hset, htag⟩ := hAsk o hacc hgood a rl b hlog j hj (by omega)
+  exact coinAnswered_session A x _ ht ho hk hset htag
 
 /-! ## The join -/
 
