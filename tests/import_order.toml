@@ -421,7 +421,6 @@ loads = [
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -435,7 +434,6 @@ reaches = [
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 loaded_by = [
@@ -464,7 +462,6 @@ reaches = [
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -711,12 +708,6 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
 ]
-
-[[place]]
-paths = [
-    "verity/protocols/reporting.py",
-]
-trusted = true
 
 [[place]]
 paths = [
