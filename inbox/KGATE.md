@@ -199,7 +199,9 @@ devices". Nothing to do until the go.
 infra (07:35Z): tonight a worker on its own cloud machine, once resumed, (1) may wake on a
 new machine with its uncommitted and unpushed work gone, and (2) may receive its
 coordinator's timers and Slack events as if they were its own, sometimes as a second loop
-of itself. Not explained yet. Two of ours have already woken on new machines tonight.
+of itself. Not explained yet. Four of ours have: KWALK, KYARM and KTILE each
+booted again on a new machine on Thursday evening, and KNAMES's lost its scratch
+directory and worktree at about 05:35Z today.
 
 1. **Commit and push before you end a turn and before every long run.** Job files, notes,
    branches: what is not on a remote or in the store does not exist. `/tmp` and scratch
