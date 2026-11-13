@@ -496,7 +496,7 @@ def TopPMaskStep(B, S, i, x, keep):
            conformance="exact-model-tested")
 def TopPMask(B, S, logits, top_p, splits):
     """`apply_top_k_top_p_triton` for a row of a batch <= 64 without top-k (`_apply_topp_split`, `splits` splits): the fp32 row with
-    every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (registry/topp_split.py).  `splits`
+    every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (verity/definitions/registry/topp_split.py).  `splits`
     (i32) is the launch's split count, an OPERAND of the event (the registered `registered_splits(num_SMs)`, a `Const32[S]`)."""
     keep = B.call(topp_mask_word(S.V), logits, top_p, splits)
     res = B.scan(bind(TopPMaskStep, V=S.V), B.call(const(32, 0)), xs=(logits,), shared=(keep,))
