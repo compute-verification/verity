@@ -24,6 +24,6 @@ while read -r i args; do
   # shellcheck disable=SC2086
   (cd "$W" && "$CUDA/bin/nvcc" $args "$H/ieee_pin.cu" -o "$W/pin$i")
 done < "$W/builds"
-POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
-cp "$ROOT/benchmarks/pouw/harness/sass_pins.json" "$OUT/sass_pins.json"
+POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/verity/protocols/pouw/prover/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
+cp "$ROOT/verity/protocols/pouw/prover/sass_pins.json" "$OUT/sass_pins.json"
 python3 "$H/ieee_pin.py" --toolkit "$TK=$CUDA" --out "$OUT/ieee-pin.json"
