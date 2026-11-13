@@ -88,14 +88,15 @@ def groupPlan (ms : Array Member) (sts : Array StatementFiles) (stOf : Std.HashM
   let members ← g.2.mapM (memberPlan ms sts stOf)
   pure (#[c] ++ members.flatten)
 
-/-- The planned blobs' SHA-512 are distinct and none a pinned table's, else a refusal naming the first that is. -/
-def distinctFrom : Std.HashSet String → List ByteArray → V Unit
+/-- The planned blobs' SHA-512 are distinct and none one of the tables' `tabs`, else a refusal naming the first that
+is. -/
+def distinctFrom (tabs : List ByteArray) : Std.HashSet String → List ByteArray → V Unit
   | _, [] => pure ()
   | seen, b :: bs =>
     let h := Flock.hexOf b
-    if pinned.any (fun t => decide (t = b)) then throw s!"plan: {h} is a pinned table's SHA-512, and the tables come first"
+    if tabs.any (fun t => decide (t = b)) then throw s!"plan: {h} is a pinned table's SHA-512, and the tables come first"
     else if seen.contains h then throw s!"plan: {h} is named twice, and the streamed check reads each blob once"
-    else distinctFrom (seen.insert h) bs
+    else distinctFrom tabs (seen.insert h) bs
 
 /-- **The per-member form's order** (module docstring): its statements' structure held first (`membersHeld`), each
 blob under its SHA-512 with its role, group by group (`groupPlan`), the SHA-512 distinct and none a pinned table's
@@ -104,7 +105,7 @@ def planOf (ms : Array Member) (sts : Array StatementFiles) : V (Array (ByteArra
   let held ← membersHeld ms sts
   let stOf : Std.HashMap String Nat := held.zipIdx.foldl (fun acc (m, i) => acc.insert m.name i) {}
   let out := (← (groupsOf ms).mapM (groupPlan ms sts stOf)).flatten
-  distinctFrom {} (out.toList.map (·.1))
+  distinctFrom pinned {} (out.toList.map (·.1))
   pure out
 
 /-- `verdictOf` past the coin-tree key's freshness, on the session's proof files `proofs`. -/

@@ -149,9 +149,10 @@ theorem StepKept.step_of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) (r : Run)
 
 /-- **What the plan's distinctness check holds where it passes**: no digest is one `seen` holds, their hex is
 distinct, and none is a pinned table's. -/
-theorem distinctFrom_ok : ∀ {seen : Std.HashSet String} {l : List ByteArray}, distinctFrom seen l = .ok () →
-    (∀ b ∈ l, seen.contains (Flock.hexOf b) = false) ∧ (l.map Flock.hexOf).Nodup ∧ ∀ b ∈ l, b ∉ pinned
-  | _, [], _ => ⟨by simp, List.nodup_nil, by simp⟩
+theorem distinctFrom_ok {tabs : List ByteArray} : ∀ {seen : Std.HashSet String} {l : List ByteArray},
+    distinctFrom tabs seen l = .ok () →
+      (∀ b ∈ l, seen.contains (Flock.hexOf b) = false) ∧ (l.map Flock.hexOf).Nodup ∧ ∀ b ∈ l, b ∉ tabs
+  | _, [], _ => ⟨fun _ h => nomatch h, List.nodup_nil, fun _ h => nomatch h⟩
   | seen, b :: bs, h => by
     simp only [distinctFrom] at h
     split at h
@@ -186,5 +187,73 @@ theorem distinctFrom_ok : ∀ {seen : Std.HashSet String} {l : List ByteArray}, 
 /-- Digests whose hex is distinct are distinct. -/
 theorem nodup_of_hex {l : List ByteArray} (h : (l.map Flock.hexOf).Nodup) : l.Nodup :=
   List.Pairwise.of_map Flock.hexOf (fun _ _ hne he => hne (congrArg Flock.hexOf he)) h
+
+theorem listMapM_congr {α β : Type} {f g : α → V β} :
+    ∀ {l : List α}, (∀ x ∈ l, f x = g x) → l.mapM f = l.mapM g
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.mapM_cons, List.mapM_cons, h a List.mem_cons_self,
+      listMapM_congr fun x hx => h x (List.mem_cons_of_mem _ hx)]
+
+theorem arrayMapM_congr {α β : Type} {f g : α → V β} {xs : Array α} (h : ∀ x ∈ xs, f x = g x) :
+    xs.mapM f = xs.mapM g := by
+  rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList,
+    listMapM_congr fun x hx => h x (Array.mem_toList_iff.mp hx)]
+
+/-- Two sets of blobs that answer alike for the digest `d`, under every name a refusal gives it. -/
+def Alike (b₁ b₂ : Core.Blobs) (d : String) : Prop := ∀ what, b₁.get d what = b₂.get d what
+
+/-- Two sets of blobs that answer alike for a session's record and rep files. -/
+def SessionAlike (b₁ b₂ : Core.Blobs) (s : RunFiles) : Prop :=
+  Alike b₁ b₂ s.record ∧ ∀ x ∈ s.reps, Alike b₁ b₂ x.2
+
+theorem sessionEvidence_congr {b₁ b₂ : Core.Blobs} {s : RunFiles} (h : SessionAlike b₁ b₂ s) :
+    sessionEvidence b₁ s = sessionEvidence b₂ s := by
+  unfold sessionEvidence
+  rw [h.1, arrayMapM_congr (fun x hx => by rcases x with ⟨f, d⟩; dsimp only; rw [h.2 _ hx])]
+
+theorem filesOf_congr {b₁ b₂ : Core.Blobs} {s : RunFiles} (h : SessionAlike b₁ b₂ s) (st : SetUp) :
+    filesOf b₁ s st = filesOf b₂ s st := by
+  unfold filesOf
+  cases st with
+  | error e => rfl
+  | ok v =>
+    obtain ⟨spec, rest⟩ := v
+    dsimp only [ok_bind]
+    refine arrayMapM_congr fun x _ => ?_
+    obtain ⟨a, b, w⟩ := x
+    dsimp only
+    cases hf : s.reps.find? (·.1 == s!"{w.replace "/" "."}.bin") with
+    | none => rfl
+    | some y =>
+      obtain ⟨n, d⟩ := y
+      dsimp only
+      rw [h.2 _ (Array.mem_of_find?_eq_some hf)]
+
+theorem rootBTables_congr {b₁ b₂ : Core.Blobs} {p : Own} (hc : Alike b₁ b₂ p.circuit) (hp : Alike b₁ b₂ p.pub)
+    (ht : tablesOf b₁ = tablesOf b₂) (record : String) : rootBTables p b₁ record = rootBTables p b₂ record := by
+  unfold rootBTables inputsOf
+  rw [hc, hp, ht]
+
+theorem StepKept.of_congr {b₁ b₂ : Core.Blobs} {s : RunFiles} (h : SessionAlike b₁ b₂ s) (a : StepAt) :
+    StepKept.of a b₁ s = StepKept.of a b₂ s := by
+  unfold StepKept.of
+  rw [h.1]
+  simp only [filesOf_congr h]
+
+/-- **What is kept of a session on the blobs held is what is kept of it on all the blobs**, where the two answer
+alike for its record, its rep files, and its member's circuit and public files, and hold one set of pinned tables. -/
+theorem SessionKept.of_congr {b₁ b₂ : Core.Blobs} {m : Member} {s : RunFiles} (h : SessionAlike b₁ b₂ s)
+    (hc : Alike b₁ b₂ m.own.circuit) (hp : Alike b₁ b₂ m.own.pub) (ht : tablesOf b₁ = tablesOf b₂) (a : V StepAt) :
+    SessionKept.of m a b₁ s = SessionKept.of m a b₂ s := by
+  unfold SessionKept.of
+  simp only [h.1, sessionEvidence_congr h, rootBTables_congr hc hp ht, StepKept.of_congr h]
+
+/-- A member's files on what is kept of its circuit file and program read the blobs for its public file alone. -/
+theorem Member.filesOn_congr {b₁ b₂ : Core.Blobs} (m : Member) (hp : Alike b₁ b₂ m.own.pub) (tags0 : Flock.Tags)
+    (tables : List (String × ByteArray)) (fk : FileKept) (pk : ProgramKept) (slice : Json) :
+    m.filesOn tags0 tables fk pk slice b₁ = m.filesOn tags0 tables fk pk slice b₂ := by
+  unfold Member.filesOn statementOn
+  simp only [hp]
 
 end Spot.OneStageZk.Streamed
