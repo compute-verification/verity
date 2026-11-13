@@ -49,23 +49,6 @@ variable (h : Held)
 
 /-! ## Decided on the held wiring -/
 
-/-- **Wire `w`'s port at reader `t` is like its writer's output port**: as many words, and the same row schema
-(`PortRoots.schemaOf`); true where the wire's writer names no template. -/
-def wireAlike (w : Spot.SecondStage.Wire) (t : ℕ) : Bool :=
-  match heldWriter h w.writer with
-  | some tw =>
-    ((memberCircuit h t).ports[portNamed h t w.port]!).words ==
-        ((memberCircuit h tw).ports[portNamed h tw w.wport]!).words &&
-      _root_.Flock.PortRoots.schemaOf (memberCircuit h t) (portNamed h t w.port) ==
-        _root_.Flock.PortRoots.schemaOf (memberCircuit h tw) (portNamed h tw w.wport)
-  | none => true
-
-/-- **Each wire's reader port is like its writer's output port** (`wireAlike`), at every template of the wire's
-reader's name, decided. -/
-def wiresAlike : Bool :=
-  (h.wires.getD #[]).all fun w =>
-    (List.range h.ms.length).all fun t => !(w.template == h.names.getD t "") || wireAlike h w t
-
 variable {h} in
 /-- Where each wire's reader port is like its writer's, template `t`'s port a wire names has its writer's output
 port's words and row schema. -/
@@ -91,10 +74,6 @@ theorem wiresAlike_spec (hc : wiresAlike h = true) {t : ℕ} (ht : t < h.ms.leng
   simp only [Bool.and_eq_true, beq_iff_eq] at h2
   exact h2
 
-/-- **No gate the boundary record holds is a written bit at a port no link names**, decided. -/
-def returnedWhole : Bool :=
-  (writtenBits h.ms).all fun y => (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || !returned h y.1
-
 variable {h} in
 /-- Where it holds, the boundary record holds no written bit at a port no link names. -/
 theorem returned_of_whole (hc : returnedWhole h = true) {y t : ℕ} {r : Spot.Bits.RowPos}
@@ -108,11 +87,6 @@ theorem returned_of_whole (hc : returnedWhole h = true) {y t : ℕ} {r : Spot.Bi
   | true =>
     rw [hr] at h1
     simp at h1
-
-/-- **No wire names a port a member writes that no link names**, decided. -/
-def writtenUnwired : Bool :=
-  (writtenBits h.ms).all fun y =>
-    (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || (heldWire h (h.names.getD y.2.1 "") y.2.2.row).isNone
 
 variable {h} in
 /-- Where it holds, no wire names a written bit's port that no link names. -/
@@ -189,19 +163,6 @@ def OwnReads : Prop :=
     heldLink h (h.names.getD (templateOf h.ms r.u) "") reg.name = none →
     heldWire h (h.names.getD (templateOf h.ms r.u) "") reg.name = none →
     ∀ rec, jsonMsg r.m₁ = some rec → ((Spot.Record.byPort rec).find? (·.1 == reg.value)).isSome = true
-
-/-- **Each reference read at a port no link or wire names reads a port of the interior registration**, decided: for
-each template, each port of its reference registered reads (`Held.refReads`) that no link or wire names has a string
-value that is one of the interior registration's ports (`Held.interiorNames`). Round 2 holds a session's registered
-reads to its template's reference reads but for the run's fields (`SecondStage.valuesOk`), and a run's interior
-record to the registration's ports (`recordsOk`); so it is what `OwnReads` asks, on what the verifier holds. -/
-def refReadsOwn : Bool :=
-  (List.range h.ms.length).all fun t =>
-    (Spot.entries (Spot.getD (h.refReads t) "ports")).all fun pe =>
-      (heldLink h (h.names.getD t "") pe.1).isSome || (heldWire h (h.names.getD t "") pe.1).isSome ||
-        match Spot.getD pe.2 "value" with
-        | .str v => h.interiorNames.ports.contains v
-        | _ => false
 
 /-- **A needed gate the wiring sends inside its replay block stays inside**: at every accepted run's checked unit,
 a gate its proof block needs side by side that the wiring map sends to a gate the boundary record doesn't hold, no
