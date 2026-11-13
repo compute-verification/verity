@@ -22,10 +22,10 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the sample misses all
-  `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`,
+  `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.SamplingBlock.drawMiss_le`,
   under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
   `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
-  `ε_ks,t + δ_link,t` (`HiddenWindow.accepted_drawnWrong_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
+  `ε_ks,t + δ_link,t` (`SamplingBlock.accepted_drawnWrong_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
   the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
   its incorrect proof blocks is a bridge not stated either: `IntegrityPeriod` plays the windows as one sequential game, not over a
   product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its

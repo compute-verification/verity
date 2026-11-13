@@ -78,9 +78,11 @@ def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t
 /-- **Sampled proofs' per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
 window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
 (`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
-`(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while sampling one with
-probability at most `ks t` (`HiddenWindow.accepted_drawnWrong_le`). That the deployment's windows are such windows is not
-stated. -/
+`(1 − q)^m` (`Flock.Guarantees.SamplingBlock.drawMiss_le`, under A3), and it detects none of them while sampling one
+with probability at most `ks t` (`SamplingBlock.accepted_drawnWrong_le`). That the deployment's windows are such
+windows is not stated. The share `q` is a hypothesis: a window that samples a uniform `kd`-subset of its `n` units has
+the miss bound at `q ≤ kd/n`, which the count a `rate:NUM/DEN` rule names meets at `q = NUM/DEN` over whatever `n` the
+window registers, while under a fixed count the largest `q` that holds falls as the prover pads `n`. -/
 def SampledPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)] {β : Type}
     (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) (q : ℝ) (ks : Fin T → ℝ) : Prop :=
   (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧

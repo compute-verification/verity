@@ -99,7 +99,10 @@ end ServerBlocks
 its session's units, the probability that every session of block `b` is accepted and its incorrect proof blocks total at least
 `ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions. -/
+Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityBlock : Prop :=
   ∀ (S : ServerBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -117,7 +120,10 @@ def IntegrityBlock : Prop :=
 `IntegrityBlock` whose samples each cover at least a fraction `q > 0` of their session's units, the probability that some
 block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
 $$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
-Its named assumptions are `IntegrityHorizon`'s. -/
+Its named assumptions are `IntegrityHorizon`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -136,7 +142,10 @@ def IntegrityBlocks : Prop :=
 `IntegrityBlocks`, the probability that every session of every block is accepted and the incorrect proof blocks over the monitoring
 period total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityHorizon`'s. -/
+Its named assumptions are `IntegrityHorizon`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityHorizonBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
