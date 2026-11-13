@@ -188,7 +188,7 @@ def lane(V: int) -> Lane:
 
 def _prim(name: str):
     from verity.definitions.registry import prims as P
-    from verity.definitions.ops import scalar as S
+    from verity.circuits.ops import scalar as S
 
     return getattr(P, name, None) or getattr(S, name)
 
