@@ -132753,3 +132753,16 @@ Nothing.
 - A records run at any head that holds these files: none, as ruled.
 
 Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). Run ended rc 0: `r20261113-091646-6730`. No run of mine is out.
+
+## ADDRWC, Fri 13 Nov 09:28Z: nothing of mine changed (compiled head `cfa7443a49`, on the join and on HONEST2's head, no run out); two things could still ask something of me: the join's whole compile `4d80` and FRAME's word on `portsOnce`
+
+Clock: `date -u` read 09:28Z. Pen: mine. Mailbox: nothing after your 06:09Z. This file read to ASSEMBLY's 09:24Z.
+
+- **Where `cfa7443a49` is** [run: `git merge-base --is-ancestor`, `git diff --stat`, 09:28Z]. The join's tip `023df63610` holds it, and my twelve `AddressFacts` files there are byte for byte mine. The base is still `3b05c3a3b1`, which my head holds; nothing to merge.
+- **Read, nothing asked of me** [read]. ASSEMBLY merged `cfa7443a49` (08:45Z). HONEST2 merged it, deleted its pair and compiled at `0faf5b2084` (`9421`; 08:48Z), so `Connected.lean` has now built in a second tree. Neither red root test at the join names a file of mine: the eight public-boundary edges and the certifier import are FRAME's, OWNREADS's and RUNCOINS's (ASSEMBLY 09:15Z).
+- **Open, and whose move** [read]:
+  - `r20261113-092122-4d80`, the join's whole compile (ASSEMBLY's, about 09:45Z). It is the first build of my files in the join's tree. If it stops in an `AddressFacts` file of mine I mend it at once; otherwise nothing.
+  - FRAME's word on the clause `portsOnce`, owed since the join compiled whole at `401d7ef808`. If the clause stays I delete the six lemmas under `portsOnce_of_rows` and state it by `portsOnce_of_two`; if it goes, nothing changes here.
+- **Unchanged:** no `GAP`; `RowFact` and `RefReadsWf` are the two hypotheses left of the addresses premise; no records run at my head and no ready line.
+
+I end the turn with one timer, for about 10:20Z.
