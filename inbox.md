@@ -76,3 +76,49 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 10:25 AM PST. #9646's job ha
 
 **The question.** May I run, on each of the three carried heads, one job of those two suites alone (`adapters/vllm` and `tools/research`, `--quick`) with the default temp directory? It is a second run of a red, so I do not start it without your word. If you would rather have it another way, say which. Until then #9646's verdict is: nothing rewritten, 58 of 60 suites passed, 2 red for my job's temp directory.
 
+[2026-11-13T18:26Z] 790f43da9b6b
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 10:26 AM PST. #9639 at the carried head: the suites pass; the records run would rewrite one line that is not a record, so by your rule of 9:14 AM PST I pushed nothing more. The list is one line.
+
+- **Heads** [rev-parse, ls-remote]: old `d4db4746171fd701f90ff91214d0deae07d968f4`, carried
+  `a33474dac75d87ababe98922ed087a32714cb279`, on the pull request's branch since 9:16 AM PST. The tool's word: `clean`,
+  one pass, 28 moves, no hand merge (`r20261113-163748-da2b`).
+- **Suites** [ran]: `r20261113-172016-b7e7` at `a33474dac75d`, `suites.py --changed 43e3af9c16d9 --quick`: the change
+  touches 7 suites, 7 pass, none fails.
+- **Records run** [ran]: `r20261113-171810-3230` at `a33474dac75d`, `lean_changed.py --records security/Properties
+  --update`, outcome `regenerated`. `security/Properties` passes (3,484 declarations, 107 modules, 540 guarantees);
+  `security` and `security/Proofs` pass with no record difference. It compiled the six modules of the change on the
+  moved tree.
+- **The list, one line** [ran]: in `security/Properties/lean-audit.json`, `trust_gap`'s list for
+  `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`: the same 12 premises, with
+  `Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase` moved up to its sorted place, which is `main`'s order.
+  Nothing else differs: no guarantee's entry, no `reads` entry, no digest. So no record of the carried head is stale.
+- **Why it is not a commit of generated content** [ran]: `research.carry.lock_policy` of the head's lock and of the
+  regenerated one are unequal, by that list's order alone; `trust_gap` is policy there. The entry is PoUW's, not ours.
+- **Where it comes from** [read: `merge.py`'s `SORTED` and `NESTED`; argued]: a move's script renames the premise in
+  place, `--update` on `main` sorted the list after, and the lock's merge driver keeps our order of a `trust_gap` list.
+  Every carried head whose lock crossed that rename should show the same line.
+- **If you want it pushed,** it is the run's record over the lock, one commit: sha256 `07cf8dba7a81…`, kept at
+  `lean-audit/record/security/Properties/lean-audit.json` in the run. I do not push it without your word.
+- **Pins** [ran]: the tool's own pins step ran and rewrote nothing.
+- **The body** [ran, read back]: `research queue edit 9639`: the carried head, the three runs, a section on the carry,
+  the stale `git merge-tree` line dropped, "Not run" corrected. Every path and name in it stands at the carried head.
+- **`main` at 10:25 AM PST** [ran]: `fa3e619ee146` holds no move the head lacks; `git merge-tree` with it is clean.
+- **Not checked:** the reader's check itself (`python3 -m research.carry`), which is yours; a full `check.py`; the
+  suites' slow tests outside the test modules the change reaches. I could not find which word of the change ci read
+  as the retired `sample`: the three Lean files are byte for byte the old head's, and the retired-terms lint counts
+  the same sites in each as on `main` [ran].
+
+**What else of mine waited for the carry, one line each:**
+- The two scratch tries, both at `e5905339eb20`, both `lean exit 0`: `ScopeAtTwoStage.lean` (`r20261113-070215-427e`),
+  each of its five theorems on `propext`, `Classical.choice`, `Quot.sound`; `WireInMember.lean`
+  (`r20261113-070215-4534`), two on `propext`, `Quot.sound` and three on the three. Neither lands from us.
+- Step B's branch, `cursor/network-accounting-scan-files-held-6c2f` at `5c0aeaf6fb00`: the period's check as a
+  `BlobProtocol` and the difftest-only executable. Not known to elaborate (its try's log went with the machine). It
+  sits on the paths before the moves and must cross them itself.
+- Condition 3's two numbers, due Mon 16 Nov noon PST: so far 55.4 s to make the files [ran], about 25 s for the
+  check [derived]; the accepting period on real files is not run.
+- Three questions on step B, unsent: the second decode of the scan's descriptor against `scanOf` handing on its
+  Program; where the accepting test on real files lives; the direct require of the sampled verifier's package.
+
+TIMER: none
+
