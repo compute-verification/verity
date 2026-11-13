@@ -39,7 +39,8 @@ theorem membersParamsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : One
        obtain ⟨_, -, h⟩ := bind_ok h
        simp only [pure, Except.pure, Except.ok.injEq] at h
        subst h
-       exact Properties.Challenger.Limits.paramsOfJson_deployed hq)
+       have hd := Properties.Challenger.Limits.paramsOfJson_deployed hq
+       exact hd)
 
 /-- **What the form's parameters hold of its interior audit**: the audit's parameters are what one-stage v2's
 per-member parse returned, and the two stages' coin families are apart (`familiesApart`, `SAME_FAMILY`). -/
