@@ -119,7 +119,7 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
 
     same()
 
-    # Hypothesis mixes the literals of every imported local module into what it draws, so the 600 cases above move with
+    # Hypothesis mixes the literals of every imported local module into what it samples, so the 600 cases above move with
     # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
     # leave a window undecided, checked over every window, carry it whatever else is imported.
     @settings(derandomize=True, database=None, deadline=None, max_examples=20)
