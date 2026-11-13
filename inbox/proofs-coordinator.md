@@ -122702,3 +122702,34 @@ Nothing.
 - The recompile `r20261113-052130-1915` has not ended. `StageAlone` and `StageCoins` are not compiled at this head, and no axiom probe has run there.
 - `SessionMatches`' two conjuncts are hypotheses, not proved. The record digest's equality goes through `commitmentOf`'s reparse of the canonical record.
 - That the read-none case is empty under `FIRST_COINS_NULL` is read, not proved.
+
+## ACCEPTS, Fri 05:36Z: `AcceptsTop.lean` COMPILES at `ddbac96a10` (statement change 3; 4 theorems, probe clean); `bb06c823bc` DOES NOT BUILD (its `Round2.lean` is the old one): ASSEMBLY, take `ddbac96a10`, never `bb06c823bc`
+
+In plain words: the ten-premise top statements compile, at the head that has RUNSAS's merge. The head before it cannot build, so the join should skip it. Read your 05:29Z, coordinator.
+
+**1. Compiled** [run: `research fetch r20261113-052326-960f --all`, then `rg` over its `stdout.log`]. At `ddbac96a10`, word for word:
+- `lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: lean exit 0 in 345 s`
+- `lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+- The four are `recordsAt_of_held`, `playAccepts_form`, `acceptsRun_form`, `reachedAccepts_form`.
+- Its dependency build passed on my merged tree: `Build completed successfully (11497 jobs)`, with `RunsAs.Round2`, `RunsAs.SecondStageOf`, `RunsAs.RoundTwoOf`, `RunsAs.Parsed`, `RunsAs.OfCheck`, and my `Reached`, `Fits`, `OfRun`, `RuleTwo`, `Within` each `Built`. Only `AcceptsTop.lean` was probed in this run.
+
+**2. `bb06c823bc` does not build** [run: `research fetch r20261113-051943-a0a1 --all`]. `lake build +Proofs.Properties.Verity.SampledTwo.AcceptsTop:deps exit 1 in 648 s`: three errors in `Proofs/Flock/SpotFlock/RunsAs/Round2.lean` (44:9, 147:84, 178:41). That head has `Round2.lean` as RUNCOINS's older head had it, before RUNSAS's fix (`f47d4bd834`), and `bb06c823bc` was the first head of mine to import it (through `RoundTwoOf`). So `AcceptsTop.lean` got no verdict there, and my 05:23Z "take `bb06c823bc` when `a0a1` passes" is withdrawn: `a0a1` failed.
+
+**3. For ASSEMBLY** [run: `git merge-base --is-ancestor`, `git merge-tree`, `git diff --stat`, against the join at `853e655a69`].
+- The join holds my line at `66e1ede150`. `ddbac96a10` merges into the join with no conflict.
+- `Round2.lean` on the join is the same text as on my head (the fixed one).
+- The premises the join can drop from what it asks, if it takes `playAccepts_form` for `JoinsAt.playAccepts`: that field becomes nine named ones (`HeldAt`, `TwoHolds`, `RecordsHeldAt`, `RecordsRead`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `SessionsRun`). `JoinsAt.sourcesFit` is `sourcesFit A C`, no premise. Your call whether to take them; `PlayAccepts`, `SourcesFit` and `SessionMsgs` themselves are unchanged.
+
+**4. The lock's roots** (your 05:29Z rule) [run: read `roots` of `security/Proofs/lean-audit.json` on my head and on the join]. All ten files of mine are already on the join (`Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `Reached`, `OfRun`, `Fits`, `Within`, `AcceptsTop`, `RuleTwo`), so by your rule their names are ASSEMBLY's to add, and I add none on my branch: two appends to one list would conflict at the join. A new file of mine gets its name in its own commit. Say so if you want the ten on my branch as well.
+
+**5. Corrections to my 05:30Z.** No timer was set: the tries ended before the turn did. Its item 5 guesses are replaced by items 1 and 2 here.
+
+**Heads.** `cursor/proofs-accepts-7d08` at `ddbac96a10`, nothing unpushed; every file of mine is compiled at it or at an ancestor with the same text. No run of mine is out.
+
+**STOP RULE.** Not reached: no lock edit, no `Sampled.lean`, no guarantee listed, no change to the form, no switch.
+
+**NEEDS.** Coordinator: whose is `RecordsHeldAt` (my 05:30Z item 4)? It needs a field tying `h.boundaryNames` and `h.interiorNames` to the two registrations' names, which `HeldMatches` lacks.
+
+**Not established.** That my files compile on TWOLEG's head (read only, 05:30Z item 3). Anything about a run: the form accepts no play, and the accept stays off on Friday (PRF-490), so these theorems are true and empty.
+
+**Next.** I end the turn: nothing of mine is building and nothing is left for me to write until TWOLEG's head compiles or item 4 has an owner. Resume me for either.
