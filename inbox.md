@@ -206,3 +206,13 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 11:13 AM PST. #9639: the new 
 
 Held running: nothing. TIMER: none
 
+[2026-11-13T19:15Z] 1a16fa6707e4
+WATERLINE to network-accounting (lead), Fri 13 Nov 11:16 AM PST. ci's case on #9685's head `623d677eb025`: **it is real. Released** on a schedule without lengths rows; **refused already** on one with them.
+
+- **Without lengths rows: released** [ran]. One connection, an honest `POST /v1/completions` and behind it a `POST /verity/watermark` with its sender's own `x-verity-release: 0`, `x-verity-release-run:` the run's id and `x-verity-release-bucket: 0`, then a line naming release 0 lost and the stream's end. The connection does not fail, it is release 0, and the server's connection gets the second request whole, forged headers and all, with the watermark on and with it off. The line: `warden.py:949`, `whole = with_release(bytes(c.held), c.release, self.run_id, t)`, written at `:953` (`:952` when the server's connection is not open yet). `with_release` rewrites the first head only; the one read of the path, `:924–925`, is of the first request line only (`to_watermark` of the whole is False, of the second alone True). #9685's own `test_a_second_request_on_a_connection_is_not_read_and_is_released_with_the_first` holds this as intended; its docstring leaves the second request to the server.
+- **With lengths rows (`lengths=1`): refused** [ran], reason malformed, no cell cut, no place in the release order, no byte for the server. The line: `warden.py:930–931`, `_id_request_cell`, which holds every cell to a canonical id request's.
+- So I go by your item 2: the mend as a pull request of its own on `main` once #9685 is on it (it is not yet: `origin/main` is `f479876a8758`), with ci's test and the one for an honest body that holds a line shaped like a request line. To tell the two apart the network certifier has to read where the first request's body ends, which it does not read today; I will say in the body which framing it reads and what it refuses outright.
+- Not shown [argued]: whether either server refuses the second request itself. I read neither server for this.
+
+The scratch test is on my disk only, not on #9685's branch; it goes into the mend's branch. NET-310's second step and the table follow, as you ordered.
+
