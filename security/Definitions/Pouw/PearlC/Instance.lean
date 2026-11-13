@@ -130,8 +130,8 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
 /-- **The named failure probability** `δ(q, N) = (q + N)·2^−128`. It counts oracle calls only: `q` is the oracle calls,
 preprocessing included, and each of the `N` declared units has its own E_A sample (keyed by the unit's index; F_A, F_B
 and E_B are per job, shared by the job's units). When the noise is an oracle, each call yields at most one fresh noise
-sample. A cost model that computes the noise instead draws samples `q` does not count: W1's `sha` instructions, free at
-`W1Device.s8H100Best`, are outside `q`, so there `δ` does not grow with the noise samples a program draws. The conjecture is that a sample on which some program undercuts that
+sample. A cost model that computes the noise instead samples samples `q` does not count: W1's `sha` instructions, free at
+`W1Device.s8H100Best`, are outside `q`, so there `δ` does not grow with the noise samples a program samples. The conjecture is that a sample on which some program undercuts that
 unit's credit by more than `g₀` has probability at most `2^−128`, the seeds' entropy; the union bound over the grinding
 samples and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`: a
 conjectured figure, since the `2^−128` a sample is the conjecture's and not a theorem, and one for at most `2^64` oracle
