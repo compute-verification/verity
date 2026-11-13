@@ -72,6 +72,11 @@ class FakeGitHub:
     def open_prs(self) -> list[PR]:
         return list(self.prs.values())
 
+    def pr(self, n: int) -> PR:
+        if n not in self.prs:
+            raise QueueError(f"gh api repos/{self.repo}/pulls/{n}: Not Found (HTTP 404)")
+        return self.prs[n]
+
 
 class World:
     def __init__(self, tmp: Path):
@@ -4912,6 +4917,22 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert not capsys.readouterr().err
 
 
+def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
+    """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
+    whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
+    at its head; it raises for a head whose own change can't be read, which `World.crossing` takes as crossing nothing."""
+    main = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    move = world.change({"tools/move/x_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n'})
+    bad = world.change({"tools/move/x_map.toml": "[paths\n"})
+    heads = {n: world.change(files) for n, files in ((1, {"b.txt": "1\n"}), (2, {"e.txt": "reads c.txt\n"}),
+                                                     (3, {"d.txt": "written\n"}))}
+    moves = [(move, "tools/move/x_map.toml"), (bad, "tools/move/x_map.toml")]
+    assert {n: Q.crossed(world.origin, main, h, moves) for n, h in heads.items()} == {
+        1: frozenset({move}), 2: frozenset(), 3: frozenset()}
+    with pytest.raises(Q.QueueError):
+        Q.crossed(world.origin, main, "f" * 40, moves, files=())
+
+
 def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):
     """`status --loop` says what `World.ready` decides of a head below a move `main` landed: one whose own change names none of
     the move's retired names is admitted, and one that names one, in a path or an added line, is refused with the move and
@@ -5678,6 +5699,26 @@ def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(mon
     monkeypatch.setattr(Q, "GH_PAGES", 2)
     assert [p.number for p in Q.GitHub("o/r").open_prs()] == list(range(250, 0, -1))
     assert sorted(asked) == [1, 2, 3, 4]
+
+
+def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
+    """`GitHub.pr` reads `repos/<repo>/pulls/<n>`, which answers for a merged PR as for an open one."""
+    import research.queue as Q
+
+    asked: list[list[str]] = []
+
+    def gh(argv, **kw):
+        asked.append(argv)
+        if argv[-1].endswith("/9"):
+            return subprocess.CompletedProcess(argv, 1, "", "gh: Not Found (HTTP 404)")
+        return subprocess.CompletedProcess(argv, 0, json.dumps({"number": 7, "state": "closed", "merged": True, "body": "Lane `lean`.",
+                                                                "head": {"sha": "a" * 40, "ref": "b7"}}), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    p = Q.GitHub("o/r").pr(7)
+    assert (p.number, p.head, p.owner, asked) == (7, "a" * 40, "lean", [["gh", "api", "repos/o/r/pulls/7"]])
+    with pytest.raises(QueueError, match=r"^gh api repos/o/r/pulls/9: gh: Not Found \(HTTP 404\)$"):
+        Q.GitHub("o/r").pr(9)
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):

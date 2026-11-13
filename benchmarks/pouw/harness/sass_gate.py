@@ -1763,9 +1763,8 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
 
 
 # ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
-# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/, torch_gpu's s8_linear/ and attn_bf16/) states the
-# kernels it wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
-# torch_gpu's units/ reads the build through `ptxas_report` and `sass_functions`.
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and torch_gpu's s8_linear/) states the kernels it
+# wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: a ptxas line that refuses the build: a warning, an error or a serialized wgmma (C751x)

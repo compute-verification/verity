@@ -53,10 +53,10 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
 
 
 def test_a_schedule_with_lengths_rows_is_one_whose_releases_fit_them():
-    """The form is 1 or unset; with it the egress form is id, ingress ends by the delay, a connection ends within a
-    window of its admission, its egress cells count in a u16 and a cell holds an id request's head and first prompt
-    field. K, a row's slots, is the most releases a slot stride can hold."""
-    for bad in (0, 2, True, "1", 1.0):
+    """The form is 1 or 2, or unset; with it the egress form is id, ingress ends by the delay, a connection ends
+    within a window of its admission, its egress cells count in a u16 and a cell holds an id request's head and first
+    prompt field. K, a row's slots, is the most releases a slot stride can hold."""
+    for bad in (0, 3, True, "1", 1.0):
         with pytest.raises(ValueError, match="lengths is 1"):
             dataclasses.replace(PLAIN, lengths=bad)
     for change, why in (({"egress": "bytes"}, "egress form is id"), ({"ingress_buckets": D + 1}, "at most the delay"),
