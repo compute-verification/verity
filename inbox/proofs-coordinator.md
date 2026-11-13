@@ -133134,3 +133134,59 @@ Beyond the places [run: counts of each name in my file and the scratch's]: `two_
 - The 20-template play (`--units 20 --v 2560 --logits`) at the scratch: it raises in `a5.audit` there, by HELDOF's 08:50Z entry. That is item 2 of your 09:14Z, which I own; I start it now and name its head, or the obstacle, by 11:30Z, with item 3 in the same entry.
 
 No run of mine is running. No timer of mine is set.
+
+## ASSEMBLY, Fri 13 Nov 09:40Z: THE JOIN COMPILES at `b0048e4e24` (`4d80`, rc 0, all five tries). Since then: `firstDrawn` is OUT of `JoinsAt` (22 fields), `sessionMatches` is asked at the good accepts, and CUT's `1ae7e0f73d`, SESSIONOF2's `501cfcad28` and TWOLEG's scratch `654e34d42b` are merged. The join is `0df461b1b2`, NOT compiled: `r20261113-093801-8f29` on vy-nebius-cpu-5 is out, expected end about 09:55Z. The merges change no `JoinsAt` field's statement
+
+**In plain words.** The whole compile you asked for passed: with STAGECOINS's head in, the join's theorem and everything it reads build, the three hand mends of `JoinsAt.lean` included. I then made the two changes you ruled (09:23Z, 09:27Z), took the two heads of your 09:33Z and TWOLEG's scratch, and sent one compile of all of it.
+
+**1. `r20261113-092122-4d80`** [run: its `stdout.log` and `status.json`]. vy-nebius-cpu-11, at `b0048e4e24`, 09:21:45Z to 09:34:28Z, rc 0, last line "ALL TRIES rc=0".
+- `DrawRoots.lean`: "lean exit 0 in 362 s", 3 theorems.
+- `JoinsAt.lean`: "lean exit 0 in 203 s", 12 theorems, `joinedOfLaw` among them.
+- `JoinedCoupling.lean`: "lean exit 0 in 96 s", 1 theorem. `JoinedForm.lean`: "lean exit 0 in 69 s", 2 theorems (`joinedForm`, `joinedCoupling`).
+- `StageCoins.lean`: "lean exit 0 in 30 s", 3 theorems.
+- Each try's axiom probe: none beyond `propext`, `Classical.choice`, `Quot.sound`.
+- So ACCEPTS's `partsHeldAt` mend and SESSIONCOINS's `firstTreeless_of_check` mend, its `rfl` included, compile.
+
+**2. `JoinsAt.lean`, two commits** [read: the diff], neither compiled yet.
+- `023df63610`: `firstDrawn` and `sessionMatches` asked at `goodCase C JoinGood`, your 09:23Z. It was pushed before your 09:27Z reached me.
+- `854e4f245e`: the field `firstDrawn` and its docstring go; `hD'` is `firstDrawn_of _ hC'`; `firstDrawn_goodCase` goes with it, since nothing reads it now. `sessionMatches : SessionMatches (goodCase C JoinGood)` stays, and `hM'` is the field itself.
+- **22 fields:** `ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `sessionMatches`, `msgOpens`, `digestBefore`, `partsHeldAt`, `heldOfAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`.
+
+**3. The three merges** [run], each with no conflict and its tree equal to the dry `git merge-tree`.
+- CUT's `1ae7e0f73d` (`8f3224f94b`): `CutRoots.lean` alone. No file on the join names `oneRoot_first` or `firstDraws_after`.
+- SESSIONOF2's `501cfcad28` (`5aa468bee5`): seven files, two of them new roots. The two sites that build a `SessionMatch` (`Record/Accepts.lean:507`, `MemberChecks.lean:283`) are SESSIONOF2's own and came mended. No other file on the join imports `Record/Session.lean` or `MemberChecks.lean`. The `partition := rfl` at `Verity/Recursive.lean:257` builds a `SetupMatch`, not a `SessionMatch`.
+- TWOLEG's scratch `654e34d42b` (`e8e0cb6261`), by your 08:18Z item 3 and TWOLEG's 09:33Z. 50 files, none a Lean, lakefile or lock file.
+  - After it `benchmarks`, `adapters`, `tools`, `tests` and `uv.lock` are the scratch's by tree id (`c5e4172104`, `4e5227ee12`, `a54458591f`, `45b36ec144`, `e66be93c2b`), and `verity` differs from the scratch's in the pin's line alone. `security` is the join's own. So the join's tree is not the scratch's hash `3c83bd48bc`, and differs from it only in `security/` and that line.
+  - **It brings no `main` the join lacks.** 32 of its 127 commits are on `origin/main` today: they are GATHER's branch's own, which landed. None is on `main`'s first-parent line, and each of the ten `main` tips they merged is already an ancestor of the join.
+- After the three: `lock_roots.py --check` adds nothing and finds nothing wrong; lakefile roots 309, lock roots 312; `dup_names.py` the same 17 names; the pin's line regenerated (`0df461b1b2`), `pins.py --stale` prints nothing; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings". Pushed.
+
+**4. The compile that is out** [run: the launch's lines]. `r20261113-093801-8f29`, `--on auto --as proofs --mem-gb 72 --timeout 3600`, spilled to vy-nebius-cpu-5's research pool, "starts now", launched 09:38Z at `0df461b1b2`, worktree clean and pushed, no `ulimit`.
+- Four tries, each run whether or not an earlier one failed; the run exits 1 if any failed: `JoinsAt`, `JoinedCoupling`, `JoinedForm`, `MemberChecks`.
+- `JoinsAt`'s imports hold `CutRoots`, `DrawRoots` and `StageAlone`. The join's theorem imports none of SESSIONOF2's five files; `MemberChecks` imports all of them, which is why it is the fourth try [run: the imports read at the tip].
+- Expected end about 09:55Z [guess: `4d80` took 13 minutes on cpu-11; cpu-5's build tree may be colder].
+
+**5. The table for 11:00Z, your "one line if any other row changed"** [read].
+- Row 6 (`firstDrawn`) leaves, as you have it.
+- **Row 7 (`sessionMatches`) changed in one column:** "ranges over" is now "good accepts" (`SessionMatches (goodCase C JoinGood)`), by your 09:23Z. Kind and owner as written; STAGECOINS's 4b is the comparison it lacks.
+- Row 9 reads as MESSAGES's 09:22Z section 6. On the join the field is still `digestBefore`: `MessagesOpen.lean`, which holds `FixedBefore`, is on no head named for me.
+- No other row changed. The three merges touch no field's statement: `SessionMatch` and `ReadsBack` are in no field of `JoinsAt` and in no file the join's theorem imports.
+
+**6. Next** [your 09:23Z item 3]. When `8f29` ends rc 0: the records run of `security/Proofs` at that head (72 GB), and one run of the root suite's quick tier, both `--on auto`. Then RUNCOINS's head when it names one.
+
+## Runs
+
+- `r20261113-092122-4d80`: ended rc 0, read.
+- `r20261113-093801-8f29`, vy-nebius-cpu-5, at `0df461b1b2`: out, expected end about 09:55Z.
+- Timer: one, set after this entry, to read `8f29`.
+
+## NEEDS
+
+- **You:** nothing.
+- **TWOLEG:** nothing; `654e34d42b` is in.
+
+## Not established
+
+- That anything at `0df461b1b2` compiles: `8f29` decides. The last compiled head of the join is `b0048e4e24`.
+- The 18 files of `SampledTwo/` outside `4d80`'s five tries: the records run reads them.
+- The two root tests of my 09:15Z entry: not rerun; these merges touch none of the files they name, so I expect both red still [derived].
+- TWOLEG's quick tier at `654e34d42b` (`0daf`) had not ended when its entry was written; I have read no verdict of it.
