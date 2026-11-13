@@ -31,3 +31,44 @@ Read of `r20261112-234326-4763`'s `stdout.log` whole and its `audit-Properties/r
 
 Now reading for Fri 2:00 PM PST: C's two (the unread bits, `memberOk`'s cap) and job 2's two.
 
+[2026-11-13T00:45Z] f1d45367f445
+OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 4:45 PM PST. Your 3:52 PM and 4:13 PM PST are read whole. **Done since: the run at part b's head, the tightening as its own last commit, the cap's cases, lean's new head merged, and your two reads for Fri 10 AM. On origin: `cursor/na-scratch-net386-5924` at `74d2ae870ee`.** One thing I could not do as you wrote it: there is no kept served run with connection rows' registrations (item 2).
+
+**1. The run at part b's head** [ran] r20261112-233401-0509 at `b7f8e4783a1`: the two reds of `test_nci_record_difftest.py` and nothing else. The certifier verifier's suite 1,487 passed, 1 skipped; `network` 102 passed, 2 failed; the record writer's 4; 162 root tests; the difftest 0 differences. Lean's head `34c5cbb3705c` is merged in (it descends from the marked one, two commits); nothing run again for it.
+
+**2. Python tightens to the Lean: commit `5aaf7bfeaba`, the last of the series**
+- `check_registration` refuses, each by name: a number that is not an `int` ("… which is not written as the schedule's …: a registration's integer is an int, neither a bool nor a float"), hex not in lower case or with a space ("… doesn't read: it is hex in lower case with no space"), and a further key in `certificate` ("… doesn't read: it holds the keys ['digest', 'key', 'signature'] and no other"). The negative is `test_a_registration_reads_one_way_only`; it fails when any one of the three is taken out [ran, my machine].
+- The three are in the difftest's data as compared refusals: 55 registrations with such hex, 62 with a float or a bool, 29 with a further key. [ran] r20261113-001346-070e at `5aaf7bfeaba`: 240 instances, 0 differences, so the Lean refuses each.
+- **Nothing of ours trips them, as far as run:** [ran] the same run: the certifier verifier's suite 1,490 passed, 1 skipped; `network` 102 passed and the same two reds. [not run yet] `verity-network-traces` whole, whose `connection_rows_run` check reads a run's registrations through this reader: r20261113-004356-b0f9 at `74d2ae870ee`, launched 4:44 PM PST. One line when it ends.
+- **The kept run.** No served run in my reach kept connection rows' registrations: the served run of 11 Nov (r20261111-160319-6d24) kept the cells form (`cells.jsonl`) and no `rows.jsonl`. The nearest is BOUNDTIE's rehearsal r20261112-231924-477b: the stand-in backend, NET-399's tree `2beaee450524`, four tables a class. [ran, my machine, read only] with the tightening applied to that tree, its six registrations are all taken, and each is refused when written each of the three ways. It is a rehearsal and not a served run; say if you meant another run.
+- The tightening's patch applies cleanly at `2beaee450524` [ran: `git apply --3way`]. Not tried on #9333 or #9491.
+- **Not touched, yours to rule:** `check_no_head` reads its certificate the same loose way (upper case, spaces, further keys). The Lean has no reader of that word yet.
+
+**3. The cap: no `require`; commit `d47dd15db50`**
+- The data's first four instances are: a lengths row of 2,730 slots, taken; of 2,731, refused; a class of 4,096 ids released, taken; of 8,192, refused. The cap is on a row's bits, so these are the rows at it and one step past it.
+- The generator reads both numbers from Python's own checks (`connection_rows.check_slots`, `content_rows.most_ids`), and `test_the_data_holds_the_size_class_cap_on_both_sides` holds the four cases. The constant changed in Python alone changes the pinned data; changed in the Lean alone fails the Lean half.
+
+**4. The salt, read only** [read at `74d2ae870ee`]
+- **No.** On a serve there is no tie's stream today, and nothing of the certifier's releases a salt. Outside tests the one caller is PoUW's served path (`benchmarks/pouw/served_zk/served_commit.py`, `salt_released`). The certifier's streams in `benchmarks/network_traces` (`n2_zk.py`, `n2_tie_zk.py`, `certifier_serve.py`) are built with `coins=_no_coins`, under which `Stream.salt` raises (`NO_OWN_COINS`), and with `clock=time.monotonic`.
+- **What `salted_at` reads:** from `Stream.salt`, the stream's injected clock at the moment the coin is read; from `Stream.salt_released`, the `released_at` it is handed, refused if later than the clock's reading now.
+- **`Check.registration_deadline` on a tie's stream today: none.** `ResponseTie.spec` builds its `Check` with a proof deadline alone, as `tie_service.py` and `service.py` do. So `register` reads no clock, the record's `received_at` is None and the epoch log stays empty.
+- **So (i) needs two things that do not exist:** coins or an outside salt for the tie's stream, and a caller that releases the salt at the phase's close. The second is the question you asked me, moved: (i) fixes the rule and the clock, and it does not say on what signal the auditor's side knows the phase has closed.
+- **A correction to my paragraph:** under a deadline the stream does hand its reading back: an on-time registration's `WindowCommitmentRecord` carries `salted_at` and `received_at`. No ask of proofs' interface is needed.
+
+**5. What reads the receipt's log, read only** [read at `74d2ae870ee`: every use of `epoch_log`, `received_at`, `salted_at` and `late-registration` in Python and Lean outside tests]
+- `Stream.epoch_log`: nothing reads it outside `service.py`'s own tests (`test_service.py`, `test_challenger_coins.py`). It is a property in memory; `service.py` writes it to no file. No record, summary, report or figure reads it.
+- The same two readings on an accepted registration's `WindowCommitmentRecord`: no reader outside tests.
+- A late one's readings do leave: the refusal's detail holds `received_at`, `salted_at` and the deadline, and PoUW's `served_commit.py` returns and prints a refusal with its detail. That is the late case, not an accepted one.
+- The stream's control (Lean `Spot.Stream`, and its Python state) holds the reading to decide late or not.
+- Not the same log, so that nobody confuses them: the challenger device's release log (`verity/protocols/spot/device/challenger.py`) has its own `received_at` of each root, and `benchmarks/remote_session/auditor_line.py` and `gate_whatif.py` make timing figures from it.
+- Not traced: whether any caller outside this tree writes a `Refused` detail to a kept file.
+- The tie's verify path reads no `tick` today: `ResponseTie` takes the registration document alone, never a `rows.jsonl` line. The test (the `tick` rewritten or removed, the verdict the same) goes in when a verify path reads the line.
+
+**6. Four smaller facts**
+- My 3:35 PM PST report's stamp reads 3:39 PM: I wrote it from memory. It was sent at 3:35 PM PST.
+- `research notes sync --path lanes/network-accounting` failed at 3:37 PM PST: git's fetch of the notes repository was refused for its credential ("Invalid username or token"). Nothing of mine was waiting to be committed. Not retried.
+- `benchmarks/network_traces/served_session.py` on `main` holds a pool machine's name (6 lines of the file, one a help string). Not mine and not touched; it is public text.
+- Build of the auditor's side: none, as you said.
+
+TIMER: when r20261113-004356-b0f9 ends.
+
