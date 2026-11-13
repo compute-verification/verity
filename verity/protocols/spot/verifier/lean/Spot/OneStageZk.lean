@@ -1197,8 +1197,8 @@ def Member.files (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
 
 /-- **Every member's files, sampled or not**: each member's statement with its files held (`Member.files`), at its
 `slice` of the registration, in the members' order, under its name. Compiled as `membersFilesKept`, which reads the
-blobs' lookup tables once, a circuit file once for the members that name it and a program once for the members in a
-row that read it, and returns the same (`membersFiles_eq_kept`). -/
+blobs' lookup tables once, a circuit file once for the members that name it, and a program and the strata of its
+partition's query once for the members in a row that read it, and returns the same (`membersFiles_eq_kept`). -/
 def membersFiles (slice : Member → Json) (bs : Core.Blobs) : List Member → V (List (String × StepAt))
   | [] => pure []
   | m :: ms => m.files (slice m) bs >>= fun a => membersFiles slice bs ms >>= fun as => pure ((m.name, a) :: as)
@@ -1274,27 +1274,99 @@ theorem tablesHeld_match (p : Own) (bs : Core.Blobs) :
       bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch (tablesOf bs) :=
   rfl
 
-/-- **What the files' pass keeps of a program**, each a function of its bytes, so the members that read one program
-share one: the bytes, their parse (`Program.parse`) and the digest a session's record must name (`programDigest`). -/
+/-- The strata of the partition `partition`'s query over a program as parsed, `parsed`: what a member's population
+check reads of its program and its partition (`Member.population`). -/
+def strataOn (parsed : V Program) (partition : Json) : V (Array (String × Array (Nat × Nat))) :=
+  parsed >>= fun p => Partition.strata p (getD partition "query")
+
+/-- Whether two readings of a query's strata are one: the same strata, or the same refusal. -/
+def sameStrata : V (Array (String × Array (Nat × Nat))) → V (Array (String × Array (Nat × Nat))) → Bool
+  | .ok a, .ok b => decide (a = b)
+  | .error a, .error b => decide (a = b)
+  | _, _ => false
+
+/-- Two readings `sameStrata` takes as one are equal. -/
+theorem sameStrata_eq : ∀ {a b : V (Array (String × Array (Nat × Nat)))}, sameStrata a b = true → a = b
+  | .ok _, .ok _, h => congrArg Except.ok (of_decide_eq_true h)
+  | .error _, .error _, h => congrArg Except.error (of_decide_eq_true h)
+  | .ok _, .error _, h => nomatch h
+  | .error _, .ok _, h => nomatch h
+
+/-- `sameStrata` takes a reading as itself. -/
+theorem sameStrata_refl : ∀ (a : V (Array (String × Array (Nat × Nat)))), sameStrata a a = true
+  | .ok _ => decide_eq_true rfl
+  | .error _ => decide_eq_true rfl
+
+/-- **What the files' pass keeps of a program**, for the members that read it: the bytes, their parse
+(`Program.parse`) and the digest a session's record must name (`programDigest`), each a function of the bytes; and
+the partition the member before read with it, with the strata of that partition's query over the parse (`strata`,
+which `held` says they are), so the members in a row that read one program under one partition evaluate its query
+once. -/
 structure ProgramKept where
   bytes : ByteArray
   parsed : V Program
   sha : Option String
+  partition : Json
+  strata : V (Array (String × Array (Nat × Nat)))
+  held : strata = strataOn parsed partition
 
-/-- What the files' pass keeps of the program `b`, parsed and hashed here. -/
-def programOf (b : ByteArray) : ProgramKept :=
-  { bytes := b, parsed := Program.parse b, sha := programDigest b }
+/-- What is kept of the program `bytes`, parsed as `parsed` and of the digest `sha`, under the partition
+`partition`: the strata of its query evaluated here. -/
+def programRead (bytes : ByteArray) (parsed : V Program) (sha : Option String) (partition : Json) : ProgramKept :=
+  { bytes, parsed, sha, partition, strata := strataOn parsed partition, held := rfl }
 
-/-- What is kept of the program `b` after the member before read `prog`: `prog` where its bytes are `b`, else `b`
-parsed and hashed anew, so members in a row that read one program parse and hash it once. -/
-def ProgramKept.next (prog : Option ProgramKept) (b : ByteArray) : ProgramKept :=
+/-- What the files' pass keeps of the program `b` under the partition `partition`: `b` parsed and hashed here, and
+the partition's query evaluated on the parse. -/
+def programOf (b : ByteArray) (partition : Json) : ProgramKept :=
+  programRead b (Program.parse b) (programDigest b) partition
+
+/-- A program kept with any strata that are its partition's is the program kept with them evaluated. -/
+theorem programRead_of {bytes : ByteArray} {parsed : V Program} {sha : Option String} {partition : Json}
+    {strata : V (Array (String × Array (Nat × Nat)))} (h : strata = strataOn parsed partition) :
+    ({ bytes, parsed, sha, partition, strata, held := h } : ProgramKept) = programRead bytes parsed sha partition := by
+  subst h
+  rfl
+
+/-- The strata kept are those of the kept partition's query, so `sameStrata` takes the two as one under a partition
+equal to the kept one. -/
+theorem ProgramKept.same (pk : ProgramKept) {partition : Json} (e : partition = pk.partition) :
+    sameStrata (strataOn pk.parsed partition) pk.strata = true := by
+  subst e
+  rw [← pk.held]
+  exact sameStrata_refl pk.strata
+
+/-- **What is kept of `pk`'s program for a member whose partition is `partition`**: `pk`'s strata where `partition`
+is the partition `pk` evaluated them under, else the strata of `partition`'s query on `pk`'s parse. Compiled, the
+partition the members share is one object, which `withPtrEq` sees without reading it, so no query is evaluated; a
+partition that is another object has its query evaluated and the strata compared (`sameStrata`), and evaluated once
+more where they differ. Either way the result is `programRead` at `partition` (`ProgramKept.under_eq`). -/
+def ProgramKept.under (pk : ProgramKept) (partition : Json) : ProgramKept :=
+  if h : withPtrEq partition pk.partition (fun _ => sameStrata (strataOn pk.parsed partition) pk.strata)
+      (fun e => pk.same e) = true then
+    { bytes := pk.bytes, parsed := pk.parsed, sha := pk.sha, partition, strata := pk.strata
+      held := (sameStrata_eq (a := strataOn pk.parsed partition) (b := pk.strata) h).symm }
+  else programRead pk.bytes pk.parsed pk.sha partition
+
+/-- What `ProgramKept.under` keeps is `pk`'s program with the strata of `partition`'s query on its parse. -/
+theorem ProgramKept.under_eq (pk : ProgramKept) (partition : Json) :
+    pk.under partition = programRead pk.bytes pk.parsed pk.sha partition := by
+  unfold ProgramKept.under
+  split
+  · exact programRead_of _
+  · rfl
+
+/-- What is kept of the program `b` under the partition `partition` after the member before read `prog`: `prog`
+under `partition` where its bytes are `b` (`ProgramKept.under`), else `b` parsed and hashed anew, so members in a
+row that read one program parse and hash it once, and evaluate their partition's query on it once. -/
+def ProgramKept.next (prog : Option ProgramKept) (b : ByteArray) (partition : Json) : ProgramKept :=
   match prog with
-  | some pk => if pk.bytes = b then pk else programOf b
-  | none => programOf b
+  | some pk => if pk.bytes = b then pk.under partition else programOf b partition
+  | none => programOf b partition
 
-/-- What is kept of a program after a member is what `programOf` reads of its bytes. -/
-theorem ProgramKept.next_eq {prog : Option ProgramKept} (h : ∀ pk, prog = some pk → pk = programOf pk.bytes)
-    (b : ByteArray) : ProgramKept.next prog b = programOf b := by
+/-- What is kept of a program after a member is what `programOf` reads of its bytes under the member's partition. -/
+theorem ProgramKept.next_eq {prog : Option ProgramKept}
+    (h : ∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) (b : ByteArray) (partition : Json) :
+    ProgramKept.next prog b partition = programOf b partition := by
   unfold ProgramKept.next
   cases prog with
   | none => rfl
@@ -1302,15 +1374,27 @@ theorem ProgramKept.next_eq {prog : Option ProgramKept} (h : ∀ pk, prog = some
     dsimp only
     split
     · rename_i hb
-      exact (h pk rfl).trans (congrArg programOf hb)
+      have hp : pk.parsed = Program.parse pk.bytes := congrArg ProgramKept.parsed (h pk rfl)
+      have hs : pk.sha = programDigest pk.bytes := congrArg ProgramKept.sha (h pk rfl)
+      subst hb
+      rw [ProgramKept.under_eq, hp, hs] <;> rfl
     · rfl
 
-/-- `Member.population` on its program's parse `parsed`, made before it. -/
-def Member.populationOn (m : Member) (parsed : V Program) (slice : Json) (pubB : ByteArray) : V Unit := do
-  let strata ← Partition.strata (← parsed) (getD m.own.partition "query")
+/-- `Member.population` on the strata of its partition's query over its program, `strata`, read before it. -/
+def Member.populationOn (m : Member) (strata : V (Array (String × Array (Nat × Nat)))) (slice : Json)
+    (pubB : ByteArray) : V Unit := do
+  let strata ← strata
   let h ← FilePart.header pubB
   m.heldAt strata h
   headerHeld slice h
+
+/-- `Member.population` is `Member.populationOn` at the strata of the member's partition's query over its program's
+parse. -/
+theorem Member.population_on (m : Member) (slice : Json) :
+    m.population slice = m.populationOn (strataOn (Program.parse m.own.program) m.own.partition) slice := by
+  funext pubB
+  exact (bind_assoc (Program.parse m.own.program)
+    (fun p => Partition.strata p (getD m.own.partition "query")) _).symm
 
 /-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the blobs' lookup tables `tables`, the tags
 its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every check that
@@ -1397,23 +1481,22 @@ theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = s
     simp only [ok_bind] <;> rfl
 
 /-- `Member.files` on what the files' pass keeps of the member's circuit file (`fk`) and of its program (`pk`):
-`statementOn` in place of `statementOf`, and the population check on the program's kept parse. -/
+`statementOn` in place of `statementOf`, and the population check on the strata kept of the program. -/
 def Member.filesOn (m : Member) (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (fk : FileKept)
     (pk : ProgramKept) (slice : Json) (bs : Core.Blobs) : V StepAt :=
-  ((statementOn tags0 tables fk pk.sha m.own (m.populationOn pk.parsed slice) bs >>= fun a =>
+  ((statementOn tags0 tables fk pk.sha m.own (m.populationOn pk.strata slice) bs >>= fun a =>
       m.blockHeld a.g >>= fun _ => pure a) >>=
     fun a => a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
 
 /-- `Member.files` is `Member.filesOn` at the blobs' lookup tables, what `fileOf` keeps of its circuit file and what
-`programOf` keeps of its program. -/
+`programOf` keeps of its program under its partition. -/
 theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (m : Member)
     (slice : Json) (bs : Core.Blobs) :
     m.files slice bs =
-      m.filesOn tags0 (tablesOf bs) (fileOf tags0 (tablesOf bs) bs m.own.circuit) (programOf m.own.program) slice
-        bs := by
+      m.filesOn tags0 (tablesOf bs) (fileOf tags0 (tablesOf bs) bs m.own.circuit)
+        (programOf m.own.program m.own.partition) slice bs := by
   unfold Member.files Member.statement Member.filesOn
-  rw [statementOf_on ht]
-  rfl
+  rw [statementOf_on ht, Member.population_on] <;> rfl
 
 /-- **The circuit files kept for the members still to come**, each under its digest as the members name it. -/
 abbrev KeptFiles := List (String × FileKept)
@@ -1444,14 +1527,15 @@ theorem KeptFiles.find_held {tags0 : Flock.Tags} {tables : List (String × ByteA
 
 /-- `membersFiles` on the circuit files `kept` and the program `prog` the member before read: each member's files
 held on what is kept under its circuit's digest, which is read under it (`fileOf`) for the first member that names
-it and kept for the members still to come, and on what is kept of its program (`ProgramKept.next`). A circuit file
-is found, read and parsed once in the pass, the blobs' lookup tables `tables` once before it, and a program once for
-the members in a row that read it. -/
+it and kept for the members still to come, and on what is kept of its program under its partition
+(`ProgramKept.next`). A circuit file is found, read and parsed once in the pass, the blobs' lookup tables `tables`
+once before it, and a program is parsed and hashed, and its partition's query evaluated on it, once for the members
+in a row that read it under the partition the parameters give them all. -/
 def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (tables : List (String × ByteArray)) :
     KeptFiles → Option ProgramKept → List Member → V (List (String × StepAt))
   | _, _, [] => pure []
   | kept, prog, m :: ms =>
-    let pk := ProgramKept.next prog m.own.program
+    let pk := ProgramKept.next prog m.own.program m.own.partition
     match kept.find m.own.circuit with
     | some fk =>
       m.filesOn tags0 tables fk pk (slice m) bs >>= fun a =>
@@ -1463,14 +1547,15 @@ def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (
           pure ((m.name, a) :: as)
 
 /-- `keptFiles` on files each of which is what `fileOf` reads under its digest, and a program that is what
-`programOf` reads of its bytes, is `membersFiles`. -/
+`programOf` reads of its bytes under its partition, is `membersFiles`. -/
 theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (slice : Member → Json)
     (bs : Core.Blobs) : ∀ (ms : List Member) (kept : KeptFiles) (prog : Option ProgramKept),
-      kept.Held tags0 (tablesOf bs) bs → (∀ pk, prog = some pk → pk = programOf pk.bytes) →
+      kept.Held tags0 (tablesOf bs) bs → (∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) →
       keptFiles slice bs tags0 (tablesOf bs) kept prog ms = membersFiles slice bs ms
   | [], _, _, _, _ => rfl
   | m :: ms, kept, prog, hk, hp => by
-    have hnext : ∀ pk, some (programOf m.own.program) = some pk → pk = programOf pk.bytes := by
+    have hnext : ∀ pk, some (programOf m.own.program m.own.partition) = some pk →
+        pk = programOf pk.bytes pk.partition := by
       intro pk h
       cases h
       rfl
@@ -1488,9 +1573,10 @@ theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = som
         · rfl
         · exact hk e he) hnext]
 
-/-- **Every member's files, a circuit file read and parsed once for the members that name it**: `keptFiles` from no
-file and no program kept, at the statement's tags and the blobs' lookup tables, each read once. It returns what
-`membersFiles` returns, a refusal included (`membersFiles_eq_kept`), and is compiled in its place. -/
+/-- **Every member's files, a circuit file read and parsed once for the members that name it**, and the program's
+strata evaluated once for the members that read it: `keptFiles` from no file and no program kept, at the statement's
+tags and the blobs' lookup tables, each read once. It returns what `membersFiles` returns, a refusal included
+(`membersFiles_eq_kept`), and is compiled in its place. -/
 def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
   match Flock.Tags.find? STATEMENT with
   | some tags0 => keptFiles slice bs tags0 (tablesOf bs) [] none ms
