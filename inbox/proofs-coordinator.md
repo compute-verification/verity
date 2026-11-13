@@ -134135,3 +134135,34 @@ For a reader outside the lane. The debit's mend adds two terms to the Lean defin
 **Not established.** Whether the mend's cuts are the same at every sm_120 floor at most −126. Whether `Cap.lean`'s missing lemmas go through as stated: nothing of them is written yet. Nothing about the Python side or the tests: I have not read the ported tests.
 
 **Runs.** `r20261113-094537-ae0a` done, exit 1 (the table above). `r20261113-095329-3369` done, exit 0. `r20261113-095521-452d` done, exit 1 (the probe). Branch `cursor/proofs-rating-debit-4ba7` at `78d74ea7955248aaf412af55f0b453cd5c9c49cc`, pushed.
+
+## CUT, Fri 13 Nov 10:00Z: nothing of mine changed; the join holds `1ae7e0f73d` (ASSEMBLY's `8f3224f94b`) and its compile `8f29` at `0df461b1b2` ended rc 0 having built all eight Cut modules and `DrawRoots` on the join's own tree, which settles the two open lines of my 09:27Z entry. I have no work in hand
+
+**In plain words.** The cut's files are on the join as they are on my branch, and they compile there, with the join's `DrawRoots.lean` over my shortened `CutRoots.lean`. No failure names a Cut file. I hold nothing more to do unless the records run or the coordinator names something.
+
+1. **The join holds my head** [run: `git merge-base --is-ancestor 1ae7e0f73d 0df461b1b2`; blob ids]: all eight Cut files at the join's tip `0df461b1b2` are my head's, byte for byte. ASSEMBLY's 09:40Z entry, item 3, says the same of the merge.
+2. **They compile on the join's tree** [read: `r20261113-093801-8f29`'s `stdout.log` and `status.json`, ASSEMBLY's run, fetched read-only]: source `0df461b1b274a4ef91043af1ea734eee89cff9d6`, vy-nebius-cpu-5, 09:38:23Z to 09:54:55Z, rc 0, last line "ALL TRIES rc=0".
+   - `JoinsAt.lean`'s try built its imports first: "Built" lines for `Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutRoots`, `CutOrder`, `CutFirst`, `CutAccept`, and for `DrawRoots` and `StageAlone`. Then "lean exit 0 in 410 s", and its probe is clean over 11 theorems.
+   - The log holds no line starting "error".
+   - This is ASSEMBLY's run and its verdict is ASSEMBLY's to give; I cite only what it shows of my files.
+3. **So two lines of my 09:27Z "Not established" are settled** [derived from 2]: my files on the join's own tree over `1e20910586`, and `DrawRoots.lean` over `1ae7e0f73d`.
+4. **Mailbox** [run]: read through `aa07d62c86` at 09:59Z; nothing new for CUT since your 07:54Z.
+
+### STOP RULE
+
+Not reached.
+
+### NEEDS
+
+- Nothing. If there is a next piece for CUT, name it; until then I only watch the records run of `security/Proofs` for a Cut file. I write nothing for the two refusals, and merge no `main`.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- A records run at any head that holds these files: ASSEMBLY's 09:40Z item 6 says it sends one after `8f29`; I have read none.
+- An axiom probe of the Cut files on the join's tree: `8f29` built them as imports and probed only the four files it tried. My own tries probed all eight on my branch (`5897`, and `6730` for `CutRoots.lean`).
+
+Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). No run of mine is out.
