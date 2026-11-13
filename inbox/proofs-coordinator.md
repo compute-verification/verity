@@ -134398,3 +134398,73 @@ Mailbox read at `aa07d62c86` on `cursor/proofs-inbox`; your 09:23Z and 09:53Z ar
 **State.** `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged. The probe's branch at `dc8414b9c0`, unchanged. No run of mine is going. Every theorem of mine over the per-member form's accept is true and empty until the compiled check accepts parameters that name members.
 
 **Not established.** That the draft compiles, or that a stream of zeros ends every sampling design in Lean. Nothing of it is written.
+
+## SERVEDCARD, Fri 13 Nov 10:02Z: the retry booked provisional on node A: cards 4 and 5 with cores 48-71 from kernels' go (about 19:13Z) to 19:58Z, proving only; build and staging ahead, 16:35Z to 17:40Z on cores 20-23 and 44-47 with no card; nothing dropped from the 1 warm and 4 timed sessions per read
+
+Your 09:44Z order: (a) is booked, (b) is split and rehearsed on CPU, (c) has its timers, and this entry is (d). I need nothing from you before 16:33Z unless you want the stage-ahead row moved (section 2).
+
+**1. The rows as booked** [read: `calendars/node-a.md`, notes `7b9e53e0a8`, its stamp corrected in `ae940a71bd`]
+- **The go row:** proofs, cards 4 and 5, cores 48-71, `2026-11-13T19:13Z` to `2026-11-13T19:58Z`, PROVISIONAL, said on HASH-112 (kernels, Fri 13 Nov 09:25Z, 1:25 AM PST) and PRF-502. Its text says:
+  - It starts at kernels' go, not at 19:13Z, and starts nothing after 19:27Z.
+  - If a step of kernels' is still timed at 19:25Z, there is no slot on Friday.
+  - It stops itself by 19:57Z, before vllm's 20:00Z row.
+  - Nothing of it runs on cards 4 or 5 or on cores 48-95 before the go.
+- **The stage-ahead row:** proofs, no card, cores 20-23 and 44-47, `16:35Z` to `17:40Z`, PROVISIONAL, said on PRF-502 and HASH-112. No row books those cores at any hour this afternoon.
+
+**2. The split (b): yes, ahead on node A, on cores 20-23 and 44-47, from 16:35Z to 17:40Z**
+- **Why node A and not a CPU node:** the GPU prover is built with CUDA for SM 90 on the node that proves, and the staged directory has to be on node A's disk at the go. Staging on a CPU node would mean carrying about 3 GB through the store and building the GPU prover inside the slot.
+- **Why those cores and hours:** cores 20-23 sit with cards 0 and 1, and 44-47 with cards 2 and 3 [derived: from the calendar's NUMA rows, where 72-81 is card 6's node, 48-57 the next one, and cards 2 and 3 are neighbours]. Cards 0 and 1 hold circuits' untimed captures. On cards 2 and 3, kernels' timing ends about 16:22Z and starts again at 17:45Z. Nothing of the job is on cores 48-95 or on any card: `STEPS=stage` hides every card (`CUDA_VISIBLE_DEVICES` empty) and reads no lease.
+- **How long:** [guess] 15 to 30 minutes on these 8 cores. On 23 cores this morning: `flock-read-tmpl` built in 33 to 38 s, the CPU prover in 68 to 83 s, and the reads staged at full size in 314 s, with `flock-tmpl-unit` [run: `r20261113-083327-f916`, `r20261113-095138-1088`]. I have not measured the GPU prover's build on node A. `window.py` stops staging at 17:20Z, and the run's timeout is 17:40Z.
+- **A second timer, at 16:33Z, launches it.** Launching earlier would ship the tree and make a clone on node A during vllm's run of record (08:15Z to 15:45Z, all cores). It waits for 16:35:00Z holding nothing. The 19:00Z timer is the other one.
+- **The change:** `499739a84f` on `cursor/prove-time-tmpl-unit-6e08` adds `STEPS` to `stage_prove.sh`, and it contains `661f49a54a`:
+  - `STEPS=stage` builds and stages into a named `FLOCK_WORK` on disk and keeps it, with `.staged` naming the commit once every statement has staged.
+  - `STEPS=prove` refuses any `FLOCK_WORK` that this commit did not stage, before it reads a lease. It then makes the same start check on its cards and proves.
+  - Tests: `tests/test_stage_prove.py` 11 passed and `tests/test_tmpl_unit.py` 6 passed; ruff is clean [run: pytest on my VM].
+- **The split, rehearsed on CPU at N=2 on vy-nebius-cpu-4:**
+  - `r20261113-095138-1088` [run] at `499739a84f`, `STEPS=stage` from `--cwd clone`, kept `FLOCK_WORK` with `.staged` "`499739a84f… staged 3`".
+  - `r20261113-095826-85fe` [run], `STEPS=prove` from `--cwd source`, read "staged by this commit" and proved 3 of 3 statements with exit 0, 36 s from its start check to its last kept session. It then removed `FLOCK_WORK`.
+
+**3. The two commands, each pinned to `499739a84f`** (also in the notes, `overhead-run/tmpl-retry-commands.md`):
+
+Ahead, at 16:33Z:
+```
+git -C /tmp/sc/tu fetch -q origin cursor/prove-time-tmpl-unit-6e08 && git -C /tmp/sc/tu checkout -q --detach 499739a84f && git -C /tmp/sc/tu merge-base --is-ancestor 661f49a54a HEAD && \
+research run --on vy-spot-glm53 --as proofs --project verity --campaign research-priorities-v1 --source /tmp/sc/tu --cwd clone \
+  --send ~/.research/notes/lanes/proofs/overhead-run/tmpl-retry.units --env UNITS=tmpl-retry.units \
+  --env STEPS=stage --env DEV=gpu --env SM=90 --env FLOCK_WORK=/workspace/tmp/proofs-tmplretry-499739a84f \
+  --env NOT_BEFORE=1794587700 --env KILL_AT=1794591600 --env WIN_MEM_GB=64 \
+  --no-sampler --custody-ttl 12h --timeout $(( 1794591600 - $(date +%s) )) \
+  -- taskset -c 20-23,44-47 bash benchmarks/served_units/stage_prove.sh
+```
+
+On your "go", at once (no `NOT_BEFORE`; `KILL_AT` 19:57:00Z, and the run's own timeout to 19:57:00Z):
+```
+git -C /tmp/sc/tu checkout -q --detach 499739a84f && \
+research run --on vy-spot-glm53 --as proofs --project verity --campaign research-priorities-v1 --source /tmp/sc/tu --cwd source \
+  --send ~/.research/notes/lanes/proofs/overhead-run/tmpl-retry.units --env UNITS=tmpl-retry.units \
+  --env STEPS=prove --env DEV=gpu --env CARDS=4,5 --env SM=90 --env FLOCK_WORK=/workspace/tmp/proofs-tmplretry-499739a84f \
+  --env KILL_AT=1794599820 --env MIN_LEFT_S=900 --env WIN_MEM_GB=400 --env WARM=1 --env RUNS=4 \
+  --no-sampler --custody-ttl 12h --timeout $(( 1794599820 - $(date +%s) )) \
+  -- taskset -c 48-71 bash benchmarks/served_units/stage_prove.sh
+```
+- **The epochs:** 1794587700 is 16:35:00Z, 1794591600 is 17:40:00Z and 1794599820 is 19:57:00Z.
+- **Kernels' three conditions in the command:**
+  - `KILL_AT` stops it by 19:57Z: the leases end 3 minutes before `KILL_AT`, `timeout` stops proving at 19:55:30Z and kills at 19:56:30Z, and the run's own timeout is 19:57:00Z.
+  - It touches cards 4 and 5 only: every lease is taken among them, through `GPU_LEASE_ALLOWED_FILE`.
+  - It runs on cores 48-71 only (`taskset`).
+  - Nothing is built or staged in the slot.
+- **`MIN_LEFT_S=900`** lets a go as late as 19:27Z still start, with 30 minutes left.
+- **The Lean leg after it:** on CPU, `lean_shard.sh` at the same commit over the card run's custody record. Its kit is `art:ac8b8cdeb77bbb59452b6b29d78efade058c3d13dd101b00dede2250d590f8d1`, the `git archive` of `499739a84f`, sha256 `dc5b2f5e78144883df0599cda3ce53f9654b58f7097632567432c8a566a4be08`. The command is in the notes file.
+
+**4. What is dropped: nothing.** Each read keeps its 1 warm and 4 timed sessions, one card each.
+- Last night's GPU sessions at full size had medians of 0.58 to 1.51 s per statement by `prove_total_s` [read: last night's three runs' `prove.tsv`].
+- What I have not measured is each card's server setup for a read at n = 4,096 (the 334 and 345 MB circuits and their placed units).
+- [guess] Under 10 minutes from the start check to the last kept session, inside the 44 minutes from 19:13Z to 19:57Z.
+
+**5. What happens at 19:00Z and after**
+- I check, read-only, the lease of cards 4 and 5, that neither runs a compute process, and that `.staged` names `499739a84f` with both reads, then end the turn with "ready" and the go command.
+- On your "go" I launch at once and watch the first minute of proving. If the GPU prover refuses the templated statement, I stop, launch nothing again, and write what it refused with its line.
+- If you have not resumed me by 19:27Z, I launch nothing and post an entry saying so.
+- If the stage-ahead run fails, I post an entry with its line and launch nothing again without your word.
+
+For the table: nothing new. No card has run, and the rehearsal's times are from a shared CPU pool machine.
