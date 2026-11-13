@@ -19,8 +19,8 @@ import struct
 import numpy as np
 import pytest
 import torch
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.circuits.evaluation.bits import evaluate_bits
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 
 from tests.engine.test_int8_zy import LLAMA, _configs, _cuda_call, _rows
 from verity_vllm.engine import int8_exact as E
@@ -67,7 +67,7 @@ TARGETS = [0, 1, -1, 3, -7, 127, -16129,
 
 def rn_bf16(f: np.ndarray) -> np.ndarray:
     """float32 -> bf16 encodings, round to nearest even on the encoding (overflow to inf included), every NaN 0x7FFF."""
-    b = f.view(np.uint32).astype(np.uint64)
+    b: np.ndarray = f.view(np.uint32).astype(np.uint64)
     r = ((b + 0x7FFF + ((b >> 16) & 1)) >> 16).astype(np.uint16)
     return np.where(np.isnan(f), np.uint16(0x7FFF), r)
 
@@ -100,7 +100,7 @@ def row_for(t: int, k: int) -> np.ndarray:
     s = (t - r) // 127
     n, rem = divmod(abs(s), 127)
     assert n + (rem > 0) <= k - 1, t
-    q = np.zeros(k, np.int8)
+    q: np.ndarray = np.zeros(k, np.int8)
     q[:n] = 127 if s >= 0 else -127
     if rem:
         q[n] = rem if s >= 0 else -rem
@@ -109,7 +109,7 @@ def row_for(t: int, k: int) -> np.ndarray:
 
 
 def _flipped(k: int, d: int) -> np.ndarray:
-    q = np.full(k, 127, np.int8)
+    q: np.ndarray = np.full(k, 127, np.int8)
     q[[5 + 1000 * i for i in range(d)]] = -127
     return q
 
@@ -126,9 +126,9 @@ def _columns(k: int) -> list[np.ndarray]:
     """The edge call's B rows before their scales, a block of 32 columns each: "fullc" (z the design's target), all +127,
     all -127, all 0 (z = 0 at every scale), e0 (z = the row's first code) and random codes."""
     rng = np.random.default_rng(3053)
-    fullc = np.full(k, 127, np.int8)
+    fullc: np.ndarray = np.full(k, 127, np.int8)
     fullc[-1] = 1
-    e0 = np.zeros(k, np.int8)
+    e0: np.ndarray = np.zeros(k, np.int8)
     e0[0] = 1
     return [fullc, np.full(k, 127, np.int8), np.full(k, -127, np.int8), np.zeros(k, np.int8), e0,
             rng.integers(-127, 128, k).astype(np.int8)]
@@ -156,7 +156,7 @@ def exact_z(a: np.ndarray, b: np.ndarray, rows: int) -> np.ndarray:
 
 def slot_scales(sa: np.ndarray, rows: int) -> np.ndarray:
     """The slots' s_a: row i's under slot i < M, +0 under an empty one."""
-    out = np.zeros(rows, np.uint32)
+    out: np.ndarray = np.zeros(rows, np.uint32)
     out[:sa.size] = sa
     return out
 
@@ -285,7 +285,8 @@ def coverage(z: np.ndarray, sa: np.ndarray, sw: np.ndarray) -> dict[str, int]:
     s = np.broadcast_to(sa[:, None], z.shape)
     w = np.broadcast_to(sw[None, :], z.shape)
     u, y = oracle(z, s, w)
-    ub, zs = u.view(np.uint32), z.view(np.int32).astype(np.int64)
+    ub: np.ndarray = u.view(np.uint32)
+    zs: np.ndarray = z.view(np.int32).astype(np.int64)
     (s_fin, s_sub, s_nan), (w_fin, w_sub, w_nan) = _f32_class(s), _f32_class(w)
     y_fin, y_nonzero = (y & 0x7F80) != 0x7F80, (y & 0x7FFF) != 0
     tie = np.isfinite(u) & ((ub & 0xFFFF) == 0x8000)
@@ -379,7 +380,7 @@ def test_h1zy_dequant_is_int8_exacts_stated_oracle(source, record_property):
     extremes and the edge call's scales, and on 300,000 random encodings with 75,000 bf16 ties and neighbours; and
     numpy's int32 -> float32 is RN32 (ties to even on 24 significant bits, in integers)."""
     tri = _edge_encodings() if source == "edges" else _encodings(33, 300_000)
-    zs = tri[:, 0].view(np.int32).astype(np.int64)
+    zs: np.ndarray = tri[:, 0].view(np.int32).astype(np.int64)
     assert np.array_equal(zs.astype(np.float32).astype(np.int64), rn24(zs))
     want = oracle(tri[:, 0], tri[:, 1], tri[:, 2])[1]
     got = np.array([Z.dequant(int(p), int(q), int(r)) for p, q, r in tri], np.uint16)
