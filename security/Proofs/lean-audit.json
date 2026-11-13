@@ -171,6 +171,7 @@
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets",
+  "Proofs.Flock.SpotFlock.BlockCommits",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
