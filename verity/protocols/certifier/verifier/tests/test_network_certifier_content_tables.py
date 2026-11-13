@@ -54,11 +54,17 @@ def salt(*name) -> bytes:
 
 
 def fingerprint(params: WardenParams, directory) -> str:
-    """A hash of everything the lengths tests' traffic leaves under `params`, with the signer's key, its coins and
-    every salt fixed: each wire record's certificate, each cells' head and its signature, the `fails` records, and
-    each handed execution phase's lengths slots, connection rows' head and certificate."""
+    """`leaves` of the lengths tests' traffic under `params`."""
     _, arrivals, answers = traffic()
     device, _, _ = run(answers, arrivals, params=params, windows=3)
+    return leaves(device, params, directory)
+
+
+def leaves(device, params: WardenParams, directory) -> str:
+    """A hash of everything a run of `device` leaves under `params`, with the signer's key, its coins and every salt
+    fixed: each wire record's certificate (or that it has none, not being complete), each cells' head and its
+    signature, the `fails` records, and each handed execution phase's lengths slots, connection rows' head and
+    certificate."""
     counter = itertools.count()
     issuer = Issuer(signers.signer(directory), signers.SESSION,
                     coins=lambda n: hashlib.sha512(b"coins%d" % next(counter)).digest()[:n])
@@ -69,6 +75,9 @@ def fingerprint(params: WardenParams, directory) -> str:
             continue
         direction = Direction.INGRESS if record.link == "requests" else Direction.EGRESS
         wire = issuer.certify(record, direction, params.grid, params.digest)
+        if wire is None:
+            h.update(repr(("refused", record.link, record.window, record.status.reason)).encode())
+            continue
         h.update(wire.certificate.digest + wire.certificate.signature)
         held, cert = WR.attest(issuer, record, params, direction,
                                [salt(record.link, record.window, k) for k in range(params.window)],
