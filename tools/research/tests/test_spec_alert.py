@@ -86,6 +86,55 @@ def test_a_guarantee_whose_premises_change_is_shown_and_one_that_first_records_t
         "guarantees: 1 new, 1 with new premises, 2 premises recorded"
 
 
+def test_a_renamed_guarantee_shows_the_premises_it_gains_or_drops_under_its_new_name():
+    """A guarantee under another name with its type hash is a rename and no change, and what its record rests on is
+    compared all the same: a premise it gains or drops in the push that renames it is shown under its new name. A premise
+    under another name with its digest is that premise, and one whose digest changed with its name is another."""
+    def rec(*open_: str) -> dict:
+        return _g("t : A", H1) | {"premises": {"assumptions": ["P.Hyp"], "open": list(open_), "reads": []}}
+
+    def doc(name: str, *open_: str, listed: dict | None = None) -> dict:
+        return _doc({name: rec(*open_)}) | {"open": listed or {}}
+    old = doc("P.t", "P.Held")
+    assert spec.changes(old, doc("Q.t", "P.Held")) == []
+    assert spec.changes(old, doc("Q.t")) == ["• guarantee `Q.t` (renamed from `P.t`) rests no longer on `P.Held`"]
+    assert spec.changes(old, doc("Q.t", "P.Held", "P.New")) == [
+        "• guarantee `Q.t` (renamed from `P.t`) rests now also on `P.New`"]
+    entries = spec._across({"a": _doc({"P.t": _g("t : A", H1)})}, {"a": doc("Q.t", "P.Held")})
+    assert [(k, t) for _, k, t in entries] == [("premised", "")]
+    two = _doc({"P.t": rec("P.Held"), "P.u": rec("P.Held")}), _doc({"Q.t": rec(), "Q.u": rec()})
+    assert spec.changes(*two) == []                    # two renamed under one type hash: which is which, nothing says
+    ticket = {"issue": "PROOFS-1", "due": "2026-11-30"}
+    listed = "• open premise `P.Kept` listed (PROOFS-1, due 2026-11-30)"
+    gone = "• open premise `P.Held` discharged: no longer listed (PROOFS-1, due 2026-11-30)"
+    was = doc("P.t", "P.Held", listed={"P.Held": ticket | {"digest": H2}})
+    for name, said in (("P.t", "• guarantee `P.t`"), ("Q.t", "• guarantee `Q.t` (renamed from `P.t`)")):
+        assert spec.changes(was, doc(name, "P.Kept", listed={"P.Kept": ticket | {"digest": H2}})) == [listed, gone]
+        assert spec.changes(was, doc(name, "P.Kept", listed={"P.Kept": ticket | {"digest": H3}})) == [
+            f"{said} rests now also on `P.Kept`; no longer on `P.Held`", listed, gone]
+
+
+def test_a_premise_renamed_with_a_changed_digest_is_one_gained_and_one_dropped_under_each_guarantee_resting_on_it():
+    """A premise under another name is that premise only when its digest came with it. One whose digest changed with its
+    name states something else, and so may one whose entry holds no digest on either side: no rename pairs the two, each
+    guarantee that rests on it shows one premise gained and one dropped, and a guarantee that doesn't shows nothing."""
+    def rec(h: str, *open_: str) -> dict:
+        return _g("t : A", h) | {"premises": {"assumptions": ["P.Hyp"], "open": list(open_), "reads": []}}
+
+    def doc(premise: str, digest: str | None) -> dict:
+        entry = {"issue": "PROOFS-1", "due": "2026-11-30"} | ({"digest": digest} if digest else {})
+        return _doc({"P.t": rec(H1, premise), "P.u": rec(H2, premise), "P.v": rec(H3)}) | {"open": {premise: entry}}
+    listed = "• open premise `P.Kept` listed (PROOFS-1, due 2026-11-30)"
+    gone = "• open premise `P.Held` discharged: no longer listed (PROOFS-1, due 2026-11-30)"
+    each = [f"• guarantee `{g}` rests now also on `P.Kept`; no longer on `P.Held`" for g in ("P.t", "P.u")]
+    assert spec.changes(doc("P.Held", H1), doc("P.Kept", H1)) == [listed, gone]        # its digest came with it: a rename
+    for was, now in ((H1, H2), (None, H1), (H1, None), (None, None)):
+        assert spec.changes(doc("P.Held", was), doc("P.Kept", now)) == [*each, listed, gone]
+    other = doc("P.Kept", H1)
+    other["open"]["P.Other"] = {"issue": "PROOFS-2", "due": "2026-11-30", "digest": H1}
+    assert spec.changes(doc("P.Held", H1), other)[:2] == each                         # two came with its digest: no pair
+
+
 def test_a_changed_definition_names_its_module():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2})
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2})
@@ -152,6 +201,30 @@ def test_the_named_assumptions_and_the_open_premises_are_shown_as_they_change():
     read = _doc({"P.t": _g("P.t : A", H1)}, {"P.Gone": H2}) | {"assumptions": {}, "open": new["open"]}
     assert spec.changes(new | {"assumptions": {"P.Gone": {"owner": "@lean"}}}, read) == [
         "• named assumption `P.Gone` no longer listed: statements only read it, and its `reads` record holds it"]
+
+
+def test_an_open_premise_whose_entry_gains_or_loses_its_why_is_shown():
+    """An open entry's `why` is written by hand, and by it the guarantees that read the premise without taking it rest on
+    it: one gained or lost changes what they rest on, so it is shown, as is the `why` of an entry listed or discharged
+    with one. A `why` that stays says nothing new."""
+    def doc(opened: dict, assumed: dict | None = None) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1)}) | {"assumptions": assumed or {}, "open": opened}
+    ticket = {"owner": "@proofs", "issue": "PROOFS-1", "due": "2026-11-30"}
+    held = ticket | {"why": "P.t's event holds it"}
+    old = doc({"P.Gains": ticket, "P.Loses": held, "P.Done": held, "P.Same": held}, {"P.Named": {"owner": "@lean"}})
+    new = doc({"P.Gains": held, "P.Loses": ticket, "P.New": held, "P.Same": held | {"due": "2026-12-31"}, "P.Named": held})
+    readers = "the guarantees that read it without taking it"
+    assert spec.changes(old, new) == [
+        f"• open premise `P.Gains`: {readers} now rest on it (P.t's event holds it)",
+        f"• open premise `P.Loses`: {readers} no longer rest on it (its `why` was: P.t's event holds it)",
+        f"• open premise `P.Named`: {readers} now rest on it (P.t's event holds it)",
+        f"• open premise `P.New` listed (PROOFS-1, due 2026-11-30); {readers} rest on it (P.t's event holds it)",
+        "• open premise `P.Same`: PROOFS-1, due 2026-12-31 (was PROOFS-1, due 2026-11-30)",
+        f"• open premise `P.Done` discharged: no longer listed (PROOFS-1, due 2026-11-30); {readers} rested on it "
+        f"(P.t's event holds it)"]
+    assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
+        "premises: 1 open listed, 1 now open, 1 discharged, 1 re-ticketed, 2 open where read, 1 no longer open where read"
+    assert spec.changes(new, new) == []
 
 
 def test_a_domain_hypothesis_is_shown_with_what_it_restricts_as_it_is_listed_moved_or_restated():
@@ -271,6 +344,29 @@ def test_a_gap_premise_renamed_with_its_text_is_no_growth_and_one_the_records_al
         "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `A.Other`"]
 
 
+def test_a_gap_premise_swapped_for_a_fresh_one_with_another_text_is_no_growth_and_the_dm_names_both(tmp_path):
+    """A deployed guarantee's gap premise replaced by one no old record held, whose text is another, reads in the trust as
+    a rename, so the push shows no gap grown by hand. It is not silent for that: the DM names both premises, in the
+    guarantee's own line (the one it now also rests on, the one it no longer does) and as one listed and one discharged."""
+    def doc(premise: str, digest: str, issue: str) -> dict:
+        rec = _g("G", "h1") | {"premises": {"assumptions": [], "open": [premise], "reads": []}}
+        return _trust(_doc({"A.G": rec}), ["A.G"], {"A.G": [premise]}) | {
+            "open": {premise: {"issue": issue, "due": "2026-11-30", "digest": digest}}}
+
+    old, new = doc("A.DrawIsCoin", H1, "X-1"), doc("A.SampleIsCoin", H2, "X-2")
+    rests = "• guarantee `A.G` rests now also on `A.SampleIsCoin`; no longer on `A.DrawIsCoin`"
+    assert spec._entries(old, new) == [
+        ("premises", rests),
+        ("open", "• open premise `A.SampleIsCoin` listed (X-2, due 2026-11-30)"),
+        ("discharged", "• open premise `A.DrawIsCoin` discharged: no longer listed (X-1, due 2026-11-30)")]
+    repo = _repo(tmp_path)
+    a = _commit(repo, "security/lean-audit.json", old, "a")
+    b = _commit(repo, "security/lean-audit.json", new, "b")
+    text = spec.message(repo, a, b)
+    assert "• `security`: guarantees: 1 with new premises; premises: 1 open listed, 1 discharged" in text
+    assert rests in text and "trust gap" not in text
+
+
 def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_nothing(tmp_path):
     old = _doc({"A.G": _g("G", "h1")})
     new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
@@ -375,7 +471,7 @@ def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_pa
 
 def test_a_fixture_of_the_audits_tests_is_no_record(tmp_path):
     """A layout move renamed a test fixture named `lean-audit.json` under the audit's directory, whose `reads` are lists:
-    read as a record it failed the DM, and Daniel was told the records couldn't be read."""
+    read as a record it failed the DM, which then said the records couldn't be read."""
     repo = _repo(tmp_path)
     toy = {"guarantees": {"Core.G": {"owner": "@lean"}}, "reads": {"Core.G": ["Core.helper"]}}
     old = _commit(repo, "tools/verity/lean/tests/fixtures/unread/Old/lean-audit.json", toy, "base")

@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.records.fields import RecordError, only, required
+from verity_vllm.records.fields import RecordError, only, optional, required
 
 SCHEMA = "verity-vllm/boundary-rows/v1"
 #: its name in the class's directory, beside the prover's ``index.json``, ``index-salt.bin`` and ``salts.bin``
@@ -35,6 +35,9 @@ class BoundaryCommit:
     index: str                                        # the prover's index's hiding leaf
     index_rule: str                                   # how that leaf hashes the index
     seconds: float                                    # how long the commit took
+    stop: Mapping[str, Any] | None = None             # the serve's registered stop rule (`Layout.stop`)
+    stopped: bool | None = None                       # under one: whether it is a stop class, with `b.stop` (`Layout.held`)
+    tables: Mapping[str, Any] | None = None           # its history tables' layers and capacity, when it has any
 
     @classmethod
     def of(cls, doc: Any, where: str) -> BoundaryCommit:
@@ -44,14 +47,17 @@ class BoundaryCommit:
             raise RecordError(where, "format", f"cannot be read: the record is a {type(doc).__name__}, not a JSON object")
         if doc.get("format") != SCHEMA:
             raise RecordError(where, "format", f"is {doc.get('format')!r}, not {SCHEMA}: not a boundary commitment")
-        only(doc, ("format", *KINDS), where)
-        return cls(**{k: required(doc, k, where, kind) for k, kind in KINDS.items()})
+        only(doc, ("format", *KINDS, *OPTIONAL), where)
+        return cls(**{k: required(doc, k, where, kind) for k, kind in KINDS.items()},
+                   **{k: optional(doc, k, where, kind) for k, kind in OPTIONAL.items()})
 
     def dump(self) -> dict[str, Any]:
-        return {"format": SCHEMA, **dataclasses.asdict(self)}
+        return {"format": SCHEMA, **{k: v for k, v in dataclasses.asdict(self).items() if k in KINDS or v is not None}}
 
 
 KINDS: dict[str, type | tuple[type, ...]] = {"window": int, "run": str, "prompt": int, "outputs": int, "check": str,
                                              "per_prompt": int, "per_output": int, "inline": bool, "spans": int,
                                              "replay": str, "program": str, "partition": str, "schema": str,
                                              "values": Mapping, "index": str, "index_rule": str, "seconds": (int, float)}
+#: what a writer writes only where it holds one
+OPTIONAL: dict[str, type | tuple[type, ...]] = {"stop": Mapping, "stopped": bool, "tables": Mapping}

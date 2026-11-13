@@ -16,7 +16,8 @@ registered rows are the served bytes; with one, that the registered rows are the
 its weights (`window_weights`).
 
 Outside the integration, this module is the per-expert cut's tables: with the registration, it exports the table layout
-(`table_param`, `table_words`), the record (`ExpertTables`) and a window committer's registration (`committer`)."""
+(`table_param`, `table_words`), the record (`ExpertTables`) and a window committer's registration (`committer`; `of_request`
+reads it as a serving-rows request names it, by its file and its key file)."""
 from __future__ import annotations
 
 import hashlib
@@ -33,12 +34,12 @@ import numpy as np
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.expert_rows import committer, table_param, table_words
+from verity_vllm.pipeline.expert_rows import committer, of_request, table_param, table_words
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "program",
-           "register", "served_fields", "table_param", "table_words", "tables_of"]
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "entries", "key_of", "mint_key", "nonces", "of_request",
+           "program", "register", "served_fields", "table_param", "table_words", "tables_of"]
 
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)

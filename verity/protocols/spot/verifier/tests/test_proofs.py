@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -146,6 +147,31 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
+@pytest.mark.parametrize("own, want", [(None, "-1"), ("0", "0")], ids=["unset", "the caller's own"])
+def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_its_own(tmp_path, monkeypatch, own, want):
+    circuit, public = _files(tmp_path)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    children = []
+
+    def child(cmd, **kw):
+        children.append(kw["env"])
+        return subprocess.CompletedProcess(cmd, 0, f"VERDICT {json.dumps(verdict)}\n", "")
+
+    assert PF.VERIFIER_ENV == {"MIMALLOC_PURGE_DELAY": "-1"}
+    if own is None:
+        monkeypatch.delenv("MIMALLOC_PURGE_DELAY", raising=False)
+    else:
+        monkeypatch.setenv("MIMALLOC_PURGE_DELAY", own)
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(PF.subprocess, "run", child)
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
+    assert children == [{**os.environ, "MIMALLOC_PURGE_DELAY": want}]
 
 
 #: `Flock/Test/RecordText.lean`'s `printed` vectors and a text it `accepts`, which is its own printing, verbatim (Lean's

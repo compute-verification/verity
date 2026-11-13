@@ -10,16 +10,16 @@ public import Proofs.Flock.Bridge.Members
 # SPOT[Flock]'s sessions are Flock runs
 
 `SpotFlock.seq h rel`: SPOT[Flock]'s two-stage verifier (`SpotFlock.code h`) runs its sessions in sequence
-(`Claims.Sampling.SessionSeq`). Rounds 0 to 2 answer with no `H` call: the two stages' coins, then the session
+(`Claims.Sampling.SessionSeq`). Rounds 0 to `stage + 1` answer with no `H` call: the two stages' coins, then the session
 statements' check (`stmtOk`), which answers `[]` or refuses. Template `t`'s session follows on its `k₀ t` rounds from
-`off t`, as Flock's masked verifier at the statement round 2 states for it, whose round count `stmtOk` holds to `k₀ t`
-(`stmtOk_at`), its acceptance answered `[]`, a message Flock never answers (a coin's bytes are never empty,
+`off t`, as Flock's masked verifier at the statement round `stage + 1` states for it, whose round count `stmtOk` holds
+to `k₀ t` (`stmtOk_at`), its acceptance answered `[]`, a message Flock never answers (a coin's bytes are never empty,
 `coin_bytes_ne`). A session round after a decided prefix answers `[]` too, and the last round accepts only where every
-session's messages have a prefix Flock decides (`decidedAt`), at which Flock answers no message (`decidedAt_ne_msg`).
-A checked unit is a proof block of the members' partition, so its template is one of theirs (`templateOf_lt`), and the
-session read off a transcript is the template's round-2 statement where it is in scope (`sessionOk`), which `stmtOk`
-checks. A run refused before the session shows `xS₀ t`'s refused run, at which Flock refuses the first message `[]`
-(`refuses_empty`); Flock's verifier has a round at every statement (`k₀_pos`).
+session's messages have a prefix Flock decides (`decidedAt`), at which Flock answers no message (`decidedAt_ne_msg`). A
+checked unit is a proof block of the members' partition, so its template is one of theirs (`templateOf_lt`), and the
+session read off a transcript is the template's statement of round `stage + 1` where it is in scope (`sessionOk`), which
+`stmtOk` checks. A run refused before the session shows `xS₀ t`'s refused run, at which Flock refuses the first message
+`[]` (`refuses_empty`); Flock's verifier has a round at every statement (`k₀_pos`).
 
 So `sessionRunsTo`: `SessionRunsTo` holds at that code, for every relation and every `H`.
 -/
@@ -131,7 +131,7 @@ theorem slotOf_eq {n t : ℕ} (ht : t < h.ms.length) (h1 : off h t < n) (h2 : n 
   refine ⟨by simp [h1, h2], List.mem_range.mpr ht, fun j hj => ?_⟩
   simp only [Bool.not_eq_true', decide_eq_false_iff_not, not_and, not_le]
   intro _
-  exact lt_of_le_of_lt (sessOff_add_le 3 (k₀ h) hj) h1
+  exact lt_of_le_of_lt (sessOff_add_le (h.stage + 2) (k₀ h) hj) h1
 
 /-- **The round after the sessions is in none.** -/
 theorem slotOf_last : slotOf h (off h h.ms.length + 1) = none := by
@@ -139,27 +139,17 @@ theorem slotOf_last : slotOf h (off h h.ms.length + 1) = none := by
   rw [List.find?_eq_none]
   intro t ht
   simp only [List.mem_range] at ht
-  have := sessOff_add_le 3 (k₀ h) ht
+  have := sessOff_add_le (h.stage + 2) (k₀ h) ht
   simp only [decide_eq_true_eq, not_and, not_le]
   intro _
   show off h t + k₀ h t < off h h.ms.length + 1
   exact Nat.lt_succ_of_le this
 
-/-- **The verifier's step after round 2**: a session's round where one holds it, else the verdict's. -/
-theorem next_long (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (has : 3 < as.length)
-    (hcs : cs.length = as.length) :
-    next h x as cs = match slotOf h as.length with
-      | some t => sessStep h t (stmtAt h (as.getD 2 []) t) as cs
-      | none => .ret (if as.length == off h h.ms.length + 1 && verdict h (as.getD 2 []) as cs then .acc else .rej) := by
-  rcases as with _ | ⟨a₀, _ | ⟨a₁, _ | ⟨m₂, _ | ⟨a₃, as'⟩⟩⟩⟩ <;> simp at has
-  rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs'⟩⟩⟩⟩ <;> simp at hcs
-  rfl
+/-! ## The statement check -/
 
-/-! ## The round-2 check -/
-
-/-- **The round-2 check, template by template**: template `t`'s statement has `k₀ t` rounds and is in scope. -/
-theorem stmtOk_at {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
+/-- **The statement check, template by template**: template `t`'s statement has `k₀ t` rounds and is in scope. -/
+theorem stmtOk_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    {t : ℕ} (ht : t < h.ms.length) :
     (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t ∧ sessionOk h t (stmtAt h m₂ t) = true := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
     cases hp : parse h x with
@@ -177,16 +167,17 @@ theorem stmtOk_at {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmt
 
 /-- **A session statement the run checks is in the scope Flock's soundness proof covers, with hidden outputs**
 (`sessionOk`'s scope check and hidden-outputs tag). -/
-theorem scoped_at {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
+theorem scoped_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    {t : ℕ} (ht : t < h.ms.length) :
     FlockDeploy.scopeCheck true (stmtAt h m₂ t) = true ∧ hiddenOf (stmtAt h m₂ t) = true := by
   have hs := (stmtOk_at h hok ht).2
   simp only [sessionOk, Bool.and_eq_true] at hs
   exact ⟨hs.1.2, hs.2⟩
 
-/-- **The round-2 check holds template by template** (`stmtOkAt`), at the statement `m₂` states for each template. -/
-theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) : stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true := by
+/-- **The statement check holds template by template** (`stmtOkAt`), at the statement `m₂` states for each
+template. -/
+theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    {t : ℕ} (ht : t < h.ms.length) : stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
     cases hp : parse h x with
     | none => simp [stmtOk, hp] at hok
@@ -204,7 +195,7 @@ theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
 
 section At
 
-variable {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ}
+variable {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ}
 
 theorem parse_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : ∃ s, parse h x = some s := by
   cases hp : parse h x with
@@ -233,11 +224,12 @@ theorem scoped_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
 
 end At
 
-/-- **Round 2 passed**: the prefix's last answer is a message only where the check passes. -/
-theorem stmtOk_of_next {x a₀ a₁ a₂ : Msg} {c₀ c₁ c₂ : FlockDeploy.Coin} {m : Msg}
-    (hm : next h x [a₀, a₁, a₂] [c₀, c₁, c₂] = .ret (.msg m)) : stmtOk h x a₁ a₂ c₀ c₁ = true := by
-  change OC.ret (if stmtOk h x a₁ a₂ c₀ c₁ then Out.msg [] else Out.rej) = OC.ret (Out.msg m) at hm
-  cases hok : stmtOk h x a₁ a₂ c₀ c₁
+/-- **The statement check's round passed**: its answer is a message only where the check passes. -/
+theorem stmtOk_of_next {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {m : Msg} (hcs : cs.length = as.length)
+    (hlen : as.length = h.stage + 2) (hm : next h x as cs = .ret (.msg m)) :
+    stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs) = true := by
+  rw [next_stmt h x hcs hlen] at hm
+  cases hok : stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs)
   · rw [hok] at hm
     cases hm
   · rfl
@@ -288,22 +280,32 @@ theorem lt_of_mem_checked {x : Msg} {r : Fin ((code h).V.k x) → FlockDeploy.Co
 
 /-! ## The sequential structure -/
 
-theorem getD_take_three (as : List Msg) : (as.take 3).getD 2 [] = as.getD 2 [] := by
-  simp [List.getD]
+/-- The message that states the session statements, among the prefix's. -/
+theorem getD_take_pre (as : List Msg) :
+    (as.take (h.stage + 2)).getD (h.stage + 1) [] = as.getD (h.stage + 1) [] := by
+  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+    List.getElem?_take_of_lt (show h.stage + 1 < h.stage + 2 by omega)]
 
-/-- **The two-stage verifier's sequential structure**: rounds 0 to 2, then template `t`'s session on its `k₀ t` rounds
-from `off t`, Flock's masked verifier at the statement round 2 states for it; a refused run shows `xS₀ t`'s refused
-run. -/
+/-- The message that states the session statements, read off a transcript's prefix. -/
+theorem getD_fst_pre (ms rest : List (Msg × Out)) (hn : h.stage + 1 < ms.length) :
+    ((ms ++ rest).getD (h.stage + 1) ([], .rej)).1 = ((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) [] := by
+  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left hn, List.getElem?_map,
+    List.getElem?_take_of_lt (show h.stage + 1 < h.stage + 2 by omega), List.getElem?_eq_getElem hn]
+  rfl
+
+/-- **The two-stage verifier's sequential structure**: rounds `0` to `stage + 1`, then template `t`'s session on its
+`k₀ t` rounds from `off t`, Flock's masked verifier at the statement round `stage + 1` states for it; a refused run
+shows `xS₀ t`'s refused run. -/
 noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     SessionSeq (deployOf (FlockDeploy.deployZk rel) (code h)) where
-  pre _ := 3
+  pre _ := h.stage + 2
   nS _ := h.ms.length
   kS _ := k₀ h
   idx _ u := templateOf h.ms u
-  stmt _ as i := stmtAt h (as.getD 2 []) i
+  stmt _ as i := stmtAt h (as.getD (h.stage + 1) []) i
   xR _ i := h.xS₀ i
   mark := []
-  pre_pos _ := Nat.zero_lt_succ 2
+  pre_pos _ := Nat.succ_pos _
   kS_pos _ i := k₀_pos h i
   k_eq _ := rfl
   idx_lt x r u hu := by
@@ -314,28 +316,22 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
         t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)).filter fun t => (order h x).second < t) ↔
         off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u) := fun t => by
       rw [Finset.mem_filter, Finset.mem_filter]
-      have := three_le_off h (templateOf h.ms u)
+      have := stage_le_off h (templateOf h.ms u)
       constructor
       · rintro ⟨⟨_, h1⟩, _⟩
         exact h1
       · intro h1
-        exact ⟨⟨mem_univ t, h1⟩, by show (1 : ℕ) < t.val; omega⟩
+        exact ⟨⟨mem_univ t, h1⟩, by show h.stage < t.val; omega⟩
     exact e t
   next_pre x as cs hne hle hcs := by
     change ∃ o, next h x as cs = .ret o ∧ o ≠ .acc
-    rcases as with _ | ⟨a₀, _ | ⟨a₁, _ | ⟨a₂, _ | ⟨a₃, as⟩⟩⟩⟩
-    · exact absurd rfl hne
-    · rcases cs with _ | ⟨c₀, _ | ⟨c₁, cs⟩⟩ <;> simp at hcs
-      exact ⟨_, rfl, nofun⟩
-    · rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, cs⟩⟩⟩ <;> simp at hcs
-      exact ⟨_, rfl, nofun⟩
-    · rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs⟩⟩⟩⟩ <;> simp at hcs
-      exact ⟨_, rfl, by split <;> nofun⟩
-    · simp only [List.length_cons] at hle
-      omega
+    change as.length ≤ h.stage + 2 at hle
+    by_cases h1 : as.length ≤ h.stage + 1
+    · exact ⟨_, next_coin h x hne hcs h1, by split <;> nofun⟩
+    · exact ⟨_, next_stmt h x hcs (by omega), by split <;> nofun⟩
   next_mid H x as cs hpre hlt hcs := by
     change ((next h x as cs).eval H).1 ≠ .acc
-    change 3 < as.length at hpre
+    change h.stage + 2 < as.length at hpre
     change as.length < off h h.ms.length + 1 at hlt
     rw [next_long h x as cs hpre hcs]
     split
@@ -349,25 +345,25 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     change i < h.ms.length at hi
     change off h i < as.length at h1
     change as.length ≤ off h i + k₀ h i at h2
-    have h3 : 3 < as.length := lt_of_le_of_lt (three_le_off h i) h1
+    have h3 : h.stage + 2 < as.length := lt_of_le_of_lt (stage_le_off h i) h1
     change (next h x as cs).eval H =
-      (markOut [] ((FlockDeploy.next true (stmtAt h ((as.take 3).getD 2 []) i) (as.drop (off h i))
-          (cs.drop (off h i))).eval H).1,
-        ((FlockDeploy.next true (stmtAt h ((as.take 3).getD 2 []) i) (as.drop (off h i))
+      (markOut [] ((FlockDeploy.next true (stmtAt h ((as.take (h.stage + 2)).getD (h.stage + 1) []) i)
+          (as.drop (off h i)) (cs.drop (off h i))).eval H).1,
+        ((FlockDeploy.next true (stmtAt h ((as.take (h.stage + 2)).getD (h.stage + 1) []) i) (as.drop (off h i))
           (cs.drop (off h i))).eval H).2)
-    rw [getD_take_three, next_long h x as cs h3 hcs, slotOf_eq h hi h1 h2]
+    rw [getD_take_pre, next_long h x as cs h3 hcs, slotOf_eq h hi h1 h2]
     refine sessStep_eval h H i _ as cs fun j hj hj' => ?_
     obtain ⟨m, hm⟩ := hund j hj hj'
-    rw [getD_take_three] at hm
+    rw [getD_take_pre] at hm
     exact not_decidedAt hm
   next_last H x as cs hlen hcs hacc i hi := by
     change as.length = off h h.ms.length + 1 at hlen
     change i < h.ms.length at hi
-    have h3 : 3 < as.length := by have := three_le_off h h.ms.length; omega
+    have h3 : h.stage + 2 < as.length := by have := stage_le_off h h.ms.length; omega
     change ((next h x as cs).eval H).1 = .acc at hacc
     rw [next_long h x as cs h3 hcs, hlen, slotOf_last] at hacc
-    have hv : verdict h (as.getD 2 []) as cs = true := by
-      cases hv : verdict h (as.getD 2 []) as cs
+    have hv : verdict h (as.getD (h.stage + 1) []) as cs = true := by
+      cases hv : verdict h (as.getD (h.stage + 1) []) as cs
       · rw [hv, Bool.and_false] at hacc
         cases hacc
       · rfl
@@ -375,31 +371,29 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     obtain ⟨j, hj, hd⟩ := List.any_eq_true.mp (hv i hi)
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hd
     refine ⟨j, hd.1, Nat.lt_succ_iff.mp (List.mem_range.mp hj), fun m => ?_⟩
-    change ((FlockDeploy.next true (stmtAt h ((as.take 3).getD 2 []) i) ((as.drop (off h i)).take j)
-      ((cs.drop (off h i)).take j)).eval H).1 ≠ .msg m
-    rw [getD_take_three]
+    change ((FlockDeploy.next true (stmtAt h ((as.take (h.stage + 2)).getD (h.stage + 1) []) i)
+      ((as.drop (off h i)).take j) ((cs.drop (off h i)).take j)).eval H).1 ≠ .msg m
+    rw [getD_take_pre]
     exact decidedAt_ne_msg hd.2 H m
   flock_ne H xS as cs := flock_ne_nil H xS as cs
   k_stmt x as cs m i hlen hcs hm hi := by
-    change as.length = 3 at hlen
+    change as.length = h.stage + 2 at hlen
     change i < h.ms.length at hi
-    change (FlockDeploy.V true).k (stmtAt h (as.getD 2 []) i) = k₀ h i
-    rcases as with _ | ⟨a₀, _ | ⟨a₁, _ | ⟨a₂, _ | ⟨a₃, as⟩⟩⟩⟩ <;> simp at hlen
-    rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs⟩⟩⟩⟩ <;> simp at hcs
-    have hok : stmtOk h x a₁ a₂ c₀ c₁ = true := stmtOk_of_next h (a₀ := a₀) (c₂ := c₂) (m := m) hm
-    exact (stmtOk_at h hok hi).1
+    change (FlockDeploy.V true).k (stmtAt h (as.getD (h.stage + 1) []) i) = k₀ h i
+    exact (stmtOk_at h (stmtOk_of_next h hcs hlen hm) hi).1
   k_xR _ _ := rfl
   refuses _ i c := refuses_empty (h.xS₀ i) c
   session_pass x u ms rest out cs m hlen hidx hms hcs hm := by
     change ms.length = off h (templateOf h.ms u) at hlen
     change templateOf h.ms u < h.ms.length at hidx
     change session h u ⟨ms ++ rest, out⟩ =
-      some (stmtAt h (((ms.take 3).map Prod.fst).getD 2 []) (templateOf h.ms u),
+      some (stmtAt h (((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) []) (templateOf h.ms u),
         cutSeen [] (k₀ h (templateOf h.ms u)) rest)
-    change cs.length = 3 at hcs
+    change cs.length = h.stage + 2 at hcs
+    change next h x ((ms.take (h.stage + 2)).map Prod.fst) cs = .ret (.msg m) at hm
     have htake : (ms ++ rest).take (off h (templateOf h.ms u)) = ms := List.take_left' hlen
     have hdrop : (ms ++ rest).drop (off h (templateOf h.ms u)) = rest := List.drop_left' hlen
-    have h3 := three_le_off h (templateOf h.ms u)
+    have h3 := stage_le_off h (templateOf h.ms u)
     have hall : ms.all (answered ·.2) = true := List.all_eq_true.mpr fun e he => by
       obtain ⟨m', hm'⟩ := hms e he
       rw [hm']
@@ -407,26 +401,16 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     have hle : off h (templateOf h.ms u) ≤ (ms ++ rest).length := by
       rw [List.length_append]
       omega
-    obtain ⟨⟨a₀, o₀⟩, ⟨a₁, o₁⟩, ⟨a₂, o₂⟩, ms', rfl⟩ : ∃ e₀ e₁ e₂ ms', ms = e₀ :: e₁ :: e₂ :: ms' := by
-      match ms, hlen with
-      | e₀ :: e₁ :: e₂ :: ms', _ => exact ⟨e₀, e₁, e₂, ms', rfl⟩
-      | [], hl => simp at hl; omega
-      | [_], hl => simp at hl; omega
-      | [_, _], hl => simp at hl; omega
-    obtain ⟨c₀, c₁, c₂, rfl⟩ : ∃ c₀ c₁ c₂, cs = [c₀, c₁, c₂] := by
-      match cs, hcs with
-      | [c₀, c₁, c₂], _ => exact ⟨c₀, c₁, c₂, rfl⟩
-      | [], hl => simp at hl
-      | [_], hl => simp at hl
-      | [_, _], hl => simp at hl
-      | _ :: _ :: _ :: _ :: _, hl => simp at hl
-    have hok : stmtOk h x a₁ a₂ c₀ c₁ = true := stmtOk_of_next h (a₀ := a₀) (c₂ := c₂) (m := m) hm
+    have hpl : ((ms.take (h.stage + 2)).map Prod.fst).length = h.stage + 2 := by
+      rw [List.length_map, List.length_take]
+      omega
+    have hok := stmtOk_of_next h (hcs.trans hpl.symm) hpl hm
     have hsess := (stmtOk_at h hok hidx).2
     unfold session
     rw [htake, hdrop, ite_eq_left ⟨hle, hall⟩]
-    change (if sessionOk h (templateOf h.ms u) (stmtAt h a₂ (templateOf h.ms u)) = true then _ else _) = _
-    rw [ite_eq_left hsess]
-    rfl
+    change (if sessionOk h (templateOf h.ms u)
+        (stmtAt h ((ms ++ rest).getD (h.stage + 1) ([], .rej)).1 (templateOf h.ms u)) = true then _ else _) = _
+    rw [getD_fst_pre h ms rest (by omega), ite_eq_left hsess]
   session_refused x u ms a hlen hms := by
     change ms.length < off h (templateOf h.ms u) at hlen
     change session h u ⟨ms ++ [(a, .rej)], .rej⟩ = some (h.xS₀ (templateOf h.ms u), refusedSeen)

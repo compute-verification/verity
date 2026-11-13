@@ -112,10 +112,13 @@ def rank_rows(worker: Any, request: dict[str, Any], tp: dict[str, Any]) -> dict[
 
 def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> dict[str, Any]:
     """Rank ``st["rank"]``'s window over its committed store opened against its root, the weight shards it registered and its Programs
-    of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
+    of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state; its history tables
+    released after it but the requests ``request`` names ``open`` (`commit.history_tables.release`)."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import history_tables as H
     from verity_vllm.pipeline import expert_rows as EX
+    from verity_vllm.pipeline import history_rows as HR
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -125,14 +128,18 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     if rc.run_root.hex() != tp["roots"].get(str(rank)):
         raise ValueError(f"rank {rank}: its run root {rc.run_root.hex()[:16]} is not the one the TP run root combines")
     p = RR.load(st["replay"], rank, world, definitions=False)
-    res = SRW.after_commit(str(Path(request["dir"]) / f"rank{rank}"), partition_file=request["partition"], programs=p.progs, bmap=st["bmap"],
-                           committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
-                           manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
-                           run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
-                           committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
-                           workers=1,   # vLLM's TP workers are daemonic: no process pool under them
-                           tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
+    hs = H.of_request(request.get("committer"), HR.on(json.loads(Path(request["partition"]).read_text())))
+    try:
+        res = SRW.after_commit(str(Path(request["dir"]) / f"rank{rank}"), partition_file=request["partition"], programs=p.progs, bmap=st["bmap"],
+                               committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
+                               manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
+                               run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
+                               committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
+                               workers=1,   # vLLM's TP workers are daemonic: no process pool under them
+                               tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
+                               index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), histories=hs)
+    finally:
+        H.release(hs, request.get("open", ()))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 

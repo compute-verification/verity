@@ -12,11 +12,15 @@ heads):
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes minutes, all of it the window's population program lowering the
 three templates: it is the one test of the committed window and its public bodies, which the others reach only through the rows.
+
+A whole key block proved under ``--zk`` is its Boolean body: `test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes`
+composes it as serving's stager does and holds its statement's form to `one_stage.proofs.ks_form_why`.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -26,14 +30,17 @@ from verity.commitments.windows import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity.definitions import boolean as BB
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla as BM
+from verity.definitions.registry import boolean_sparse_mla_split as BX
 from verity.definitions.registry import hopper
 from verity.definitions.registry import sparse_mla as M
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
 from verity.protocols.spot.verifier.one_stage import draw as D
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -41,6 +48,8 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BM.SPARSE_MLA_GLM53["DOT"], "INV": BM.SPARSE_MLA_GLM53["INV"]}
 TOY = {"T": 40, "NH": 2, "DR": 16, "DV": 32, "BN": 16, "SCALE": 0.0625}
+#: TOY at DV = 16, the least a block binds at
+NARROW = {**TOY, "DV": 16}
 GLM = {"T": 130, "NH": 8, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}
 SERVED = ('SparseMla_v1{T=130,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
           'SCALE={"f64":"0x1.0000000000000p-4"}}')
@@ -65,7 +74,7 @@ def end(S: dict = TOY, boolean: bool = False) -> str:
 
 F8, B16, E = block(8), block(), end()
 TMPLS = [F8, B16, E]
-CAPS = {F8: 2, B16: 3, E: 4}
+PER_CHUNK = {F8: 2, B16: 3, E: 4}
 
 
 class Served:
@@ -101,15 +110,15 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
-    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK) -> list[CS.Member]:
+    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
-    ms = members(s, tmpls, caps)
+def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
+    ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -146,7 +155,8 @@ def units(ms, tmpls, S: dict = TOY, rows: int = 1) -> dict[tuple, int]:
 
 def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
     """The units `sparse_mla.head_chain` cuts the row into, each a ``chain`` template; a whole block's EX2 reads go in lookup
-    slots, a partial first block's and the end's inline."""
+    slots, a partial first block's and the end's inline.  Each unit's Boolean version (`boolean_version`) is a template of the
+    same word, and a block's, its EX2 gates, is flat at every key count."""
     assert SRW.unit_templates(row()) == ((row(), 1), (F8, 2), (B16, 4), (E, 2))
     assert row(GLM) == SERVED
     assert SRW.unit_templates(SERVED) == ((SERVED, 1), (block(2, GLM), 8), (block(None, GLM), 16), (end(GLM), 8))
@@ -155,7 +165,10 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
         ("chain", F8, "inline"), ("chain", B16, "slots"), ("chain", E, "inline")]
     assert [CR.reads(SRW.template(t)) for t in (block(2, GLM), block(64, GLM), block(None, GLM), end(GLM))] == [
         "inline", "slots", "slots", "inline"]
-    assert [SRW.template(t).word for t in (block(8, boolean=True), block(boolean=True), end(boolean=True))] == TMPLS
+    bits = [block(8, boolean=True), block(boolean=True), end(boolean=True)]
+    assert [SRW.template(t).word for t in bits] == TMPLS
+    assert [descriptor_id(BB.boolean_version(SRW.template(t).fn)) for t in TMPLS] == bits
+    assert [CR.reads(SRW.template(t)) for t in (*bits, block(64, GLM, boolean=True), block(None, GLM, boolean=True))] == ["inline"] * 5
     assert [CH.kind(SRW.template(t)) for t in TMPLS] == ["first", "block", "end"]
     DV, DR = TOY["DV"], TOY["DR"]
     assert CR.unit_rows(SRW.template(B16)) == ([("in0", V2, 16 * DV, ["q_nope"]), ("in1", V2, 16 * DR, ["q_rope"]),
@@ -288,3 +301,42 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     bad = [dict(g, rows={**g["rows"], "in5": g["rows"]["in5"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in5 row is not the o2 row")):
         CS.commit(w, bad, salt_key=bytes(32))
+
+
+def composed(t: str, d: Path) -> UnitStager:
+    """Template ``t``'s statement as serving's stager composes it (its rows `chunk_rows.unit_rows`, its table reads laid out
+    as `chunk_rows.statement` says, bound as ``compose_circuit.py --template`` binds it), its circuit ``d/circuit.txt``."""
+    tp = SRW.template(t)
+    in_rows, out_rows = CR.unit_rows(tp)
+    return UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=d / "circuit.txt",
+                      bind={"partition": "0" * 128, "program": "0" * 128}, **CR.statement(tp))
+
+
+@pytest.mark.slow
+def test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes(tmp_path):
+    """`verify --zk` takes a statement whose unit returns its own outputs and refuses one whose last stage returns them
+    (`one_stage.proofs.ks_form_why`, the mirror of Lean's `KsScope`).  A whole key block's word template is staged with its EX2
+    reads in lookup slots, the refused form.  Its Boolean body (``SparseMlaHeadBlock_v2``), and a split part's of a whole
+    block (``SparseMlaSplitPart_v2`` at T = BN), have no table to read: each is staged flat, the form it takes, and the
+    block's circuit returns the words serving commits for it.  Minutes, all of them composing the three circuits: the form
+    is the composed circuit's (its META ``out_net``), which nothing short of composing it reads."""
+    s = Served(row(NARROW))
+    tmpls = [block(8, NARROW), block(None, NARROW, boolean=True), end(NARROW)]
+    ms = members(s, tmpls, dict.fromkeys(tmpls, 2))
+    m, (g, _e) = next((m, x) for m, x in zip(ms, read(s, ms, tmpls)) if m.template == tmpls[1])
+    part = descriptor_id(bind(BX.SparseMlaSplitPartV2, T=NARROW["BN"], **{x: NARROW[x] for x in ("DR", "DV", "BN", "SCALE")},
+                              DOT=BOOL["DOT"], INV=BOOL["INV"]))
+    rng = np.random.default_rng(5)
+    part_rows = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
+                 for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
+    for name, t, rows, units, want in (("block", tmpls[1], g["rows"], range(m.base, m.base + m.n), g["outs"]),
+                                       ("part", part, part_rows, range(2), {})):
+        st = composed(t, tmp_path / name)
+        assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), name
+        got = st.stage(rows, tmp_path / name, bytes(32), indices=units)
+        assert all(np.array_equal(got["outs"][q], a) for q, a in want.items()), name
+        assert PF.ks_form_why(tmp_path / name / "circuit.txt", tmp_path / name / "pub.bin") is None, name
+    word = composed(block(None, NARROW), tmp_path / "word")
+    assert "ex2" in word.meta["lookups"] and word.meta["out_net"].startswith("stage")
+    assert PF.ks_form_why(tmp_path / "word" / "circuit.txt", tmp_path / "word" / "pub.bin") == (
+        f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover")

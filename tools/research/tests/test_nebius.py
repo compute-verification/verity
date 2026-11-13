@@ -844,7 +844,12 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                       ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
         assert code(embedded[path]) == code(src.read_bytes()), path
         assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
-    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
+    for path, name in [("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "user-cpuset.conf"),
+                       ("/etc/apt/apt.conf.d/52vy-trust", "apt-security-updates.conf"),
+                       ("/etc/needrestart/conf.d/50-vy.conf", "needrestart-list-only.conf")]:
+        assert embedded[path] == (NEBIUS / name).read_bytes(), path
+    # the first boot writes no unattended-upgrades policy of its own: the one cloud-init wrote is the one deploy.toml installs
+    assert "apt.conf.d" not in "\n".join(code((NEBIUS / "vm_setup.sh").read_bytes()))
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
@@ -864,6 +869,19 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
         assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
 
 
+def test_a_data_disk_of_a_type_that_comes_in_93_gib_units_is_refused_at_another_size_before_anything_is_created():
+    """Nebius refuses such a data disk only after launch.sh has created the boot disk, which then stays behind, billed."""
+    cpu = {"NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy", "NEBIUS_VM_NAME": "vy-nebius-cpu-14", "NEBIUS_PLATFORM_PREFIX": "cpu-d3",
+           "NEBIUS_PRESET": "192vcpu-768gb"}
+    for kind in ("network_ssd_io_m3", "network_ssd_non_replicated"):
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1280", **cpu)
+        assert r.returncode == 1 and f"not a multiple of 93, the unit {kind} disks come in: 1209 is the next size down" in r.stderr
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1209", **cpu)
+        assert r.returncode == 0 and f"else created (1209 GiB {kind})" in r.stdout, r.stderr
+    r = launch("--dry-run", NEBIUS_DATA_TYPE="network_ssd", NEBIUS_DATA_GIB="1280", **cpu)
+    assert r.returncode == 0 and "else created (1280 GiB network_ssd)" in r.stdout, r.stderr
+
+
 @pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
 def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_nothing(path, nodes):
     """n1_replacement.sh plan prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
@@ -876,6 +894,8 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     for n in creates:
         assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
     assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
+    assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
 
 

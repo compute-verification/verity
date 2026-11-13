@@ -79,8 +79,8 @@ def xOf (A : Live) (o : Own) : Msg := (baseRaw A o).encode
 /-- **The session's statement at the draw file `d`.** -/
 def sessStmt (A : Live) (o : Own) (d : Msg) : Msg := { baseRaw A o with draw := some ⟨d.toArray⟩ }.encode
 
-/-- The draw's rounds: `64` coins of `2^20` bytes, the challenger's `MAX_COINS · COIN_BYTES`. -/
-def DRAW_ROUNDS : ℕ := 64
+/-- The draw's rounds: `1024` coins of `2^20` bytes, the challenger's `MAX_COINS · COIN_BYTES`. -/
+def DRAW_ROUNDS : ℕ := 1024
 
 /-- The draw rounds' coins at the coins `r`. -/
 def coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) : List FlockDeploy.Coin := (List.range DRAW_ROUNDS).map (coinSeq r)

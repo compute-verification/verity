@@ -1,0 +1,19 @@
+# The verifier-cost benchmarks' guard: each benchmark's Lean (`<name>/Main.lean`, which its script builds in a scratch Lake
+# package on a node) still elaborates against the checkout's verifier, and whole_run.py still writes a run its own check
+# accepts. Not a package: the benchmarks run on a node (README.md), and the suite only holds them to the verifiers they time
+# (`uv run tools/verity/check/suites.py benchmarks/verifier_cost`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (lake, and whole_run.py as its script runs it): keyed on the
+# suite's whole tree
+untraced = ["tests/test_mains.py"]
+# The three Lake packages a Main.lean is elaborated in, each named by its lakefile because the test builds the modules the
+# main imports there (so check runs the suite after lean-build); `verity` holds them, the packages they require by path,
+# and what whole_run.py imports: sampled proofs' difftest module, with the reference verifier and the circuits under it.
+inputs = ["verity/protocols/flock/verifier/lakefile.toml",
+          "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
+          "verity/protocols/spot/verifier/lean/lakefile.toml",
+          "verity"]

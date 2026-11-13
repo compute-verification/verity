@@ -44,7 +44,7 @@ lean_verify() {   # lean_verify D O TAG: the Lean verifier on D's --zk session (
   local D=$1 O=$2 tag=$3 s n=$4
   s=$(ls -d "$D"/sessions-zk/*/ 2>/dev/null | tail -1)
   [ -n "$s" ] || { log "  lean $tag: no --zk session"; return; }
-  $TIME "$O/lean-$tag.time" bash -c "$(vlimit $STAGE_GB) exec $LEAN verify --zk --circuit $D/circuit.txt --statement verity/flock-circuit \
+  $TIME "$O/lean-$tag.time" bash -c "$(vlimit $STAGE_GB) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt --statement verity/flock-circuit \
     --public $D/pub-$n.bin --session $s" > "$O/lean-$tag.out" 2> "$O/lean-$tag.err"
   log "  lean $tag: $(grep -m1 '^VERDICT ' "$O/lean-$tag.out" | cut -c1-300) $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 }

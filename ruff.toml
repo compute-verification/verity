@@ -2,8 +2,13 @@
 # own exclusions and per-file exceptions. Of the rules the vLLM integration's `# noqa` comments name, the bug classes (pyflakes F,
 # of which they name F401, F811, F821 and F841; B018; S102, S307, S310) and the conventions its suppressions show (BLE001, E402,
 # E731), with UP017, B006 and B008 (a mutable value or a call as a default), B015 (a comparison left unused), and RUF100, which
-# finds a stale `noqa`. The style rules a few comments also name (ANN001, ANN201, PLC0415, N812, D401, SLF001, I001, SIM115, D107,
-# ARG002, E702, E741, PERF203) have thousands of findings the code never suppressed, so they're off and those comments are stale.
+# finds a stale `noqa`. The style rules a few comments also name (PLC0415, N812, D401, SLF001, I001, SIM115, D107, ARG002, E702,
+# E741, PERF203, and ANN001 and ANN201 outside the typed directories below) have thousands of findings the code never
+# suppressed, so they're off and those comments are stale.
+# The annotation rules (ANN001, ANN201, ANN202, ANN204: every argument typed, every function's return type stated) are on
+# for the directories that were brought to them and off everywhere else, by the first exception below: a function added
+# there without its types is a finding like any other. Ruff ignores by path and has no select by path, so the rules are
+# selected for every file and the exception names where they are not ignored.
 # Two lints hold the findings to lists that only shrink: adapters/vllm/tests/lint/test_ruff.py the integration's (and
 # verity/definitions'), tests/lint/test_repo_ruff.py every other tracked file's, per (file, rule). The ratchet gate
 # (adapters/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree, and fails a
@@ -17,11 +22,23 @@ extend-exclude = [".lake"]
 force-exclude = true
 
 [lint]
-select = ["B006", "B008", "B015", "B018", "BLE001", "E402", "E731", "F", "RUF100", "S102", "S307", "S310", "UP017"]
+select = ["ANN001", "ANN201", "ANN202", "ANN204", "B006", "B008", "B015", "B018", "BLE001", "E402", "E731", "F", "RUF100", "S102",
+          "S307", "S310", "UP017"]
 
 [lint.per-file-ignores]
 # a pytest fixture imported from a sibling module and taken as an argument
 "**/tests/**" = ["F811"]
+# the typed directories: the annotation rules are ignored in every file outside them (`!` negates the pattern). A directory
+# brought to the rules joins the braces; adapters/vllm/ruff.toml has the pattern for the one it lints
+"!{benchmarks/{hash,moe_align,native_peak,tc_probe,tc_probe_fp4,torch_gpu},verity/definitions/kernels}/**" = [
+    "ANN001", "ANN201", "ANN202", "ANN204"]
+# the files that hold `@triton.jit` kernels: a kernel's annotations are read by Triton's compiler (a `tl.constexpr` is a
+# compile-time value), so its arguments and return carry none of Python's. Ruff excepts by file, not by decorator, so
+# the other functions of these files are typed without these three rules holding them to it
+"benchmarks/hash/dither/dither_a.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/hash/exactlin/exactlin.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/torch_gpu/s8_linear/bench.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/torch_gpu/s8_linear/int_mm.py" = ["ANN001", "ANN201", "ANN202"]
 
 [format]
 exclude = ["*"]

@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity_vllm.pipeline.boundary_rows`' Definition, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.pipeline.boundary_rows`' Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 

@@ -9,17 +9,17 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
-(`security/Definitions/Nci/Guarantees/Training.lean`).
+Nothing in `verity` reads this directory. The theorem it cites is in `security/`: `Nci.SecurityProofs.ThreadedTraining`
+(`security/Definitions/Nci/Guarantees/Threads.lean`).
 
 The slowdown lower bound's numbers come from [`verity/protocols/inference_only/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
-`fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
+`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
+and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
-where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
+Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
@@ -42,13 +42,26 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python verity/protocols/inference_only/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python verity/protocols/inference_only/nci/fit.py [--json]` |
-| `figures.py` | `tiers.py`'s talk figures, with the slowdown from rho's `multiple_bound`, to the evidence store |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python verity/protocols/inference_only/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
 `governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,
 `strategy-gradient-free`, `strategy-reuse`, `capability-measures`, `rl-scaling`.
+
+## What loads it
+
+This directory has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). Three things outside it read
+it:
+
+- `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,
+  `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `slowdown.py` by
+  path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
+- the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
+  statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
+- `fixtures/artifacts.json` registers `sources/` by this directory's path.
+
+Every command above prints, and none writes a file.
 
 ## Rules for adding to it
 
@@ -162,15 +175,6 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum rule, `Nci.SecurityProofs.IncompressibleContainedTraining`:
-  \(\text{slowdown} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
-  with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumption is that
-  one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\)
-  (`TrainingIncompressible`). A
-  chain charges each weight once per layer, so it is one forward path, and a row's `chain` gives that path's share
-  \(\kappa_{\text{chain}}\) and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared
-  expert), 7% of training's work. The activation rate is capped by a compressed boundary's bits per residual entry.
-  Rows without a chain get none.
 
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
 updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
@@ -199,8 +203,8 @@ there, and bounds something only at a lower proving cost (`statement.py`'s known
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
-`train.compute_multiplier`, and gives each recipe's multiplier over its slowdown, \(m/\text{slowdown}\): a ceiling from
-the partial-sum rule and the attack's from the construction. The attacker picks the best recipe.
+`train.compute_multiplier`, and gives each recipe's multiplier over the construction's slowdown,
+\(m/\text{slowdown}\), for the rows that update every weight of their model. The attacker picks the best recipe.
 
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
@@ -230,8 +234,8 @@ What registered hardware computes is one circuit, built by appending as it strea
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
-would let the partial-sum rule apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
-for the full map.
+would let a rule that charges partial sums apply to the registered circuit directly. The proposed evidence carries the
+round-2 red team's verdicts. Render the index for the full map.
 
 ## What the literature says now
 

@@ -1,13 +1,16 @@
 # The serve tax
 
 What each change Verity makes to the serving engine costs on every token served, measured against stock compiled
-vLLM at the integration's pin (d9105ea80) on the same node, workload and SLO. Each arm is one engine configuration of
+vLLM at the integration's pin (d9105ea80) on the same node, workload and SLO, and the serving cost, one number with a
+target (below). Each arm is one engine configuration of
 vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`), its change installed as a vLLM general plugin, and adds
 its change to the arm it names as its parent (`serve_tax.ARMS`):
 
 | arm | its change | parent |
 |---|---|---|
 | `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
+| `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
+| `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -18,11 +21,28 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
-| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), its check template and the template's instances a prompt row and an output in `BOUNDARY_ROWS` (JSON) | `record` |
+| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
+| `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
+| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
 | `restore-unseeded` | `restore` with requests that carry no seed, as clients send them in serving | `restore` |
+
+An arm is data: its flags, its environment, the vLLM general plugins its server loads and its boundary commitment's
+object are all in `serve_tax.ARMS`, and the runner has no code for any one arm. The two-stage serve's launch line is
+stated there alone, as the `two-stage` arm: a job that serves the two-stage audit serves that arm
+(`ARMS=two-stage RATES=... PLAN_FILE=...`), so the serve and its measured cost can't differ in an engine setting.
+Before an arm's server starts, the runner loads each of its plugins once in the server's environment and refuses the
+arm where one doesn't load, because vLLM logs such a plugin and serves on without it.
+
+What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
+classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
+They go to `PRIVATE/<arm>` (`--private DIR`), a directory outside every run's, the classes under
+`PRIVATE/<arm>/boundary/w<window>/p<P>-o<O>/`. A serve's later stages read them, so with the corpus client such an arm
+is refused without `PRIVATE`; in the serving cost's form, where nothing reads them afterwards, the arm gets a fresh
+directory without it, removed when it stops. The run's directory keeps each class's public `commit.json`, a line of
+`<arm>/server/boundary.PID.jsonl`.
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.
@@ -42,6 +62,163 @@ The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts 
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
 (`ignore_eos`) so that every arm serves the same tokens, sent by the corpus's streaming client. A job serves each arm in
 one server lifetime: a warm-up, then each load REPS times, rep by rep, each from an empty prefix cache.
+
+## The serving cost
+
+One number: how much more GPU time an arm needs than stock to serve the same tokens, in percent of stock's serving
+compute (lower is better), with the loads sent by vLLM's own benchmark client (`vllm bench serve` at the pin) in place
+of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of its header's last form:
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
+~~~
+
+- **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. The number has two, and a third,
+  `prefix`, has the row under it (below). `chat` is the load
+  of vLLM's standing serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length.
+  `long` is long context: the client's synthetic dataset at one long length (8,192 tokens in, 128 out), which stands
+  until a plan of recorded long requests replaces it; the output says which it was. Its first token takes seconds on
+  any engine, so its goodput counts the time per output token alone, and the engines' context limit is raised to fit
+  it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
+  only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
+  them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
+  the cost refuses two arms whose passes sent different numbers of prompts.
+- **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
+  keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
+  `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
+  is not the pinned one is refused. No run sends the file or keeps it: an arm's `meta.json` records its path and
+  SHA-512. `serve_tax.py dataset chat [--fetch]` prints the checked path, for another benchmark that reads the file.
+- **A rung** is a concurrency the client holds (`--request-rate inf --max-concurrency RUNG`): it sends the next request
+  when one ends, as vLLM's standing tests do. A fixed arrival rate can't carry this number: below capacity the tokens a
+  second only repeat the rate, and at capacity the queue grows for as long as the pass lasts. `--loads chat=12+16+24`
+  names the rungs; a load's own are a first ladder, to find where stock is saturated.
+- **A pass** is a load at a rung, `<load>@<rung>`. An arm serves each pass REPS times (six by default) in one server
+  lifetime, each from an empty prefix cache, every request greedy and decoding to its length (`--ignore-eos`), the same
+  prompts under one seed. `<load>@<rung>/rep-<r>/result.json` is the result the client saved, and the table's figures
+  for a pass are the client's own.
+- **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is the arm's tax where stock is
+  saturated: stock's output tokens a second over the arm's, less one. Every arm serves the same prompts, each decoded
+  to its length, so both sides serve the same tokens, and at a rung where stock's GPUs have no idle time the ratio is
+  the arm's extra GPU time a token. Both sides are read at one rung: of the rungs both served, the one where stock's
+  output tokens a second, averaged over its reps, are highest (`serve_tax.saturated`). The cost is the benchmark kit's
+  paired ratio (`verity_bench.overhead.paired`): the median over reps of stock's tokens a second over the arm's in the
+  same rep, with the kit's 95% interval, the order statistics of those ratios that bound their median. Six reps are
+  the fewest that have one (their least and greatest ratio); with fewer the cost has no interval and its verdict
+  cannot be told. No SLO enters the cost. Each load's line gives both sides' output and prompt tokens a second at the
+  rung and the prompt and output tokens a request, and the third line the GPUs an engine serves on: what a reader
+  needs to turn the tokens a second into a utilisation.
+- **Whether stock is saturated at that rung** is said on each load's line and in the JSON (the load's `saturated`).
+  Stock's own rungs show it only where it served a rung above and no more tokens a second at any
+  (`serve_tax.peak`). Otherwise the line says it is not shown, and why: stock served no rung above, or served more
+  at a rung the arm did not. No verdict reads it: a job that serves stock at the one rung an earlier job found does
+  not show it saturated by its own passes.
+- **The cost within the SLO** (`serve_tax.within_slo`) is printed under each load's cost: stock's best goodput over
+  the arm's, less one, by the same paired ratio. Goodput is the client's "Request goodput": requests a second within
+  the model's SLO (TTFT and time per output token). Each side's best is at the rung where its mean over reps is
+  largest, so each arm is read at its own operating point. It is the cost only where both sides meet the SLO for
+  every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
+  (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
+  cost within it.
+- **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
+  so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall
+  between passes, where no request waits on them, and the cost would leave them out. A short period counts a period's
+  fixed work more often than a long one does, so the cost errs high; the commitment's line names the period.
+- **The number** is the larger of the two loads' costs, each load's cost printed beside it. Where only one load has
+  run, the first line names it (`load chat alone`) and a later line says the number waits for the other: one load's
+  cost is not the number. Its loads repeat no prefix, so it is labelled `no repeated prefix` and is never given
+  without the row on a repeated prefix under it: where load `prefix` has not run, the first line says so in place of
+  the number and the JSON's `value` is null, while each load's own cost is still printed.
+- **The row on a repeated prefix** (`serve_tax.prefix_row`) is directly under the number's line and directly after
+  the JSON's `run` (`prefix`): what the arm costs over stock on load `prefix`, which the number's loads say nothing
+  of, since stock serves a repeated prefix from its cache and an arm with the cache off computes it again. It has no
+  target and no verdict. The load is four planned requests (`serve_tax.PAIRS`): two prompts near the engines' context
+  limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
+  the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
+  that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
+  blocks whose ids they share), each prompt as the synthetic token ids the client generates for its blocks, in the
+  file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
+  for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
+  tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
+  nothing.
+  `--dataset prefix=FILE` serves a table of planned requests in place of those four (`serve_tax.read_plan`): a line
+  a request, with its arrival time in seconds after the pass starts (`at_s`) and its prompt's and its output's
+  lengths (`prompt`, `output`), and, where its prompt begins as an earlier line's does, that line counted from 0 and
+  the blocks the two share (`after`, `blocks`); nothing else, so it holds no token and no text. The arm writes the
+  client's file from it, and its `meta.json` records what the table plans and its SHA-256. Each request is then sent
+  at its arrival time, however many are in flight (the pass is `prefix@0`), and the row says `as they arrive` in
+  place of `one request in flight`. It says for each arm whether it served all that arrived, and whether stock kept
+  up: stock kept up where it served all that arrived and each of its passes ended within a tenth of the time the
+  requests arrive over after the last one arrived. Where stock kept up, tokens a second follows the arrivals and is
+  not a cost: the row's cost is the two latencies. Where stock did not keep up the row is read as the number is, by
+  tokens a second. It prints tokens a second and both latencies either way, `cost` names which of them is the cost
+  and `why` says why. Each figure of such a row is its readings, one a rep, never a mean with an interval, so its
+  `value` is null.
+  `prefix_plan.jsonl` is the full-size table, the run of record's: the 651 requests that a serve plan of 25 minutes
+  of mixed traffic at 0.4 requests a second sends within its span, of which two long ones near the context limit
+  each repeat an earlier one's prompt; `prefix_plan.py` makes it from that plan's two files, which
+  `prefix_plan.source.json` names.
+  With one request in flight the cost is stock's output tokens a second over the arm's, less one, by the same paired
+  ratio; beside it the row gives how much longer the arm's time to the first token and its 99th-percentile gap
+  between tokens are, the share of the prompt tokens each side's prefix cache served by the engine's own counters
+  beside the share planned to repeat, whether each side served every request, and the same for `no-prefix-cache`
+  over stock where that arm served the load: what the cache alone is worth there. The load is served in a job of
+  its own (`--loads prefix`), since one engine serves a job's loads and this one's context limit would be the others'
+  too; that job's cost is the row alone, and `WITH=` joins it to the number's job.
+- **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
+  whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
+  what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`).
+  `compiled-again` gives the noise floor, which reps inside one server lifetime don't see, and each load's verdict
+  widens its interval by that load's floor at each end. The number's verdict follows from the loads':
+  it misses where one load misses, meets only where both have run and meet, and otherwise cannot be told.
+- **The target's parts.** A model's target is the sum of its parts (`Model.target_parts`), each the cost model's
+  points for some of our changes (`serve_tax.CHANGES`, each read from an arm's data). GLM-5.3's are the certified
+  tick, the tie order of the canonical top-k, and the snapshot bundle (the pause to copy and hash the cache at each
+  edge and the carried pages' hash, with vLLM's prefix cache on). A cost is compared with the target only where its
+  arm has every part's changes on and no change on that no part counts (`serve_tax.not_in_target`). Otherwise every
+  verdict is `not comparable`, a fourth value, and the output names the changes that are off with their parts and
+  the changes the target has no part for: the cost is not of what the target is of, so it neither meets nor misses
+  it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
+  tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
+  part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
+  cost against the model's target is not comparable. A target given with `--target` has no parts.
+- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and the arms from
+  `boundary-rows` down turn it off, since the boundary commitment needs it off. Neither load repeats a prefix
+  (chat's requests are different conversations' first turns, long context's are random tokens, and the cache is
+  emptied before every pass), so the number does not hold what the cache is worth on a load that does: the row on
+  a repeated prefix does. `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records
+  the prompt tokens the cache served (`schedule.prompt_tokens_cached`).
+- **The arms** are by default `compiled`, `compiled-again` and `two-stage`, and the cost is of the last one named.
+  `--arms all` adds one arm for each change in between (`record`, `no-prefix-cache`, `boundary-rows`) and the canonical
+  top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
+  at the number's load and rung, with its share of the whole for the arms from the measured one up to stock, and
+  with what its step turns on: beside each such change the target's part for it, with no verdict, or `not in the
+  model` for a change the target has no part for (the step record, prefix caching off, the two-stage boundary
+  commitment, the history tables). A
+  job of `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks,
+  which a later job's `--loads` names.
+- **The boundary commitment's line** says what the measured arm's commitment did, from its own records: the finished
+  requests committed, those whose commit failed, and those committed with their history tables. An arm that asks for
+  tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
+  them.
+- **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
+  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's, fed by the
+  stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+
+It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
+next lines are the row on a repeated prefix, and `serving_cost.json`, one object whose first keys are `value`, `unit`,
+`commit` and `run`, then `prefix` (the row, or null) and `label` (`not_run` names the number's loads that have not
+run). `--json` prints the object last, and `serve_tax.py cost ARM_DIR... --json` prints it alone from a
+finished job's arm directories, which may be of more than one job: a load served by a later job joins the number
+(`WITH="OUT_DIR ..."` gives `run.sh` the earlier jobs').
+
+The run's `result.json` (`serve_tax.result_of`, written by the kit's writer) holds each load's cost as a measurement
+named by the load, and the number as one named by the model's metric id (`Model.metric`), with `ci95`, `target`,
+`target_basis`, `target_parts` (each part with the changes the arm left off), `verdict` (one of the three, or `not
+comparable`), `better`, `load`, and `loads`, each load's cost beside it, with its `label` and the row (`prefix`). The
+row is also a measurement of its own, named `prefix`, with no target and no verdict; its `value` is null where its
+requests are sent as they arrive, and its figures' readings are beside it (`cost`, `kept_up`, `why`, `tokens`,
+`ttft`, `itl_p99`). A job in which a load of the
+number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
 ## Running it
 

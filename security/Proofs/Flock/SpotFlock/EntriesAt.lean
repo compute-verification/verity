@@ -489,7 +489,8 @@ theorem stmtJsonOf_fields {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.
     rw [hb] at hb'
     cases hb'
 
-theorem readsOk_true {t : ℕ} {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hr : readsOk h t x m₁ xS c₀ c₁ = true) :
+theorem readsOk_true {t : ℕ} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hr : readsOk h t x m₁ xS c₀ c₁ = true) :
     ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
       FlockDeploy.decode xS = some w ∧ stmtJsonOf h t w = some S ∧ codesOk h (ownOf h st rec draw c₀) t S = true := by
   unfold readsOk at hr
@@ -512,7 +513,7 @@ theorem readsOk_true {t : ℕ} {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} 
           | none => rw [hS] at hc; cases hc
           | some S => rw [hS] at hc; exact ⟨st, rec, draw, w, S, rfl, rfl, rfl, rfl, hS, hc⟩
 
-theorem keyAt_readRoots {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec draw : Json}
+theorem keyAt_readRoots {x m₁ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {st : Roots} {rec draw : Json}
     (hst : decode x = some st) (hrec : jsonMsg m₁ = some rec) (hdraw : secondDraw h c₀ c₁ = some draw)
     (ρ t : ℕ) (port v : String) :
     keyAt (readRoots h x m₁ c₀ c₁ ρ t port v) (readKeyAt h x m₁ c₀ c₁ t port v) =
@@ -528,10 +529,10 @@ theorem keyAt_readRoots {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Root
 /-- **`EntriesAt`'s registered half**: in an accepted run, the entry round 2 reads each of a checked unit's session's
 registered reads off, under the roots it reads it under, has the read's root, leaf count and domain id, and the read
 has at most `MAX_LEAVES` leaves. -/
-theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u ρ : ℕ} {ins : FlockDeploy.Ins}
+theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u ρ : ℕ} {ins : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
-    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
     (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts))
     {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
     (hown : ins.registered = some own) (hreg : reg ∈ own) :
@@ -569,10 +570,10 @@ theorem registered_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} 
 checked unit's one-table session that no registered read is named like has the root and domain id of the port's
 published tree over the population the session's public file loads, which the header names (`header_roots`): round
 2's `rootsOk` holds the record's entry to the header's. -/
-theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u ρ : ℕ}
+theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u ρ : ℕ}
     {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
-    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
     (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts))
     {j : ℕ} (hj : j < sts.size) {q : ℕ} {pop : _root_.Flock.Public} (hc1 : ins.read.I.count ≤ 1)
     (hq : q < sts[j].c.ports.size)
@@ -620,8 +621,8 @@ theorem interior_entry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u
 trees of a one-table session's ports that no registered read is named like, over any population its public file
 loads. -/
 def DepthsAt (c : Code) : Prop :=
-  ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u ins spec sts,
-    parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+  ∀ x s (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u ins spec sts,
+    parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     (∀ own reg, ins.registered = some own → reg ∈ own → _root_.Flock.log2ceil reg.leaves ≤ depth c.own) ∧
@@ -633,8 +634,8 @@ def DepthsAt (c : Code) : Prop :=
 /-- **The published trees a checked unit's one-table session reads are no deeper than `c`'s own**: each port's that
 no registered read is named like, over any population its public file loads. -/
 def RootedDepthsAt (c : Code) : Prop :=
-  ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u ins spec sts,
-    parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+  ∀ x s (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u ins spec sts,
+    parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     ∀ j (hj : j < sts.size) q pop, ins.read.I.count ≤ 1 → q < sts[j].c.ports.size →

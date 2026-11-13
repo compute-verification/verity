@@ -46,7 +46,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     assert T.remote_terms(p, r) == (r["unmonitored"], rest)
     assert S.dampener(p, "T4") == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
     assert r["residual"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["residual"], rel=1e-9)
-    assert S.dampener(P | {"residual": 1.0}, "T1") == 1.0
+    assert all(S.dampener(P | {"residual": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
 
 
 def test_the_remote_dampener_at_the_defaults():
@@ -101,8 +101,6 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     assert fl["1 / (ε_W + ε′ + ν / MFU_0), the floor's limit as the verdict lag goes to 0"] == pytest.approx(
         1 / floor, rel=1e-12)
     assert fl["MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
-    assert fl["D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are "
-              "falsified)"] > P["mfu"] / X.nu(P)
 
 
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():

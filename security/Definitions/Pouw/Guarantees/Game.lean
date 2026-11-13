@@ -22,7 +22,7 @@ namespace Pouw.Guarantees
 open Pouw.GameStatements Finset
 
 /-- **(d) End to end: TT gives resource exhaustion.** Under TT(g₀) and the `Ω_max` bound, for every in-domain
-workload, budget, oracle bound and adversary, the audit with `t` work-weighted samples satisfies
+workload, budget, oracle bound `q ≤ 2^64` and adversary, the audit with `t` work-weighted samples satisfies
 `Pr[accept ∧ T < (1 − g)(1 − ε_s)·W ∧ the run doesn't break SHA-512] ≤ (1 − ε_s)^t + δ(q, N)` with
 `g = 1 − (1 − g₀)/Ω_max`. -/
 def EndToEnd : Prop :=

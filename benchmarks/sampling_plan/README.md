@@ -60,7 +60,7 @@ their floor.
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
-  6.35 s step, 32 steps a request, on the Definition map (`archive/examples/h200/e2e_h200/plan.py`: every subcircuit a
+  6.35 s step, 32 steps a request, on the Definition map (the H200 demo's `plan.py`, in history at `5c095bb4ab70`: every subcircuit a
   Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per execution phase. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half

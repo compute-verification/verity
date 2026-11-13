@@ -17,8 +17,8 @@ with the memory challenger a party of its own on the challenger host
   and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
   and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
   plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
-  wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the staging decode
-  `p2_stage.stage.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
+  wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
+  `p2_v1.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
@@ -34,7 +34,7 @@ with the memory challenger a party of its own on the challenger host
 
 Settings: ``salt_source`` (the auditor's coin: its hex, a callable of the commitment, or ``{"command": argv}``, a process
 that reads ``{"commitment", "manifest"}`` as one JSON line and prints ``{"source": HEX}``), ``p2_lib`` (``libp2v1.so``'s
-directory, built for the GPU by ``benchmarks/torch_gpu/p2_stage/build.sh``; weights on a GPU need it) and
+directory, built for the card by the store's ``benchmarks/pous/p2_v1/Makefile``; weights on a GPU need it) and
 ``experimental`` (P2 is; `schemes.p2.EXPERIMENTAL` says why).
 
 Not here yet: TP (each rank's shard), the head and the embedding (not ``LinearBase``), and a setup case that scales:
@@ -64,6 +64,9 @@ NAME = "pous"
 DEFAULT_SCHEME = "p2-16448/v4"
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
+#: P2's encoded weights store, loaded as the package ``p2_v1``: ``store.py``, which POUS encodes with, ``load.py``, its
+#: decode at use on the GPU, and its CUDA library's wrapper.
+P2_V1 = config.ROOT.parent.parent / "benchmarks/pous/p2_v1"
 
 
 def schemes() -> tuple[str, ...]:
@@ -145,13 +148,9 @@ def _package(name: str, directory: Path) -> None:
 
 
 def _p2(module: str) -> Any:
-    """``store`` (`benchmarks/pous/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
-    (`benchmarks/torch_gpu/p2_stage/stage.py`, as ``p2_stage.stage``)."""
-    _package("p2_v1", config.P2_POUS / "p2_v1")
-    if module == "store":
-        return importlib.import_module("p2_v1.store")
-    _package("p2_stage", config.P2_STAGE)
-    return importlib.import_module("p2_stage.stage")
+    """``store`` or ``load``, a module of `P2_V1` (as ``p2_v1.store``, ``p2_v1.load``)."""
+    _package("p2_v1", P2_V1)
+    return importlib.import_module(f"p2_v1.{module}")
 
 
 # --- the weights ------------------------------------------------------------------------------------------------------------
@@ -345,7 +344,7 @@ def _encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: by
     if device.type == "cuda":
         if not lib:
             raise ValueError("the weights are on a GPU and no p2_lib names libp2v1.so's directory "
-                             "(benchmarks/torch_gpu/p2_stage/build.sh builds it)")
+                             "(benchmarks/pous/p2_v1/Makefile builds it)")
         enc = S.GpuEncoder(q, salt, str(lib), torch.cuda.current_device() if device.index is None else device.index)
     else:
         enc = S.CpuEncoder(q, salt)
@@ -378,8 +377,8 @@ def _decoder(store: _Store, lib: str | None) -> Callable[[Any, Any], None]:
     if store.rows.device.type == "cuda":
         from verity.protocols.pous.verifier.schemes.p2 import expand_prefix
 
-        St = _p2("stage")
-        store.staged = St.EncodedRows(St.L.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
+        Ld = _p2("load")
+        store.staged = Ld.EncodedRows(Ld.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
                                 str(lib))
 
         def decode(p: Any, out: Any) -> None:
@@ -570,7 +569,7 @@ def install(scheme: str, target: Target) -> PousOption:
                    "tensor_bytes": sum(p.size for p in layout.tensors),
                    "used_blocks": sum(-(-p.size // q.payload_bytes) for p in layout.tensors), "blocks": q.blocks,
                    "c_star_bytes": q.blocks * q.block_bytes, "device": str(device), "encode": store.encode,
-                   "decode": "p2_stage staging decode (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
+                   "decode": "p2_v1.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
                    "certifies": period.certify(store.point), "certificate": None if cert is None else cert.theorem,
                    "gaps": gaps, "experimental": P2.EXPERIMENTAL}
     return opt

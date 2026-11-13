@@ -117,7 +117,7 @@ def main(argv: list[str]) -> int:
             LC.mark(tree, package=PKG, phase="deps")
             deps = LC.LA.COMMON.cache_dir() / "lean-deps"
             if not ((tree / PKG / ".lake" / "packages").is_dir() and PKG not in links) and \
-                    not LC.link(PKG, tree, deps, links, print, copy=True):
+                    not LC.link(PKG, tree, deps, links, print):
                 print(f"guard-node: {PKG}: no dependencies kept on this node")
                 return 2
             LC.write_links(tree, links)

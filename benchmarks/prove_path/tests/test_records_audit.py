@@ -20,8 +20,8 @@
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
-* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, and the
-  audit takes that cache;
+* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
+  read's by the verifier's executable too, and the audit takes that cache;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does;
 * that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
@@ -618,6 +618,25 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                            rec=json.loads((d / "registration.json").read_text()))
 
 
+@pytest.mark.parametrize("text, population, rule", [
+    ("stratified:1", 561, "stratified-rate:1/561"), ("subset:3", 40, "rate:3/40"), ("subset:9", 4, "rate:4/4"),
+    ("work:2", 10, "work-rate:2/10"), ("bernoulli:1/8", 10, "bernoulli:1/8"),
+])
+def test_the_audits_rule_is_the_rate_of_the_windows_design_which_a_stream_takes(text, population, rule):
+    """A stream's rule is a rate (`service.Law` refuses a fixed count), so the audit states the window's fixed design K of
+    N as the rate K/N of its kind (`rule_of`), which over N proof blocks samples K: one a stratum at ``stratified:1``."""
+    from verity.protocols.spot.verifier import service as S
+
+    assert RA.rule_of(D.parse_design(text), population) == rule
+    assert S.Law(rule).text == rule
+    with pytest.raises(ValueError, match="a fixed count"):
+        S.Law(text if not text.startswith("bernoulli") else "subset:1")
+    if text.startswith("subset"):
+        assert S.selection_law(S.Law(rule), population) == {"law": "subset", "k": min(int(text.split(":")[1]), population)}
+    if text == "stratified:1":
+        assert S.selection_law(S.Law(rule), population, [1, 200, 360]) == D.parse_design(text)
+
+
 def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch):
     """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
     first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
@@ -634,11 +653,14 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
         seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"])
+        ruled.append((a.rule, A5.rated(mine, a.rule) == mine, mine.population))
         return {"audit": {"accepted": True}}, True
 
     def output_class(circuit, given=(), own=frozenset()):
         owned.append(set(own))
         return []
+
+    ruled: list = []
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -656,6 +678,8 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert RA.main([*base, "--out", str(tmp_path / "out"), "--tie", str(got.w_file), "--tie-prefix", "h1/"]) == 1
     tied, pins = RA.tie_of(json.loads((got.dir / "circuit.json").read_text()), got.w, "h1/")
     assert seen["tie"] == tied and tied["log"] == [got.w] and pins == {got.name: {**got.entry, "value": got.name}}
+    (rule, same, n), = ruled
+    assert rule == f"stratified-rate:2/{n}" and same, "the stream's rule is a rate, and its design the window's own"
     assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
     assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
                                                  and f["ports"]["wrow"]["domain"] == got.entry["domain"]
@@ -1099,6 +1123,39 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want
+
+
+def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_other_composer_is(tmp_path, monkeypatch):
+    """A table read's unit is the template the verifier's executable prints (`read_tmpl`), and that executable is no file of
+    the tree: its composer's ``inputs`` hold the executable's digest, by `compose_circuit.template_inputs`'s rule
+    (`read_tmpl.is_read`, `read_tmpl.digest`), so a5's key for it (`a5.compose_key`) moves with the executable and comes back
+    with it, and a compose cache kept under another build is not taken. Every other template's composer never asks for the
+    executable, and its inputs and its key are the statement's alone; the Definition decides, not the statement's form. The
+    read here is the toy template under the read's name (`read_tmpl.READ`), which is all `is_read` asks of a Definition."""
+    import a5 as A5
+    import compose_circuit as CM
+    from verity_flock import read_tmpl as RT
+
+    st, flat = {"layout": "iv/hybrid/4", "structural": True}, {"reads": "inline"}
+    with monkeypatch.context() as m:
+        m.setattr(RT, "READ", COORD.base_id)
+        assert RT.is_read(COORD)
+        builds, keys = [tmp_path / "flock-read-tmpl-1", tmp_path / "flock-read-tmpl-2"], []
+        for exe, text in zip((*builds, builds[0]), (b"one build", b"another build", b"one build")):
+            exe.write_bytes(text)
+            m.setattr(RT, "EXE", str(exe))
+            compose = RA.composer(COORD, st)
+            assert compose.inputs == ["unit/window", st, hashlib.sha512(text).hexdigest()]
+            keys.append(A5.compose_key(compose, COORD, TID))
+        assert keys[0] == keys[2] != keys[1]
+        assert RA.composer(COORD, flat).inputs == ["unit/window", flat, hashlib.sha512(b"one build").hexdigest()]
+    assert not RT.is_read(COORD)
+    monkeypatch.setattr(RT, "digest", lambda: pytest.fail("a template that reads no table asked for the verifier's executable"))
+    compose = RA.composer(COORD, flat)
+    assert compose.inputs == ["unit/window", flat] and RA.composer(COORD, st).inputs == ["unit/window", st]
+    assert A5.compose_key(compose, COORD, TID) == CM.cache_key(
+        ["a5/own", TID, program_digest(A5.Program(COORD)), ["unit/window", flat]], files=(Path(CM.__file__), Path(RA.__file__)))
+    assert A5.compose_key(compose, COORD, TID) not in keys
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):

@@ -8,11 +8,11 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from conftest import SHAPE
+from conftest import SHAPE, calculators_count, figure
 
 from training_slowdown import VERSION as F_VERSION
+from training_slowdown import calculator, policy, work
 from training_slowdown import formalism as F
-from training_slowdown import policy
 from training_slowdown.gates import per_mac
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -28,25 +28,42 @@ def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=0.0, tail=0.0, a
                       delta_bits=delta if delta is not None else u1, decoder_gates=decoder, tail_share=tail)
 
 
-def test_even_update_slowdown_is_the_corollary():
-    """Evenly spread with u(1) >> k: x0 <= k/u(1), s* <= k^2/(4 a u(1)), so rho ≳ 4 σ s a u(1) / k^2."""
+def term_of(m: F.Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
+    """The one bound's products term on `m` at (c, k), its reason where it has none, and what it read."""
+    b = F.bound(m, c, k)
+    return b["terms"]["products"], b["unmeasured"].get("products"), b["inputs"]["products"]
+
+
+def token_form(m: F.Measured, c: float, k: float) -> dict:
+    """Slowdown's token form on `m` at (c, k), a sensitivity of the one bound and never its slowdown: its terms (σ,
+    x0, s, s*, ᾱ/α_max, and v2's s* as `s_star_a1` where the context is charged) and its value (`token_form`)."""
+    b = F.bound(m, c, k)
+    return b["inputs"]["token_form"] | {"token_form": b["sensitivities"]["token_form"]}
+
+
+def test_even_update_token_form_is_the_corollary():
+    """Evenly spread with u(1) >> k: x0 <= k/u(1), s* <= k^2/(4 a u(1)), so the token form is about 4 σ s a u(1) / k^2;
+    it is a sensitivity, and no slowdown of the record's, which has no product rows."""
     m, c, k = measured(u1=1e9), 1e13, 1e5
-    r = F.at(m, c, k)
+    r = token_form(m, c, k)
     s = c / 0.8e9
     assert (r["sigma"], r["s"]) == pytest.approx((0.8, s))
     assert r["x0"] == pytest.approx(k / 1e9)
     assert r["s_star"] == pytest.approx(k * k / (4 * 1e9) / 8192)
-    assert r["rho"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3) and not r["fit"]
+    assert r["token_form"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3)
+    got = F.at(m, c, k)
+    assert not got["fit"] and got["rho"] is None and "slowdown" not in got
 
 
 def test_a_frozen_tail_is_always_charged():
     """Frozen layers above changed ones with u(1) > k: u_in jumps at once, so x0 = 0 and the tail's work stays charged;
-    s* <= t k / a, so rho ≈ σ s a / (t k), below the evenly spread update's (the tail leaves a block more room)."""
+    s* <= t k / a, so the token form is about σ s a / (t k), below the evenly spread update's (the tail leaves a
+    block more room)."""
     t, k, u1, c = 0.05, 1e5, 1e9, 1e13
-    r = F.at(measured(u1=u1, tail=t), c, k)
+    r = token_form(measured(u1=u1, tail=t), c, k)
     assert r["x0"] == 0 and r["s_star"] == pytest.approx(t * k / 8192)
-    assert r["rho"] == pytest.approx(0.8 * (c / 0.8e9) * 8192 / (t * k), rel=1e-6)
-    assert F.at(measured(u1=u1), c, k)["rho"] > r["rho"]
+    assert r["token_form"] == pytest.approx(0.8 * (c / 0.8e9) * 8192 / (t * k), rel=1e-6)
+    assert token_form(measured(u1=u1), c, k)["token_form"] > r["token_form"]
 
 
 def test_the_tail_profiles():
@@ -68,20 +85,20 @@ def test_varying_token_blocks_take_the_largest_per_token_affected_count():
     u = F.even(1e9)
     m = F.Measured((a, b), 32, 8192, u, u, 1e9)
     c, k = 1e13, 1e5
-    r = F.at(m, c, k)
+    r = token_form(m, c, k)
     s_star = F.room(u, k) / 8192
     alpha_max = 0.8e12 / 1e3
     assert r["alpha_ratio"] == pytest.approx((1e12 / 2e3) / alpha_max)
-    assert r["slowdown"] == pytest.approx((1 - k / 1e9) * c * 1e12 / (alpha_max * 2e12 * s_star))
-    assert r["slowdown"] == pytest.approx(m.sigma * (1 - k / 1e9) * (c / m.w) / s_star * r["alpha_ratio"])
+    assert r["token_form"] == pytest.approx((1 - k / 1e9) * c * 1e12 / (alpha_max * 2e12 * s_star))
+    assert r["token_form"] == pytest.approx(m.sigma * (1 - k / 1e9) * (c / m.w) / s_star * r["alpha_ratio"])
     same = F.Measured((a, a), 32, 8192, u, u, 1e9)
-    assert F.at(same, c, k)["alpha_ratio"] == 1
+    assert token_form(same, c, k)["alpha_ratio"] == 1
 
 
 def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     """Training fits when compute (Δ + sτ), reduction (2Δ_grad) and update application (Δ + Δ_grad) each fit in k;
     ρ is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
-    (`capped`), so x0's bound is 1 and Slowdown's bound 0."""
+    (`capped`), so x0's bound is 1 and the token form 0."""
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
     fits = F.at(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k)
@@ -97,8 +114,9 @@ def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
         assert not got[name] and all(v for n, v in got.items() if n != name), name
     assert not F.at(measured(u1=1e5), c, k)["fit"]  # Δ_grad unmeasured: training Fit unchecked
     for tail in (0.0, 0.5):
-        wide = F.at(measured(u1=1e8, delta=1e3, dgrad=1e3, tail=tail), c, k)
-        assert wide["fit"] and wide["rho"] == 1.0 and wide["x0"] == 1.0 and wide["slowdown"] == 0.0
+        m = measured(u1=1e8, delta=1e3, dgrad=1e3, tail=tail)
+        wide, form = F.at(m, c, k), token_form(m, c, k)
+        assert wide["fit"] and wide["rho"] == 1.0 and form["x0"] == 1.0 and form["token_form"] == 0.0
 
 
 def test_u_and_u_in_are_at_most_delta_where_delta_counts():
@@ -111,26 +129,10 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
     assert F.capped(u, 50.0) == u and F.capped(u, 10.0)[1:] == ((0.5, 10.0), (0.75, 10.0), (1.0, 10.0))
     part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
     c, k = 1e13, 30.0
-    r = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=0.0), c, k)
+    r = token_form(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=0.0), c, k)
     assert r["x0"] == 1.0 and r["s_star"] == pytest.approx((k - 20.0) / 8192)
-    wide = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=c), c, k)
+    wide = token_form(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=c), c, k)
     assert wide["x0"] == pytest.approx(0.5 + 0.25 * 2 / 3)
-
-
-def test_fit_k_is_the_least_k_at_which_fit_holds():
-    """Running θ': Δ + (c/w_run)τ; training: the most of its three kinds (None without Δ_grad), a part with no token
-    blocks (the setup) needing Δ alone; none when the decoder reaches c or is unmeasured."""
-    m, c, w_run = measured(u1=1e6, delta=1e3, dgrad=1e4), 1e13, 2e8
-    s_tau = c / 0.8e9 * 32
-    run, train = F.fit_k(m, c, w_run)
-    assert (run, train) == pytest.approx((1e3 + c / w_run * 32, max(1e3 + s_tau, 2e4, 1e3 + 1e4)))
-    assert F.at(m, c, train)["fit"] and not F.at(m, c, train * (1 - 1e-9))["fit"]
-    setup = F.Part(gates=1e9, tokens=0, token_gates=0.0, affected_gates=0.0)
-    assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3, 0.0), c, w_run) == pytest.approx(
-        (run, train))
-    assert F.fit_k(measured(u1=1e6), c, w_run)[1] is None
-    assert F.fit_k(measured(u1=1e6, decoder=c), c, w_run) == (None, None)
-    assert F.fit_k(measured(u1=1e6, delta=1e3, dgrad=1e4, decoder=None), c, w_run) == (None, None)
 
 
 def test_update_application_reads_delta_t_where_the_run_has_latents():
@@ -141,8 +143,8 @@ def test_update_application_reads_delta_t_where_the_run_has_latents():
     latent = dataclasses.replace(code, delta_t_bits=k)
     assert F.at(code, c, k)["fit"] and code.delta_t == code.delta_bits
     assert F.at(latent, c, k)["parts"][0]["fit"] == {"compute": True, "reduction": True, "update": False}
-    assert F.fit_k(latent, c, 2e8)[1] == pytest.approx(k + 1e5)
-    assert F.from_json(latent.to_json()).delta_t_bits == k
+    need = k + 1e5
+    assert F.at(latent, c, need)["fit"] and not F.at(latent, c, need * (1 - 1e-9))["parts"][0]["fit"]["update"]
 
 
 def test_the_attack_side_is_reported_beside_the_bounds():
@@ -151,7 +153,7 @@ def test_the_attack_side_is_reported_beside_the_bounds():
     c, k = 1e13, 1e5
     tail = F.at(measured(u1=1e9, tail=0.05), c, k)
     assert tail["x0_known"] == 0 and tail["s_star_known"] == pytest.approx(0.05 * math.floor(k / (8192 + 32)))
-    assert tail["s_star_known"] <= tail["s_star"]
+    assert tail["s_star_known"] <= token_form(measured(u1=1e9, tail=0.05), c, k)["s_star"]
     narrow = F.at(measured(u1=1e9, tail=0.05), 1e8, k)
     assert narrow["s_star_known"] == pytest.approx(0.05 * math.floor(1e8 / (0.05 * 0.4e9)))
     assert F.at(measured(u1=1e9), c, k)["s_star_known"] == 0
@@ -166,7 +168,7 @@ def charged(m: F.Measured, h: float, positions: int = 1024, kv: float = 2 * 512 
 def test_the_context_charge_is_its_formula_on_a_toy_profile():
     """u(x) = 8000x, k = 5000, a = 1000, L = 4: x(k − u(x)) peaks at x* = 5/16 with u(x*) = 2500, so S1(p) is v2's
     s* = 0.78125 while a(p + 1) ≤ 2500 and then the limit's x(k − u(x)), 750 and 500 over a; S0 at h = 0.2 is
-    0.2 (5000 − 1600)/1000. u_in jumps, so x0 = 0, and ρ is σ s times the positions' mean of
+    0.2 (5000 − 1600)/1000. u_in jumps, so x0 = 0, and the token form is σ s times the positions' mean of
     h/max(S0, S1(p)) + (1 − h)/S1(p)."""
     part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
     m = F.Measured((part,), tau_bits=32, a_bits=1000, u=F.even(8000), u_in=((0, 0), (0, 8000), (1, 8000)),
@@ -175,33 +177,36 @@ def test_the_context_charge_is_its_formula_on_a_toy_profile():
     assert F.context_rooms(m.u, 5000, 1000, 4) == pytest.approx(s1)
     assert F.room(m.u, 5000, 0.2) / 1000 == pytest.approx(s0)
     mean = sum(0.2 / max(s0, s) + 0.8 / s for s in s1) / 4
-    r = F.at(charged(m, 0.2, positions=4, kv=2000), 1e12, 5000)
+    r = token_form(charged(m, 0.2, positions=4, kv=2000), 1e12, 5000)
     assert r["x0"] == 0 and r["s_star_a1"] == pytest.approx(0.78125) and r["s_star"] == pytest.approx(1 / mean)
-    assert r["slowdown"] == pytest.approx(0.8 * 1250 * mean) and r["rho"] == r["slowdown"]
-    v2 = F.at(m, 1e12, 5000)["slowdown"]
-    assert v2 == pytest.approx(0.8 * 1250 / 0.78125) and v2 < r["slowdown"]
+    assert r["token_form"] == pytest.approx(0.8 * 1250 * mean)
+    v2 = token_form(m, 1e12, 5000)
+    assert v2["token_form"] == pytest.approx(0.8 * 1250 / 0.78125) and v2["token_form"] < r["token_form"]
+    assert "s_star_a1" not in v2
     with pytest.raises(ValueError, match="best span"):
         F.at(charged(m, 0.2, positions=4, kv=999), 1e12, 5000)
 
 
-def test_a_narrow_cut_whose_best_block_holds_the_sequence_keeps_v2s_rho():
+def test_a_narrow_cut_whose_best_block_holds_the_sequence_keeps_v2s_token_form():
     """a = 32 and a frozen tail: v2's best block holds k/a = 2500 tokens, more than L = 1024, so every position's
     S1(p) is s* and the charge changes nothing."""
     m = replace(measured(u1=1e9, tail=0.3), a_bits=32)
-    v2, r = F.at(m, 1e13, 8e4), F.at(charged(m, 0.6), 1e13, 8e4)
-    assert r["s_star"] == pytest.approx(v2["s_star"]) == r["s_star_a1"] and r["rho"] == pytest.approx(v2["rho"])
+    v2, r = token_form(m, 1e13, 8e4), token_form(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == pytest.approx(v2["s_star"]) == r["s_star_a1"]
+    assert r["token_form"] == pytest.approx(v2["token_form"])
 
 
 def test_a_dense_cut_is_unbounded_where_k_holds_few_tokens():
     """a = d_model·16 at k = 80,000 bits: a block doing a token's charged work must hold every earlier token, so none
-    serves a position past k/a − 1 ≈ 8.8, and the charged share 1 − h left there makes ρ infinite (s* 0). At k = 10^8
-    the block holds the sequence and ρ is v2's. With no affected K/V (h = 1) nothing is charged."""
+    serves a position past k/a − 1 ≈ 8.8, and the charged share 1 − h left there makes the token form infinite (s* 0).
+    At k = 10^8 the block holds the sequence and the token form is v2's. With no affected K/V (h = 1) nothing is
+    charged."""
     m = measured(u1=1e9, tail=0.3)
-    r = F.at(charged(m, 0.6), 1e13, 8e4)
-    assert r["s_star"] == 0 and r["rho"] == math.inf and r["s_star_a1"] == pytest.approx(0.3 * 8e4 / 8192)
-    assert F.at(charged(m, 0.6), 1e13, 1e8)["rho"] == pytest.approx(F.at(m, 1e13, 1e8)["rho"])
-    assert F.at(charged(m, 1.0), 1e13, 8e4)["rho"] == pytest.approx(F.at(m, 1e13, 8e4)["rho"])
-    assert F.at(charged(replace(m, u_in=F.even(1e3)), 0.6), 1e13, 8e4)["slowdown"] == 0
+    r = token_form(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == 0 and r["token_form"] == math.inf and r["s_star_a1"] == pytest.approx(0.3 * 8e4 / 8192)
+    for h, k in ((0.6, 1e8), (1.0, 8e4)):
+        assert token_form(charged(m, h), 1e13, k)["token_form"] == pytest.approx(token_form(m, 1e13, k)["token_form"])
+    assert token_form(charged(replace(m, u_in=F.even(1e3)), 0.6), 1e13, 8e4)["token_form"] == 0
 
 
 def test_the_context_quantities_from_the_changed_tensors():
@@ -223,13 +228,13 @@ def test_the_context_quantities_from_the_changed_tensors():
     with pytest.raises(ValueError, match="lm_head"):
         F.context(["lm_head.weight"], SHAPE)
     m = F.complete({"context": emb}, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": {}}}, SHAPE)
-    assert m.context == emb and m.labels["context"] == F.CONTEXT and F.from_json(m.to_json()).context == emb
+    assert m.context == emb and m.labels["context"] == F.CONTEXT
 
 
-def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
-    """A total update (Fit's Δ) larger than the per-token update (Slowdown's u(1)), as for an update each token's path
-    reads only part of: the compute block fails on Δ while the Slowdown bound reads u(1). With a small Δ the compute
-    block fits and Δ bounds u too. The record says which value each came from."""
+def test_fit_reads_delta_and_the_token_form_reads_u1_as_separate_fields():
+    """A total update (Fit's Δ) larger than the per-token update (the token form's u(1)), as for an update each
+    token's path reads only part of: the compute block fails on Δ while the token form reads u(1). With a small Δ the
+    compute block fits and Δ bounds u too. The record says which value each came from."""
     row = {"output": {"e_bytes": 10**9, "rebuild_macs": 0}, "macs_log": {"by": {}, "ops": {}}}
     part = {"gates": 1e12, "tokens": 1e3, "token_gates": 1e12, "affected_gates": 5e11, "steps": 1,
             "delta_grad_bits": None}
@@ -239,11 +244,13 @@ def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
     assert m.labels["u1_bits"] == "upper bound (witness): a test" and m.labels["u"] == F.STUBS["u"]
     assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1)")
     k = 1e6
-    r = F.at(m, 1e13, k)
-    assert not r["parts"][0]["fit"]["compute"] and r["x0"] == pytest.approx(k / 1e9)
-    assert r["rho"] == pytest.approx(4 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
-    small = F.at(F.complete(f, row | {"output": {"e_bytes": 10, "format": "full"}}, SHAPE), 1e13, k)
-    assert small["parts"][0]["fit"]["compute"] and not small["fit"] and small["x0"] == 1.0 and small["rho"] == 1.0
+    r, form = F.at(m, 1e13, k), token_form(m, 1e13, k)
+    assert not r["parts"][0]["fit"]["compute"] and form["x0"] == pytest.approx(k / 1e9)
+    assert form["token_form"] == pytest.approx(4 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
+    less = F.complete(f, row | {"output": {"e_bytes": 10, "format": "full"}}, SHAPE)
+    small, form = F.at(less, 1e13, k), token_form(less, 1e13, k)
+    assert small["parts"][0]["fit"]["compute"] and not small["fit"]
+    assert form["x0"] == 1.0 and form["token_form"] == 0.0
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u": [[0, 0], [1, 5.0]], "u1_bits": 6.0}, row, SHAPE)
 
@@ -254,7 +261,6 @@ def test_a_block_s_tail_share_gives_the_tail_profiles_labelled_as_assumptions():
     m = F.complete({"parts": [part], "u1_bits": 1e9, "tail_share": 0.25}, row, SHAPE)
     assert m.tail_share == 0.25 and (m.u, m.u_in) == F.tail(1e9, 0.25)
     assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1)")
-    assert F.from_json(m.to_json()) == m
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u1_bits": 1e9, "tail_share": 1.0}, row, SHAPE)
 
@@ -419,31 +425,39 @@ def test_the_one_bound_is_its_products_kind_resting_on_what_it_names():
     c, k = 1e11, policy.CONSOLE[1]
     b = F.bound(one_part(), c, k)
     assert b["kinds"] == list(F.KINDS) == ["products"] and b["label"] == f"{F.THE_CODE} {F_VERSION}"
-    assert b["terms"]["products"] is None and b["unmeasured"]["products"] == F.PRODUCTS_UNMEASURED
+    assert b["terms"]["products"] is None and b["unmeasured"]["products"] == work.PRODUCTS_UNMEASURED
     assert (b["max"], b["binding"]) == (None, None)
     assert set(b["rests_on"]) == set(F.KINDS) and b["rests_on"]["products"].startswith("theorem of record")
     stated = replace(one_part(), products=STATED)
     one = F.bound(stated, c, k)
     assert one["binding"] == "products" and one["max"] == one["terms"]["products"] > 1
-    r = F.at(stated, c, k, one_bound=True)
-    assert r["bound"] == one and r["rho"] == one["max"]
+    r = F.at(stated, c, k)
+    assert r["bound"] == one and r["rho"] == one["max"] == one["entry"]["slowdown"]
     with pytest.raises(ValueError, match="some of"):
         F.bound(stated, c, k, kinds=("tokens",))
     with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
         F.bound(stated, c, k, kinds=("decoding_form",))
 
 
-#: one bf16 product of two fresh operands over K = 512, half of one_part's 1e12 gates
-SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512, "k_dim": 512, "b_a": 16, "b_b": 16,
-          "cell_gates": 23682.0}
+#: one bf16 product of two fresh operands over K = 512, half of one_part's 1e12 gates: its MACs and output entries
+SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512}
 
 
-#: SQUARE as products a model states, with the products term's M at the console's k (`he_of_products`)
-STATED = {"k": policy.CONSOLE[1], "he": F.he_of_products([SQUARE], policy.CONSOLE[1])}
+def stated(k: float) -> dict:
+    """SQUARE as the products term's M at k, in `he_of_rows`' form: one input gradient, an activation times a trained
+    weight at 16 bits each with 16-bit outputs, which doesn't say whether it is the head's."""
+    group = {"beta": [16, 16], "width": [16, 16], "weight": [False, True], "b_y": 16, "forward": False, "k_dim": 512,
+             "dw": False, "head": None, "macs": SQUARE["macs"], "wires": SQUARE["outputs"] * 16}
+    return {"k": float(k), "groups": [group], "r_step": None, "candidates_macs": SQUARE["macs"], "self_macs": 0.0,
+            "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+
+
+#: SQUARE as a run's products at the console's k
+STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
 
 
 def test_the_products_term_is_the_theorem_of_records_on_m():
-    """The products kind's term is the theorem of record's ρ on M (`he_figure` on the products' `he`) and the record's
+    """The products kind's term is the theorem of record's ρ on M (the entry point's, on the products' `he`) and the record's
     |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took and (E) at its b_y, which
     `products_rests_on` carries wherever the term is measured. It is unmeasured at a k the products weren't
     classified at, on products that come without M (no rows), on rows that don't flag a gather's and where an
@@ -452,7 +466,7 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     c, k = 1e11, policy.CONSOLE[1]
     stated = replace(one_part(), products=STATED)
     b = F.bound(stated, c, k)
-    fig = F.he_figure(STATED["he"], c, 1e12)
+    fig = figure(STATED["he"], c, 1e12)
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["b_y"]) == ("M", 16, 15.9, 16)
     assert not fig["below_width"] and fig["macs_share"] == 1
     assert fig["F"] == pytest.approx(2 / math.sqrt(3), rel=1e-15) and fig["N"] == SQUARE["macs"]
@@ -461,7 +475,8 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert F.bound(stated, 2 * c, k)["terms"]["products"] == pytest.approx(2 * fig["rho"], rel=1e-12)
     one = F.published(stated)
     assert one["products_rests_on"] == F.he_rests_on(fig)
-    assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", F.BETA_K_LABEL,
+    assert one["products_rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H)")
+    assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", calculator.BETA_K_LABEL,
                                                        "the casts of one value count as one word", "(E)",
                                                        "b_y = 16 bits an output", "a single counterexample refutes"))
     assert F.CODE_LABEL not in one["products_rests_on"]
@@ -471,19 +486,19 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert F.published(replace(stated, products=STATED | {"capture_code": F_VERSION}))["capture_code"] == F_VERSION
     elsewhere = F.bound(stated, c, 80_000)
     assert elsewhere["terms"]["products"] is None and "classified at k = 65536" in elsewhere["unmeasured"]["products"]
-    assert F.bound(replace(stated, products={"k": k}), c, k)["unmeasured"]["products"] == F.HE_NO_ROWS
-    assert F.bound(replace(stated, products=STATED | {"he": None}), c, k)["unmeasured"]["products"] == F.HE_RETRACE
+    assert F.bound(replace(stated, products={"k": k}), c, k)["unmeasured"]["products"] == work.HE_NO_ROWS
+    assert F.bound(replace(stated, products=STATED | {"he": None}), c, k)["unmeasured"]["products"] == work.HE_RETRACE
     fans = F.bound(replace(stated, products=STATED | {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]}), c, k)
     assert fans["terms"]["products"] is None and "breaks the premise" in fans["unmeasured"]["products"]
     assert all(x in F.RESTS_ON["products"] for x in ("(H)", "(E)", "F = 2/√3", "β_eff", "K* = ½√(k/β)",
-                                                    F.BETA_K_LABEL, F.CODE_LABEL, "casts of one value"))
+                                                    calculator.BETA_K_LABEL, F.CODE_LABEL, "casts of one value"))
     assert all(x in F.RESTS_ON_CELL["products"] for x in ("(H)", "(E)", "a single counterexample refutes"))
     assert F.CELL_SENSITIVITIES == ("reduction", "update")
 
 
 def he_row(phase: str, td: list, m: int, k: int, n: int, count: int = 1, batch: int = 1) -> dict:
     """A product row as training_slowdown.capture.products writes one: both operands affected at bf16, paid, none gathered."""
-    gates = next(g for g, b in F.HE_BITS.items() if b == (16, 16))
+    gates = next(g for g, b in work.HE_BITS.items() if b == (16, 16))
     return {"phase": phase, "token_dims": td, "dims": {"batch": batch, "m": m, "k": k, "n": n}, "count": count,
             "macs": batch * m * k * n, "outputs": batch * m * n, "affected": [True, True], "self": False,
             "gathered": [False, False], "widths": [16, 16], "rates": [16.0, 16.0], "cell_gates": gates}
@@ -499,52 +514,87 @@ HE_STEP = [he_row("forward", ["m"], 1024, 1024, 1024, 2), he_row("forward", ["m"
 
 
 def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_size_beta_w_and_the_first_steps():
-    """4.13.1's rules on M (`he_of_rows`, `he_figure`): the optimizer's products and attention's leave M; a weight is an
+    """4.13.1's rules on M (`work.he_of_rows`, the entry point's choice of the work): the optimizer's products and attention's leave M; a weight is an
     operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
     backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
-    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568 and linear in log
-    k between the red-team's points, none past 8e8, weights their width or less the record's code bits a trained weight,
+    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568, between two
+    red-team points the next one's (from 4.13.5), none past 8e8, weights their width or less the record's code bits a trained weight,
     a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
     whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
     after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
     with the layers' are unmeasured from 8e7, and every M past 8e8."""
     c, k, C, T = 1e11, 65_536.0, 1e13, 1024
-    assert (F.beta_k(1.0), F.beta_k(145_568), F.beta_k(8e6), F.beta_k(8e8)) == (15.9, 15.9, 10.8, 0.37)
-    assert F.beta_k(math.sqrt(8e6 * 8e7)) == pytest.approx((10.8 + 2.7) / 2, rel=1e-12) and F.beta_k(8.1e8) is None
-    he = F.he_of_rows(HE_STEP, k, 10.0, T)
+    beta = calculator._min_cut().beta
+    assert (beta(1.0), beta(145_568), beta(8e6), beta(8e8)) == (15.9, 15.9, 10.8, 0.37)
+    assert beta(8e6 + 1) == beta(math.sqrt(8e6 * 8e7)) == beta(8e7) == 2.7 and beta(8.1e8) is None
+    he = work.he_of_rows(HE_STEP, k, 10.0, T)
     opt, att = HE_STEP[7], HE_STEP[8]
     assert he["left_out_macs"] == 10 * (opt["count"] * opt["macs"] + att["count"] * att["macs"])
     assert he["trained_weights"] == 2 * 1024 * 1024 + 1024 * 4096 + 8 * 4096
     assert sorted((g["k_dim"], g["dw"], g["head"], tuple(g["weight"])) for g in he["groups"]) == [
         (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
         (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
-    fig = F.he_figure(he, c, C)
-    assert fig["subset"] == F.HE_SUBSETS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    fig = figure(he, c, C)
+    assert fig["subset"] == calculator.HE_SUBSETS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
     assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
-    assert fig["subsets"][F.HE_SUBSETS[2]] == pytest.approx(max(0.0, F.he_rho(N, O, 15.9, 15.9, 16, 1.0, c, k, C)),
-                                                            rel=1e-12)
-    first = F.he_figure(he, c, C, tau=16)
+    alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
+    assert fig["subsets"][calculator.HE_SUBSETS[2]] == calculators_count(c, k, alone)
+    first = figure(he, c, C, tau=16)
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
-    assert fig["first_steps"] is None and F.he_figure(he, c, C, tau=1e3)["first_steps"] == 0
-    coded = F.he_figure(he, c, C, beta_code=2.0)
+    assert fig["first_steps"] is None and figure(he, c, C, tau=1e3)["first_steps"] == 0
+    coded = figure(he, c, C, beta_code=2.0)
     assert coded["rho"] < fig["rho"] and coded["beta_code"] == 2.0
     one = he | {"groups": [g for g in he["groups"] if g["k_dim"] == 1024 and not g["dw"] and not g["head"]][:1]}
-    weighed = F.he_figure(one, c, C, beta_code=8.0)
+    weighed = figure(one, c, C, beta_code=8.0)
     assert (weighed["beta_w"], weighed["beta_x"], weighed["code_bound"]) == (8.0, 15.9, True)
     m = replace(one_part(delta=2.0 * he["trained_weights"]), products={"k": k, "he": he})
-    term, why, got = F.he_products(m, c, k)
-    assert why is None and got["beta_code"] == 2.0 and term == F.he_figure(he, c, m.gates, m.tau_bits, 2.0)["rho"]
+    term, why, got = term_of(m, c, k)
+    assert why is None and got["beta_code"] == 2.0 and term == figure(he, c, m.gates, m.tau_bits, 2.0)["rho"]
     assert (F.CODE_LABEL in F.he_rests_on(got)) == got["code_bound"]
-    far = F.he_of_rows(HE_STEP, 8e7)
-    assert F.he_figure(far, c, C) == F.he_figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
-    assert F.he_figure(he, c, C) != F.he_figure(he | {"groups": [g for g in he["groups"] if not g["head"]]}, c, C)
-    for at, why in ((8e7, F.HE_HEAD), (9e8, F.HE_PAST)):
-        model = replace(one_part(), products={"k": at, "he": F.he_of_products([SQUARE], at)})
-        assert F.he_products(model, c, at)[:2] == (None, why), at
+    far = work.he_of_rows(HE_STEP, 8e7)
+    assert figure(far, c, C) == figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
+    assert figure(he, c, C) != figure(he | {"groups": [g for g in he["groups"] if not g["head"]]}, c, C)
+    for at, why in ((8e7, work.HE_HEAD), (9e8, calculator.he_past())):
+        model = replace(one_part(), products={"k": at, "he": stated(at)})
+        assert term_of(model, c, at)[:2] == (None, why), at
     with pytest.raises(ValueError, match="past k"):
-        F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
+        figure(work.he_of_rows(HE_STEP, 9e8), c, C)
+
+
+def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients_and_the_words_say_so():
+    """The subset that binds is the one whose count is largest, and the row's words name it with its F. Here M's
+    forward and input-gradient products give many output wires a MAC, where the statement's second conjunct loses
+    most of the count: by the count all of M binds, at F = 2/√3 and the code's β_w, and by the second conjunct the
+    weight gradients alone would, so a term read from the second conjunct fails here."""
+    k, c, C = policy.CONSOLE[1], 1e14, 1e18
+
+    def group(macs, wires, weight, forward, dw, k_dim):
+        return {"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": weight, "b_y": 16.0, "forward": forward,
+                "k_dim": k_dim, "dw": dw, "head": False, "macs": macs, "wires": wires}
+
+    groups = [group(1.5e15, 7.5e11, [False, False], False, True, 4096.0),
+              group(1.6e15, 3.3e13, [False, True], True, False, 512.0),
+              group(1.6e15, 3.3e13, [False, True], False, False, 512.0)]
+    he = {"k": k, "groups": groups, "r_step": None, "candidates_macs": sum(g["macs"] for g in groups),
+          "self_macs": 0.0, "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
+          "trained_weights": None}
+    fig = figure(he, c, C, beta_code=8.0)
+    whole = {"N": 4.7e15, "O": 7.5e11 + 2 * 3.3e13, "beta_w": 8.0, "beta_x": 15.9, "b_y": 16.0,
+             "F": calculator._min_cut().share(3), "C_gates": C}
+    alone = {"N": 1.5e15, "O": 7.5e11, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16.0, "F": 1.0, "C_gates": C}
+    count = {name: calculators_count(c, k, w) for name, w in (("M", whole), ("dw", alone))}
+    assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
+        "M", calculator._min_cut().share(3), 8.0, whole["N"], whole["O"])
+    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][calculator.HE_SUBSETS[2]]
+    words = F.he_rests_on(fig)
+    assert words.startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at β_w = 8 "
+                            f"({F.CODE_LABEL}) and β_x = 15.9 bits a word")
+    assert calculator.HE_SUBSETS[2] not in words
+    second = calculator._min_cut().slowdown_at_least
+    assert second(whole["N"], whole["O"], C, c, k, 8.0 * 15.9, 16.0, whole["F"]) < second(
+        alone["N"], alone["O"], C, c, k, 15.9 * 15.9, 16.0, 1.0) < count["dw"]
 
 
 def test_the_adapter_rule_needs_a_frozen_weight_the_update_reaches_and_a_frozen_head_keeps_its_width():
@@ -560,18 +610,18 @@ def test_the_adapter_rule_needs_a_frozen_weight_the_update_reaches_and_a_frozen_
 
     student = [he_row("forward", ["m"], 1024, 256, 704), he_row("forward", ["m"], 1024, 704, 256),
                he_row("forward", ["m"], 1024, 256, V)]
-    alone, distilled = (F.he_of_rows(rows, k) for rows in (student, [frozen(he_row("forward", ["m"], 1024, d, V), 0, 1),
+    alone, distilled = (work.he_of_rows(rows, k) for rows in (student, [frozen(he_row("forward", ["m"], 1024, d, V), 0, 1),
                                                                      *student]))
     assert distilled["r_step"] is alone["r_step"] is None
     assert distilled["groups"] == alone["groups"] and all(b == 16 for g in alone["groups"] for b in g["beta"])
     lora = [frozen(he_row("forward", ["m"], 1024, d, d), 1), he_row("forward", ["m"], 1024, d, r),
             he_row("forward", ["m"], 1024, r, d), frozen(he_row("forward", ["m"], 1024, d, V), 1),
             he_row("backward", ["m"], 1024, d, r), he_row("backward", ["k"], d, 1024, r)]
-    he = F.he_of_rows(lora, k)
+    he = work.he_of_rows(lora, k)
     assert he["r_step"] == r and not any(g["head"] for g in he["groups"])
     dx = [g["beta"] for g in he["groups"] if not g["forward"] and not g["dw"]]
-    assert dx == [[round(F.beta_eff(16, r, k), 9), 16]]
-    trained = F.he_of_rows([*lora[:3], he_row("forward", ["m"], 1024, d, V), he_row("backward", ["m"], 1024, V, d)], k)
+    assert dx == [[round(work.beta_eff(16, r, k), 9), 16]]
+    trained = work.he_of_rows([*lora[:3], he_row("forward", ["m"], 1024, d, V), he_row("backward", ["m"], 1024, V, d)], k)
     assert [g["k_dim"] for g in trained["groups"] if g["head"]] == [V]
 
 
@@ -591,11 +641,13 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     dw = group([8.0, 16.0], [False, False], False, True, 0.25)
     he = {"k": k, "groups": [fwd, dx, dw], "r_step": None, "candidates_macs": 5.25 * m * m * K, "self_macs": 0.0,
           "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
-    fig = F.he_figure(he, c, C, beta_code=2.0)
+    fig = figure(he, c, C, beta_code=2.0)
     share = 2 / math.sqrt(3)
 
     def rho(M: list, bw: float, bx: float, f: float = share) -> float:
-        return F.he_rho(sum(g["macs"] for g in M), sum(g["wires"] for g in M), bw, bx, 16, f, c, k, C)
+        work = {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M), "beta_w": bw, "beta_x": bx,
+                "b_y": 16, "F": f, "C_gates": C}
+        return calculators_count(c, k, work)
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
@@ -605,7 +657,7 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
 
 
 def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
-    """F = 2/√3 (`SHARE`) where the M_P a term takes holds a backward product, since a layer's forward,
+    """F = 2/√3 (the calculator's `min_cut.share`) where the M_P a term takes holds a backward product, since a layer's forward,
     input-gradient and weight-gradient products share three arrays, and 1 where it holds forward products alone: a
     forward product sixteen times the gradients' MACs binds at its own pair, alone, at F = 1, and gradients sixteen
     times its bind at the least pair, with all three, at 2/√3."""
@@ -623,11 +675,11 @@ def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
                 "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
                 "trained_weights": None}
 
-    alone = F.he_figure(step(16, 1), c, C)
+    alone = figure(step(16, 1), c, C)
     assert (alone["subset"], alone["F"], alone["beta_w"], alone["beta_x"]) == ("M", 1.0, 16.0, 15.9)
     assert alone["macs_share"] == pytest.approx(16 / 18, rel=1e-15)
-    shared = F.he_figure(step(1, 16), c, C)
-    assert shared["subset"] == "M" and shared["F"] == pytest.approx(F.SHARE, rel=1e-15) and shared["macs_share"] == 1
+    shared = figure(step(1, 16), c, C)
+    assert shared["subset"] == "M" and shared["F"] == calculator._min_cut().share(3) and shared["macs_share"] == 1
 
 
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
@@ -644,7 +696,7 @@ def test_no_published_string_names_the_code():
     "training's slowdown code", and a premise is named in words beside its name."""
     c, k = 1e11, policy.CONSOLE[1]
     static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
-              F.PRODUCTS_UNMEASURED, F.HE_RETRACE, F.HE_NO_ROWS, F.HE_PAST, F.HE_HEAD, F.OTHER_PROGRAM, F.STAND_IN,
+              work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS, calculator.he_past(), work.HE_HEAD, work.OTHER_PROGRAM, F.STAND_IN,
               F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
     strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
     other = {"shapes": 2, "unmatched": 1, "ran": 3, "largest": [[4, 512, 8]]}
@@ -659,9 +711,11 @@ def test_no_published_string_names_the_code():
             reasons |= set(b["unmeasured"].values())
             one = F.published(m, c, at)
             strings += [one["label"], one["rests_on"], one["why"] or "", one["products_rests_on"] or ""]
-    strings += [F.he_rests_on({"subset": F.HE_SUBSETS[2], "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
-                               "below_width": True, "code_bound": True}), *F.HE_SUBSETS]
-    assert {F.PRODUCTS_UNMEASURED, F.HE_RETRACE, F.HE_NO_ROWS} <= reasons
+    alone = F.he_rests_on({"subset": calculator.HE_SUBSETS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
+                           "below_width": True, "code_bound": True})
+    assert alone.startswith("theorem of record on the weight gradients alone at F = 1, given (H)")
+    strings += [alone, F.SHARED_LABEL, *calculator.HE_SUBSETS]
+    assert {work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("classified at k", "breaks the premise", "own program"))
     named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
     assert not named, named
@@ -681,8 +735,8 @@ def test_published_above_1_is_the_products_term():
     full = F.published(replace(one_part(), products=STATED), 1e11, policy.CONSOLE[1])
     assert full["binding_kind"] == "products" and full["rho"] == full["terms"]["products"] > 1
     assert not full["partial"] and full["rests_on"] == full["products_rests_on"]
-    assert full["rests_on"].startswith("theorem of record on M, given (H): operands are hard at β_w = 16 and β_x = "
-                                       "15.9 bits a word")
+    assert full["rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at "
+                                       "β_w = 16 and β_x = 15.9 bits a word")
 
 
 def test_published_with_the_term_unmeasured_is_null_never_1():
@@ -703,60 +757,33 @@ def test_published_with_every_kind_measured_and_none_above_1_is_1_binding_none()
     assert one["rests_on"] == F.RESTS_ON_CELL["none"] == "no kind exceeds 1"
 
 
-def test_products_of_is_each_captured_steps_rows_times_its_steps():
-    """`products_of` is the products term's M of each captured step's product rows at k
-    (training_slowdown.capture.products' `rows`, at the console's k by default), each row's count times its segment's
-    steps, and the steps' P-match check: a low-rank chain through trained weights."""
-    import torch
-    import torch.nn.functional as tF
-    from torch import nn
-
-    from training_slowdown.capture import capture_step, products
-
-    torch.manual_seed(0)
-    m = nn.Sequential(nn.Linear(256, 256, bias=False), nn.Linear(256, 64, bias=False), nn.Linear(64, 256, bias=False),
-                      nn.Linear(256, 256, bias=False))
-    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: tF.mse_loss(mm(b[0]), b[1]),
-                     (torch.empty(6, 256), torch.empty(6, 256)))
-    k = policy.CONSOLE[1]
-    block = products.rows(g, k, "bfloat16")
-    got = F.products_of([(3, g), (2, g)])
-    assert got["k"] == k and got["p_match"] == 2 * block["p_match"]
-    assert got["he"] == F.he_of_rows([r | {"count": n * r["count"]} for n in (3, 2) for r in block["rows"]], k)
-    assert got["he"]["groups"] and F.products_of([(1, g)], k=1024)["k"] == 1024.0
-
-
-def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_dial_reads_as_c_times_a_number():
+def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
     """A trace keeps its product rows at each k of the console's dial (training_slowdown.capture.products' `at`), so
-    the products term is measured at each of them on that k's M, and off the dial it is unmeasured with the reason. At
-    a fixed k the theorem of record's ρ is c/|C| times a function of k, so the dial reads the term as c times a number
-    for each k (`products_per_c`). On the 45M dense step the term falls with k (99,481 at the console's 65,536 bits
-    and 56,743 at 80,000 on M, 23,374 at the served block's 145,568 and 1,655 at 800,000 on M without its short
-    contractions), and from 8e6 bits up β(k) is low enough that the outputs' term exceeds the MACs', so it is 0, which
-    ρ's floor reads as 1."""
+    the products term is measured at each of them on that k's M, linear in c there, and off the dial it is unmeasured
+    with the reason, as at every k but their own for products that keep no rows on the dial. On the 45M dense step
+    the term falls with k (220,665 at the console's 65,536 bits, 160,416 at 80,000, 60,188 at the served block's
+    145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its short contractions), and from 8e7 bits up β(k) is so
+    low that the count allows fewer blocks than |C|/c, so the term is below 1, which ρ's floor reads as 1."""
     from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
-    got = F.products_of_trace(rows)
+    got = work.products_of_trace(rows)
     C = rows["gates"]
     m = replace(one_part(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
     assert sorted(got["at"], key=int) == [str(k) for k in products.DIAL_K if k != policy.CONSOLE[1]]
     assert all(b["k"] == float(x) and "at" not in b for x, b in got["at"].items())
-    per = F.products_per_c(m)
-    assert list(per) == [str(k) for k in products.DIAL_K]
+    c, terms = policy.CONSOLE[0], []
     for k in products.DIAL_K:
-        for c in (1e12, policy.CONSOLE[0]):
-            term, why, inputs = F.he_products(m, c, k)
-            assert why is None and inputs["k_classified"] == k
-            assert term == pytest.approx(c * per[str(k)], rel=1e-12, abs=1e-12)
-    c = policy.CONSOLE[0]
-    assert [round(c * per[str(k)]) for k in products.DIAL_K] == [99_481, 56_743, 23_374, 1_655] + [0] * 3
-    term, why, _ = F.he_products(m, c, 100_000)
+        term, why, inputs = term_of(m, c, k)
+        assert why is None and inputs["k_classified"] == k
+        assert term_of(m, 1e12, k)[0] == pytest.approx(term * 1e12 / c, rel=1e-12, abs=1e-12)
+        terms.append(round(term))
+    assert terms == [220_665, 160_416, 60_188, 2_815, 39, 0, 0]
+    term, why, _ = term_of(m, c, 100_000)
     assert term is None and "keep none at it" in why and "each k of the console's dial" in why
-    assert F.products_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {
-        "65536": per["65536"]}
-    assert F.products_per_c(replace(m, products=None)) is None
-    assert F.from_json(m.to_json()).products == m.products
+    own = replace(m, products={x: v for x, v in got.items() if x != "at"})
+    assert term_of(own, c, policy.CONSOLE[1])[0] == term_of(m, c, policy.CONSOLE[1])[0]
+    assert term_of(own, c, 80_000)[:2] == (None, why)
 
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
@@ -765,8 +792,8 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     step the circuit traces): the capture's version, the console's k, the circuit's tokens and |C|, P-match holding,
     and by kind every product the op log places. On the tiny start no product is fresh: every counted candidate has an
     operand read through a repeating view or a broadcast below its width (each view read at its own value's rate), so
-    the products term is a measured 0: M's operands are read far below their widths, and at every β M can take its
-    outputs' part is at least its MACs'."""
+    the products term is measured and far below 1, where the bound says nothing: M's operands are read far below
+    their widths, and at every β M can take the count allows fewer blocks than |C|/c."""
     from training_slowdown.capture import products
     from training_slowdown.capture.circuit import StepCircuit, measure
 
@@ -774,13 +801,13 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
     assert (block["capture"], block["k"]) == (products.CAPTURE, policy.CONSOLE[1])
     assert (block["tokens"], block["gates"]) == (f["tokens"], f["gates"]) and block["p_match"] == []
-    got = F.products_of_trace(block)
+    got = work.products_of_trace(block)
     ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())
     assert sum(got["kinds_macs"].values()) == sum(op["macs"] for op in ops if op["products"])
     assert got["kinds_macs"]["fresh"] == 0 and any(any(r["gathered"]) for r in block["rows"])
     b = F.bound(replace(one_part(), products=got), 1e11, policy.CONSOLE[1])
     he = b["inputs"]["products"]
-    assert b["terms"]["products"] == 0 and "products" not in b["unmeasured"] and he["below_width"]
+    assert 0 < b["terms"]["products"] < 1 and "products" not in b["unmeasured"] and he["below_width"]
     assert he["beta"] < 4 and he["macs_share"] < 1
 
 
@@ -795,7 +822,7 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
            "token_dims": ["m"], "macs": 256, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, True], "self": False, "cell_gates": 23682.0}
     theta = row | {"count": 1, "affected": [True, False], "rates": [16.0, 0.0], "paid": [True, False]}
-    block = {"capture": F.PRODUCTS_FROM, "k": 65536.0, "tokens": 8, "gates": None, "rows": [row, theta]}
+    block = {"capture": work.PRODUCTS_FROM, "k": 65536.0, "tokens": 8, "gates": None, "rows": [row, theta]}
     log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
     record = {"steps": [{"step": 0, "tokens": 8, "struct": "b", "by": {"fwd/theta": 80}},
                         {"step": 1, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
@@ -807,7 +834,7 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
     f = F.of_record(record)
     assert [p["tokens"] for p in f["parts"]] == [8, 32]
     p = f["products"]
-    assert (p["k"], p["capture"]) == (65536.0, F.PRODUCTS_FROM)
+    assert (p["k"], p["capture"]) == (65536.0, work.PRODUCTS_FROM)
     assert p["kinds_macs"]["fresh"] == 2 * 2 * 256 and p["kinds_macs"]["theta"] == 2 * 256
     assert F.of_record(record, through=1)["products"]["kinds_macs"]["fresh"] == 2 * 256
     m = F.complete(f, {"output": {"e_bytes": 10}}, SHAPE)
@@ -839,7 +866,7 @@ def test_a_record_an_older_version_ingested_reads_its_traces_rows_as_this_one_do
            "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, False], "self": False, "cell_gates": 23682.0}
     theta = row | {"count": 1, "affected": [True, False], "rates": [16.0, 0.0], "paid": [True, False]}
-    block = {"capture": F.PRODUCTS_FROM, "k": 65536.0, "tokens": 8, "gates": None, "rows": [row, theta]}
+    block = {"capture": work.PRODUCTS_FROM, "k": 65536.0, "tokens": 8, "gates": None, "rows": [row, theta]}
     log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
 
     def record(block):
@@ -859,14 +886,14 @@ def test_a_record_an_older_version_ingested_reads_its_traces_rows_as_this_one_do
 
     now = F.of_record(record(block))
     assert now["products"]["kinds_macs"]["fresh"] == 2.5 * 2 * 16384 and "stand_in" in now["products"]
-    assert term(now) == (None, F.HE_RETRACE)
-    at_48 = now | {"products": {"k": 65536.0, "capture": F.PRODUCTS_FROM,
+    assert term(now) == (None, work.HE_RETRACE)
+    at_48 = now | {"products": {"k": 65536.0, "capture": work.PRODUCTS_FROM,
                                 "kinds_macs": {"expansion": 2.5 * 2 * 16384, "theta": 2.5 * 16384},
                                 "stand_in": now["products"]["stand_in"]}}
     assert F.complete(at_48 | {"trace": {}}, out, SHAPE).products == at_48["products"]
-    assert term(at_48 | {"trace": {}}) == (None, F.HE_NO_ROWS)
-    assert F.complete(at_48, out, SHAPE).products == now["products"] and term(at_48) == (None, F.HE_RETRACE)
-    captured = block | {"capture": F.SYSTEM_FROM, "p_match": [],
+    assert term(at_48 | {"trace": {}}) == (None, work.HE_NO_ROWS)
+    assert F.complete(at_48, out, SHAPE).products == now["products"] and term(at_48) == (None, work.HE_RETRACE)
+    captured = block | {"capture": work.SYSTEM_FROM, "p_match": [],
                         "rows": [r | {"gathered": [False, False]} for r in block["rows"]]}
     now = F.of_record(record(captured))
     assert now["products"]["he"] is not None and term(now) == (0.0, None)
@@ -892,7 +919,7 @@ def test_a_trace_of_another_program_than_the_runs_is_never_priced():
            "rates": [16.0, 16.0], "paid": [True, True], "self": False, "cell_gates": 23682.0,
            "gathered": [False, False]}
     served = 145_568.0
-    block = {"capture": F.SYSTEM_FROM, "k": 65536.0, "tokens": 8, "gates": None, "p_match": [], "rows": [row],
+    block = {"capture": work.SYSTEM_FROM, "k": 65536.0, "tokens": 8, "gates": None, "p_match": [], "rows": [row],
              "at": {f"{served:.0f}": {"k": served, "rows": [row], "p_match": []}}}
     log = [["fwd", "updated", "mm", "[[4, 512], [512, 8]]", 2, 2 * 16384]]
     f = F.of_record({"steps": [{"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/updated": 2 * 16384}}],
@@ -916,13 +943,11 @@ def test_a_trace_of_another_program_than_the_runs_is_never_priced():
                        "fwd updated bmm [[2, 4, 512], [2, 512, 8]]": [1, 32768]}, 1)):
         for k in (65536.0, served):
             b = bound(ops, k)
-            why = F.OTHER_PROGRAM.format(unmatched=1, shapes=1, ran=ran, largest="4×512 by 512×8")
+            why = work.OTHER_PROGRAM.format(unmatched=1, shapes=1, ran=ran, largest="4×512 by 512×8")
             assert b["terms"]["products"] is None and b["unmeasured"]["products"] == why, (ops, k)
             assert b["inputs"]["products"]["other_program"] == {"shapes": 1, "unmatched": 1, "ran": ran,
                                                                 "largest": [[4, 512, 8]]}
             assert "beta" not in b["inputs"]["products"]
-    assert F.products_per_c(F.complete(f, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": ops}},
-                                       SHAPE)) == {"65536": None, f"{served:.0f}": None}
 
 
 def test_a_records_trace_publishes_what_its_rows_give_at_every_dial_k_whichever_version_ingested_it():
@@ -955,7 +980,7 @@ def test_a_records_trace_publishes_what_its_rows_give_at_every_dial_k_whichever_
     c, k = policy.CONSOLE
     rows = [{x: v for x, v in r.items() if x != "gathered"} for r in fixture["rows"]]
     at_411 = row({x: v for x, v in fixture.items() if x not in ("at", "p_match")} | {"capture": "4.11", "rows": rows})
-    assert term(stored(at_411), c, k) == term(at_411, c, k) == (None, F.HE_RETRACE)
+    assert term(stored(at_411), c, k) == term(at_411, c, k) == (None, work.HE_RETRACE)
     now, at_4121 = row(fixture), row(fixture)
     at_4121["formalism"]["products"] = {x: v for x, v in at_4121["formalism"]["products"].items() if x != "at"}
     served = 145_568.0
@@ -971,10 +996,10 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     """They come out labelled beside the kind: reduction and update where the step's token work fills two or more
     blocks (b = 8 at c = 1e11), unmeasured without the cuts, and Slowdown's token form and the decoding form,
     targets; asking for any of them in the max is refused. A record with no product rows has no measured kind, so
-    where Fit fails the one bound's ρ is unmeasured."""
+    where Fit fails ρ is unmeasured, whatever the token form gives."""
     m, c, k = measured(u1=1e9), 1e11, 1e5
     b = F.bound(m, c, k)
-    assert b["sensitivities"]["token_form"] == F.at(m, c, k)["slowdown"]
+    assert b["sensitivities"]["token_form"] > 1
     assert b["sensitivities"]["reduction"] is None and set(b["unmeasured"]) == {"products", "reduction", "update"}
     cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
     b = F.bound(cut, c, k)
@@ -983,8 +1008,8 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     assert b["sensitivities"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
     assert b["max"] is None and b["binding"] is None and set(b["labels"]) == set(F.SENSITIVITIES)
     assert "split by tokens" in b["labels"]["reduction"] and "a target, not a bound" in b["labels"]["token_form"]
-    r = F.at(cut, c, k, one_bound=True)
-    assert not r["fit"] and r["rho"] is None and F.at(cut, c, k)["rho"] == max(1.0, b["sensitivities"]["token_form"])
+    r = F.at(cut, c, k)
+    assert not r["fit"] and r["rho"] is None and r["bound"]["sensitivities"] == b["sensitivities"]
     for kinds in (("products", "reduction"), ("update",), ("token_form",), ("decoding_form",)):
         with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
             F.bound(cut, c, k, kinds=kinds)

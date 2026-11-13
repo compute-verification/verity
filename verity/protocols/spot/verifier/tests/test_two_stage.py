@@ -3,24 +3,28 @@ stage, the interior registration over the replay sample's proof blocks, the seco
 binding both registrations and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
 second-stage sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its
-refusals; and its profile at the footprint."""
+refusals; its profile at the footprint; and its replay grain's fan-out."""
 
 from __future__ import annotations
 
 import dataclasses
 import random
+from collections import Counter
 from collections.abc import Mapping
 from fractions import Fraction
 from math import comb
 
 import pytest
 
-from verity.circuits import codec
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.cut import member_refs
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.population import population
 from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.spot.verifier.profile import Bernoulli, Subset
+from verity.protocols.spot import optimize as O, plancheck as PC
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
@@ -594,6 +598,72 @@ def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
     assert checks["statements"]["detail"]["second-links"] == SS.LINKS_WHY and checks["run"]["codes"] == [V.DISAGREE]
 
 
+ID18 = PrimitiveDefinition("TwoStageTestId18", 1, (("a", Bits(8)),), Bits(18), lambda a: a, register=False)
+#: A unit returning one 18-bit field, and four of them a replay block.
+WIDE = bind(CompositeDefinition("TwoStageTestWide", 0, (), lambda S_: ((("x", Bits(8)),), Bits(18)),
+                                lambda B, S_, x: B.call(ID18, x), register=False))
+WIDES = bind(CompositeDefinition("TwoStageTestWides", 0, (), lambda S_: ((("x", Array(4, Bits(8))),), Array(4, Bits(18))),
+                                 lambda B, S_, x: B.batch(WIDE, x, axes=(0,)), register=False))
+#: A unit returning eight 18-bit values as one field, and two of them a replay block.
+PACK = bind(CompositeDefinition("TwoStageTestPack", 0, (), lambda S_: ((("x", Array(8, Bits(8))),), Array(8, Bits(18))),
+                                lambda B, S_, x: array_of([B.call(ID18, x[i]) for i in range(8)]), register=False))
+PACKS = bind(CompositeDefinition("TwoStageTestPacks", 0, (),
+                                 lambda S_: ((("x", Array(2, Array(8, Bits(8)))),), Array(2, Array(8, Bits(18)))),
+                                 lambda B, S_, x: B.batch(PACK, x, axes=(0,)), register=False))
+#: A replay block that returns a primitive's output, which no link reads.
+BARE = bind(CompositeDefinition("TwoStageTestBare", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+
+
+def _returned(block) -> int | None:
+    return SS.replay_returned(P.population_program(block, N), codec.descriptor_id(block))
+
+
+def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
+    """What a replay block returns is the verifier's own count over its Definition's return
+    (`second_stage.returned_bits`): each returned output field of each unit, laid on 16-bit words of its own. BLOCK's
+    three PAIRs return a byte each, a word each; MIXED's two PAIRs and its TRIPLE the same. A field of 18 bits is two
+    words, so four of them return 128 bits, while eight in one field are 144 bits on nine words. A replay block whose
+    return no link reads, and a descriptor id the program doesn't define, have no count. The count is the same
+    whatever the population, and a two-stage registration carries it (`WindowCommitmentRecord.returned`); a one-stage
+    registration and an interior one carry none."""
+    assert _returned(BLOCK) == 3 * 16 and _returned(MIXED) == 3 * 16
+    assert _returned(WIDES) == 4 * 32 and _returned(PACKS) == 2 * 9 * 16 == 2 * 8 * 18
+    assert _returned(BARE) is None
+    assert SS.replay_returned(P.population_program(BLOCK, N), codec.descriptor_id(MIXED)) is None
+    assert SS.replay_returned(P.population_program(BLOCK, 1), codec.descriptor_id(BLOCK)) == 3 * 16
+    stream = _stream()
+    reg = stream.register(*_boundary())
+    first = stream.select(reg)
+    ireg = stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, D.proved(first.draw)))
+    assert reg.returned == 3 * 16 and ireg.returned is None
+    assert _window_boundary(_window_stream()).returned == 3 * 16
+    spec = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
+                  PUBLIC, b"two-stage-test")
+    one = FC.Stream(spec, BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
+    assert one.register(*_boundary()).returned is None
+
+
+ID32 = PrimitiveDefinition("TwoStageTestId32", 1, (("a", Bits(8)),), Bits(32), lambda a: a, register=False)
+#: A unit returning one 32-bit id, as a token select returns it.
+WORD = bind(CompositeDefinition("TwoStageTestWord", 0, (), lambda S_: ((("x", Bits(8)),), Bits(32)),
+                                lambda B, S_, x: B.call(ID32, x), register=False))
+
+
+def test_a_cap_of_875_ids_is_refused_for_an_output_class_of_1024():
+    """A request's replay block in an output class of O ids, one unit an id as a serve's stand-in lays it out
+    (`population`), returns every id of the class as its unit's 32-bit word, served or not: 32,768 bits at O = 1,024
+    and 16,384 at 512. So a served cap of 875 ids at 32 bits, 28,000, is refused for the class of 1,024 and priced for
+    the class of 512 (`plancheck.two`'s `returned`): a cap holds a class only when the class is no larger than it."""
+    top, half = (_returned(population(WORD, o)) for o in (1024, 512))
+    assert (top, half) == (32 * 1024, 32 * 512)
+    cells, k, cap = [O.Cell(3, 8.0)], {0: 1}, 875 * 32
+    assert PC.two(cells, k, 2, .5, .01, cap, fanout=1, returned=half)["S"] == str(cap)
+    with pytest.raises(ValueError, match="served-cover: a replay block of the registered Program returns 32768 bits"):
+        PC.two(cells, k, 2, .5, .01, cap, fanout=1, returned=top)
+    assert PC.two(cells, k, 2, .5, .01, top, fanout=1, returned=top)["S"] == "32768"
+
+
 def test_an_own_read_at_another_root_fails_the_interior_audit():
     """The interior audit takes a read of its own port only at that port's root: at another, its `registered` check
     fails beside round 2's (`second-read`)."""
@@ -694,6 +764,34 @@ def test_each_stage_is_once_and_in_order():
     assert stream.deliver(second, [SESSION]) is None
     assert _refused(lambda: stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, sample))) == \
         ("delivered",)
+
+
+def test_the_interior_registration_is_in_the_boundary_registrations_window_or_the_one_the_verifier_computes():
+    """The interior registration's window root is the boundary registration's, so one session samples both stages, or
+    the root the verifier computes from the boundary registration's digest and the replay sample
+    (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
+    (`interior-window`): a root of the prover's choosing, none where the boundary registration has one, and the root
+    of another sample or another registration. On the computed root, the second stage's session opened for it, the run
+    of record agrees through both stages, and the outcome's one failure is the form's (`second_stage.FORM`)."""
+    stream = _stream()
+    reg = stream.register(*_boundary())
+    first = stream.select(reg)
+    sample = D.proved(first.draw)
+    interior = _interior(Q * N_RHO, reg.digest, sample)
+    root = SS.interior_root(reg.digest, sample)
+    assert len(sample) == Q > 1 and root != FC.WINDOW["root"]
+    for other in ("22" * 64, None, SS.interior_root(reg.digest, sample[::-1]), SS.interior_root("00" * 64, sample)):
+        assert _refused(lambda: stream.register_interiors(first, *interior, window_root=other)) == ("interior-window",)
+    ireg = stream.register_interiors(first, *interior, window_root=root)
+    stream.fake.window = {"root": root}
+    second = stream.select(ireg)
+    stream.deliver(second, [SESSION])
+    statements = stream.statements(second)
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
+                         session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and "run" not in checks and checks["statements"]["codes"] == ["two-stage-form"]
+    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
 
 
 def test_a_one_stage_stream_has_no_interior_registration():
@@ -804,6 +902,77 @@ def test_the_second_stage_samples_k_in_each_cell():
                                   ([0], (4,), (0,), "1 to n_t"), ([0], (4, 2), (1, 3), "1 to n_t")):
         with pytest.raises(ValueError, match=match):
             S.select_second(sample, ns, ks, lambda m: bytes(m))
+
+
+def _over(r, x):
+    """`x`, a replay block's input, with its first pair's second byte taken from replay block result `r`'s first byte."""
+    return array_of([array_of([x[0][0], r[0]]), x[1], x[2]])
+
+
+def _shared(B, S_, x):
+    a = B.call(BLOCK, x[0])
+    b = B.call(BLOCK, _over(a, x[1]))
+    c = B.call(BLOCK, x[2])
+    d = B.batch(BLOCK, array_of([_over(b, x[3]), x[4]]), axes=(0,))
+    return tuple_of(a, b, c, d, B.call(BLOCK, _over(d[1], x[5])))
+
+
+def _fanout_walk(program: Program, query) -> int:
+    """The fan-out walked a proof block at a time, every batch member's own share: the most proof blocks one group joined
+    by reads of each other's results holds.  The reference `partition.fanout`'s summary a root node at a time is held to;
+    a verifier never runs it."""
+    part = PO.evaluate(program, query)
+    nodes = program.root.body.nodes
+    first = {k: lo for k, _t, lo, _n in part.ranges}
+    parent = list(range(part.population))
+
+    def group(u: int) -> int:
+        while parent[u] != u:
+            u = parent[u]
+        return u
+
+    for k, _t, lo, n in part.ranges:
+        node = nodes[k]
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        for m in range(n):
+            for a, ax in zip(node.args, axes):
+                for i, a_lo, a_hi, _once in P._runs(member_refs(a, ax, m) if node.form == "batch" else a.refs):
+                    if i in first:
+                        w = nodes[i].fn.out_leaves
+                        for v in range(first[i] + a_lo // w, first[i] + (a_hi - 1) // w + 1):
+                            parent[group(v)] = group(lo + m)
+    return max(Counter(group(u) for u in range(part.population)).values())
+
+
+def _chain(B, S_, x):
+    a = B.call(BLOCK, x[0])
+    b = B.call(BLOCK, _over(a, x[1]))
+    return tuple_of(a, b, B.call(BLOCK, x[2]), B.call(BLOCK, _over(b, x[3])))
+
+
+def test_a_replay_block_reading_anothers_values_joins_its_group():
+    """Fan-out (`partition.fanout`): replay blocks are joined when one reads part of another's result, directly or
+    through others, and F is at least the most one group holds, summarized a root node at a time.  A population of
+    closed replay blocks has F = 1.  Of calls alone, F is the walk's exactly: here the second and the fourth read the
+    first's chain, groups {0, 1, 3} and {2}, F = 3.  Where a batch's members read other replay blocks in parts, the
+    summary counts the whole batch: here the second reads the first's result and the fourth, a batch member, the
+    second's, while the last reads the batch's other member, groups {0, 1, 3}, {2} and {4, 5} walked a member at a
+    time (F = 3), and the summary's joined nodes hold 5.  F is a template query's."""
+    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == _fanout_walk(P.population_program(BLOCK, 4), GRAIN) == 1
+    o = Array(3, Bits(8))
+    calls = Program(bind(CompositeDefinition("TwoStageTestChain", 0, (),
+                                             lambda S_: ((("x", Array(4, Array(3, Array(2, Bits(8))))),),
+                                                         Tuple(o, o, o, o)), _chain, register=False)))
+    assert P.fanout(calls, GRAIN) == _fanout_walk(calls, GRAIN) == 3
+    prog = Program(bind(CompositeDefinition("TwoStageTestShared", 0, (),
+                                            lambda S_: ((("x", Array(6, Array(3, Array(2, Bits(8))))),),
+                                                        Tuple(o, o, o, Array(2, o), o)), _shared, register=False)))
+    assert P.units(prog, GRAIN) == 6 and _fanout_walk(prog, GRAIN) == 3 and P.fanout(prog, GRAIN) == 5
+    cells, k, f = [O.Cell(3, 8.0)], {0: 1}, P.fanout(prog, GRAIN)
+    charge = O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0, fanout=f)
+    assert charge == O.two_stage_exfil(cells, k, 6, .5, DELTA, f * 8.0) > O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0)
+    with pytest.raises(P.QueryRefused, match="template query's"):
+        P.fanout(Program(PAIR), PO.call_query(16))
 
 
 TRIPLE = bind(CompositeDefinition("TwoStageTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),

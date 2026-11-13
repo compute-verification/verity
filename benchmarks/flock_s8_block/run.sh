@@ -40,6 +40,7 @@ PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEME
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
 . verity/protocols/flock/pod/cuda-13.3.sh
+. verity/protocols/spot/verifier/one_stage/verifier_env.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
@@ -208,14 +209,14 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/protocols/flock/verifier/. $FW/lean-src/ \
-      && (cd $FW/lean-src && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
-      && mkdir -p $(dirname $LV) && cp $FW/lean-src/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
+    rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $FW/lean-src) \
+      && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
+      && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi
   mkdir -p $O/lean
   for name in served served-plain; do
@@ -223,12 +224,12 @@ if has lean; then
     for set in $d/sessions-*; do
       mode=${set##*/sessions-}
       case $mode in *nsys*) continue ;; *plain*) [ $name = served-plain ] || continue
-        V=(verify --statement verity/flock-circuit+plain-leaves --stratified $n --coins os) ;;
-        *) [ $name = served ] || continue; V=(verify --zk --statement verity/flock-circuit) ;; esac
+        V=(--statement verity/flock-circuit+plain-leaves --stratified $n --coins os) ;;
+        *) [ $name = served ] || continue; V=(--zk --statement verity/flock-circuit) ;; esac
       o=$O/lean/$mode/$name; mkdir -p $o
       for S in $set/*/; do
         [ -f $S/session.json ] || continue; l=$(basename $S)
-        taskset -c $VCPU /usr/bin/time -v -o $o/time-$l.txt $LV "${V[@]}" --circuit $d/circuit.txt --public $d/pub-$n.bin \
+        taskset -c $VCPU /usr/bin/time -v -o $o/time-$l.txt $(verifier_env) $LV verify "${V[@]}" --circuit $d/circuit.txt --public $d/pub-$n.bin \
           --partition $d/partition.json --program $d/program.json --session $S > $o/$l.log 2>&1
         echo $? > $o/$l.rc; [ "$(cat $o/$l.rc)" = 0 ] || { LEAN_BAD=1; echo "lean $mode $name $l refused: $(tail -1 $o/$l.log)"; }
       done

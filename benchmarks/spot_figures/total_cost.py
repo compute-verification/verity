@@ -93,10 +93,31 @@ EDGE_PAUSE = (0.98, 1.06)
 #: the same server's throughput tax against stock compiled vLLM with the step record, the token commits and an edge each
 #: 30 s, measured within noise at every load: the 95% interval's top at saturation, which 3 reps can't rule out
 SERVED_HIGH = 0.024
-#: the measured serving run of `SERVED_HIGH` and `EDGE_PAUSE`
-SERVED_RUNS = ["r20261107-155724-3f53"]
+#: one engine across eight H200s serving GLM-5.3 under the chat load at 384 requests at once, stock compiled vLLM:
+#: seconds an engine step, the rows it schedules and the requests it finishes a second
+ENGINE_STEP, STEP_ROWS, REQUEST_RATE = 0.1467, 143, 4.897
+#: the scheduler's step record on the engine core's thread, seconds a step: the serving path's writer timed off the
+#: engine at `STEP_ROWS` rows, and at a full batch of 256
+STEP_RECORD = (98e-6, 173e-6)
+#: the two-stage boundary commitment's hooks on the engine core's thread, timed off the engine: seconds a step at
+#: `STEP_ROWS` rows, and seconds a request admitted
+BOUNDARY_HOOKS = (11.2e-6, 4.4e-6)
+#: its commit thread's rows, salts, hashes and files for one finished request, seconds, with its class's replay block's
+#: program already digested: the least and the most timed
+BOUNDARY_COMMIT = (0.41e-3, 1.09e-3)
+#: the bytes the card hashes for one row of a history table: the row's 576 16-bit words, its 192-byte salt and the
+#: tree node above its leaf
+HISTORY_ROW_BYTES = 2 * 576 + 192 + 128
+#: a history table's rows a computed token: a request's table has a row for each prompt and output position of its
+#: class, each count the least power of two that holds the request's own, so from one to two: the chat load's mean,
+#: the least and the most
+HISTORY_FILL = (1.4, 1.0, 2.0)
+#: the measured serving runs of `SERVED_HIGH` and `EDGE_PAUSE`, and of `ENGINE_STEP`, `STEP_ROWS` and `REQUEST_RATE`
+SERVED_RUNS = ["r20261107-155724-3f53", "r20261111-162328-f498"]
 #: the deterministic DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving (kernel-modeled)
 TOPK_SHARE = 0.0025
+#: the serve tax's part a server pays only if it snapshots at each replay block's edge
+EDGE = "token commits and replay-block edge snapshot"
 #: batch-invariant kernels' throughput tax against stock compiled vLLM at saturation on one H200: the MoE's
 #: (Qwen3-30B-A3B), the least (Moonlight, dense MLA) and the most (Llama-3.1-8B, dense); GLM-5.3's sparse MLA has no
 #: batch-invariant backend on the H200
@@ -181,23 +202,57 @@ CONFIGURATIONS = {
 }
 
 
-def priced_card(model: str = "GLM-5.3") -> dict:
+def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
     """The model's `serve_tax` card priced from its parts: each part's GPU-seconds a token over a token's at serving's
-    MFU, hashing at the `commitment` card's rate (and at `HASH_RATES` for the range), the tick rule's throughput loss
-    (`TICKS`), the pause at a replay block's edge (`EDGE_PAUSE`), the deterministic top-k (`TOPK_SHARE`) and, for the
-    batch-invariant comparison, `BATCH_INVARIANT`.  (C)'s is a lower bound: hashing alone."""
-    c = f1.cards(model)
+    MFU (under `serving="measured"`, at the `serving_rate` card's rate: `figure1.token_seconds`), hashing at the
+    `commitment` card's rate (and at `HASH_RATES` for the range), the tick rule's throughput loss
+    (`TICKS`), the step record's and the two-stage boundary commitment's time on the engine core's thread over an
+    engine step (`STEP_RECORD`, `BOUNDARY_HOOKS`, `ENGINE_STEP`), the history tables' hashing (`HISTORY_ROW_BYTES`), the
+    pause at a replay block's edge (`EDGE_PAUSE`), the deterministic top-k (`TOPK_SHARE`) and, for the batch-invariant
+    comparison, `BATCH_INVARIANT`.  Each part says how it got its share (`cards.PART_STATUS`), and a configuration's
+    tax is the sum of its parts'.  (C)'s is a lower bound: hashing alone."""
+    c = f1.cards(model, serving=serving)
     sc = f1.slot_cards(model)
-    token_s = 2 * c["partition"].value["served_macs_per_token"] / (c["mfu_serve"].value * c["peak_flops"].value)
+    token_s = f1.token_seconds(c, c["partition"].value["served_macs_per_token"])
     rate = c["hash_rate"].value
 
     def hashed(part: str, nbytes: float, source: str, scale: tuple[float, float, float] = (1, 1, 1)) -> dict:
         share = [nbytes * s / r / token_s for s, r in zip(scale, (rate, *HASH_RATES))]
-        return {"part": part, "share": share[0], "low": share[1], "high": share[2],
+        return {"part": part, "status": "modeled", "share": share[0], "low": share[1], "high": share[2],
                 "source": f"{nbytes:,.0f} B a token hashed at the commitment card's rate, the range at "
                           f"{HASH_RATES[0] / 1e9:.0f} and {HASH_RATES[1] / 1e9:.0f} GB/s; {source}"}
 
-    ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
+    load = (f"one engine across eight H200s under the chat load at 384 requests at once ({ENGINE_STEP * 1e3:.0f} ms a "
+            f"step, {STEP_ROWS} rows a step, {REQUEST_RATE:.1f} requests finished a second, measured on stock compiled "
+            "vLLM)")
+    record = {"part": "step record", "status": "modeled", "share": STEP_RECORD[0] / ENGINE_STEP, "low": 0.0,
+              "high": STEP_RECORD[1] / ENGINE_STEP,
+              "source": "the scheduler's record of each step, written on the engine core's thread: "
+                        f"{STEP_RECORD[0] * 1e6:.0f} µs a step, timed on the serving path's writer off the engine, over "
+                        f"the step of {load}, as if it lengthened every step; the high at a full batch of 256 rows, "
+                        f"{STEP_RECORD[1] * 1e6:.0f} µs; the low 0, vLLM's queue of two batches letting the thread "
+                        f"write while the cards run; with the record on, {model}'s throughput at TP8 was measured "
+                        "within noise of stock compiled vLLM's at every load"}
+    hooks = BOUNDARY_HOOKS[0] / ENGINE_STEP + BOUNDARY_HOOKS[1] * REQUEST_RATE
+    boundary = {"part": "two-stage boundary commitment", "status": "modeled", "share": hooks, "low": 0.0,
+                "high": hooks + BOUNDARY_COMMIT[1] * REQUEST_RATE,
+                "source": f"its hooks on the engine core's thread, {BOUNDARY_HOOKS[0] * 1e6:.1f} µs a step and "
+                          f"{BOUNDARY_HOOKS[1] * 1e6:.1f} µs a request admitted, timed off the engine, on {load}, as if "
+                          "they lengthened every step; the high adds its commit thread's rows, salts, hashes and "
+                          f"files, {BOUNDARY_COMMIT[0] * 1e3:.2f} to {BOUNDARY_COMMIT[1] * 1e3:.2f} ms a finished "
+                          "request, as if each second of that thread, which shares the engine core's interpreter, "
+                          "were taken from serving; the low 0; priced with each size class's replay block's program "
+                          "digested once: a commit thread that builds the program again for every window and class "
+                          "costs more, and that is not in this part"}
+    fill = HISTORY_FILL
+    history = hashed("history tables", HISTORY_ROW_BYTES * fill[0],
+                     f"one attention layer's table for each request, {HISTORY_ROW_BYTES:,} B hashed on the card a row "
+                     f"(the row's {2 * 576:,} B, its 192 B salt and the tree node above its leaf) at {fill[0]:g} rows "
+                     f"a computed token on the chat load's size classes, {fill[1]:g} to {fill[2]:g} over the range; "
+                     "the hashing alone, without the rows' gather from the layer's state and their copy to the host; "
+                     "no served run has built a table", (1, fill[1] / fill[0], fill[2] / fill[0]))
+    served = [record, boundary, history]
+    ticks = {"part": "certified-tick rule", "status": "simulated", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
                        "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
@@ -207,18 +262,19 @@ def priced_card(model: str = "GLM-5.3") -> dict:
                        "caching on)"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
-    edge = {"part": "step record, token commits and replay-block edge snapshot",
+    edge = {"part": EDGE, "status": "measured",
             "share": EDGE_PAUSE[0] / window, "low": EDGE_PAUSE[0] / window,
             "high": max(EDGE_PAUSE[1] / window, SERVED_HIGH),
             "source": f"measured on {model} at TP8 against stock compiled vLLM: the serving pause at each {window:g} s "
                       f"replay block's edge to copy and hash the KV pool, {EDGE_PAUSE[0]:.2f} s at the median and "
-                      f"{EDGE_PAUSE[1]:.2f} s at most; the throughput with the record, the token commits and an edge "
-                      f"each 30 s within noise at every load, up to {SERVED_HIGH:.1%} at saturation"}
-    topk = {"part": "deterministic top-k", "share": TOPK_SHARE, "low": TOPK_SHARE, "high": TOPK_SHARE,
+                      f"{EDGE_PAUSE[1]:.2f} s at most; the throughput with the step record, the token commits and an "
+                      f"edge each 30 s within noise at every load, up to {SERVED_HIGH:.1%} at saturation"}
+    topk = {"part": "deterministic top-k", "status": "modeled", "share": TOPK_SHARE, "low": TOPK_SHARE,
+            "high": TOPK_SHARE,
             "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, "
                       "kernel-modeled"}
-    invariant = {"part": "batch-invariant kernels", "share": BATCH_INVARIANT[0], "low": BATCH_INVARIANT[1],
-                 "high": BATCH_INVARIANT[2],
+    invariant = {"part": "batch-invariant kernels", "status": "measured", "share": BATCH_INVARIANT[0],
+                 "low": BATCH_INVARIANT[1], "high": BATCH_INVARIANT[2],
                  "source": "throughput against stock compiled vLLM at saturation on one H200, measured on these "
                            f"models: Qwen3-30B-A3B (MoE) {BATCH_INVARIANT[0]:.1%}, Moonlight (dense MLA) "
                            f"{BATCH_INVARIANT[1]:.1%}, Llama-3.1-8B (dense) {BATCH_INVARIANT[2]:.1%}; unavailable for "
@@ -235,12 +291,14 @@ def priced_card(model: str = "GLM-5.3") -> dict:
 
     return spot_cards.check({
         "schema": spot_cards.SCHEMA, "slot": "serve_tax", "model": model, "status": "modeled", "provisional": True,
-        "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's "
-                  "dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
+        "source": "priced from each configuration's parts against a token's GPU-seconds at "
+                  + ("the serving_rate card's measured tokens a GPU-second" if "serving_rate" in c
+                     else "serving's MFU on the H200's dense FP8 peak")
+                  + " (total_cost.priced_card); measured values replace it configuration by configuration",
         "runs": SERVED_RUNS, "owner": "@proofs",
         "value": {"baseline": "stock vLLM, compiled, on the model's served circuit",
-                  "configurations": [entry("tokens", [ticks, edge, topk]),
-                                     entry("tokens_bi", [ticks, edge, topk, invariant]),
+                  "configurations": [entry("tokens", [ticks, *served, edge, topk]),
+                                     entry("tokens_bi", [ticks, *served, edge, topk, invariant]),
                                      entry("layer_of_token", [ticks, tokens, layers, topk]),
                                      entry("every_block", [ticks, blocks], lower_bound=True)]}})
 
@@ -530,8 +588,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
-            "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
-            "whole batch at that layer.")
+            "serving's busy GPU-seconds (0.97× to 1.02× measured on Moonlight on one H200), and a sampled layer of one "
+            "token its engine step's whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
     head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
              f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "
@@ -631,19 +689,22 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1, lean: bool = True) -> dict:
+        workers: int = 1, lean: bool = True, serving: str = "assumed") -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes
-    (`figure1.processes`), with Lean checking every line's designs unless `lean` is off."""
+    (`figure1.processes`), with Lean checking every line's designs unless `lean` is off.  `serving` is where serving's
+    rate comes from (`figure1.SERVING`): the measured reading's JSON says which rate it read (`serving`), and its serve
+    taxes are still the `serve_tax` card's, priced at the assumed reading until `priced_card` prices one at the
+    measured."""
     with f1.processes(workers, lean) as each:
-        return _run(model_name, scope_names, request, each, lean)
+        return _run(model_name, scope_names, request, each, lean, serving)
 
 
-def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+def _lines(model_name: str, request: str, verify: bool = True, serving: str = "assumed") -> tuple:
     """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
     verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
     overhead) and which of its cells' types are computed."""
-    sc = f1.slot_cards(model_name)
-    c = f1.cards(model_name, request)
+    sc = f1.slot_cards(model_name, serving)
+    c = f1.cards(model_name, request, serving)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
@@ -663,8 +724,9 @@ def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
     return sc, c, cuts, confs, inputs, lines, computed
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool) -> dict:
-    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool,
+         serving: str = "assumed") -> dict:
+    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
@@ -673,6 +735,9 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     tokens = c["tokens_per_request"].value
     refs = f1.references(c, model_name, sc.get("references", []))
     notes = f1.reference_notes(sc.get("references", []), refs)
+    if serving == "measured":
+        for panel in PANELS:
+            notes.setdefault(panel, []).append(f1.reading_note(f1.reading(sc, c, part)))
     chosen = [s for s in f1.scopes(c, part) if scope_names is None or s.name in scope_names]
     series: dict[str, list[dict]] = {p: [] for p in PANELS}
     bases, plans = {}, []
@@ -709,7 +774,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "machines": registration_gpu_seconds(r, c) / (c["machine_gpus"].value * c["window"].value),
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
-    out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+    out = ({"serving": f1.reading(sc, c, part)} if serving == "measured" else {}) | {
+           "schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                     "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
@@ -825,14 +891,15 @@ def _breakeven(job: tuple) -> tuple[float | None, dict | None]:
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True, serving: str = "assumed") -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
     floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
     row's `lean` holds, for its floor and each break-even, the point Lean certifies (`at`, an overhead for `h`), the
     bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
-    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does."""
-    _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
+    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does.  `serving`
+    is where serving's rate comes from (`figure1.SERVING`)."""
+    sc, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
@@ -855,7 +922,8 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
                 if cert and cert["at"] is not None:
                     cert["at"] *= oh
         rows.append(row)
-    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
+    return ({"serving": f1.reading(sc, c, lines["tokens"][0])} if serving == "measured" else {}) | {
+            "beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
             "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                      "precision": plancheck.TWO_P, "steps": STEPS} if lean else None}
 
@@ -886,12 +954,14 @@ def breakeven_table(be: dict) -> str:
              _size(r["lean"]["floor"]["y"] if lean else r["floor"])]
             + [cell(r, "h", n, be["spans"]["h"][1] * r["overhead"]) for n in names]
             + [cell(r, "beta", n, be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
-    return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
+    note = f1.reading_note(be["serving"]) + "\n\n" if "serving" in be else ""
+    return note + "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
 
 
 def at_budgets(out: dict) -> list[dict]:
     """Each line's point at the design card's budgets: the bound, its x, and its share of the scope's served bits
-    (exfiltration, infiltration) or FLOP (skipped work)."""
+    (exfiltration, infiltration) or FLOP (skipped work).  An exfiltration row at the measured reading names the rate it
+    read (`figure1.at_reading`)."""
     rows = []
     for panel, p in out["panels"].items():
         for s in p["series"]:
@@ -901,7 +971,8 @@ def at_budgets(out: dict) -> list[dict]:
                 whole = sc["flop"] if panel == "skipped_work" else sc["served_bits"]
                 rows.append({"panel": panel, "scope": s["scope"], "config": s["config"], "beta": beta, "x": s["x"][i],
                              "bound": s["y"][i], "share": s["y"][i] / whole,
-                             **({"binds": s["binds"][i]} if "binds" in s else {})})
+                             **({"binds": s["binds"][i]} if "binds" in s else {}),
+                             **(f1.at_reading(out.get("serving"), s["y"][i]) if panel == "exfiltration" else {})})
     return rows
 
 
@@ -1059,12 +1130,18 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
     return paths
 
 
+#: `--serving`'s help, here and in figures.py
+SERVING_HELP = ("where serving's rate comes from: rho's fleet utilization (assumed, the default), or the model's "
+                "serving_rate card (measured)")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     pc = sub.add_parser("priced-card", help="write the model's priced serve_tax card")
     pc.add_argument("--model", choices=spot_cards.MODELS, default=spot_cards.MODELS[0])
     pc.add_argument("--out", type=Path, required=True)
+    pc.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
     rd = sub.add_parser("render", help="plot Figure 1 from its JSON")
     rd.add_argument("json", type=Path)
     rd.add_argument("--scope", action="append", help="a scope's name, as the JSON's `scopes` has it; default all")
@@ -1075,14 +1152,16 @@ def main(argv=None) -> None:
     be.add_argument("--scope", action="append", help="a scope's name; default all")
     be.add_argument("--workers", type=int, default=1)
     be.add_argument("--no-lean", action="store_true", help="skip Lean's certificate of each break-even")
+    be.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
     args = ap.parse_args(argv)
     if args.cmd == "priced-card":
-        args.out.write_text(json.dumps(priced_card(args.model), indent=1) + "\n")
+        args.out.write_text(json.dumps(priced_card(args.model, args.serving), indent=1) + "\n")
         print(args.out)
         return
     if args.cmd == "breakeven":
         out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers,
-                        lean=not args.no_lean)
+                        lean=not args.no_lean, serving=args.serving)
+        args.out = f1.outdir(args.out, args.serving)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         (args.out / "breakeven.txt").write_text(breakeven_table(out))

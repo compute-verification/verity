@@ -10,7 +10,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import kappa  # noqa: E402
-import slowdown as S  # noqa: E402
 import tiers as T  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -94,40 +93,10 @@ def test_unmonitored_compute_trains_at_full_efficiency():
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
 
 
-def test_the_residual_voids_the_partial_sum_law():
+def test_the_declared_computation_trains_at_the_thread_bound():
     p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
-
-
-def test_without_dark_compute_the_declared_side_is_the_chain_bound():
-    """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
-    calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0,
-                      "unmonitored": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}
-    r = T.evaluate(p, T.TIERS["T4"])
-    alpha = p["K"] / p["Gamma"]
-    chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
-    assert r["largest"] == "declared (partial-sum law)"
-    assert 1 / r["efficiency"] == pytest.approx(chain, rel=1e-3)
-
-
-def test_the_adversary_relays_partial_sums_only_when_it_pays():
-    """With width-1 blocks the partial-sum rule never reaches the thread bound, and relaying the whole residual into the
-    declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
-    partial sums that pay, and the residual still trains at full efficiency."""
-    p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0, "kappa_chain": 0.0695}
-    r = T.evaluate(p, T.TIERS["T4"])
-    assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
-    assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-6)
-    assert r["crossing_bits"] / (2 * p["b_p"]) < 1e-6 * T.residual_share(p) * p["nodes"] * p["node_flops"] * T.YEAR
-
-
-def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
-    """PS' on Kimi K2's forward chain: G_D b_a / R at zeta = b_a Z / R of 0, 1 and 10 (Tier 1's table)."""
-    rates = T.chain_rates(T.DEFAULTS, 2000)
-    got = [T.chain_products(rates, 1.0, z) * T.DEFAULTS["b_a"] for z in (0.0, 1.0, 10.0)]
-    assert got == pytest.approx([1714, 2482, 6483], rel=1e-3)
 
 
 def test_the_wipe_floor_is_the_closed_form():

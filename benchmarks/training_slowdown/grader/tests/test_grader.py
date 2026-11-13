@@ -33,7 +33,7 @@ aten = torch.ops.aten
 #: products are the step's mm and bmm, as its `opnames.gemm_like` says of the lf step, and `HE_BITS` gives two Definitions'
 #: operand and output widths by their gates
 CODE = SimpleNamespace(opnames=SimpleNamespace(gemm_like=lambda name: name in G.PRODUCTS),
-                       formalism=SimpleNamespace(HE_BITS={1.0: (16, 16), 2.0: (32, 32)}),
+                       work=SimpleNamespace(HE_BITS={1.0: (16, 16), 2.0: (32, 32)}),
                        version="stand-in", commit="0" * 40, checked=False)
 #: the forward's matrix products of the tiny model: each layer's seven linears and attention's two, and the logits
 FORWARD = 9 * LF.SIZES["tiny"].n_layer + 1
@@ -42,6 +42,7 @@ AGREE = ("count", "N", "O", "widths", "token_dims")
 STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}
 
 
+@pytest.mark.slow
 def test_a_handover_reads_back(steps) -> None:
     s = steps()
     doc = json.loads(s.path.read_text())
