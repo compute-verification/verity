@@ -139690,3 +139690,170 @@ Clock: `date -u` read 12:08Z when I wrote this. Mailbox: your 11:51Z, by the hoo
 - **My state:** `cursor/proofs-addrrow2-5e1b` at `034f12b9a7fdf93cc3dd6b16b1060705898318de`, compiled (`r20261113-115941-3c1b`, rc 0). No run is out. Mailbox read at 12:11Z: nothing later than your 11:51Z.
 
 **STOP RULE.** Nothing. **To post.** Nothing.
+
+
+## SESSIONOF2, Fri 13 Nov 12:12Z: the switch compiles and its difftest passes; the row that decides misses the 2% line in seconds (+3.2% on four runs), and the served window's check is 43% slower, so I stop again
+
+The switch is the one change that makes every protocol read its JSON texts with the parser a proof can follow. It
+now compiles on its branch, and a new test shows that the function gives the same answer under the old parser and the
+new one on every text tried. What it costs is now measured on three windows. On the window you named as the one that
+decides (300 members, the whole check), the new parser came out 3.2% slower, which is over your 2% line, on two runs
+of each parser. On Thursday's served window, whose texts are 684 MB, the verifier's check took 43% longer and 30% more
+memory. Memory never doubled. By your rule I stop the switch here and say which half failed: seconds. A repeat of the
+deciding row with six more runs is in flight.
+
+**Which fails, by the 11:52Z rule: seconds. The peak passes.**
+
+### 1. Seconds and peak memory, both parsers, each evidence
+
+| evidence | texts read by `canonicalJson`: parameters / commitment / evidence, bytes | what ran | core's parser | the total parser | change |
+|---|---|---|---|---|---|
+| stand-in window, 300 members, 2 statements, 308 files of 134,877,152 bytes (**the row that decides**) | 486,327 / 570,724 / 849,954 | v2's `refusal`, the whole check | 312.6 s and 309.0 s; peak 736,084 and 718,436 kB | 321.4 s and 319.9 s; peak 670,524 and 674,196 kB | **+9.85 s on the means, +3.2%** (2.3% to 4.0% by which runs are paired); peak ×0.92 |
+| Thursday's served window, 298 templates | 366,953,552 / 301,951,000 / 15,584,496 | the one-stage `check`: `accept` | 80.613 s (80.505 to 80.845); peak 10,765,988 kB | 115.249 s (112.985 to 116.982); peak 14,047,448 kB | **+34.6 s, +43.0%; peak ×1.30** (+3,281,460 kB) |
+| play of twenty templates | 1,629,177 / 21,075 / 72,943 | the one-stage `check`: refused at R6 | 0.3921 s | 0.4439 s | +0.052 s, +13.2%; peak not measured (see 3) |
+
+- Stand-in: run `r20261113-113652-fee5`, vy-nebius-cpu-11, 11:36:52Z to 12:07:46Z, rc 0, at FIRSTACCEPT's tree
+  `9683ae5e92` with and without the two lines; the window and its audit regenerated in the run (audit 352.0 s), then
+  `refusal` in the order core, total, total, core. `[run]` All four answers are the per-member form's refusal, one
+  SHA-256. `[run]` It asked for 24 GB; the largest process it measured is the 736,084 kB above. `[run]`
+- Served window: run `r20261113-114853-dad3`, vy-nebius-cpu-6, 11:48:53Z to 12:00:39Z, rc 0, at the served audit's own
+  tree `69655a037c` with and without the two lines; three runs of each parser, alternated. `[run]` All six answers are
+  `accept`, 42,384 bytes, one SHA-256. `[run]` User seconds 72.9 to 90.5, system seconds 7.6 to 24.5: half of what is
+  added is system time. `[run]` It asked for 96 GB and its largest process is the 14,047,448 kB above. `[run]`
+- The case is the audit's `v3c-w0-4-27-2/audit/window/case.json`, 1,043,068,886 bytes, in the serve directory of
+  `r20261112-101803-fbc8` that Thursday's audit `r20261112-120044-297f` worked on. `[run]` The job read it in place,
+  wrote its three texts to a private scratch directory that its exit trap removes, and kept under its own `out/` only
+  sizes, times, the verdict and the answer's SHA-256. `[read]` of my script; I did not list the node afterwards. Three
+  listing runs found the file, names and sizes only: `r20261113-114427-2020`, `-114558-8579`, `-114658-3bdc`. `[run]`
+  Nothing of vllm's was copied off the node or deleted. `[read]`
+- The stand-in's 9.85 s is not explained. The three texts are 1.9 MB, which my per-byte figure makes 0.07 s. `[derived]`
+  Either v2's `refusal` passes far more text through `canonicalJson` than the three texts, or the node moved between
+  runs: the total parser's two runs are the middle two. 300 members times the commitment's text is 171 MB and times
+  the evidence's is 255 MB, and 9.85 s wants 195 to 281 MB at my two per-byte figures, so a read of one of them once
+  per member would fit. `[guess]` I have not found such a read. `[read]`
+- **In flight:** `r20261113-120926-e2a7` on vy-nebius-cpu-7, launched 12:09:26Z, the same job with six runs in the
+  order total, core, core, total, total, core. Expected end about 12:52Z.
+
+### 2. The row you asked for: the parameters' text of each window, and what the per-byte figures make of it
+
+| window | parameters' text | at 35 ns and 17 bytes a byte | all three texts | at 35 ns a byte | measured |
+|---|---|---|---|---|---|
+| stand-in, 300 members | 486,327 bytes | 0.017 s, 8.3 MB | 1,907,005 bytes | 0.067 s | +9.85 s (two runs each) |
+| Thursday's served window | 366,953,552 bytes | 12.8 s, 6.2 GB | 684,489,048 bytes | 24.0 s | +34.6 s; +3.36 GB at the peak |
+
+- In the served tree the commitment and the evidence go through `canonicalJson` too (`Spot/OneStage.lean:395`, `:401`
+  there), so all 684 MB do. `[read]`
+- Measured on the served window, the total parser adds 50.6 ns for each byte of the three texts, 1.45 times the
+  figure from the small case. `[derived]` The peak rises by 9.2 bytes for each byte of the parameters' text. `[derived]`
+- FIRSTACCEPT's kept case (`r20261113-112614-c0b5`, `out/standin/m300-k128-256/case-v2-members.json`) has the same
+  sizes but for the evidence, 850,035 bytes there. `[run]` I did not time on it: `fee5` regenerated the window with
+  its files.
+
+### 3. A correction to my 11:42Z entry
+
+- I wrote that the peak was ×1.00 on the kept case. That figure is not the verifier's: it is a floor. The cause, I
+  believe: the script starts the verifier from a Python process, and the peak reported for the child is never below
+  the parent's own at that moment. `[guess]`
+- The sign: `{}` and the kept case show one figure, 274,496 kB, under both parsers, and on cpu-6 a 0.13 s run on `{}`
+  shows 3,899,580 kB, the footprint of the script that had just read the 1 GB case. `[run]`
+- What stands: every figure above its floor. That is the ×16 and ×64 rows of 11:42Z (×1.76 and ×1.78), both rows of
+  the served window here, and the 17 bytes a byte derived from ×64. The ×4 row's ×1.33 is at least that. `[derived]` The stand-in's peaks are FIRSTACCEPT's
+  harness's own measure, which I did not check for the same floor. `[read]`
+
+### 4. What is written, and what compiled
+
+- Branch `cursor/proofs-sessionof2-parser-defe`, head `dc91f31f56fe`, off `origin/main`, pushed. Two commits: the
+  token with its import, then the difftest and the tree test's entry. `[run]`
+- **It compiles.** Run `r20261113-120614-9fc4`, vy-nebius-cpu-7, 12:06:14Z to 12:07:20Z, rc 0, at that head: the
+  interface's default targets build (45 jobs), so `Cli.lean`'s guards over 81 texts hold the in-place reader to
+  `canonicalJson` read with the total parser; the new port builds (22 jobs). `[run]`
+- The difftest, in REDRAW's pattern. `CoreProtocol/CanonicalJsonDifftest.lean` serves `canonical-parsers` from the
+  interface's package as `core-canonical-json-difftest`: on bytes in hex it answers `{"core": A, "total": A}`, what
+  `canonicalJson` answers reading with each parser, the value with nothing lost or the refusal with its text. `[read]`
+- "core" is a copy of the function's text with the parser a parameter, and the file proves by `rfl` that the copy
+  read with the total parser is `Core.canonicalJson` (`canonicalJsonWith_total`). It compiled. `[run]`
+- Its test, `verity/difftest/tests/test_canonical_json_port.py`, holds both answers to one Python mirror: 3,000
+  samples (1,717 answered, 1,283 refused before a text is read), then a sweep where the two answers are compared to
+  each other: 200 canonical texts all read, 200 broken ones of which 182 are refused and 18 read, alike under both.
+  `[run]` Broken means a character cut, inserted or replaced, a text cut short, a value written not canonically, a
+  member no canonical text holds, or bytes that are no text.
+- The test also holds the mirror to `verity_difftest.protocol.canonical_json`, the harness's Python reading of
+  canonical JSON, on 500 texts: same texts accepted, same values. `[run]` The protocol port's nine tests pass on the
+  switched interface. `[run]` The new file's Python-only tests and the tree test also ran on my VM, 5 s and 0.5 s.
+  `[run]`
+- `tests/test_flock_json.py`: the interface is in `TREES` and out of `NOT_READ`; the difftest file is in `ALLOWED`;
+  `PENDING` names its four other calls (`Protocol/Canonical.lean` `strValue` and `refusal`, `Example.lean` `refusal`
+  and `profileRefusal`). Its three tests pass. `[run]`
+- Edits to files that are not mine, both part of the ordered difftest: `verity/protocols/interface/lakefile.toml`
+  (the executable and one comment line) and `tests/test_flock_json.py`. I did not touch the interface's lock.
+- Not run: the Lean check, any whole suite, `security/Proofs`. The branch still fails the Lean check for the reasons
+  in NEEDS.
+
+### 5. Item 3 of 11:40Z: `c₂.record` and `j₂` after the token
+
+- They are then **the same value, by a proof of a few lines, not by `rfl`**. With `Flock.canon e.record = .ok s`,
+  `c₂.record` is the `j` of `Core.canonicalJson s.toUTF8 = .ok j` and `j₂` is the `j` of `readBack e.record`, and
+  after the token each is what `Flock.JsonParse.parse s` returns. `[read]`
+- What still stands between the two terms changes no value: `canonicalJson` has the ASCII guard, the trip through
+  bytes (`s.toUTF8`, then `String.fromUTF8?`) and its own wording of a refusal; `readBack` has its own refusal; both
+  print the tree back and compare with `s`; `commitmentOf` adds the object check and the digest. `[read]`
+- Before the token `c₂.record` is what `Lean.Json.parse` returns, which no proof opens, so the lemma cannot be
+  stated to any use. `[derived]`
+- The lemma I would prove, on the join's side (`SampledTwo` is not on `main`):
+
+  ```lean
+  theorem commitmentOf_record_eq_readBack {record j₂ : Json} {s : String} {c₂ : OneStage.Commitment}
+      (hs : Flock.canon record = .ok s) (hc : OneStage.commitmentOf s.toUTF8 = .ok c₂)
+      (hr : readBack record = .ok j₂) : c₂.record = j₂
+  ```
+
+  The two trees are equal, so `Record.byPort` and the roots agree by rewriting. It stands on `canonicalJson_ok`
+  made to say what was parsed (`Flock.JsonParse.parse s' = .ok j` beside its two conjuncts) and on
+  `fromUTF8?_toUTF8`. About a dozen lines. `[guess]` Not written.
+
+### STOP RULE
+
+Nothing here says a listed guarantee is false or empty, or that a verifier accepts something new. Every answer was
+the same under both parsers on every text run: 62 runs at 11:42Z, 12 on the served window, 4 on the stand-in, and
+the difftest's samples. `[run]`
+
+### NEEDS
+
+1. **Your word again, with soundness's.** `fee5` fails the 2% line in seconds on two runs of each parser; the repeat
+   gives five of each by about 12:52Z. The served window's row is a second question: is +34.6 s and +3.1 GiB on a
+   window of that size inside the budget? I write nothing more of the switch until you say.
+2. FIRSTACCEPT, or whoever owns v2's `refusal`: does it read the commitment's or the evidence's text once for each
+   member? That would explain the stand-in's 9.85 s, and would be a cost under either parser.
+3. The interface's owner, when the switch has a pull request, three lines of `verity/protocols/interface/lean-audit.json`:
+   `roots` gains `"CoreProtocol.CanonicalJsonDifftest"`; `exempt` gains `"CoreProtocol.CanonicalJsonDifftestMain"`
+   (the server's entry point, one line, audited under the root); `layers["CoreProtocol.Protocol"].imports` gains
+   `"Base.JsonParse"`.
+4. PoUS's owner, as at 11:42Z: the token at `security/Proofs/Properties/Pous/Component.lean:98`.
+
+### To post
+
+Nothing of mine. For PRF-490, if you pass it on: the two bold rows of section 1 and the correction of section 3.
+
+### Not established
+
+- Whether the stand-in's +3.2% is the parser or the node. Two runs of each parser; the repeat is in flight.
+- Where v2's `refusal` would spend it. Not found by reading.
+- The served window's row per monitoring period: it is per window checked, and how many windows of that size a week,
+  a month or a year holds is not known to me.
+- The whole audit's verifier seconds for the served window (the proofs' verification beside this `check`), so the
+  43% is of this `check` alone.
+- That the cpu-6 scratch directory is gone: by the script's trap, not checked.
+- The Lean check and the suites on the branch.
+
+### Runs side by side
+
+`fee5` (cpu-11) and `dad3` (cpu-6) overlapped from 11:48:53Z to 12:00:39Z, and `9fc4` (cpu-7) ran inside `fee5`'s
+last two minutes: three jobs on three nodes, not one try at a time. `[run]` Each launch on a named node printed the
+node's lease line; the lease already ended later than my runs' timeouts, so by `pods/lease.py:145` they did not move
+it. `[read]`
+
+### Heads
+
+- `cursor/proofs-sessionof2-parser-defe` `dc91f31f56fe` (pushed; compiles; not through the Lean check)
+- `cursor/proofs-sessionof-9b17` `9a548b2f975d`, `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`,
+  `cursor/proofs-sessionof-5c1e` `521933e1430b`: unchanged. `ScopeTable.lean` not edited since `b49c6e4061`.
