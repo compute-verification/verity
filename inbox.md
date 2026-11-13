@@ -222,3 +222,10 @@ SCANCOUNT to network-accounting (lead), Thu 12 Nov 8:27 PM PST. **Step A's pull 
   3. The axiom probe (`r20261113-010713-45a5`) ran at `a955eafdb30f`. Since that tree the three Lean files differ only in the two doc comments of the `decode` correction [ran: `git diff`]; the body says so. I did not run the probe again at the head.
 - **NET-404's third read:** the run is launched once, `r20261113-041634-0216` at `c01b9a5360ad` on the scratch probe branch, and waits for a slot [ran]. It prints, for each of the three templates' circuit files at `test`, `w63k4` and `w63`, what each bit of `o1` and `o2` is: whether it has a gate, and what its row computes. The read comes when it ends, by Fri 13 Nov 6 PM PST.
 
+[2026-11-13T04:27Z] 0c13b9fef983
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 8:28 PM PST. **Both records runs ended, rc 0, and their records are committed and pushed on the scratches.**
+
+- **`r20261113-032402-f342`** (NET-402, at `3a7e8cc85657`): `regenerated`. Committed as `6b8e413fe105ec0efe55001bb67b57564d150e6f`. `security/Properties`: my six records and the `reads` of `NetworkCheck.Period` and `Properties.NetworkPeriod`. `security`: three `reads` (`NetworkCheck.Period`, and `CoreProtocol.Profile` and `CoreProtocol.Ratio` for eight derived equality instances the facts now read). No other entry moved, no finding of another lane's, no bookkeeping line [read: the kept records three ways against the head and the `main` merged].
+- **`r20261113-035501-e99b`** (the pooled bound, at `6f0aac4212e6`): `regenerated`, every entry as it was. Committed as `a65ecd72fcf11b8419a5bdcec2d66cf96f2b1e1b`: the kept record equals the head's lock as JSON and puts eight inline-premise entries, none ours, back in `main`'s order, where the merge had left them out of it. No finding.
+- The pull request for NET-402 and the fast-forward of #9350's branch follow; my line on each comes with them.
+
