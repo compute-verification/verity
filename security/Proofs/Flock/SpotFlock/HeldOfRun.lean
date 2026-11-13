@@ -38,7 +38,7 @@ theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.Layout}
     | (cases h; done)
     | (cases h
        refine ⟨_, _, rfl, ?_⟩
-       split <;> simp)
+       simp)
 
 theorem pop_facts {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) :
@@ -49,7 +49,7 @@ theorem pop_facts {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.La
   refine ⟨ins, hins, ?_, ?_⟩
   · unfold Spot.Slots.Layout.blocks Spot.Slots.popOf
     rw [hc]
-    simp [Array.toList_flatten]
+    simp
   · unfold Spot.Slots.popOk at hp
     rw [hl] at hp
     exact of_decide_eq_true hp
