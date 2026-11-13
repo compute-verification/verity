@@ -114355,3 +114355,97 @@ NEEDS: unchanged from 02:04Z (your choice among (i), (ii), (iii)). FRAME needs n
 To post: nothing.
 
 Not established: that any of `HeldOfReads.lean`, `Apart.lean`, `OwnReadsGive.lean`, `ReadsCheck.lean` compiles; that `OwnReads.lean` compiles against FRAME's head; `ReadsWf` or `OpensOwn` at anything real.
+
+## FRAME, Fri 13 Nov 02:20Z: THE BASE MOVED to `6c1a87cc54d3` (L1's rest with `Held.refHeaders`): a run built it whole and its four probed files use only the three permitted axioms. The notice's before and after are below. The connected statement's ready line: not before about 08:00Z Fri if it does not wait for #9375, about five and a half hours after #9375 is on `main` if it does
+
+**In plain words.** The change that makes the proved verifier check the wiring between the inner blocks of one outer block is now on the base branch that every worker of the two-stage audit builds on. A machine compiled all of it, and for the four files that hold the new proofs it also confirmed that they use nothing beyond the three axioms we allow. With it the two-stage guarantee asks two things where it asked five: that the session's frame is the built one, and that every gate's value sits where the address map says. The second is the one the workers are proving piece by piece; it is not proved. The lock's records were edited by hand to match and no machine has regenerated them yet. That regeneration, the merge of `main`, the quick suites and the guard's run are what stands between this and a line that says "ready".
+
+Clock: `date -u` read 02:20Z when I posted this. Mailbox read at 02:12Z (newest heading 02:00Z); your 02:17Z message came by the hook and is answered here.
+
+### Heads and runs
+
+- [run: `git push`, 02:11Z] **Base `cursor/proofs-two-round-base-84b5`: `798474779897` to `6c1a87cc54d3`**, a fast-forward. Workers: merge it. It holds, beyond the old base: the wiring's definitions and `two` with `membersScoped` and `wiringOk` (`Code.lean`); `SpotKSTwo` and `SpotExfilTwo` at two premises (`Guarantees.lean`); `Held.refHeaders` (a held code's literal gains `refHeaders := …`); `InsideOf.lean` (`inside_of`); the assembly `AddressesGive.lean` (`addressesConnected_of_runs`, `addressesConnected_of_blocks`); `returnedWhole_of_once`; the guard's description-sized clauses. It does not hold NEEDEDBITS's files, `BlockSize.lean`, `BitsInUnitsOf.lean`, `addressesConnected_of_rowed` or `PortsOnce`: those are on the L1 branch, in the try below.
+- [run] **`r20261113-014000-6b8a`, vy-nebius-2, done.** Started within the minute. At `6c1a87cc54d3`:
+  - `BUILD_EXIT_L1 0`: "Build completed successfully (11151 jobs)", the 65 files of `SpotFlock/`, `SamplingGeneric/Guarantees.lean`, `SpotFirstHit.lean`, `Claims/Sampling/Select/Code.lean`, `Spot/Pieces.lean`.
+  - The axiom probe (`lean_changed.py --try`), each "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound": `EntryRoots.lean` (13 theorems, the `port_at` fix among them), `InsideOf.lean` (7), `AddressesGive.lean` (4), `WiringOk.lean` (11).
+  - Not probed: `Guarantees.lean`, `Code.lean`, `Facts.lean`, `WiredCode.lean`, `WiredKS.lean`. They built. I add `Guarantees.lean` and `WiredKS.lean` to the next try's probes.
+  - `TwoGuard.lean`: `--try` refuses it ("not a .lean file in a Lake package with a lean-audit.json"). Only the guard's own suite elaborates it, and that has not run.
+- [run: `git push`] L1 branch `cursor/proofs-frame-l1-9c4e` at `a6ccdd66a686` (unchanged since 02:06Z). Unpushed: nothing.
+- [run] **`r20261113-021143-5105`, vy-nebius-2, launched 02:12Z**, `--pool proofs --mem-gb 16 --timeout 90m`, the L1 branch at `a6ccdd66a686`: the same build, then probes of `NeededBitsOf`, `BlockSize`, `BitsInUnitsOf`, `AddressesGive`, `WiringOk`. Running; about 02:45Z [guess]. It is my one try.
+- [run: `gh pr view`, 02:17Z] #9375 OPEN, head `34c5cbb3705c`, not merged. #9357, #9229, #9176, #9212, #9080, #9237: all OPEN.
+
+### The notice: what the two-stage guarantees say and rest on, before and after this move
+
+| | Before (base `798474779897`) | After (base `6c1a87cc54d3`) |
+|---|---|---|
+| `Flock.Guarantees.SpotKSTwo` | `∀ h : SpotFlock.Held, SpotFlock.WiresFirst h → SpotFlock.WiresMove h → SpotFlock.SourcesNamed h → SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h → (SamplingDeploy.compiledTwo (FlockDeploy.deployZk Flock.Readable.relation) (SpotFlock.codeConnected h) SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KS FlockDeploy.sha512` | the same with the first three premises gone: `∀ h, SpotFlock.BuiltWired h … → SpotFlock.AddressesConnected h → (…).KS FlockDeploy.sha512` |
+| `Flock.Guarantees.SpotExfilTwo` | the same five premises, `.Exfil` | the same two, `.Exfil` |
+| `SpotKSTwo`'s open premises in the lock | `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.AddressesConnected`, `SpotFlock.SourcesNamed`, `SpotFlock.WiresFirst`, `SpotFlock.WiresMove` | `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.AddressesConnected` |
+| `SpotExfilTwo`'s open premises | `Claims.Sampling.InScopeTwo` and those five | `Claims.Sampling.InScopeTwo`, `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.AddressesConnected` |
+| The lock's open entries | `SpotFlock.SourcesNamed`, `SpotFlock.WiresFirst`, `SpotFlock.WiresMove` listed, each with its issue and date | all three removed |
+| Where the design evaluates (`SpotFlock.two h`) | the two-stage scope, the layout's fit, every template's reference statement reads as a member's | those, and: every member's circuit is in the scope Flock's hidden-output proof covers (`membersScoped`), and the registered wiring passes its check (`wiringOk`, ten clauses, `SourcesNamed`, `WiresFirst` and `WiresMove` three of them) |
+| `SpotFlock.Held` | no field for the reference headers | `refHeaders : ℕ → Json` (my 01:38Z entry's stop-rule table) |
+| `SamplingDeploy.Code.ReplayCap`, `SamplingDeploy.RegMatchesTwo` (row B16) | open, due 12 Nov | `domain` of the guarantee over a code, each with its one-line why: both are facts of the code, proved at ours (`replayCap_wired`, `regMatchesTwo_wired`) |
+
+- [derived] The three premises did not vanish: they moved from the statement into the model's design. A held code that fails one has no accepted run, so the guarantee says nothing false of it, and says something only of codes that pass. The model refuses more than it did; it accepts nothing it refused.
+- [read] The running form (`Spot/SecondStage.lean`, `second_stage.py`) is untouched by this move. Nothing is accepted that was refused.
+- [read] I edited `security/lean-audit.json` by hand in the same change. No records run has regenerated it; the digests of `SpotKSTwo`, `SpotExfilTwo` and the guarantee over a code are the old ones until one does.
+- A second move follows (the per-template form of four clauses, below). It changes `two` again and so those records again; its before and after come with its head.
+
+### Your question: the earliest hour of a ready line for the connected statement
+
+[guess, from the runs' lengths tonight] **About 08:00Z Fri (midnight PST) if the line is written against today's `main`; about five and a half hours after #9375 is on `main` if it waits for that.** It is not the 7 PM PST board's, and I do not promise the hour: each step below is one run, I may hold one run at a time, and a failure in any adds its length again.
+
+What it waits on, in order:
+
+1. **`main` merged into the base**, then the build of `security/Proofs` there (about 25 minutes warm; unknown how much the merge breaks). Lean's lead asked that this come after #9375, which changes `Verity.Vocab`; #9375 is open. Your instruction is that I merge neither tonight unless a build needs it. So the first thing I need is your word: merge today's `main` now, or wait for #9375.
+2. **The records run** at the merged head (`lean_changed.py --records security/Proofs --update`): one to two and a half hours. It regenerates the three records and commits B16's close.
+3. **The quick suites and the guard** (the guard was 72 minutes at #9229). The guard has not run since `membersScoped` and `wiringOk` went into `two`. If the model refuses Friday's registration on one of the clauses the guard evaluates, that is a finding to fix before any ready line.
+4. **A pull request to carry it.** There is none. The base holds #9357, #9080, #9176, #9212 and #9229, all open. I propose one new PR from the base, whose diff shrinks as those land; I open none without your word. #9229's own ready line still owes its records run, which I have not relaunched (one run at a time).
+5. **Whether the line waits for the second move.** If it does not, the records move twice in two PRs. If it does, add the second move's writing and its try: about two hours [guess].
+6. **Your notice to Daniel** of the table above.
+
+What a run has compiled of the connected statement itself: `Guarantees.lean` built at `2fd832c7a5ce` (`0dde`) and at `6c1a87cc54d3` (`6b8a`), with `ksTwo_connected` and `exfilTwo_connected` under it. No axiom probe of that file, no records run.
+
+### The second move: one change to what I proposed at 01:38Z
+
+[read] The source half of the per-template form does not need "a source bit's row is an input port". No lemma in the tree says which ports a unit's source keys read (`RowKey` gives a port of the circuit, not an input port), and writing one tonight is a risk. Instead the decided clause walks one unit's input columns of each template's circuit and collects the rows their sources name:
+
+- `sourceRows c`: for each input column `b` of one unit of `c`, the row of `Bits.srcKey c b` where it is a message bit. `Bits.rowBit` reads exactly that at column `(g − 2) % B`, so "a source bit's row is in `sourceRows` of its member's circuit" is an unfolding.
+- `writtenRows c`: the names of ports `nIn c + o` for `o` below `outRowPorts.size`, which is what `Bits.outPos` writes.
+- `sourcesNamed`, `writtenUnwired`, `writtenRead` then range over each template's `sourceRows` or `writtenRows`. Their cost is one unit's input columns and the output row ports of each template: it does not grow with the units of the run. The unrolled statements stay as lemmas, so nothing downstream changes its text.
+- `returnedWhole` leaves; `portsOnce` (each circuit names its ports once) joins, which ADDRWC's copy fact needs and `two` does not decide today.
+- `wiresMove` per template last, as you ruled.
+
+### Answers to NEEDS
+
+- **NEEDEDBITS** (`cursor/proofs-neededbits-2597`, 02:12Z):
+  1. I keep `public import Proofs.Flock.SpotFlock.NeededBitsHeld` when I merge your branch, which I do in my next commit.
+  2. My call: the assembly takes `two` from the run. Every fact of the assembly is used under an accepted run `r` with `hr : r.Ok h`, and `hr`'s sixth component is `two h _ = some _` (`CheckedRun.wiring_of_ok` reads it the same way). So `membersRowed_of_two` and `rowsArePorts_of_two` are called there and neither `MembersRowed h` nor `RowsArePorts h` stays a hypothesis of the assembly.
+  3. The lowering fact: yes, that statement, with the range written as `o < c.outRowPorts.size` (the range `Bits.outPos` searches; give me the equality with `outPorts.size` if you prove it at the other). I use it at the writer's template and unit and at the reader's source bit's `bit`, whose bound I take from ADDRWC's `BitsInPorts` and `wiresAlike`. `c.ports[q]!.name` is fine; your `name_getD` turns it into `outPos`'s `getD`.
+  4. The source half of my per-template change asks nothing of you (above).
+- **OWNREADS** (02:04Z, section 5) and your ruling (iii): I take `OwnReads.lean` from `cursor/proofs-ownreads-9a1c` at `90bbf657c8` into the L1 branch in my next commit, with section 5's two lines: `wiring_of_wiringOk` takes `hWf : RefReadsWf h`, and the assembly's theorems take `hWf` in place of `hOwn`. `HeldOfReads.lean` stays on your branch until it compiles.
+- **ADDRROW** (02:07Z, 2): yes. The bridge takes `∀ v, h.reg.always v = false` as its premise directly.
+- **HELDOF** (02:06Z): you are right and my 01:46Z entry was wrong on one point. `partitionsOk` bounds what a block commits, not its length, and `length_blockOf_le` (`nIn + 3·nComp`) is far over the cap at Friday's shape. Your `BlockCommits.lean` is the bound; of `BlockSize.lean` you need only `length_insOf_le`. I tell you when `5105` has compiled it.
+
+### NEEDS
+
+1. **Coordinator: merge today's `main` into the base now, or wait for #9375?** (step 1 above). Without your word I wait.
+2. **Coordinator: one new PR from the base for the connected statement, yes or no**, and whether its ready line waits for the second move.
+
+### STOP RULE
+
+Nothing new. The move of this entry is the one you ruled on at 22:50Z and 02:00Z; its before and after is the table above. The second move is not made.
+
+### Not established
+
+- The lock's records for the moved guarantees: hand-edited, not regenerated.
+- The axioms of `Guarantees.lean`, `Code.lean`, `Facts.lean`, `WiredCode.lean`, `WiredKS.lean`: built, not probed.
+- That the guard passes Friday's registration with `membersScoped` and `wiringOk` in `two`: not run.
+- `BlockSize.lean`, `BitsInUnitsOf.lean`, `addressesConnected_of_rowed`, `PortsOnce`, and NEEDEDBITS's `NeededBitsOf.lean` at its new root: in `5105`, no verdict.
+- `AddressesConnected h` itself. Of its facts, compiled: `NeededBits` from `MembersRowed`, `SideBySide`, `Inside` from those. Written, not compiled: `BitsInUnits`, `WrittenOnce`, `RowsArePorts`, `MembersRowed` from `two`. With workers: width, copy, row, `RefReadsWf`. Not written: `wiresMove`'s lemma.
+- Every hour in the ready line's answer is a guess.
+
+### To post
+
+The notice's table above, when you choose to send it.
