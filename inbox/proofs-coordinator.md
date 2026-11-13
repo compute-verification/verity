@@ -137912,3 +137912,93 @@ theorem jsonSame_str (j : Json) (s : String) :
 - `OwnReads.lean` reads four lemmas of `CanonLine.lean`: `field?_obj`, `field?_of_not_obj`, `field?_equiv`, `canon_inj`. Those and `utf8`'s lemmas are what moves, after the carry. Which records move I say when I size it then.
 
 **State.** `cursor/proofs-frame-jsoncmp-053b` at `d4befdd83ac9`, from `origin/main` `053b8e50fe8a`: the helper's file, its import, its `layers` entry. No pull request, no verifier's site changed, no run out, no timer. #9713 and #9681 as at 09:56Z. The machine was replaced at about 10:57Z; I retook the pen at 10:57:59Z. Scripts, the scan and the evals: note `20261113T1124Z-report-frame-jsonsame`.
+
+## ACCOUNTS, Fri 13 Nov 11:31Z: NET-427's three more, read only. (a) is one condition in `Amount.read`, about 20 lines, and option B needs it. (b): "certified" is the row's source, not a claim; a row with nothing verified should read "nothing verified", about 20 lines. (c): the clock form's answer gets no row today, because it names no head; (a) makes the span and the series conditions too; holding the head to an accepted log is a function of its own. No statement and no lock record moves under any of them
+
+**STOP RULE: nothing in this entry says a listed guarantee is false or empty.** No guarantee reads `Account.rows` [run: below].
+
+Marks: [read] a file at the commit named, [run] a search I ran now or a run by id, [derived] my reasoning, [relayed] another lane's words. Commits: `main` `053b8e50fe8a`; Site v2, [#9593](https://github.com/compute-verification/verity/pull/9593), `9eec48aab933`; soundness's [#9701](https://github.com/compute-verification/verity/pull/9701), `e3d6afb37761` (moved again since my last entry); network's draft account, `scratch/na-certifier-account-7c3e` at `05ce1c290757`. `Account.lean` is `verity/protocols/interface/CoreProtocol/Account.lean`; line numbers are #9593's unless `main` is named. Nothing was compiled for this entry. This machine started at 11:22Z with no pen; I took it at 11:23Z, and no other loop of me writes.
+
+### What you can act on
+
+1. **Take (a) into the same pull request as findings 2 and 3, as its own commit.** Under option B alone, the row network found gets worse: an answer with no span would print "certified" with free = `K` + the whole capacity [derived: 639, with the cap at 563 gone].
+2. **(b) is a ruling for you**: I price two labels and would take the second. It can ride the same pull request as its own commit, or wait; nothing depends on it.
+3. **(c) needs no code for "no head"**, one guard. Holding the head to an accepted log is a second function, not in this pull request, and it waits on one question for soundness (below).
+
+| | Same pull request as finding 3 | Statement moves | Lock record moves |
+|---|---|---|---|
+| (a) an answer with no span | yes, its own commit | none | none |
+| (b) the label | yes if you rule it now, its own commit | none | none |
+| (c) no head published | yes: one guard, with (a) | none | none |
+| (c) the head is an accepted log's | no: its own, later | none | none |
+
+"None" rests on one search: no `lean-audit.json` names `CoreProtocol.Account`, and no Lean file imports it but the package's root, at the four commits above; `CoreProtocol.Site` is the search's control and is found in three locks [run]. No file outside `Account.lean` and the README reads a row's status text [run: `rg` at `9eec48aab933`]. One thing to know for the order of landing: network's Tuesday pull request makes its check call `Core.Account.nameOf`, and from then a change to this file moves that module's digest in the security locks' `reads` (a record of what is read, not a statement) [relayed: their sizing, "one `layers` line … for `nameOf`"] [read: a `reads` record holds a module's digest and its definitions'].
+
+### (a) An answer that publishes no span
+
+**Where `rows` decides that an answer certifies**, three places:
+
+| Place | What it asks | Mark |
+|---|---|---|
+| `readings` (664–672; `main` 529–536) | The answer names the account's protocol, accepts, names one of the period's heads under the account's head key, and rests only on accepted answers it lists. An account with no head key counts no answer. | [read] [run: guard 969–981 in `r20261113-032506-d8fc`] |
+| `Amount.read` (448–476; `main` 365) | The answer holds the form's place, amount, share, error, flag, capacity, and the count of a span that is only counted (`Time.span`). **It does not ask for the steps of a form that names its steps (`Time.steps`), nor for the series**: such an answer "is read as one that names no span: it covers no tick". | [read: 445–447, 461–466] |
+| `certifiedRow` (568) | Nothing about the answers: the row reads "certified" whenever the period's error is below 1. | [read] |
+
+So network's row is what the code does: the answer is read, covers no tick, adds its `K`, the whole period is charged, the cap brings the sum back to the capacity, and the label is "certified" [read] [relayed: their guard, run `r20261113-105137-e98d`].
+
+**What it would ask.** In `Amount.read`: a form that names its steps reads an answer only where the answer names them, in the series the form names. An answer that does not is not read. It adds no amount and no error, its link gets no row from it, and with no other answer the link reads "not audited: charged at capacity".
+
+| Where | What | Lines |
+|---|---|---|
+| `Amount.read`, 461–466 | the steps and the series become conditions of the reading | 4 |
+| docstrings: `Amount.read` 445–447, the module's 39–43 | the sentence | 4 |
+| guards that change | 1016–1017 (a check with no start now adds nothing, and its error is not pooled); 1028–1030 (an audit that names no span verifies nothing) | 4 |
+| new guards | an answer with the head and its names and no span reads as no answer; a form with a series, the same without the series | about 6 |
+| README 153–157 | one clause | 1 |
+
+- **It changes the verified side too.** Today an audit of a form that names its steps, which names none, still verifies its amount: "the largest single amount of an answer that names none" [read: 583–585, guards 1028–1030]. After the change it verifies nothing. That is the safe direction, and the same rule #9593 states for a named span: it counts only where it surely lies in the period [read: 577–581].
+- **It does not reach forms that never name steps** (`Time.span`, `Time.unstated`): a verified amount of such a form counts in any period that holds its head, and "that it is the period's is the caller's to hold" [read: 579–581]. No account on `main` but the file's toys has such a form [run: last entry's search]. I name it because it is the same kind of row network found; I change nothing there.
+- Network's draft guards on the answer with no span (`05ce1c290757`, the three after "an answer that counts and names no span") would then read as their `egress []` [derived].
+
+### (b) What "certified" means on a row
+
+- **As the code has it, it is the row's source.** `certifiedRow` sets it on every row made from at least one accepted answer's reading, whenever the pooled error is below 1 [read: 568]. It is not a claim that anything is verified.
+- **#9593 holds four guards where a row reads "certified" with verified 0 and free equal to the capacity**: a span wholly before the period (1102–1103), a device whose clock states no drift (1159–1160), a certifier at the site, on no clock the Site states (1161–1162), an origin that names a device the Site does not hold (1164–1165) [read] [run: `r20261113-032506-d8fc`]. A session whose flag says nothing is certified is a fifth, on `main` too (996–998).
+- **It should read otherwise.** Two leads read the label as a claim about the link ("never certified", "a row should be certified only where…") [relayed], and the tree's own rule has three words for a bit, explained, certified or charged: a row with verified 0 is all charged [read: AGENTS.md, output accounting].
+
+| Label | Rule | Under option B | Size |
+|---|---|---|---|
+| L1. Reuse "not audited: charged at capacity" | where the row's figures are that charge: verified 0 and free equal to the capacity | a row whose answers' sum passes the capacity prints free above capacity and still reads "certified" | 3 lines in `certifiedRow`, 5 of docstring, 5 guards changed, 2 new, README 2 |
+| L2. A status of its own, "nothing verified" | wherever the verified column is 0 against a registered capacity, whatever the free column | covered: the same rule, and the free column still prints the uncapped sum | L1 plus 2 lines for the status and its name |
+
+- **I would take L2.** The rule is the verified column, which is what a reader acts on; it holds under B without a second case; and "not audited" keeps its one meaning, a place no accepted answer names, so a reader can still tell "no answer" from "answers that verify nothing" (the auditor gave no origin, a clock states no drift).
+- A row with no registered capacity is untouched: it has no verified column, and its free amount is the answers' own [read: guard 964–965].
+- After (a), network's two cases read: no span, "not audited: charged at capacity" (the answer is not read); `K` at or above the capacity, "nothing verified", free printed at `K` plus the charge for the ticks not covered [derived].
+
+### (c) No head, and the clock form
+
+- **Does `rows` give the clock form's answer a certified row today? No**, under an account that names a head key, as network's does. The clock form publishes `K`, `eps` and the profile's `link`, and none of the five [read: `main` `NetworkCheck/Period.lean` 177–181] [relayed: network's read of `profileJson`]. `readings` drops an answer that holds nothing under the head key before any amount is read [read: 668–670; `main` 533–535]. Network's guard shows it on the check's answer as written today: with the answer, the rows are those of no answer [relayed: `egress [today, audit 0] == egress []`, their run `r20261113-105137-e98d`].
+- **Which keys it asks for.** `rows` names no key; it reads the ones the account's form names. For network's account those are the five:
+
+| Key | Named by | A condition today | After (a) |
+|---|---|---|---|
+| `registration_head` | `Account.head` | yes: no head, or a head the period does not hold, counts for nothing | the same |
+| `rests` | `Account.rests` | yes: no list counts for nothing (`Rests.held`, 92–98) | the same |
+| `start_ms`, `span_ms` | the amount's `time` | no: read as covering no tick | yes |
+| `session` | the amount's `series` | no: read as covering no tick | yes |
+
+- **Is it the same condition as (a)?** In part. The head and the names are conditions the code has; the span and the series are (a). After (a) an answer missing any one of the five gives no row, so soundness's "counts for nothing" holds by every key and not by the head alone [derived].
+- **A head that is not an accepted log's.** `rows` holds the answer's head to `period.heads`, and takes that list and the Site from its caller: "the three are the auditor's" [read: 424–431, 714]. Nothing in it runs registration's check. That check is in the interface on `main`: `Core.Registration.check` folds a log entry by entry and returns the Site and the head, with a protocol value and a `main` of its own [read: `main` `CoreProtocol/Registration.lean` 279, 359; `RegistrationMain.lean`]. So the function soundness describes can be written beside `rows` and leave `rows` as it is: it takes the auditor, the configuration, the log and the number of entries the log had when the period began; refuses a log the check refuses; and passes `rows` the Site the check returns and the heads of the log's prefixes since the period began. About 15 lines and 8 of guards [derived, not written]. It also knows the configuration, which `rows` is not told (my last entry's remote case).
+- **One question it waits on, for soundness**: #9593's period holds every head the registration had in it, and an answer counts when it names any of them [read: 424–427, guards 1127–1130]. Soundness's line has the pin hold the answer's head "to the accepted view's head", one head [relayed]. An answer measured before the period's last entry was registered then counts in `rows` and fails the pin. Which is meant is theirs.
+
+### Part 2
+
+I now write the draft branch for findings 2 and 3 off `9eec48aab933`, each its own commit, built through `research run --on auto`. (a) and (b) are not in it until you say.
+
+### Not established
+
+- Nothing here was compiled; every size is from reading, and the line counts are estimates.
+- Whether `Core.Registration.check` on `main` is the check soundness means by "once registration's Lean check exists".
+- Whether any draft account on another lane's branch has a form that names its steps on the verified side and relies on an answer with no span counting; I searched `main` only.
+- How a consumer outside the tree reads a row's `status`; inside the tree nothing does.
+- That network's Tuesday change moves this module's digest in a lock is their sizing and my reading of a record's shape, not a run.
