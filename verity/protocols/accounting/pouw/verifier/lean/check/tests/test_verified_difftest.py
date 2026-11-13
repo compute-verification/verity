@@ -6,6 +6,7 @@ each sampled proof block's outcome or the refusal, string for string, the lanes 
 is of record."""
 from __future__ import annotations
 
+import json
 import random
 import re
 import shutil
@@ -89,6 +90,24 @@ def test_verified(server):
                  "failed: drawn leaf #'s ", "(checkFull)", "# statement could not be verified",
                  "# statement: the statement's public file"):
         assert any(part in k for k in VERIFIED), part
+
+
+def test_decoy_leaf_is_refused(server):
+    """A lanes-form window whose committed leaf Program also calls a composite keyed with an input id
+    (``lanes-leaf-decoy``) is refused by `credit._asks` or `credit._verified` and by the compiled check: that leaf Program
+    is not `h1window.leaf_program`'s, whose root has one call beside its inputs. A reader of ids alone takes it. A case
+    with no answers asks its calls' statements first, so it reaches no leaf Program."""
+    refused = 0
+    for seed in range(8):
+        case = cases.verified_instance(random.Random(f"lanes-leaf-decoy/{seed}"), "lanes-leaf-decoy")
+        want = verified(case)
+        kind, out = D.replay(VERIFIED_PORT, case, server)
+        assert kind == "output" and json.loads(out) == want, out
+        if "run" not in want:
+            code, why = want.get("refused", [None, ""])
+            assert code == "circuit" and "leaf Program is not h1window.leaf_program's" in why, (seed, want)
+            refused += 1
+    assert refused, "no case reached its leaf Programs"
 
 
 def test_served_answers():

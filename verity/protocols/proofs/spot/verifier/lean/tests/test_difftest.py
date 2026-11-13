@@ -74,7 +74,7 @@ from verity.protocols.proofs.spot.device.coins import ran_out as draw_ran_out
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
@@ -6007,7 +6007,8 @@ def test_the_call_queries_cut_call_by_call(pieces):
 
 def _keyed(key: str, first: bool = False) -> dict:
     """The descriptor of a root of one instance of `PAIR` and one Call of a composite of one gate whose id is the input id
-    `key`, the Call the later node or, `first`, the earlier; its program put among `PROGRAMS`."""
+    `key`, the Call the later node or, `first`, the earlier. The decoder refuses it, so it has no program among
+    `PROGRAMS`."""
     name, version = key.rsplit("_v", 1)
     keyed = bind(CompositeDefinition(name, int(version), (), lambda S: ((("y", Value(8)),), Value(8)),
                                      lambda B, S, y: B.call(XOR8, y, y), register=False))
@@ -6017,38 +6018,28 @@ def _keyed(key: str, first: bool = False) -> dict:
         calls = [lambda: B.call(keyed, y), lambda: B.call(PAIR, x)]
         return tuple_of(*(call() for call in (calls if first else calls[::-1])))
 
-    program = Program(bind(CompositeDefinition(
+    return _json(codec.encode_program(Program(bind(CompositeDefinition(
         f"CoreSpotKeyed{name}{'First' if first else ''}", 0, (),
-        lambda S: ((("x", Array(2, Value(8))), ("y", Value(8))), Tuple(Value(8), Value(8))), body, register=False)))
-    PROGRAMS[PO.program_sha512(program)] = program
-    return _json(codec.encode_program(program))
+        lambda S: ((("x", Array(2, Value(8))), ("y", Value(8))), Tuple(Value(8), Value(8))), body, register=False)))))
 
 
 @pytest.mark.parametrize("key, first", [("Input16_v1", False), ("Input16_v1", True), ("RegisteredInput16_v1", False)])
-def test_a_composite_whose_id_is_an_input_id_is_no_input(pieces, key, first):
-    """A root Call of a composite whose id is an input id is no input node (`program.is_input`: only a primitive is one):
-    its gate is computed. A template query that doesn't list the composite refuses the program, Lean with the Python's
-    reason, in `unit_gates`, `slots` and `select`. One that lists it, and `Q_call` at `X = 16`, which cuts every Call,
-    take the Call as a unit, and Lean's slots are the Python's whole: the Call's gate is its unit's and no input block's,
-    so the proof blocks' gates and the input class's are every gate of the program once."""
+def test_a_composite_keyed_with_an_input_id_is_refused(pieces, key, first):
+    """An input id keys only the input primitive: the decoder (`codec.decode_program`) refuses a descriptor whose root
+    Calls a composite keyed with one, and Lean refuses it in the decoder's words in `unit_gates`, `slots` and `select`,
+    under a template query that doesn't list the composite, under one that lists it, and under `Q_call`."""
     desc = _keyed(key, first)
+    registry = DefinitionTable()
+    registry.add(XOR8)
+    with pytest.raises(ValueError) as why:
+        codec.decode_program(copy.deepcopy(desc), registry)
+    assert str(why.value) == f"definition {key!r}: an input id keys only the input primitive"
     case = {"closure": None, "program": desc, "source": hashlib.shake_256(b"keyed").hexdigest(400), "work_table": None}
-    one = _json(P.template_instance_query(PAIR.id))
-    refused = {**case, "query": one, "rule": {"rule": "all"}}
-    for port, reference, j in [(UNIT_GATES, unit_gates, {"program": desc, "query": one}), (SLOTS, slots, refused),
-                               (SELECT, select, refused)]:
-        with pytest.raises(D.Reject) as why:
-            reference(copy.deepcopy(j))
-        assert f"is a call of '{key}'" in str(why.value)
-        assert D.replay(port, j, pieces) == ("reject", f"query-refused: {why.value}")
-    size = PROGRAMS[PO.program_sha512(desc)].circuit.size
-    for query in (P.template_instances_query([PAIR.id, key]), PO.call_query(16)):
-        taken = {**case, "query": _json(query), "rule": {"law": "rate:1/2", "rule": "law"}}
-        out = slots(copy.deepcopy(taken))
-        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(out))
-        blocks = [b for c in out["classes"] for s in c for b in s]
-        assert sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi)) == list(range(size))
-        assert sorted(b["unit"] for b in blocks if b["unit"] is not None) == [0, 1]
+    for query in (P.template_instance_query(PAIR.id), P.template_instances_query([PAIR.id, key]), PO.call_query(16)):
+        j = {**case, "query": _json(query), "rule": {"rule": "all"}}
+        for port, value in [(UNIT_GATES, {"program": desc, "query": j["query"]}), (SLOTS, j), (SELECT, j)]:
+            kind, reason = port.lean(pieces, value)
+            assert kind == "reject" and str(why.value) in reason, (port.fn, reason)
 
 
 XOR64 = PrimitiveDefinition("CoreSpotXor64", 1, (("a", Value(64)), ("b", Value(64))), Value(64),

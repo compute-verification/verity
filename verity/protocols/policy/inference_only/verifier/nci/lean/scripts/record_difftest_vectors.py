@@ -54,7 +54,8 @@ read, a table read, an opening's port and ingress, each refused. Then a template
 (`BITLESS`): one that returns no field, and one with a field of no bit beside a field of 16, each refused with its
 templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
 its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
-record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
+record with a unit of it more at the Program's root that the record does not list, each refused with its Program: an
+input id keys only the input primitive, so the decoder reads no such Program.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -869,8 +870,8 @@ def shaped() -> list[dict]:
 
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
-    it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
-    (`templates`): a root node of a composite is no input, whatever its key reads as."""
+    it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its Program
+    (`program`): an input id keys only the input primitive, so the decoder reads no such Program."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1008,8 +1009,8 @@ def shaped() -> list[dict]:
     for k, (what, name) in enumerate(KEYED.items()):
         keyed = template(name, [("p", Value(16))], [Value(16)], [[("op", 16, [(0, 0)])]])
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
-        first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
-        first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+        first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="program", alone=keyed)
+        first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="program", unlisted=keyed)
     return out
 
 

@@ -91,14 +91,15 @@ structure Param where
   ty : Ty
   gates : Option (Nat × Nat)
 
-/-- The root body's input nodes, in body order: each one's width, member count and first gate. -/
+/-- The root body's input nodes (`Desc.isInputNode`), in body order: each one's width, member count and first gate. -/
 def inputNodes (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
   let some root := d.def? d.root | return #[]
   let mut out := #[]
   let mut at_ := 0
   for x in root.nodes do
     let id := d.callees.getD x.fn ""
-    if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
+    if d.isInputNode x then
+      if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
     at_ := at_ + x.members * d.gates id
   return out
 
@@ -110,7 +111,8 @@ def inputNodesFast (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
   let mut at_ := 0
   for x in root.nodes do
     let id := d.callees.getD x.fn ""
-    if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
+    if d.isInputNode x then
+      if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
     at_ := at_ + x.members * Partition.look d G id
   return out
 

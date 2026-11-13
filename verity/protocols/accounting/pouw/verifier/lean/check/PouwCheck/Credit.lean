@@ -8,6 +8,7 @@ public import Flock.Program
 public import Flock.RegKnown
 public import PouwCommit.Frame
 public import PouwCheck.Chunks
+public import PouwCheck.InputNode
 public import PouwCheck.Json
 public import PouwCheck.Opening
 public import PouwCheck.Pass
@@ -572,9 +573,9 @@ def programOf (descriptor : ByteArray) : R Flock.Program.Prog := do
 (`programOf` of its descriptor), else the refusal (`layout` or `tile-k`). The calls, linears and slot are its program
 function's record (`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s,
 whose A and B rows give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP`
-below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs are each call's (M/R)·(n/C)
-instances of its K's template, in the calls' order: a call one instance and a batch its members, as the template query
-counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. -/
+below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs (`nonInputNodes`) are each
+call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its members, as
+the template query counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. -/
 def layoutOf (P : Flock.Program.Prog) : R Json := do
   let fn := P.programFn
   let pairs := if fn.startsWith (WINDOW_FN ++ "{") then Flock.Program.recordPairs fn else #[]
@@ -622,9 +623,8 @@ def layoutOf (P : Flock.Program.Prog) : R Json := do
         (ts.find? (·.1 == k)).map fun (_, tid) => (tid, (mv / r) * (n / c))
     | _ => none)
   let mut got : Array (String × Nat) := #[]
-  for x in (P.defs.getD P.root default).body.nodes do
+  for x in nonInputNodes P do
     let t := (P.defs.getD x.fn default).key
-    if Flock.Program.isInputId t then continue
     let n := match x.form with
       | .call => some 1
       | .batch => some x.n
@@ -1852,8 +1852,8 @@ structure Live where
 /-- `credit.live_of`: the live Program (`circuit.live.program_v2`) whose descriptor is `descriptor` (its bytes, canonical
 JSON without annotations), else the refusal (`LIVE`). T, S and the prefix are its program function's record
 (`LIVE_FN`'s `T`, `S` and `PREFIX`), its template `PouwLiveSlots_v2{T=<T>}` a composite of id `LIVE_UNIT` bound to T
-alone, and its root's nodes other than inputs S calls of it, unit s round s's. Its cost is the descriptor's bytes,
-never the gates its nodes unroll to. -/
+alone, and its root's nodes other than inputs (`inputNode`) S calls of it, unit s round s's. Its cost is the
+descriptor's bytes, never the gates its nodes unroll to. -/
 def liveOf (descriptor : ByteArray) : R Live := do
   let some d := (String.fromUTF8? descriptor).bind loads? | liveRefuse LIVE_DESCRIPTOR_FORM
   let defs := get d "definitions"
@@ -1861,7 +1861,7 @@ def liveOf (descriptor : ByteArray) : R Live := do
     | liveRefuse LIVE_DESCRIPTOR_FORM
   let some callees := cs.toList.mapM str? | liveRefuse LIVE_DESCRIPTOR_FORM
   unless schema == SCHEMA && isObj defs do liveRefuse LIVE_DESCRIPTOR_FORM
-  let callees := callees.toArray
+  let desc := inputsOf callees.toArray defs
   let pairs := if fn.startsWith (LIVE_FN ++ "{") then Flock.Program.recordPairs fn else #[]
   unless pairs.toList.map (·.1) == LIVE_RECORD do liveRefuse NOT_LIVE
   let some vals := pairs.toList.mapM (fun (_, s) => loads? s) | liveRefuse NOT_LIVE
@@ -1879,8 +1879,8 @@ def liveOf (descriptor : ByteArray) : R Live := do
   let mut calls := 0
   for x in nodes do
     let some f := (if isObj x then nat? (get x "fn") else none) | liveRefuse LIVE_BODY
-    let some c := callees[f]? | liveRefuse LIVE_BODY
-    if Flock.Program.isInputId c then continue
+    let some c := desc.callees[f]? | liveRefuse LIVE_BODY
+    if inputNode desc f then continue
     unless get x "form" == Json.str "call" && c == unit do liveRefuse LIVE_BODY
     calls := calls + 1
   unless calls == s do liveRefuse LIVE_BODY

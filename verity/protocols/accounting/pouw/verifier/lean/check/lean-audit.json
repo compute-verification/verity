@@ -86,6 +86,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
+  "PouwCheck.InputNode": {
+   "imports": ["Flock.TemplateQuery", "PouwCheck.Json", "Spot.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
@@ -95,6 +100,7 @@
     "Flock.RegKnown",
     "PouwCommit.Frame",
     "PouwCheck.Chunks",
+    "PouwCheck.InputNode",
     "PouwCheck.Json",
     "PouwCheck.Opening",
     "PouwCheck.Pass",

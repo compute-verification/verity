@@ -521,6 +521,22 @@ def test_honest_j10r_windows_are_credited(pass_server):
     assert any(credited), credited
 
 
+def test_decoy_windows_are_refused(pass_server):
+    """A window honest in everything but a decoy (`decoy_window`: a composite keyed with an input id, which its circuit's
+    root, a template's body below it or its live Program's root also calls, or a root node calling an input id no
+    definition keys) is refused by `credit.window` and by the compiled `Credit.window`: its circuit's descriptor as one
+    the decoder refuses, since an input id keys only the input primitive, and its live Program, which no decoder reads,
+    for its body, the node being no input. A reader of ids alone skips the node and credits the window. `test_credit`
+    replays decoys but holds only the two sides to each other."""
+    for where in credit_cases.DECOY_WHERE:
+        refusal = [Cr.LIVE, Cr.LIVE_BODY] if where == "live" else ["layout", Cr.DESCRIPTOR_FORM]
+        for seed in range(3):
+            case = credit_cases.decoy_window(random.Random(f"decoy/{where}/{seed}"), where)
+            assert window(case) == {"refused": refusal}, (where, seed)
+            kind, out = D.replay(WINDOW, case, pass_server)
+            assert kind == "output" and json.loads(out) == {"refused": refusal}, out
+
+
 def leaf_words(case: dict) -> dict:
     try:
         return {"leaf_words": W.leaf_words(case["k"])}

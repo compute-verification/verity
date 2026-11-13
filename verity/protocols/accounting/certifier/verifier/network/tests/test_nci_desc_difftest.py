@@ -1,7 +1,7 @@
 """The difftest of the description-sized inference-only check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py` writes 4,082 declarations divided into IUs of
-root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py` writes 4,010 declarations divided into IUs of
+root nodes (six on a composite keyed with an input id, which the decoder refuses, two on a gate reading a nested scan's
 carry, one past `NciCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
 them, `E_REINTERPRET`, or are their well-typed neighbours, then three pinned: θ with an input bound per run, refused,
@@ -14,7 +14,7 @@ for `test_nci_lean_difftest.py`, the audit checks the data against the record's 
 package's files alone, so this test is what says the data is still what the generator and the reference write. The
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
 fixture's descriptor, the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
-id, whose gates are computed, which `NciCheck.Desc` once took for an input node, the fourth that it holds the walks: a
+id, which `NciCheck.Desc` once took for an input node and the decoder now refuses, the fourth that it holds the walks: a
 gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and the
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
 resolve, refused read or not, the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
@@ -48,7 +48,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,082 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,010 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -75,17 +75,17 @@ def test_the_generator_covers_what_it_says():
     assert wide, "an instance whose expansion has more gates than root nodes"
 
 
-def test_the_decoys_are_no_input_nodes():
-    """The decoys come just before the walks, and the reference refuses each one the unrolled check refuses: the decoy
-    node in θ (`theta-not-input`) or in no IU (`gate-in-no-iu`), and gives a verdict with the decoy node in an IU."""
+def test_the_decoys_are_refused():
+    """The decoys come just before the walks, and the reference refuses each one (`program`), whatever the instance says
+    of the decoy node: an input id keys only the input primitive, so the decoder reads no such declaration."""
     first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
              - len(vectors.empties()) - len(vectors.walks()) - len(vectors.decoys()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.decoys()))]
-    assert made == vectors.decoys()
-    got = [reference.check_desc(m).get("error") for m in made]
-    assert got == ["theta-not-input", "gate-in-no-iu", None] * 2
+    assert made == vectors.decoys() and len(made) == 6
     for m in made:
-        assert reference.check_desc(m) == reference.check(reference.expand(m))
+        assert reference.check_desc(m) == {"error": "program"}
+        with pytest.raises(ValueError, match="an input id keys only the input primitive"):
+            reference.root_nodes(m["program"])
 
 
 def test_the_walk_past_the_bound_is_refused():

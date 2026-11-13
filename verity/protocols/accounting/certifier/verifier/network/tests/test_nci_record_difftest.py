@@ -25,8 +25,8 @@ slot, and `input_count`'s totals. The eleventh is that a row is declared once: t
 declaration more into a row it already declares is refused, whatever the two declarations are, and the second alone
 is taken. The twelfth is that an output has a bit: a template that returns no field, or a field of no bit, is refused
 with its templates, and the interface lays out no unit of it. The thirteenth is that a root node of a composite is no
-input, whatever its key reads as: a template keyed as an input id is refused with its templates, its record alone and
-a unit of it at the root that the record does not list.
+input, whatever its key reads as: a Program with a template keyed as an input id is refused (`program`), the decoder
+reading no such Program, with its record alone and with a unit of it at the root that the record does not list.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -89,7 +89,7 @@ TWICE = {f"2x3 {what}": stage for what, (stage, *_) in vectors.TWICE.items()}
 BITLESS = {f"2x3 {what}": "templates" for what in vectors.BITLESS}
 #: the cases on a template keyed as an input id, its record alone and a unit of it the record does not list, each
 #: with the stage that refuses it
-KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in ("alone", "unlisted")}
+KEYED = {f"2x3 {what}, {how}": "program" for what in vectors.KEYED for how in ("alone", "unlisted")}
 
 
 @pytest.fixture(scope="module")
@@ -659,10 +659,10 @@ def test_an_output_has_a_bit(shaped):
 def test_a_root_node_of_a_composite_is_no_input(shaped):
     """An input node is a root node of an input primitive. A composite's gates are computed whatever its key reads
     as, so a root node of a composite keyed as an input id is no input, and a record that left it out would count
-    none of its gates. Such a Program is refused with its templates: the record of that one template, which lists
-    it, and the accepted record beside a Program whose root has a unit of it more, which the record does not list.
-    The key alone decides the first: the same template under a key that is no input id is read past its
-    templates. Unlisted it is refused under either key."""
+    none of its gates. An input id keys only the input primitive, so the decoder reads no such Program and it is
+    refused (`program`): with the record of that one template, which lists it, and with the accepted record beside a
+    Program whose root has a unit of it more, which the record does not list. The key alone decides it: the same
+    template under a key that is no input id is read past its templates alone, and refused with them unlisted."""
     held = shaped["2x3 registered"]
     gate = [[("op", 16, [(0, 0)])]]
     for what, name in vectors.KEYED.items():
@@ -672,7 +672,7 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
         for how in ("alone", "unlisted"):
             m = shaped[f"2x3 {what}, {how}"]
             r = vectors.results(m["case"])
-            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": "templates"}, what
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": "program"}, what
             program = json.loads(m["case"]["instance"]["program"])
             assert program["definitions"][tid]["form"] == "composite", what
             root = program["definitions"][program["root"]]["body"]["nodes"]

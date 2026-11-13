@@ -8,6 +8,7 @@ public import PouwCheck.Protocol
 public import PouwCheck.Opening
 public import PouwCheck.Pass
 public import PouwCheck.Rounds
+public import PouwCheck.InputNode
 public import PouwCheck.Credit
 public import PouwCheck.Period
 public import PouwCheck.Chunks
@@ -30,7 +31,8 @@ sample (`PouwCheck.Pass`) and on a live execution phase's salt and round coins (
 The rules on a served execution phase's credited set, its sampled proof blocks (the sampling coin's over its layout) and their outcome, its
 credit period (counted only closed and complete) and its A rows (`PouwCheck.Credit`, whose one entry is `window` and
 `periodCredit`, every rule composed on one execution phase and its round log) are held to `credit.py` the same way, through
-`pouw-check-difftest` (`PouwCheck.CreditDifftest`). An execution phase unit's leaf statements read their values at the unit's
+`pouw-check-difftest` (`PouwCheck.CreditDifftest`). A root node they skip as an input is one the template query reads as
+an input (`PouwCheck.InputNode`). An execution phase unit's leaf statements read their values at the unit's
 placement in the execution phase's tables, from its descriptor and round log (`PouwCheck.LeafOwn`, `pouw-leaf-own-window`). An H1
 lane's chunks along K, and so the chunk rows a table at K commits a row as (`PouwCheck.Chunks`, `weights.chunks`), are held
 to the Python through `pouw-check-difftest` too.

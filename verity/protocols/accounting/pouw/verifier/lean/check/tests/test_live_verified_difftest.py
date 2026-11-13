@@ -6,6 +6,7 @@ verdict, when it names none); with the answers, the verdict, each round's outcom
 here the Lean is of record."""
 from __future__ import annotations
 
+import json
 import random
 import re
 import shutil
@@ -88,6 +89,17 @@ def test_live_verified(server):
                  "rows of # words, not the T = #", "could not be verified, so the window stays refused",
                  "live@#: the statement's public file", "was rejected by the verifier of record", "not unit #"):
         assert any(part in k for k in VERIFIED), part
+
+
+def test_decoy_live_program_is_refused(server):
+    """A live Program whose root also calls a composite keyed with an input id (``decoy``) is refused for its body by
+    `credit.live_of` and by the compiled check, before any statement is asked. A reader of ids alone takes it."""
+    for seed in range(3):
+        case = cases.live_verified_instance(random.Random(f"decoy/{seed}"), "decoy")
+        want = {"refused": [Cr.LIVE, Cr.LIVE_BODY]}
+        assert live_verified(case) == want, seed
+        kind, out = D.replay(LIVE_PORT, case, server)
+        assert kind == "output" and json.loads(out) == want, out
 
 
 def committed_files(case: dict) -> dict:

@@ -14,7 +14,8 @@ its registered finding the ``--registered`` file's ports at their values and roo
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form or their lanes
 form (``files-lanes``), drop the live circuit file, break the statements' form, name a round past the execution phase's or one twice, give a descriptor that is no
-v2 live Program (``not-live``, a v1 Program among them), and leave a live table unregistered, registered twice or at other than T rows
+v2 live Program (``not-live``, a v1 Program among them) or whose root also calls a composite keyed with an input id
+(``decoy``, `pouw_credit_cases.decoy`), and leave a live table unregistered, registered twice or at other than T rows
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
@@ -31,7 +32,7 @@ from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import live_reads as LR
 
 PRE_NAMES = ["files-form", "files-lanes", "no-live-file", "statements-form", "round-past", "twice", "not-live",
-             "no-table"]
+             "decoy", "no-table"]
 RUN_NAMES = ["error", "refused", "rejected", "unit-other"]
 NAMES = PRE_NAMES + RUN_NAMES
 
@@ -124,6 +125,8 @@ def live_verified_instance(rng: random.Random, name: str = "honest") -> dict:
                                              C.live_hex({**p, "program_fn": zero}),
                                              C.live_hex({**p, "program_fn": "PouwH1Window_v3{}"}),
                                              C.live_hex(C.live_program(t, steps, prefix, version=1))])
+        case "decoy":
+            case["descriptor"] = C.live_hex(C.decoy(p, rng.choice(C.DECOY_IDS), {"nodes": [], "params": []}))
         case "no-table":
             v = rng.choice([LR.table(prefix, LR.SLOTS, rng.randrange(steps)), LR.table(prefix, LR.REQUESTS)])
             e = next(x for x in entries if x["value"] == v)

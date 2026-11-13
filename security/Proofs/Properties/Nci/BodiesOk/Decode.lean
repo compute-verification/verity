@@ -365,7 +365,11 @@ theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
       obtain ⟨defn, s4, hdf, h5⟩ := st_bind h4
       obtain ⟨rfl, rfl⟩ := st_pure hdf
       exact hpush _ _ _ _ h5 hs (hd _ _ _ _)
-  · obtain ⟨defn, s2, hdf, h3⟩ := st_bind h2
+  · split at h2
+    · first
+        | exact absurd h2 (by intro h; injection h)
+        | (obtain ⟨_, _, h1, -⟩ := st_bind h2; exact absurd h1 (by intro h; injection h))
+    obtain ⟨defn, s2, hdf, h3⟩ := st_bind h2
     obtain ⟨i2, p2, d2⟩ := hc _ _ _ _ _ _ _ _ hdf hs
     obtain ⟨i3, p3, h4⟩ := hpush _ _ _ _ h3 i2 d2
     exact ⟨i3, pre_trans p2 p3, h4⟩

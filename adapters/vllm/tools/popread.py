@@ -46,7 +46,6 @@ from typing import Any
 
 SCHEMA = "popread/v1"
 UNIT_BITS = 16
-INPUT = re.compile(r"^(Registered)?Input\d+_v\d+$")
 SELECT = re.compile(r"^(?:Gather(?P<t>[A-Za-z0-9]*?)x(?P<v>\d+)(?:u\d+)?|Select(?P<s>[A-Za-z0-9]+))_v\d+$")
 INDEX_PARAMS = ("token", "idx", "index", "c", "cond", "pred", "sel")
 CONST = re.compile(r"^Const\d+\[")
@@ -125,6 +124,12 @@ class Walk:
     def callee(self, node: dict[str, Any]) -> str:
         return self.callees[node["fn"]]
 
+    def is_input(self, node: dict[str, Any]) -> bool:
+        """Whether `node` is an input node: its callee a primitive under an input id (`program.is_input_entry`)."""
+        from verity.circuits.program import is_input_entry
+        fid = self.callee(node)
+        return is_input_entry(fid, self.defs.get(fid))
+
     def gates(self, fid: str) -> int:
         got = self._gates.get(fid)
         if got is None:
@@ -176,7 +181,7 @@ def root_selects(desc: dict[str, Any]) -> Counter:
     nodes = W.defs[desc["root"]]["body"]["nodes"]
     param = {}
     for k, n in enumerate(nodes):
-        if INPUT.match(W.callee(n)):
+        if W.is_input(n):
             param[k] = len(param)
     got: Counter = Counter()
     for k, n in enumerate(nodes):
@@ -594,7 +599,7 @@ def descriptor_egress(desc: dict[str, Any], W: Walk, units: dict[int, int] | Non
     root = W.defs[desc["root"]]
     nodes = root["body"]["nodes"]
     n = len(nodes)
-    is_in = [bool(INPUT.match(W.callee(x))) for x in nodes]
+    is_in = [W.is_input(x) for x in nodes]
     group: dict[int, int] = {}
     groups: list[list[int]] = []                                    # per egress node: leaves, bits, declared bits
     for space, k, count in ref_runs(root["body"]["ret"], nodes):
@@ -660,7 +665,7 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
                        value_bound: dict[str, str] = VALUE_BOUND) -> dict[str, Any]:
     W = Walk(desc)
     nodes = W.defs[desc["root"]]["body"]["nodes"]
-    is_in = [bool(INPUT.match(W.callee(n))) for n in nodes]
+    is_in = [W.is_input(n) for n in nodes]
     names = input_names(desc, sum(is_in))
     label: list[str] = []
     it = iter(names)

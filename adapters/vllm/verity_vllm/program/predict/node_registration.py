@@ -79,15 +79,16 @@ def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
 
 
 def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
-    """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode)."""
-    from verity.circuits.program import input_id
+    """(root node, width, members) of each input node of the descriptor's root (`program.is_input_entry`: its callee a
+    primitive under an input id), in order, read off its JSON (no decode)."""
+    from verity.circuits.program import input_id, is_input_entry
 
-    callees = desc.get("callees") or []
+    callees, defs = desc.get("callees") or [], desc["definitions"]
     out = []
-    for k, n in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]):
-        got = input_id(callees[n["fn"]] if isinstance(n["fn"], int) else n["fn"])
-        if got is not None:
-            out.append((k, got[1], int(n["n"]) if n["form"] in ("batch", "scan") else 1))
+    for k, n in enumerate(defs[desc["root"]]["body"]["nodes"]):
+        fid = callees[n["fn"]] if isinstance(n["fn"], int) else n["fn"]
+        if is_input_entry(fid, defs.get(fid)):
+            out.append((k, input_id(fid)[1], int(n["n"]) if n["form"] in ("batch", "scan") else 1))
     return out
 
 

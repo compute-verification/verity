@@ -893,6 +893,8 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
                 raise ValueError(f"primitive {fid} ports differ from the registry")
             built[fid] = p
             return p
+        if input_id(fid) is not None:
+            raise ValueError(f"definition {fid!r}: an input id keys only the input primitive")
         name, _, ver = d["id"].rpartition("_v")
         if d["form"] != "composite" or not (name and ver.isdigit() and f"{name}_v{int(ver)}" == d["id"]):
             raise ValueError(f"definition {fid!r}: form {d['form']!r}, id {d['id']!r} (a composite's id is Name_vN)")

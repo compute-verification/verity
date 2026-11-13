@@ -23,7 +23,8 @@ form, one or two sampled leaves at the lanes-form K and perhaps tile-form units,
 lanes and combine statements among the calls' in a shuffled order, and the produced record of their partials under the
 execution phase's sample root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
 opened of the partials and the known rows (``openings``). Its mutations: a K outside `LeafLanesSound`'s reach, no lanes
-evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution phase's own, a statement
+evidence, a leaf's statement dropped, a leaf Program other than the committed one, not the execution phase's own or one
+whose root also calls a composite keyed with an input id (``lanes-leaf-decoy``, `pouw_credit_cases.decoy`), a statement
 twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the leaf reads unregistered,
 the sample malformed, the evidence's or the circuit files' lanes form broken; then a leaf session's partials or known row
 opened at another opening or reported without openings (``P-shared``), its ports at another root, rejected, proving
@@ -49,7 +50,7 @@ PRE_NAMES = ["files-form", "statements-form", "call-past", "twice", "undrawn", "
              "unregistered", "layout"]
 RUN_NAMES = ["error", "refused", "rejected", "pub-other", "ok-other", "ok-none", "unit-other"]
 LANES_PRE = ["lanes-shape", "lanes-missing", "lanes-no-combine", "lanes-leaf-digest", "lanes-leaf-other",
-             "lanes-twice", "lanes-undrawn", "lanes-statement", "lanes-record", "lanes-unregistered", "lanes-draw",
+             "lanes-leaf-decoy", "lanes-twice", "lanes-undrawn", "lanes-statement", "lanes-record", "lanes-unregistered", "lanes-draw",
              "lanes-form", "lanes-files"]
 LANES_RUN = ["lanes-partial", "lanes-known", "lanes-openings-none", "lanes-root", "lanes-rejected", "lanes-units",
              "lanes-error", "lanes-refused", "lanes-empty"]
@@ -200,9 +201,10 @@ def zy_unit(k: int) -> str:
     return f"{Cr.ZY_UNIT}{{TILE={C._canon(_tile_binding(k))}}}"
 
 
-def leaf_desc(kind: str, k: int, at: int | None = None, unit_kind: str | None = None) -> bytes:
+def leaf_desc(kind: str, k: int, at: int | None = None, unit_kind: str | None = None, decoy: str | None = None) -> bytes:
     """`h1window.leaf_program`'s descriptor as far as `credit.leaf_of` reads it: the one-call Program of `LEAF_FN`
-    [`kind`] at K (`at`, else `k`) over the unit `LEAF_UNIT` [`unit_kind`, else `kind`] bound to K's TILE."""
+    [`kind`] at K (`at`, else `k`) over the unit `LEAF_UNIT` [`unit_kind`, else `kind`] bound to K's TILE; with `decoy`,
+    its root also calls a composite keyed with that input id (`pouw_credit_cases.decoy`)."""
     tile, uk = _tile_binding(k), unit_kind or kind
     unit = f"{Cr.LEAF_UNIT[uk]}{{TILE={C._canon(tile)}}}"
     fn = f"{Cr.LEAF_FN[kind]}{{UNIT={C._canon({'fn': unit})},K={k if at is None else at}}}"
@@ -213,8 +215,10 @@ def leaf_desc(kind: str, k: int, at: int | None = None, unit_kind: str | None = 
             root: {"form": "composite", "id": root, "bindings": {},
                    "body": {"params": [], "ret_type": ["Value", 1],
                             "nodes": [{"form": "batch", "fn": 0, "n": 3}, {"form": "call", "fn": 1}]}}}
-    return C.desc_bytes({"callees": ["Input16_v1", unit], "definitions": defs, "program_fn": fn, "root": root,
-                         "schema": Cr.SCHEMA})
+    desc = {"callees": ["Input16_v1", unit], "definitions": defs, "program_fn": fn, "root": root, "schema": Cr.SCHEMA}
+    if decoy is not None:
+        C.decoy(desc, decoy, {"params": [], "ret_type": ["Value", 1], "nodes": []})
+    return C.desc_bytes(desc)
 
 
 def _bc(rng: random.Random) -> str:
@@ -302,6 +306,11 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
             other = rng.choice([leaf_desc(kind, lk, at=lk + 32),
                                 leaf_desc(kind, lk, unit_kind=LL.LANE if kind == LL.COMBINE else LL.COMBINE),
                                 progs[x] + b" ", progs[x].replace(b'"call"', b'"batch"')])
+            evidence["leaf_programs"][x] = other.hex()
+            files[Cr.LEAF_PROGRAMS][x] = hashlib.sha512(other).hexdigest()
+        case "lanes-leaf-decoy":
+            x = rng.choice(sorted(progs))
+            other = leaf_desc(x[:-len(str(lk))], lk, decoy=rng.choice(C.DECOY_IDS))
             evidence["leaf_programs"][x] = other.hex()
             files[Cr.LEAF_PROGRAMS][x] = hashlib.sha512(other).hexdigest()
         case "lanes-twice":

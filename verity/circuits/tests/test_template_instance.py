@@ -52,15 +52,33 @@ X3 = Array(3, Array(2, V32))
 Sq = bind(_comp("TSq", 1, (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(TMul, x, x)))
 
 
-def _keyed(key: str, first: bool = False) -> Program:
-    """One instance of `Sq` and one call of a composite of one gate whose id is the input id `key`: the call reads the
-    instance and the root returns it, or, `first`, the instance reads the call. Only a primitive is an input
-    (`program.is_input`), so the call is a node of another function, whatever its id."""
+def _canon(program) -> str:
+    return codec.canonical_json({k: v for k, v in codec.encode_program(program).items() if k != "annotations"}).decode()
+
+
+def _keyed(key: str, first: bool = False, nested: bool = False) -> str:
+    """The bytes of a program of one instance of `Sq` and one call of a composite of one gate whose id is the input id `key`:
+    the call reads the instance and the root returns it; `first`, the instance reads the call; `nested`, the root's one node
+    is an instance of `TOuter`, whose body is the call. An input id keys only the input primitive, so the decoder refuses
+    each (PROTOCOL.md §4.6)."""
     name, version = key.rsplit("_v", 1)
     keyed = bind(_comp(name, int(version), (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(TAdd, x, x)))
     assert codec.descriptor_id(keyed) == key
-    return Program(_comp("TKeyedProg", 0, (), lambda S: ((("x", V32),), V32),
-                         (lambda B, S, x: B.call(Sq, B.call(keyed, x))) if first else (lambda B, S, x: B.call(keyed, B.call(Sq, x)))))
+    outer = bind(_comp("TOuter", 1, (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(keyed, x)))
+
+    def body(B, S, x):
+        if nested:
+            return B.call(outer, x)
+        return B.call(Sq, B.call(keyed, x)) if first else B.call(keyed, B.call(Sq, x))
+    return _canon(Program(_comp("TKeyedProg", 0, (), lambda S: ((("x", V32),), V32), body)))
+
+
+def _edited(program: Program, edit) -> str:
+    """`program`'s bytes with `edit` applied to its descriptor and its root's one `call` node."""
+    d = json.loads(_canon(program))
+    call, = (nd for nd in d["definitions"][d["root"]]["body"]["nodes"] if nd["form"] == "call")
+    edit(d, call)
+    return codec.canonical_json(d).decode()
 
 
 def _mixed(B, S, xs, k, a, b):
@@ -79,9 +97,9 @@ SCAN = Program(_comp("TScanProg", 0, (), lambda S: ((("xs", Array(3, V32)), ("c"
 PRIM = Program(_comp("TPrimProg", 0, (), lambda S: ((("x", Array(2, V32)),), V32), lambda B, S, x: B.call(TAdd, x[0], x[1])))
 EMPTY = Program(_comp("TEmptyProg", 0, (), lambda S: ((("a", Array(0, Array(2, V32))), ("b", Array(0, Array(2, V32)))), Array(0, V32)),
                       lambda B, S, a, b: B.batch(Dot, a, b, axes=(0, 0))))
-PROGRAMS = {"population": POPULATION, "mixed": MIXED, "scan": SCAN, "primitive": PRIM, "empty": EMPTY,
-            "keyed": _keyed("Input8_v1"), "keyed_first": _keyed("Input8_v1", first=True),
-            "keyed_registered": _keyed("RegisteredInput8_v1")}
+#: one instance of `Sq`, which the undecoded programs edit
+SQUARE = Program(_comp("TSqProg", 0, (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(Sq, x)))
+PROGRAMS = {"population": POPULATION, "mixed": MIXED, "scan": SCAN, "primitive": PRIM, "empty": EMPTY}
 SCALE_ID, DOT_ID = codec.descriptor_id(Scale), codec.descriptor_id(Dot)
 
 #: (label, program, query): the query applies
@@ -89,7 +107,6 @@ CASES = [
     ("Q_template_instance over a population program", "population", PO.template_instance_query(Scale)),
     ("Q_template_instances over two templates", "mixed", PO.template_instances_query([Scale, Dot])),
     ("the list order is kept: the same units, another digest", "mixed", PO.template_instances_query([Dot, Scale])),
-    ("a listed composite whose id is an input id is an instance", "keyed", PO.template_instances_query([Sq, "Input8_v1"])),
 ]
 #: (label, program, query): the query refuses the program
 REFUSED = [
@@ -99,9 +116,22 @@ REFUSED = [
     ("a scan at the root", "scan", PO.template_instance_query(Step)),
     ("a primitive at the root", "primitive", PO.template_instance_query(TAdd)),
     ("a batch of 0 members is no instance", "empty", PO.template_instance_query(Dot)),
-    ("a composite whose id is an input id is no input", "keyed", PO.template_instance_query(Sq)),
-    ("a composite whose id is an input id, which the instance reads", "keyed_first", PO.template_instance_query(Sq)),
-    ("a composite whose id is a registered input id is no input", "keyed_registered", PO.template_instance_query(Sq)),
+]
+KEYS_ONLY = "an input id keys only the input primitive"
+#: (label, the program's bytes, query, a substring of the refusal): the decoder refuses the bytes, so no query reads them
+UNDECODED = [
+    ("a composite keyed with an input id", _keyed("Input8_v1"), PO.template_instance_query(Sq), KEYS_ONLY),
+    ("a composite keyed with an input id, which the instance reads", _keyed("Input8_v1", first=True),
+     PO.template_instance_query(Sq), KEYS_ONLY),
+    ("a composite keyed with a registered input id", _keyed("RegisteredInput8_v1"), PO.template_instance_query(Sq), KEYS_ONLY),
+    ("a composite keyed with an input id that the query lists", _keyed("Input8_v1"),
+     PO.template_instances_query([Sq, "Input8_v1"]), KEYS_ONLY),
+    ("a composite keyed with an input id inside the instance", _keyed("Input8_v1", nested=True),
+     PO.template_instance_query("TOuter_v1"), KEYS_ONLY),
+    ("a root call node of an input primitive", _edited(SQUARE, lambda d, call: call.update(fn=d["callees"].index("Input32_v1"))),
+     PO.template_instance_query(Sq), "a call node does not call a primitive (Input32_v1)"),
+    ("a listed callee without a definition", _edited(SQUARE, lambda d, call: d["callees"].__setitem__(call["fn"], "Input8_v1")),
+     PO.template_instance_query("Input8_v1"), "KeyError: 'Input8_v1'"),
 ]
 #: (label, query): the object's form is refused (`validate`: query-params or query-unknown)
 MALFORMED = [
@@ -113,10 +143,6 @@ MALFORMED = [
     ("an extra parameter", {"name": "Q_template_instance", "version": 0, "params": {"template": DOT_ID, "X": 16}}),
     ("a version not registered", {"name": "Q_template_instance", "version": 1, "params": {"template": DOT_ID}}),
 ]
-
-
-def _canon(program) -> str:
-    return codec.canonical_json({k: v for k, v in codec.encode_program(program).items() if k != "annotations"}).decode()
 
 
 def _evaluated(program, q) -> dict:
@@ -136,6 +162,14 @@ def _refusal(program, q) -> str | None:
     return None
 
 
+def _undecoded(text: str) -> str | None:
+    try:
+        codec.decode_program(json.loads(text), REG)
+    except (ValueError, KeyError) as e:
+        return f"{type(e).__name__}: {e}"
+    return None
+
+
 def _order_refused() -> list:
     """The population program whose instances read their own outputs: not topological, so no query applies."""
     d = json.loads(_canon(POPULATION))
@@ -150,11 +184,13 @@ def build(decode: bool = True) -> dict:
     return {
         "about": "Pinned vectors of Q_template_instance v0 and Q_template_instances v0 (verity.circuits.partition_object), checked by "
                  "verity/circuits/tests/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are "
-                 "[unit, root node, member, first gate, end gate, inputs, outputs].",
+                 "[unit, root node, member, first gate, end gate, inputs, outputs]; undecoded holds bytes the decoder refuses, each "
+                 "with its refusal.",
         "descriptors": {k: _canon(p) for k, p in PROGRAMS.items()},
         "template_ids": {"TScale descriptor id": SCALE_ID, "TScale readable id": Scale.id, "TDot": DOT_ID},
         "cases": [[label, name, q, _evaluated(progs[name], q)] for label, name, q in CASES],
         "refused": [[label, name, q, _refusal(progs[name], q)] for label, name, q in REFUSED],
+        "undecoded": [[label, text, q, _undecoded(text)] for label, text, q, _ in UNDECODED],
         "order_refused": _order_refused(),
         "served_unsupported": list(PO.verify(PO.build(POPULATION, PO.template_instance_query(Scale)), POPULATION, served={}).codes),
         "malformed": [[label, q, list(PO.validate({"format": PO.FORMAT, "program": "0" * 128, "query": q}).codes)] for label, q in MALFORMED],
@@ -200,6 +236,12 @@ def test_the_mixed_program_commits_the_value_across_units():
 def test_the_query_refuses(live, n):
     assert live["refused"][n] == VECTORS["refused"][n], REWRITE
     assert VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
+
+
+@pytest.mark.parametrize("n", range(len(UNDECODED)), ids=[u[0] for u in UNDECODED])
+def test_the_decoder_refuses_the_program(live, n):
+    assert live["undecoded"][n] == VECTORS["undecoded"][n], REWRITE
+    assert VECTORS["undecoded"][n][3] is not None and UNDECODED[n][3] in VECTORS["undecoded"][n][3]
 
 
 def test_a_program_that_is_not_topological_and_served(live):
