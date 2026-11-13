@@ -27,7 +27,8 @@ outcome, so both records are written here and no stream's.
 ``expect`` holds the rehearsal's five runs to what each must be, each with the case Lean's verdict on the read across
 the class's two streams gives it (`stop_audit.across`): ``accept`` accepted by Lean's verdict of record with every
 entry that ran accepted, not complete, and no length held, case 3 since no boundary outcome is handed; ``length``
-refused by Lean's verdict on the session alone; ``unlogged`` refused as case 2 before any session, Lean's verdict
+refused by Lean's verdict on the session alone, with the reason ``stop_word`` (`stop_audit.reason`), which no other
+run states; ``unlogged`` refused as case 2 before any session, Lean's verdict
 that the boundary stream's log holds no such record; ``unaccepted`` refused by the boundary-audit entry alone, case 3;
 ``incomplete`` accepted as ``accept`` is, the boundary-audit entry without a verdict and with its reason, not
 complete, and no length held, case 4."""
@@ -139,7 +140,8 @@ def expect(summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, bool]:
         and a.get("not_run") == sorted(null) and a.get("case") == 3
         and {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE} == set(a.get("premises") or ()),
         "length": w.get("accepted") is False and vw.get(SA.LEAN) is False and vw.get(SA.ORDER) is True
-        and w.get("length_held") is False,
+        and w.get("length_held") is False and w.get("reason") == SA.STOP_WORD,
+        "no_other_reason": all("reason" in x and x["reason"] is None for x in (a, u, b, i)),
         "unlogged": u.get("accepted") is False and u.get("refused") == [SA.ORDER] and u.get("case") == 2
         and ((u.get("across") or {}).get("logged") or {}).get("accepted") is False and "verdicts" not in u,
         "unaccepted": b.get("accepted") is False and vb.get(SA.BOUNDARY_AUDIT) is False and b.get("case") == 3

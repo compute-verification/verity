@@ -4,7 +4,8 @@
 # `two_stage.py first --stop` (the boundary registration, the stop registration and both samples on a local challenger
 # session) and five audits of the stop population:
 #   accept      the class as served: the audit record accepts on Lean's verdict of record, and is not complete
-#   length      a class registered with stop words that are not the rule's: Lean refuses its session
+#   length      a class registered with stop words that are not the rule's: Lean refuses its session, and the
+#               summary's reason is stop_word, which no other run's is
 #   unlogged    a stop record on a boundary record the boundary stream never logged: refused before any session
 #   unaccepted  a boundary stream's outcome that did not accept: the boundary-audit entry refuses the record
 #   incomplete  a boundary stream's outcome that accepted with an entry that did not run: the record accepts, the

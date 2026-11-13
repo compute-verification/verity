@@ -55,6 +55,18 @@
   ``cross-stream-order`` (its ``case``), name that as their premise.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
+* **The reason** (`reason`): ``summary.json``'s ``reason`` is one word for what Lean's verdict of record refused, read
+  from that verdict and from nothing else. It is ``stop_word`` where Lean's own verdict on the stop blocks' session
+  refused the proof it read at its inner check's batched constraint (`UNSATISFIED`), the check that holds a proof to
+  the statement's constraints: the stop relation does not hold of the rows the session opened. It is null for every
+  other outcome: an accept; Lean's refusal at setup, for a file of the session that was not there, or at any other
+  of its checks; a run with no verdict line of Lean's; a refusal by another entry of the record or by the stream; and
+  a command that stopped before a verdict. The word names the relation Lean refused, whose one output row is the stop
+  word. Lean's verdict does not say which of the statement's three rows is wrong, and neither does the word: it is the
+  changed stop word's only on the negative control, ``--forge``, which changes the stop word alone. There the two
+  parameters' rows are the class's own under the boundary record's roots and the output row's tree is the one over
+  the class's stop words with those spans' bit 0 flipped (`opens`, held before any session), so the relation can fail
+  only at the stop word.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
   stage's: nothing here holds the time between the two commands.
 
@@ -97,6 +109,9 @@ TOOL = "benchmarks/one_stage/stop_audit.py"
 MEMBER, OUT = "stop", "o0"
 
 LEAN, M0, READS = f"lean-verify/{MEMBER}", f"m0-verifier/{MEMBER}", "registered-reads"
+#: the word of a refusal of the stop relation (module docstring, **The reason**), and how Lean's reason opens where its
+#: inner check finds that the proof it read does not satisfy the statement's constraints (`Zk.verifyInner`, Flock/Zk.lean)
+STOP_WORD, UNSATISFIED = "stop_word", "zk inner: the batched constraint fails"
 ORDER, BOUNDARY_AUDIT, REQUEST_ROW, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "request-row", "stop-rule"
 #: the tool of an entry that is the Lean verifier's piece ``across``'s verdict
 ACROSS = f"{V.EXE} across"
@@ -449,10 +464,31 @@ def decide(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], prove
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"], "audit": body["audit"]}
 
 
+def opens(roots: Mapping[str, str], file: Mapping[str, Any]) -> list[str]:
+    """The statement's ports whose tree, as the prover opens it (``roots``, `staged`'s, by value), is not the one the
+    verifier's own ``--registered`` file (``file``, `reads`'s) reads the port under: none where every row of the
+    statement is proved under the root its record registers. On the negative control that is what holds the change
+    to the stop word alone (module docstring, **The reason**)."""
+    return [p for p, v in {**BS.STOP_READS, OUT: BR.STOP}.items() if roots.get(v) != file["ports"][p]["root"]]
+
+
+def reason(verdicts: Mapping[str, Any]) -> str | None:
+    """The word for what Lean's verdict of record refused (module docstring, **The reason**), from the audit record's
+    ``verdicts`` and of them `LEAN`'s entry alone: `STOP_WORD` where it is of record, is Lean's own verdict line, and
+    refused the proof at its inner check's batched constraint (`UNSATISFIED`); None for anything else, an accept, a
+    refusal at setup or for a missing file, and a record that holds no such entry among them. It weighs nothing: a
+    record another entry refused too gets the same word, and one only another entry refused gets none."""
+    lean = verdicts.get(LEAN)
+    if not isinstance(lean, Mapping) or lean.get("of_record") is not True or not a0.lean_refused(dict(lean), UNSATISFIED):
+        return None
+    return STOP_WORD if lean["why"].startswith(UNSATISFIED) else None
+
+
 def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -> dict[str, Any]:
     """What a run reports of an outcome (`decide`'s): the audit record's ``accepted`` and ``complete`` as they are, each
-    verdict, why one did not accept or gives a reason for having none, Lean's ``case`` of the read across the streams,
-    every entry's premise, and whether the response's length is held: only by a record that accepted and is complete."""
+    verdict, why one did not accept or gives a reason for having none, the word for what Lean's verdict of record
+    refused (`reason`), Lean's ``case`` of the read across the streams, every entry's premise, and whether the
+    response's length is held: only by a record that accepted and is complete."""
     L, audit = r.layout, got.get("audit") or {}
     verdicts = audit.get("verdicts") or {}
     accepted, complete = audit.get("accepted") is True and got.get("accepted") is True, audit.get("complete") is True
@@ -466,6 +502,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "verdicts": {k: v.get("accepted") for k, v in verdicts.items()},
             "why": {k: v.get("why") for k, v in verdicts.items()
                     if v.get("accepted") is False or (v.get("accepted") is None and v.get("why"))},
+            "reason": reason(verdicts),
             "not_run": sorted(k for k, v in verdicts.items() if v.get("accepted") is None),
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
@@ -499,10 +536,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     forge = [int(i) for i in a.forge.split(",") if i]
 
     def done(code: int, summary: Mapping[str, Any]) -> int:
+        summary = {"reason": None, **summary}  # a command that stopped before a verdict states none
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str) + "\n")
         print("STOP " + json.dumps({k: summary.get(k) for k in ("accepted", "complete", "length_held", "case", "refused",
-                                                                "error", "sample", "failed", "verdicts", "why", "premises")},
-                                   sort_keys=True, default=str))
+                                                                "error", "sample", "failed", "verdicts", "why", "reason",
+                                                                "premises")}, sort_keys=True, default=str))
         return code
     try:
         check, stop = TS.template_fn(stage1["commit"]["check"]), TS._stop(a.stop)
@@ -518,9 +556,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         st = staged(BR.reopen(Path(a.boundary), check, stop=stop), out / "prover", forge)
         if (st["pin"], a0.sha512_file(st["dir"] / "circuit.txt")) != (own["pin"], own["circuit_sha512"]):
             raise ValueError("the prover's circuit file is not the one the verifier's own stop block lowers to")
-        if st["roots"][BR.STOP] != file["ports"][OUT]["root"]:
+        off = opens(st["roots"], file)
+        if off == [OUT]:
             raise ValueError("the prover's b.stop tree is not the one the stop record registers"
                              + ("" if forge else ": a class forged at registration is proved with --forge"))
+        if off:
+            raise ValueError(f"the prover's trees of {', '.join(off)} are not the ones the class's records register"
+                             + (": --forge changes the stop word alone" if forge else ""))
         proved = session({**st, **mine}, r.sample.units, out / "session", bin_=a.bin, lean=a.lean, firewall=a.firewall,
                          forged=bool(forge), timeout=a.session_timeout)
         got = decide(r, stage1, file, proved, outcome)
