@@ -29,13 +29,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
-from verity_vllm.acquire import inductor_templates as T
-from verity_vllm.acquire.inductor_templates import Unmodelled, bound
-from verity_vllm.engine.profiles.devices import CARD, NO_CARD
-from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity.hardware.cards import load
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import attention_vocab
@@ -45,6 +38,16 @@ from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import inductor as IR
 from verity.definitions.registry.hopper import Fa3InvSum
 from verity.definitions.registry.prims import Fa2InvSum
+from verity.hardware.cards import load
+
+from verity_vllm.acquire import inductor_templates as T
+from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.engine.profiles.devices import CARD, NO_CARD
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.gemm_targets import (
+    UnregisteredGemmTarget,
+    gemm_target_for,
+)
 
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
@@ -84,7 +87,7 @@ def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dic
         fam, dot = gt.key, TG.DOTS[gt.dot]
     except UnregisteredGemmTarget:
         missing.append(f"the cuBLAS GEMMs' k16 step (no registered GEMM target at cc {cc[0]}.{cc[1]})")
-    want = ATTENTION.get(fam)
+    want = ATTENTION.get(fam) if fam is not None else None
     got = [(a.get("backend"), a.get("fa_version")) for a in attention] if attention is not None else [(BACKEND, want)]
     if want is None or got != [(BACKEND, want)]:
         missing.append(f"attention {', '.join(f'{b} (FA{v})' if v else str(b) for b, v in got)}: the served attention Definitions are "
@@ -161,9 +164,12 @@ def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, 
 
 
 # ---------------------------------------------------------------------------------------------------- FA2 (cc 10.0 and 12.0)
-def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int) -> dict[str, Any]:
-    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count."""
+def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int | None) -> dict[str, Any]:
+    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count.  Only a swapped launch
+    reads `max_seqlen_k`; one given none (a FULL graph's on a device that binds no max_model_len) is refused."""
     if max(qlens) == 1 and NH > KVH and D % 8 == 0:
+        if max_seqlen_k is None:
+            raise Unmodelled("FA2's split count reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len")
         ns = W.fa2_num_splits(batch, KVH, NH // KVH, max_seqlen_k, D, sms)
         return {"swapped": True, "BN": W.fa2_align_kblock_n(D) if ns == 1 else W.fa2_split_kblock_n(D), "NS": ns,
                 "batch": batch, "max_seqlen_k": max_seqlen_k}
@@ -199,3 +205,6 @@ def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tu
                     max_seqlen_k=device.max_model_len if full else max(klens))
     rows = [fa2_attention_rows(q, k, la, NH=NH, KVH=KVH, D=D, dot=device.dot) for q, k in zip(qlens, klens)]
     return [la["NS"]] * len(qlens), rows, {"fa2": la}
+
+
+__all__ = ["DeviceBindings", "card_of", "device_of", "launch"]

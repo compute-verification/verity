@@ -787,6 +787,40 @@ def test_a_holder_held_unread_is_posted_and_rings_top(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
 
 
+def test_a_run_the_watch_could_not_judge_rings_infra_with_why_and_not_top(relay):
+    """`unjudged`: a run its stream shows held, of which the watch cancelled nothing because it could not read it afresh.
+    It needs someone who reads the agent and its run by the API and cancels it by hand, so infra is rung, with why, and
+    top is not: by the record's kind, whatever owner it names."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
+    co = PROOFS_INBOX["holder"]
+    why = ("the watch could not read its agent and the run afresh (TimeoutError: this sweep's reads are spent (12 min); the "
+           "next sweep reads again)")
+    rec = {"kind": "unjudged", "agent": co, "name": "verity: proofs", "run": "run-h", "rule": "held",
+           "since": "2026-10-24T17:25:00Z", "minutes": 15, "why": why, "owner": "infra"}
+    relay.log_text["text"] = json.dumps(rec) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{co}|{co}>"
+    assert relay.posts == [
+        f"{infra} *Agent watch:* verity: proofs ({link}, run run-h) was found held by its stream since 2026-10-24T17:25:00Z "
+        f"(15 min), but {why}: the watch cancelled nothing, and judges it again each sweep; look at it if it can't wait."]
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]], "infra's inbox, and not top's"
+    assert {relay.rung({**rec, "owner": owner}) for owner in ("top", "proofs", None)} == {"infra"}
+
+
+def test_an_agent_that_went_on_by_itself_is_posted_and_rings_no_one(relay):
+    """`continued_itself`: the agent began a run of its own after the cancel, so the run the watch held for it was dropped:
+    posted, and nobody need act."""
+    co = PROOFS_INBOX["holder"]
+    relay.log_text["text"] = json.dumps({"kind": "continued_itself", "agent": co, "name": "verity: proofs", "run": "run-h",
+                                         "own_run": "run-o", "since": "2026-10-24T17:40:00Z"}) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{co}|{co}>"
+    assert relay.posts == [
+        f"*Agent watch:* verity: proofs ({link}, run run-h) went on by itself (its run run-o is going), so the run the watch "
+        "had waiting for it since 2026-10-24T17:40:00Z, which the API refused, was dropped."]
+    assert rings(relay) == []
+
+
 def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(relay):
     rec = {"t": "2026-10-30T00:52:00Z", "kind": "outage", "agent": "", "name": "", "run": "", "owner": "top", "count": 5,
            "handles": ["kernels", "proofs"], "since": "2026-10-29T23:22:00Z", "every_min": 15}

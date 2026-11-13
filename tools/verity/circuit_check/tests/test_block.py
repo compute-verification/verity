@@ -176,20 +176,22 @@ from verity.definitions.registry import b1
 F = CK.Findings()
 b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
 print(json.dumps({"failures": [f["code"] for f in F.failures], "whole": b["whole"]["k_log"], "k_log": b["k_log"],
-                  "cut": [[u["unit"].partition("{")[0], u["count"], u["k_log"]] for u in b["cut"]]}))
+                  "cut": [[u["unit"], u["count"], u["k_log"]] for u in b["cut"]]}))
 """
 
 
 def test_glm53_greedy_select_is_held_to_the_block_by_its_chunks():
     """GLM-5.3's greedy `TokenSelect_v1` at its served vocabulary (V = 154,880) is past the block whole (2^28 bits) and cut by
-    `b1.CUTS` into nine chunks of 16,384 lanes and the combine, which reads the last 7,424, each a quarter of the block.  Checked
-    in a process of its own: a chunk registers a constant for each of its lanes, and every later test of this session that goes
-    through the registry's primitives (`test_declared_tables`) would go through those 16,384."""
+    `b1.CUTS` into nineteen chunks of 7,744 lanes, a Definition a chunk position and each an eighth of the block, and the
+    combine, which reads the last 7,744, a quarter of it.  Checked in a process of its own: a chunk registers a constant for
+    each of its lanes, and every later test of this session that goes through the registry's primitives
+    (`test_declared_tables`) would go through those 7,744."""
     r = subprocess.run([sys.executable, "-c", GREEDY_SERVED], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
     assert json.loads(r.stdout.strip().splitlines()[-1]) == {
         "failures": [], "whole": 28, "k_log": 25,
-        "cut": [["GreedyChunk_v1", 1, 25], ["GreedyChunk_v1", 8, 25], ["GreedyCombine_v1", 1, 25]]}
+        "cut": [*[[f"GreedyChunk_v2{{N=7744,OFF={c * 7744}}}", 1, 24] for c in range(19)],
+                ["GreedyCombine_v2{V=154880,N=7744}", 1, 25]]}
 
 
 def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():

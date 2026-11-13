@@ -12,8 +12,13 @@ from __future__ import annotations
 
 from verity.definitions.registry import b1
 
-from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (build_profile, make_check_header, make_root_class, make_weight_field,
-                                        with_geometry)
+from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (
+                                        build_profile,
+                                        make_check_header,
+                                        make_root_class,
+                                        make_weight_field,
+                                        with_geometry,
+)
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16-qwen2.5-1.5b"
 CASE = "B1"
