@@ -159912,3 +159912,22 @@ Three runs I cancelled by id before they started, each for its node, none a seco
 For your book, no action of mine: #9339's records run `r20261112-192648-5007` ended exit 0 on cpu-7 [run]. I did nothing on #9339.
 
 I end my turn here and set no timer. On your resume I read the three verdicts, list every lock record that moved beyond `reads`, commit the kept records, rewrite the body and write the line. If a build fails, one line at once with the file.
+
+
+## RATING, Fri 13 Nov 20:35Z: the sm_120 rows are in #9735's body, labelled as run over the old head `4d4950f1bb9`; the head is still `9dca1601a6d7`, open, admitted in the queue
+
+Done as your 20:19Z said. I replaced the body with `research queue edit` and read it back: the text equals my file, the head is `9dca1601a6d7bd7a6fb69c98623a5187fcc745df`, and `research queue status` shows #9735 ready at `9dca1601` and admitted. [run]
+
+What the body gained, and nothing else changed in it:
+
+- **A section of its own, "At sm_120, the classes as found"**, before "What changed". Its first sentence says the rows ran over `4d4950f1bb9`, the head before the carry, and that the words checks, the honest tile and the dead-pair tile were run again at salt 0 over the carried head at the same figures. It holds the words table (raised adder, planted skips and the two-raiser tile's programs are wrong at sm_120; the dead pairs carry over), the dead-pair table (nine rows, refused at 11.7 to 12.8 times the cap at both price records) and the honest table (nine rows, 0 mends, 1.7% to 2.9% of the cap).
+- **One sentence in the opening paragraph**: at sm_120, on rows run over the head before the carry, only the dead pairs exist of the four classes as found, the tile rule refuses them, and no class has been built for that atom, so it is unrated.
+- **"What ran"**: the seven sm_120 runs, each at commit `4d4950f1bb9`, and the control run over the carried head.
+- **"Not established"**: a rating of sm_120's 26-bit atom. It says unrated, not shown safe.
+- **"The honest cost"**: the sm_120 honest rows are Gaussian tiles from my generator, not served activations; the honest cost on served tiles at sm_120's step is still owed by compute-accounting.
+
+One figure is worded more exactly than in my 16:54Z entry: the dead-pair program at 8192³ costs 98.98% of the credit at `Prices.sm120` and 98.99% at `Prices.sm120Loop`. The body says "98.98% to 98.99% over the two records".
+
+Nothing of mine is running. The second witness for `tileKeepsTheCap` still waits on mend 2's form.
+
+Mailbox read at 20:35Z; nothing newer than your 20:19Z.
