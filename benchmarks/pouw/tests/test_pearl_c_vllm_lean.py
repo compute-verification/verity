@@ -198,9 +198,10 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
 
 
 def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
-    """The params are the epoch's coins, the sample count and the coin record's run and source; the manifests the retained
-    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and exclusion
-    tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files 0600."""
+    """The params are the epoch's coins, the sample count and the coin record's run and source; the manifests the
+    retained passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and
+    exclusion tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files
+    0600."""
     d, verify, doc = run
     assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
     answer, out = tmp_path / "piece" / "pearlplus-lean.json", tmp_path / "case"
