@@ -83,10 +83,11 @@ if len(windows) == 2:
                    "other": sorted(Counter((t.words, t.rows) for t in c.registered.tables
                                            if not t.param.endswith("/vocab")).items())},
         "split": {"plain": len(plain), "tables": len(tables), "vocab": sum(len(v) for v in by.values()),
-                  "plain_equal_without_embed": plain == WW.weight_params(c0.registered.params),
-                  "plain_nonces_equal": WW.weight_nonces(plain) == WW.weight_nonces(c0.registered.params),
-                  "nonces_moved_if_unsplit": sum(WW.weight_nonces(c.registered.params).get(q) != n
-                                                 for q, n in WW.weight_nonces(c0.registered.params).items()),
+                  "plain0": len(NE.split(c0.registered.params)[0]), "tables0": len(NE.split(c0.registered.params)[1]),
+                  "plain_equal_without_embed": plain == NE.split(c0.registered.params)[0],
+                  "plain_nonces_equal": WW.weight_nonces(plain) == WW.weight_nonces(NE.split(c0.registered.params)[0]),
+                  "plain_nonces_moved_if_unsplit": sum(WW.weight_nonces(c.registered.params)[q] != n
+                                                       for q, n in WW.weight_nonces(plain).items()),
                   "vocab_nonces": [min(nonces.values()), max(nonces.values()), len(set(nonces.values()))],
                   "tables_nonce": XT.TABLES_NONCE},
     }
