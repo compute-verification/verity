@@ -25,4 +25,30 @@ if "blocks" in c:
     out["blocks"] = {"types": len(on), "blocks": sum(b["blocks"] for b in on), "prefill": sum(b["prefill"] for b in on),
                      "decode": sum(b["decode"] for b in on), "counts": bc, "extra_units": len(c["blocks"]) - len(on),
                      "unaccepted_over_3m": [len(big), sum(n for _, n in big)]}
+if "bound_totals" in c:
+    on = [b for b in c["blocks"] if b["on_card"]]
+    bt = {s: [sum(1 for b in on if b["bound_outcome"] == s), sum(b["blocks"] for b in on if b["bound_outcome"] == s)]
+          for s in sorted(Counter(b["bound_outcome"] for b in on))}
+    assert bt == c["bound_totals"], (bt, c["bound_totals"])
+    ty = c["bound_runs"]["types"]
+    for t, r in ty.items():
+        v = r.get("verdicts") or {}
+        h, np_, od = v.get("B.verify.held"), v.get("B.verify.no-program"), v.get("B.verify.other-def")
+        held = bool(h and h["exit"] == 0 and h["accepted"] is True)
+        ctl = held and all(x and x["exit"] == 1 and x["accepted"] is False for x in (np_, od))
+        assert (r["outcome"] == "accepted") == ctl and (r["outcome"] == "held-control-off") == (held and not ctl), t
+    for b in on:
+        r = ty.get(b["cir272"]["tag"]) if b.get("cir272") else None
+        assert (b["form"] == "bound") == (r is None), b["block"]
+    total = sum(b["blocks"] for b in on)
+    grp = lambda s: "accepted" if s.startswith("accepted") else "not-run" if s.startswith("not-run") else s  # noqa: E731
+    shares = {}
+    for s, (n, k) in bt.items():
+        g = shares.setdefault(grp(s), [0, 0])
+        g[0] += n
+        g[1] += k
+    out["bound"] = {"types": len(on), "blocks": total, "by_outcome": bt,
+                    "shares": {g: [n, k, round(100 * k / total, 4)] for g, (n, k) in shares.items()},
+                    "tags": dict(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values())),
+                    "extras": dict(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values() if r["extra"]))}
 print(json.dumps(out, indent=1))
