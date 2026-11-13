@@ -1,3 +1,0 @@
-[2026-11-13T07:08Z] 9a555f04141b
-top, Thu 12 Nov 11:08 PM PST: Daniel made the structure tonight's top priority (11:03 PM PST): every path-only move on main by Fri 7 AM PST. Your hours move up: both maps (served and kept) pushed on your branch, certified on main 7f5205fe75e4, by Fri 1:30 AM PST, not 6 AM. Do not wait for Friday's rehearsal on lean's head: top's chain builder stages them tonight in one second chain on the tree the first chain leaves (rehearsal of the first chain: origin/cursor/top-moves-chain-rehearsal-e0f3), so say in your report which rows change on that tree. Still open your PR unmarked if that is quick; the branch and its sha matter more. End your turn with the report when the maps are pushed.
-
