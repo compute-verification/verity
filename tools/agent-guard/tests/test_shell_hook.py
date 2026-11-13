@@ -1566,8 +1566,281 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
                     "git config --name-only --get-regexp url"):
         out = ask(command)
         assert out["permission"] == "deny" and "url.*.insteadof's name" in out["agent_message"], command
-    for command in ("git config user.name", "git config user.name t", "git config --get remote.origin.fetch"):
+    for command in ("git config user.name", "git config core.abbrev 12", "git config --get remote.origin.fetch"):
         assert ask(command)["permission"] == "allow", command
+
+
+#: git commands that name an author or committer of their own, by each form the rule reads: git's own `-c` and `--config-env`,
+#: a variable assigned ahead of the command, `commit --author`, and a `git config` that writes the checkout's own
+BY_OPTION = [
+    "git -c user.name=a -c user.email=a@a commit -m x", "git -c user.email=a@a commit -m x", "git -c User.Name=a commit -m x",
+    "git -c author.name=a commit -m x", "git -c committer.email=a@a revert --no-edit HEAD",
+    "git --config-env=user.name=NAME commit -m x", "git --config-env user.email=ADDRESS commit -m x",
+    "git add -A && git -c user.name=a -c user.email=a@a commit -m x", "bash -lc 'git -c user.name=a commit -m x'",
+]
+BY_VARIABLE = [
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a git commit -m x",
+    "GIT_AUTHOR_NAME=a git commit -m x", "GIT_AUTHOR_EMAIL=a@a git commit -m x", "GIT_COMMITTER_NAME=a git commit -m x",
+    "GIT_COMMITTER_EMAIL=a@a git cherry-pick lane/mine", "env GIT_AUTHOR_EMAIL=a@a git commit -m x",
+    "tmux send-keys 'GIT_AUTHOR_NAME=a git commit -m x' C-m",
+]
+BY_AUTHOR = ["git commit --author='A <a@a>' -m x", "git commit -m x --author 'A <a@a>'",
+             "git commit --amend --no-edit --author='A <a@a>'"]
+BY_CONFIG = ["git config user.name a", "git config user.email a@a", "git config --local user.name a",
+             "git config --worktree user.email a@a", "git config set user.email a@a", "git config Author.Name a"]
+OWN_IDENTITY = BY_OPTION + BY_VARIABLE + BY_AUTHOR + BY_CONFIG
+IDENTITY_FIX = "commit with the machine's configured identity; pass no name or address"
+#: and what both refusals about a variable say clears one a shell already holds
+UNSET = "`unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL` clears"
+
+
+@pytest.mark.parametrize("form", OWN_IDENTITY)
+def test_a_git_that_names_an_author_or_committer_of_its_own_is_refused_in_a_checkout_of_verity_or_infra(clones, form):
+    """A commit in the queue's repositories carries the machine's configured identity, by which their history shows who wrote
+    what. A commit made under a name and an address passed on the command line shows an author nobody can place, so a git
+    command that passes one there is refused, and the refusal says how to commit."""
+    for clone in ("verity", "infra"):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"] and UNSET in out["agent_message"], (form, clone, out)
+
+
+@pytest.mark.parametrize("form", OWN_IDENTITY)
+def test_a_scratch_repository_and_any_other_take_any_identity(clones, tmp_path, form):
+    """Tests commit in throwaway repositories under a temporary directory all the time, under any name: a repository with no
+    `origin`, or one that is not the queue's, takes the same commands."""
+    subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    for clone in ("scratch", "notes"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_the_identity_rule_judges_the_repository_the_command_runs_in(clones, tmp_path):
+    """The rule places a command by the directory it starts in and git's own `-C`: a worktree of a verity checkout is one, and
+    a scratch repository named from inside one is not. A command the guard can't place, as one that names its repository with
+    `GIT_DIR` or `--git-dir`, passes: the rule refuses only where it can tell."""
+    scratch, env = tmp_path / "scratch", {**os.environ, **GIT_ENV}
+    for args in (["init", "-q", str(scratch)], ["-C", str(tmp_path / "verity"), "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wt"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env=env)
+    commit = "-c user.name=a -c user.email=a@a commit -m x"
+    for form, clone in ((f"git {commit}", "wt"), (f"git -C {{V}} {commit}", "notes"), (f"git -C {{V}} {commit}", "scratch"),
+                        (f"git -C ../verity {commit}", "scratch"), (f"cd /tmp && git -C {{V}} {commit}", "notes"),
+                        (f"git -C {tmp_path}/wt {commit}", "notes")):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"], (form, clone, out)
+    for form in (f"git -C {scratch} {commit}", f"git -C ../scratch {commit}", f"git -C {{N}} {commit}",
+                 f"cd /tmp && git -C {scratch} {commit}", f"cd {scratch} && git {commit}",
+                 f"cd {scratch} && git init -q . && git {commit}", f"GIT_DIR={scratch}/.git git {commit}",
+                 f"git --git-dir={scratch}/.git {commit}", f"git init -q {tmp_path}/new && git -C {tmp_path}/new {commit}"):
+        assert clones(form, "verity") == {"permission": "allow"}, form
+
+
+COMMIT = "-c user.name=a -c user.email=a@a commit -m x"
+#: `cd DIR && git ...` that names an identity, with the clone it is typed in: DIR a checkout of verity or infra, a worktree of
+#: one or a directory inside one ({T} is the directory the clones are in, {S} a scratch repository, {V}/sub a directory)
+CD_INTO_A_CHECKOUT = [
+    (f"cd {{V}} && git {COMMIT}", "notes"), (f"cd {{V}} && git {COMMIT}", "scratch"), (f"cd {{T}}/infra && git {COMMIT}", "notes"),
+    (f"cd {{T}}/wt && git {COMMIT}", "scratch"), (f"cd ../verity && git {COMMIT}", "notes"), (f"cd sub && git {COMMIT}", "verity"),
+    (f"cd {{V}}/sub && git {COMMIT}", "scratch"), (f"cd {{V}}; git {COMMIT}", "notes"), (f"cd {{V}}\ngit {COMMIT}", "notes"),
+    (f"cd {{V}} 2>/dev/null && git {COMMIT}", "notes"), (f"cd {{V}} && git add -A && git {COMMIT}", "notes"),
+    (f"cd {{V}} && git diff --cached --quiet || git {COMMIT}", "notes"), (f"cd {{V}} && git status | tail -1; git {COMMIT}", "notes"),
+    (f"cd {{V}} && git status |& tail -1; git {COMMIT}", "notes"), (f"cd {{V}} && env LC_ALL=C git add -A && git {COMMIT}", "notes"),
+    ("cd {V} && git commit --author='A <a@a>' -m x", "notes"), ("cd {V} && GIT_AUTHOR_NAME=a git merge lane/mine", "notes"),
+    ("cd {V} && env GIT_COMMITTER_EMAIL=a@a git commit -m x", "notes"), ("cd {V} && git config user.email a@a", "notes"),
+    (f"cd {{S}} && cd {{V}} && git {COMMIT}", "notes"), (f"cd {{T}} && cd verity && git {COMMIT}", "scratch"),
+    (f"cd {{T}} && git -C verity {COMMIT}", "scratch"), (f"(cd {{V}} && git {COMMIT})", "notes"),
+    (f"cd {{S}} && (cd {{V}} && git {COMMIT})", "notes"), (f"bash -lc 'cd {{V}} && git {COMMIT}'", "notes"),
+    (f"tmux send-keys 'cd {{V}} && git {COMMIT}' C-m", "notes"),
+]
+#: the same after a `cd` into a scratch repository or the notes, typed in a checkout
+CD_OUT_OF_A_CHECKOUT = [
+    (f"cd {{S}} && git {COMMIT}", "verity"), (f"cd {{S}} && git {COMMIT}", "infra"), (f"cd {{S}} && git {COMMIT}", "wt"),
+    (f"cd {{N}} && git {COMMIT}", "verity"), (f"cd ../scratch && git {COMMIT}", "verity"), (f"cd {{S}}; git {COMMIT}", "verity"),
+    (f"cd {{V}} && cd {{S}} && git {COMMIT}", "verity"), (f"cd {{S}} && git init -q . && git {COMMIT}", "verity"),
+    (f"(cd {{S}} && git {COMMIT})", "verity"), (f"bash -lc 'cd {{S}} && git {COMMIT}'", "verity"),
+]
+#: and where the `cd`s leave the directory in doubt, each typed where a wrong guess would refuse it: a directory that does not
+#: exist, one the shell names later, a `cd` that may not run or runs in a shell of its own, and what the guard follows for no rule
+CD_IN_DOUBT = [
+    (f"cd {{T}}/nowhere && git {COMMIT}", "verity"), (f"cd {{V}}/nowhere; cd ..; git {COMMIT}", "scratch"),
+    (f'cd "$D" && git {COMMIT}', "verity"), (f"cd $(mktemp -d) && git init -q . && git {COMMIT}", "verity"),
+    (f"cd ~ && git {COMMIT}", "verity"), (f"(cd {{V}} && git status); git {COMMIT}", "scratch"),
+    (f"cd {{V}} & git {COMMIT}", "scratch"), (f"true || cd {{V}}; git {COMMIT}", "scratch"),
+    (f"if false; then true; cd {{V}}; fi; git {COMMIT}", "scratch"), (f"f() {{ cd {{V}}; }}; git {COMMIT}", "scratch"),
+    (f"X=`cd {{V}} && git rev-parse HEAD`; git {COMMIT}", "scratch"), (f"echo $(cd {{V}} && pwd); git {COMMIT}", "scratch"),
+    (f"nohup cd {{V}}; git {COMMIT}", "scratch"), (f"eval 'cd {{S}}' && git {COMMIT}", "verity"),
+    (f"pushd {{S}} && git {COMMIT}", "verity"), (f"source ./env.sh && cd {{V}} && git {COMMIT}", "notes"),
+    (f"cd {{V}} && GIT_DIR={{S}}/.git git {COMMIT}", "notes"), (f"cd {{V}} && git --git-dir={{S}}/.git {COMMIT}", "notes"),
+]
+
+
+def test_the_identity_rule_follows_a_cd_written_out_and_passes_what_a_cd_leaves_in_doubt(clones, tmp_path, monkeypatch):
+    """`cd CHECKOUT && git ...` is how a command is usually typed, so the identity rule, and no other, judges the git after a
+    plain `cd` where the `cd` leaves the shell: refused in a checkout of verity or infra, a worktree of one or a directory
+    inside one, passed in a scratch repository or the notes. Where the `cd`s leave the directory in doubt, the command passes."""
+    env, hook = {**os.environ, **GIT_ENV}, guard_module("shell_hook", monkeypatch)
+    for args in (["init", "-q", str(tmp_path / "scratch")], ["-C", str(tmp_path / "verity"), "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wt"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env=env)
+    (tmp_path / "verity" / "sub").mkdir()
+
+    def typed(form: str) -> str:
+        return form.replace("{T}", str(tmp_path)).replace("{S}", str(tmp_path / "scratch"))
+    passed = [(form, clone) for form, clone in CD_INTO_A_CHECKOUT
+              if (out := clones(typed(form), clone))["permission"] != "deny" or IDENTITY_FIX not in out["agent_message"]]
+    refused = [(form, clone) for form, clone in CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT if clones(typed(form), clone) != {"permission": "allow"}]
+    assert not passed and not refused, json.dumps({"passed": passed, "refused": refused})
+    for form, _ in CD_INTO_A_CHECKOUT + CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT:      # one directory for each command `flattened` gives
+        assert len(hook.cd_dirs(typed(form), str(tmp_path))[0]) == len(hook.flattened(typed(form))), form
+
+
+#: `git config --global` that writes the machine's identity, and the reads and other writes beside it
+GLOBAL_IDENTITY = [
+    "git config --global user.name a", "git config --global user.email a@a", "git config --global author.name a",
+    "git config --global committer.email a@a", "git config set --global user.email a@a", "git config --global User.Email a@a",
+    "git config --global user.name 'A B'", "/usr/bin/git config --global user.email a@a", "git -C {N} config --global user.name a",
+    "cd /tmp && git config --global user.name a", "bash -lc 'git config --global user.email a@a'",
+    "GIT_DIR=/nowhere git config --global user.name a", "XDG_CONFIG_HOME=/tmp/x git config --global user.name a",
+]
+#: what its refusal says to do, which holds on a machine that has an identity and on one that was given none
+GLOBAL_FIX = ("`git config --global user.name` and `git config --global user.email` read the identity the machine has; if either "
+              "prints nothing, the machine was not given it: stop and tell your coordinator rather than set one.")
+
+
+@pytest.mark.parametrize("form", GLOBAL_IDENTITY)
+def test_a_git_config_that_writes_the_machines_global_identity_is_refused_wherever_it_is_typed(clones, tmp_path, form):
+    """The identity every checkout on a machine commits with sits in its global configuration, so one `git config --global
+    user.name VALUE` typed anywhere changes the author of verity's and infra's commits. It is refused in every repository and
+    outside one. The refusal says how to read the identity the machine has, to stop and tell the coordinator where it was given
+    none rather than set one, and where a scratch repository's name goes instead."""
+    subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    for clone in ("verity", "infra", "notes", "scratch", "state"):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and GLOBAL_FIX in out["agent_message"], (form, clone, out)
+        assert "git -C <scratch> config user.name" in out["agent_message"] and "git -C <scratch> -c user.name=" in out["agent_message"]
+
+
+@pytest.mark.parametrize("form", [
+    "git config --global --get user.email", "git config --global user.name", "git config get --global user.email",
+    "git config --global core.abbrev 12", "git config --global user.signingkey K", "git config --global --unset user.name",
+    "git config --system user.name a", "git config --file /tmp/x user.name a", "git config -f /tmp/x user.email a@a",
+    "HOME=/tmp/home git config --global user.name a", "GIT_CONFIG_GLOBAL=/tmp/x git config --global user.email a@a",
+])
+def test_reading_the_global_identity_and_writing_any_other_global_key_passes(clones, form):
+    """`git config --global user.name` and `--get` read the machine's identity, a `--global` write of another key leaves it
+    alone, and a command that names another file as the global configuration (`HOME=DIR git config --global ...`) writes
+    there. `--system` and `--file` are not judged."""
+    for clone in ("verity", "infra", "notes"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+@pytest.mark.parametrize("form", [
+    "git log --author=NAME -3", "git shortlog -sn --author NAME", "git rev-list --count --author=a HEAD",
+    "git config --get user.email", "git config user.email", "git config --local user.name", "git var GIT_AUTHOR_IDENT",
+    "git config --unset user.name", "git config core.abbrev 12", "git commit -m x", "git commit -m 'refuse --author on a commit'",
+    "git commit --amend --no-edit --reset-author", "git -c commit.gpgsign=false commit -m x", "git -c user.signingkey=K commit -S -m x",
+    "GIT_AUTHOR_DATE=@1 GIT_COMMITTER_DATE=@1 git commit -m x",
+    "unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL; git commit -m x",
+])
+def test_reading_an_author_or_the_configured_identity_passes_in_a_checkout_of_verity_or_infra(clones, form):
+    """`--author` selects commits in `git log`, `git shortlog` and `git rev-list`; `git config KEY`, `git config --get KEY` and
+    `git var GIT_AUTHOR_IDENT` read the identity; and a commit that passes none carries the machine's."""
+    for clone in ("verity", "infra"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+#: commands that leave a variable naming a commit's author or committer set in the shell that runs them ({S} is a scratch
+#: repository): an `export`, a `declare` or `typeset`, an assignment with no command after it, each also in what a body, a
+#: subshell or a carrier runs, after a comment, and in a text the hook can't split
+SET_IN_THE_SHELL = [
+    "export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x",
+    "export GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_EMAIL=x@x", "export GIT_COMMITTER_NAME=x", "export GIT_COMMITTER_EMAIL=x@x",
+    "export GIT_AUTHOR_NAME='A B'", 'export GIT_COMMITTER_NAME="$USER"', "export GIT_AUTHOR_DATE=@0 GIT_COMMITTER_EMAIL=x@x",
+    "export PATH=/x:$PATH GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_NAME", "export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL",
+    "GIT_AUTHOR_NAME=x; export GIT_AUTHOR_NAME", "declare -x GIT_AUTHOR_NAME=x", "typeset -x GIT_COMMITTER_EMAIL=x@x",
+    "declare -gx GIT_COMMITTER_NAME=x", "declare GIT_AUTHOR_NAME=x", "readonly GIT_AUTHOR_EMAIL=x@x", "export -p GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_NAME=x", "GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x", "X=1 GIT_COMMITTER_NAME=x",
+    "GIT_COMMITTER_EMAIL=x@x; git -C {S} commit -m x", "set -a; GIT_AUTHOR_NAME=x; set +a",
+    "export GIT_AUTHOR_NAME=x && git -C {S} commit --allow-empty -m x",
+    "export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x; git -C {S} commit -m x; unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL",
+    "cd {S} && export GIT_AUTHOR_NAME=x && git commit -m x", "command export GIT_AUTHOR_NAME=x",
+    "if true; then export GIT_AUTHOR_NAME=x; fi", "for n in a b; do export GIT_AUTHOR_NAME=$n; done",
+    "f() { export GIT_AUTHOR_NAME=x; }; f", "(export GIT_AUTHOR_NAME=x; git -C {S} commit -m x)",
+    "bash -c 'export GIT_AUTHOR_NAME=x; git -C {S} commit -m x'", "bash -lc 'GIT_COMMITTER_NAME=x'",
+    "eval 'export GIT_AUTHOR_NAME=x'", "tmux send-keys 'export GIT_AUTHOR_NAME=x' C-m",
+    "# a throwaway name\nexport GIT_AUTHOR_NAME=x", "# a throwaway name\nGIT_AUTHOR_NAME=x",
+    "git -C {S} status # first\nexport GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_NAME=x # for the scratch commits",
+    "# a throwaway name\ncd {S} && export GIT_AUTHOR_NAME=x", "# in a pane\ntmux send-keys 'export GIT_AUTHOR_NAME=x' C-m",
+    "export GIT_AUTHOR_NAME=$'it\\'s'", "echo $'it\\'s' && export GIT_AUTHOR_NAME=x", "echo $'it\\'s'\nexport GIT_AUTHOR_NAME=x",
+]
+#: and commands that leave none there: the names ahead of the one command, on its line or on continued ones, which the rule
+#: above judges by where its git runs; an `unset`; a read; an `export` of any other variable; and an export that is only
+#: words, in a quoted string, a comment or a heredoc's body
+NOT_SET_IN_THE_SHELL = [
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a git -C {S} commit --allow-empty -m x",
+    "env GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a git -C {S} commit -m x", "git -C {S} -c user.name=a -c user.email=a@a commit -m x",
+    "cd {S} && GIT_AUTHOR_NAME=a GIT_COMMITTER_NAME=a git commit -m x", "GIT_AUTHOR_NAME=a GIT_COMMITTER_NAME=a python3 fixture.py",
+    "unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL", "unset GIT_AUTHOR_NAME && git -C {S} status",
+    'echo "$GIT_AUTHOR_NAME"', 'echo "${GIT_COMMITTER_EMAIL-unset}"', '[ -n "${GIT_AUTHOR_NAME+x}" ] && echo set',
+    "declare -p GIT_AUTHOR_NAME", "compgen -e | rg GIT_", "git -C {S} var GIT_AUTHOR_IDENT",
+    "export GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0", "GIT_AUTHOR_DATE=@0", "export GIT_PAGER=cat GIT_TERMINAL_PROMPT=0",
+    "export PATH=$HOME/bin:$PATH", "export NAME=GIT_AUTHOR_NAME",
+    'git -C {S} commit --allow-empty -m "export GIT_AUTHOR_NAME=x is refused"', 'rg -n "export GIT_AUTHOR_NAME" {S}',
+    "echo 'GIT_AUTHOR_NAME=x; export GIT_AUTHOR_NAME'", "# export GIT_AUTHOR_NAME=x\ngit -C {S} status",
+    "# a throwaway commit\nGIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a git -C {S} commit --allow-empty -m x",
+    "# a throwaway commit\nGIT_AUTHOR_NAME='A (B)' GIT_AUTHOR_EMAIL=a@a git -C {S} commit --allow-empty -m 'x; GIT_AUTHOR_NAME=y'",
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a \\\n  GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a \\\n  git -C {S} commit --allow-empty -m x",
+    "# a throwaway commit\nGIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a \\\n  git -C {S} commit --allow-empty -m x",
+    "cat > {S}/note <<'EOF'\n# how not to\nexport GIT_AUTHOR_NAME=x\nEOF",
+]
+#: what its refusal says to do: where a scratch repository's name goes instead (and UNSET, for one a shell already holds)
+SHELL_FIX = ("put the names ahead of it, `GIT_AUTHOR_NAME=NAME GIT_AUTHOR_EMAIL=ADDRESS GIT_COMMITTER_NAME=NAME "
+             "GIT_COMMITTER_EMAIL=ADDRESS git -C <scratch> commit ...`")
+
+
+@pytest.fixture
+def scratch(tmp_path):
+    """A scratch repository beside the clones, and a form with its path for {S}."""
+    subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    return lambda form: form.replace("{S}", str(tmp_path / "scratch"))
+
+
+@pytest.mark.parametrize("form", SET_IN_THE_SHELL)
+def test_a_command_that_leaves_an_author_or_committer_set_in_the_shell_is_refused_wherever_it_is_typed(clones, scratch, form):
+    """A shell keeps what it is told to export, and git reads `GIT_AUTHOR_NAME` and its three kin from its environment in every
+    repository: a name exported for a commit in a scratch repository is the author of the next commit in verity's checkout too.
+    The hook reads a command and never a shell's environment, so the command that puts the name there is the one it can
+    refuse: in every repository and outside one, and, since a wrong pass can't be taken back, also where the name would die
+    with a subshell or a carrier. The refusal says where a scratch repository's name goes and what clears one already set."""
+    for clone in ("verity", "infra", "notes", "scratch", "state"):
+        out = clones(scratch(form), clone)
+        assert out["permission"] == "deny" and SHELL_FIX in out["agent_message"] and UNSET in out["agent_message"], (form, clone, out)
+        assert "-c user.name=NAME -c user.email=ADDRESS" in out["agent_message"]
+
+
+@pytest.mark.parametrize("form", NOT_SET_IN_THE_SHELL)
+def test_naming_an_author_ahead_of_one_command_unsetting_or_reading_one_and_any_other_export_pass(clones, scratch, form):
+    """The names ahead of one command reach that command alone, which the rule for a git that names an identity judges by
+    where the git runs; `unset` is the cure; a read changes nothing; `GIT_AUTHOR_DATE` and every other variable are not an
+    identity; and an export that is only the words of a message, a search, a comment or a file being written sets nothing."""
+    for clone in ("verity", "infra", "notes", "scratch", "state"):
+        assert clones(scratch(form), clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_a_name_exported_for_throwaway_commits_is_stopped_before_a_later_merge_in_the_checkout_carries_it(clones, scratch):
+    """Three commands, each typed on its own: an export of a made-up author and committer, a throwaway commit in a scratch
+    repository, and later a merge in verity's checkout. The shell that ran the first still held the names at the third, whose
+    merge commit went into the history under them. The second and third name no identity and pass as typed, as they must:
+    the hook can't see what a shell holds. So the first is refused, and the form its refusal gives for the throwaway commit,
+    the names ahead of that one command, passes."""
+    export = ("export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x "
+              "GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0")
+    commit, merge = scratch("git -C {S} commit -q --allow-empty -m throwaway"), "git merge --no-edit lane/mine"
+    out = clones(export, "verity")
+    assert out["permission"] == "deny" and SHELL_FIX in out["agent_message"] and UNSET in out["agent_message"], out
+    assert clones(commit, "verity") == {"permission": "allow"} and clones(merge, "verity") == {"permission": "allow"}
+    ahead = "GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0"
+    assert clones(f"{ahead} {commit}", "verity") == {"permission": "allow"}
 
 
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):
