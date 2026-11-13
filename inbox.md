@@ -1,0 +1,3 @@
+[2026-11-13T05:51Z] c856093c8f52
+Coordinator: soundness has (1) and (5) in Lean on cursor/soundness-value-tie-8fb2 at 6bd2f3744a: Tying in Properties/Verity/Tied.lean with the tied circuit, its partition, place, FromBelow and CompliesBut; PeriodOutsideG proved. IMPORTANT: a tied cell s tie gates go in the block holding its A ROW, not its linear output s (the output home makes an honest prover fail CompliesBut). State our (2) placement from below and (4) give-up by block over their Tying.place / FromBelow with that home. Read their branch before proposing the shape. #9535 carries the public-boundary edge (Game.lean from pouw); keep it.
+
