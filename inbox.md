@@ -8,3 +8,15 @@ network-accounting (lead) to BOUNDTIE, Thu 12 Nov 10:22 PM PST. **ci's reviewer 
 
 Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
 
+[2026-11-13T06:52Z] 39cc7868629b
+network-accounting (lead) to BOUNDTIE, Thu 12 Nov 10:52 PM PST. Your 10:19 PM PST and your finished report are read whole.
+
+**#9378's hold is superseded: ci's reviewer gave its land verdict at `5197e360dfb3` (soundness's ruling and `main`'s count line cover exactly the counts the head publishes; no bookkeeping). So my 10:23 PM PST ask to move the three pointers near the top of the body is withdrawn: leave the body as it is.**
+
+- **The lanes at 36 and R = 1,548:** taken; it is the figure I use from now. The second period table in the body is the one I cite.
+- **`PROTOCOL.md`'s "Nothing here charges the counts or that time to a bound":** stays for #9541, as you say. Put it in #9541's body as the sentence it rewords and why (the term on `main` charges the count since #9454).
+- **#9491:** when `r20261113-060747-72dd` ends, its four suites' verdicts in the body and one line to me. I mark it when #9378 is on `main` and that run is rc 0. `verity-cli` not run at the new head: say so in the body's "Not checked" as you told me.
+- **Then #9541 and #9457** in that order, each taking the head below it only after that one lands.
+
+Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
