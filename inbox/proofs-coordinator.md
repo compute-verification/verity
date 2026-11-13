@@ -128352,3 +128352,95 @@ Clock: `date -u` read 07:47Z. Pen: no `~/wt` on this machine at 07:39Z, so I mad
 **Not established.** Everything: no file written, no run. That `refTable` is the name SESSIONCOINS's `slotStream` wants for `tab` (its 07:15Z entry reads `tab t` as the one table's name in `spec.tables`; mine gives exactly `spec.tables = #[refTable h t]`).
 
 Branches: `cursor/proofs-sessionof2-7c3a` at `42bba26494` (the join's head, no commit of mine yet), pushed. `cursor/proofs-sessionof-5c1e` at `521933e143` and `cursor/proofs-sessionof-9b17` at `b611ff18e0`, untouched. Runs: none.
+
+## HELDOF, Fri 13 Nov 07:48Z: `593d` FAILED (rc 1): `descOk` REFUSES the play, first at `memberOk`; and the play this run made is NOT an accepted play (the merged tree holds FRAME's `second-inputs` rule, which refuses its registered `logits`); the refused case is empty on a one-template play; the executable compiles; TWOLEG's call to `descOk` must not go in yet; THIS TURN RAN IN THE COPY THAT STOPPED AT 07:09Z (the 07:00Z loop's timer woke it on a new machine, no other loop seen); a run that prints every clause and the member's numbers is next
+
+In plain words: the run you asked for at 06:43Z came back failed, and it shows three things. The descriptor check says
+no to the small play, and the first clause that fails is the member's size bound. The play this run made was not an
+accepted play at all: the run regenerates it at a tree that also holds FRAME's stricter second-stage rule, and that rule
+refuses it. And the refused case written for (b) changes nothing on a play with one template. No proof is touched and
+nothing calls the check. One more run, which prints every clause's verdict and the member's numbers, is next.
+
+**1. Which loop writes this** [run]
+- The timer `heldof-descrun-593d`, set by the 07:00Z loop, fired at 07:36:39Z into this conversation: the copy that
+  stopped at 07:09Z. The machine booted at 07:36:41Z and had no `~/wt`.
+- From my stop line (07:08:41Z) to 07:45Z no HELDOF commit or entry appeared on `cursor/proofs-heldof-4c7b`,
+  `cursor/proofs-heldof-descrun-f684` or this file [read: fetched 07:38Z and 07:45Z]. The 07:08Z entry ends "Waiting
+  on … one timer", so no HELDOF turn was running when the timer fired [derived].
+- So I took the pen (`mkdir ~/wt/.pen`, 07:45:22Z) and did the timer's job. Of the 07:00Z loop's turn I hold only what
+  it pushed: `be198cefc6`, `ae14c73b55` and the 07:08Z entry.
+- If a second HELDOF loop appears I stop again and say so. Say if this copy should stop instead.
+
+**2. `r20261113-070605-593d`, word for word** [run] (vy-nebius-cpu-14, tree `ae14c73b55`, 07:06:30Z to 07:16:26Z, rc 1)
+- `second rc=1`
+- `FORM_ON rc=1`, `on.json`: `"verdict": "reject"`
+- `FORM_OFF rc=1`, `off.json`: `"verdict": "reject"` (rc 1 is what the script expects of this one)
+- `DESC rc=1`
+- `play: descOk false, refused at memberOk`
+- `play with template 1 named as template 0: descOk false, refused at memberOk`
+- The executable builds at that tree: `build-lean.log` ends "✔ [473/473] Built «sampled-two-desc»:exe" and "Build
+  completed successfully (473 jobs)". So `SampledTwoDesc.lean` and `SampledTwoDescMain.lean` compile against
+  `b53983fdab`'s `SampledTwo` and `Spot.Run`.
+
+**3. The play this run made is not an accepted play** [run, read]
+- `second.log`'s `TWO` line: `"held": false`, `"round_two": {"ok": false, "codes": ["second-inputs"]}`,
+  `"outcome": {"accepted": false, "interior": ["statements"], "replay_sample": [], "statements": ["second-inputs"], "refused": null}`.
+- The run of record's interior audit, `checks.statements`, is not ok: `second-inputs`, value `logits`, "the interior
+  registration registers a value that is neither one the verifier holds without the prover (one it pinned, one it holds
+  to an earlier record, or one it fills from its own bytes) nor the opened row of a read the auditor's params record, …".
+  Both forms reject on the run of record's `"symbol": "reject"`.
+- Why here and not in `2556` [read]:
+  - The rule `second-inputs` is in FRAME's `1ab2eea6de13` (`second_stage.py`, `Spot/SecondStage.lean`, `two_stage.py`),
+    which my head holds. It is not in TWOLEG's `b53983fdab`, where `2556` ran: `second rc=0`, `"held": true`,
+    `"round_two": {"ok": true, "codes": []}`, `FORM_ON rc=0`, `"verdict": "accept"`.
+  - `ae14c73b55` is the merge of the two.
+  - The two plays' params have one shape: one template, `TokenSelect_v4{V=128}`; one member with units `[[0, 8]]` and
+    `vus_per_block` 4; `interior.params.registered = {"logits": 128}`; a boundary of 6 requests under `subset`, k 2.
+- So at a tree that holds `1ab2eea6de13`, the second stage itself refuses TWOLEG's small play [one run].
+  FRAME, TWOLEG: which changes, the play's registration of `logits` or the rule? Until one does, no tree has both an
+  accepted play and my check.
+
+**4. What `descOk` would say of `2556`'s accepted play** [derived: not run on `2556`'s kept files, which lack `evidence.json` and the circuit]
+- `memberOk` reads only the template's circuit, the boundary layout and the replay cells. Those are the same in both
+  plays, so I expect `2556`'s play refused at `memberOk` too.
+- `memberOk` is the model's bound, not a new one [read]. `SampledTwoDesc.memberOk` is `ScopeDesc.memberOk` by `rfl`
+  (`memberOk_eq`), which gives `MemberFits`'s last clause in `ScopeOf.lean`: the member's whole lowered program, over
+  its `n` units (requests × cells), has at most `unitClassMax` = 262,144 gates, where
+  `memberSize c n = 2 + n·unitIns c + 3·(n·unitRows c)`.
+- Which of its three parts fails (`unitLog ≤ 32`, `0 < upv`, the size) the run does not print. [guess] The size: the
+  member's circuit file is 56 MB and its `META` has `k_log` 22.
+- If it is the size, `heldOf` is `none` at the kept accepted play, and `twoHolds_of_files` and everything on `decided`
+  say nothing about it. The model would have to bound a unit's bits, which is what the verifier refuses on
+  (`Spot.Partition`: "commits … bits, more than the widest class"), not the member's whole program. That is a change
+  to `MemberFits` and `partitions_keyProg` in `ScopeOf.lean`. Not started: the numbers first.
+- A later clause would refuse it too [read of the params and of the clause; not run]: `descOk` asks that the interior
+  register no value (`(vi.registered.map (·.1)).toList.isEmpty`), and both plays have
+  `interior.params.registered = {"logits": 128}`. `why` prints the first failing clause only, so the run did not show it.
+
+**5. The refused case is empty on this play** [read]
+- `renamed` gives template 1 the name of template 0. The play has one template (`proofs.templates` has one entry), so
+  the "renamed" play is the play, and its line repeats the first.
+- `namesOnce` needs a play of two templates. On a one-template play the registered value is itself a refused case.
+
+**6. Next, in this turn**
+- `sampled-two-desc` prints every clause's verdict, and for each template `unitLog`, `upv`, `unitIns`, `unitRows`, `n`
+  and `memberSize` against 262,144. One run of the same script on the scratch branch; `593d` took 9 min 56 s.
+- Then one line here: which bound fails and by how much.
+
+**STOP RULE:** none. Nothing calls `descOk`. No statement, lock or listed guarantee changes.
+
+**NEEDS:**
+- TWOLEG's call to `descOk` does not go in: as written it refuses the kept play (items 2 and 4).
+- FRAME and TWOLEG: item 3's question.
+- Your word, only if this copy should stop (item 1).
+
+**To post:** nothing.
+
+**Not established:**
+- That `2556`'s accepted play fails `memberOk` (derived, not run).
+- Which part of `memberOk` fails, and the member's numbers.
+- Whether any other clause fails on the play; the run shows the first only.
+- FRAME's head for me, `013955525dbe` (its 07:15Z entry): not read, not merged.
+
+Branches: `cursor/proofs-heldof-4c7b` at `be198cefc6`; scratch `cursor/proofs-heldof-descrun-f684` at `ae14c73b55`.
+Both pushed; nothing unpushed.
