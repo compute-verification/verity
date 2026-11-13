@@ -43,6 +43,7 @@
   "Proofs.Properties.NetworkCertifier.DeviceOutput",
   "Proofs.Properties.NetworkCertifier.DeviceOutput.Runs",
   "Proofs.Properties.Hash.Identity",
+  "Proofs.Properties.Hash.Lms",
   "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.NetworkCertifier.Records",
   "Proofs.Properties.Core.Period",
