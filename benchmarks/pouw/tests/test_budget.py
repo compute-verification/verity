@@ -21,7 +21,7 @@ FAM = {f.name: f for f in B.FAMILIES}
 GAMMA = {"sm_120": 2.1868, "H200": 2.3435, "B200": 2.5611, "L40S": 3.0144, "A100": 4.2263}
 
 
-def test_luck_is_the_drawn_units_deficient_branch_and_the_sum_bounds_the_mix():
+def test_luck_is_the_sample_deficient_branch_and_the_sum_bounds_the_mix():
     assert B.DEFICIT == pytest.approx(0.002368, rel=1e-3)
     for f in B.FAMILIES:
         t = B.today(f)
@@ -70,7 +70,7 @@ def test_sampling_data_is_opt2s_frontier_on_the_grid():
             assert e < plain[x] / 50
 
 
-def test_spend_and_draws_interpolate_through_the_points():
+def test_spend_and_samples_interpolate_through_the_points():
     xs, es, ds, _, _ = B.curve("plain")
     for x, e, d in list(zip(xs, es, ds))[5:-5]:
         s = B.sample(FAM["sm_120"], x)
@@ -87,7 +87,7 @@ def test_a_family_buys_provers_at_the_price_ratio():
     assert B.today(h200).B_sample == pytest.approx(B.today(sm).B_sample / 3)
 
 
-def test_filler_grows_each_drawn_units_cost():
+def test_filler_grows_each_sampled_blocks_cost():
     f = FAM["sm_120"]
     s0, s16 = B.sample(f, 0.3), B.sample(f, 0.3, y=16)
     u = B.curve("plain")[3][B.curve("plain")[0].index(0.316228) - 1]

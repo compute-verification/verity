@@ -326,7 +326,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
-from .gates import git_env
+from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -447,7 +447,7 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
     if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
         for k in DATES:
             full.pop(k, None)
-    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+    with worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
         r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
                            errors="surrogateescape", env=full)
     if check and r.returncode:
@@ -461,24 +461,6 @@ def _subcommand(args: tuple[str, ...]) -> str:
     while args[i:i + 1] == ("-c",):
         i += 2
     return args[i] if i < len(args) else ""
-
-
-#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
-#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
-#: reads every worktree's HEAD, holds it shared
-WORKTREES_LOCK = "research-worktrees.lock"
-
-
-@contextlib.contextmanager
-def _worktrees_shared(repo: Path, env: dict[str, str]):
-    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
-                            env=env).stdout.strip()
-    if not common:
-        yield
-        return
-    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
-        yield
 
 
 def _out(repo: Path, *args: str) -> str:
@@ -954,25 +936,36 @@ class DriveFlags:
                         for k, v in dataclasses.asdict(self).items())
 
 
+#: the word of a PR list that names every PR (`listed` with ``every``)
+EVERY = "*"
+
+
 def priority_list(path: Path, flag: str = "--priority-file", comments: bool = False) -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
     there is no such file.  With ``comments``, a `#` starts a comment that runs to the end of its line.  QueueError, with the
     fix, when it can't be read or holds anything else, naming it as ``flag``: the verified queue reads its `--wide-file` so
     too, and its `--pins-file` with ``comments``."""
+    return listed(path, flag, comments)[0]
+
+
+def listed(path: Path, flag: str = "--priority-file", comments: bool = False, every: bool = False) -> tuple[tuple[int, ...], bool]:
+    """(``path``'s PR numbers, as `priority_list` reads them; whether it holds `EVERY` too, a word only ``every`` takes): the
+    verified queue reads its `--heavy-file` so."""
     try:
         if not path.exists():
-            return ()
+            return (), False
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
         raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
     words = [w for w in re.split(r"[\s,]+", re.sub(r"#.*", "", text) if comments else text) if w]
-    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
+    star = every and EVERY in words
+    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w) and not (every and w == EVERY)]:
         raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
-                         "spaces or commas")
-    return tuple(dict.fromkeys(map(int, words)))
+                         f"spaces or commas{f', or {EVERY} for every PR' if every else ''}")
+    return tuple(dict.fromkeys(int(w) for w in words if w != EVERY)), star
 
 
 #: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
@@ -1092,12 +1085,13 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
     return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
-def scripts_at(repo: Path, at: str, paths: Iterable[str]) -> dict[str, str]:
-    """{path: blob} of the Python files at ``at`` of ``paths`` (a file, or a directory's own files when it ends in `/`)."""
+def scripts_at(repo: Path, at: str, paths: Iterable[str], suffix: str = ".py") -> dict[str, str]:
+    """{path: blob} of the Python files (those ending in ``suffix``; "" for every file) at ``at`` of ``paths`` (a file, or a
+    directory's own files when it ends in `/`)."""
     out = {}
     for line in _out(repo, "ls-tree", "-z", at, "--", *paths).split("\0"):
         meta, _, path = line.partition("\t")
-        if path.endswith(".py") and meta.split()[1:2] == ["blob"]:
+        if path.endswith(suffix) and meta.split()[1:2] == ["blob"]:
             out[path] = meta.split()[2]
     return out
 
@@ -2445,8 +2439,8 @@ class Queue:
         are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
         holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
         fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None).  Its
-        worktree is added and removed under the clone's worktree lock (`worktrees_locked`), which train.sh's launches in the
-        same clone hold for theirs: a prune beside a worktree half made deletes it."""
+        worktree is added and removed under `worktrees_locked`: train.sh's launches in the same clone add and prune theirs
+        under train.lock, and a fetch there reads every worktree's HEAD, which a worktree half added has as a placeholder."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
@@ -2931,13 +2925,14 @@ class Queue:
 
     def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None,
                fetched: Callable[[], Callable[[list[PR]], dict[int, float]] | None] | None = None,
-               loop: bool = False) -> dict[int, Entry]:
+               loop: bool = False, reviews: Callable[[int, str], list] | None = None) -> dict[int, Entry]:
         """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
         PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
         returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
         ``loop``, as the verified queue admits each onto `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on
-        `main` landed, a move PR that conflicts with `main` refused as any PR is, and so is a head whose own change names what a
-        move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
+        `main` landed, one holding a held PR's head waiting for it (`held_below`; a reviewer's hold read from ``reviews``, the
+        `reviewed` labels of a PR's head), a move PR that conflicts with `main` refused as any PR is, and so is a head whose
+        own change names what a move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
         member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
         self._clone()
         state = self.load_state()
@@ -2989,9 +2984,16 @@ class Queue:
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
         maps: dict[tuple[str, str], Retired | None] = {}
+
+        def held(a: int) -> str | None:
+            why = unreviewed(reviews(a, entries[a].pr.head), ()) if reviews else None
+            return why if why and why.startswith("held") else None
+
         for n in contained_first(entries):
             e = entries[n]
-            if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
+            if loop and (e.state == "ready" or e.why.startswith("contains")) and (below := held_below(entries, n, held)):
+                e.state, e.why = "waiting", held_waits(below[0], entries[below[0]].pr.head, below[1])
+            elif e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
                 e.state, e.why = "waiting", f"contains {e.contains(out[0])}, which is {entries[out[0]].state}: {entries[out[0]].why}"
             elif e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
@@ -4177,6 +4179,31 @@ def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
             "new head ready")
 
 
+def held_below(entries: dict[int, Entry], n: int, held: Callable[[int], str | None],
+               seen: frozenset[int] = frozenset()) -> tuple[int, str] | None:
+    """The held PR whose head ``n`` holds, directly or through the PRs between (`Entry.after`), with its hold: a hold label,
+    under which the queue doesn't admit it (`Entry.why`), or ``held``'s word on one it admits (a reviewer's, `unreviewed`);
+    None when ``n`` holds no held PR."""
+    for a in entries[n].after:
+        if a in seen or a not in entries:
+            continue
+        e = entries[a]
+        if hold := e.why if e.why.startswith("held (") else held(a) if e.state == "ready" else None:
+            return a, hold
+        if got := held_below(entries, a, held, seen | {n}):
+            return got
+    return None
+
+
+def held_waits(a: int, head: str, hold: str) -> str:
+    """Why a PR holding held PR #``a`` (`held_below`: at ``head``, under ``hold``) waits, with what releases it."""
+    label = re.match(r"held \(`(.+)` label\)", hold)
+    release = (f"the `{label[1]}` label comes off #{a}" if label else
+               f"#{a}'s holder gives that head a `land` verdict (`research queue review {a} --land`)")
+    return (f"it waits on #{a}'s head {head[:12]}, which is {hold}: it is taken once {release}, or once it no longer holds "
+            f"#{a}'s commits")
+
+
 def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
     """How ``head``'s own change mapped across ``moves`` (`mapped_change`) is kept: by the head and the SHA-512 of the moves'
     commits in order, which fix it whatever else `main` holds."""
@@ -4717,11 +4744,15 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 def worktrees_locked(repo: Path):
     """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
     and train.sh never add, remove or prune a worktree beside another (two at once fail with "Could not write new index
-    file")."""
+    file"), then the worktree lock (`WORKTREES_LOCK`), so no fetch in the clone reads a worktree's placeholder HEAD while it
+    is added (`bad object worktrees/…/HEAD`).  Always in that order: train.lock first, which train.sh takes alone, and
+    `WORKTREES_LOCK` second, which nothing holds while it waits for train.lock."""
     common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     with open(common / "train.lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
-        yield
+        with open(common / WORKTREES_LOCK, "a") as w:
+            fcntl.flock(w, fcntl.LOCK_EX)
+            yield
 
 
 @contextlib.contextmanager
@@ -5855,9 +5886,11 @@ PASSES_LOOKBACK_S = 3 * 86400
 KEY_COMMAND = "tools/verity/lean/lean_changed.py"
 KEY_CODE = ("tools/verity/lean/", "tools/verity/check/", "tools/verity/graph/verity_graph/")
 KEY_TIMEOUT_S = 600
-#: the fast path's command, which `RecordsGate` names for each package it can't vouch for
-RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
+#: the fast path's command, which `RecordsGate` names for each package it can't vouch for, asking the memory `records_mem_gb`
+#: gives: the commit's own `KEY_COMMAND --ask`'s, else `RECORDS_MEM_GB`, within `ASK_TIMEOUT_S`
+RECORDS_COMMAND = ("research run --on auto --mem-gb {gb} --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
+RECORDS_MEM_GB, ASK_TIMEOUT_S = 93, 60
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
 RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
                          "a red whose culprit, the PR, is fixed forward or reverted")
@@ -5879,19 +5912,12 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     if pkgs is None:
         pkgs = [posixpath.dirname(f) for f in _out(repo, "ls-tree", "-r", "-z", "--name-only", commit).split("\0")
                 if f.endswith("/" + LEAN_LOCK) and not f.startswith(LEAN_FIXTURES)]
-    code = scripts_at(repo, commit, KEY_CODE)
-    if not (pkgs := sorted(set(pkgs))) or KEY_COMMAND not in code:
+    if not (pkgs := sorted(set(pkgs))):
         return {}
-    with tempfile.TemporaryDirectory(prefix="queue-keys-", ignore_cleanup_errors=True) as d:
-        tool = write_scripts(repo, code, Path(d)) / KEY_COMMAND
-        if "--inputs-key" not in tool.read_text(errors="replace"):
-            return {}
-        try:
-            r = subprocess.run([sys.executable, str(tool), "--inputs-key", *pkgs, "--head", commit, "--repo", str(Path(repo).resolve())],
-                               cwd=d, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=KEY_TIMEOUT_S,
-                               env=git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1"))
-        except subprocess.TimeoutExpired:
-            raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} ran over {KEY_TIMEOUT_S} s") from None
+    r = _own_key_command(repo, commit, "--inputs-key", [*pkgs, "--head", commit, "--repo", str(Path(repo).resolve())],
+                         KEY_TIMEOUT_S)
+    if r is None:
+        return {}
     if r.returncode:
         raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} exited {r.returncode}: "
                          f"{(r.stderr or r.stdout).strip()[-300:]}")
@@ -5903,6 +5929,50 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     if not isinstance(keys, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in keys.items()):
         raise bad
     return keys
+
+
+def _own_key_command(repo: Path, commit: str, flag: str, args: list[str], timeout: float,
+                     suffix: str = ".py") -> subprocess.CompletedProcess | None:
+    """``commit``'s own `KEY_COMMAND` run with ``flag`` and ``args`` from git's objects in ``repo`` (no checkout, no build), the
+    files of `KEY_CODE` ending in ``suffix`` (`scripts_at`) at ``commit`` written to a temporary directory it runs in: None when
+    ``commit`` has no such command or it names no ``flag``; QueueError when it runs over ``timeout`` seconds."""
+    code = scripts_at(repo, commit, KEY_CODE, suffix)
+    if KEY_COMMAND not in code:
+        return None
+    with tempfile.TemporaryDirectory(prefix="queue-keys-", ignore_cleanup_errors=True) as d:
+        tool = write_scripts(repo, code, Path(d)) / KEY_COMMAND
+        if flag not in tool.read_text(errors="replace"):
+            return None
+        try:
+            return subprocess.run([sys.executable, str(tool), flag, *args], cwd=d, capture_output=True, text=True,
+                                  stdin=subprocess.DEVNULL, timeout=timeout,
+                                  env=git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1"))
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"`{KEY_COMMAND} {flag}` at {commit[:12]} ran over {timeout:g} s") from None
+
+
+def records_mem_gb(repo: Path, commit: str, pkgs: Iterable[str], log: Callable[[str], None] = print) -> int:
+    """The memory, in GB, a records run of ``pkgs`` at ``commit`` asks (`RECORDS_COMMAND`'s `--mem-gb`): the one whole number
+    ``commit``'s own `KEY_COMMAND --ask PKG...` prints, run as `lean_keys` runs `--inputs-key` (every file of `KEY_CODE` at
+    ``commit``, `ASK_TIMEOUT_S` at most); `RECORDS_MEM_GB` where it has no `--ask`, or it fails, runs over or prints anything
+    else.  Logs which."""
+    try:
+        r = _own_key_command(repo, commit, "--ask", sorted(set(pkgs)), ASK_TIMEOUT_S, suffix="")
+    except QueueError as e:
+        why = str(e)
+    else:
+        if r is None:
+            why = f"{commit[:12]} has no `{KEY_COMMAND} --ask`"
+        elif r.returncode:
+            said = (r.stderr or r.stdout).strip()[-300:]
+            why = f"`{KEY_COMMAND} --ask` at {commit[:12]} exited {r.returncode}{f': {said}' if said else ''}"
+        elif re.fullmatch(r"[1-9][0-9]*", r.stdout.strip()):
+            log(f"research queue: records run at {commit[:12]}: --mem-gb {r.stdout.strip()}, its own `{KEY_COMMAND} --ask`'s")
+            return int(r.stdout.strip())
+        else:
+            why = f"`{KEY_COMMAND} --ask` at {commit[:12]} printed no whole number of GB: {r.stdout.strip()[-200:]!r}"
+    log(f"research queue: records run at {commit[:12]}: --mem-gb {RECORDS_MEM_GB}, as {why}")
+    return RECORDS_MEM_GB
 
 
 def lean_passed(store, pkg: str, key: str) -> tuple[str, str, str] | None:
@@ -6011,7 +6081,8 @@ class RecordsGate:
         lines = []
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
-            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`; when its result keeps "
+            gb = records_mem_gb(self.repo, pr.head, [pkg], self.log)
+            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg, gb=gb)}`; when its result keeps "
                          f"records (`lean-audit/record/<path>/{LEAN_LOCK}`, {pkg}'s and each requirer's it regenerated), commit "
                          f"exactly those over the locks of their paths and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
@@ -7217,7 +7288,7 @@ def main(argv: list[str]) -> int:
                 return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
-            entries = q.status(fetched=at_main, loop=True)
+            entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
             teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,

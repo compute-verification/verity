@@ -863,7 +863,7 @@ def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_check
 
 
 def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_branches(tmp_path, monkeypatch):
-    """ci's case: a `--train` fast-forward lands the checked tip over prep merges nobody checked one by one; and infra's: an
+    """A `--train` fast-forward lands the checked tip over prep merges nobody checked one by one, and an
     older worktree's push to a lane branch must pass without the guard starting at all."""
     from research.merge import ZERO, install_push_guard, unchecked_pushes
     from research.store.local import LocalStore

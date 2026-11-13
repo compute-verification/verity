@@ -94,7 +94,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 251, "security/Properties": 185, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 251, "security/Properties": 186, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -102,7 +102,7 @@ def test_the_unwitnessed_list_only_shrinks():
     changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
     down with it (`_held`)."""
     _held("UNWITNESSED", UNWITNESSED, {_rel(p): len(_lock(p).get("unwitnessed", {})) for p in lake_packages()},
-          "`unwitnessed`", "it only shrinks (LEAN-66); give the guarantee you added its `honest` and `nontrivial` "
+          "`unwitnessed`", "it only shrinks; give the guarantee you added its `honest` and `nontrivial` "
           "witnesses under `witnesses` (check.py's failure names both) instead")
 
 
@@ -370,10 +370,11 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
-                      f"larger of their caps while the count took both: raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
+                      f"under it, the merge kept the lowering while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -642,9 +643,47 @@ def _load(name: str, path: Path):
     return mod
 
 
-def test_every_cap_merges_as_the_larger_of_its_sides():
+def unmatched_first(packages: dict[str, list[dict]], audited) -> list[str]:
+    """The entries of `tools/verity/lean/replay-first.json` (``packages``) that name no module their package audits
+    (``audited``: a package's audited modules, or None where the tree has no such audited package)."""
+    lost = []
+    for p, entries in packages.items():
+        own = audited(p)
+        lost += [f"{p}: no audited package here"] if own is None else \
+            [f"{p}: {e['module']}" for e in entries if e["module"] not in own]
+    return lost
+
+
+def test_every_module_a_replay_checks_first_is_one_its_package_audits():
+    """Each entry of `tools/verity/lean/replay-first.json` names one of its package's own Lean files under its lock's
+    roots, the modules a replay step is planned for (`check.py`'s `replay_plan`). An entry that matches none would leave
+    the module it meant in the one replay with every other, unseen, so a mistyped or moved name fails here."""
+    check = _load("lean_check", ROOT / "tools" / "verity" / "lean" / "check.py")
+    packages = json.loads((ROOT / "tools" / "verity" / "lean" / check.REPLAY_FIRST).read_text())["packages"]
+
+    def audited(p: str) -> set[str] | None:
+        if not (ROOT / p / check.POLICY).is_file():
+            return None
+        roots = json.loads((ROOT / p / check.POLICY).read_text())["roots"]
+        return {m for m in check.lean_modules(ROOT / p) if check.under(roots, m)}
+    assert {p: check.replay_first(ROOT / p) for p in packages} == packages
+    lost = unmatched_first(packages, audited)
+    assert not lost, ("replay-first.json lists modules no audit replays, so their steps never run: name each as its file "
+                      f"under its package's roots has it, or remove the entry: {lost}")
+
+
+def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
+    """`unmatched_first` on a toy list: a mistyped module and a package the tree does not audit are named, and an entry
+    that names an audited module is not."""
+    entries = [{"module": "P.Heavy", "threads": 2, "why": "w"}, {"module": "P.Haevy", "threads": 2, "why": "w"}]
+    audited = {"a/pkg": {"P.Heavy", "P.A"}}.get
+    assert unmatched_first({"a/pkg": entries[:1]}, audited) == []
+    assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
+
+
+def test_every_cap_merges_key_by_key():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as the larger of the two sides' caps instead of conflicting."""
+    three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]

@@ -1001,8 +1001,8 @@ def test_a_replay_block_others_read_is_charged_its_groups_served_bits():
     """A replay grain of fan-out F (`partition.fanout`), some replay block reading values another computed, is charged as
     if each replay block served F S bits, the capped form at N = F: more than at F = 1 where the served bound binds, and a
     design's bound is the capped `two_stage_exfil` at F.  At F = 1, every replay block closed, the charge is the served
-    bound's alone.  The sets' form without a served bound doesn't read F, and the patterns' form, each request read in one
-    replay block, refuses it."""
+    bound's alone.  The sets' form without a served bound doesn't read F, and the patterns' form, priced only at closed
+    replay blocks, refuses it."""
     delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
     cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
     k, q = {0: 995}, 0.0438

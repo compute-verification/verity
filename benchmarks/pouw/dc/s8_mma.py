@@ -50,7 +50,7 @@ STRUCTURED = ("extremes", "clamp_block_a", "clamp_block_b", "clamp_single_a", "c
 HEADER = b"S8MMAPR1"
 
 
-def words(values) -> np.ndarray:
+def words(values: np.ndarray | list) -> np.ndarray:
     return (np.asarray(values, dtype=np.int64) & 0xFFFFFFFF).astype(np.uint32)
 
 
@@ -194,7 +194,7 @@ def decode(fmt: str, x: np.ndarray) -> np.ndarray:
     return x.astype(np.int8).astype(np.int64) if fmt == "s8" else x.astype(np.int64)
 
 
-def exact_sums(A, B, fa, fb, chunk_words=1 << 20) -> np.ndarray:
+def exact_sums(A: np.ndarray, B: np.ndarray, fa: str, fb: str, chunk_words: int = 1 << 20) -> np.ndarray:
     t, m, _ = A.shape
     n = B.shape[1]
     out = np.empty((t, m, n), np.int64)
@@ -244,7 +244,8 @@ def sass_kernels(text: str) -> dict[str, dict]:
     return kernels
 
 
-def check_words(family: str, A, B, C, meta, device: dict[str, np.ndarray]) -> tuple[dict, dict, bool]:
+def check_words(family: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, meta: list[dict],
+                device: dict[str, np.ndarray]) -> tuple[dict, dict, bool]:
     """Each form's words (``device[form]``, (t, M, N) u32) against the sm_120 model at the form's formats and saturation:
     (report of the forms, the clamp tiles' words by pattern, every form exact)."""
     from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as SAT
@@ -317,7 +318,7 @@ def check_words(family: str, A, B, C, meta, device: dict[str, np.ndarray]) -> tu
     return forms, structured, bool(ok)
 
 
-def check(args) -> int:
+def check(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(Path.cwd()))
     A, B, C = read_cases(Path(args.cases))
     meta = json.loads(Path(args.meta).read_text())
@@ -347,7 +348,7 @@ def check(args) -> int:
     return 0 if ok else 1
 
 
-def evidence(args) -> int:
+def evidence(args: argparse.Namespace) -> int:
     """The ``tc-evidence/v1`` meta (``benchmarks/tc_probe/trust.py``'s nested ``tc_evidence``) of one family's s8.s8 .satfinite
     form in a run's outputs: its families with their word and mismatch counts against the registry instruction's model, and
     its SASS."""
