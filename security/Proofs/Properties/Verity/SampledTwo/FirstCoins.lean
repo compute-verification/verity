@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Flock.SpotFlock.Jeq
 import all Spot.Run
+import all Lean.Data.Json.Basic
 
 /-!
 # The first stage's coins are the device's
@@ -243,7 +244,7 @@ theorem inputOf_source (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStag
     (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
     (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).source = ξ := by
   unfold VStar.Recursive.SampledTwo.inputOf
-  first | rfl | (split; rfl)
+  rfl
 
 /-- **The first stage read all its bytes**: on a play the form accepts, the run's first stage read every byte of its
 input's, since the form refuses where the evidence's bytes run past what the run answers it read (`sourceRead`). -/
