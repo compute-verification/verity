@@ -50,13 +50,11 @@ theorem key_item (i : Core.Registration.Item) : (item B i).key = i.key := by cas
 theorem entry_refusal_sheet {D₁ D₂ : Verity.Registration.Digests} (h : D₁.sheet = D₂.sheet)
     (A : Verity.Registration.Auditor) (c : Verity.Registration.Composite) (S : Verity.Site) (head : String)
     (e : Verity.Registration.Entry) : e.refusal D₁ A c S head = e.refusal D₂ A c S head := by
-  cases e with
-  | site p s =>
-    simp only [Verity.Registration.Entry.refusal, Verity.Registration.Entry.kindRefusal, Verity.Site.Entry.refusal,
-      Verity.Site.Entry.Fresh, Verity.Site.Entry.Sheets, Verity.Site.Entry.Capacity, h]
-    split_ifs <;> rfl
-  | information => rfl
-  | declaration => rfl
+  obtain ⟨s₁, e₁, g₁⟩ := D₁
+  obtain ⟨s₂, e₂, g₂⟩ := D₂
+  dsimp only at h
+  subst h
+  cases e <;> rfl
 
 /-- **A valid log registers each item once.** -/
 theorem valid_items_nodup {D : Verity.Registration.Digests} {A : Verity.Registration.Auditor}
@@ -129,7 +127,7 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
     have hr := Properties.Site.refuses Core.Site.Registration.sha512 A c s.site s.head x
     have hf : refusal ∘ Core.Registration.Refusal.site = Properties.Site.refusal := rfl
     rw [Core.Registration.Entry.refusal, Option.map_map, hf, hr,
-      entry_refusal_sheet (D₁ := Properties.Site.digests Core.Site.Registration.sha512) (D₂ := digests E) rfl, hS, hH,
+      entry_refusal_sheet (D₁ := Properties.Site.digests Core.Site.Registration.sha512) (D₂ := digests E) rfl, hS, ← hH,
       Verity.Registration.refusal]
     cases x
     simp [entry, regEntry, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
