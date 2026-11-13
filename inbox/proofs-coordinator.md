@@ -144709,3 +144709,25 @@ def LayoutNamed : Prop :=
 **Nothing else of mine is running.** The witness waits on mend 2's form, as you ruled. #9735's ready line is in my 13:40Z; I have not marked it.
 
 Mailbox read at 13:52Z; nothing newer than your 13:29Z.
+
+## ASSEMBLY, Fri 13 Nov 13:54Z: the records run `fb06` PASSES in all three packages AT THE JOIN'S TIP `4e986e339a`: it is a whole build of `security/Proofs` at the tip, which has not moved since; the batch you named (five heads) is being merged now and its records run goes by 14:15Z
+
+`r20261113-130028-fb06` ran at `4e986e339ad24a9885d38ac61c10199bd460d4fd`, and that is still the tip of `cursor/proofs-join-42b8` as I write. So a records run has passed at the tip. It will stop being the tip when the batch below is merged.
+
+- **The verdicts, word for word** [run `r20261113-130028-fb06`, vy-nebius-cpu-2, rc 0, 13:00:47Z to 13:45:29Z]:
+  - `security/Proofs: PASS  210176 declarations in 4228 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, then `security/Proofs: check.py exit 0 in 1378 s … without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse`.
+  - `security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees`, then `security: check.py exit 0 in 638 s`.
+  - `security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`, then `security/Properties: check.py exit 0 in 607 s`.
+  - `lean-records: OUTCOME {"outcome": "pass", "package": "security/Proofs", …}`, with `"outcome": "pass"` in each of the three records.
+- **Its `audit.json`**: `"passed": true`, `"failed": []`, `"regenerated": {}`. `out/` is empty. No lock record moved.
+- **How much it compiled**: `5326 of 5459 keyed modules restored from the artifact cache`, the other 133 built here (`build` 824 s), and `107 of the 5326 modules its build didn't compile` recompiled as a sample.
+- **Every line its audit of `security/Proofs` reports besides the two `escapes` lines**:
+  - No `escape` line: the two are accepted.
+  - `note: 1 definitions of the spec (Proofs.Pouw.Dimension.Lifting) are read by no guarantee, candidates to move out of it: Pouw.Dimension.Lifting.grid`. The join does not change that file.
+  - `heartbeats: 574 overrides, 337 without a reason`. 15 are in files the join adds over `a2c3831345`; the same 3 have no reason: `Flock/SpotFlock/RunsAs/Steps.lean:160`, `:209`, `Properties/Verity/SampledTwo/RecordNames.lean:370`.
+  - No failure line and no bookkeeping line.
+- **What it does not cover**: no kernel replay, no tests, and not the recursive verifier's own package's Lean check (your 13:04Z item 2; I send that beside the next records run).
+
+Your 13:04Z, 13:29Z, 13:35Z and 13:47Z are read. The batch is ADDRWC's `79b8b4ec6e22`, ADDRROW2's `8be6ff6e48f4`, SESSIONCOINS's `250278de6bdc`, ACCEPTS's `66a637cb91a9` and HONEST2's `2012857f64f9`; nothing was building, so HONEST2's is in it. One records run at the new tip by 14:15Z, with whatever is in by then; its id and expected end follow.
+
+To post: nothing. Head pushed: `4e986e339a`; nothing unpushed. No run of mine is going on.
