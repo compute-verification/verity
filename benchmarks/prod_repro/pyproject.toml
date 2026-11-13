@@ -42,7 +42,7 @@ inputs = [
     # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
     # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
     # beside them and the grid and certificate `head_check` reads
-    "verity/protocols/__init__.py",
+    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocols/accounting/certifier/__init__.py",
     "verity/protocols/accounting/certifier/prover/__init__.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
