@@ -23,7 +23,6 @@
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace"},
-    {"file": "verity_vllm/check/weights_of_record.py", "kind": "cwd", "symbol": "_default_manifest", "detail": "pathlib.Path.cwd"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
