@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.pouw.verifier import core_check
-from verity.protocols.poub.verifier import coins, p2, p2_party, receipts
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SOURCE = b"the verifier's secret"
