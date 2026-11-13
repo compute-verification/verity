@@ -3,7 +3,7 @@ A class's place in its window's session, and the family of that session its samp
 functions of a registration record's window alone (`place`, `family`), beside the root the window's session is opened
 on (`run`).
 
-A window's session holds one family of challenges for each sample drawn in it, and a sample's evidence is read as
+A window's session holds one family of challenges for each sample sampled in it, and a sample's evidence is read as
 challenges of one family (`Challenger.drawCoins`). Which family a registration's sample reads is not its prover's to
 name: it is the family of the place the record's own window names. A check that holds the family it reads to `family`
 of the record, and the session's root to `run` of the record, reads the one sample the record fixes.

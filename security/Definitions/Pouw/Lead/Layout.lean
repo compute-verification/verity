@@ -20,7 +20,7 @@ hiding L1 + (a).
 * **A call's bits** (`Layout.callBits`): a forward's egress cap, `cap` bits a token, apportioned among its calls by
   their MACs, so a call's share is `cap · rows · n · K / fwdMacs` and a forward's calls' shares sum to its cap. The
   network certifier counts and refuses per forward, not per call (`Pouw.Lead.Forward.Accepted`).
-* **The coins** (`Coins`) are what the certifier draws after it holds the call's `A`: the tag bits `b`, the step-1
+* **The coins** (`Coins`) are what the certifier samples after it holds the call's `A`: the tag bits `b`, the step-1
   bits `a₁`, the tag weights `G ∈ [−3, 3]^{4×n}` and the coin lanes `s ∈ {±1, ±3, …, ±(2^e − 1)}`, one a step, tile,
   lane and column. They are a finite type, and every bound averages over them uniformly.
 * **The committed word** (`word`) of row `i`, step `t`, column `j` is `−β_j` plus, over the steps `τ ≤ t`, the data's
@@ -71,7 +71,7 @@ structure Layout where
 /-- Coin tiles a call: `⌈m / tile⌉`. -/
 def Layout.tiles (L : Layout) : ℕ := (L.m + L.tile - 1) / L.tile
 
-/-- **The call's coins**, drawn by the certifier after it holds the call's `A`:
+/-- **The call's coins**, sampled by the certifier after it holds the call's `A`:
 `(b, a₁, g, u)` with tag bits `b i t`, step-1 bits `a₁ i e`, tag weights `G = g − 3` and coin lanes `s = 2u − (2^e − 1)`
 (`u` a step, tile, lane and column). -/
 abbrev Coins (L : Layout) : Type :=

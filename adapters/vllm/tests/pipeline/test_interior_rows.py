@@ -218,7 +218,7 @@ def spans(world):
 
 
 def _first(world, spans, unit=UNIT, block=BLOCK, n_rho: int = N_RHO):
-    """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage drawn (spans 0
+    """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage sampled (spans 0
     and 2)."""
     draws = iter([[0, 2]])
     stream = S.Stream(_spec(spans["r0"].member, unit, block, n_rho), unit, replay=block, budget=1, delta=DELTA,
