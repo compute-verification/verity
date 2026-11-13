@@ -137645,3 +137645,57 @@ On a rejection the reason is `checkBlobs`' only if the checks are reported in it
 - The queue stopped waiting (rc 79, not a failure) on `Sampled/Record/Pass.lean`, `r20261113-110041-4813` on vy-nebius-cpu-1, still running at 11:21Z [run]; the queue takes `CircuitKept.lean` when it ends. One try at a time.
 - Suites `r20261113-110236-7a94` on vy-nebius-cpu-7: running [run], due about 11:45Z.
 - Still needed from you: where the served-cases fix (`96193ee1080`) lands, (a) or (b) of my 11:07Z entry.
+## ONSITE, Fri 13 Nov 11:25Z: CHAIN 2: on the stager's real pass, still moving (tip `ffdc9480c03d`), our three moves and the loose paths' map certify; the 4 red root tests are each an edit of importcarry's listing head; one `verity-cli` test is red on lean's lock, not on a map; the Lean fast path runs to about 12:15Z
+
+**What I ran on.** No after-maps head is posted yet [read 11:14Z: my mailbox, TOP-398, VLLM-283]. The stager's real pass is moving on `cursor/top-moves-chain2-42e2`: 13 maps staged by 11:04Z, our four among them; the PoUW maps, the group map, the pins and the listing's head are still to come [read: its first-parent log]. I ran on that tip, `ffdc9480c03de8c3433994ef7a62fae4c4f68987`, without waiting:
+
+- Our commits are behind the tip, so their certificates stand whatever the stager adds.
+- The tests' verdicts are for this tip only. I run the job again on the posted head; it takes 6 minutes.
+
+**The checks job, `r20261113-111517-b914`** [run: cpu-9 through `--on auto`, 11:15:56Z to 11:21:30Z, rc 1 by the tests alone]:
+
+| Step | Verdict |
+|---|---|
+| compose, `2ad8dd208591` | certified a pure move: 19 renames, 33 path-only edits; `resolve_check.py` 0 issues |
+| configurations, `354b5b6fac74` | certified: 13 renames, 32 path-only edits; 0 issues |
+| world, `dddb1864a440` | certified: 6 renames, 11 path-only edits; 0 issues |
+| loose paths, `578efd95fb31` | certified: 34 renames, 217 path-only edits; 0 issues |
+| `tests/test_tree.py HEAD` | rc 0 |
+| what Python imports | the new module names, from the run's clone; the old names are not found |
+| `import_order.py --check` | "differs" |
+| the four root test files | 65 passed, 4 failed |
+| `verity-cli`, quick | 132 passed, 1 failed |
+| `demos/lifecycle`, quick | 66 passed |
+
+The renames are the first trial's (19, 13, 6), and the loose paths' count is the one LOOSEMAP's own run gave [relayed].
+
+**The 4 red root tests are the listing's, and each is an edit importcarry's head makes** [run; ran: `chain2_listing_head.py` of `cursor/vllm-listing-chain2-script-bcc5` at `3c2a1e366501` with `--dry` on the tip: all five edits "made", nothing written]:
+
+- `test_a_file_loads_only_its_own_row_or_an_earlier_one`: the rows `verity/protocols/onsite` and `verity/protocols/remote` hold nothing. Its edits 1a and 1b, the three rows and the place.
+- `test_a_place_loads_only_the_places_the_listing_names`: trusted places reach `verity/definitions` through `verity/circuits`. Its edits 2a and 2b, the four files of the cut.
+- `test_verity_loads_no_distribution_of_its_own`: `tools/difftest`. Its edit 3.
+- `test_the_listing_is_what_its_generator_writes`: the generator's run after the edits.
+
+My listing commit is not in the pass: the tip's order names remote, onsite and compose once each [read].
+
+**`verity-cli`'s one red test is on lean's lock, not on a map** [run; read: `security/lean-audit.json` at three commits]:
+
+- The test is `tests/test_lean_deployed.py::test_on_the_trees_own_locks_each_gap_is_the_lean_checks_and_each_gap_premise_has_a_row`.
+- It refuses the lock: `deployed` names `NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted`, and `guarantees` has no record under that name.
+- The lock reads so at lean's head `28a271c823e7` already: `deployed` has the new name, and the record keeps the old key `NetTiming.SecurityProofs.PeriodLeakAccepted`. On `main` (`053b8e50fe8a`) both have the old name.
+- lean's records commit should rename the record [guess]. Until it does, this test is red on every head of the chain. I have not read that lean named it; one line to lean would settle it.
+
+**One line of ours for after the chain; no test is red on it.** `verity/protocols/compose/verifier/remote/README.md:69` links `composition/README.md`, which our two moves leave unresolved (a bookkeeping warning of `tests/test_doc_paths.py`). It should read `../lean/README.md`. I carry it with #9602. Nothing for the stager.
+
+**Not final on this tip:**
+
+- `demos/lifecycle` passes here. The first trial refused it after the served Definitions' map, and that map is not staged yet [read].
+- `test_trusted_hashes_are_current` is in PoUS's suite, which my job does not run.
+
+**The Lean fast path, `r20261113-111607-5428`** [run: cpu-14 through `--on auto`, one place, started 11:17:17Z]:
+
+- The composition's package at `verity/protocols/compose/verifier/lean` passed in its first minute: 167 declarations in 8 modules.
+- It now audits `security` and `security/Properties`, each with `security/Proofs`, then the world's package. Expected end 12:00Z to 12:20Z [guess].
+- `security`'s lock on this head holds lean's renamed names, so a refusal there would be the records commit's matter, not our moves'. I say which when it ends.
+
+**Next, at 12:30Z:** the Lean run's verdict, and the checks job on the posted head if there is one. No head of mine moved.
