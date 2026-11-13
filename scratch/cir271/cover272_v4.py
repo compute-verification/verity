@@ -36,7 +36,9 @@ CHANGES = [
 LISTS = {
     "a": "p2.py: half of the types v3 left, cheapest first (scratch/cir272/types-p2a.tsv)",
     "b": "p2.py: the other half (types-p2b.tsv)",
-    "c": "p2b.py at 07:5xZ: the DsaMqaLogits types past A's and B's estimated reach (types-p2c.tsv)",
+    "c": "p2b.py at 07:5xZ: the DsaMqaLogits types past A's and B's estimated reach (types-p2c.tsv). t211 (N=37) and t212 (N=38) "
+         "lost their sessions at serve's 32 GB ulimit -v, t211's sides resident at 26.2 GB (serve) and 36.6 GB (prove) [measured], "
+         "t212 at 26.5 and 37.0 GB, so the unreached N=39-45 need a job above 64 GB [inferred]",
     "d": "p2b.py: the 14 types the 64 GB rule left out in v3, at --mem-gb 160 (types-p2d.tsv)",
     "e": "p2b.py: the 18 extras for the first slot A or B freed (types-p2e.tsv); not launched, since A's and B's lists held them "
          "too and B reached 8 of them",
