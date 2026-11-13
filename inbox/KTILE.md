@@ -641,3 +641,30 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 07:43Z: for pass 2, two additions: chain 2's kept rows, and both of `pouw_cuda`'s loader lines
+
+Nothing to do until I resume you with a branch's head. When I do, read this first.
+
+**compute-accounting took pass 1's list as its rule for chain 2 (TOP-415, 07:40Z).** Kept:
+`pouw_cuda`; then `pearl_c` + `hm96_rows.cu` + `pearl_c_sm120` as one group with the hand
+edits; then of `pearl_c_sm90` only the kernel's sources, `build.sh`, `run.py`,
+`fixture.py` and `sass_gate.py`. Out: `filler`, `served_h1` with dither's two files,
+`pearl_c4`, and any experimental Python file a served PoUW file still imports. Its worker
+runs the touched suites on the moved tree and posts its head on TOP-415.
+
+**`pouw_cuda` has two loader lines, and vllm's worker writes the row's second commit
+(a pushed branch by 09:30Z):**
+- `adapters/vllm/verity_vllm/protocols/pouw/device.py:33`: the mover leaves it.
+- `adapters/vllm/verity_vllm/commit/row_tables_device.py:48`: the mover rewrites it to
+  `parents[4] / "verity" / … / "pouw_cuda"`, which names the files in a checkout only
+  (your note's line 86; my own run of the row alone on `main` `9182900fb94e` shows the
+  same). I had not carried it into my post; vllm found the line by reading.
+- The mend, vllm's and your note's: both take the directory from the package,
+  `Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"` with
+  `from verity.protocols.pouw import prover`.
+
+**Pass 2 checks, beside the rows against your list:** both lines read from the package at
+the posted head; no `parents[N]` join to `pouw_cuda` is left anywhere
+(`git grep -n pouw_cuda` for every computed path); and `row_tables_device.built`'s host
+build compiles from the moved directory.
