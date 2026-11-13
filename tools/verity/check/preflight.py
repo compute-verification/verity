@@ -146,7 +146,7 @@ def probe(root: Path, packages: list[str]) -> list[dict]:
     for k, v in sorted(pins(root).items()):
         if k in keys:
             return [{"name": f"{v['package']}'s Lean bundle {k[:12]}", "key": k, "sha256": v["sha256"], "bytes": v["bytes"]}]
-    up = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
+    up = root / "verity" / "protocols" / "flock" / "prover" / "agreement" / "upstream.json"
     if up.is_file():
         return [{"name": "the pinned upstream build", "sha256": json.loads(up.read_text())["upstream"]["sha256"]}]
     return []
@@ -210,7 +210,7 @@ def _sent(inputs: Path | None, sha256: str) -> bool:
 
 def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list[str]]:
     """avx512f, when the run carries the pinned upstream build's URL (lean-agreement runs) and that build needs it."""
-    pin = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
+    pin = root / "verity" / "protocols" / "flock" / "prover" / "agreement" / "upstream.json"
     if not pin.is_file() or not (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").exists():
         return ["cpu: no lean-agreement on this tree"], []
     up = json.loads(pin.read_text())["upstream"]

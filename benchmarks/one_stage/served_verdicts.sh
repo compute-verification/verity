@@ -1647,7 +1647,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/flock/pod/60-circuit.sh || return 6
+  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/flock/prover/pod/60-circuit.sh || return 6
   # after flock-verify's build, whose package it requires by path: the inference-only verdict's `nci-check --count`,
   # without which the verdict is the Python count's alone
   (cd verity/protocols/inference_only/verifier/nci/lean && lake build nci-check) || echo "nci-check didn't build"
