@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `verity`: windows, commitments, the Definitions a unit replays and core's registered values.
 # `benchmarks/torch_gpu/commit_slots/slots.py`: kernels' commit call, which builds the bundle's step commitments.
-inputs = ["verity", "benchmarks/torch_gpu/commit_slots/slots.py"]
+# `benchmarks/census/deployments.json`: the reference deployment test_block_record holds the block record's to.
+inputs = ["verity", "benchmarks/torch_gpu/commit_slots/slots.py", "benchmarks/census/deployments.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
