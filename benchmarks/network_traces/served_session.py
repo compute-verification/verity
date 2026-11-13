@@ -7,7 +7,7 @@ network certifier late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 
 answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to
 27% of requests. The network chain's run of record (`chain_record.sh`'s network certifier path) then proves the session.
 
-    python served_session.py plan [FLAGS]
+    python served_session.py plan [FLAGS] [--auditor AUDITOR]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
         [--at UTC]
     python served_session.py io --run RUN [--keep DIR]
@@ -19,15 +19,17 @@ answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000] [--scan-class w63|w63k4]
 
-``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
-request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule (`auditor.SCAN_CLASSES`:
-w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and ``--tokens``.
+``--requests`` is by default `REQUESTS`, what the served node's free disk seals by the endpoint's sizing; ``--tokens``
+is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule
+(`auditor.SCAN_CLASSES`: w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound
+``--prompt-ids`` and ``--tokens``.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
   its prompts are checked by this tree's gate first (`auditor.parse_warden` and `warden_prompts` on a scratch host), so
   a request the gate would refuse is refused here, with the gate's reason. A gate pinned at an older tree takes
-  400 requests at most.
+  400 requests at most. Each run is on ``--auditor`` (`AUDITOR` by default) but ``endpoint``, which is on ``--peer``;
+  the chain's command names an ``--auditor`` that isn't `AUDITOR` as its ``--coin-peer``.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
   128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
@@ -90,7 +92,7 @@ deployment's challenger-key/v1 record (labelled ``challenger-key current``), sen
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 **The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
-listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
+listens within about 35 s. Its records stay in its serve dir on the served node: requests.jsonl (prompt and streamed ids) and
 advice_trace.jsonl (prompt lengths, sampling, rows, emitted ids) are request values, and this runbook neither fetches
 nor publishes them. The endpoint step's advice (`verity-vllm advice`) needs both, so ``endpoint`` runs it there, on a
 copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its network certifier user,
@@ -195,15 +197,15 @@ TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
 HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
-              "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
+              "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
-              "h200-2 under its 300 GB disk floor "
+              "a served node with less than its 300 GB disk floor free "
               "and sends its own smoke and load requests into the records. VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
-              "too, so it is left off or points at a private dir on h200-2: the serve dir's records stay there, and "
-              "the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
+              "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
+              "there, and the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
@@ -258,6 +260,10 @@ def check(a: argparse.Namespace, data: bytes) -> dict:
 
 def plan(a: argparse.Namespace, data: bytes) -> dict:
     req = check(a, data)
+    # the auditor's node (``session`` plans without the flag); a chain's coin peer is the node it runs on, `AUDITOR`
+    # by ``chain``'s own default, so its command names any other
+    on = getattr(a, "auditor", AUDITOR)
+    coin_peer = "" if on == AUDITOR else f" --coin-peer {on}"
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
                f"--minutes {a.minutes} --prompt-ids {a.prompt_ids} --tokens {a.tokens} --vocab {a.vocab}"
@@ -269,21 +275,21 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
             "endpoint": ENDPOINT.format(port=a.port) + (f" --max-model-len {ctx}" if ctx > CONTEXT else ""),
             "hand_start": HAND_START,
             "runs": {
-                "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
+                "session": f"research run --on {on} --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
-                "io": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
+                "io": f"research run --on {on} --source . --project verity --as network-accounting "
                       "--cwd source --timeout 30m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run "
                       "--no-sync python benchmarks/network_traces/served_session.py io --run RUN'",
                 "endpoint": f"research run --on {a.peer} --source . --project verity --as network-accounting "
                             f"--cwd source --timeout 30m --send {CERTIFIED} -- bash -lc 'python3 "
                             "benchmarks/network_traces/served_session.py endpoint --from SERVE_DIR --io "
                             f"\"$RESEARCH_RUN_DIR/inputs/{CERTIFIED}\" --out \"$OUT\" --port {a.port}'",
-                "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
+                "chain": f"research run --on {on} --source . --project verity --as network-accounting "
                          "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
                          "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --draw 8 --coins gate "
+                         f"--endpoint ART --draw 8 --coins gate{coin_peer} "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
 
 
@@ -732,6 +738,8 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--scan-class", choices=sorted(A.SCAN_CLASSES),
                        help="the gate's scan class (its class of record, w63, by default)")
         q.add_argument("--at")
+    sub.choices["plan"].add_argument("--auditor", default=AUDITOR,
+                                     help="the auditor's node: every run's --on but the endpoint's, which is --peer")
     q = sub.choices["session"]
     q.add_argument("--out", type=Path, required=True)
     q.add_argument("--gate", default=GATE, help="USER@HOST, the gate's; or local, the dry rehearsal")
