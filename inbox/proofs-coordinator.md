@@ -142450,3 +142450,68 @@ Your 12:54Z is read (by the hook) [read]: `52b2` first; `drawCoins` after the ca
 - `cursor/proofs-redraw-commitof-4e9d` `779936dea335f202b11284204ec7ce4664ee00e0` (no pull request).
 
 **I wait on:** `r20261113-130102-ef87` (about 13:11Z [guess]), whose verdict I give in one line; then your word on the boundary line if you want it otherwise, and "carry". A timer of mine is set for the run.
+## ONSITE, Fri 13 Nov 13:07Z: CHAIN 2: the Lean fast path ended rc 1 and none of it is a move of ours: both of our packages pass, and `security` and `security/Properties` are refused on locks that are those of lean's head before any map, which lean's records commit regenerates; lean's records run covers our packages at their new paths and passed; on the head lean names (`1c91c20035cc`) nothing I ran is red
+
+Only what differs from my 12:14Z entry. Times are Friday's, UTC, from `date -u`.
+
+**1. The Lean fast path `r20261113-111607-5428`** (11:17:17Z to 12:47:14Z on cpu-14, rc 1; its tree is `ffdc9480c03d`, the pass at 13 maps of 17)
+
+| Package | Verdict [run `5428`] |
+|---|---|
+| `verity/protocols/compose/verifier/lean` (the composition's) | PASS: 167 declarations in 8 modules, `check.py` exit 0 in 24 s |
+| `verity/protocols/interface/world` (the world's) | PASS: 46 declarations in 1 module, `check.py` exit 0 in 19 s |
+| `security/Proofs` (built because `security` is taken in) | PASS: 204,314 declarations in 4051 modules |
+| `security` | FAIL: `check.py` exit 1 (3582 s, then 558 s for the world's pass) |
+| `security/Properties` | FAIL: `check.py` exit 1 (592 s, then 568 s) |
+
+So `lean_changed.py --records` is rc 1 for both packages, each time on the two requirers and never on the package itself.
+
+**Whose the refusal is: lean's records, not a move of ours.**
+
+- **The refused state is lean's head's own** [read: `git diff 28a271c823e7 ffdc9480c03d`]. Between lean's head `28a271c823e7`, the chain's base before any map, and my run's tree:
+  - `security/Properties/lean-audit.json` is byte-equal;
+  - `security/lean-audit.json` differs in three `"test"` paths;
+  - every `.lean` file is byte-equal or renamed whole (47), but two comment lines of `security/Definitions/Nci/Guarantees/Remote.lean`;
+  - `security/Properties/lakefile.toml` and the two manifests under `security/` differ only in the paths to moved packages.
+  - The lock's three lines and the two comment lines are the map `nci_rho_map.toml`'s (`4179dced6d5`), which is not one of our four. So the same refusals stand at lean's head with no map applied [derived].
+- **What our commits change there** [read]. The three moves, the loose paths' map and its two hand commits rename every `.lean` file whole and change neither lock. Under `security/` they edit the path to a moved package in that lakefile and the two manifests, and paths in five docs. With those paths all three packages built: `security/Proofs` passed, and the other two were refused at their records, not at the build [run `5428`].
+- **No failure line names a path** [read]. The 94 failure lines of `security` and the 62 of `security/Properties` name Lean declarations and the lock's lists.
+- **It holds the record lean named and more of its kind** [run `5428`]: `deployed` lists `NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted`, which `guarantees` does not; `witnesses` and `shape` list names that are not guarantees of the package; guarantees and definitions "changed". The tool's line "its records fail on this build, not only on record differences" says a package failed in some way that is not a record's difference [read: `lean_changed.py`, `settled` and `differences`]; the lists are of that kind [derived].
+- **The two lines that name a module we moved** report `Core.Remote.windowRecords` gone and `Core.Remote.executionPhaseRecords` new in `CoreRemote`. That is lean's rename inside the file: it is in `28a271c823e7` and not in `main` `053b8e50fe8a` [read]. Our move renames `CoreRemote.lean` whole (blob `56740a9ebed0` on both sides) [read].
+- **lean's commit `1c91c20035cc` is the cure** [read: the two locks at `316032179818` and at `1c91c20035cc`]. 154 of the 156 failure lines name a declaration whose line or record that commit changes. I did not trace the other two (`NetTiming.CertifierRegisters` "read by a statement, but none takes it as a premise", and one "definitions in … read changed" of C-Flock's witnesses' module).
+- **A limit of my run:** its tree was 4 maps short. The last map (`protocol_groups_map.toml`) then edited the lakefiles and manifests of `compose/verifier/onsite` and `compose/verifier/remote`. The composition's own Lean inputs and every file of the world's package are unchanged from my run's tree to the head [read]. For the head, lean's run is the evidence, not mine.
+
+**2. lean's records run has ended, covers our packages at their new paths, and passed** [run `r20261113-120414-2e9e`, lean's; its result, stdout and tails read by me]
+
+- On `316032179818`, 12:04:42Z to 12:44:34Z on cpu-13, rc 0, with lean's moves file.
+- Its lines: `verity/protocols/compose/verifier/lean` rc 0 in 25 s; `…/compose/verifier/onsite` rc 0 in 50 s; `…/compose/verifier/remote` rc 0 in 38 s; `verity/protocols/interface/world` rc 0 in 1 s, "reused, nothing built: the Lean check's audit, kernel replay included, passed on the same inputs here"; `security` and `security/Properties` pass.
+- No Lean input (`.lean`, lakefile, manifest, toolchain) differs between `316032179818` and the head `1c91c20035cc` [read]. So its verdict serves for our two packages at the head.
+- It is the fast path's kind (`lean-fast/v1`, no kernel replay, no tests), as mine was. The Lean check with replay at the head is the candidate's; I have not seen it.
+
+**3. The stager's branch since 12:14Z** [read: git]
+
+- `cursor/top-moves-chain2-42e2`: `316032179818` → `e20a0b69851f` (two digests in `benchmarks/harness/tests/test_exfiltration.py`) → `81bb562c0ecc` (12:33:39Z: `verity/hardware/cards.py`, `nodes.py` and a test, the data sheets found through a link). It has not moved since (13:01Z).
+- lean's two commits are on `cursor/lean-period-chain-4-fc8d` over that tip: `e8a7b401298e` (the three Lean-built fixtures) and `1c91c20035cc7a01405ba0e773421935eba70182` (the two locks). lean on TOP-398 at 12:51Z names that the head to mark [relayed]. top at 12:58Z says #9734 is not marked yet and the final head is that one plus test mends [relayed].
+- From `316032179818` to that head, no file differs under `verity/protocols/compose`, `verity/protocols/interface/world` or `tools/move`, nor `tests/import_order.toml`. Our four commits and importcarry's listing commit are its ancestors.
+
+**4. The checks job on that head: all green** [run `r20261113-125344-3a31`, 12:54:12Z to 12:59:51Z on cpu-14, rc 0, on `1c91c20035cc`]
+
+- I launched it without being asked: your mailbox holds nothing after 11:45Z. It is the same six-minute job as `e134`, on the head lean named.
+- Our four moves certify with the same counts, and `resolve_check.py` finds 0 issues on each. `tests/test_tree.py HEAD` is rc 0. `import_order.py --check`: "the same". The four root test files: 69 passed.
+- `verity-cli`: **133 passed**. The one test lean named passes on lean's locks. `demos/lifecycle`: 66 passed.
+
+**5. Reds others found, and whether they read our four moves** [relayed: top, TOP-398 12:58Z; vllm 12:46Z; ci 13:00Z. I ran none.]
+
+- ci's recorded run `r20261113-120735-d92d` on `316032179818` ended with ten failed suites; top says seven are still red at the head.
+- By the paths those posts name, none reads one of our four moves [read: the posts against our maps' 11 rows, and the eight test files at the head]. They read the registry's move (`artifacts.json`), the Definitions' moves (`verity/definitions/silicon/captures`, `verity.circuits.ops`), the protocols' groups (`accounting/pouw`, `certifier`, `proofs/flock`), a fixture's digest, PoUW's vectors script, the export's read of lean's lock, and one known flake.
+- `tools/research/tests/test_landing.py` names `verity/protocols/interface/world` at line 129, rightly; its failing test is another one, on PoUW's path.
+
+**Not established.**
+
+- **The composition's suite `verity-core-composition`**, which is ours, has not run on the moved tree: it is one of the 32 suites ci's run left out, and top asked ci for them at 13:01Z [relayed]. I have not run it either. It is Lean-built and takes about two hours whole.
+  - By reading only, at the head: no component join (`"a" / "b"`, `"a", "b"`) of an old path of our four maps is left outside `tools/move` and `archive`; the 141 repository paths that the files under `verity/protocols/compose` and `verity/protocols/interface/world` name all exist; every Lake `path` requirement there finds a lakefile.
+  - On your word I run that suite at the head through `research run --on auto`. I do not launch it unasked, beside ci's.
+- A kernel replay on the moved tree, but for the world's package by reuse (point 2). The whole check at the head. `tests/test_pins.py` and PoUS's suite, by me.
+- I did not rerun the Lean fast path at the head with lean's locks committed.
+
+**Next.** No run of mine is out and no timer is set. #9602 and #9674 are open, unmarked and unmoved; no `main` merged anywhere; nothing written in `tests/import_order.toml`.
