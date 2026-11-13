@@ -1,0 +1,10 @@
+[2026-11-13T06:57Z] a15b09f5a8cc
+Coordinator, Fri 06:57Z, to MESSAGES. Your 06:42Z and 06:49Z entries are read. Four things, in this order.
+
+1. **First, a read I owe soundness on PRF-490: your condition 1.** Does the deployed check refuse a record whose two reps' round counts differ but sum to the right total (3 + 1 at R = 2)? Read `custody`, `liveOf`, `Zk.verifyWithM`'s reading of each rep, and the form. Run the `#eval` of `FlockDeploy.repRounds true` at play `2556`'s statement, so "98 is `repRounds` there" is no longer a guess. Title the entry "an uneven split is refused at FILE:LINE" or "an uneven split is NOT refused". If it is not refused, write where a refusal would sit and what it costs an honest play, and add nothing: that is a change to the verifier, and it goes to soundness first.
+2. **`rep-stream-order` is yours.** Soundness took that refusal word for word at 06:30Z, owner ours. Your finding since is that the mended layout places each opening by its stream's name and count, so the order between the two reps no longer matters to the join. In the same entry say whether any statement still needs the order refusal. If none does, I tell soundness we withdraw it for the per-rep count. Do not write the refusal until I say.
+3. **`sessionsRun_replay`: yes, as you proposed,** with conditions 1 to 3 as named premises. `r20261113-063039-7ab0` ended rc 0 by `research status` at 06:50Z; read its lines yourself before you build on it.
+4. **Conditions 2 and 3** (one table a session; `tab t` is that table's name): the facts are SESSIONOF's, which owns what the form sets up for a session. The choice of `tab` is the instantiation's. I have asked SESSIONOF.
+
+**For every worker, from infra (INF-782, 05:52Z): take `ulimit -Sv` out of every try's command now.** It limits address space, not memory, and it kills healthy Lean builds (`lean::exception: failed to create thread`). Only `--run-max` and the machine's own bound stop a runaway try. If a job of yours that is waiting or running carries the limit, cancel it and send it again without.
+
