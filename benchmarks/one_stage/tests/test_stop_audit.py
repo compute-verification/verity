@@ -107,7 +107,7 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     with pytest.raises(SA.Unlogged, match="no record of the class's boundary stream's log"):
         _resume(SMALL.unlogged(handoff, T.PAIR))
 
-    spans, blocks = T.TS.family_of(r.layout), T.TS.family_of(r.layout, blocks=True)
+    spans, blocks = T.WP.family_of(r.layout), T.WP.family_of(r.layout, blocks=True)
     assert (handoff["family"], s["family"], handoff["window_root"]) == (spans, blocks, r.layout.run)
     swapped = {**handoff, "stop": {**s, "family": spans}}
     for named in (swapped, {**handoff, "family": blocks}):

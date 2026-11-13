@@ -41,6 +41,7 @@ sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "veri
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("a5_coins")
+WP = importlib.import_module("window_place")
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -94,7 +95,7 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
 def _placed(layout: BR.Layout, seed: str = "first") -> FC.Challenger:
     """A test's challenger for a class's first stage whose hand-off is resumed: its one family is the class's place's
     (`two_stage.family_of`), the family `two_stage.resume` names."""
-    return FC.Challenger(seed, label=TS.family_of(layout))
+    return FC.Challenger(seed, label=WP.family_of(layout))
 
 
 def _samples_q(got: TS.First) -> bool:
@@ -234,9 +235,9 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     names the same, or names neither, resumes to the same registration and sample under them. Refused: a hand-off
     that names another family, as one written by a second sample of the same registration on another family is; a
     hand-off that names another session root than its record's; a caller's root that is not the record's; and a
-    record whose window is of another run than the class's commitment."""
+    record whose window is of another run, or names another class, than the class's commitment."""
     c = _class()
-    pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
+    pub, mine, elsewhere = c.public(), WP.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
     stage1 = json.loads(json.dumps(got.stage1()))
     assert stage1["family"] == mine and "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
@@ -258,9 +259,13 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
         TS.resume({**stage1, "window_root": elsewhere}, PAIR)
     with pytest.raises(ValueError, match="the registration is held to the session root abababab"):
         TS.resume(stage1, PAIR, window_root=elsewhere)
-    moved = {**stage1, "record": {**stage1["record"], "window": {**stage1["record"]["window"], "run": elsewhere}}}
+    window = stage1["record"]["window"]
+    moved = {**stage1, "record": {**stage1["record"], "window": {**window, "run": elsewhere}}}
     with pytest.raises(ValueError, match="the record's window is of run abababab"):
         TS.resume(moved, PAIR, window_root=elsewhere)
+    resized = {**stage1, "record": {**stage1["record"], "window": {**window, "outputs": 8}}}
+    with pytest.raises(ValueError, match="the record's window names another class than its commitment's layout"):
+        TS.resume(resized, PAIR, window_root=pub["run"])
 
 
 def test_the_second_stages_coins_follow_the_whole_first_stage():
@@ -487,41 +492,82 @@ def _stop_class(held: bool = True) -> BR.Committed:
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
-def test_a_classs_place_in_its_windows_session_is_its_layouts_alone():
-    """`place` is ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks, and a record's window says the same four: its
-    ``prompt``, its ``outputs``, ``stopped`` true and, on a stop record, ``population`` "stop". The class's family is
-    ``draw/<place>``, the place in decimal. Classes that differ in a size or in being a stop class have places apart,
-    and a stop class's stop blocks the place after its spans'. A class filed without a stop block has its sizes' place
-    with no stop bit, as a class under no rule has. Refused: the stop blocks of a class that is no stop class, and a
-    size of 2^32 or more."""
+#: `window_place.of`'s rows, a record's window and its place, None for a window that has none: the rows the Lean
+#: verifier's place is held to
+PLACES = [
+    ({"prompt": 4, "outputs": 4}, 68719476752),
+    ({"prompt": 4, "outputs": 4, "stopped": False}, 68719476752),
+    ({"prompt": 4, "outputs": 4, "stopped": True}, 68719476754),
+    ({"prompt": 4, "outputs": 4, "stopped": True, "population": "stop"}, 68719476755),
+    ({"prompt": 4, "outputs": 2}, 68719476744),
+    ({"prompt": 2, "outputs": 8}, 34359738400),
+    ({"prompt": 8, "outputs": 2}, 137438953480),
+    ({"prompt": 0, "outputs": 0}, 0),
+    ({"prompt": 0, "outputs": 1}, 4),
+    ({"prompt": 1, "outputs": 0}, 17179869184),
+    ({"prompt": 2**32 - 1, "outputs": 2**32 - 1, "stopped": True, "population": "stop"}, 2**66 - 1),
+    ({"prompt": 2**32, "outputs": 4}, None),
+    ({"prompt": 4, "outputs": 2**32}, None),
+    ({"prompt": 4, "outputs": -1}, None),
+    ({"prompt": "4", "outputs": 4}, None),
+    ({"prompt": 4.0, "outputs": 4}, None),
+    ({"prompt": True, "outputs": 4}, None),
+    ({"prompt": None, "outputs": 4}, None),
+    ({"outputs": 4}, None),
+    ({"prompt": 4}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": 1}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": "true"}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": None}, None),
+    ({"prompt": 4, "outputs": 4, "population": "stop"}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": False, "population": "stop"}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": True, "population": "spans"}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": True, "population": None}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": True, "population": 1}, None),
+]
+
+
+def test_a_classs_place_in_its_windows_session_is_its_records_windows_alone():
+    """`window_place.of` is ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks over four items of a record's
+    window: its ``prompt``, its ``outputs``, ``stopped`` true and, on a stop record, ``population`` "stop"; no other
+    item moves it (`PLACES`). The family is ``draw/<place>``, the place in decimal. A layout's place is its record's
+    window's, and its stop blocks' its stop record's. Classes that differ in a size or in being a stop class have
+    places apart, and a stop class's stop blocks the place after its spans'. A class filed without a stop block has
+    its sizes' place with no stop bit, as a class under no rule has. Refused: a size that is no natural number below
+    2^32, a ``stopped`` that is neither true nor false, a ``population`` other than "stop", and the stop blocks of a
+    class that is no stop class."""
     def layout(prompt: int = 4, outputs: int = 4, **more: object) -> BR.Layout:
         return BR.Layout(PAIR, 0, 1, prompt, outputs, N, ROOT, **more)
 
-    def of_window(w: dict) -> int:
-        return ((w["prompt"] * 2**32 + w["outputs"]) * 2 + (w.get("stopped") is True)) * 2 + (w.get("population") == "stop")
-
+    for window, at in PLACES:
+        more = {**window, "run": ROOT, "row": 3, "check": "c", "stop": STOP.to_json(), "verdicts": True}
+        if at is None:
+            for w in (window, more):
+                with pytest.raises(ValueError, match="no place in a window's session|is no stop class"):
+                    WP.of(w)
+        else:
+            assert WP.of(window) == WP.of(more) == at, window
+            assert WP.family(window) == AC.family(at) == f"draw/{at}"
     plain, filed, stopped = layout(), layout(stop=STOP, held=False), layout(stop=STOP)
-    assert TS.place(plain) == TS.place(filed) == 68719476752
-    assert (TS.place(stopped), TS.place(stopped, blocks=True)) == (68719476754, 68719476755)
-    assert [TS.place(c) for c in (plain, filed, stopped)] == [of_window(c.provenance()) for c in (plain, filed, stopped)]
-    assert TS.place(stopped, blocks=True) == of_window({**stopped.provenance(), "population": "stop"})
-    assert (TS.family_of(plain), TS.family_of(stopped)) == ("draw/68719476752", "draw/68719476754")
-    assert TS.family_of(stopped, blocks=True) == AC.family(TS.place(stopped, blocks=True)) == "draw/68719476755"
-    places = [TS.place(layout(p, o, **more), blocks) for p in (2, 4, 8) for o, more, blocks in (
+    classes = (plain, filed, stopped)
+    assert [WP.of_layout(c) for c in classes] == [WP.of(c.provenance()) for c in classes]
+    assert [WP.of_layout(c) for c in classes] == [68719476752, 68719476752, 68719476754]
+    assert WP.of_layout(stopped, blocks=True) == WP.of({**stopped.provenance(), "population": "stop"}) == 68719476755
+    assert (WP.family_of(plain), WP.family_of(stopped)) == ("draw/68719476752", "draw/68719476754")
+    assert WP.family_of(stopped, blocks=True) == WP.family({**stopped.provenance(), "population": "stop"})
+    assert WP.family_of(stopped, blocks=True) == "draw/68719476755"
+    places = [WP.of_layout(layout(p, o, **more), blocks) for p in (2, 4, 8) for o, more, blocks in (
         (2, {}, False), (4, {}, False), (8, {}, False), (4, {"stop": STOP}, False), (4, {"stop": STOP}, True))]
     assert len(set(places)) == len(places) == 15
     for c in (plain, filed):
         with pytest.raises(ValueError, match="is no stop class"):
-            TS.place(c, blocks=True)
-    with pytest.raises(ValueError, match="no place in a window's session"):
-        TS.place(layout(prompt=1 << 32))
+            WP.of_layout(c, blocks=True)
 
 
 def _stop_places() -> list[int]:
     """The places `_stop_class`'s two classes take in their window's session (`two_stage.place`): the stop class's
     spans', its stop blocks', and the other class's."""
     stopped, filed = (BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held) for held in (True, False))
-    return [TS.place(stopped), TS.place(stopped, blocks=True), TS.place(filed)]
+    return [WP.of_layout(stopped), WP.of_layout(stopped, blocks=True), WP.of_layout(filed)]
 
 
 class OneSession(CC.ChallengerCoins):
