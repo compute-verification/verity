@@ -9,7 +9,7 @@ with the run's own record, the commitment, appended, and that record's digest th
 (`baseline_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
 budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
-commitments and evidence. Onsite's and remote's difftest (`verity/protocols/remote/verifier/composition/tests/`) samples the
+commitments and evidence. Onsite's and remote's difftest (`verity/protocols/compose/tests/`) samples the
 subprotocol's cases from `drawn` and answers them with `reference`."""
 
 from __future__ import annotations

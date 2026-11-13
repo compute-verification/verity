@@ -231,7 +231,7 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
-    "Verity's two composite protocols": "`verity/protocols/remote/verifier/composition/README.md`, in a Lake package's "
+    "Verity's two composite protocols": "`verity/protocols/compose/README.md`, in a Lake package's "
                                         "directory, which the protocols' word move rewrites; renamed with it",
 }
 

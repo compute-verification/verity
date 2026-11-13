@@ -54,7 +54,7 @@ from verity.protocols.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 from verity.settings import REGISTRY as VERITY_SETTINGS
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[4]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/protocols/onsite/verifier", ROOT / "verity/protocols/remote/verifier"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 #: the mark of a difftest that takes over five minutes on a node: it stays out of every check but the nightly cold one, which runs

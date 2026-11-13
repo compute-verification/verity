@@ -6,7 +6,7 @@ answer format, `build` makes a period with one change (`EXPECT`, each aimed at o
 parameters, commitments, evidence and cases) in the clock form or, for a change named `rows-…`, the rows form, and
 `case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports
 what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it samples onsite's certifier cases from
-`build` and answers them with `reference` (`verity/protocols/remote/verifier/composition/tests/reference.py`)."""
+`build` and answers them with `reference` (`verity/protocols/compose/tests/reference.py`)."""
 
 from __future__ import annotations
 

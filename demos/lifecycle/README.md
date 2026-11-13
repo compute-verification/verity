@@ -162,7 +162,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
 | `spot`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
-| `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/protocols/remote/verifier/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
+| `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/protocols/compose/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/commitments/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |

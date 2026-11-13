@@ -45,7 +45,7 @@ one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.pro
 `verity/protocols/remote/verifier/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/protocols/remote/verifier/composition/README.md`). H1's development executable
+(`Core.Composition.tiedSameB`, `verity/protocols/compose/README.md`). H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
 Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
@@ -94,7 +94,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/protocols/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside sampled proofs'
-(`verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+(`verity/protocols/compose/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes

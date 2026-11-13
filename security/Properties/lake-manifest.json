@@ -20,7 +20,7 @@
    "name": "core_composition",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/protocols/remote/verifier/composition",
+   "dir": "../../verity/protocols/compose",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

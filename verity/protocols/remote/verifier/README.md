@@ -67,7 +67,7 @@ the period must name the policy's record as its Commit record (`windowRecords`),
 remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). The
 product's rule and its difftest are the composition's ([README](composition/README.md),
-`verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py`).
+`verity/protocols/compose/tests/test_composition_difftest.py`).
 
 ## Lifecycle
 
@@ -91,7 +91,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
-4. **The verdict**, by the composition rule (`verity/protocols/remote/verifier/composition/README.md`). The composite rejects if
+4. **The verdict**, by the composition rule (`verity/protocols/compose/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
@@ -565,7 +565,7 @@ the vLLM demo runs both halves on one served run, PoUW's as a development run:
 
 What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
 suite `verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
-(`verity/protocols/remote/verifier/composition/tests`).
+(`verity/protocols/compose/tests`).
 
 ## Read next
 

@@ -69,7 +69,7 @@
    "name": "core_composition",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../remote/verifier/composition",
+   "dir": "../../compose",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

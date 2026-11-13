@@ -991,10 +991,10 @@ def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
 # --- 6. accounting -----------------------------------------------------------------------------------------------------
 
 def _reference() -> Any:
-    """The composition's Python mirror of its Lean verdict (`verity/protocols/remote/verifier/composition/tests/reference.py`)."""
+    """The composition's Python mirror of its Lean verdict (`verity/protocols/compose/tests/reference.py`)."""
     name = "lifecycle_composition_reference"
     if name not in sys.modules:
-        path = ROOT / "verity/protocols/remote/verifier/composition/tests/reference.py"
+        path = ROOT / "verity/protocols/compose/tests/reference.py"
         sys.path.insert(0, str(path.parent))
         spec = importlib.util.spec_from_file_location(name, path)
         m = importlib.util.module_from_spec(spec)

@@ -85,7 +85,7 @@ Open premises (`open`):
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
   `benchmarks/network_e2e/encodings` writes; `advice.py` (`benchmarks/network_e2e/encodings`); and in `network/tests`,
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
-  `test_inference_only_protocol.py` (the tests of `../../remote/verifier/composition`).
+  `test_inference_only_protocol.py` (the tests of `../../compose`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../flock/verifier`),
   `nci_check` (`../../inference_only/verifier/nci/lean`), `core_protocol` (`../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.

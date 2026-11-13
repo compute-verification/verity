@@ -76,7 +76,7 @@ path = "../../verity/definitions/requirement"
 
 [[require]]
 name = "core_composition"
-path = "../../verity/protocols/remote/verifier/composition"
+path = "../../verity/protocols/compose"
 
 [[require]]
 name = "core_onsite"

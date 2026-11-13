@@ -18,7 +18,7 @@ import pytest
 
 import reference as R
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[4]
 V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")

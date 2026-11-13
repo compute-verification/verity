@@ -1,6 +1,6 @@
 """The registration log in Python: `Core.Registration` (`../protocols/interface/CoreProtocol/Registration.lean`), the type every
 subprotocol and both composites read, entry for entry and refusal for refusal. The composition suite's difftest holds
-this module to the Lean (`../protocols/remote/verifier/composition/tests/test_registration_difftest.py`).
+this module to the Lean (`../protocols/compose/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.

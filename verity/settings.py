@@ -422,7 +422,7 @@ REGISTRY = EnvSettings(
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
-    # ---- verity.protocols.remote.verifier.composition's suite
+    # ---- verity.protocols.compose's suite
     Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
     schema=RECORD_SCHEMA)
