@@ -131,8 +131,8 @@ the reference's weight.
 
 **The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
-that inequality solved for one term; it is standard library only, so another benchmark loads it by path. `HECharged`
-is stated and no lock lists a proof of it. A work of `N` MACs with `O` output wires needs at
+that inequality solved for one term; it is standard library only, so another benchmark loads it by path. The lock
+lists a proof of each of the three. A work of `N` MACs with `O` output wires needs at
 least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
