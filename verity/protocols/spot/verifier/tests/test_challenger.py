@@ -488,3 +488,21 @@ def test_a_line_of_a_member_before_the_one_before_it_is_closed_is_refused(log):
     member's before it: the line that samples the next tree, a round of it, or a line of a tree after its own closing
     round. A round that is not round `CLOSING_ROUND` of the ``session`` stream closes no tree."""
     assert C.members_order(log) is None
+
+
+def test_each_trees_link_is_opened_before_its_other_rounds():
+    """`links_first` holds where the first round a release log opens of each tree is of the tree's ``session`` stream,
+    its link's, and refuses a round of another stream opened first, of the first tree or of a later one. It reads a
+    round after another tree's as a tree's first, so a tree whose rounds come again after another's is held to its
+    link's stream again; that order is `members_order`'s to refuse. The lines that open no round are read past."""
+    s, rep = C.CT.SESSION, "circuit/rep0"
+    root = C.canonical_json_text({"event": "root", "index": 0, "label": "sample", "received_at": 0, "root": "ab"})
+    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "sample", "released_at": 0})
+    assert C.links_first([root, release])
+    assert C.links_first([_tree("01"), _round("01", s), _round("01", rep), _close("01"), root, _tree("02"),
+                          _round("02", s), _close("02")])
+    assert not C.links_first([_tree("01"), _round("01", rep), _round("01", s), _close("01")])
+    assert not C.links_first([_round("01", s), _close("01"), _tree("02"), _round("02", rep), _round("02", s),
+                              _close("02")])
+    assert C.links_first([_round("01", s), _round("02", s), _close("01")])
+    assert not C.links_first([_round("01", s), _round("02", s), _round("01", rep)])

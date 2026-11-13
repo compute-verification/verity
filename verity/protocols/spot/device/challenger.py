@@ -288,6 +288,10 @@ NO_CLOSING = (f"its coin tree's last opening is not its {CT.SESSION} round {CLOS
 MEMBERS_ORDER = ("the challenger's release log does not hold the sessions' coin trees one after another, in the "
                  "sessions' order: a line of a tree, the one that samples it or one opening a round of it, is before "
                  "the closing round of the tree before it, or after its own")
+#: Lean `Challenger.LINKS_FIRST`: the refusal of a release log that opens a round of a session's coin tree before the
+#: tree's link (`links_first`)
+LINKS_FIRST = ("the challenger's release log opens a round of a session's coin tree before the tree's link: the first "
+               f"round opened of each tree is of its {CT.SESSION} stream, the link points")
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -1162,6 +1166,24 @@ def members_order(log: Sequence[str]) -> list[str] | None:
     return roots
 
 
+def links_first(log: Sequence[str]) -> bool:
+    """**Each tree's link before its other rounds**, in the release log's lines `log` (Lean `Challenger.linksFirst`): a
+    line that opens a round of a tree (`open_line`, the tree its ``tree`` names), where the round opened before it is
+    another tree's or it is the first the log opens, is of the stream ``session`` (`link_line`), whose first round is
+    the session's link points. So the first round the log opens of a tree is its link's stream, and no round of a
+    session's other streams is opened before the session's link: what `sample_link_first` holds the log's first tree
+    to, for every tree. The per-member form refuses a log that is not so (`LINKS_FIRST`)."""
+    last = None
+    for line in log:
+        if not open_line(line) or type(_event(line).get("tree")) is not str:
+            continue
+        root = _event(line)["tree"]
+        if last != root and not link_line(line):
+            return False
+        last = root
+    return True
+
+
 def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
                         records: Sequence[tuple[str, Mapping[str, int | None], Any, str]]) -> str | None:
     """**The members' sessions' coins, each session closed before the next begins** (Lean
@@ -1172,7 +1194,8 @@ def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
     closing round is not after its evidence (`member_tree_reason`); then no tree two sessions' (`SHARED_TREE`); then
     every tree a session's (`UNUSED_TREE`); then the log holds the sessions' trees one after another in the sessions'
     order, each tree's closing round before the line that samples the next tree and every round of it
-    (`members_order`, `MEMBERS_ORDER`)."""
+    (`members_order`, `MEMBERS_ORDER`); then the first round the log opens of each tree is of its link's stream
+    (`links_first`, `LINKS_FIRST`)."""
     for name, tables, record, evidence in records:
         why = member_tree_reason(trees, tables, record, evidence)
         if why is not None:
@@ -1185,6 +1208,8 @@ def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
                 f"{UNUSED_TREE}")
     if members_order(log) != used:
         return MEMBERS_ORDER
+    if not links_first(log):
+        return LINKS_FIRST
     return None
 
 
@@ -2174,9 +2199,10 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
            "CLOSING_ROUND", "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",
-           "MAX_TREE_LINES", "MEMBERS_ORDER", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
+           "MAX_TREE_LINES", "LINKS_FIRST", "MEMBERS_ORDER", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
            "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "coin_trees_of",
-           "coins_digest", "link_after", "link_line", "member_line", "members_order", "open_line", "record_rounds",
+           "coins_digest", "link_after", "link_line", "links_first", "member_line", "members_order", "open_line",
+           "record_rounds",
            "sample_link_first",
            "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason",
            "NO_CLOSING", "closes", "member_tree_reason", "members_tree_reason"]

@@ -36,11 +36,14 @@ passes. `membersTreeReason` holds the members' sessions to them: each so, one tr
 and the log holding the sessions' trees one after another in the sessions' order, no line of a tree, the line that
 samples it (`coin-tree`) or one opening a round of it (`tree-open`), before the closing round of the tree before it
 or after its own (`membersOrder`, `members_order`, `MEMBERS_ORDER`): nothing of a member's tree is in the log before
-the member before it is closed.
+the member before it is closed. And each tree's link is opened before its other rounds (`linksFirst`, `links_first`,
+`LINKS_FIRST`): the first round the log opens of a tree is of its `session` stream, as `sampleLinkFirst` holds the
+first tree's.
 
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_session_trees` (`sessions_tree_reason`
 over the log's trees and the request's records, each with its tables), each `{"refused": why}` where Python refuses,
-`challenger_sample_link_first` (`sample_link_first`) and `challenger_members_order` (`members_order`).
+`challenger_sample_link_first` (`sample_link_first`), `challenger_members_order` (`members_order`) and
+`challenger_links_first` (`links_first`).
 -/
 module
 
@@ -437,6 +440,38 @@ come again after another's is listed again, so a list without a tree twice shows
 line and its coin's release, the window's sample's, are read past. O(the log's lines). -/
 def membersOrder (log : List String) : Option (Array String) := membersOrderFrom #[] none false log
 
+/-- The refusal of a release log that opens a round of a session's coin tree before the tree's link (`linksFirst`). -/
+def LINKS_FIRST : String :=
+  "the challenger's release log opens a round of a session's coin tree before the tree's link: the first round " ++
+  "opened of each tree is of its " ++ TREE_SESSION ++ " stream, the link points"
+
+/-- The tree a release log line opens a round of: its `tree`, where its `event` is `OPEN_EVENT`; `none` of every other
+line. -/
+def openedTree (l : String) : Option String :=
+  match event l with
+  | .ok j =>
+    if jsonStrIs (getD j "event") OPEN_EVENT then
+      match getD j "tree" with
+      | .str root => some root
+      | _ => none
+    else none
+  | .error _ => none
+
+/-- `linksFirst`'s scan, `last` the tree of the round the lines so far opened last. -/
+def linksFirstFrom : Option String → List String → Bool
+  | _, [] => true
+  | last, l :: ls =>
+    match openedTree l with
+    | none => linksFirstFrom last ls
+    | some root => (last == some root || linkLine l) && linksFirstFrom (some root) ls
+
+/-- `links_first`, **each tree's link before its other rounds**, in the release log's lines `log`: a line that opens a
+round of a tree (`openedTree`), where the round opened before it is another tree's or it is the first the log opens,
+is of the stream `TREE_SESSION` (`linkLine`), whose first round is the session's link points. So the first round the
+log opens of a tree is its link's stream, and no round of a session's other streams is opened before the session's
+link: what `sampleLinkFirst` holds the log's first tree to, for every tree. O(the log's lines). -/
+def linksFirst (log : List String) : Bool := linksFirstFrom none log
+
 /-- **The members' sessions' coins, each session closed before the next begins**: why the members' `--zk` sessions
 `records`, each its name, its tables with their `root_B` lengths, its record and its evidence's SHA-512, don't show
 their coins to be the ones the release log `log` shows sampled and opened (`trees`, `coinTreesOf`'s of it), one tree a
@@ -444,7 +479,8 @@ session, the sessions one after another in the order given; `none` when they do.
 not its tree's or whose closing round is not after its evidence (`memberTreeReason`); then no tree two sessions'
 (`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`); then the log holds the sessions' trees one after another
 in the sessions' order, each tree's closing round before the line that samples the next tree and every round of it
-(`membersOrder`, `MEMBERS_ORDER`). -/
+(`membersOrder`, `MEMBERS_ORDER`); then the first round the log opens of each tree is of its link's stream
+(`linksFirst`, `LINKS_FIRST`). -/
 def membersTreeReason (trees : Array LoggedTree) (log : List String)
     (records : Array (String × Array (String × Option Nat) × Json × String)) : Option String :=
   let used := records.map fun x => strOf (getD (getD x.2.2.1 "coin_tree") "root")
@@ -456,6 +492,7 @@ def membersTreeReason (trees : Array LoggedTree) (log : List String)
     else if used.size ≠ trees.size then
       some s!"the challenger's release log shows {trees.size} coin trees and the sessions use {used.size}: {UNUSED_TREE}"
     else if membersOrder log ≠ some used then some MEMBERS_ORDER
+    else if ¬ linksFirst log then some LINKS_FIRST
     else none
 
 private def openAtT (tree stream : String) (round : Nat := 0) : String :=
@@ -503,6 +540,14 @@ private def recordT : Json := Json.mkObj [("coin_tree", Json.mkObj [("root", Jso
 #guard membersOrder [treeAtT "01", closeAtT "01", treeAtT "01"] == none
 #guard membersOrder [closeAtT "01", closeAtT "02", closeAtT "01"] == some #["01", "02", "01"]
 #guard membersOrder [treeAtT "01", closeAtT "01", openAtT "02" "circuit/rep0", openAtT "01" "circuit/rep0"] == none
+#guard linksFirst [rootT, releaseT] && linksFirst [treeAtT "01", openAtT "01" TREE_SESSION,
+  openAtT "01" "circuit/rep0", closeAtT "01", rootT, treeAtT "02", openAtT "02" TREE_SESSION, closeAtT "02"]
+#guard !linksFirst [treeAtT "01", openAtT "01" "circuit/rep0", openAtT "01" TREE_SESSION, closeAtT "01"]
+#guard !linksFirst [openAtT "01" TREE_SESSION, closeAtT "01", treeAtT "02", openAtT "02" "circuit/rep0",
+  openAtT "02" TREE_SESSION, closeAtT "02"]
+-- A tree opened again after another's round is held to its link's stream again: the order is `membersOrder`'s.
+#guard linksFirst [openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION, closeAtT "01"]
+#guard !linksFirst [openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION, openAtT "01" "circuit/rep0"]
 
 /-! Two members' sessions as an honest challenger's release log shows them: each tree sampled, its link points opened
 after its link's roots, one round of its table's first rep, then its closing round after its evidence, the second
@@ -564,6 +609,15 @@ private def membersLogT : List String := [helloT 'a'] ++ closedT 'a' ++ [helloT 
   (closedT 'a').drop 2 ++ (closedT 'b').drop 1) (evidenceT "a") (evidenceT "b") == some MEMBERS_ORDER
 #guard membersReasonT ([helloT 'b'] ++ closedT 'b' ++ [helloT 'a'] ++ closedT 'a') (evidenceT "a") (evidenceT "b") ==
   some MEMBERS_ORDER
+-- A member's table round opened before its link, the tree's rounds otherwise its record's: refused for it.
+private def lateLinkT (c : Char) : List String :=
+  match closedT c with
+  | [link, round, closing] => [round, link, closing]
+  | lines => lines
+#guard membersReasonT ([helloT 'a'] ++ closedT 'a' ++ [helloT 'b'] ++ lateLinkT 'b') (evidenceT "a") (evidenceT "b") ==
+  some LINKS_FIRST
+#guard membersReasonT ([helloT 'a'] ++ lateLinkT 'a' ++ [helloT 'b'] ++ closedT 'b') (evidenceT "a") (evidenceT "b") ==
+  some LINKS_FIRST
 #guard membersT ([helloT 'a'] ++ closedT 'a') [('a', evidenceT "a"), ('a', evidenceT "a")] ==
   some s!"two sessions' coins are one tree's: {SHARED_TREE}"
 #guard membersT ([helloT 'a', helloT 'b'] ++ closedT 'a') [('a', evidenceT "a")] ==
@@ -629,5 +683,12 @@ def membersOrderPiece (j : Json) : V Json := do
   let order := membersOrder lines
   let why := if order ≠ some used then Json.str MEMBERS_ORDER else Json.null
   return Json.mkObj [("order", order.elim Json.null fun rs => Json.arr (rs.map Json.str)), ("reason", why)]
+
+/-- `{"log"}` to `links_first`'s over the release log's lines `log`, `{"reason"}`: null where each tree's link is
+opened before its other rounds (`linksFirst`), else `LINKS_FIRST`. -/
+def linksFirstPiece (j : Json) : V Json := do
+  unless keys? j == some #["log"] do throw "a request's keys are log"
+  let lines ← logOf j
+  return Json.mkObj [("reason", if linksFirst lines then Json.null else Json.str LINKS_FIRST)]
 
 end Spot.Challenger

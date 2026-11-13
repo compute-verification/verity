@@ -3,7 +3,8 @@
 (`Spot.Challenger`'s, the same lines, records and reasons), and on a challenger's own log: the device opens a tree's
 closing round as it opens any round, so two sessions it serves one after another, each closed after its evidence, pass,
 and the same sessions closed after other evidence, left open, interleaved, the next tree sampled before the closing
-round or named in another order are refused. `test_challenger` holds `member_line` and `members_order` alone. The
+round, named in another order or with a table's round opened before the link are refused. `test_challenger` holds
+`member_line`, `members_order` and `links_first` alone. The
 evidence's bytes (`closing.evidence_bytes`, `session_evidence`, `closing_after`) decode to their parts, and a
 directory's digest is its files' evidence's."""
 
@@ -93,6 +94,12 @@ def closed(c: str) -> list[str]:
     return member_log(c, evidence(c))
 
 
+def late_link(c: str) -> list[str]:
+    """`closed(c)` with its table's round opened before its link."""
+    link, table, closing_round = closed(c)
+    return [table, link, closing_round]
+
+
 def members(log: list[str], named: list[tuple[str, str]]) -> str | None:
     return C.members_tree_reason(C.coin_trees_of(log), log, [(c, TABLES, member_record(c), ev) for c, ev in named])
 
@@ -114,6 +121,10 @@ TWO_MEMBERS = {
                                                  + closed("b")[1:], [A, B], C.MEMBERS_ORDER),
     "the sessions in the other order": ([hello("b")] + closed("b") + [hello("a")] + closed("a"), [A, B],
                                         C.MEMBERS_ORDER),
+    "the second's table round opened before its link": ([hello("a")] + closed("a") + [hello("b")] + late_link("b"),
+                                                        [A, B], C.LINKS_FIRST),
+    "the first's table round opened before its link": ([hello("a")] + late_link("a") + [hello("b")] + closed("b"),
+                                                       [A, B], C.LINKS_FIRST),
     "one tree two sessions'": ([hello("a")] + closed("a"), [A, A],
                                f"two sessions' coins are one tree's: {C.SHARED_TREE}"),
     "a tree no session's": (HELLOS + closed("a"), [A],
