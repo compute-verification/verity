@@ -113184,3 +113184,57 @@ Not established
 - That the family is the verifier's: `∃ label` until #9555 is on the base.
 - That a replayed earlier-period signature is excluded; it counts as a forgery.
 - That `lean_changed --records` agrees: no lock touched, so none was run.
+
+## HISTORY, Fri 13 Nov 01:56Z: ON MY BRANCH `Device.lean` COMPILES WHOLE: `r20261113-012543-4d04` at `b272f37a46`, "lean exit 0 in 238 s", "none of its 31 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `binds_dev₂` and `cut_dev₂` included. `PrintsTwo` and `SignsPlay` at the two-session history are DONE.
+
+**In plain words.** In a two-stage audit the auditor's device runs two challenger sessions: the first stage's, which picks the outer blocks to replay, and the second stage's, which picks inner blocks inside them. CUT's cut needs two facts about the device's record of both sessions: it printed the play's log, and it signed everything the play's signatures are on. Both facts, and the cut at that record, now compile on my branch with no gap of their own. They still take two conditions, named below. One of them is about where the device opens each session's window, and the live device as written today does not guarantee it.
+
+Clock: `date -u` read 01:53Z. Mailbox read at 01:53Z: nothing after your 00:48Z. I was resumed at 01:31Z on a new machine; nothing was lost, since everything was pushed.
+
+**1. Runs** (vy-nebius-cpu-12) [run].
+- `r20261113-012543-4d04` (yours, launched 01:25Z): my branch at `b272f37a46`, which holds your merges of TWOLEG `99da2b91892` and CUT `6c782c1022`. It waited for a slot from 01:26Z to 01:47Z (21 min), then took 5 min. **done, rc 0.**
+  - `lean exit` line: "`Device.lean`: lean exit 0 in 238 s".
+  - Axiom probe line: "none of its 31 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". So `binds_dev₂` and `cut_dev₂` are clean, now that CUT's `binds_of_prints`, `paramsAt_of_caseOf` and `finders_of_break` and TWOLEG's `inputAt_ok` and `accepted_steps` are proved.
+  - Siblings: no name clash. The build of `Steps`, `Cut`, `CutPrints` and `CutHeld` passed in the same run, so CUT's and TWOLEG's files no longer fail at these heads.
+  - My file's only warnings are six deprecated `if_pos`/`if_neg`, as in `Cut.lean` and `Soundness.lean`.
+- `r20261113-015256-6d55`: my new head `f54420243d` (section 2), launched 01:53Z. [guess] It ends by 02:15Z if it waits as long as `4d04` did.
+
+**2. Pushed** [run]. `cursor/proofs-history-d2e7` at `f54420243d`, one commit on top of your `b272f37a46`. It changes only my file:
+- `Apart` now says only what the proof uses: the two setups' ledger lines open neither session's run on the other's window (`¬ OpensIn L w₁ S₂.id ∧ ¬ OpensIn L w₂ S₁.id`). Before, it also said that each run is opened nowhere but its own window. This is strictly weaker, so it is easier to discharge.
+- COINMAP's split: `firstLen ℓ log` is the length of the log's longest prefix of fresh coins of `ℓ`. `noHello_firstLen` proves the first session at that split holds no hello. `holdsTwo_first` is `holdsTwo_play` at `cut = firstLen ℓ`, with the `NoHello` condition gone.
+- Not compiled until `6d55` ends. Nothing unpushed.
+
+**3. The split: what is left between `cut` as a parameter and COINMAP's** [derived]. COINMAP said yes at 01:13Z.
+- At `cut = firstLen ℓ₁`, the hello condition is proved (once `6d55` compiles). Nothing else in my file depends on the split.
+- What is left is `ℓ₁` itself, the first stage's family as a function of `θ`. Whoever joins the pieces (ASSEMBLY) passes `cut := firstLen (ℓ₁ θ)` to `cut_dev₂`. `cut_dev₂` is at one `θ`, so a fixed `cut` is enough. `ℓ₁ θ` must be the same family STAGECOINS's `firstDraw` and COINMAP's `stageLocate` read. Under your 00:48Z ruling that is the run input's `family`, and COINMAP's Note 1 says the composite has to build it from `θ` (TWOLEG).
+- COINMAP's note stands: on a play that releases `ℓ₁` coins after a later release, the locator puts them on stage 0 while the history prints them in the interior's session. COINMAP says `DevFirst` doesn't need them to agree, and my file needs nothing from it either.
+
+**4. `Apart`: I can't prove it at `dev₂` in an hour, and at the live device it can fail** [read: `LiveDevice.lean` at `856ae01ece`, `Properties/Challenger.lean:136`; derived].
+- `dev₂` takes its ledger lines from the deployment, so `Apart` is a fact about the deployment, not about `dev₂`. It is unprovable for an arbitrary `Deployment`.
+- `OpensOn h pk w id` asks for an `open` line with `session = id`, `window.root = w` and `withheld: true`. In the live deployment, `openBody` copies the window's root from the prover's request (`requestPart a "open"`, `"root"`), and `withheld` too (`RESERVE_FIELDS`).
+- So at a faithful two-session live device, `Apart` holds exactly when the prover's request opens the interior's session on a root other than `w₁` and the first stage's on a root other than `w₂`. A prover can swap them. At that play the run on `w₁` printed the interior's releases, so `PrintsTwo` itself fails at any faithful history, not only my `dev₂`. CUT's `BindsOfPrints` asks for `PrintsTwo` at every play after `θ`, accepted or not.
+- One of three things closes it:
+  - (a) the two-session device opens the windows the parameters name, in order (root from `θ`, not the request);
+  - (b) the device refuses to open a session on a root the parameters give to the other stage;
+  - (c) CUT asks for `PrintsTwo` only at accepted plays, and the check refuses a play whose records sit on swapped windows.
+- Under (a) or (b), `Apart` becomes a lemma, given that the two sessions' ids differ. Even then, its proof has to parse the device's own ledger line back (`ledgerEntry?` of the canonical text `entryLine` prints). I find no round-trip lemma for that in `LiveDevice.lean` or `Sampled/`, and that is the part I can't do in an hour.
+- I did not touch OWNREADS's piece. OWNREADS's 01:19Z entry says it waits only on `RefReadsWf`. With the weakened `Apart`, its target is the conjunction above.
+
+**5. Should my `Deployment` be an instance of #9566's live deployment?** [read: `LiveDevice.lean`; derived]
+- Yes in the end, but not as two copies of `LiveDevice.deployment H`. Two copies would give both sessions the one id `H.session θ`, so `Apart` can't hold unless neither window is opened. They would also write two `period-open` and two `period-close` lines with the same `seq`s and leaves, and an `end` whose `record_leaf` (`leaf θ + 3`) is not the leaf my signer signs the record at.
+- What a real instance costs:
+  - (i) In my file, about 60 lines: `Deployment` becomes its own structure. It has one `opens θ a` (period-open, then each session's reserve and open) and one `closes θ a log₁ log₂ b ρ`, because the period's close lists both windows and whether each is complete, which needs both sessions' logs. It has two `run`s and one `sign` counter over all of the play's messages. `signsPlay_dev₂`'s proof keeps its shape.
+  - (ii) A `LiveDevice` for two sessions, about 250 lines reusing #9566's `entryLine`, `entries` and bodies, with a host holding two session ids and the leaves numbered in my signer's order (opens, then both runs' records and closes, then the closing lines).
+  - (iii) `Apart` at it, under (a) or (b) of section 4, plus the ledger line round trip.
+- Your relay of Daniel's 5:02 PM ruling (Friday is a demo) leaves this for after Friday. Nothing in my file changes now.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS:
+1. CUT (`cursor/proofs-cut-9323`): a word on section 4. Should `BindsOfPrints` ask for `PrintsTwo` only at accepted plays, and does the check refuse records on swapped windows? Or is (a) or (b) the device's job?
+2. Whoever builds the two-session live device (OWNREADS has `Apart`): open the parameters' windows in order, or refuse the swap (section 4), and the ledger line round trip.
+3. ASSEMBLY: `cut := firstLen (ℓ₁ θ)`, with `ℓ₁` the family `firstDraw` reads (section 3).
+
+To post: nothing.
+
+Not established: that `f54420243d` compiles (`6d55`). That `Apart` holds at any live deployment (section 4). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
