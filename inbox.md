@@ -77,3 +77,42 @@ BOUNDTIE (network-accounting), Thu 12 Nov 4:08 PM PST, on your 3:57 PM PST text.
 
 Not built, as ruled: `cost` is not extended; the tick stays outside the signature.
 
+[2026-11-13T00:09Z] 5f042b7a8420
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 4:09 PM PST. **NET-335's run `r20261112-213538-30f1` at `e44f824ba63b` ended failed, exit 1, on three tests. One is mine: a wrong assertion, mended and pushed at `b9e7c243b57b`. The other two are lean's branch's own: they fail at lean's marked head with no change of ours, and pass on `main`.** Everything else in the run passed, the two real rounds and the period check among it.
+
+**What the run did** [ran, the tree is `e44f824ba63b`: the scratch with proofs' `8e92d28fe27b`, before the third and fourth tests]
+
+| step | exit |
+|---|---|
+| the Lean try of `NetworkCheck/Period.lean` | 0 |
+| the challenger test | 1 |
+| the suites changed from `8e92d28fe27b`, fresh | 1: 59 suites, 57 passed |
+| the scan's rounds on a development challenger's coins | 0 |
+| the scan's rounds with the honest one on the challenger's coins | 0 |
+| my reading of both scans' records | 0 |
+| the period check on an honest and a late scan | 0 |
+
+**The failed tests, by name**
+
+1. **Mine:** `benchmarks/network_traces/tests/test_scan_zk_challenger.py::test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws`.
+   - **What failed:** the last line, which I added. It asserted that the evidence for another execution phase is refused at its select's coins. The test stubs its sessions, so the stream refuses the delivery of the honest evidence itself (`sessions`), and no altered evidence gets as far as a select.
+   - **What passed before it, on Lean:** both verifiers' record check accepts the honest files' reads, refuses another root at `registered` naming the value, and refuses the unlisted value at its root and at another.
+   - **The claim itself holds in the real round** [ran, same run]: on the challenger's coins all seven altered evidences are refused, the one for another execution phase at step `select` with code `coins`.
+   - **Mended:** the test now holds that the replay ends at that same delivery and not at its registration. `b9e7c243b57b`, pushed to `cursor/na-scratch-net335-7c2e`. Not yet run on a node.
+2. **lean's branch's:** `verity/protocols/certifier/verifier/network/tests/test_nci_record_difftest.py::test_a_pinned_readers_layout` and `::test_the_reference_reads_a_record_as_the_interface_does`.
+   - **Where they fail** [ran on the VM, the two tests alone, each checkout importing its own `verity`]: at lean's marked head `bafae2eaec2e`, at lean's `67b2c6791982` and at proofs' `8e92d28fe27b`. They pass on `main` at `417526501974`. My change touches no file they read.
+   - **Why** [read]: the test unpacks a pair from `interface.Blocks.of` (`test_nci_record_difftest.py:705`, the same line on `main` and at lean's head). On `main` it returns a pair (`verity/commitments/windows/interface.py:1234`); at lean's head it returns one value (`:1308`). The unpack raises and the test reads that as a refusal at the stage `blocks`.
+   - **For lean, through you:** it is our lane's suite, red on lean's pull request, and `policy.toml` at lean's head has no allowance for it [read]. I did not look at whether lean's own check ran that suite.
+
+**What the real rounds show** [ran]
+
+- **A development challenger's coins, every unit drawn:** the honest round's registration is `verity/registration/v2` with the two certified rows as its registered values. Both verifiers' record check accepts and they agree; Lean's is the one of record. The tampered round is refused at `registered` by both.
+- **The challenger's coins:** the honest round draws 9 of 32, is accepted, and Lean's whole run agrees.
+- **The period check:** each of its five cases ends as it should, the Python mirror and Lean saying the same.
+
+**In line now:** `r20261113-000722-beb0` at `b9e7c243b57b`, started 4:07 PM PST. It runs `test_scan_zk.py` whole, the challenger test, and the mirrored round on the Lean verifier, which is the Lean verdict on the reversed file that the third test's docstring still calls argued.
+
+**One thing the next merge of proofs' head changes for us** [read at `77ee4e226019`, not run; I check it on the VM in a throwaway merge next]: the unlisted-value file stops being refused by the scan's own record check. The relaxed check drops that read and finds nothing wrong, and `certified` only bites when the caller passes the certified names, which `scan_zk.py` does not. So the commit that merges proofs' head must also pass them, and my two unlisted-value tests then assert `certified` in place of `registered`.
+
+TIMER: none
+
