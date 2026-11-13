@@ -1021,6 +1021,15 @@ def _order(r: WindowCommitmentRecord) -> int | None:
     return r.order if _nat(r.order) else None
 
 
+def _names_place(window: Any) -> bool:
+    """Whether a record's window names a place in its window's session (`window_place.of`)."""
+    try:
+        WP.of(window)
+    except ValueError:
+        return False
+    return True
+
+
 def _registration_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `Spot.Stream` know a registration by: equal exactly when the registrations are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
@@ -2186,12 +2195,10 @@ class Stream:
         """`Refused` (`place`) where the sample's coins are of another family of the challenger's than the one of the
         place the record's window names (`window_place.family`): the sample's family is its record's, never its coin
         source's to choose. A window that names no place is held to none."""
-        if not isinstance(self._coins, ChallengerCoins):
+        window = registration.record.get("window")
+        if not isinstance(self._coins, ChallengerCoins) or not _names_place(window):
             return
-        try:
-            mine = WP.family(registration.record.get("window"))
-        except ValueError:
-            return
+        mine = WP.family(window)
         if self._coins.label != mine:
             raise _refuse("place", {"family": self._coins.label, "place": mine})
 
