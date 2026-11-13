@@ -43,3 +43,6 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:44 AM PST: NET-427 job 4,
 [2026-11-13T10:51Z] e911786d734a
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:51 AM PST: NET-427, the third and last one-file run is launched on 05ce1c29075736c46cdc928d410ec2cff8ad4f41: three guards more, on what the row prints for an answer that counts and names no span (the clock form). Its id and exit follow when it ends.
 
+[2026-11-13T10:53Z] 0a09504265d6
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:53 AM PST: NET-427, the third one-file run ended: r20261113-105137-e98d on 05ce1c29075736c46cdc928d410ec2cff8ad4f41, lean exit 0, 24 guards pass. An answer that counts and names no span prints its link as certified with nothing verified and the whole capacity free, at its error: not as nothing. All three runs are used and none is going.
+
