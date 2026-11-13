@@ -10,6 +10,7 @@ __models__ = ("unsloth/Llama-3.2-1B",)
 
 import copy
 import dataclasses
+import inspect
 import json
 import os
 import re
@@ -603,6 +604,7 @@ def test_a_backbone_output_that_is_a_column_range_is_refused(art: Path, tmp_path
     ({"attention": [{"NH": 32, "KVH": 8, "D": 64}], "calls": [{"op": "mm"}]}, "no embedding call: the vocabulary is unknown"),
 ], ids=["no-attention", "two-geometries", "no-embedding"])
 def test_a_wired_program_the_steps_cannot_be_planned_for_is_refused(wired: dict[str, Any], why: str) -> None:
+    """`assemble` refuses each of the wired Program alone, before it reads another argument: every other one is None."""
+    rest: dict[str, Any] = dict.fromkeys(inspect.signature(SV.assemble).parameters)
     with pytest.raises(Unmodelled, match=re.escape(why)):
-        SV.assemble(wired, None, {}, {}, {}, source={}, schedule=[], steps=0, routes={}, capture_sizes=[1], max_num_seqs=1,
-                    device=SD.device_of(CC, 132), split_cap=0, lm_head="lm_head.weight", rank=0)
+        SV.assemble(**{**rest, "wired": wired})
