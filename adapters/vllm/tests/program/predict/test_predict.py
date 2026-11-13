@@ -230,6 +230,20 @@ def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
 
 
+@pytest.mark.slow
+def test_mhc_request_equals_the_record(tmp_path):
+    """DeepSeek-V4-Pro's switched row at rank 0: its one request through `predict.dsv4`, the prefill of its prompt and each decode
+    after it, is the request Program `records.json` pins for the rank.  The step above is one decode of one row, and a request of
+    two rows adds to it only the prefill's gather and attention and the ratio-4 compressor; the row's own lengths alone reach the
+    ratio-128 compressor, the TF32 post-pre of more than 16 rows, DeepGEMM's FP8 linear from 32 rows, cuBLAS's f32 GEMM without
+    split-K and the multimem all-reduce.  About 140 s."""
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    [(lp, t)] = phi.request_shapes()
+    r = build_program(phi, "request", LP=lp, T=t)
+    assert r.function.startswith("Derived[vLLMRequest[DeepseekV4ForCausalLM]]_v1")
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"]["0"]["requests"][f"build_request_LP{lp}_T{t}"]
+
+
 def test_mhc_refuses_outside_its_domain(tmp_path):
     phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
     short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
@@ -238,6 +252,9 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
     cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
     with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
         build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
+    half = {**phi.hf_config, "head_dim": 256}
+    with pytest.raises(Unexpressible, match=re.escape("no FlashMLA sparse geometry at head 256, rope 64 (registered: ")):
+        dsv4.Net(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": half}}), 1, 8)
 
 
 def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
