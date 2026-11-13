@@ -55,7 +55,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
+- `artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -358,7 +358,7 @@ and its parameters). What a run measured, what happened and who decided live out
   the published result.
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
   outside the repository (the team skill).
-- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
+- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
 
