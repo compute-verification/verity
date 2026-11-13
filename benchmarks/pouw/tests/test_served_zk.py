@@ -42,9 +42,8 @@ from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.verifier import service as S
 from verity.protocols.spot.verifier.one_stage import registration as R
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
-import served_commit as SC  # noqa: E402
-import of_record as OR  # noqa: E402
+import served_commit as SC
+import of_record as OR
 
 #: the challenger's checks are of record in Lean (`of_record`), which `lake` builds
 LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -258,7 +257,6 @@ def test_rows_of_record_serve_a_public_fixed_length(served):
     max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and an execution phase with no length
     item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served request's
     (`e2e.SERVED_TOKENS`), and the runner's record of it has the name the committer reads."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
     assert (SC.MAX_TOKENS, SC.SERVED_RECORD) == (e2e.SERVED_TOKENS, e2e.SERVED_RECORD)
     *_, words = served
@@ -302,7 +300,6 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
     """e2e.py's coins under ``POUW_COIN_STATE`` and `served_commit.py challenger --state` on the same file publish one
     commitment and open the one salt coin; the state file is its owner's alone, and a missing one is refused, never
     replaced by fresh coins."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
     *_, words = served
     params, *_ = _window(words)
@@ -326,7 +323,6 @@ def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, mon
     """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
     instance, the Lean verifier's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is flipped or published."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
     for source in (os.urandom, random.Random(0).randbytes):
         with pytest.raises(Ch.CoinError, match="coins-without-claim"):
@@ -1464,7 +1460,6 @@ def _recorded(words, root: Path, units=(1, 13)) -> Path:
 def test_replay_window_holds_a_recorded_window_and_refuses_its_breaks(served, tmp_path):
     """`replay_window` on a recorded execution phase of entry rows: its statement, rows, records, root, samples and registered items
     are the recorded values and every negative control is refused; a tampered salt fails the execution phase's root."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
     import replay_window as RW
     *_, words = served
     run = _recorded(words, tmp_path)
@@ -1485,7 +1480,6 @@ def test_replay_window_holds_a_recorded_window_and_refuses_its_breaks(served, tm
 def test_replay_window_lean_is_the_python(served, tmp_path):
     """Every input `replay_window` makes of a recorded execution phase, the controls' included, gives Lean's
     `pouw-window-difftest` the outcome Python gives."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
     import replay_window as RW
     *_, words = served
     sides = RW.Sides()
