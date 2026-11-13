@@ -150962,3 +150962,119 @@ Nothing changed in a listed guarantee, a named assumption or a lock.
 - I take the merge and that mend together, on your word, and run `test_a5_wiring.py` with the merge's tries.
 
 To post: nothing. Run going on: none. My timer is set for FRAME's report.
+
+## ADDRWC, Fri 13 Nov 16:25Z: PRF-616, THE SIZING, ALL SIX POINTS, by reading `main` `4ae17f7eafd7`: POLICYROWS's four points are AS SAID; I would choose (a), the verifier's template pinned BESIDE the Program's Definition (no Definition, closure digest or listed record moves); the plain read's `GatesRefine` is then one theorem assembled from five proved lemmas, and I stand behind Tue 17 Nov 02:00Z for it; the fused two have no gates proof and no template lemma reaches them; the tie stays a second premise. One question on "carry" at the end
+
+**How to read it.** Nothing built, nothing on a node. Every path and line is at `origin/main` `4ae17f7eafd7dd42d56e166f04d060e96174d384`, fetched 15:49Z, read in a read-only worktree. `main` has since moved to `5eb1231b2558`: four merges, 19 files, none a file cited here [script: `git diff --name-only 4ae17f7eafd7 origin/main` against the cited paths]. Marks: [read] the file's text; [script] `rg` or a `json.load` scan, whose pattern I name; [derived] my inference from lines read; [guessed]; [not found] with what I searched. Every name in the order is on `main`. Network's three branches that could hold more were diffed against `main` (`na-policy-rows-23d7` `7dbff23d631f`, `na-policy-histories-f42d` `ca1b769e6044`, `na-k-two-schedules-b4e6` `95ba862a3fb4`): no added or removed line names `GatesRefine`, `openingHeld`, `TableReadBinding`, `ReadNet`, `PinnedOpens`, `DigestPins`, `LayoutReads` or `Provenance` [script]. NET-430's statement is on no branch I found, so where a line depends on its text I say so.
+
+Paths, short: **F** = `verity/protocols/proofs/flock/verifier/Flock`, **N** = `verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck`, **R** = `security/Proofs/Accounting/ReadUnit`, **PR** = `security/Properties/Nci/Record.lean`, **PY** = `verity/protocols/proofs/flock/prover/python/verity_flock`.
+
+### 1. POLICYROWS's four points
+
+**P1, the plain read: AS SAID.** The gap is the tie, and only the tie.
+- The form pins a Program Definition: `pinOf` (`N/Record.lean:570`) is `closureDigest` (`N/DefinitionDigest.lean:91`), the SHA-512 over the descriptor entry of every Definition the reader reaches [read].
+- The Program's `EmbeddingRead_v1` is Python's: a composite of four calls (`verity/commitments/gates/embedding.py:150-160`), each a traced builder written as And/Xor/Not gates (`verity/circuits/boolean/trace.py:1-16`) [read].
+- The verifier's template is another network: eleven part Definitions from Lean generators and a flat root of `segs H + 5 + depth V` calls (`F/ReadNet/Template.lean:102-212`); `check` accepts a template only if its Definitions, root and port groups are that one's (`decide (t.defs = r.defs)`, `:226-230`) [read]. That it refuses Python's lowering of the read is [derived] from that equality and stated in `PY/read_tmpl.py:3-4`; no test runs the check on that lowering (the refusing test uses the Boolean toy, `flock/prover/tests/test_read_tmpl.py:148`) [read; searched the two `test_read_tmpl*.py`].
+- `TableReadBinding` is at that template, for every `V` and `H` (`R/Guarantees.lean`, `R/Binding.lean:88`) [read].
+- Nothing ties the two. `Flock.ReadNet.check` has one caller in `verity/`, the command `flock-read-tmpl` (`F/ReadTmplCmd.lean:31,42`) [script: `rg "ReadNet\.check"` over `verity/**.lean`]. The form reads the Program and the record's text and no circuit file (`N/Record.lean:26-40`) [read]. The verifier ties a circuit file to a Program by META's `program_sha512` alone, the whole Program's digest (`F/ProvedScope.lean:443-462`) [read]. No Lean lowers a descriptor's Definition to a template: the typed path derives rows from circuit types, and `UProg` is units over circuit types (`F/Derive.lean`, `F/DeriveAll.lean`, `security/Proofs/Flock/Soundness/Types/Program.lean`, headers) [read].
+- **One thing the point leaves out:** the bare read's circuit file is already the verifier's template. The structural stager stages a bound `EmbeddingRead_v1` on `flock-read-tmpl V H`'s text, not on `struct_lower` (`PY/class_statement.py:891`, `PY/read_tmpl.py:56`) [read]; an opt-in test holds each served read's file to the check at its own `(V, H)` (`test_read_tmpl.py:177`) [read, not run].
+
+**P2, the fused two: AS SAID.** No `.lean` file in the tree names `ReadGemm` [script]. Each calls `READ` inside and returns `(y, ok)`, the row `h` never leaving (`verity/definitions/registry/boolean_fp8_moe.py:170-190`) [read]. The stager gives the verifier's template only to a Definition whose base id is `EmbeddingRead_v1` (`PY/read_tmpl.py:41-61`), so a fused unit is `struct_lower`'s whole, the read inside it lowered by its Python builders (`PY/struct_lower.py:16-17`) [read], and `check` refuses it [derived].
+
+**P3, the three statements: AS SAID.** `Provenance` (`PR:396`), `DigestPins` (`:452`) and `LayoutReads` (`:467`) are each a `def … : Prop`. `pinnedOpens_of` takes all three as hypotheses (`security/Proofs/Properties/Nci/Record.lean:67`) and `pin_listed` takes `Provenance` (`:90`) [read]. No theorem concludes any of them, at `form` (`security/Proofs/Properties/Nci/RecordForm.lean:33`) or elsewhere [script: `rg` of the three names over `security/`]. The Properties lock says it of `DigestPins` itself: `shape.frozen`, "no theorem proves the pin yet" (`security/Properties/lean-audit.json:13258`) [read]. No lock names `PinnedOpens`, `LayoutReads` or `Record.Provenance` [script].
+
+**P4, the tie from the slot to the unit: AS SAID.**
+- `openingHeld` (`N/Record.lean:635`) decides on the record's declarations, the pins and θ. `GatesRefine` (`security/Definitions/Accounting/ReadUnit.lean:170`) is over a `Verity.Circuit`, a partition, one of its units and `Ports` of one-bit gates [read].
+- The form's circuit is the Program's gates that no wire covers (`LaysOut`, `PR:257`), its blocks the slots, not the units (`Divides`, `:270`); "operations and outputs are free" (`:254-256`), and `LaidOut` "does not say that this circuit's operations are the Program's, nor that it is the deployment's registered circuit" (`:331-332`) [read].
+- `TableReadBinding`'s circuit is one parsed circuit file's, `Flock.Bridge.circuitOf (.tmpl ct)` under `partsOf`, a block a unit of `units_per_vu` copies [read].
+- No Lean file names both the record form and the bridge or the read unit [script: files matching `Record\.Served|Properties\.Record|Record\.Form|NciCheck\.Record`, then `Flock\.Bridge|ReadUnit\.|GatesRefine|TableReadBinding` in them: none].
+- What SPOT has toward it: the one-stage audit holds the registration's population to ONE circuit file's units in order (`FilePart.check`); the form with several members, where a reader class is one member, is parsed and refused (`MULTI_REFUSED`, `spot/verifier/lean/Spot/OneStageZk.lean:772`) [read: its docstring].
+
+### 2. The two choices
+
+**(a) in its first form: the Program's `EmbeddingRead_v1` IS the template.** A descriptor Definition (gates) and a template (rows, calls) are two kinds of object, so "is" can only mean "lowers to" [derived].
+- What changes: Python's read and its three parts rewritten until `struct_lower` emits `readTmpl V H` Definition for Definition and column for column: `verity/commitments/gates/{embedding,rowleaf,hm96,frame_v3}.py` and `struct_lower`'s commit and fold rules (`PY/struct_lower.py:60-65`) [derived].
+- What moves: the `definitionDigest` of `EmbeddingRead_v1{V,H}` and of each rewritten part; the closure digest of the read and of everything that reaches it (the two fused readers, whose `READ` is a static they call [read]; any other Definition that calls it, `verity/definitions/registry/dsa_topk_reads.py`'s among the candidates [not read]); `program_sha512` of every Program holding one; the sidecars' pins for the read, its select and the fused two (`embedding.circuit-check.py`, `boolean_fp8_moe.circuit-check.py:54-56`); the read's pinned gate counts [derived; not enumerated per served Program].
+- Listed records that move: none, because no Lean statement names Python's Definition [script]. And for the same reason it proves nothing: Lean does not define `struct_lower`, so the tie is still missing.
+
+**(a) in its second form: the form pins the template BESIDE the Program's Definition.** The closure digest stays what it is and goes on fixing the reader's layout and gate count. Beside it, each held opening's reader class is held to `Flock.ReadNet.check V H`, `V` and `H` the opening's table's `rows` and `words` in the record (`verity/commitments/windows/interface.py:630-640`).
+- What exists: the check, and the command that runs it on a circuit file with the two side conditions the binding takes (`flock-read-tmpl check V H CIRCUIT`, `F/ReadTmplCmd.lean:37-44`) [read]. The bare reads' files already pass by construction (P1's last line).
+- What is missing: (i) a caller on a verifier path, the smallest being the auditor running that command on the file whose SHA-512 the audit commits (`one_stage/proofs.py:397-433`, a member's `circuit`); (ii) the Lean statement of the tie (point 6); (iii) the first lemma (point 3).
+- What moves: no Definition, no closure digest, no `program_sha512`, no circuit file of a bare read staged structurally [derived]. One new record, the lemma's, if listed (`security/lean-audit.json`, `@proofs`). `TableReadBinding`'s three records stay while the texts of `portsAt`, `BindsAt` and `TableReadBinding` are not edited [derived].
+- What to keep out: the form's own files. A new field of its instance moves `N/Record.lean`, its difftest and reference, the `runs` pin of `NciCheck.RecordDifftestMain`, and `Form`/`Instance` in `PR:118,137`, with them the digests of five `domain` entries (`@lean`), of `Counts`, `LaidOut`, `Owns`, `Rates` (`open`, `@training`, TRN-103) and `ServedComplies`'s record (`@lean`); and network's #9547 and #9644 edit the same package and both locks [read: the locks, the two PRs' file lists].
+
+**(b) the pin stays Python's lowering: a second gates proof.**
+- Statement: for every template a new check `ReadNet.checkPy V H` accepts, the first lemma's conclusion. `checkPy` is equality with Lean generators that reproduce what `struct_lower` and the four Python builders emit for the read [derived].
+- Why it cannot be smaller: the lowering is a function of the Python builders and of tuning constants (`SUPPORT`, `FOLD_CAP`, `PRIM_CALL_ANDS`), not of the descriptor (`trace.py:22-25`, `PY/struct_lower.py:16-17,60-65`) [read]. A proof at the Program's own And/Xor/Not gates would need the same generators to describe the body at every `(V, H)`, or the kernel to evaluate millions of gates at one, the wall `ExpertReadAccepted` already names (`security/Properties/Flock/ReadNet.lean:10-12`) [read], and it would still be about the wrong circuit: Lean's one description is the parsed circuit file.
+- Files: new generators and `checkPy` in the verifier's package (trusted code grows, a second definition of the read's gates); a difftest holding them to Python on served files; new proofs.
+- What carries over of the 4,805 lines of `R/` and `ReadUnit.lean` [script: `wc -l`]: the calculus, specs, reference side and bridge as they are (`Net` 111, `Gates` 131, `Digests` 146, `Tie` 287, `Deployed` 247, `Binding` 100, `Guarantees` 98, `ReadUnit.lean` 207); redone for the new layout, all of `Check.lean` and `Check/*` (1,584); redone wherever a generator's text differs, the parts' soundness (`Sha` 490, `RowSeg` 385, `Leaf` 247, `Frame` 53, `Select` 197); and a second pair of witnesses beside `Witnesses` (522) [derived from each file's header; not classified theorem by theorem].
+- And it still needs the tie.
+
+**I would choose (a), second form.** The one reason: the gates are proved once, at the verifier's template, for every `V` and `H`, and the served bare reads are already staged on it; (b) must first write in Lean what Python's lowering emits before it can state anything, to re-prove a read that computes the same function.
+
+**Owners.** `R/*`, `ReadUnit.lean`: `@proofs` (the lock's owner of `TableReadBinding`) [read]. `F/ReadNet/*`, `F/ReadTmplCmd.lean`: proofs by path [guessed]. `N/Record*.lean`, its lock and difftest: network-accounting in practice (#9547, #9644) [read]; the statements over it are `@lean` and `@training` in the Properties lock [read]. The Python Definitions, `PY/*` and the vLLM adapter's templates: [not found: no owners file; `tests/tree.toml` names owners of moves only; `git log` shows only moves].
+
+### 3. The first lemma: the plain read's `GatesRefine`
+
+Under (a). Statement as I would write it [derived; not compiled]:
+
+```lean
+theorem gatesRefine_check {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {ct : Flock.Circuit} {tu : Flock.TmplUnit}
+    (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ht : ct.tmpl = some tu)
+    (hcheck : Flock.ReadNet.check V H tu.t = true) (ho : ct.outNet = ct.unitNet) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) (FlockSoundness.unrolled_built hparse) n).N → Option Bool)
+    (hone : ∀ u, consts (Flock.Bridge.constGate (.tmpl ct) (FlockSoundness.unrolled_built hparse) n u) = some true)
+    (u : Fin n) {j : ℕ} (hj : j < (Flock.HmOut.unrolled ct).upv) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList consts
+      (Flock.Bridge.partsOf (.tmpl ct) (FlockSoundness.unrolled_built hparse) n) u
+      (ReadUnit.portsAt (.tmpl ct) (FlockSoundness.unrolled_built hparse) n u hj V H)
+```
+
+In words: at every copy of every unit of a circuit file whose unit template the read's check accepts, the gates compute `Hash.EmbeddingRead` at `V` rows of `H` words, at SHA-512 and the pinned hm96 key, with the root, domain id and verdict committed.
+- Files: the theorem beside `readUnitDrawn_check` in `R/Deployed.lean` (or a file of its own under `R/`); a named statement in `R/Guarantees.lean` only if NET-430 is to cite a guarantee rather than a theorem; one record in `security/lean-audit.json` then.
+- Its proof is `readUnitDrawn_check`'s (`R/Deployed.lean:199-247`) without the probability: `unrolled_leaves_of_parse` (`R/Check.lean:115`), `read_of_check` (`:138`), `constGate_mem_io` and `copyGate_mem_committed` (`security/Proofs/Flock/Bridge/UnitRows.lean:133,158`), `gatesRefine_partsOf` (`R/Deployed.lean:69`), then `portsAt_eq` (`R/Binding.lean:30`) [read].
+- What it rests on that is not proved: nothing [derived: those five are proved, and `TableReadBinding`'s record lists only `SHA512CRExpected` and `Hash.RowLeaf.accepts`, both of the probability layer this lemma does not enter (`security/lean-audit.json`) [script]]. `hone` is the statement's own: the registered constants set each unit's constant. That a deployment's file passes the check is the compiled check's run, not a kernel fact; its honest witness, `ExpertReadAccepted`, stays open (`@proofs`, PRF-458, due 30 Nov) [read].
+- **The hour I stand behind, L1's pull request first (Sun 15 Nov 02:00Z): Tue 17 Nov 02:00Z (Mon 16 Nov 6 PM PST), a pull request with the theorem compiled and its record.** Its basis is the size above: one theorem, one `lean try`, one records run. If it must be a listed guarantee with both witnesses, the nontrivial one is a second file, and I would say Wed 18 Nov 02:00Z.
+- Under (b) I stand behind no hour from this reading: its first piece, the Lean generators for Python's lowering held to Python by a difftest, is larger than all of (a) and I have not read `struct_lower.py`'s 790 lines and the four builders line by line.
+
+### 4. The fused two
+
+- What reaches them today: `computes_of_vals` and `gatesRefine_of_vals` (`R/Tie.lean:166,260`) and `gatesRefine_partsOf`, which ask only that the unit's rows hold the read's program with its inputs on input columns and its outputs on computed ones (`HoldsRead`, `R/Tie.lean:75-82`); a fused unit's first six parameters are the read's ports, `h` is computed inside and `ok` is returned [read]. And the parts' soundness, which is about the generators whatever template calls them. `GatesRefine`'s own docstring covers the case (`ReadUnit.lean:160-163`) [read].
+- What does not: `read_of_check` and all of `R/Check*` are for a template that IS `readTmpl V H`; `readUnitDrawn_layout` puts the verdict on output leaf `H`, bit 0 (`R/Deployed.lean:146,159-160`), where a fused unit's verdict follows `y`'s `N` words [read].
+- **Route 1, the template inside the fused unit.** (i) Stager: a bound `READ` called inside a structural unit is spliced in as the verifier's parts and root (`PY/struct_lower.py`, `PY/class_statement.py:891`, `PY/read_tmpl.py`); it moves each fused class's circuit file, no Definition or closure digest [derived]. (ii) Verifier: a check beside `check` that the template holds `partDefs V H` and the read's root as a called Definition, once a copy, its six input groups on the unit's first six ports and its verdict copied to the unit's last output leaf (`F/ReadNet/Template.lean`, `F/ReadTmplCmd.lean`). Today's root has `ins := 0` and reads the unit's own input columns (`:198-203`), so as a callee it is a new Definition [read]. (iii) Proof: `HoldsRead` for the fused unit from that check, which is `R/Check*`'s 1,584 lines generalized from "is the template" to "calls it", then `gatesRefine_partsOf` as it stands. Statement: the first lemma's with `checkIn` for `check` and ports whose `h` are the read's inner output columns and whose `ok` is the unit's verdict leaf.
+- **Route 2, no new proof.** Serve the read as its own unit, wired to the block GEMM inside the slot, the shape the adapter's `read` already has beside `fused` (`adapters/vllm/verity_vllm/pipeline/expert_rows.py:8-13`); the plain lemma covers it. Its cost is the committed `h` rows the fused Definitions exist to avoid (`boolean_fp8_moe.py:142-145`) [read]; what that costs in serving is not known to me, and I read no measurement.
+
+### 5. `DigestPins`, `Provenance`, `LayoutReads` at the form
+
+| | Stated | Proved today | Missing |
+|---|---|---|---|
+| `LayoutReads form` | `PR:467` | nothing | a few lines: `layoutOf` reads `d.params` and `fieldsOf d.ret` and nothing else (`N/Record.lean:592-598`), and `form.layout` is its image (`RecordForm.lean:42`) [derived, not compiled] |
+| `Provenance form` | `PR:396`, on `Good` (`:383`), `TrustedRun`, `RunNames`, `IsTheta` | the pieces under it: `finish_case`, `held_unwired` (`security/Proofs/Properties/Nci/RecordInputs.lean:282,331`), `theta_held`, `fill_of_cover` (`RecordKinds.lean:77,52`), `heldAt_declared`, `inst_of_read`, `program_of_read` (`RecordRead.lean:139,166,175`) [read] | the theorem, in three parts: `TrustedRun` and `RunNames` from `front`'s refusals `trusted`, `run-program`, `run-circuit`; `IsTheta` from `isTheta = true` (`N/Record.lean:559`); and `Good`'s opened case from `openingHeld`, `rolesOf`, `covered` and `pinOf` (`:570-637`): the pin listed and the reader's closure digest, the layout's roles, and the root and domain rows held as table reads of the same table over every cut row [derived] |
+| `DigestPins` | `PR:452`, on `Same`, `Hashed`, `Collides` | nothing; the lock's `shape.frozen` says so | the largest: an injectivity statement through `closureDigest`, `canonicalEntry`, `Flock.canon` and `Flock.Program.decode`, two canonical entries equal as strings decoding to `Same` Definitions callee by callee; it reads no part of the form [derived] |
+
+None of the three is needed by the first lemma; they are what `PinnedOpens` needs to carry a statement about a reference Program's Definition to the instance's reader (`pinnedOpens_of`).
+
+### 6. The tie as a second premise: YES
+
+- The two are discharged by different things. `GatesRefine` at a checked template is a kernel theorem about every circuit file, closed by the first lemma with nothing open. The tie is a fact about one deployment's registration, and nothing on a verifier path checks it today (P1, P4).
+- Folded into one premise, the proved gates fact would sit under an `open` entry until the tie's check exists. Apart, the gates premise closes with the lemma and the tie's `open` entry names exactly what is missing.
+- What the tie has to say for the lemma to plug in [derived; NET-430's text not read]: for each opening the form holds, of reader template `tid` at units `[at, at + units)` and of table `t`, (i) those units are units of one parsed circuit file `ct`, the one the audit commits for `tid`'s class; (ii) `ct`'s unit template passes `ReadNet.check t.rows t.words` and `ct.outNet = ct.unitNet`; (iii) the form's key, root, domain id and opened rows and its verdict of unit `at + i` are `portsAt`'s gates of that unit's copy.
+- Of these, (ii) is decidable today by the existing command; (i) is `FilePart.check`'s for one member and refused for several (P4); (iii) has no statement anywhere: the form's rows are leaves of the Program's parameters (`RowLeaf`, `PR:188`), `portsAt`'s are columns of the file (`R/Guarantees.lean`), and no lemma relates a unit's parameter leaves to its file's input columns [not found: searched `security/` for a file naming both].
+
+### Not established
+
+- NET-430's statement: not read; point 6's three clauses are mine.
+- Which listed guarantees read SPOT's one-stage audit functions, if the tie's check were put inside them rather than beside: not enumerated.
+- Under (a)'s first form, the moved digests per served Program: not enumerated.
+- That the check refuses `struct_lower`'s lowering of the read: derived and stated in docstrings, asserted by no test, and I ran nothing.
+- At most one `V` passes for a given template: [guessed] from the select's bound and the node constants entering the Definitions.
+- Owners of the Python and adapter files.
+
+### "Carry": one question, and what I do meanwhile
+
+Your 16:04Z names #9713. It is `cursor/proofs-frame-l1-9c4e` at `767972c546b8`, FRAME's two-stage wiring pull request [`gh pr view`]. It is not my branch, it does not hold my leg `79b8b4ec6e22` [`git merge-base --is-ancestor`: no], and of the profile change's files its diff touches only `Spot/Pieces.lean`, where `ofFlock` moves [`git diff --name-only`]. **I read the order as: when FRAME's table names #9713's carried commit, I create `cursor/proofs-addrwc-profile-163f` at that commit by a plain push and write step 2 on top, so the profile's pull request is stacked on #9713; the records run and the ready line are for my branch, not for #9713, which I never push to.** If you meant the profile off `origin/main`, or that #9713's carried line is mine to run and mark ready, say so; until then I do the first, which pushes nothing to anyone's branch.
+
+### State
+
+No run out, no code written, no branch for the profile yet. FRAME's pass (`r20261113-155839-6e94`) is due back about 16:50Z; I read the table then and set a timer of at most 30 minutes if it is not there. Next entry by 17:25Z.
