@@ -136841,3 +136841,41 @@ Your 10:54Z message is read: the one-call witness on `Internal.credited` is the 
 **Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d`; `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`; `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
 
 **I wait on:** `r20261113-102457-87d9` (vy-nebius-2, about 11:08Z [guess]) and `r20261113-105619-032e` (about 11:26Z [guess]). One timer of mine is set for about 11:12Z.
+
+## HONEST2, Fri 13 Nov 11:01Z: COMPILED HEAD `191488fbab` (`f386`, rc 0): the address premise at the instance is one use of `addressesConnected_of_firstK`, `Bnd` has no `units`, `Honest/` is three files (57 theorems with `SampleBelow`, probes clean). The whole-tree tests at that head are red on THREE, none naming my files; one is new, came with ADDRROW2's base and is mended on the join. My head merges into the join's `701559cfdc` with no conflict; a try of that merge is out (`r20261113-105930-d6c5`, a scratch commit, not pushed)
+
+**In plain words.** What I said at 10:40Z was pushed and not compiled now compiles. At my instance the design premises ask one thing, that the reference statement's reads are well formed; a run it accepts then gives a registration that meets everything the two-stage guarantees take. The instance is smaller than it was this morning: three files, and a boundary registration with one fact fewer. I also checked that the join can take it: the merge has no conflict, and I am compiling my files on the merged tree so ASSEMBLY knows before it merges.
+
+Clock: `date -u` read 11:00Z. Mailbox: read at 10:49Z, nothing since your 09:52Z.
+
+**1. What compiled** [run: `r20261113-103808-f386`, `--on auto`, vy-nebius-cpu-3, 10:38Z to 10:54Z, `done rc=0 class=SUCCESS`; lines quoted from its `stdout.log`], at `191488fbab70a42df4baad9db9387acb1de06c9c`:
+- `Honest/Instance.lean`: "lean exit 0 in 208 s"; "none of its 29 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Honest/Wiring.lean`: "lean exit 0 in 245 s"; 16 theorems, the same probe line.
+- `Honest/Sits.lean`: "lean exit 0 in 303 s"; 9 theorems, the same; with `--siblings`: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.Honest.Sits declares a name it does (414 imported in 8 s, peak 4802 MB); 3794 unchecked".
+- No warning or error line of the log names a file of mine [run: `grep`].
+- `SampleBelow.lean` is not in `f386`: it and its one import are as `f9ae` compiled them at `c810b61f91` (3 theorems).
+- The statements are item 2 of my 10:40Z entry, unchanged, with `Bnd` as its item 3 says. Nothing was mended between that entry and this verdict.
+
+**2. The whole-tree tests at `191488fbab`** [run: `pytest tests/test_lean_packages.py tests/test_lean_vocabulary.py tests/test_boundaries.py tests/test_public_boundary.py tests/test_repository.py tests/test_glossary_lean_names.py tests/test_doc_paths.py tests/test_tree.py`: "3 failed, 192 passed"].
+- `test_no_import_all_of_an_in_tree_module`: `SampledTwo/FirstSample.lean` has `import all Spot.Run`. **New on my line**, not mine: it came with ADDRROW2's base (`caad17c097` has the line too); the join's `1b24b4e730` imports it publicly, and my head does not hold that commit [run: `git show` of the file at the three heads].
+- `test_spot_never_imports_the_network_certifier_in_lean` and `test_no_public_file_needs_one_the_export_does_not_copy`: the two known ones.
+- No failure's text names `Honest/` or `SampleBelow` [run: `grep` of the log, 0 lines].
+
+**3. Will the join take it** [run for the merge; the compile is out].
+- `git merge-tree` of `191488fbab` with the join's `701559cfdc`: no conflict. The merged tree has 318 roots, no duplicate, every named module has a file, and `Honest/`'s roots are the three [run: the script over the lock and the lakefile].
+- The join holds `49ae9b1101` and ADDRROW2's `7e52dfb8e2`, not yet `c810b61f91` or `191488fbab` [run: `git merge-base --is-ancestor`].
+- I committed that merge on no branch (`ae722d6239`, in a second worktree) and sent one try of `SampleBelow`, `Instance`, `Wiring`, `Sits` on it: `r20261113-105930-d6c5`. It answers whether my files compile over the join's newer `RowTable.lean` and base. I do not push the merge: my branch stays without the join unless you say otherwise.
+
+**STOP RULE.** Nothing since 10:40Z: no file, root, record, guarantee, assumption or verifier touched after `191488fbab`. The scratch merge is on no branch and is not pushed.
+
+**NEEDS.** ASSEMBLY: merge `191488fbab` (it holds `c810b61f91`, ADDRROW2's `7e52dfb8e2` and FRAME's `6e7ac16f9a`). It deletes `Honest/Runs.lean` and `Honest/Written.lean` and their two root names. From you: nothing; say if you want the join merged into my branch.
+
+**Not established.**
+- That my files compile on the join's `701559cfdc`: `d6c5` (`--on auto`, vy-nebius-cpu-1, launched 10:59Z), no verdict yet.
+- A whole build of `security/Proofs` at my head, and a records run. `RunsAs/Statement.lean` differs from the join's copy at my head (26 lines in, 46 out) and ADDRROW2 reports it does not build on this base.
+- A sibling check past the 414 modules that slot tree had built.
+- An accepted run, any concrete `Ref` or `Bnd`.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled. Nothing unpushed on the branch. Run out: `r20261113-105930-d6c5`, one.
+
+**To post.** Nothing.
