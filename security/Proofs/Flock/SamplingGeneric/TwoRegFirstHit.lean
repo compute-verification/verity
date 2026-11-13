@@ -26,15 +26,15 @@ terms are square roots: `N·√Pr[B_conf,X]` for a run that opens a gate off the
 (`Proofs.Core.SamplingGeneric.FirstHit`), and the event of `KSRegTwoX` with those two terms in place of the square
 roots. No statement of the definitions tree changes.
 
-What the two finders keep and what they redraw:
+What the two finders keep and what they resample:
 
 * **The boundary** (`Compiled.finderX`, `Compiled.pr_offRegX_le_needs_ex`). The boundary trace read at the statement
   is the plurality over the prover's tape, the run's coins and the extractor's coins together, so the finder keeps
-  nothing and redraws all three: a further run is at a fresh tape. Two runs' openings of one gate under the
+  nothing and resamples all three: a further run is at a fresh tape. Two runs' openings of one gate under the
   statement's roots that differ are a collision whichever tapes opened them (`collX`, `B_conf,X`'s output).
 * **The interior** (`CompiledTwo.finderI`, `CompiledTwo.pr_offIreg_le_needs_ex`). A replay block's committed interior
   is the plurality over the second stage's coins and the extractor's, at the prover's tape and the first stage's
-  coins, so the finder keeps the tape and the run's coins off the second stage and redraws the second stage's coins
+  coins, so the finder keeps the tape and the run's coins off the second stage and resamples the second stage's coins
   and the extractor's. The two runs it compares share the replay block's interior roots (`Sessions.interior`), so two
   openings of one gate under them that differ are a collision (`icoll`, `B_conf,2`'s output). The sample of a further
   run reads the kept coins and the redrawn ones: it is the run's sample at the kept coins with the second stage
@@ -259,7 +259,7 @@ theorem collX_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
 
 /-! ## The boundary: the finder at the trace read at the statement -/
 
-/-- **The first-hit finder at the boundary trace read at the statement**, at cap `K`. It keeps nothing: it draws a
+/-- **The first-hit finder at the boundary trace read at the statement**, at cap `K`. It keeps nothing: it samples a
 tape, a run's coins and the extractor's, then `K` further tapes, runs and extractor's coins, and makes a further run
 only when its sample (the gates the proof blocks of its coins' sample need) holds a gate the first run opened that no
 further run has opened yet. It outputs `collX` at the first run and a further run that is the first to open such a
@@ -729,7 +729,7 @@ theorem iop_isSome_needs (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} 
   exact ⟨u, hu, ha2 ▸ hmem⟩
 
 /-- **The first-hit finder at the committed interiors**, at cap `K`. It keeps a tape and a run's coins off the second
-stage: it draws those, a second stage's coins and the extractor's, then `K` further second stages' and extractor's
+stage: it samples those, a second stage's coins and the extractor's, then `K` further second stages' and extractor's
 coins, and makes a further run, at the kept tape and first stage, only when its sample (the gates the proof blocks of
 its coins' sample need; it reads the kept coins and the redrawn ones) holds a gate the first run opened under a replay
 block's interior roots that no further run has opened yet. It outputs `icoll` at the first run and a further run that
