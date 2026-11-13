@@ -476,7 +476,7 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
 def h200_site(devices: int):
     """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
     from verity import device as S
-    sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
+    sheet = S.Sheet.of_file(S.load_card("h200-sxm-141gb"))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
     return S.Site((sheet,), tuple(locs))

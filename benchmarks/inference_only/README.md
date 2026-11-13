@@ -46,8 +46,8 @@ through `research run` in the run's own clone.
    refuses on `k`, and an instance of any other class has the same form.
 6. **The metric**: with `--out`, the served policy's `value` is also a measurement named
    `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
-   a research run, else `--out`), the number `benchmarks/metrics.toml` declares, marked `modeled`: it is priced from
-   the policy's stated numbers, and no check runs on the served class. A `--policy FILE` writes none. The
+   a research run, else `--out`), the number `benchmarks/inference_only/metrics.toml` declares, marked `modeled`: it
+   is priced from the policy's stated numbers, and no check runs on the served class. A `--policy FILE` writes none. The
    metric's command is the second form above with `uv run python benchmarks/inference_only/run.py`, the script
    `verity bench inference_only` runs, in place of `uv run verity bench inference_only`.
 

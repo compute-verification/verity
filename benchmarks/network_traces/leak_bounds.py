@@ -118,11 +118,11 @@ from typing import Any, NamedTuple
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import calibration
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols import reporting
+from verity import protocol
 
 #: the monitoring periods' seconds, by name
-PERIODS: dict[str, int] = dict(reporting.PERIODS)
-DELTAS: tuple[Fraction, ...] = reporting.DELTAS
+PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
+DELTAS: tuple[Fraction, ...] = protocol.DELTAS
 #: a bucket's seconds when a link names none: the network certifier's default τ
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default

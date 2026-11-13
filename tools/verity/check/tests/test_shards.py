@@ -760,3 +760,45 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and "flock_upstream=" not in " ".join(head)
     assert f"{CHECK.SLOT.MIN_MEM_ENV}={CHECK.TRAIN_GB}" in head and tail[0] == "slot" and tail[-2:] == ["--keep-going", "--cc-records"]
+
+
+def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch):
+    """Each train shard asks for its kind's memory (`check.SHARD_ASKS_GIB`) as the run's ask beside the train slot's minimum,
+    so slot.py books it over a lowered book= (`slot.booked`): the 5-shard plan's pytest shard, whose parts are by suite, asks
+    too, a reused audit lowers its shard's ask, lean-agreement raises one only where it runs, and a lane's check and a whole
+    train check, which no shard row measures, ask nothing."""
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
+
+    def env(*args: str) -> dict[str, str]:
+        launched.clear()
+        assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--keep-going", *args]) == 0
+        head = launched[0][:launched[0].index("--")]
+        return dict(head[i + 1].split("=", 1) for i, x in enumerate(head) if x == "--env")
+
+    steps = "flock-circuit-build,lean-build,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests"
+    reused = steps.replace("lean-audit,", "")
+    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 240),
+                      (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 170),
+                      (["--deferred", steps, "--shard", "2/5"], 40), (["--deferred", steps, "--shard", "4/5"], 110),
+                      (["--deferred", steps, "--shard", "3/5"], 110), (["--deferred", steps, "--shard", "2/3"], 130),
+                      (["--deferred", steps, "--shard", "3/3"], 290), (["--deferred", "lean-audit"], 330)):
+        sent = env("--priority", *args)
+        assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
+        assert sent[CHECK.SLOT.RUN_MEM_ENV] == CHECK.ask_gb(gib) and CHECK.SLOT.gib(float(CHECK.ask_gb(gib))) == gib, args
+    assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
+    assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
+    build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
+    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 390 and CHECK.shard_ask_gib(build, []) == 130
+    assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)
