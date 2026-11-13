@@ -26,7 +26,7 @@ public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
@@ -76,11 +76,11 @@ account on one device model.
 
 The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
 
-* `Accounting.Guarantees.RemoteSessionConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
+* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
   PoUB at its deployed parameters.
-* `Accounting.Guarantees.RemoteSessionConservationSketchDeployed` (the same module): PoUB's sketch session at the
+* `Accounting.Guarantees.RemoteRunConservationSketchDeployed` (the same module): PoUB's sketch session at the
   deployed receipt parameters, under the per-pass hash budget.
-* `Accounting.Guarantees.StackedSessionConservationSketchDeployed` (`Definitions.Accounting.Guarantees.Stacking`): PoUB
+* `Accounting.Guarantees.StackedRunConservationSketchDeployed` (`Definitions.Accounting.Guarantees.Stacking`): PoUB
   with a store per pass. `Accounting.Guarantees.StackedRequirementSketchDeployed` (the same module) reads
   it against a registered circuit's requirement.
 * `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Accounting.Guarantees.RemoteSketch`): the sketch
@@ -98,7 +98,7 @@ The area's other guarantees are `Accounting.Guarantees.X`, stated in the module 
 * `JointPeriodLive`, `JointPooledLive` and `JointPooledBlocksLive` (`JointLive`): the joint guarantee over one period,
   over `m` periods and over `B` server blocks, as one causal game over the subprotocols' per-period guarantees.
 * `ComputeOfPouw` (`Pouw`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
-* `Compose.CircuitCredit` (`Compose`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod`):
+* `Compose.CircuitCredit` (`Compose`) and `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (`ComposeMonitoringPeriod`):
   PoUW's credit on a registered circuit it compiles, over one execution phase and over a monitoring period.
 * `TS.Sm90SheetHeadline` (`HeadlineDc`) and `TS.Sm120SheetHeadline` (`Headline`): the headline at H200's and sm_120's
   data sheets.
