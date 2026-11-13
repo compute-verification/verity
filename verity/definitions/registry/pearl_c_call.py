@@ -1,7 +1,7 @@
 """A Pearl-C -h3 call's rows and cells as Definitions, and a Definition laid out in the units a proof takes.
 
 A call C = A·B under ``-h3`` forms each row of A and each row of the fixed operand B against noise nothing supplies, and
-computes each cell from a formed row of each (`verity.protocols.pouw.prover.schemes.pearl_c`: `PearlC.encode`,
+computes each cell from a formed row of each (`verity.protocols.accounting.pouw.prover.schemes.pearl_c`: `PearlC.encode`,
 `PearlC.checked`):
 
     PearlCRowA{K, R, DOT, G}
@@ -22,7 +22,7 @@ computes each cell from a formed row of each (`verity.protocols.pouw.prover.sche
 Row A is the one place a call's noise is derived from a value the call keeps private, the row: E_B, F_A, F_B and G come
 from seed_B = `PearlCSeedB` of the salt and B's root, both public, so whoever holds them derives those
 (`PearlCLineKey`, `PearlCNoiseLine` at norm 16 for a basis' line, `pearl_c_forming.PearlCGram`), and here they are
-parameters. On the codes and the factors a row is PoUW's row unit (`verity.protocols.pouw.prover.circuit.pc8`: `Pc8RowA`,
+parameters. On the codes and the factors a row is PoUW's row unit (`verity.protocols.accounting.pouw.prover.circuit.pc8`: `Pc8RowA`,
 `Pc8RowB` at the same atom and promotion period, R = 32), row A with its line derived; a row's admission (the unit's
 ``ok``) is not here, and reads the statistics a row returns. R, the basis' rank, is 32 in a call and a static so that
 circuit-check binds a row small; a cell takes its factors sixteen at a time, so there R is a multiple of 8. A tile's
@@ -51,7 +51,7 @@ F32, BF16, E4M3, U32 = Value(32), Value(16), Value(8), Value(32)
 LOWERED_WHOLE = 1 << 16
 
 _TESTS = "verity/definitions/tests/test_pearl_c_call.py"
-_HELD = f"protocol-defined; equal to `verity.protocols.pouw.prover.schemes.pearl_c.PearlC.encode` on its vectors ({_TESTS})"
+_HELD = f"protocol-defined; equal to `verity.protocols.accounting.pouw.prover.schemes.pearl_c.PearlC.encode` on its vectors ({_TESTS})"
 
 
 def _refuse(b: dict) -> str | None:
@@ -110,7 +110,7 @@ def _refuse_cell(b: dict) -> str | None:
 @composite("PearlCCell", 1, ["K", "R", "DOT", "G", "STEP"],
            lambda S: ((("a", Array(S.K, E4M3)), ("b", Array(S.K, E4M3)), ("pa", Array(2 * S.R, BF16)),
                        ("pb", Array(2 * S.R, BF16))), Tuple(F32, F32)),
-           conformance=f"protocol-defined; equal to `verity.protocols.pouw.prover.schemes.pearl_c.PearlC.checked` on its vectors "
+           conformance=f"protocol-defined; equal to `verity.protocols.accounting.pouw.prover.schemes.pearl_c.PearlC.checked` on its vectors "
                        f"({_TESTS})", refuse=_refuse_cell)
 def PearlCCell(B, S, a, b, pa, pb):
     """One cell of a call's tile from a formed row of A (its codes ``a``, its row ``pa`` of P_A) and a formed row of B

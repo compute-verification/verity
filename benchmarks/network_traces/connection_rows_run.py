@@ -73,13 +73,13 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
-from verity.protocols.certifier.verifier import connection_rows as CR
-from verity.protocols.certifier.verifier import content_rows as CT
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import VirtualClock
-from verity.protocols.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.certifier.verifier.grid import BlockGrid
-from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
+from verity.protocols.accounting.certifier.verifier import connection_rows as CR
+from verity.protocols.accounting.certifier.verifier import content_rows as CT
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
+from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"
