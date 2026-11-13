@@ -2675,7 +2675,7 @@ def _local_ports(n: int) -> list[int]:
 
 
 def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
-                  tunnel_argv: Callable[[list[str], int], list[str]] | None = None,
+                  tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
