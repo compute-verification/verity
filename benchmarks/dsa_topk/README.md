@@ -77,7 +77,8 @@ outputs unpatched and canonical across processes and repetitions, whether the ca
 k-th, and whether rows of at most `k` keys are unchanged. `stress.py time` writes `time.json`: the device time a call
 (CUDA events, queued behind a sleep) and the host time, unpatched and canonical, per parameter variant (`--variants`).
 `stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
-each case through the indexer's own entry points (`plugin.json`).
+each case through the indexer's own entry points (`plugin.json`). `log_cost.py` needs no device: it times what keeping
+the counters adds to a call on the host, a wrapper's time a call over stand-in ops with the record kept and without.
 
 `replay.sh` replays a served replay-ladder window with the plugin in every engine process (its header has the command).
 The tests (`tests/`) hold the definition, the torch reference, the wrappers' dispatch on stand-in ops, the kept counters
