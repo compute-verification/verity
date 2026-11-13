@@ -107,19 +107,19 @@ def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -
                 listings.setdefault(name, []).append((section, {"lock": path, "owner": _owner(entry.get("owner")),
                                                                 "issue": _str(entry.get("issue")), "due": _str(entry.get("due"))}))
     guarantees.sort(key=lambda r: (r["name"], r["lock"]))
-    in_gap: dict[str, set[str]] = {}
+    holders: dict[str, set[str]] = {}
     for r in guarantees:
         for p in r["gap"]:
-            in_gap.setdefault(p, set()).add(r["name"])
+            holders.setdefault(p, set()).add(r["name"])
     premises = []
-    for name in sorted({n for n, ls in listings.items() if any(s == "open" for s, _ in ls)} | set(in_gap)):
+    for name in sorted({n for n, ls in listings.items() if any(s == "open" for s, _ in ls)} | set(holders)):
         ls = listings.get(name, [])
         listed = sorted((e for _, e in ls), key=lambda e: e["lock"])
         agreed = {f: vs.pop() if len(vs := {e[f] for e in listed}) == 1 else None for f in ("owner", "issue", "due")}
         dues = [e["due"] for e in listed if e["due"] and check.OPEN_DUE.fullmatch(e["due"])]
         premises.append({"name": name, "kind": next((KINDS[s] for s in KINDS if any(s == t for t, _ in ls)), None), **agreed,
                          "listed": listed, "overdue": bool(dues) and min(dues) < today.isoformat(),
-                         "in_gap_of": sorted(in_gap.get(name, ()))})
+                         "in_gap_of": sorted(holders.get(name, ()))})
     return {"format": FORMAT, "commit": commit, "today": today.isoformat(), "locks": sorted(locks),
             "guarantees": guarantees, "premises": premises, "totals": totals(guarantees, premises)}
 
