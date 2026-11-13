@@ -8,8 +8,8 @@ public import Proofs.Flock.Soundness.Refine.Walk
 
 `Spot.OneStage.paramsParsed` binds the verifier program to `Program.parse` of the canonical text of the parameters'
 `program` and returns it as the parameters' `verifier.program`. `rw [paramsParsed.eq_def]` keeps the block's join
-points as `let`s, and `ret_walk` walks each once to each return, keeping the parse's equation and the returned
-parameters' `let`.
+points as `let`s, and `ret_walk_aux` walks each once to each return, keeping the parse's equation and the returned
+parameters' `let`, each join point's body its own auxiliary theorem.
 -/
 
 @[expose] public section
@@ -25,8 +25,7 @@ theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
   revert p
   show Ret (_root_.Spot.OneStage.paramsParsed j) fun p => ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program
   rw [_root_.Spot.OneStage.paramsParsed.eq_def]
-  ret_walk [_root_.Spot.Program.parse, _root_.Spot.OneStage.Params.mk]
-  all_goals
+  ret_walk_aux [_root_.Spot.Program.parse, _root_.Spot.OneStage.Params.mk] =>
     subst_vars
     first
       | exact ⟨_, by with_reducible assumption⟩
