@@ -6,7 +6,7 @@ import struct
 
 import numpy as np
 import pytest
-from verity.circuits.types import Array, RecordType
+from verity.circuits.types import Array, RecordType, Tuple, Type
 from verity.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
@@ -80,15 +80,35 @@ def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources(
     assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "layers"))) is None
     assert mla_moe_sources(RecordType(*((k, BF16 if k == "layers" else t) for k, t in wt.fields))) is None
     assert mla_moe_sources(Array(FD, BF16)) is None
-    with pytest.raises(ValueError, match="an array w13 in each of its layers"):
-        mla_moe_sources(RecordType(*((k, Array(2, BF16) if k == "layers" else t) for k, t in wt.fields)))
+    assert mla_moe_sources(Tuple(BF16)) is None
 
 
-def test_a_name_that_is_no_layer_field_is_refused_by_name():
+@pytest.mark.parametrize(("fields", "raised"), [
+    ({"layers": Array(2, BF16)}, AttributeError),                                             # layers that are no Records
+    ({"layers": Array(2, Array(2, BF16))}, AttributeError),
+    ({"layers": Array(2, Tuple(BF16))}, AttributeError),
+    ({"layers": Array(2, RecordType(("gate_w", BF16)))}, KeyError),                           # Records with no w13
+    ({"layers": Array(2, RecordType(("w13", BF16)))}, AttributeError),                        # a w13 that is no array
+    ({"layers": Array(2, RecordType(("w13", Tuple(BF16))))}, AttributeError),
+    ({"layers": Array(2, RecordType(("w13", RecordType(("x", BF16)))))}, AttributeError),
+    ({"dense_layers": BF16}, AttributeError),                                                 # dense_layers that is no array
+    ({"dense_layers": Tuple(BF16)}, AttributeError),
+    ({"dense_layers": RecordType(("ln1", BF16))}, AttributeError),
+    ({"dense_layers": BF16, "layers": Array(2, RecordType(("gate_w", BF16)))}, KeyError),     # the layers are read before dense_layers
+    ({"dense_layers": BF16, "layers": Array(2, BF16)}, AttributeError),
+])
+def test_a_record_with_dense_layers_and_an_array_of_layers_that_is_no_mla_moe_record_raises_by_what_it_lacks(fields: dict[str, Type], raised: type[Exception]):
+    wt = _mla_weights_type()
+    with pytest.raises(raised, match="^'w13'$" if raised is KeyError else None):
+        mla_moe_sources(RecordType(*((k, fields.get(k, t)) for k, t in wt.fields)))
+
+
+@pytest.mark.parametrize("name", ["norm", "embed", "cos_sin", "", "layers[0]", "layers[x].ln1", "prefix.layers[0].ln1", "layers[0].ln1.more"])
+def test_a_name_that_is_no_layer_field_is_a_type_error(name: str):
     sources = mla_moe_sources(_mla_weights_type())
     assert sources is not None
-    with pytest.raises(ValueError, match="^norm: not a layer field of an MLA Program$"):
-        mla_field_words(sources, "norm", lambda tensor, field: np.zeros(0, dtype=np.uint16))
+    with pytest.raises(TypeError):
+        mla_field_words(sources, name, lambda tensor, field: np.zeros(0, dtype=np.uint16))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):
