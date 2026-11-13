@@ -61,6 +61,8 @@ a "registration record". The page says it takes another name. top took proofs' n
 (never "frame" alone), at 1:28 AM PST [relayed]; the code is renamed after the second chain, so this cut keeps the
 longer name. A **lock** is a package's `lean-audit.json`, a **record** is a guarantee's recorded statement in it, and
 a package is **audited again** when the hash of its inputs changes (lean's words; the tree has 36 such packages).
+Only a renamed declaration changes a record. A moved or renamed module re-keys its group in the lock, and a changed
+`require` changes which packages are audited again; neither changes a record [relayed, lean, 2:42 AM PST].
 **The registration** is only what the developer registers once, before any period. The **head** of a registration is
 the 64-byte digest that names an accepted registration (the word is `CoreProtocol/Account.lean`'s).
 
@@ -488,7 +490,7 @@ SPOT's theorem is about a record and not about a circuit and a rule.
 Registration is where the developer says, once, what hardware it has, which circuit it runs and which weights. Each
 accounting protocol then measures one part of that hardware. On `main` no protocol reads what registration accepted.
 PoUW keeps its own table of a card's figures. PoUS and PoUB take the memory's size and read rate from their own
-parameters, and PoUB recomputes the store's root from the model's checkpoint. The certifier's period names one link
+parameters, and PoUB's v0 form recomputes the store's root from the model's checkpoint. The certifier's period names one link
 and one key in its own parameters. The weights are committed at least three times with nothing tying the roots. And no
 answer names the registration it was measured against. So compose cannot check that the compute, the memory and the
 network it adds up belong to the same registered devices, or that every registered device was measured at all. The
@@ -546,10 +548,10 @@ own beside the shared one. One table in commitments holds every protocol's forma
 And names leak: Flock's byte lemmas are declared under the certifier's name.
 
 - **The smallest change:** three moves, and no new statement. Registration and the account leave the interface
-  package: three modules, 1,404 lines, to a package `registration_check`, in four PRs [relayed, proofs]. Recursion and
-  the ZK server leave Flock's package. `Core`'s four files that one area owns go to that area, and the three structures
-  it reads of accounting's move into it. Then one rule on each: the interface requires only the base packages, and
-  `Core` imports no area.
+  package: three modules, 1,404 lines, to a package `registration_check`, in four PRs; the registered hardware's and
+  the period's files stay at first [relayed, proofs]. Recursion and the ZK server leave Flock's package. `Core`'s four
+  files that one area owns go to that area, and the three structures it reads of accounting's move into it. Then one
+  rule on each: the interface requires only the base packages and the difftest's Lean, and `Core` imports no area.
 - **What it costs in lock records** [relayed, lean, 2:01 AM PST]: no statement changes in any of the three. Splitting
   Flock's package moves its 11 records to new locks by hand, since `--moved` carries none between packages, and 21 of
   the 36 packages are audited again. Renaming the 48 imports that reach a base package through Flock's name changes no
@@ -566,7 +568,7 @@ how a protocol samples or decides. On `main` the vLLM adapter imports the verifi
 directory named `check/` of 22,409 lines [counted by me on `053b8e50fe8a`]. No verifier, compose or Lean file reads
 that directory: its 15 deciding files are the developer's own checks that honest serving passes [relayed, vllm]. So
 the first cut's "lines that decide accept and refuse" was wrong, and what is left of that point is a name. In
-the other direction, the certifier's advice format is defined as one pinned vLLM build's scheduler output, PoUB's
+the other direction, the certifier's advice format is defined as one pinned vLLM build's scheduler output, PoUB's v0
 verifier knows vLLM's layer order, Flock's verifier holds a table of model names, and the cut of a circuit into pieces
 is stated in the circuits, in the adapter and in the checker.
 
@@ -702,6 +704,8 @@ tests and 46 are helpers. Nothing is deleted on this read. Row A3 is rewritten t
   and the rest for this one. I did not open the Linear issues, the Notion pages or the worker reports they cite.
 - How `drive.toml`'s `lowrisk_excludes` matches a path (B3), and whether the device's lock holds a record that U7's
   move would carry.
+- Two small couplings compute-research offered as rows and I did not add or read: a machine-code check loaded by file
+  path, and a harness that reads the `sass_gate` key.
 - What changed on `main` between `9182900fb94e` and `053b8e50fe8a` beyond the paths and the lines this document
   cites.
 
