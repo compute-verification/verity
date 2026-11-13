@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionCoins
+public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
 public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Verity.Sampled.LinkFirst
@@ -27,11 +27,14 @@ The sessions' coins take two facts about a play the two-stage form accepts as pr
   a window.
 * **The members' check on the log the check read** (`MembersNamed`, `membersNamed`, `membersAccepted`), with what was
   named; and **the read** (`interiorReads`), the second stage's `Verity.Sampled.logRead_isSome`.
-* **Each session's tree closes after its evidence's SHA-512** (`closes_after`): in the log the check read, session
-  `t`'s tree has an opening of the stream named the session's, after one opening of that stream, answering the bytes of
-  the SHA-512 of session `t`'s evidence, with no opening of the tree after it; and before any opening of a session's
-  tree, each earlier session has an opening answering its evidence's SHA-512
+* **Each session's tree closes after its evidence's SHA-512, and the trees open in the sessions' order**
+  (`closes_after`): in the log the check read, session `t`'s tree has an opening of the stream named the session's,
+  after one opening of that stream, answering the bytes of the SHA-512 of session `t`'s evidence, with no opening of the
+  tree after it; an opening of session `t`'s tree comes after openings of the trees of sessions at or before `t` only;
+  and before any opening of a session's tree, each earlier session has an opening answering its evidence's SHA-512
   (`Verity.Sampled.MemberForm.members_read`).
+* **The piece at the form's acceptance** (`located_own_accepted`, `located_one_accepted`, `sessionsAgree_accepted`):
+  `LocatedOwn`, one release a round and `SessionsAgree` with `InteriorReads` and `MembersAccepted` discharged.
 
 **The earlier signature.** Nothing here reads a signature: the trees and the lines are the ones the check read under
 the parameters' challenger key, and a strategy replaying an earlier period's genuine signature shows in the cut's
@@ -327,14 +330,15 @@ theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
   obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 hsome
   exact ⟨l, interiorRead_of hk hp he hs hc₂ hd hξ (named_records hN) hlines hl⟩
 
-/-! ## Each session's tree closes after its evidence's SHA-512 -/
+/-! ## Each session's tree closes after its evidence's SHA-512, and the trees open in the sessions' order -/
 
-/-- **Each session's tree closes after its evidence's SHA-512, before the next session's tree opens**: on a play the
-form accepts, at a numbering `tree` of the sessions' trees as the read numbers trees, in the log the check read
+/-- **Each session's tree closes after its evidence's SHA-512, and the trees open in the sessions' order**: on a play
+the form accepts, at a numbering `tree` of the sessions' trees as the read numbers trees, in the log the check read
 
 * session `t`'s tree has an opening of its stream named the session's (`Spot.Challenger.TREE_SESSION`), after one
   opening of that stream, that answers the bytes of the SHA-512 of session `t`'s evidence
-  (`Spot.OneStageZk.sessionEvidence`), with no opening of the tree after it; and
+  (`Spot.OneStageZk.sessionEvidence`), with no opening of the tree after it;
+* an opening of session `t`'s tree comes after openings of the trees of sessions at or before `t` only; and
 * before any opening of session `t`'s tree, each earlier session has an opening answering the bytes of its own
   evidence's SHA-512.
 
@@ -350,6 +354,10 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
               some Spot.Challenger.TREE_SESSION ∧
             openedOf Lc (tree t) st = 1 ∧ Flock.unhex (Spot.sha512Hex ev) = .ok c.answers ∧
             ∀ y ∈ L₂, ∀ s' n', y.frame ≠ .opening (tree t) s' n') ∧
+        (∀ pre r post, l = pre ++ r :: post → ∀ t, t < (e.statements.toList.flatMap (·.sessions.toList)).length →
+          ∀ st n, r.frame = .opening (tree t) st n → ∀ q ∈ pre, ∀ t',
+            t' < (e.statements.toList.flatMap (·.sessions.toList)).length → ∀ s' n',
+              q.frame = .opening (tree t') s' n' → t' ≤ t) ∧
         ∀ pre r post, l = pre ++ r :: post → ∀ t s st n,
           (e.statements.toList.flatMap (·.sessions.toList))[t]? = some s → r.frame = .opening (tree t) st n →
             ∀ t' s', t' < t → (e.statements.toList.flatMap (·.sessions.toList))[t']? = some s' →
@@ -357,8 +365,13 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
                 Flock.unhex (Spot.sha512Hex ev) = .ok q.answers := by
   intro o hacc l hl
   obtain ⟨k, e, label, after, ξ, lines, trees, records, hk, he, hT, hR, hM, hN⟩ := h o hacc l hl
-  obtain ⟨tree, h1, -, h3⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
-  refine ⟨k, e, tree, hk, he, fun t s hs => ?_, fun pre r post hpre t s st n hs hr t' s' hlt hs' => ?_⟩
+  obtain ⟨tree, h1, h2, h3⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
+  have hlen : (e.statements.toList.flatMap (·.sessions.toList)).length = records.size := by
+    rw [hN.length_eq, Array.length_toList]
+  refine ⟨k, e, tree, hk, he, fun t s hs => ?_,
+    fun pre r post hpre t ht st n hr q hq t' ht' s' n' hq' =>
+      h2 pre r post hpre t (lt_of_lt_of_eq ht hlen) st n hr q hq t' (lt_of_lt_of_eq ht' hlen) s' n' hq',
+    fun pre r post hpre t s st n hs hr t' s' hlt hs' => ?_⟩
   · obtain ⟨x, hx, -, ev, hev, hxe⟩ := forall₂_getElem? hN hs
     rw [Array.getElem?_toList] at hx
     obtain ⟨tr, -, -, -, -, Lc, c, L₂, st, n, hlog, hc, hname, hcount, hun, hlast⟩ := h1 t x hx
@@ -371,5 +384,25 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
     obtain ⟨q, hq, hun⟩ := h3 pre r post hpre t ht st n hr t' x' hlt hx'
     rw [hxe] at hun
     exact ⟨ev, q, hev, hq, hun⟩
+
+/-! ## The piece at the form's acceptance -/
+
+/-- **Each session's coins are its own tree's** (`LocatedOwn`), at the form's acceptance. -/
+theorem located_own_accepted (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) : LocatedOwn A C tab :=
+  located_own A C tab (membersAccepted (membersNamed C hsz))
+
+/-- **One release a round**, at the form's acceptance: the session-round locator puts at most one release of the log
+the check read on each round. -/
+theorem located_one_accepted (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) :
+    ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ n, (located (locOf A tab) n [] l).length ≤ 1 :=
+  located_one A C tab (membersAccepted (membersNamed C hsz))
+
+/-- **The sessions' releases agree with the run's coins** (`SessionsAgree`), at the form's acceptance: from the coin
+map's agreement at the session-round locator (`DevElems`) and the cut's `InteriorLogged`. -/
+theorem sessionsAgree_accepted (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+    (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop) (Ag : Exchange → Coins A x → Prop)
+    (hsz : HeldSize) (hlog : InteriorLogged C Good) (hE : DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag) :
+    SessionsAgree A x (withCoins A C tab dev Ms) dev (FormAccepts C) Good Ag :=
+  sessionsAgree A x C Ms tab dev Good Ag (interiorReads C hsz) hlog hE
 
 end Verity.SampledTwo.SessionCoins
