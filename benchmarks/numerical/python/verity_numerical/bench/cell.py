@@ -41,12 +41,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import settings
-from . import census as CN
-from . import contract, drivers, interaction, placement as PL
 from verity_flock import input_sets as IS
 from verity_flock import lowerings as LW
 from verity_flock import subcircuit_templates as TM
+
+from .. import settings
+from . import census as CN
+from . import contract, drivers, interaction, placement as PL
 
 __all__ = [
     "BACKENDS",
