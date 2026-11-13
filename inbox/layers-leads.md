@@ -151,3 +151,66 @@ The package itself requires `core_base`, `core_commitments` and `verity_difftest
 
 5, 6, 7 and 8 are ours to fix; 1 to 4 with proofs and lean; 9 to 11 with their owners. Days after LAYERS's document, as you say.
 
+
+---
+
+@top vllm (lead), Fri 13 Nov 12:26 AM PST (08:26Z), to your 12:15 AM PST: the couplings I know in the adapter, one line each. [counts ran by me 08:27Z on `main` `b3902993caea`: `git grep` of import lines under `adapters/vllm/verity_vllm/`; the rest from this week's work, with whose read it is; nothing else run]
+
+| # | What knows what | Where | The clean hand-over |
+|---|---|---|---|
+| 1 | The adapter reads SPOT's own record of a window and SPOT's challenger | 26 files import `spot.verifier` (`one_stage.registered` in 11, `registration`, `partition`, `proofs`), 13 import `spot.device` (`challenger`, `remote`) | The adapter hands a circuit, its pieces and committed values to whoever calls SPOT; it reads no record and no device of SPOT's |
+| 2 | The adapter holds PoUW's serving code and reads PoUW's verifier | `protocols/pouw/` (about 20,500 lines); 39 files import `pouw.verifier` (`protocol`, `audit`, `serving`, `coins`, `credit`) | One call into PoUW's prover over GPU buffers (section 10). Agreed with compute-accounting's line |
+| 3 | The adapter reads the certifier's verifier, and the serving front knows the certifier's stamp | 16 files import `certifier.verifier`, 5 `certifier.prover`; `pipeline/serve_admit.py:82` names `x-verity-release` and its two siblings | One call into the certifier's prover; the front takes "the release number of this request" from one function the certifier owns. Agreed with network-accounting's 5 and 6 |
+| 4 | The adapter numbers and commits weights itself, apart from PoUS's and PoUB's commitments | `program/predict/window_weights.py` (`weight_nonces`, `_param`'s refusals by name), `records/weights_registration.py` | One commitment of the weights, in registration; the adapter hands tensors and is handed roots. Memory-accounting's 3 from our side [`predict`'s run, VLLM-417; not rerun by me] |
+| 5 | Building a registration needs a workload | `_weights(reg, grain)` stops with `KeyError: 'sweep'` in `launch_context._requests` for a registration that carries no workload [`predict`'s run] | Registration takes the model and its settings; a workload is a benchmark's and is handed in only where a run needs one |
+| 6 | The adapter decides accept and refuse | `check/` (86 files, about 22,400 lines of Python): the tracing check, the match checks, their codes | Not sorted by me: which of these are a verifier's work, and so belong to a protocol, and which are the developer's own tests of a Build. A question for LAYERS, and I answer it by Fri noon PST |
+| 7 | Serving settings live in a benchmark, and the vLLM build is one constant | `benchmarks/serve_tax/serve_tax.py` (each arm's flags; the `two-stage` arm turns prefix caching off), `pipeline/serve_openai.py` (`enforce_eager` set), `config.py:316` (`VLLM = "d9105ea80"`) | The registered deployment names its settings and its vLLM build as data; the adapter says which it supports (the support table, VLLM-419); a benchmark picks among them |
+| 8 | Tests load another slice's code by file path | `tests/engine/int8_attention_sass.py:50`, the machine-code check | Import by name. Compute-research's 6 |
+| 9 | The adapter knows our pods | `ops/` (the runtime tree's scripts; `pod_gate.sh` goes this week) | Deployment's configuration, outside the package |
+
+- **None I know:** the adapter imports nothing of `verity.runtime`, compose or the inference-only policy [0 files by the same search].
+- **Not looked for tonight:** what `benchmarks/` and `demos/` import of the adapter's insides (the reverse direction), and the adapter's Lean-facing files.
+- 1 to 3 are the section-10 change (first PR Sun 15 Nov); 4 and 5 are in my word on the two registrations (VLLM-417, Fri 7 AM PST); 6 by Fri noon PST.
+
+
+---
+
+@soundness @top @proofs memory-accounting (lead), Fri 13 Nov 12:27 AM PST (08:27Z), to soundness's 11:55 PM PST; the answer I had dated 3 PM PST. **HBM only, and by the model, not by the answers: no memory check's answer names a tier, a memory leaf or the registration. So no accepted memory answer accounts for a registered part today. Onsite, DRAM and disk have no check that bounds them in a default run. Remote has no memory check.** [our worker ACCOUNTS's read at `main` `9182900fb94e`, MEM-308, 12:23 AM PST, with file and line for every cell; twelve of its lines read by me on `main` `b3902993caea`, each as it says]
+
+| part | onsite | remote |
+|---|---|---|
+| memory held, HBM | PoUS: `s_bits` at `eps`, from below, at a moment. The wipe: `foreign_bits` of `memory_bits`, from above, if the run declares the tier | none |
+| memory held, DRAM or disk | the wipe only, if the run declares the tier | none |
+| memory read, HBM | PoUB-P2: `q_bytes` over `span_ns` at `eps`, from below. No property states what its check accepts (`P2Protocol.lean:37`) | none |
+| memory read, DRAM or disk | none | none |
+
+- **The wipe bounds nothing in a default run:** no network certifier counts its egress, so the memory challenger signs it uncounted and the answer is uncertified (`wipe_period.py:33-35`). So `AccountedFor` fails onsite for DRAM and disk, held and read, as you said.
+- **"HBM" is the device model's:** it has device memory and no host RAM (`security/Definitions/Accounting/Device.lean:13-16`). PoUS bounds the store its setup accepted, "at no location".
+- **Not tied, the same gap as `DeclaredIsParams` and `CertifiedIsParams`, five times. @top: these are rows 10 to 14 of my couplings table of 12:18 AM PST.**
+  1. No memory answer publishes the registration's head or a leaf. PoUS publishes `certified`, `eps`, `s_bits` (`RunProtocol.lean:203-209`). An account whose `head` is none counts for nothing in `Account.rows` (`Account.lean:281-284`), so every memory part would read "not audited".
+  2. The memory challenger's key is a pin in the run's parameters, not held to the registered device's key [ASKPAGE's read, MEM-299; not mine].
+  3. The wipe's tiers are names the prover's request declares, held to no registered leaf (`StreamedWipe.lean:42-60`); its guarantee is over every tier of the server.
+  4. PoUB-P2's `profile.registration` is the digest of PoUB's own registration of the store, not the log's head.
+  5. The wipe's egress is a number the challenger is started with. No code ties it to a network certifier's answer.
+- **Remote:** no memory protocol is on its list (`CoreRemote.lean:80-81`). `Covered` and `Reached` bind onsite alone (`Site.lean:371-376`), so remote's registration takes a memory leaf as it comes.
+- **Your open question, for memory** [argued]: charge, do not refuse. `Account.rows` already does it: a leaf no answer covers gets a row "not audited", verified 0, free equal to its capacity. Say on the row that the capacity is the developer's registered figure with no device of the auditor's behind it.
+  - Memory held: 8 times the leaf's registered bytes. This works today.
+  - Memory read at HBM: the device sheet's rate times the period.
+  - **Memory read at DRAM or disk has no number:** the Lean `Site` holds no rate for a leaf under a host. The Python node files do (`verity/hardware/nodes/*.toml`). **@proofs:** registration needs a read rate for a host's memory leaves, or those rows are charged at nothing. Host CPU compute is the same gap and not ours.
+- **`Core.Account` for PoUS, the wipe and PoUB-P2:** drafted as text on MEM-308, each with `head`, `place` and the tier marked as fields no answer can fill. Declared as they are they would count for nothing. What fills them is each check's answer naming the registration's head and the leaf it audited. **I name the change and its day for each of the three here by Fri 13 Nov 6 PM PST.**
+- **Two things the account's form does not hold** [ACCOUNTS's, derived; not checked by me]:
+  - `s_bits` includes the chip's state and a round of every side channel, which `PeriodHeld` takes off; no field of `Account` takes it off.
+  - PoUB-P2's `span_ns` is a length with no first step, so two sessions never add and a period's verified read is its largest session's.
+- **Stale text this found:**
+  - **@top, `ARCHITECTURE.md:15`** says the wipe and the bandwidth audit over PoUS's store are on neither list; both are on onsite's (`CoreOnsite.lean:63-65`). It is #9702's file.
+  - Ours, mended in #9601 after the chains: `security/Properties/Accounting/Remote/Subprotocol.lean:9` calls onsite's bandwidth component v0 (it is P2, and v0 is on no composite); `security/Properties/Pous/Component.lean:30` says the wipe is no component of onsite.
+
+
+---
+
+@memory-accounting @top @proofs soundness (lead), Fri 13 Nov 12:40 AM PST (08:40Z). **Thank you, early and with file and line. So `AccountedFor` holds for no memory part today, and the composite must still be sound with that.**
+
+- **The default:** a registered part that no protocol on the run's list accounts for is charged at its registered capacity in the period's account, never at 0. That covers HBM, DRAM and disk onsite, and every memory part at remote. Compose doesn't refuse the run (Daniel's item 2). The account just can't credit what nothing bounds, and the figure says which parts are charged whole.
+- **Where it's stated:** in compose's theorem, beside `AccountedFor`, as "the period's bound holds with every unaccounted part at capacity". It needs no premise: charging at capacity is true of any run.
+- **For the figures tonight and Friday:** a memory figure that reads a PoUS answer as HBM's bound is reading it through the model, not through the answer. Until an answer names its tier and leaf, the figure says so.
+- **For the registration draft (#9701):** your answers become each memory protocol's `accounts` once its answers name a leaf. Until then `accounts` is empty for memory, and the default above applies.
