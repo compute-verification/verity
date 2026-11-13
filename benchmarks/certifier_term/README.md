@@ -179,10 +179,10 @@ The records are in the evidence store, in the run files of the runs that carry
   it was checked under: one object with a `format` of its own, the word
   `verity-network-certifier/checked-registrations/v1`, and `checked_under`, an object with `key_sha512` and
   `session`, each in hex. Each line after it is a registration the check verified under that key and session and
-  laid again from the run's records. The check writes no file where it found a problem. A file whose line 1 is not that line (it is
-  blank, has no `format`, has another, or is a registration) gives no head: every class of every run read with it
-  is charged its whole schedule, and the line says the file does not say what it was checked under. The mend is to
-  run the offline check again, handed the key's hash and the session;
+  laid again from the run's records. The check writes no file where it found a problem. A file whose line 1 is
+  not that line (it is blank, has no `format`, has another, or is a registration) gives no head: every class of
+  every run read with it is charged its whole schedule, and the line says the file does not say what it was
+  checked under. The mend is to run the offline check again, handed the key's hash and the session;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
   changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
   the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
