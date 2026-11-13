@@ -116960,3 +116960,36 @@ Not established: that my two files and CUT's four still build over TWOLEG's chan
 Pushed: `cursor/proofs-frame-connected-4e1b` `e033bfc14be4`; `cursor/proofs-frame-l1-9c4e` `8c37334cc716`. Unpushed: an edit of `guard.py` on L1 that splits the export into the auditor's copies and the run's (uncommitted, goes with the export's call).
 
 Not established: that the merged tree builds; that the two Python resolutions pass their tests.
+
+## WINDOWAT, Fri 13 Nov 03:13Z: `Read.lean` and `Links.lean` compile; soundness's ten commits are merged, so A28's `WindowAt` is now `WindowPasses` for me to prove; the sample at each sampled member is written but not compiled
+
+**Compiled since 02:49Z:** [run `r20261113-021053-4c37`, vy-nebius-2, waited 27 s for its place, running] `MemberForm/Links.lean` at `47d2c04d8f`: "lean exit 0 in 1411 s", "none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". That is `linkFirst_members`: at an accept of the form each tree's first opening is of its session stream, from the link-first refusal, with nothing assumed. `MemberForm/Read.lean` (`accept_read`) compiled in the same run, as said at 02:49Z. The run's third file, the aggregator, waits for a build place there.
+
+**Running, no verdict yet:** [run `r20261113-023737-0c5b`, vy-nebius-cpu-12, waited 23 s for its place, started 02:38:00Z] `MemberForm/Run.lean` and `MemberForm/Passes.lean` at `ba64988bee`.
+
+Mailbox read at `6afa7ee890`: your 03:00Z message taken. I push nothing to #9520's branch, `cursor/proofs-windowat-linkfirst-5e4b` stays at `1ca22d7e7e`, and my statements are against `specs` and `order`.
+
+**1. Soundness's branch is merged.** `cursor/proofs-windowat-5e4b` at `d6b5dcee5e` holds `cursor/soundness-multileg-8fb2` at `899017e4fc` (ten commits past what I held; `git merge`, one conflict).
+
+- [read `MemberForm/SetsUp.lean`, their `8822589507`] Soundness took `MemberForm/SetsUp.lean` and rewrote it; I kept theirs whole. The window's members are now on the registered files (`MemberOn (V.registered θ)`), not on the committed files, and `SameFiles`, `ReadsMemberFiles`, `MemberFilesAt` and my `windowAt_members` are gone from it.
+- [read `Window/Instance.lean:527,572,578,588`] `SetsUp` is no longer a field of the instance: it is `MembersSetUp`. So the hypothesis I said `WindowAt` would need (the instance's `SetsUp` gives `MembersSetUp`) is not needed. Soundness proves `WindowAt` from two statements, `WindowRegistered` (the deployment's window is the parameters' members on the registered files: a fact of the instance, no play in it) and `WindowPasses` (at an accepted play the window is laid out and each member's files pass). **`WindowPasses` is what A28's `WindowAt` now asks of me.**
+- [read `Window/FilesSent.lean:55`, `Window/Instance.lean:618`] `WindowAt`, `WindowPasses` and `WindowReads` now also take `FilesSent`: the blobs sent hold each member's two files at the registered bytes. Where it fails the window's read finder outputs a collision, which the bound already pays for.
+- [read `Window/Steps.lean:234`] `WindowSessions` has `specs` and `order` in place of `members`, as you relayed.
+- [derived] What the merge broke of mine, fixed in the merge commit: `statesMember`, `filesPass_of_held` and `WindowOn.passes` read the blobs as committed files then evidence (`s.blobs = F ++ B`). They now take one fact in its place, `ReadsFiles R vm bs`: what v2 reads on the blobs under the member's two digests are the files those digests name among `R`. `readsFiles_of_holds` gives it on blobs that start with files holding the member's two; at the registered files it is to come from `FilesSent`. Not compiled since the change.
+
+**2. The sample at each sampled member (E) is written.** Three files, at `d6b5dcee5e`:
+
+- [checked on the VM, not a run] `MemberForm/Ranges.lean` (405 lines; Mathlib alone): `lean` on the file exits 0, and `#print axioms` of each theorem shows only the three. New in it: `UnitsOver` (members' ranges apart, the held members in order, each session's units inside its member's range, the evidence's units their union) with `UnitsOver.kept` (the held members are exactly those the units touch) and `UnitsOver.mem_units` (a unit in a held member's range is proved exactly when that member's session proved it).
+- [written, modelled on the VM with stand-ins for the verifier's names, NOT compiled in the tree] `MemberForm/Sample.lean` (288 lines) and `MemberForm/Units.lean` (338 lines). `member_session`: at an accepted run of the form and a sample `S` that is the proof blocks at the evidence's proved units, as many statements were read as members have a proof block in `S`, and the member at place `i` with one has, at the statement after as many as the sampled members before it, a session's verdict whose record's sample is the member's part of `S`. That is `WindowSessions.session`'s first three clauses and the count for `trees`.
+
+**3. What is left of A28**, in the order I write it:
+
+1. `MemberForm/Reads.lean`: `WindowReads` at an accept of the form. `fresh` is `accept_read`'s `SampleLinkFirst`; `specs` and `order` are soundness's `Accepted.specs` and `Accepted.opensLast`, carried from v2's read to the device's log; `trees` is the count above with `members_place_logged`; `session` is `member_session` with `statesMember`, `sessionRead_logged`, the record sent and the evidence's proof files.
+2. The window's sample is the proof blocks at the evidence's proved units (soundness's `joint_draw_of_drew`, `checkAt_proved`).
+3. `WindowPasses`: laid out (from `laidHeld` and the members' places) and each member's files passing (`WindowOn.passes`, with `ReadsFiles` from `FilesSent`).
+
+**Machines.** [run] Each file of a try takes about 24 minutes on either machine (1491 s, 1411 s): [guess] the place's tree differs from this branch in 799 files, so each file's dependencies are rebuilt. I model on the VM first and send several files a run. The next try (the merged tree's `Ranges`, `Sample`, `Units`, `States`, `Passes`) goes when one of my two ends; I hold one a machine.
+
+**Not established:** that `Sample.lean`, `Units.lean`, and the restated `States.lean` and `Passes.lean` compile in the tree; `Run.lean` and `Passes.lean` at the older head (`0c5b` has no verdict); `Reads.lean` and `WindowPasses` are not written; whether soundness's merged files compile on my branch (I compiled none of theirs). `FormAccepts` (an accept on parameters naming members is one of the form) stays MEMBERS' lift: on this branch it holds only because the check refuses such parameters.
+
+**To post:** nothing.
