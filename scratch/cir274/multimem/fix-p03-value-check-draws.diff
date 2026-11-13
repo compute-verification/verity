@@ -1,8 +1,8 @@
 diff --git a/adapters/vllm/verity_vllm/program/predict/node_window_values.py b/adapters/vllm/verity_vllm/program/predict/node_window_values.py
-index 6bc3f99605e..5288bacb0f0 100644
+index 6bc3f99605e..5c86b918cc4 100644
 --- a/adapters/vllm/verity_vllm/program/predict/node_window_values.py
 +++ b/adapters/vllm/verity_vllm/program/predict/node_window_values.py
-@@ -32,6 +32,7 @@ import numpy as np
+@@ -32,12 +32,14 @@ import numpy as np
  from verity.circuits.defs import bind
  from verity.circuits.evaluation.batch import evaluate_batch
  from verity.circuits.refs import runs
@@ -10,7 +10,14 @@ index 6bc3f99605e..5288bacb0f0 100644
  from verity.commitments.windows import interface as IF
  
  from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
-@@ -85,10 +86,10 @@ def _shape(t: Any) -> tuple[int, ...]:
+ 
+ PROMPT = "prompt"
+ SAMPLE = 1024
++DRAW_DOMAIN = "verity/node-window/value-check/v1"
+ _DT = {8: np.uint8, 16: np.uint16, 32: np.dtype("<u4"), 64: np.dtype("<u8")}
+ 
+ 
+@@ -85,10 +87,10 @@ def _shape(t: Any) -> tuple[int, ...]:
      return tuple(out)
  
  
@@ -25,7 +32,7 @@ index 6bc3f99605e..5288bacb0f0 100644
      out: dict[str, np.ndarray] = {}
      for name, t in fn.signature()[0]:
          if name == PROMPT:
-@@ -624,17 +625,23 @@ def _family_of(fn: Any) -> str:
+@@ -624,17 +626,23 @@ def _family_of(fn: Any) -> str:
      return fn.defn.name if hasattr(fn, "defn") else fn.id.split("_v")[0]
  
  
@@ -33,7 +40,7 @@ index 6bc3f99605e..5288bacb0f0 100644
 -    return list(range(n)) if n <= most else sorted(rng.choice(n, most, replace=False).tolist())
 +def draws(seed: int) -> RND.Key:
 +    """The value check's key under ``seed``, from the one challenge derivation."""
-+    return RND.derive(str(seed).encode(), "verity/node-window/value-check/v1", {})
++    return RND.derive(str(seed).encode(), DRAW_DOMAIN, {})
 +
 +
 +def sample(n: int, key: RND.Key, index: str, most: int = SAMPLE) -> list[int]:
@@ -56,7 +63,7 @@ index 6bc3f99605e..5288bacb0f0 100644
      out: dict[str, Any] = {}
      extra: dict[str, set[int]] = {}
      through: dict[str, dict[str, int]] = {}
-@@ -709,5 +716,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
+@@ -709,5 +717,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
      raise ValueError(f"no registered read into {family} {port}")
  
  

@@ -22,3 +22,4 @@ dense and sparse files. Value check: r20261113-053257-b863 at 26d5e1ae (same low
 - 09:04Z REQBLOCK: piece A 1b640168 run 1fbe 190 passed 0 failed 4 skipped, gate [] mypy clean (run 86dd lacked the GLM B8 fixture: 41 FileNotFound); piece B cb65dbaa run cc4f 39 passed, digest 3ee9420daaf7545f, gate [].
 - 09:16Z REQBLOCK: piece C runs 861a (repository), ae48 (vllm lint) at cb65dbaa; piece D driver values_plant96.py launching.
 - 09:42Z REQBLOCK: piece C 861a repository 392 passed; ae48 vllm lint 87 passed 2 failed (P1, P3 in node_window_values.py, not mine); fix diffs under scratch/cir274/multimem/fix-p0{1,3}-*.diff, checking them in a clone.
+- 09:39Z REQBLOCK: piece D r20261113-091230-0102: SIZE=96 plant 749 of 1024 differ (749 covered); fix check 0862: P1 P3 pass, typed_records schema-literal on the domain, P3 diff revised (DRAW_DOMAIN constant). (The 09:42Z line above was 09:25Z.)
