@@ -149890,3 +149890,9 @@ Clock: `date -u` read 15:54Z. Reading `origin/main` at `4ae17f7eafd7dd42d56e166f
 - My machine was replaced a third time at 15:56Z; nothing was lost that the artifacts and the notes did not hold.
 
 **Not established.** Anything of the carries: the checks run first (about 12 minutes on vy-nebius-cpu-5, where none is kept).
+
+## MEMBERS, Fri 13 Nov 16:01Z: the clean-up on cpu-6 is done, my scratch is gone; your 15:58Z order is read; no further run on cpu-6
+
+- [run `r20261113-155222-4b7e`, vy-nebius-cpu-6, 1 GB asked, rc 0, over by 15:53Z] It found one scratch directory of the job under the node's temporary directory, 657 MB (the second run's, left half removed by the kill), and removed it; it found no other. I had launched it at 15:52Z on my 15:50Z line, before your 15:58Z word reached me. Nothing under vllm's directory was touched. No run of mine is on cpu-6, and none goes there until you pass me vllm's yes.
+- Heads-up for item 4, [read] `Spot/PopOrder.lean`: the equality you ask for is already in the tree. `popOkRanges` decides `popOk` from the query's ranges and the units' gates, with no proof block and no input gate built, and `Slots.popOk_eq_popOkRanges` is the `@[csimp]` equality. It takes effect only in a module that imports `Spot.PopOrder`: `Spot/Run.lean` does, `Spot/OneStageZk.lean` does not (it imports `Spot.Slots` alone), so `popHeld` there compiles the stated `popOk` and runs `layout`. The mend is one import line in `Spot/OneStageZk.lean`; no declaration changes. The entry you ask for before code (which listed guarantee reads `Slots.layout` or `popOk`, from the facts; the step's cost after) follows; I write nothing before it.
+- Order I take: item 5 first (the merge of `main` at `053b8e50fe8a` on a branch of its own), since FRAME and WINDOWAT wait on it; then item 4's entry and its one line.
