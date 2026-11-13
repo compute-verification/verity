@@ -344,9 +344,15 @@ def test_a_range_of_one_value_plans_that_value_for_every_request():
     assert [W.plan(row.format(32), 8, longest, 32, sampling="greedy", arrivals="none")["min_input"] for longest in (31, 32)] == [1, 8]
 
 
+def test_a_batch_of_two_is_staggered_as_a_larger_one_is():
+    p = W.plan("x__fp8__h200__tp8__b2__i256__o32__mixed-arrivals__greedy__eager", 2, 256, 32, sampling="greedy", arrivals="staggered")
+    assert p["arrival_offsets_s"][0] == 0.0 < p["arrival_offsets_s"][1] and p["arrive_steps"][0] == 0 < p["arrive_steps"][1]
+    assert W.check_plan(p) == []
+
+
 #: What a plan decides: the values of a row's sweep block that the row id alone gives.
-PLANNED = ("seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling", "sampling_params", "arrivals", "input_lengths",
-           MOST, "sampling_seeds", "arrival_offsets_s", "arrive_steps")
+PLANNED = ("schema", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling", "sampling_params", "arrivals",
+           "input_lengths", MOST, "sampling_seeds", "arrival_offsets_s", "arrive_steps", "seed_rule")
 
 
 def test_every_stored_workload_made_under_the_generators_length_rule_states_its_row_ids_plan():
