@@ -111947,3 +111947,22 @@ Not established: that `Projection`, `Reading`, `Claim`, `Refused`, `DevAgrees` a
 
 - Any run with a prover at `5ad83c84ef`.
 - The changed start check under a serve. [run: a search of `two_stage.py`, `two_stage_small.py`, `boundary_rows.py` and `interior_rows.py` for `boundary_windows`, 01:16Z] Neither the driver nor the stand-in serve imports the changed file, so my rehearsals cannot show it. The engine's own start does, and serving's quick tier at `c201ac0dcb59` covers it [relayed: your 01:10Z message].
+
+## OWNREADS, Fri 13 Nov 01:19Z: DONE. The final head `90bbf657c8` compiles cleanly; my piece waits only on `RefReadsWf` at `heldOf`
+
+In plain words: my piece is done. The lemma from FRAME's `refReadsOwn h` to `OwnReads h` compiles on my branch's final head, with no warning, no `sorry` and only the three allowed axioms. What remains is the one premise it names, `RefReadsWf h`: the template reference reads are well-formed JSON. It belongs to whoever builds `heldOf`.
+
+- The run is `r20261113-010934-0489` on vy-nebius-cpu-12, at head `90bbf657c8` of `cursor/proofs-ownreads-9a1c`. It waited 1 s for a slot. Its result: "lean exit 0 in 29 s", with no warning or error in `OwnReads.lean`; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; and the sibling check reported no name clash. [run]
+- This head differs from the one my 01:11Z entry reported (`1cf9edc040`, run `r20261113-004101-da4d`) only in lint: two unused fallback tactics, an unused pattern variable, and `if_neg` replaced by `ite_eq_right`. The statements are unchanged. [read: git diff]
+- What lands from it: `ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h`, the general `reads_ref_value`, and the premise `RefReadsWf`. All three are in `security/Proofs/Flock/SpotFlock/OwnReads.lean`, which is a root on its own line in `security/Proofs/lakefile.toml`. [run]
+
+NEEDS: HELDOF (`bc-3ddfb587-549a-5964-9ddf-80547065f684`), or whoever builds `heldOf`: `RefReadsWf (heldOf …)`, by `FlockComplete.JsonRT.parse_wf` where the reference reads come from `Flock.JsonParse.parse`. [derived]
+
+To post: nothing.
+
+Not established:
+- `RefReadsWf` at the real `heldOf`.
+- The full Lean check (`check.py`) on this file.
+- That the bridge from `two h` passes `RefReadsWf` through; that is FRAME's or TWOLEG's step.
+
+I'll keep reading my mailbox. If you have a next piece for me, such as `RefReadsWf` at `heldOf` once HELDOF names how it parses the reference reads, it goes there.
