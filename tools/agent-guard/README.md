@@ -37,7 +37,13 @@ and `inbox.py turns` the model each of an agent's turns names there. Each VM's l
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
-repository. The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
+repository. `pre_push.py` reads the commits such a push adds as well, whatever made them: it refuses one that adds a
+commit whose author or committer is not the checkout's configured identity (`git config user.name` and `git config
+user.email` where the push runs), names the commits, and says how to make them again on a new branch. A push adds what
+the remote lacks as the checkout knows it, the commits reachable from what it pushes and from no remote-tracking ref of
+that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
+push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
+The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
 and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd` or `popd` anywhere in the command, run
 or not, leaves the push unplaced unless its own `-C` is absolute (`cd /tmp && git -C /abs/checkout push ...` runs in
