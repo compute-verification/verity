@@ -18,7 +18,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 { (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
     && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) \
-    && (cd verity/protocols/recursion/verifier/recursive && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/recursion/verifier/recursive && lake build sampled-two sampled-two-on sampled-two-desc); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
@@ -74,4 +74,6 @@ on=0; "$FORM_BIN/sampled-two-on" check "${FILES[@]}" > "$O/form/on.json" || on=$
 off=0; "$FORM_BIN/sampled-two" check "${FILES[@]}" > "$O/form/off.json" || off=$?
 echo "FORM_ON rc=$on $(head -c 2000 "$O/form/on.json")"
 echo "FORM_OFF rc=$off $(head -c 2000 "$O/form/off.json")"
-[ "$on" -eq 0 ] && [ "$off" -eq 1 ]
+desc=0; "$FORM_BIN/sampled-two-desc" check "${FILES[@]}" > "$O/form/desc.txt" || desc=$?
+echo "DESC rc=$desc"; cat "$O/form/desc.txt"
+[ "$on" -eq 0 ] && [ "$off" -eq 1 ] && [ "$desc" -eq 0 ]
