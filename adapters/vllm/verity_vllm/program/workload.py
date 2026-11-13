@@ -26,7 +26,7 @@ import hashlib
 import json
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from verity.circuits.codec import (
     decode_program,
@@ -224,7 +224,8 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
             raise ValueError(f"{K - j} Input batches beyond the declared parameters")
     else:
         groups = [f"p{j}" for j in range(K)]
-    total, counts = Counter(groups), {}
+    total = Counter(groups)
+    counts: dict[str, int] = {}
     names = []
     for g in groups:
         names.append(g if total[g] == 1 else f"{g}[{counts.get(g, 0)}]")
@@ -595,7 +596,7 @@ class WorkloadProgram:
             inputs.append({"root_node": j, "param": params[j][0], "type": str(params[j][1]), "gates": [body.offsets[j], body.offsets[j + 1]], "owner": owner})
         shared_gates = [body.offsets[0], body.offsets[S]]
         ins = edge_ports(self.edge.static()["in"]) if self.edge is not None else []
-        fed = {(self.edge.ins[m][0], g): (S + p, f, params[S + p][1]) for p, (_, g, _, ms) in enumerate(ins) for f, m in enumerate(ms)}
+        fed = {(cast(Edge, self.edge).ins[m][0], g): (S + p, f, params[S + p][1]) for p, (_, g, _, ms) in enumerate(ins) for f, m in enumerate(ms)}
         reqs = []
         pi = S + P
         for r_i, r in enumerate(self.requests):
