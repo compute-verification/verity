@@ -93,6 +93,22 @@ def test_units_must_partition_the_calls():
         VerificationUnit("empty", frozenset())
 
 
+def test_a_program_whose_ids_clash_and_units_that_name_no_call_are_refused_by_name():
+    twice = P((C(0, "A", ("out",), (X,), "m"), C(0, "B", ("out",), (X,), "m")), inputs=(X,))
+    for read in (lambda: boundary(twice, by_module), lambda: required_values(twice, by_module, Policy())):
+        with pytest.raises(ValueError) as e:
+            read()
+        assert str(e.value) == "Program: Call ids are not unique" and not isinstance(e.value, PartitionError)
+    Pr = chain()
+    an_input_with_a_calls_id = P(Pr.calls, inputs=(X, ValueRef(1, "w"), ValueRef(0, "w")), outputs=Pr.outputs)
+    with pytest.raises(ValueError) as e:
+        boundary(an_input_with_a_calls_id, by_module)
+    assert str(e.value) == "Program: input ids [0, 1] are also Call ids" and not isinstance(e.value, PartitionError)
+    with pytest.raises(PartitionError) as e:
+        boundary(Pr, lambda P_: (VerificationUnit("all", frozenset({0, 1, 9, 7})),))
+    assert str(e.value) == "units name 2 id(s) that are not Calls (first: [7, 9])"
+
+
 def test_required_values_keeps_the_three_sources_apart():
     Pr = chain(("a", "b"))
     W = ValueRef(-2, "w")
