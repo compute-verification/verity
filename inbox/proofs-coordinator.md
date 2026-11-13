@@ -156021,3 +156021,92 @@ Read at FRAME's carried switch head `097b85eff21b` (`cursor/proofs-carried-membe
 - That the row's timer compiles, and its figures.
 - The suites' verdict for any of the three branches.
 - That the cut builds: nothing of the split is compiled or written.
+
+## STOPDRIVER, Fri 13 Nov 18:39Z: B FAILED one suite's read guard: new head `ca7a92c69852`, no PR; mended hold merged
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+**1. B is not ready: the changed suites found one failure of B's, and B has a new head**
+
+- [run] `6798` at `1cf9a938a3ae`, read at 18:30Z with 60 of its 68 suites back: 59 passed, 1 failed. It still runs.
+- [run] The failure is `benchmarks/spot_proved`: 101 tests passed, and the read guard fails the suite, because its
+  tests read `verity/protocols/proofs/spot/verifier/window_place.py`, which is outside its inputs (read by
+  `test_stage_fused_norm.py`).
+- [read] The cause is B's. `service.py` imports `window_place` since B, and that suite names the stream's file and
+  what it imports one by one (`second_stage.py`, `schedule.py`). Two more suites name the same three files:
+  `verity/circuits/requirement` (passed in `6798` with `--quick`, 22 tests) and circuit-check (not back).
+- [run] The mend is `ca7a92c69852`, one commit on B: the three lists gain `window_place.py`, 4 lines added and 1
+  removed in three `pyproject.toml` files. Pushed. On the VM the three files parse, each names the path once, and
+  `pins.py --stale` exits 0.
+- [guess] `requirement` passed because its tests that import the stream are slow ones, which `--quick` leaves out;
+  a train's whole check would then have failed it. I have not read which of its tests imports the stream.
+- So B's pull request is NOT open. By your order it opens when B's tests and the changed suites pass at B's final
+  head, and that is `ca7a92c69852` now. Three runs are out at it (item 5). Say so if you want it opened sooner.
+- [run] `main` is `fa3e619ee146`, 19 landings past B's base `4ae17f7eafd7`. None changes one of B's 15 files, and
+  `git merge-tree` of `ca7a92c69852` into it is clean.
+
+**2. The merge you ordered**
+
+- [run] `c80ba551ec06` merges TWOLEG's mended hold `b2602169f807` into `5f0288f9993c` with no conflict. My own
+  `git merge-tree` gave the tree the merge made (`1076a817dc31`). It brings the 12 lines in the join's five files
+  and nothing else. Nothing went to a branch of TWOLEG's.
+- [run] `bf701e54dc6e` then merges B's new head `ca7a92c69852`, no conflict, so the hold's branch holds B whole.
+
+**3. The hold fails one root lint on its own; mended on my branch as `b678f3affc5a`**
+
+- [run] `test_no_new_silent_excepts` fails at TWOLEG's hold alone (`b2602169f807`, on the VM: 1 failed, 2 passed)
+  and failed at `5f0288f9993c` in `94ef`: `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py: 12
+  found, 11 allowed`. The twelfth is line 1498, `except ValueError: return True`, in `_placed`, the Python the
+  difftest holds Lean's `Run.placed` to.
+- [read] B does not touch that file: it is one blob at `4ae17f7eafd7`, at B's head and on `main`.
+- [run] `b678f3affc5a`, 3 lines added and 5 removed in that file: `_placed` asks the stream's predicate
+  (`service._names_place`, B's) whether the window names a place, and catches nothing. The lint's file then
+  passes on the VM, 3 passed.
+- [derived] What `_placed` answers is unchanged: the predicate is false exactly where `window_place.family` raises
+  ValueError, and there the old code returned true. `test_a_run_reads_the_family_of_its_records_place` holds it to
+  Lean in each case; it is in run `7f56`.
+- The mend leans on B's predicate, so it stands only above B, which is where TWOLEG says the hold's pull request is
+  cut (18:12Z). It is a commit of its own: TWOLEG may take it, or mend the line another way and I drop mine.
+
+**4. The three runs at `5f0288f9993c`, read whole: nothing failed but the form's build and that lint**
+
+- [run] `94ef`, exit 1. Passed: the driver's four files 53 (the three tests of `test_stop_audit.py` among them),
+  the verifier's two files 152, the place difftest 105, the nine other files 88, the root's four files 47. Failed:
+  the lint of item 3, and the composition test on the kept play, at the build
+  (`VStarRecursive/SampledTwo.lean:463:23: Unknown identifier 'Challenger.trustedSessionOf'`), as you wrote.
+- [run] `d5f3`, exit 1. Passed: `verity/protocols/proofs/spot/verifier` 970, `benchmarks/one_stage` 1105,
+  `verity-core-sampled-proofs` 426 with 2 skipped. Failed: `verity-core-composition`, 23 passed and 63 errors. The
+  30 errors the log names are all in `test_sampled_two_difftest.py`; I read no error's text and not the other 33.
+- [run] `c8f1`, exit 106: the play stopped at the same build error (`PLAY rc=7`), so the composition test on a
+  play made afresh never ran.
+
+**5. Runs out**
+
+At the hold's branch `b678f3affc5a`, all on vy-nebius-cpu-11, launched 18:28Z:
+
+- `r20261113-182809-7f56`: `94ef`'s line again, with the test of item 3 added. Running at 18:37Z.
+- `r20261113-182809-1ee0`: the play, then the composition test on the play it makes. Waiting for a slot at 18:37Z.
+- `r20261113-182809-43bf`: the same four suites with `--quick`. Running at 18:37Z.
+
+At B's new head `ca7a92c69852`, launched 18:35Z, each waiting for a slot at 18:37Z:
+
+- `r20261113-183527-3c78` on vy-nebius-cpu-2: B's tests, `d286`'s line.
+- `r20261113-183612-c4f7` on vy-nebius-cpu-1: `suites.py --changed 4ae17f7eafd7 --quick`. About 75 minutes once
+  it starts [guess, from `6798`].
+- `r20261113-183547-e9c1` on vy-nebius-cpu-11: `benchmarks/spot_proved` and `verity/circuits/requirement` whole,
+  slow tests included.
+
+### Not established
+
+- Whether `6798`'s last eight suites pass at `1cf9a938a3ae`: `verity-vllm`, `verity-numerical`, circuit-check,
+  `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`,
+  `verity/definitions`.
+- Whether any suite fails at `ca7a92c69852`: nothing has run there yet.
+- Whether a fourth suite reads `window_place.py` only in its slow tests. I looked for lists that name `service.py`
+  beside what it imports and found three. `verity-pouw-check-difftest` names `service.py` alone, and passed.
+- Whether the form builds and the play passes at the merged head: `7f56` and `1ee0`. TWOLEG's `1f3e` built
+  `b2602169f807`, not my merge.
+- Whether the composition test passes on the kept play once the form builds. My 17:49Z guess was that it fails
+  there, for want of a play made after B.
+- No run is at `bf701e54dc6e` itself. It differs from `b678f3affc5a` by the three input lists only.
