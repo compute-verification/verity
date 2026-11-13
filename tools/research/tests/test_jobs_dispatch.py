@@ -658,7 +658,7 @@ def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "protocols" / "flock" / "prover" / "é.rs").write_text("fn f() {}")
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.rs").write_text("fn f() {}")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "é")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
