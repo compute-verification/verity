@@ -97,7 +97,8 @@ def test_select_units(program, window):
 
 def test_select_reads(program, window):
     """Rank 0's 160 rows of each select's logits are wired to the LM head's first-level gather chunks
-    (`AllGather_v1{WORLD=121,N=1}`) and the other ranks' 1,120 rows are free under their peers' names; each combine parameter
+    (`AllGather_v1{WORLD=121,N=1}`) and the other ranks' 1,120 rows are free under their peers' names, seven a select, each
+    select's its own; each combine parameter
     r<c> is wired to chunk c's output."""
     circuit, w = window
     ts = set(_select_templates(circuit))
@@ -108,9 +109,10 @@ def test_select_reads(program, window):
     assert sum(x.units for x in logits) == 2 * V // 8 // R
     free = [f for f in w.free if f.tid in ts]
     assert {f.kind for f in free} == {"peer"} and {f.port for f in free} == {"logits"}
-    sel = next(n for n in program.body.nodes if NW._family(n) == "TokenSelect")
-    peers = {w.params[i] for s, i, _lo, _hi in runs(NSEL.through(w, sel.args[0].refs)) if s == "p"}
-    assert {f.name for f in free} == peers and len(peers) == 7
+    sels = [n for n in program.body.nodes if NW._family(n) == "TokenSelect"]
+    peers = [{w.params[i] for s, i, _lo, _hi in runs(NSEL.through(w, n.args[0].refs)) if s == "p"} for n in sels]
+    assert all(len(p) == 7 for p in peers) and not peers[0] & peers[1]
+    assert {f.name for f in free} == peers[0] | peers[1]
     assert sum(f.count for f in free) == 2 * 7 * V // 8 // R
     rs = {x.port: x.writer for x in circuit.wires if x.reader == combine and x.port.startswith("r")}
     assert rs == {f"r{c}": descriptor_id(G.plan(V)[c].defn) for c in range(K - 1)}
