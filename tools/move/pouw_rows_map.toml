@@ -1,0 +1,67 @@
+# compute-accounting's path-only rows toward the architecture's tree: what `tools/move/layout.py --map
+# tools/move/pouw_rows_map.toml` moves and rewrites. Its paths are today's: it runs before the protocol group move
+# (`verity/protocols/accounting/`, `proofs/`, `policy/`), which then carries `verity/protocols/pouw/` and
+# `verity/protocols/experimental/` as they are after it. `pouw_kernels_map.toml` runs after it, on the commit it makes.
+#
+# - `verity/protocols/pouw/clear/` becomes `verity/protocols/pouw/verifier/clear/`: the clear audit is PoUW's verifier's.
+# - The adapter's PoUW kernels, `adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/`, become PoUW's prover's
+#   `verity/protocols/pouw/prover/kernels/pouw_cuda/`. Its sources include only each other and what their build puts on
+#   the include path, so no source changes.
+# - Dither, an experimental PoUW variant, becomes `verity/protocols/experimental/dither/`: its circuit and sidecar under
+#   `prover/`, its specification and its circuit's test. Its served producer (`benchmarks/pouw/served_h1/`) stays: it
+#   loads `benchmarks/hash/dither/` by file, which nothing outside `benchmarks/` may.
+#
+# No kernel source's bytes change: every `.cu`, `.cuh`, `.cpp`, `.h` and `.c` is excluded from the rewrite, and no row
+# moves a source whose relative `#include` leaves its directory. The rows that would are `pouw_kernels_map.toml`'s. No file
+# is split or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/pouw/clear/" = "verity/protocols/pouw/verifier/clear/"
+"adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/" = "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+"verity/protocols/pouw/prover/circuit/dither.py" = "verity/protocols/experimental/dither/prover/dither.py"
+"verity/protocols/pouw/prover/circuit/dither.circuit-check.py" = "verity/protocols/experimental/dither/prover/dither.circuit-check.py"
+"verity/protocols/pouw/prover/circuit/dither.circuit-check.json" = "verity/protocols/experimental/dither/prover/dither.circuit-check.json"
+"verity/protocols/pouw/verifier/dither/" = "verity/protocols/experimental/dither/"
+"verity/protocols/pouw/verifier/tests/test_circuit_dither.py" = "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and their rows are a
+# directory's, so a file only a branch has under one is carried
+paths = ["verity/protocols/pouw/clear/", "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+         "verity/protocols/pouw/verifier/dither/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`, whose not-yet lines are deleted once the move lands),
+# records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the archive), files
+# whose bytes a digest pins, Lean sources, and every kernel source, whose bytes change only with its owner's build
+# check. A `.lean` file that writes a path outside a comment is still rewritten (`include`); lakefiles and Lake
+# manifests are too.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.pouw.clear" = "verity.protocols.pouw.verifier.clear"
+"verity.protocols.pouw.prover.circuit.dither" = "verity.protocols.experimental.dither.prover.dither"
+"verity.protocols.pouw.verifier.dither" = "verity.protocols.experimental.dither"
+"verity.protocols.pouw.verifier.tests.test_circuit_dither" = "verity.protocols.experimental.dither.tests.test_circuit_dither"
+"verity_vllm.protocols.pouw.pouw_cuda" = "verity.protocols.pouw.prover.kernels.pouw_cuda"
