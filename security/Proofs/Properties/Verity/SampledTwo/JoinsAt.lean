@@ -9,6 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
+public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
 
 /-!
 # The two-stage leg's projection at the form's accept, from the coin map's law
@@ -37,7 +38,8 @@ its proof (`CoinMapAgree.lean`).
 * the sessions' releases' agreement and coins (`SessionCoins.sessionsAgree_accepted`, `coinsAgree_sessions`), with
   CUT's `held_size` for `HeldSize`;
 * no coin at the statements' round, the accept on the rounds a run reaches (`reachedAccepts`, with ACCEPTS's
-  `sourcesFit`: an accepted run read at most the coins it has) and the statement read (`stmtAt`).
+  `sourcesFit`, an accepted run read at most the coins it has, and `playAccepts_form`, its run of record a play
+  SPOT[Flock] accepts) and the statement read (`stmtAt`).
 
 **The stages' pieces are taken at the case kept on the good plays** (`goodCase C JoinGood`, `GoodCase.lean`).
 STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form accepts, and none of them is known
@@ -60,8 +62,11 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
 * **The first stage's coins are read under the parameters' key** (`firstReads`) and **an accepted play on two windows
   shows its sessions' order** (`orderShown`): CUT derives both from the form's accept (`CutAccept.lean`, not on the
   join yet); `firstDrawn`, `sessionMatches`.
-* **The interior's log on the play's** (`interiorLogged`), **the messages** (`msgOpens`, `digestBefore`) and **the
-  accept** (`playAccepts`, `sessionMsgs`).
+* **The interior's log on the play's** (`interiorLogged`, SESSIONCOINS) and **the messages** (`msgOpens`,
+  `digestBefore`, MESSAGES).
+* **The run of record's accept** (`playAccepts_form`'s premises): `heldAt`, `twoHolds` (HELDOF); `recordsHeldAt`
+  (HELDOF's names, ACCEPTS's rest); `recordsRead` (TWOLEG's form change); `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`,
+  `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`.
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -239,8 +244,24 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- An accepted play's run of record is a play SPOT[Flock] accepts. -/
-  playAccepts : PlayAccepts A C (joinSessions A C Ms tab ℓ₁ ℓ₂) P'
+  /-- The held copies agree with what an accepted play's run reads (`RunsAs.HeldMatches`). -/
+  heldAt : HeldAt A C
+  /-- The held copies' two-stage design evaluates at every statement. -/
+  twoHolds : SpotFlock.RunsAs.Round2.TwoHolds A.h
+  /-- An accepted play's records name their registrations' names. -/
+  recordsHeldAt : RecordsHeldAt A C
+  /-- An accepted play's records read back as the records the run held. -/
+  recordsRead : RecordsRead C
+  /-- The reading's session statements are the ones the run's second stage checked. -/
+  stmtsRead : StmtsRead A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
+  /-- Each session statement has its template's stage count. -/
+  roundsHeldAt : RoundsHeldAt A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
+  /-- Each session statement is in scope. -/
+  scopeHeldAt : ScopeHeldAt A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
+  /-- Each session statement is its template's reference statement but for the run's fields. -/
+  pinHeldAt : PinHeldAt A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
+  /-- Flock accepts each session, on the provers `P'`. -/
+  sessionsRun : SessionsRun A C (joinSessions A C Ms tab ℓ₁ ℓ₂) P'
   /-- The sessions' messages are the ones the check read. -/
   sessionMsgs : SessionMsgs A C (joinSessions A C Ms tab ℓ₁ ℓ₂) P'
   /-- The sampled verdict accepts, after `θ`, only where the form accepts the instance's case. -/
@@ -337,7 +358,9 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     hFit₁ hFit₂ hSess hFirst hSecond hSessions
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
-    (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C) h.playAccepts h.sessionMsgs)
+    (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
+      (playAccepts_form A C _ P' h.heldAt h.twoHolds h.recordsHeldAt h.recordsRead h.stmtsRead h.roundsHeldAt
+        h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
 end Verity.SampledTwo
