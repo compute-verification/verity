@@ -25,8 +25,8 @@ from verity_vllm.commit.committer.pinned_pool import PinnedPool  # noqa: E402
 GPU = torch.cuda.is_available()
 
 
-def _rss_bytes() -> int:
-    for line in open("/proc/self/status"):
+def _rss_bytes(status: str = "/proc/self/status") -> int:
+    for line in open(status):
         if line.startswith("VmRSS:"):
             return int(line.split()[1]) * 1024
     raise RuntimeError("no VmRSS")
@@ -76,12 +76,33 @@ def test_exact_pool_rss_equals_its_accounting_and_is_released():
     assert _rss_bytes() - r0 < (256 << 20), "the exact pool's memory goes back to the OS on release()"
 
 
-def _cgroup_anon_shmem() -> tuple[int, int] | None:
+def _cgroup_anon_shmem(stat: str = "/sys/fs/cgroup/memory.stat") -> tuple[int, int] | None:
     try:
-        st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in open("/sys/fs/cgroup/memory.stat")}
+        st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in open(stat)}
         return st["anon"], st["shmem"]
     except Exception:  # noqa: BLE001
         return None
+
+
+def test_the_two_readers_the_device_cases_measure_with_read_the_kernels_files(tmp_path):
+    """`_rss_bytes` and `_cgroup_anon_shmem` need no device: each is held to a file in the kernel's form. The resident set is the
+    `VmRSS` line's kibibytes in bytes, and a status with no such line is an error; the cgroup's pair is its `anon` and `shmem`
+    counts, and `None` where the file is absent or lacks one of the two. On this process the resident set is whole kibibytes."""
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython3\nVmHWM:\t   99999 kB\nVmRSS:\t    1234 kB\nRssAnon:\t     999 kB\n")
+    assert _rss_bytes(str(status)) == 1234 * 1024
+    status.write_text("Name:\tpython3\nVmHWM:\t   99999 kB\n")
+    with pytest.raises(RuntimeError, match="no VmRSS"):
+        _rss_bytes(str(status))
+    assert _rss_bytes() > 0 and _rss_bytes() % 1024 == 0
+    stat = tmp_path / "memory.stat"
+    stat.write_text("anon 4096\nfile 12288\nshmem 8192\nanon_thp 0\n")
+    assert _cgroup_anon_shmem(str(stat)) == (4096, 8192)
+    stat.write_text("anon 4096\nfile 12288\n")
+    assert _cgroup_anon_shmem(str(stat)) is None
+    assert _cgroup_anon_shmem(str(tmp_path / "absent")) is None
+    here = _cgroup_anon_shmem()
+    assert here is None or (len(here) == 2 and all(type(count) is int and count >= 0 for count in here))
 
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
