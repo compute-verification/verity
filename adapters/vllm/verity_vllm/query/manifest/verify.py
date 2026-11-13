@@ -22,9 +22,9 @@ ENGINE = "v2-query"
 
 
 def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str | None = None) -> dict[str, Any]:
-    # the used manifest is evidence, not a record this reader trusts: one with no list of rows digests as an empty one, and fails
+    # the used manifest is evidence, not a record this reader trusts: one with no rows digests as an empty one, and fails
     rows, query = used.get("identities"), used.get("query")
-    used_rows = list(rows) if isinstance(rows, (list, tuple)) else []
+    used_rows = rows if rows else []
     rows_digest = manifest_digest(used_rows)
     rec = {"schema": SCHEMA, "manifest": manifest_path, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
            "rebuilt_digest": rebuilt["manifest_digest"], "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt["program_digest"],
@@ -36,7 +36,7 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
     if not rec["ok"]:
         why = []
         if rec["used_digest"] != rows_digest:
-            why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
+            why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} " + ("(a 64-hex SHA-256 digest from before manifest digests became SHA-512: rebuild the manifest)" if len(str(rec["used_digest"])) == 64 else "(edited after digesting)"))
         if rows_digest != rec["rebuilt_digest"]:
             why.append(f"rows digest {rows_digest[:16]} != the Program x workload's manifest {rec['rebuilt_digest'][:16]} ({rec['used_identities']} vs {rec['rebuilt_identities']} identities): not the manifest of record")
         if rec["used_program_digest"] != rec["rebuilt_program_digest"]:

@@ -27,11 +27,12 @@ untraced = [
     "tests/test_gate_lease.py",
     "tests/test_gate_run.py",
     "tests/test_gate_whatif.py",
+    "tests/test_host_read_tiers.py",
     "tests/test_lease.py",
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", 
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
@@ -48,6 +49,12 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           "benchmarks/word_codec/cuda_lib.py",
+          # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
+          # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
+          "benchmarks/codec_tensor/reader.py", "benchmarks/codec_tensor/sketch_receipt.py",
+          "benchmarks/codec_tensor/sketching.py",
+          # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
+          "tools/research/src/research/pods/sh/gpu_lease.sh",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
           "verity/protocols/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit

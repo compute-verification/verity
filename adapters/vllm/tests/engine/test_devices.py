@@ -29,9 +29,13 @@ def test_a_listed_class_reports_its_devices_name(tmp_path: Path) -> None:
     {},
     {"sweep": None},
     {"sweep": {}},
+    {"sweep": 0},
+    {"sweep": ""},
+    {"sweep": False},
+    {"sweep": []},
     {"sweep": {"row_id": None}},
     {"sweep": {"row_id": L40S_ROW}},
-], ids=["no sweep", "null sweep", "empty sweep", "null row id", "unlisted class"])
+], ids=["no sweep", "null sweep", "empty sweep", "zero", "empty text", "false", "empty list", "null row id", "unlisted class"])
 def test_no_name_without_a_listed_class(tmp_path: Path, doc: dict[str, Any]) -> None:
     assert devices.device_name(_workload(tmp_path, doc)) is None
 

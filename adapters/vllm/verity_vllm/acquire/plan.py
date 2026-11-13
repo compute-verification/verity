@@ -230,8 +230,7 @@ def plan_digest(body: Mapping[str, Any]) -> str:
     """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
     manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
     (the two agreed Value for Value on the reference row; only `runtime_source` differed), and whether the owning modules were read off
-    the correspondence record or the v1 annotations (`correspondence.source`; a Value whose site differs between the two is a finding
-    `gate.compare_plans` lists by Value)."""
+    the correspondence record or the v1 annotations (`correspondence.source`)."""
     doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
@@ -248,7 +247,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
     prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
-    rows = manifest["identities"]
+    rows: list[Mapping[str, Any]] = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
     padded = {_identity_key(p) for p in padding_identities}
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
@@ -549,8 +548,4 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     return d
 
 
-def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    return [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]]
-
-
-__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer", "hooks_of_doc"]
+__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer"]

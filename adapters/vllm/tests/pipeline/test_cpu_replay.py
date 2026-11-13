@@ -16,7 +16,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
-GEO = bytes(range(32))
+GEO = bytes(range(64))
 WK = bytes(37 * i % 256 for i in range(64, 128))            # no run of the committed steps' bytes: a keep holding it holds the key
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
@@ -53,7 +53,7 @@ def weights_tree(tensors: dict[str, tuple[str, np.ndarray]]) -> dict:
         entry = [name, dt, list(a.shape), int(raw.size)]
         roots.append(step_rows.tensor_root(GEO, i, entry, raw, WK))
         names.append(entry)
-    return step_rows.weights_tree(GEO, names, step_rows.names_digest(names), roots, WK)
+    return step_rows.weights_tree(GEO, names, roots, WK)
 
 
 @pytest.fixture
@@ -323,7 +323,7 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
 
 
 def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
-    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
+    """``Kw`` opens every weights leaf (each tensor's salt key derives from it), and a keep is read by later replays: no file of a
     rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
     bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
     tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
@@ -419,20 +419,20 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
                             weights_check=None, tl=None)
     drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
-    CPU.kept_draw(site, slim)
+    CPU.kept_sample(site, slim)
     drawn["picks"] = drawn["picks"][::-1]
     with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 drawn\); the record draws by 'uniform'"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
     drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
     with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
     def lacks(s):
         raise KeyError("tree node 1 of step 0 level 0 is not in the slim dumped store")
 
     monkeypatch.setattr(C2, "plan", lacks)
     with pytest.raises(CPU.Refused, match="reads what the keep does not hold .*tree node 1 of step 0"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):

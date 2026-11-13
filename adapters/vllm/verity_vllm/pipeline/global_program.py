@@ -37,6 +37,7 @@ from verity.circuits.defs import REGISTRY as REGISTRY
 from verity.definitions.registry.catalog import load as _load_registry
 
 from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.check.match.declaration import MODELLED_ENGINE, compilation_facts
 from verity_vllm.config import (
     RowEngine,
     done_source_refusal,
@@ -107,40 +108,6 @@ def execution_of_workload(w: Workload) -> str:
     return row_execution(str(sweep.get("row_id") or "")) or ""
 
 
-# engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
-# weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
-# manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
-# component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
-MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
-
-# a COMPILED execution is modelled only when every component declares it (applicability.execution
-# 'bi-compiled…' AND an agreed `compilation` block {mode, cudagraph_mode, capture_sizes, …} written by derive_step from the TargetProfile);
-# the engine conditions then say enforce_eager False + those facts, and GM-01 G1 compares the record's header against them.
-COMPILATION_FACT_KEYS = ("mode", "cudagraph_mode", "capture_sizes", "backend", "use_inductor_graph_partition", "compile_cache",
-                         # the record-level pin of the Inductor output identity (control process): carried into
-                         # global_match.json execution.effective_compilation when the header attests it, NOT compared with the Build
-                         # (derive_step traces eagerly; the pin is an attempt-to-attempt condition the report/commit compare)
-                         "kernel_set_sha256", "call_set_sha256", "wrapper_norm_set_sha256")
-_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode
-
-
-def compilation_facts(block: dict | None) -> dict:
-    """The compilation facts of an applicability `engine`/`compilation` block, key-normalised (compilation_mode -> mode); {} if none."""
-    if not isinstance(block, dict):
-        return {}
-    out = {}
-    for k, v in block.items():
-        kk = _FACT_ALIASES.get(k, k)
-        if kk in COMPILATION_FACT_KEYS and v is not None:
-            out[kk] = _MODE_NAMES.get(str(v), v) if kk == "mode" else v
-    return out
-
-
-# vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
-# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable
-_MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
-
-
 def workload_target(target: Mapping[str, Any] | None):
     """The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
     declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
@@ -165,7 +132,7 @@ def component_declared_target(d: str) -> dict | None:
     try:
         with open(p) as f:
             t = json.load(f).get("target")
-    except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return t.get("declared") if isinstance(t, dict) and isinstance(t.get("declared"), dict) else None
 
@@ -230,7 +197,7 @@ def component_spec_histogram(d: str) -> dict | None:
     try:
         with open(p) as f:
             h = json.load(f).get("spec_histogram")
-    except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return h if isinstance(h, dict) else None
 

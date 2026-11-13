@@ -413,10 +413,10 @@ def snapshot_dir(hf_home: str, repo: str, revision: str) -> Path:
 
 def base_entry(entry: dict[str, Any], entries: list[dict[str, Any]], recipe: Recipe = FP8) -> dict[str, Any]:
     """The BF16 pin a recipe entry was made from (its `recipe.base_repo` at `recipe.base_revision`, with shard sha256s)."""
-    r = entry.get("recipe")
-    rid = None if r is None else r.get("id")
-    if r is None or rid != recipe.id:
-        raise UsageError(f"{entry.get('role')}: recipe {rid!r} is not {recipe.id!r}")
+    held = entry.get("recipe")
+    r = held if held else {}    # an entry with no recipe (absent, null or empty) is refused as one whose recipe has no id
+    if r.get("id") != recipe.id:
+        raise UsageError(f"{entry.get('role')}: recipe {r.get('id')!r} is not {recipe.id!r}")
     hits = [c for c in entries if c.get("repo") == r.get("base_repo") and c.get("revision") == r.get("base_revision")
             and c.get("safetensors_sha256")]
     if not hits:

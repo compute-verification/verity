@@ -1,16 +1,16 @@
 """PoUW's audit execution phase as the proof system sees it: what the execution phase makes public, the grid its tile count is padded to,
 the size of the uniform sample, and the execution phase's advice (its per-call entries and the map from a sampled index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the workloads' fixed length.  The service refuses a registration
 that makes anything else public; the execution phase's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
     verdict    output       outcome    every sampled tile proved and opened, or not
-    work       output       execution phase     the credited work, as the tile count N padded to a grid level (`bucket`)
+    work       output       `window`   the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
-    length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
-    flipped      coins        outcome    the verifier's own sample, after the receipt
+    length     structure    parameter  the workloads of record's fixed length: each slot's public max_tokens (`length_item`)
+    `drawn`    coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
@@ -25,9 +25,9 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a sample of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A workload of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
-`length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
+`length_problem` refuses an EOS-keyed workload (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A window commitment record made before the rule carries `LEGACY_REGISTERED`, without
 the item, and is not of record.
 
@@ -312,7 +312,7 @@ def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: i
 
 # ---- the fixed length -----------------------------------------------------------------------------------------------------
 
-#: a row of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
+#: a workload of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
 STOP_FIXED = "fixed"
 LENGTH_KEYS = ("max_tokens", "served", "stop")
 
@@ -752,7 +752,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
-    """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
+    """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless the sample is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
@@ -860,13 +860,14 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS",
-           "LEGACY_REGISTERED", "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC",
-           "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES",
-           "STOP_FIXED", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason", "entry_bc", "entry_digest",
-           "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item",
-           "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode",
-           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "ratio_str", "record_digest",
-           "record_problem", "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions",
-           "side_domain", "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read",
-           "tiles", "window_problem"]
+__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_BITS", "ENTRY_BYTES", "ENTRY_SCHEMA", "ENTRY_WORDS",
+           "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS", "KIND_CODE", "LEGACY_REGISTERED", "LENGTH_KEYS",
+           "LIVE_SCHEME", "MODES", "M_MAX", "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
+           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROW_STEP", "SALT", "SALT_FAMILIES", "SIDE_DOMAIN",
+           "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason",
+           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime",
+           "layout_problem", "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason",
+           "live_families", "miss_at_most", "mode", "on_grid", "pad", "pad_node", "pass_tiles", "point",
+           "public_inputs", "ratio_str", "record_digest", "record_problem", "round_key", "rounds_reason",
+           "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index", "side_levels",
+           "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]

@@ -2,6 +2,8 @@
 decides."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from verity_vllm.engine import static_schedule as ss
@@ -115,3 +117,16 @@ def test_compare_counts_a_schedule_without_requests_as_none(without):
         why = (f"the schedule depends on the prompts' contents, not only on the declaration: engine steps "
                f"{a.get('engine_steps')} vs {b.get('engine_steps')}; {counts}")
         assert not out["ok"] and out["problems"] == [why]
+
+
+@pytest.mark.parametrize("timing", [None, 0, "x", [1]], ids=["null", "zero", "text", "list"])
+def test_a_timing_that_is_no_record_is_refused_before_the_ids_or_the_requests_are_read(timing):
+    """The requests' records are read from the timing first, so its error is the one raised whatever else is wrong."""
+    orders: tuple[Any, ...] = (None, 0, [], ["a"])
+    for order in orders:
+        with pytest.raises(AttributeError, match="has no attribute 'get'"):
+            ss.schedule_of(order, timing)
+    lists: tuple[Any, ...] = (None, 0, [], [{}], [{"request_id": "a"}], [{"request_id": "a", "max_tokens": "x"}], REQS)
+    for requests in lists:
+        with pytest.raises(AttributeError, match="has no attribute 'get'"):
+            ss.check(requests, timing)
