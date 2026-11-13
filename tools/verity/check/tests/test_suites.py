@@ -1383,16 +1383,18 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
-def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
-    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
-    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
+@pytest.mark.parametrize("fault", ["OSError(errno.ENOSPC, 'No space left on device')",
+                                   # pytest's make_numbered_dir out of inodes, which drops the errno
+                                   "OSError('could not create numbered dir with prefix host in /workspace/tmp/b after 10 tries')"])
+def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path, fault):
+    """A test that failed only because the machine's disk was full (ENOSPC, or out of inodes for pytest's numbered tmp dirs)
+    failed for the machine, not its inputs: its run keeps no failure, so the pass beside it isn't flagged nondeterministic."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text(
-        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
-        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
+        f"import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n        raise {fault}\n")
     assert _run_suite(root, tmp_path).returncode == 0
     out = tmp_path / "suites.json"
     p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})

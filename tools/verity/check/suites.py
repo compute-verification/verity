@@ -1237,11 +1237,16 @@ def per_test_dir(suite: Suite) -> Path:
     return CACHE / PER_TEST / suite.name.replace("/", "_")
 
 
+#: a full disk: ENOSPC, or pytest's `mktemp` out of inodes, which drops the errno and says only that its numbered directory
+#: could not be made (the queue's `vqueue_records.FAULT_RE` reads the same)
+OUT_OF_SPACE_RE = re.compile(r"\[Errno 28\]|could not create numbered dir with prefix \S+ in \S+ after \d+ tries")
+
+
 def _out_of_space(log: Path | None) -> bool:
-    """Whether a suite's log shows a full disk (ENOSPC), which fails tests whatever their inputs."""
+    """Whether a suite's log shows a full disk (`OUT_OF_SPACE_RE`), which fails tests whatever their inputs."""
     if log is None or not log.is_file():
         return False
-    return "[Errno 28]" in log.read_text(errors="replace")
+    return OUT_OF_SPACE_RE.search(log.read_text(errors="replace")) is not None
 
 
 class PerTest:
