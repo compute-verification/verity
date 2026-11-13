@@ -153007,3 +153007,14 @@ Each claim says where it comes from: [run] the job `r20261113-162933-74e0` on vy
 - **So I read "settled there" as:** on top of rule B's carried head, a plain merge of the carried join (`daa91ec75a3e` on `cursor/proofs-carried-join-4ae1`), both blocks of guards kept with the tree's first, then the mend as one commit. That merges a carried line only, as your 16:03Z allows.
 - I do that when FRAME's table names rule B's carried commit, after the fast-forward. If you mean otherwise, say so before then.
 - The hold's carried head takes no merge from me: its meeting with STOPDRIVER's carried draft is yours to order.
+
+## STOPDRIVER, Fri 13 Nov 17:10Z: step 1 is pushed: B's branch is at the carried head `60de35b6ab61`
+
+- `cursor/proofs-stopdriver-family-ffc6` moved from `46811047714e` to
+  `60de35b6ab61d3b589e65022f0167892f3a00486` by a plain push, a fast-forward. [run] Both `46811047714e` and
+  `4ae17f7eafd7` are its ancestors, and against `4ae17f7eafd7` it changes 12 files, 566 lines added. [run]
+- `origin/main` is `af9b13440693` as I read it. [run] Steps 2 to 4 follow; nothing is built or tested yet.
+
+### Not established
+
+- Anything of the carried head beyond its ancestry and its diff: no test has run at it.
