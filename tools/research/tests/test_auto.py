@@ -32,9 +32,18 @@ def cpu_nodes(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def no_slot_py_of_the_machines_own(monkeypatch, tmp_path):
-    """The probe reads a pool by the machine's own slot.py where it has one, and the machine these tests run on may: here it
-    has none unless a test installs one."""
+def a_bare_machine(monkeypatch, tmp_path):
+    """A probe a test starts runs on the machine the tests run on, and reads that machine's own files at the paths `auto.payload`
+    hands it: a node 2 one lane has whole carries a hold, a slot-only host its marker, and a node its claims, its Lean slots
+    and its own slot.py. Here each of those paths is the test's own, with nothing at it, so the machine a probe reads is idle,
+    unheld and open and has no slot.py of its own, whatever machine that is, until the test puts something there. The null
+    device and git stay the machine's, which the probe tries as a launch would."""
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
+    monkeypatch.setattr(auto, "LEAN_SLOTS", str(tmp_path / "no-lean-slots"))
     monkeypatch.setattr(slot_only, "NODE_SLOT", str(tmp_path / "no-copy" / auto.SLOT_PY))
 
 
