@@ -141323,3 +141323,50 @@ branch `08b5d4b3c0a6`, #9458 `049c5875989c`. Run `r20261113-121708-a074` has end
 10. Whether network-accounting's reader will read the ledger at all. Part C is theirs to take or leave.
 11. Whether the launcher of a served class is the auditor's or the prover's. No launcher is in the tree.
 12. The first line's field names and whether it has a `format` of its own. The draft read holds no first line.
+
+
+## RATING, Fri 13 Nov 12:42Z: BREAK of the mended debit at #9735's head: a raised-adder tile with two raisers a group, and B's planted entries 3 off their cells' centres, takes 0 mends, passes the scheme's tile rule at k = 8,192, and both programs output its 4,096 words for 84% and 90% of the credit; one salt is in, two more and k = 65,536 are running
+
+**In plain words.** The mend charges a product only if the adder cuts it at both ends of the noise support, and a pair only if both entries keep one code at both ends. Both tests look at the two extreme salts, not at the salt drawn. I planted a tile whose skipped products are cut at the salt drawn but kept at the extremes, and whose planted entries on B have one code at the salt drawn but the neighbouring code at one extreme. On that tile the mend charges nothing, the scheme's tile rule passes, and the two programs of review 1 beat the bound by the same margin as before the mend. This is one salt at k = 8,192 through the scheme's own code; the rest is running.
+
+### The rows [run]
+
+`r20261113-123655-6a3c`, on a clone of the pull request's head `4d4950f1bb9`, with my sweep at `edf4c381210` (`--raised-pearlc 8192:8192:20:edge`, salt 0). One whole 64 × 64 tile, k = 8,192, n = 8,192, 20 planted groups.
+
+- `PearlC.encode` forms the rows with the SHA-512 lines; `admissible` is true; the planted codes come out as designed on both sides.
+- `clear_work.check_opened` returns no failure: the tile and every credited row are under their caps.
+- **Mends: 0.** Debit 13,040 against a cap of 106,824 (12% of it). 246 atoms flagged, none in a planted group.
+- **One-atom program:** 196 of 256 atoms a word, 4,096 of 4,096 words equal to the scheme's, cost 8,757.4 a word against a bound of 10,379.9 (83.95% of the credit of 10,432).
+- **Skip-only program:** 216 of 256 atoms, 4,096 of 4,096 words equal, cost 9,397.4 (90.08% of the credit).
+- The scalar chain agrees with the scheme's words on 64 of 64 sampled words. The largest product of two fill codes in a later atom of a planted group is 15.0.
+
+These are the costs of 07:40Z's row at 8192³ to the digit: the mend does not touch this tile.
+
+### How the tile dodges both terms
+
+1. **Two top-code raisers a group, not three.** The group's accumulator is 2·448² = 401,408, under 2^19, so in the later atoms the adder cuts a product under 32, not under 64 [read: `pearl_c_debit.cut_flags`; the adder is 14 bits wide].
+2. **The planted groups' other entries are zero**, so their codes are noise alone. At either end of the support every such code is 6 or every one is −6 [run locally: `end_codes` on one row], so the product of two is 36 at both ends: kept, and `ForcedZero` is false. At a salt drawn the product is small (15 at most on this tile) and the same adder cuts it.
+3. **On B the planted entries are not salt-dead:** the raisers sit at α·x = ±436 (448 at the salt drawn, 416 at one end) and the plants 3 off their cells' centres (the centre's code at the salt drawn, the next cell's at one end). So no planted pair is dead in both rows and the dead-pair term charges nothing.
+
+With step 3 left out the tile takes 5 mends a planted group-word, its dead pairs, where the three-raiser tile takes 99 [run locally: an 8 × 8 tile at k = 1,024, 640 mends over 64 words and 2 groups, against 12,672]. Whole tiles of that form are in the same runs.
+
+### What this says and what it does not
+
+- [run] At the pull request's head the two terms do not reach this tile at k = 8,192 on one salt, on the scheme's own forming, check, debit and tile rule (batch forms).
+- [not yet] Salts 1 and 2 at k = 8,192 (same run); k = 65,536 with 170 groups on three salts (`r20261113-123724-9f84`, `r20261113-123738-d36c`, `r20261113-123816-fba3`, about 13 minutes each); the scalar reference of the rule on this tile.
+- The pull request's tests still pass: they hold the classes in the forms review 1 found them in. The body's "Not established" already says the two terms are not shown to reach every product a program can skip at the salt it is given; I wrote that line before this run and changed nothing in the pull request for it.
+- I design no fix. What the two terms would have to see is the salt drawn, since the program sees it; whether a term that reads the drawn salt charges honest tiles is compute-accounting's to measure.
+
+### To post (for compute-accounting, on PRF-612)
+
+1. [run] At #9735's head, a raised-adder tile with two top-code raisers a group, zero fill in the planted groups, and B's planted entries off-centre takes 0 mends and passes `clear_work.check_opened` at k = 8,192, n = 8,192, 20 groups, salt 0: debit 13,040 against a cap of 106,824. Run `r20261113-123655-6a3c`.
+2. [run] On it the one-atom program costs 8,757.4 a word and the skip-only program 9,397.4, against a bound of 10,379.9; both output 4,096 of 4,096 of the scheme's words.
+3. [read] The cause is that `ForcedZero` and salt-deadness are read at the support's two ends: a product cut at the salt drawn but kept at an end, and an entry with one code at the salt drawn but another at an end, are not charged.
+4. [not yet] Three salts and k = 65,536: running.
+
+### Not established
+
+- More than one salt; k = 65,536; the scalar reference. A grade waits for the three salts.
+- Whether the same two moves reopen the dead-pair class of review 1 (entries off-centre on B there too). Not run.
+
+Mailbox read at 12:33Z.
