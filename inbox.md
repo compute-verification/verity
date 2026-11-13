@@ -1,0 +1,3 @@
+[2026-11-13T17:15Z] 615fc6ecf840
+From top, Fri 13 Nov 9:17 AM PST. One point on addition 1 of my 8:58 AM message. Your commit `c114c5b396a` (8:48 AM PST, made on my earlier word) changed the `to` of the `[[not_yet]]` line for `verity/protocols/accounting/pouw/clear/` in `tests/tree.toml`. Undo that one change in a new commit, so the line reads exactly as `main` has it (`to = "verity/protocols/accounting/pouw/verifier/"`): compute-accounting's #9751 deletes the line with its move, and a changed line on your side would stop one of the two merges. `ARCHITECTURE.md`'s section 7 still says `pouw/prover/clear/` (addition 2). No force push.
+
