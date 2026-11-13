@@ -7,6 +7,10 @@ per request, and the lag agrees on every leg.  A config run has no Match stage: 
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
@@ -19,8 +23,6 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
     per-request two lengths, the document-level lag attestation -- bench.m1_capture) and `<match_dir>/../global_match.json` (GM-01's
     verdict, G6's lag block and lengths_by_request, as `records.global_match.GlobalMatch`).  Missing or unreadable files are reported,
     never invented."""
-    import json
-    import os
     out: dict[str, Any] = {"match_dir": match_dir, "tokens": None, "tokens_path": None, "global_match": None, "global_match_path": None, "notes": []}
     if not match_dir:
         out["notes"].append("no --match-dir: the Match record of this attempt is not beside the Commit")
@@ -33,8 +35,7 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
             out["notes"].append(f"{os.path.relpath(path, match_dir)} not found")
             continue
         try:
-            import hashlib
-            raw = open(path, "rb").read()
+            raw = Path(path).read_bytes()
             out[key] = GlobalMatch.of(json.loads(raw), path) if key == "global_match" else json.loads(raw)
             out[f"{key}_sha256"] = hashlib.sha256(raw).hexdigest()
         except Exception as e:  # noqa: BLE001
