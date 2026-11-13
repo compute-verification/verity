@@ -582,10 +582,7 @@ def scoped_words(move: str, script: str, args: tuple[str, ...], cwd: str | None)
     i = args.index("--map") + 1 if "--map" in args else None
     path = args[i] if i is not None and i < len(args) else LAYOUT_MAP if script == LINE_SCRIPT["Layout-move"] else None
     shown = git("show", f"{move}^1:{path}", cwd=cwd, ok=(0, 128)) if path else None
-    try:
-        data = tomllib.loads(shown.stdout.decode()) if shown and not shown.returncode else {}
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError):
-        data = {}
+    data = tomllib.loads(shown.stdout.decode()) if shown and not shown.returncode else {}
     if data.get("scope") == "prose":
         return []
     found = []
