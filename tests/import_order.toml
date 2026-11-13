@@ -65,15 +65,6 @@ owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
-directory = "benchmarks/rho"
-owner = "training"
-date = "2026-11-16"
-
-[[distribution]]
-directory = "benchmarks/nci"
-owner = "compute-accounting"
-
-[[distribution]]
 directory = "verity/composite/device/live_challenger"
 owner = "proofs"
 
@@ -113,13 +104,6 @@ files = [
     "verity/protocols/flock/prover/python/verity_flock/instances.py",
     "verity/protocols/flock/prover/python/verity_flock/ir_bench.py",
     "verity/protocols/flock/prover/python/verity_flock/register.py",
-]
-
-[[against]]
-loader = "verity/protocols/pous"
-loaded = "security"
-files = [
-    "tools/pous_grader/submissions/reference.lean",
 ]
 
 [[against]]
@@ -648,11 +632,6 @@ paths = [
     "verity/protocols/reporting.py",
 ]
 trusted = true
-loaded_by = [
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_operating.py",
-    "benchmarks/rho/tests/test_params.py",
-]
 
 [[place]]
 paths = [
@@ -751,10 +730,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/flock/prover/tests/test_audit_profile.py",
-    "benchmarks/rho/rho/params.py",
-    "benchmarks/rho/tests/test_envelopes.py",
-    "benchmarks/rho/tests/test_held_to_core.py",
-    "benchmarks/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
 ]
 
