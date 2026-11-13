@@ -9,11 +9,13 @@ from __future__ import annotations
 import errno
 import fcntl
 import functools
+import logging
 import multiprocessing
 import os
 import signal
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -59,6 +61,17 @@ def _held(build_dir: str) -> bool:
     return False
 
 
+class _Logged(logging.Handler):
+    """Each record the package logs while this handler is on its logger, as `LEVEL logger: message`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(f"{record.levelname} {record.name}: {record.getMessage()}")
+
+
 def _loader(**kw):
     return {"built_in": kw["build_directory"], "name": kw["name"], "cuda_cflags": kw["extra_cuda_cflags"]}
 
@@ -96,7 +109,7 @@ def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
     parent, seen = str(tmp_path / "jit"), []
 
     def loader(**kw):
-        seen.append([(p, os.stat(p).st_mtime_ns, open(p, "rb").read()) for p in kw["sources"]])
+        seen.append([(p, os.stat(p).st_mtime_ns, Path(p).read_bytes()) for p in kw["sources"]])
 
     for tree in ("tree-a", "tree-b", "tree-a"):
         (tmp_path / tree).mkdir(exist_ok=True)
@@ -112,7 +125,7 @@ def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
     os.makedirs(os.path.join(bd, "src"))
     (tmp_path / "jit" / os.path.basename(bd) / "src" / "ext.cu").write_bytes(b"partial")
     nj.jit_load("ext", src, parent=parent, loader=_loader, **VERSIONS)
-    assert open(os.path.join(bd, "src", "ext.cu"), "rb").read() == b"__global__ void k(){}"
+    assert Path(bd, "src", "ext.cu").read_bytes() == b"__global__ void k(){}"
 
 
 @_isolated
@@ -137,7 +150,7 @@ def test_local_headers_are_staged_beside_the_sources_and_key_the_digest(tmp_path
     seen = {}
     _, bd, digest = nj.jit_load("ext", paths, parent=str(tmp_path / "jit"), loader=lambda **kw: seen.update(kw), **VERSIONS)
     assert seen["sources"] == [os.path.join(bd, "src", "ext.cu")]
-    assert open(os.path.join(bd, "src", "sub", "b.h"), "rb").read() == b"#define B 1\n"
+    assert Path(bd, "src", "sub", "b.h").read_bytes() == b"#define B 1\n"
     (src / "sub" / "b.h").write_bytes(b"#define B 2\n")
     assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) != digest, "a header byte moves the digest"
 
@@ -209,8 +222,15 @@ def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp
         seen["held"] = _held(kw["build_directory"])      # flock is per open file: a second descriptor sees the loader's hold
         return None
 
+    logged = _Logged()
+    logging.getLogger("verity_vllm").addHandler(logged)
     nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
     assert seen == {"lock_present": False, "held": True}
+    removed = (f"WARNING verity_vllm.commit.committer.native_jit: [jit] removing {bd}/lock: no live build holds "
+               f"{bd}.build-lock, so a killed build left it")
+    assert logged.lines == [removed]
+    nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
+    assert len(logged.lines) == 1, "a load that finds no torch lock logs nothing"
 
 
 @_isolated
@@ -246,7 +266,7 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     p.start()
     with open(started) as f:
         assert f.readline().strip() == "held"
-    assert _held(bd)
+    assert _held(bd) and p.pid is not None
     os.kill(p.pid, signal.SIGKILL)
     p.join()
     assert p.exitcode == -signal.SIGKILL and not _held(bd), "the kernel drops the lock with its holder"
@@ -254,5 +274,5 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
 
 def test_the_commit_torch_jit_extension_loads_through_jit_load():
     here = os.path.dirname(os.path.abspath(nj.__file__))
-    src = open(os.path.join(here, "native_ext.py")).read()
+    src = Path(here, "native_ext.py").read_text()
     assert "native_jit.jit_load(" in src and "cpp_extension import load" not in src

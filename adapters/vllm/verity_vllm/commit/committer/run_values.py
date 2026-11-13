@@ -17,12 +17,13 @@ they are read as written."""
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 import torch
-
 from verity.definitions.registry.dsa_topk import waksman_settings
+
 from verity_vllm.query.manifest.format import RUN_FAMILY
 
 

@@ -8,12 +8,26 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import Program
-from verity.definitions.registry import lifted as L
 from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import lifted as L
+
 from tests.program import test_lifted_moe as PMOE
-from tests.program.test_lifted_moe import E, FFN, K, N, T_W13, T_W2, T_WR, T_X, TOPK, TWO, _bf16, _split, _walk
+from tests.program.test_lifted_moe import (
+    FFN,
+    T_W2,
+    T_W13,
+    T_WR,
+    T_X,
+    TOPK,
+    TWO,
+    E,
+    K,
+    N,
+    _bf16,
+    _split,
+    _walk,
+)
 
 BOT16, BOT32, INV16, INV32 = L.enc_bot(16), L.enc_bot(32), L.inv(16), L.inv(32)
 
@@ -140,12 +154,6 @@ def test_r5_a_nan_router_row_still_matches_the_unlifted_route_bit_for_bit(data):
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _call_range(prog, name):
-    c = next(c for c in prog.circuit.root_calls() if (c.node.name or "") == name)
-    lo = min(g for g in c.returns)
-    return c
-
-
 def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_whatever_its_batch_mate_is(data):
     """`test_lifted_moe`'s TWO test: token 0 ⊥, token 1 Active.  This runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
     the Active token's ENTIRE call (every gate under `tok0`/`tok1`, not the outputs alone) with its single-token unlifted run; a per-expert
@@ -195,9 +203,9 @@ def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_w
 @pytest.mark.parametrize("norm", [False, True])
 def test_the_renormalising_router_keeps_a_bot_row_bot_and_an_active_row_bit_exact(norm):
     from verity.circuits import bind
+    from verity.circuits.types import Array
     from verity.definitions.registry import moe
     from verity.definitions.registry.prims import BF16
-    from verity.circuits.types import Array
     R = bind(moe.MoeRouterTopKNorm if norm else moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=2)
     T_L = Array(E, BF16)
     rng = np.random.default_rng(11)
@@ -230,7 +238,6 @@ def test_p3_closure_the_moe_block_uses_only_lselect_and_lgatherrow_from_the_spec
                 prim_ids.add(L.member_id(nd.fn))  # the member the v2 wrapper computes when enabled (B7)
     spec_used = {i for i in prim_ids if i in L.specified_ids()}
     assert spec_used, "the MoE block must reach the specified class (its selects and gathers)"
-    families = {i.split("_v1")[0].rstrip("0123456789x") for i in spec_used}
     assert all(i.startswith(("LSelect", "LGatherRow")) for i in spec_used), spec_used   # (i): nothing MoE-specific joined the list
     assert not any(i.startswith("LStepLive") or i.startswith("LBot") or i.startswith("LIsActive") for i in spec_used)
     # (ii) the gather population per pair: TOPK·(2N+K) expert-row calls × K gathers each, over ALL E experts — whatever the route

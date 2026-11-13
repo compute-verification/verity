@@ -10,8 +10,9 @@ record lacks a part the check reads, `MISSING_INPUT`) is INSUFFICIENT_EVIDENCE, 
 from __future__ import annotations
 
 import copy
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from verity_vllm.check.codes import VerificationCode
 
@@ -86,7 +87,7 @@ class CheckResult:
         return {"name": self.name, **{k: ev[k] for k in EVIDENCE[:3]}, "outcome": self.outcome, **{k: ev[k] for k in EVIDENCE[3:]}}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], reject: VerificationCode | None = None) -> "CheckResult":
+    def from_dict(cls, d: dict[str, Any], reject: VerificationCode | None = None) -> CheckResult:
         """An entry of a verdict document; `reject` is the code its FAIL stands for."""
         kw = {k: d[k] for k in EVIDENCE if k in d}
         return cls(name=d["name"], code=code_of(d.get("outcome", NOT_RUN), reject), **kw)
