@@ -92,3 +92,31 @@ Least sure of: nothing in these four; the one thing they do not show is a served
 
 TIMER: none
 
+[2026-11-13T05:30Z] cfe030d9d807
+TERMGB to network-accounting (lead), Thu 12 Nov 9:30 PM PST. **The removal test is built and pushed (#9501 at `4a38dc10c48d`), and it finds no hole of the kind of my 8:54 PM PST: what is held goes up only where the thing left out is itself a refusal by the rules as they stand. Ten ways, each with its smallest case below; I changed nothing in the reader for them and wait for your word on whether any is to be closed.**
+
+**The test** [ran on the VM]. Over 25 kinds of run files (the 22 of the superseding test and three added: a record of no listed format of another serve, a registration that doesn't read, a serve's registration that doesn't read), each as the run `old` beside a run `new`, with neither, `old` or `new` superseded: one record of each file, each whole file, and the run itself of the runs handed are left out, one at a time. Quick tier: beside nothing and beside the four, 2,022 cases. Slow tier (marked `slow`, 19 s): beside each of the 25, 25,275 cases. It asserts that every raise is the leaving out of one of the ten below, by a predicate of the test's own, and that each of the ten is met.
+
+**What raises, each 0 to 1, the smallest case I ran** (`the four` = the four accepts of a class on its head, with the controls and the serve's registration):
+1. A registration of connection rows that doesn't read, in one run's files beside the four.
+2. A second head of the execution phase: another run's registration of another head of the number.
+3. A serve's registration that doesn't read.
+4. A control record that doesn't read.
+5. A control not refused, or refused for another reason than its word, beside one that counts.
+6. A verdict record that doesn't read.
+7. A verdict refused, or accepted and not complete, beside an accept of the same verdict.
+8. A record of another serve, or under another registration, on a head whose other records name one. One record of no listed format is enough.
+9. A tie (or stop record) at another rate, beside one at `1/1`.
+10. An accept by a verifier without its control, beside one by a verifier with it.
+- With `old` superseded, 7 and 9 raise the same way: its record stood, and stands no longer once left out.
+
+**Two more, outside the list you gave:**
+- **The mark that a run is superseded.** Four accepts that name `old` as their serve: with `old` superseded, held 0; with `old` in neither list, held 1. That is D read backwards. With `old` left out of the runs handed and still in `superseded`, held 0: the reader refuses that one.
+- **A run left out of the runs handed**, not superseded, that holds a refused tie: 0 to 1. Nothing in the reader can see it; `of_runs` rests on being handed every run that carries the label.
+
+**How I read it** [argued]: in my 8:54 case the reader was handed the refusal and dropped it. Here it is not handed it. Each of the ten is a line the answer prints while the thing is there. So the property that holds is: leaving out anything that does not itself refuse never raises what is held; and a refusal counts only while it is handed. Closing that needs something fixed before the records are written (which verdicts a registration owes, or which runs carry the label), and that is not the reader's alone. I build nothing for it without your word.
+
+**Least sure of:** the predicate is mine and could excuse a raise it should not: it excuses a whole file or run when any one thing in it stands against something that stays. I did not look at how the harness lists the runs it hands.
+
+Next: the mutations at this head, the harness's file, the control's form on NET-403, then the head in one line.
+
