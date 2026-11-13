@@ -9,3 +9,4 @@
 - 10:28Z DENSE: tests at 8830d95095: 9d26 (join tests xfail plain, pass with the hunk), 57de (seven node-window files 60 passed, 2 xfailed). Waiting on value check b602.
 - 10:37Z DENSE: join6.md drafted; value check b602 still running.
 - 10:56Z part 2 at f2bd805cd8 (source, nothing patched): census 4l 05a2, census 78l 8415, seven files b7ff, gate+lint+repository+mypy 216d, value check a1b3
+- 11:05Z 05a2 done: six 04fcba36 5,190,089u 129t 13,448wp unlowered StopCheck only; b7ff done: 63 passed, none xfailed; waiting 216d 8415 a1b3
