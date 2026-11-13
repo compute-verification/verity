@@ -599,6 +599,24 @@ def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path,
     assert "DIFFERS" not in out and "1 entry: 0 equal, 0 differ, 1 refused." in out
 
 
+def test_a_record_that_states_more_than_one_thread_is_counted_under_the_math_kernel_and_not_refused(tmp_path, capsys):
+    """The real count through the command, of a record that states two CPU threads where the suite holds one: torch's
+    fused CPU attention kernel at more than one thread makes a count invalid, so the config's step is counted under
+    the math kernel a CPU job holds attention at (`run.cpu_attention`), and the entry is equal to its record."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    cpu = of_record.counted(cfg, 1, tmp_path / "count")
+    first, second = cpu["steps"]
+    rec = {k: v for k, v in cpu.items() if k != "trace"} | {
+        "steps": [first, second, second], "start_record": {"name": "tiny", "digest": cfg.start.digest}, "threads": 2}
+    records, held = held_to(tmp_path, "a", rec)
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n")
+    assert "\n  threads   2, the record's\n" in out and "1 entry: 1 equal, 0 differ, 0 refused." in out
+
+
 def test_a_record_that_is_missing_or_another_file_is_refused_with_its_fetch_line(tmp_path):
     reg = tiny_registry(tmp_path / "reg")
     path = write_config(tmp_path / "a.toml")

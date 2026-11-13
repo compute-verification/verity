@@ -16,9 +16,10 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   θ as in every later step. An entry whose trained weights leave θ later states the step read and why (`step` in
   `of_record.toml`: `counted` and `why`), and the output prints it. Both sides are stated per row a forward
   (`per_row`): the record's rows a forward are divided out of its token shapes and their MACs, and the config is
-  stepped at one row a forward, its batch over the record's rows a forward, so a step has the config's own forwards. `updated` must be equal as its `(MACs a token,
-  upstream)` pairs and in the bits each use reads its weight at (a route casts to bf16 on a CPU as on CUDA), and
-  `log` by phase, kind, op, shapes, count and MACs. The start and the steps must be the record's too.
+  stepped at one row a forward, its batch over the record's rows a forward, so a step has the config's own forwards.
+  `updated` must be equal as its `(MACs a token, upstream)` pairs and in the bits each use reads its weight at (a
+  route casts to bf16 on a CPU as on CUDA), and `log` by phase, kind, op, shapes, count and MACs. The start and the
+  steps must be the record's too.
 - **Attention's kernel.** The counter writes a fused attention kernel as the ops the math kernel computes attention
   by (`flops.Counter._attention`), so a config's step holds those. A record that holds the kernel as one row is
   rewritten the same way before it is compared (`as_math.rewrite`, on its modal structure). The row does not say
@@ -51,7 +52,9 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 - **The thread count.** A config's step is counted at the CPU thread count its record states (`threads`), set
   before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
-  is counted at a job's default (`run.THREADS`), and the output says the record names none.
+  is counted at a job's default (`run.THREADS`), and the output says the record names none. The step is counted and
+  traced under the math kernel a CPU job holds attention at (`run.cpu_attention`), since torch's fused CPU kernel at
+  more than one thread makes a count invalid.
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """
@@ -437,16 +440,17 @@ def steps(h: dict) -> int:
 
 def counted(cfg: config.Config, rows: int, out: Path, n: int = STEPS) -> dict:
     """The record of `cfg`'s first `n` steps as a job counts them (`run.train` under `run.Harness`, with the job's
-    trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward. Written to
-    `out/run.json`."""
+    trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward, under the
+    math kernel a CPU job holds attention at (`run.cpu_attention`). Written to `out/run.json`."""
     route, shape = config.route(cfg.route), cfg.start.shape
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
-    te = run.Harness(theta, out, start={"shape": dict(shape)}, digests=False)
-    with te.counter:
-        model, optimizers = route.build(shape, cfg.dials)
-        run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=n)
-    return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
+    with run.cpu_attention("cpu"):
+        te = run.Harness(theta, out, start={"shape": dict(shape)}, digests=False)
+        with te.counter:
+            model, optimizers = route.build(shape, cfg.dials)
+            run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=n)
+        return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
 
 
 def refusal(rec: dict) -> str | None:
