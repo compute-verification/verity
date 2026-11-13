@@ -828,7 +828,7 @@ def test_clique():
     assert WK.clique([frozenset((1, 2))]) == 2 and WK.clique([]) == 0
 
 
-#: the suite's Programs built by name, read at KB against `READINGS`, the readings main's recursive reader gave them
+#: the suite's Programs built by name, each held to its reading in `READINGS`
 CASES = {
     "train": loop, "carried": carried_loop, "lookup": lambda: _lookup_loop(False),
     "lookup-carried": lambda: _lookup_loop(True), "pairs": _pairs_loop, "ternary": _ternary_loop,
@@ -858,9 +858,9 @@ def _reading(w: WK.Work) -> dict:
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
-def test_the_suites_programs_read_as_main_read_them(name):
-    """Each of the suite's Programs gives the reading recorded from main's recursive reader (`READINGS`, written by
-    running this file), compared whole: the reader's stack keeps its words and their order."""
+def test_the_suites_programs_keep_their_readings(name):
+    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), compared whole, so
+    a change to the reader that moves a word or their order shows."""
     assert _reading(WK.read(CASES[name](), KB)) == json.loads(READINGS.read_text())[name]
 
 
