@@ -20,8 +20,8 @@ from its new module after; the file a definition left imports back the ones it s
 they used. A new module imports each name from the module that defines it, not from one that only imports it, so it
 loads no more than it reads. A comment, a docstring or a Markdown document that names a moved definition as
 ```module.NAME`` names its new module after; other files that do are listed in the report's notes and left. A read
-the cut can't redirect, ``x.NAME`` of a module a function of the file hands back, is refused where the module no longer
-holds the name and noted where it holds it only because it reads it itself.
+the cut can't redirect, ``x.NAME`` of a module a function hands back (``x = f()``), is refused where the module no
+longer holds the name and noted where it holds it only because it reads it itself.
 
 The script edits ROOT's working tree and commits nothing. It refuses, changing nothing and naming the fix, where a
 name of the table is not a top-level definition of its file, where two definitions of one name meet in a module, where
@@ -943,12 +943,12 @@ MOVED_FROM: dict[str, set[str]] = {}
 for (src, name) in where:
     MOVED_FROM.setdefault(src, set()).add(name)
 HELD = {src: _top_names(text_after(src)) for src in MOVED_FROM}
+#: a function's name, and the source files whose module a function of that name hands back, in any file
+HANDS: dict[str, set[str]] = {}
 for rel, text in sorted(TEXT.items()):
     if not any(Path(src).stem in text for src in MOVED_FROM):
         continue
-    tree = ast.parse(text)
-    hands: dict[str, str] = {}  # a function of this file, and the source file whose module it returns
-    for fn in ast.walk(tree):
+    for fn in ast.walk(ast.parse(text)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         local: dict[str, str] = {}
@@ -963,34 +963,42 @@ for rel, text in sorted(TEXT.items()):
                 continue
             v = n.value
             if isinstance(v, ast.Name) and v.id in local:
-                hands[fn.name] = local[v.id]
+                HANDS.setdefault(fn.name, set()).add(local[v.id])
             elif isinstance(v, ast.Call) and (getattr(v.func, "attr", "") == "import_module" or getattr(v.func, "id", "") == "__import__") \
                     and v.args and isinstance(v.args[0], ast.Constant) and isinstance(v.args[0].value, str) \
                     and module_file(v.args[0].value, rel) in MOVED_FROM:
-                hands[fn.name] = module_file(v.args[0].value, rel)
-    if not hands:
+                HANDS.setdefault(fn.name, set()).add(module_file(v.args[0].value, rel))
+
+
+def _handed(call: ast.AST) -> set[str]:
+    """The source files whose module a call may hand back: by the called function's name, whatever file it is in."""
+    func = call.func if isinstance(call, ast.Call) else None
+    return HANDS.get(getattr(func, "id", None) or getattr(func, "attr", None) or "", set())
+
+
+for rel, text in sorted(TEXT.items()):
+    if not any(f"{name}(" in text for name in HANDS):
         continue
-
-    def _handed(call: ast.AST) -> str | None:
-        return hands.get(getattr(call.func, "id", "")) if isinstance(call, ast.Call) else None
-
-    held_by = {n.targets[0].id: _handed(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign) and len(n.targets) == 1
-               and isinstance(n.targets[0], ast.Name) and _handed(n.value)}
+    tree = ast.parse(text)
+    held_by: dict[str, set[str]] = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name) and _handed(n.value):
+            held_by.setdefault(n.targets[0].id, set()).update(_handed(n.value))
     through: dict[str, set[str]] = {}
     for n in ast.walk(tree):
         if not isinstance(n, ast.Attribute):
             continue
-        src = held_by.get(n.value.id) if isinstance(n.value, ast.Name) else _handed(n.value)
-        if src is None or n.attr not in MOVED_FROM[src]:
-            continue
-        if n.attr not in HELD[src]:
-            problems.append(f"{rel}:{n.lineno}: reads `{n.attr}` of the module a function of the file hands back, and {src} "
-                            f"no longer holds it (it is in {where[(src, n.attr)]}): import it there, in an `edits` row")
-        else:
-            through.setdefault(src, set()).add(n.attr)
+        for src in sorted(held_by.get(n.value.id, set()) if isinstance(n.value, ast.Name) else _handed(n.value)):
+            if n.attr not in MOVED_FROM[src]:
+                continue
+            if n.attr not in HELD[src]:
+                problems.append(f"{rel}:{n.lineno}: reads `{n.attr}` of the module a function hands back, and {src} no longer "
+                                f"holds it (it is in {where[(src, n.attr)]}): import it there, in an `edits` row")
+            else:
+                through.setdefault(src, set()).add(n.attr)
     for src, names in sorted(through.items()):
-        notes.append(f"{rel}: reads {', '.join(sorted(names))} of the module a function of the file hands back, {src}, which "
-                     f"holds each only because it reads it itself; the cut leaves these reads as they are")
+        notes.append(f"{rel}: reads {', '.join(sorted(names))} of the module a function hands back, {src}, which holds each "
+                     f"only because it reads it itself; the cut leaves these reads as they are")
 
 # ---- prose: a comment, a docstring or a document that names a moved definition as `module.NAME` names its new module
 LEAVE: set[str] = set(TABLE.get("leave", []))
