@@ -469,15 +469,9 @@ To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research
 gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
-record, so nothing deletes it, except under gc's `--launcher-copies`: there it has an implicit record that expires 48 hours after
-its last write (`LAUNCHER_COPY_EXPIRY`). Its age alone never deletes it, and neither does its own status, which is whatever the
-launcher last fetched. Just before `--apply` deletes one, gc asks the remote, and the copy goes only when the remote holds the
-run's attempt in a final state, which the run's machine publishes once the workload has exited, and a run record that holds
-every file of the copy (one at the copy's top by its path, any other at its size) with every blob at its size, or blobs the store
-gave up by its own rule. A file custody trimmed from the record keeps the copy. To keep a failed run's tree on the launcher
-longer: `research keep COPY ...`, or a file in a `--jobs-dir` that names its run id. After the 48 hours the run's files are read
-from the store (`research data fetch`), while the store keeps a run record's blobs. The unit `vy-launcher-copies-gc` runs it
-hourly over root's runs root on vy-nebius-cpu-7, where the checker launches runs all day.
+record, except under gc's `--launcher-copies`: there it expires 48 hours after its last write, and goes only once the remote holds
+the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). `research keep COPY ...`
+keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
 
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
