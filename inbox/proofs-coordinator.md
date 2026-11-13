@@ -151699,3 +151699,32 @@ Nothing here runs on the served engine. Today's run is one prover on a staged st
 - **Times.** [run] `c64b`: 1,772 seconds with all checks kept, two carries to the end. `d83f`: 2,002 seconds in all, 24 checks made first.
 
 **Not established.** Batches 1 and 2 (`6e94`, `5920`): both finished their checks at 16:05Z and are in the carries. The join at `6bae773eb345`: not carried yet.
+
+## WINDOWAT, Fri 13 Nov 16:32Z: your 16:16Z is read and I wait for MEMBERS's named head; your question on #9576 answered now: its change and MEMBERS's import line do not meet
+
+**In plain words.** Your 16:16Z order is read whole (mailbox at `da8219a41ba`). MEMBERS has not named its head yet, so I have put nothing on the draft and merged nothing. Two things can be said now.
+
+1. **#9576 and MEMBERS's import line do not meet.** The line is added after the last import of `Spot/OneStageZk.lean`, where #9576 changes nothing, and a merge of the two computed in memory leaves that file without a conflict.
+2. **The merge you ordered looks clean, on a head MEMBERS has not named.** MEMBERS's branch `cursor/proofs-members-switch-main-34fd` is at `fd561fbff5b2`, the merge of `main` at `053b8e50fe8a`, which its own commit calls "not compiled, not run". B's tree merges with it in memory with no conflict in any file. This is foresight only: I act on the head MEMBERS names, which may be a later one.
+
+### STOP RULE
+
+This entry restates nothing on a branch a pull request reads. Both merges were computed in memory (`git merge-tree`); no branch, worktree or remote was written. The draft is at `a5b8ce506db`, `cursor/proofs-windowat-5e4b` at `e977fbc96f`, the scratch at `4667f9e890d`, #9576's branch at `338c4ad877ca`, all unchanged. No lock is edited and no pull request is opened or marked.
+
+### 1. #9576 and the import line
+
+- [read: `aeeced7cdd6`, on the switch's line] MEMBERS's mend is the one line `import all Init.Util`, added after `public import Std.Data.HashMap`, the last line of the file's import block.
+- [read: the diff of #9576's head `338c4ad877ca` against its merge base with the switch, `51a2e803cb8`] #9576 changes that file in one line of the opening docstring (line 72) and from line 1190 on (its hunks sit at or just after `stepMember`, `runMembers`, `runMembers_files`, `runMembers_proved`, `membersRun_proved`, `whyT` and `unitsJ`). It changes no import.
+- [run, local: `git merge-tree` of `338c4ad877ca` with the switch `2fe933688cb`; it compiles nothing] `Spot/OneStageZk.lean` merges without a conflict. The switch already holds #9576's Lean. What it does not hold is #9576's Python of the refusal, and there the merge does conflict, in two files: `spot/verifier/lean/tests/test_members_twin.py` and `spot/verifier/one_stage/members.py`. I do nothing to them, by your order.
+- Not established: that the two compile together. Nothing in #9576 reads `Init.Util`'s `withPtrEq` [read], so I expect no effect, but only a build says.
+
+### 2. What I do when MEMBERS names its head, in order
+
+1. B onto `cursor/proofs-windowat-hcls-b2b4`, three commits:
+   - the split, 17 files: `Joint/V5/Statement.lean`, `Member.lean`, `Bound.lean`, `Layout.lean`, `Ends.lean` removed; `Sampled/Window.lean`, `Members/Widen.lean`; nine files under `Window/`; `MemberForm/ClaimReads.lean`;
+   - `MemberForm/Reads.lean` alone: the six lines at line 113 and the clause of the opening docstring;
+   - `WeightSecurity/Deployed.lean` and `Pressure.lean`.
+   The first does not compile without the other two; its message says so.
+2. The empty `git diff` against the scratch at `4667f9e890d`, shown in the entry.
+3. The plain merge of the head MEMBERS names. If it conflicts in a file of soundness's or MEMBERS's, I stop and write the file and the two sides.
+4. One build of my changed files on a node, then the push, then the line "my live line" with the full head.
