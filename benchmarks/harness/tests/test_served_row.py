@@ -282,28 +282,26 @@ def test_no_run_is_proved_on_its_outcome_alone(tmp_path, how):
 def test_a_record_that_counts_every_kind_and_check_the_audit_writes_reads_as_it_did(tmp_path):
     """Under the tree's own table, a record as the two-stage audit writes one today, each kind of verdict and each
     check counted and all true: what stands between the run and fully proved is the same list, with no line of the
-    record lacking a verdict or a check."""
+    record lacking a verdict or a check. Which verifier decides each is the table's, read here and not typed."""
 
+    kinds = W.table()
     doc = W.account(record_of(tmp_path), tree(tmp_path), holes=CLOSED)
-    assert {c["check"] for c in doc["checks"]} == set(W.table()["checks"])
-    assert {k["kind"] for k in doc["verdicts"]} == set(W.table()["verdicts"])
+    assert {c["check"] for c in doc["checks"]} == set(kinds["checks"])
+    assert {k["kind"] for k in doc["verdicts"]} == set(kinds["verdicts"])
     assert doc["verdict"]["mark"] == E.RUN_NOT_PROVED and doc["outcome"]["final"] == "withheld"
+    by = {**kinds["verdicts"], **kinds["checks"]}
+    not_lean = ("m0-verifier", "checks_before_draw", "pins", "negatives", "registered_reads", "complete", "round_two")
     assert [(i["item"], i["said"]) for i in doc["to_fully_proved"]] == [
         ("replay block", "the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
                          "layers are not covered"),
         ("inputs after the sample", "the replay block's inputs are committed after the sample: the interior registers "
                                     "`logits` after the first stage's sample"),
-        ("not Lean", "decided by a verifier that is not Lean: `m0-verifier` (`flock-circuit serve, compared in "
-                     "benchmarks/one_stage/a5.py`), `checks_before_draw` (`benchmarks/one_stage/a5.py`), `pins` "
-                     "(`benchmarks/one_stage/two_stage.py`), `negatives` (`benchmarks/one_stage/a5.py`), "
-                     "`registered_reads` (`verity/commitments/windows/tables.py`), `complete` "
-                     "(`verity/protocols/spot/verifier/one_stage/audit.py`), `round_two` "
-                     "(`verity/protocols/spot/verifier/second_stage.py`)"),
-        ("lock entry", "`lean-draw` (`flock-verify draw-test`): no lock entry is named for it (`served_row.json`)"),
-        ("lock entry", "`lean-verify` (`flock-verify verify`): `FlockSoundness.Discharge.FailClosed.flock_verify_sound` "
-                       "is not in the lock"),
-        ("final accept", "the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round "
-                         "form's soundness is not proved")]
+        ("not Lean", "decided by a verifier that is not Lean: " + ", ".join(f"`{k}` (`{by[k]['verifier']}`)" for k in not_lean)),
+        ("lock entry", f"`lean-draw` (`{by['lean-draw']['verifier']}`): no lock entry is named for it (`served_row.json`)"),
+        ("lock entry", f"`lean-verify` (`{by['lean-verify']['verifier']}`): `{by['lean-verify']['proved_by']}` is not in "
+                       "the lock"),
+        ("final accept", f"the final accept is withheld by `{kinds['outcome']['verifier']}`: `two-stage-form`, "
+                         f"{kinds['withheld']['two-stage-form']['why']}")]
 
 
 def test_what_the_audit_covered_is_the_layouts_own_account(tmp_path):
