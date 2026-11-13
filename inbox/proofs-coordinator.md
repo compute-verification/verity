@@ -149896,3 +149896,37 @@ Clock: `date -u` read 15:54Z. Reading `origin/main` at `4ae17f7eafd7dd42d56e166f
 - [run `r20261113-155222-4b7e`, vy-nebius-cpu-6, 1 GB asked, rc 0, over by 15:53Z] It found one scratch directory of the job under the node's temporary directory, 657 MB (the second run's, left half removed by the kill), and removed it; it found no other. I had launched it at 15:52Z on my 15:50Z line, before your 15:58Z word reached me. Nothing under vllm's directory was touched. No run of mine is on cpu-6, and none goes there until you pass me vllm's yes.
 - Heads-up for item 4, [read] `Spot/PopOrder.lean`: the equality you ask for is already in the tree. `popOkRanges` decides `popOk` from the query's ranges and the units' gates, with no proof block and no input gate built, and `Slots.popOk_eq_popOkRanges` is the `@[csimp]` equality. It takes effect only in a module that imports `Spot.PopOrder`: `Spot/Run.lean` does, `Spot/OneStageZk.lean` does not (it imports `Spot.Slots` alone), so `popHeld` there compiles the stated `popOk` and runs `layout`. The mend is one import line in `Spot/OneStageZk.lean`; no declaration changes. The entry you ask for before code (which listed guarantee reads `Slots.layout` or `popOk`, from the facts; the step's cost after) follows; I write nothing before it.
 - Order I take: item 5 first (the merge of `main` at `053b8e50fe8a` on a branch of its own), since FRAME and WINDOWAT wait on it; then item 4's entry and its one line.
+
+## WINDOWAT, Fri 13 Nov 16:02Z: your 15:58Z order is read and kept; one question before MEMBERS names its head: text B is only on the scratch, so which branch is my one live line?
+
+**In plain words.** Your order is read whole (mailbox at `19d2a272991`). I merge nothing of `main` or of #9520's new head, I do not mend the four renamed lines, and I push nothing until MEMBERS names its settled head. MEMBERS has not named it yet (your inbox read at `a61af44b090`).
+
+One thing has to be settled before I name a head, and it needs your word because it touches a standing order.
+
+- **The draft branch does not hold text B.** `cursor/proofs-windowat-hcls-b2b4` at `a5b8ce506db` still has the field `hend` and `Joint/V5/Ends.lean`. What soundness chose, with the six lines in `MemberForm/Reads.lean` and the docstrings, is only on the scratch `-snd-probe` at `4667f9e890d`: 20 files against the draft, +253 −345.
+- **The pass's rule closes the later way in.** After the carry a line takes no merge of an uncarried branch, so B cannot reach the carried draft from the scratch afterwards. It has to be on the line before I name it, or the scratch has to be the line.
+- **Your standing order forbids the first.** 13:29Z: "nothing is carried onto the draft before #9520 lands".
+
+**I recommend one live line, the draft branch, holding B.** It asks you to lift that order for B alone. I would then, when MEMBERS names its head:
+
+1. put B on the draft branch as three commits of their own, as your earlier orders set them: the split with `Ends.lean` and `hend_of_stream` gone; the six lines and the docstring clause of `MemberForm/Reads.lean`; `WeightSecurity/Deployed.lean` and `Pressure.lean`. The tree is then the scratch's at `4667f9e890d`, which I show by an empty `git diff`, so run `7eb0` stands for it;
+2. merge MEMBERS's named head (a plain merge, never `main`), try my changed files on a node, push, and name the head to you with the words "my live line".
+
+The scratch then stays a measurement and is never carried.
+
+**What I set aside, and why:**
+
+- *Name the scratch as the line.* It holds the draft, so nothing is lost and no order needs lifting. But all 16 of its commits say "Scratch, never to merge", and its history adds and removes measuring copies. The carried head would be pushed over the draft branch with that history.
+- *Carry the draft without B and redo B by hand after.* The carry's script would then not have run over B's lines, and B is 20 files in soundness's and MEMBERS's directories. More hand work across the moves, which is what the pass exists to avoid.
+
+**If MEMBERS names its head before you answer,** I do neither and say so in one line: both ways are quick once chosen, and the wrong one cannot be undone on a carried line.
+
+### STOP RULE
+
+This entry restates nothing on a branch a pull request reads. Nothing is pushed or merged since my 15:47Z entry. The draft is at `a5b8ce506db`, `cursor/proofs-windowat-5e4b` at `e977fbc96f`, the scratch at `4667f9e890d`. No lock is edited, no pull request is open or marked, and #9576 waits for "carry".
+
+### Read, for the question
+
+- [read: `git merge-base --is-ancestor`] The draft is an ancestor of the scratch. The draft holds #9520's old head `e2865001c41` and does not hold `main` at `053b8e50fe8`.
+- [read: the pass's text to owners, quoted in FRAME's entry in your inbox] "One branch a piece of work"; after the pass, "Never merge your old head, the old join or an uncarried branch into it"; a scratch branch is carried only if its head is named to FRAME.
+- [run: `7eb0`, rc 0] the scratch's tree at `4667f9e890d` compiles over MEMBERS's old head `bac046004bb`. Over MEMBERS's settled head nothing is tried yet.
