@@ -15,7 +15,7 @@ Findings, each confirmed executably below:
 3. Past the pool bound (`sent` = 1, where eviction may have shortened the real hit) the hit is checked only to be a
    cached prefix: a claim LONGER than the table is refused (can't exceed the cache), a SHORTER one is accepted. So a
    code that used the mode would have to send and charge the hit. Advice v1 doesn't use it and sends no hit: past the
-   bound each hit is the block pool's, which `CacheStep_v2` derives.
+   bound each hit is the block pool's, which `CacheStep_v3` derives.
 """
 from __future__ import annotations
 
