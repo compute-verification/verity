@@ -42,3 +42,28 @@ RAN, a census of the objects each of the reader's holders reaches after the read
 
 **Next:** the before/after readings for the fix (four runs, old and new in each), then #9558's body, then s-t20's full step. I launch the larger shape of this trace only if you say so.
 
+[2026-11-13T16:56Z] 64add53649a4
+ONSITE to @training, Fri 13 Nov, 8:56 AM PST. TRN-92 / #8780: crossed, rerun, body done. The suites are still running; their last line follows by inbox when they end.
+
+NEW HEAD (RAN): 02d67733a746947eec4a840b1d1eeec15e7f200e on origin, branch cursor/training-onsite-bound-of-record-890e. #8780 is open, a draft, no label. It holds main 4ae17f7eafd7.
+
+1. CROSSING (RAN). restack.py with your command, from a checkout of main 4ae17f7eafd7: "clean 02d67733a746 [plain merge clean; crossed 28 moves ...]", exit 0, 49 minutes. Nothing resolved by hand, no rebase, no force.
+2. FAST-FORWARD (RAN). git push origin 02d67733a746...:refs/heads/cursor/training-onsite-bound-of-record-890e gave 78623b14c1d..02d67733a74, no force. The crossed branch is deleted on origin.
+   The crossing changed no line of the PR (RAN): git diff against main is the same 355 changed lines before (fa0877afdc12..78623b14c1) and after (4ae17f7eafd7..02d67733a746); 11 files, 293 insertions, 62 deletions.
+3. NODE RUNS (RAN).
+   - Suites: r20261113-164612-358b on vy-nebius-cpu-1, suites.py --changed 4ae17f7eafd7 (the merge base with main), limit 600 min. RUNNING since 16:46Z: 3 of 14 suites passed, none failed, at 16:55Z. It touches 14 suites now, not 54, vLLM and Flock among them. I expect its end by about 19:30Z (11:30 AM PST) (INFERRED from the last run: those two took three hours beside each other on few workers; here they run one at a time on 10).
+   - Ruff on the eight changed Python files: r20261113-164706-ce8b on vy-nebius-cpu-1: exit 0, "All checks passed!".
+4. THE CALCULATOR at the head against main 4ae17f7eafd7, two worktrees (RAN).
+   - periods.py: reference-onsite-h200 2.99, 3.03, 3.04 a week, a month, a year, for one datacenter and the world, set by min-cut. The same rows as reference-remote-h200. No STOP.
+   - cmp: periods.py --set bounds.lock_only=false at the head against the default output of main: equal, byte for byte (231 lines).
+   - Scan (run.py --out at both): 41 scenarios, 18 move, the same 18; none entered or left. Standing or setter alone moves in 20, nothing in 3. The scan text and the 255 cells of the period scan are identical to those before the crossing.
+   - The rule's three test files, named: 157 passed. reference-remote-h200-elementary prints conditional, assumed, set by cover. The remote README is 48,816 bytes, cap 49,152.
+5. OLD PATHS (RAN). git grep of verity/protocols/inference_only/rho and verity/protocols/remote/verifier in the lines the branch adds: none is left. None in the eleven changed files either. The 16 lines of the tree that still name one are main's own (move maps, the store's table of moves), the same at the head and at main.
+6. BODY (RAN). Redone for the new head at 16:55Z: paths, shas, node lines; what I ran apart from what I read; the Lane, Refs and Goal lines and the ASK-275 option A line kept. Draft, unmarked. Its suites line says "running" and gets the last line when the run ends.
+
+TWO THINGS YOU DID NOT ASK FOR:
+- main on origin is c68135b49d63 at 16:53Z, seven changes past 4ae17f7eafd7, no move among them (RAN). git merge-tree of my head with it: no conflict; it changes no file of the PR or of the calculator. Not merged.
+- Inside benchmarks/rho a bare "uv run pytest tests/..." no longer uses the worktree's environment: it falls back to the machine's and fails to import verity.protocols.proofs. The same at main, so not this PR's (RAN). The body's test command runs from the repository's root.
+
+COULD NOT DO: research notes checkpoint (it writes into another worker's report for lane training); my notes carry their CHECKPOINT line by hand. Note: lanes/training/20261113T1656Z-checkpoint-trn92-onsite-crossed-suites-running.md.
+
