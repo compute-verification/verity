@@ -31,21 +31,22 @@ the commit's files alone:
 - the data beside the closure's modules (`Tree.beside`): each one's directory's files that aren't Python, and the files under
   its directories that hold no Python (`tables/`); and every pyproject.toml when a module of it lists them all
   (`suites.metadata`) or reads each workspace member's (its strings hold `members` and `pyproject.toml`: `research.pythonpath`);
+  and the fixture registry when a module of it names the registry's path (`_REGISTRY`: the store's replica map);
 - the files under each path the test file, its conftests and the helpers it imports (a module of the closure under the suite's
   test paths that is no `test_*.py`) name: string parts joined by `/` or one string holding one, and parts joined to a path
   they build (`VERIFIER / "agree.py"`);
-- the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files) less their Python, which the closure has
-  where it is imported, but for the whole tree (`.`), and its own directory's files but their Python and the suites nested in
-  it (`suites.inputs_of` always holds it); less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`);
-  the fixture registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's directory or its
-  inputs;
-- what its suite's `[[tool.verity.tests.reads]]` say it reads whole (`walks`): each entry names test files (fnmatch patterns
-  from the suite's directory) and `paths` (from the root: a file, a directory as its files, or an fnmatch pattern), Python
-  included, for what no rule above follows: a tree a test walks, a module it loads by a name it computes, what a program it
-  starts reads. An entry that names no test file or a path that matches no file is refused;
+- the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files), Python included, with the closure of
+  that Python (`declared_code`): the guard holds the suite to them, and a test that loads one by a path or a computed name runs
+  its imports. Its own directory's files but their Python and the suites nested in it (`suites.inputs_of` always holds it);
+  less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`); the fixture registry when an entry of it
+  that git doesn't hold (a fetched fixture) is under the suite's directory or its inputs;
+- what its suite's `[[tool.verity.tests.reads]]` say it reads whole (`walks`), with the closure of their Python: each entry
+  names test files (fnmatch patterns from the suite's directory) and `paths` (from the root: a file, a directory as its files,
+  or an fnmatch pattern), Python included, for what no rule above follows: a tree a test walks, a module it loads by a name it
+  computes, what a program it starts reads. An entry that names no test file or a path that matches no file is refused;
 - for a test file its suite's `[tool.verity.tests] untraced` names (fnmatch patterns from the suite's directory), one that
-  starts a program the guard can't trace (git, lake, a compiler, a shell, a Python run with `-I`), what `suites.py` keys the
-  suite on (`whole`), with `vars` `untraced` = `suite`; a task whose closure holds a module that builds native code (`_NATIVE`)
+  starts a program the guard can't trace (git, lake, a compiler, a shell, a Python run with `-I`), what `suites.py` lets the
+  suite read (`whole`), with `vars` `untraced` = `suite`; a task whose closure holds a module that builds native code (`_NATIVE`)
   has `untraced` = `compilers`, since a compiler reads the sources beside it; the runner makes any other untraced program an
   error;
 - each `pyproject.toml` from the test file's directory up to the root;
@@ -74,6 +75,11 @@ KIND = "test-file"
 GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
          "tools/verity/check/guard/child/verity_suite_reads.py")
 REGISTRY = "fixtures/artifacts.json"
+#: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
+#: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
+STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
+#: a module that names the fixture registry's path, as the store's replica map does (`Path("fixtures") / "artifacts.json"`)
+_REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["']fixtures/artifacts\.json["']""")
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
 DATA_DIRS = frozenset({"fixtures", "data", "expected", "testdata"})
 STDLIB = frozenset(sys.stdlib_module_names)
@@ -578,6 +584,7 @@ class Imports:
         self._paths: dict[str, list[str]] = {}                  # file -> the files under the paths it names (`named`)
         self.metadata: set[str] = set()                         # the files read so far that list every pyproject.toml
         self.native: set[str] = set()                           # those that build native code (`_NATIVE`)
+        self.registry: set[str] = set()                         # those that name the fixture registry (`_REGISTRY`)
         self._by_top: dict[str, set[str]] = {}                  # top-level name -> the files importing it absolutely
         self.fallbacks = 0              # files whose statements the regular expressions couldn't read, parsed whole
 
@@ -768,6 +775,8 @@ class Imports:
             self.metadata.add(path)
         if any(k in text for k in _NATIVE_HINTS) and _NATIVE.search(text):
             self.native.add(path)
+        if "artifacts.json" in text and _REGISTRY.search(text):
+            self.registry.add(path)
         for top in local:
             self._by_top.setdefault(top, set()).add(path)
         return got
@@ -918,18 +927,17 @@ def suite_tests(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
 
 
 def declared(tree: Tree, suite: Suite, suites: list[Suite], fixtures: list[str]) -> list[str]:
-    """The suite's declared inputs less their Python, an import list the closure replaces, and its own directory's files but
-    their Python and the suites nested in it (`suites.inputs_of` always holds the directory); Markdown under a directory only
-    when it lists a `.md`; and the fixture registry when a fetched fixture is under the suite or one of its inputs. The whole
-    tree (`.`) is no import list: a suite declares it whose tests read every file (the root's lints, the graph's listing)."""
+    """The suite's declared inputs, Python included: the guard holds the suite to them, and its tests load some of that Python by
+    a path or a name they compute (circuit-check's sidecars), which no closure follows. Its own directory's files but their
+    Python and the suites nested in it (`suites.inputs_of` always holds the directory); Markdown under a directory only when it
+    lists a `.md`; and the fixture registry when a fetched fixture is under the suite or one of its inputs."""
     out: set[str] = set()
     for p in suite.inputs:
         p = p.strip("/")
         if p in tree.files:
-            if not p.endswith(".py"):
-                out.add(p)
+            out.add(p)
             continue
-        out.update(f for f in tree.under(p) if (p in ("", ".") or not f.endswith(".py")) and (suite.markdown or not f.endswith(".md")))
+        out.update(f for f in tree.under(p) if suite.markdown or not f.endswith(".md"))
     if suite.path != ".":
         nested = [s.dir for s in suites if s.path != suite.path and _under(s.dir, suite.dir)]
         out.update(f for f in tree.under(suite.dir) if not f.endswith(".py") and (suite.markdown or not f.endswith(".md"))
@@ -973,10 +981,12 @@ def _named_tests(suite: Suite, tests: list[str], pats: tuple[str, ...], what: st
 
 
 def whole(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
-    """What `suites.py` keys the suite on (`suites.inputs_of`, less `suites.dropped`): the files of its directory but the suites
-    nested in it that no other path of it covers, of each workspace package it depends on (its dependencies, extras and
-    dependency groups, and theirs but groups: the package's `[tool.verity.tests] exports`, else its directory), but with
-    `inputs_only = true`, and of its declared inputs. A test file that starts a program the guard can't trace is keyed on it."""
+    """What `suites.py`'s guard lets the suite read: what it keys the suite on (`suites.inputs_of`, less `suites.dropped`), the
+    files of its directory but the suites nested in it that no other path of it covers, of each workspace package it depends on
+    (its dependencies, extras and dependency groups, and theirs but groups: the package's `[tool.verity.tests] exports`, else
+    its directory), but with `inputs_only = true`, and of its declared inputs; and what it lets every suite read and keys a pass
+    on only when the tests read it, every pyproject.toml and `STORE_READS`. A test file that starts a program the guard can't
+    trace is keyed on it."""
     root = tree.toml("pyproject.toml")
     pkgs, data = {}, {}
     for m in ["", *(m.strip("/") for m in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []))]:
@@ -1010,7 +1020,7 @@ def whole(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
     out = {f for p in paths for f in tree.under(p)}
     for c in cut:
         out -= set(tree.under(c)) - {f for o in other if _under(o, c) for f in tree.under(o)}
-    return sorted(out)
+    return sorted(out | set(tree.pyprojects) | {f for f in STORE_READS if f in tree.files})
 
 
 def fetches(suite: Suite, fixtures: list[str]) -> list[str]:
@@ -1030,7 +1040,9 @@ def _basedir(tree: Tree, path: str) -> tuple[str, list[str]]:
     return d, inits
 
 
-def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str], walked: set[str] | frozenset[str] = frozenset()) -> dict:
+def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str], walked: set[str] | frozenset[str] = frozenset(),
+         loaded: set[str] | frozenset[str] = frozenset()) -> dict:
+    """``loaded``: the closure of the Python ``data`` and ``walked`` hold (`declared_code`)."""
     conftests, d = [], _parent(path)
     while True:
         if (c := _join(d, "conftest.py")) in tree.files:
@@ -1057,15 +1069,16 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str],
         if not d:
             break
         d = _parent(d)
-    code, md = imports.closure(seeds, bases, [path, *conftests]), suite.markdown
+    code, md = imports.closure(seeds, bases, [path, *conftests]) | loaded, suite.markdown
     beside = {f for d in {_parent(f) for f in code} for f in tree.beside(d) if md or not f.endswith(".md")}
     if not imports.metadata.isdisjoint(code):
         pyprojects += tree.pyprojects
+    registry = [REGISTRY] if REGISTRY in tree.files and not imports.registry.isdisjoint(code) else []
     every, under = any(t in ("", ".") for t in suite.testpaths), tuple(t + "/" for t in suite.testpaths)
     helpers = [f for f in code if (every or f.startswith(under) or f in suite.testpaths)
                and not f.rpartition("/")[2].startswith("test_")]
     paths = {f for s in {path, *conftests, *helpers} for f in imports.named(s) if md or not f.endswith(".md")}
-    inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *walked, *GUARD}
+    inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *registry, *walked, *GUARD}
     out = {"id": f"{KIND}:{path}", "vars": {"suite": suite.path}, "inputs": sorted(inputs)}
     if not imports.native.isdisjoint(code):
         out["vars"]["untraced"] = "compilers"
@@ -1074,6 +1087,12 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str],
     if suite.timeout_s:
         out["timeout_s"] = suite.timeout_s
     return out
+
+
+def declared_code(imports: Imports, suite: Suite, files: list[str]) -> frozenset[str]:
+    """The closure of the Python among ``files``, what a task declares it reads (its suite's inputs, its reads entries): a test
+    that loads one of them by its path or a name it computes runs its imports too, with the suite's `pythonpath` on `sys.path`."""
+    return frozenset(imports.closure(sorted(f for f in files if f.endswith(".py")), list(suite.pythonpath), []))
 
 
 def fetched(tree: Tree) -> list[str]:
@@ -1101,8 +1120,12 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
         walked = walks(tree, s, tests)
         untraced = _named_tests(s, tests, s.untraced, "[tool.verity.tests] untraced")
         every = whole(tree, s, suites) if untraced else []
+        loaded: dict[frozenset[str], frozenset[str]] = {}
         for f in tests:
-            t = task(tree, imports, s, f, data, walked.get(f, set()))
+            w = frozenset(walked.get(f, ()))
+            if w not in loaded:
+                loaded[w] = declared_code(imports, s, [*data, *w])
+            t = task(tree, imports, s, f, data, w, loaded[w])
             if f in untraced:
                 t["inputs"], t["vars"]["untraced"] = sorted({*t["inputs"], *every}), "suite"
             out.append(t)

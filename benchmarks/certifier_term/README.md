@@ -5,13 +5,16 @@ carry over a monitoring period, at the load of a node, the census's reference da
 GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
 the monitoring-period check charges it (`verity/protocols/certifier/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
 Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py` (`table`, `document`, `render`); this
-directory holds its runner.
+directory holds its runner, which with `--out` also writes the term of record's row as a result (The result, below).
 
 ```text
 verity bench certifier_term                              the inputs, the scopes, and the terms in GB and in bits
 verity bench certifier_term --json                       the same as one document: value, unit, commit, run, inputs, rows
 verity bench certifier_term --scope world --period year  only those rows (each flag repeats)
 verity bench certifier_term --requests census            the census's request in place of the sampling plan's
+verity bench certifier_term --out DIR                    also its result, for DIR: the amounts of the term of record's row
+verity bench certifier_term --out DIR --registration F   with its capacity and verified, read from the registration log F
+verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR   the result of record (The result, below)
 verity bench certifier_term --help                       every parameter and its default
 ```
 
@@ -26,6 +29,63 @@ term of record and is printed only under the label "with a set-time card (not ye
 release times are taken once (`timing`, `all three`) has a jitter of 0 at either D_j, which rests on the same card,
 so every figure of it is under the label: the row's own `with_set_time_card` is the label, where every other row's
 is null, and the tables print the row's name with the label.
+
+## The result
+
+With `--out DIR` the runner also writes its result, through the harness kit's writer for `DIR` (`verity_bench.kit`)
+and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
+(`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
+term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
+it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+
+- `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
+  Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
+  scan's over the world's year, whichever rows the command prints.
+- `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
+  so this is the network's amount of record. It stands against the same target, in bits.
+- `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
+  the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
+  way (`verity.hardware.site`) and the term is egress, so one direction counts. The uplink is read from a
+  registration log, `--registration FILE` (`verity.hardware.registration`'s committed log): the boundary link of its
+  one host that a network certifier splits. The log is read as given, and one that registers anything but the
+  model's machine, one host behind one network certifier, is refused. Every machine of the scope is taken as
+  registered like that one, which is the model's statement and no registration's. With no `--registration` the
+  capacity has no value and its `inputs` say why: it is read from a registered link or not at all, never copied
+  from a data sheet, a schedule or the datacenter model.
+- `certifier_term/modeled/<scope>/<period>/verified`: capacity less free, in bits, where both have a value. It
+  isn't clamped, so it is negative where the term is more than the links carry.
+- `certifier_term/modeled/<scope>/<period>/error`: the row's ε, a probability, which the calculator's document holds
+  as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
+
+A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
+`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so is `metric`
+where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
+enters. What the command prints is the calculator's still, those rows' terms among it.
+
+A measurement's `inputs` name what it was computed from: its row, the document's inputs with their values, marks and
+sources, the registration read, and the measurements it is a difference of. Every one names the class the term is at,
+the most ids a response holds, and the scan's δ its error is at, as the document states them: terms at two classes
+don't compare, and neither do errors at two δ. A δ the command gives is named as given and assumed, since no scan
+has run at it.
+
+The command of record passes its class and its scan's δ, whatever the calculator's defaults are: `--response-ids 1024`
+and `--scan-delta D`, and the result's `inputs` name both. `D` is the δ at which the world's year has an error of
+2^-20, so that every row is bounded: 2^-20 divided by the world year's execution phases, which the command's own
+document counts (the `scan` row's `phases`). It is computed from them each time and never copied, and `--scan-delta`
+takes a fraction, so it holds `D` exactly. No term depends on the scan's δ: only the errors move with it.
+
+```text
+verity bench certifier_term --json --response-ids 1024 --scope world --period year |
+    python3 -c '
+import fractions, json, sys
+phases = next(r["phases"] for r in json.load(sys.stdin)["rows"] if r["row"] == "scan")
+print(fractions.Fraction(1, 2 ** 20) / fractions.Fraction(phases))'
+verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR
+```
+
+The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
+the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
+`benchmarks/network_traces/tests/test_certifier_term.py`.
 
 ## The rows
 

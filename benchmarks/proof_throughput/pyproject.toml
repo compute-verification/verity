@@ -40,3 +40,8 @@ paths = ["verity/protocols/certifier", "verity/protocols/pous", "verity/circuits
 [[tool.verity.tests.reads]]
 tests = ["tests/test_workloads.py"]
 paths = ["verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py"]
+
+# circuit-check's registries import each module with a sidecar under the adapters' packages (`circuit_check.sidecars.TREES`)
+[[tool.verity.tests.reads]]
+tests = ["tests/test_instances.py", "tests/test_workloads.py"]
+paths = ["adapters/vllm/verity_vllm/*.circuit-check.py"]

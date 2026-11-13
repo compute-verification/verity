@@ -280,7 +280,7 @@ def test_vectors_are_pinned(case):
 
 
 def test_the_h100_h3_vectors_are_the_registered_schemes():
-    """`pearl-c-h100-v1-h3` (GLM-5.3's FP8 form on the H200) is the scheme its pinned production case was made under, and
+    """`pearl-c-h100-v1-h3` (GLM-5.3's FP8 form on the H200) is the scheme its pinned decode case was made under, and
     the case is in its domain."""
     s, case = get("pearl-c-h100-v1-h3"), next(c for c in PINNED["cases"] if c["case"] == "decode-32-v1-h3")
     v = CV.scheme(case["test_instance"], "v1", "h3")

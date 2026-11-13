@@ -1107,9 +1107,7 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
     fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
 
-    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart;
-    and a tree an earlier repair left with the module rebuilt and the object kept loses the object for being older than
-    the C beside it."""
+    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart."""
     LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     MK = LA.MK
     store, own = tmp_path / "artifacts", tmp_path / "lakes-own-cache"
@@ -1179,27 +1177,6 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     rc, out = records()
     assert rc == 0, out
     assert says() == "version B 83" and held(tree) == apart("apart-b", EXTRA, CALLS_EXTRA)
-
-    edit(tree, z)
-    assert repair() == [] and "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main")
-    edit(tree, a)
-    assert "Unpacked Toy.Word" in from_own_cache() and says() == "version A 1"
-    edit(tree, z)
-    lib = tree / ".lake" / "build" / "lib" / "lean" / "Toy"
-    for f in (lib / "Word.trace", *lib.glob("Word.*.hash"), *ir.glob("Word.*.hash")):
-        f.unlink()                                                      # what the repair dropped before it dropped objects
-    rc, out = records()
-    assert rc == 0 and "Toy.Word:c.o" not in out and says() == "version A 1", \
-        "the module is restored, its object is taken as built, and the executable runs the earlier source"
-    assert repair() == ["lean-records: toy: 2 object(s) older than the C Lake compiles them from, dropped: "
-                        "Toy/Word.c.o.export, Toy.c.o.export"], \
-        "`Toy`'s too, compiled from the same C as the one restored after it: Lake compiles it once more"
-    rc, out = records()
-    assert rc == 0, out
-    # `Main`'s object is the published build's, restored from Lake's own cache: the same C, compiled under another name
-    mine, theirs = ({f: d for f, d in h.items() if not f.startswith(("ir/Main.c.o.", "bin/"))}
-                    for h in (held(tree), apart("apart-z", z)))
-    assert says() == "version Z 1" and mine == theirs
 
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")

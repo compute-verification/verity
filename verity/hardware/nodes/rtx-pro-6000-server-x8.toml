@@ -1,0 +1,33 @@
+# An RTX PRO 6000 node: eight rtx-pro-6000-server cards in the VM of a two-socket Xeon 6776P server. This file holds
+# what the node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs
+# it carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
+# A GPU's memory is its card's store.dram, whole, and every rate, clock and peak is a card's: none is here.
+
+node = "rtx-pro-6000-server-x8"
+name = "An RTX PRO 6000 node: eight cards in the VM of a two-socket Xeon 6776P server"
+
+[device]
+sku = "rtx-pro-6000-server"
+count = { value = 8, unit = "card", mark = "measurement", source = "nvidia-smi on the node lists eight NVIDIA RTX PRO 6000 Blackwell Server Edition cards, indices 0 to 7 (art:ad5919199280)" }
+
+[host]
+sku = "xeon-6776p-2s"
+
+# The host's own memory. dram is the memory the VM is given, above MemTotal, which leaves out what the kernel keeps;
+# the server's DIMMs are not on record (a guest can't read them). The disks are the VM's block devices, each whole,
+# mounted or not.
+[memory.dram]
+tier = "dram"
+bytes = { value = 1872605741056, unit = "B", mark = "measurement", source = "lsmem -b on the node's VM: 'Total online memory', 872 blocks of 2 GiB and none offline, 1,744 GiB (art:ad5919199280); /proc/meminfo's MemTotal there is 1,843,153,899,520 B" }
+
+[memory.vda]
+tier = "disk"
+bytes = { value = 274877906944, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vda, the boot disk, 256 GiB (art:ad5919199280)" }
+
+[memory.vdb]
+tier = "disk"
+bytes = { value = 1048576, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vdb, 1 MiB, not mounted (art:ad5919199280)" }
+
+[memory.vdc]
+tier = "disk"
+bytes = { value = 5991479377920, unit = "B", mark = "measurement", source = "lsblk -b on the node's VM: vdc, the data disk, 5,580 GiB (art:ad5919199280); the same VM's was 5,392,331,440,128 B when its disks' read was measured (art:53c2656f4c56), and the larger stands" }

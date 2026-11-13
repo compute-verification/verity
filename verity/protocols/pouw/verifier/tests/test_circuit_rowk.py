@@ -17,22 +17,22 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c4_vectors as V4
 import pearl_c_vectors as V8
-from verity.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
 from verity.circuits.cut import CallGraph
 from verity.circuits.defs import CompositeDefinition
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Value
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
 from verity.definitions.ops.scalar import BitAnd, SelectBf16
 from verity.protocols.pouw.prover.circuit import leaves as L
 from verity.protocols.pouw.prover.circuit import pc4, pc8, plan, rowk
 from verity.protocols.pouw.prover.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports
-from verity.protocols.pouw.verifier.protocol import DomainError, Tile
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.verifier.protocol import DomainError, Tile
 
 SEED = bytes(range(32))
 #: (device, k, row_k): three segments each, so a form carries a carry it was given

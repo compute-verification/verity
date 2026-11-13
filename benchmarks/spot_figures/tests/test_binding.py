@@ -411,7 +411,7 @@ def covered(lines: list[str]) -> bool:
 def test_the_command_prints_by_gate_the_design_its_terms_and_each_period(capsys):
     b.main(["--card", "GLM-5.3", "--symbols", "2^10"])
     out = capsys.readouterr().out.splitlines()
-    assert out[0] == ("by gate, per sampled replay block: K = 27191776 gates (2^24.69), d = 1, openCalls = 0, "
+    assert out[0] == ("by gate, per sampled replay block: K = 34695072 gates (2^25.04), d = 1, openCalls = 0, "
                       "T = 2^80.00 calls of SHA-512 in every run, the prover's and the verifier's, k = 1507, "
                       "e_s = 316471")
     assert out[1] == ("each figure per sampled replay block or per run at a padded first stage of K0 = 1 replay "
@@ -420,7 +420,7 @@ def test_the_command_prints_by_gate_the_design_its_terms_and_each_period(capsys)
                       "times the sessions and the gates. ! is above 2^-100")
     assert [line.split()[0] for line in out[2:-2]] == ["collision", "refused", "cap", "sum", "sum", "week", "month",
                                                        "year", "waits", "waits"]
-    assert all(out[n].split()[1:3] == ["2^-132.03", "2^-123.02"] for n in (2, 5, 6)) and covered(out)
+    assert all(out[n].split()[1:3] == ["2^-131.68", "2^-122.67"] for n in (2, 5, 6)) and covered(out)
     assert [out[n].split()[1:3] for n in (10, 11)] == [["2^-125.99"] * 2, ["2^-183.64"] * 2]
     assert "at 2^128·k" in out[10] and "at 2^192·k" in out[11] and all("in no sum" in out[n] for n in (10, 11))
     assert out[-2].startswith("by gates, calls, the collision term beside the other two is at most 2^-100 up to K = "

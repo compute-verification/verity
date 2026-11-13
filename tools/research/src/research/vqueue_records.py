@@ -18,7 +18,10 @@ the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Reg
 vouched for by the merge gate against the run (`unvouched`, `merge.regenerated_parent`), so post_train reads it as a lock
 commit; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and each owner a warning names).  A run
 that regenerated nothing, or only the records the candidate holds, makes none, and the candidate is checked as built.  It is
-made in a scratch index, without a checkout or a ref.  Under a dry run or the queue's shadow nothing launches (`start`), as
+made in a scratch index, without a checkout or a ref.  The candidate is a staged batch, off main's chain; when the chain's top
+it goes onto is another base, its members are merged again there, and the records commit, made and vouched for on the staged
+tree, is carried onto that merge, the same files byte for byte, only when the two trees' Lean inputs are the same
+(`same_inputs`, `vqueue_slim.lean_key`), which are all the records depend on.  Under a dry run or the queue's shadow nothing launches (`start`), as
 `vqueue_slim.start`.  The loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call."""
 from __future__ import annotations
 
@@ -68,16 +71,20 @@ def lock_checked(rid: str, into: str, tip: str) -> str:
 
 
 def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], files: list[str],
-                 changed: Iterable[str] = ()) -> str:
+                 changed: Iterable[str] = (), onto: str | None = None) -> str:
     """A lock commit's message (`commit`), which the merge gate (`merge.regenerated_parent`), the loop (`LOCK_SUBJECT`) and
     post_train read: `Lock records regenerated for PRS`, what its records change of what a
     guarantee says (``changed``, which the spec DM shows once they land), the bookkeeping the lock run repaired (``warned``,
-    each a warning for the next PR to fix), its `Checked:` line (`lock_checked`) and `Regenerated: FILES`."""
+    each a warning for the next PR to fix), with ``onto`` the tree they were carried onto from ``tip``, its `Checked:` line
+    (`lock_checked`) and `Regenerated: FILES`."""
     said = ("What these records change of what a guarantee says, which the spec DM shows once they land:\n" +
             "".join(f"  {c}\n" for c in changed) + "\n") if (changed := list(changed)) else ""
     repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
                "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
-    return f"{LOCK_SUBJECT}{prs}\n\n{said}{repairs}{lock_checked(rid, into, tip)})\nRegenerated: {', '.join(files)}\n"
+    carried = (f"Carried from {tip[:12]} onto {onto[:12]}, the same members merged onto another base, whose Lean inputs are "
+               f"{tip[:12]}'s (`vqueue_slim.lean_key`): all these records depend on.\n\n") if onto else ""
+    return (f"{LOCK_SUBJECT}{prs}\n\n{said}{repairs}{carried}{lock_checked(rid, into, tip)})\n"
+            f"Regenerated: {', '.join(files)}\n")
 
 
 #: how many bookkeeping warnings of a lock run its post lists (`bookkeeping_told`); the lock commit lists them all
@@ -209,14 +216,28 @@ def _owners(lock: dict, line: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(out)) or (CI,)
 
 
-def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int]) -> tuple[str, list[str], Told | None] | str | None:
-    """Candidate ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files, what is
-    told of the bookkeeping the run repaired and to whom, `bookkeeping_told`, None when it repaired none), the records the run
-    regenerated committed on top of ``sha`` as a lock commit (`lock_message`), naming what they change of what a guarantee
+def same_inputs(repo: Path, a: str, b: str) -> bool:
+    """Whether commits ``a`` and ``b`` have the same Lean inputs (`vqueue_slim.lean_key`), so the same lock records."""
+    from .vqueue_slim import lean_key
+    return (key := lean_key(repo, a)) is not None and key == lean_key(repo, b)
+
+
+def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
+           onto: str | None = None) -> tuple[str, list[str], Told | None] | str | None:
+    """Staged batch ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files, what
+    is told of the bookkeeping the run repaired and to whom, `bookkeeping_told`, None when it repaired none), the records the
+    run regenerated committed on top of ``sha`` as a lock commit (`lock_message`), naming what they change of what a guarantee
     says (`_changes`), and vouched for by the merge gate.  None when there is none to make: the run regenerated nothing
     (`regenerated_locks`), or only the records ``sha`` holds.  Why not, instead, while its records or its Lean report can't
-    be read, or the gate refuses the commit."""
+    be read, or the gate refuses the commit.
+
+    With ``onto``, ``prs`` merged again onto another base, that commit is made and vouched for as above, then carried onto
+    ``onto``: the same files, byte for byte, committed on top of it, its message saying so.  Records depend on a tree's Lean
+    inputs alone, so this raises unless ``onto``'s are ``sha``'s (`same_inputs`); None means ``onto`` is checked as built."""
     repo, into = driver.repo, f"queue/{sha[:12]}"
+    if onto is not None and not same_inputs(repo, sha, onto):
+        raise QueueError(f"{onto[:12]}'s Lean inputs aren't {sha[:12]}'s: the records {rid} regenerated on {sha[:12]} aren't "
+                         "its records")
     scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
     try:
         locks, held = regenerated_locks(driver, rid, scratch)
@@ -251,7 +272,27 @@ def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int]) -> tuple[str
         raise QueueError(f"git commit-tree of {sha[:12]}'s records commit printed no commit")
     if why := unvouched(driver, rid, made):
         return why
+    if onto is not None:
+        made = _carry(repo, made, onto, files, lock_message(prs, rid, into, sha, warned, files, changed, onto))
     return made, files, bookkeeping_told(rid, into, sha, prs, made, warned) if warned else None
+
+
+def _carry(repo: Path, made: str, onto: str, files: list[str], message: str, identity: dict[str, str] = IDENTITY) -> str:
+    """Records commit ``made``'s ``files``, as it holds them, committed on top of ``onto`` with ``message`` as ``identity``."""
+    scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
+    try:
+        index = {"GIT_INDEX_FILE": str(scratch / "index")}
+        _git(repo, "read-tree", onto, env=index)
+        for f in files:
+            mode, _, blob = _out(repo, "ls-tree", made, "--", f).partition("\t")[0].split()
+            _git(repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{f}", env=index)
+        tree = _git(repo, "write-tree", env=index).stdout.strip()
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    carried = _git(repo, "commit-tree", tree, "-p", onto, "-m", message, env=identity).stdout.strip()
+    if not carried:
+        raise QueueError(f"git commit-tree of {made[:12]}'s records carried onto {onto[:12]} printed no commit")
+    return carried
 
 
 def lock_outcome(driver: Landing, rec: dict, states: dict, lost: bool) -> tuple[str, str]:

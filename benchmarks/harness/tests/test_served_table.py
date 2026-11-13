@@ -9,7 +9,7 @@ import pytest
 from verity_bench import served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm.presets import expand_sweep, load_spec, resolve_spec
+from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
@@ -110,14 +110,17 @@ class Producer:
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
 
-    def ran(self, run: str, spec: str, point: str, doc: dict | None, *, validation="passed", rc=0) -> str | None:
+    def ran(self, run: str, spec: str, point: str, doc: dict | None, *, validation="passed", rc=0,
+            recorded: str | None = None) -> str | None:
+        """A point's run; `recorded`: the path its attempt names the spec by (default: today's)."""
+
         art = None
         if doc is not None:
             files = self._tree(run, {"out/benchmark.json": json.dumps(doc)})
             art = self.store.put_artifact("verity-vllm-benchmark/v1", {"run_id": run}, {"run_files": files})
             self.store.push(art)
         self._attempt(run, "vllm_bench_point",
-                      {"spec": served_table.spec_path(spec), "point": point, "identity": "1" * 64},
+                      {"spec": recorded or served_table.spec_path(spec), "point": point, "identity": "1" * 64},
                       {"result": art} if art else {}, validation=validation, rc=rc)
         return art
 
@@ -204,6 +207,32 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — "
             "| no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
+
+
+def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
+    """A run of record keeps the path its spec had when it ran. With the specs in another directory than the one the
+    older runs name, a point's newest passing run is still found under either path, and each path names the same spec."""
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    today, former = served_table.spec_paths(COMMIT_SPEC)
+    assert (today, former) == (f"elsewhere/specs/{COMMIT_SPEC}.toml", f"{FORMER_SPECS}/{COMMIT_SPEC}.toml")
+    assert served_table.spec_name(today) == served_table.spec_name(former) == COMMIT_SPEC
+    assert served_table.spec_name("another/place/a-spec.toml") == "another/place/a-spec"
+
+    producer = Producer(tmp_path)
+    producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0), recorded=former)
+    newer = producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
+    only_former = producer.ran("r20261024-020000-0004", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1),
+                               recorded=former)
+    producer.ran("r20261024-040000-0006", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 9.0),
+                 recorded=f"neither/{COMMIT_SPEC}.toml")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda line: None, **BY_SPEC)
+    rows = _commit_rows(table)
+    assert (rows["b8-p512-mixed"]["run"], rows["b8-p512-mixed"]["art"]) == ("r20261024-030000-0002", newer)
+    assert (rows["b32-p512-mixed"]["run"], rows["b32-p512-mixed"]["art"]) == ("r20261024-020000-0004", only_former)
+    assert table["skipped"] == []
 
 
 def test_a_labelled_run_is_its_protocols_row_over_a_newer_unlabelled_one(tmp_path):

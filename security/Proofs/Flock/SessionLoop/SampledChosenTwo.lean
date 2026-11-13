@@ -11,7 +11,7 @@ session loop: its sampled sessions are `ℓ` sessions of the deployed session lo
 `Flock.Guarantees.SampledAuditAnyRelayDeployed` has them for one stage, and each stream commits its values as hm96
 leaves at the pinned key. The boundary is the registrations on the ZK server's record before the first-stage sample.
 The auditor reads its admitted record and chooses that sample with coins of its own. The interior is the value
-service's interior commits (`Flock.Firewall.Salts.interiorKey`): a stream of its own under a key `k₁` uniform and
+service's interior commits (`Flock.Firewall.Salts.interiorAnswer`): a stream of its own under a key `k₁` uniform and
 independent of the boundary's randomness and of the auditor's coins, whose values, layouts and stack are any functions
 of the boundary's record and those coins. What the audit sees of each session is the held relay's frames
 (`ZKOutRelay`).
@@ -23,8 +23,8 @@ of the boundary's record and those coins. What the audit sees of each session is
 * **`Flock.SecurityProofs.SampledAuditTwoChosenAnyRelayDeployed`**: `sampledAuditTwoChosen_zkOutRelay` at the second
   conjunct of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96_stream` for each stream's hiding.
 
-The interior's key here is uniform. The deployed one is `SHA-512(k ‖ L' ‖ s)`, at the interior session's fresh sample
-`s`, and its distance from uniform, one PRF term at a fresh input, is not in this bound.
+The interior's key here is uniform. The deployed one is sampled from the operating system with the interior session's
+salts (`Values.answer`'s `interior`), no function of the boundary's key.
 -/
 
 @[expose] public section

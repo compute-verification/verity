@@ -433,7 +433,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
     cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
                        fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
-                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
+                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8), table=x.get("table_blocks", inf))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
     return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),
@@ -452,10 +452,10 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
-#: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
-REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
-                     "sampled of a registration's n, and the first stage draws at least ⌈q·n⌉, never fewer than one. "
-                     "No bound here is what serving costs at a smaller registration.")
+#: the verification phase a two-stage bound holds at, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A two-stage bound holds at its verification phase's size: the first stage samples a whole "
+                     "number of the phase's requests, never fewer than one, and the plan is priced and bounded at "
+                     "that count. No bound here is what serving costs at a smaller verification phase.")
 
 
 def outdir(out: Path, serving: str) -> Path:
@@ -466,7 +466,7 @@ def outdir(out: Path, serving: str) -> Path:
 
 def reading_note(serving: dict) -> str:
     """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
-    (and that its bounds then are), what it stands in place of, and the registration its bounds hold at
+    (and that its bounds then are), what it stands in place of, and the verification phase its bounds hold at
     (`REGISTRATION_NOTE`)."""
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]
@@ -609,7 +609,7 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def split_cells(cells: Sequence[Cell], merged: int | None) -> list[Cell]:
+def split_cells(cells: Sequence[Cell], merged: int | str | None) -> list[Cell]:
     """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
     return two_stage_strata(cells, merged)
 
@@ -679,10 +679,13 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
     class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
-    a stratum (`merged` None), by `w` and the width's place among the widths."""
+    a stratum (`merged` None), by `w` and the width's place among the widths; a by-template design's (`merged`
+    "template"), by each cell's position."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        if "merged" in row and row["merged"] is None:
+        if row.get("merged") == "template":
+            out["k"] = {str(t): v for t, v in k.items()}
+        elif "merged" in row and row["merged"] is None:
             out["k"] = {f"w{t}": v for t, v in k.items()}
         else:
             out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
