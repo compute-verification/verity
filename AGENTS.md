@@ -40,8 +40,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `registration` (the registration log), `record` (a record entry) and
-    `lean` (the Lean card tables' writer); its types, and the readers of the data sheets, which are in the top-level
+  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
+    tables' writer); its types, and the readers of the data sheets, which are in the top-level
     `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
