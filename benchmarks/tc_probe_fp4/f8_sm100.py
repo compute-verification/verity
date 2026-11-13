@@ -49,7 +49,7 @@ import f8_model as FM  # noqa: E402
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
-    from verity.definitions.silicon.term import Format
+    from verity.circuits.silicon.term import Format
 
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019

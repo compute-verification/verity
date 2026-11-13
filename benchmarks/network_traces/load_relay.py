@@ -18,7 +18,7 @@ registrations the verifier pins each load value from (`blocks.pins`).
     python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
 The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
-``verity/composite/device/live_challenger/auditor.py``), in three parts:
+``verity/protocols/compose/device/live_challenger/auditor.py``), in three parts:
 
 * **The store** (`write_store`, ``write``): interface 1's public weights stream under `DEMO_SEED`, generated once on
   the auditor's store disk as ``<shape>.bin`` with its record ``<shape>.json``, kept only when its tensors' SHA-256
@@ -97,10 +97,10 @@ from verity.commitments.hm96 import batch as HB  # noqa: E402
 from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.commitments.crypto import chacha20  # noqa: E402
-from verity.protocols.certifier.verifier import transfer_rows as TR  # noqa: E402
-from verity.protocols.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
-from verity.protocols.pous.verifier.schemes import p2 as P2  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import transfer_rows as TR  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
+from verity.protocols.accounting.pous.verifier.schemes import p2 as P2  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"
 LINK, KIND, WINDOW = "s0/uplink", "load", 0
