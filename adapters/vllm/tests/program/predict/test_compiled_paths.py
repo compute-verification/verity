@@ -59,9 +59,9 @@ def test_the_command_opens_the_build_it_compares_with_by_the_name_given(tmp_path
         PC.main(replace(a, compare=name + "/"))
 
 
-def test_the_pin_command_opens_its_build_and_its_moe_record_by_the_names_given(tmp_path, monkeypatch):
-    """`predict compiled-pin` reads ``--build`` and ``--moe`` through `open`: the empty name of a Build is `open`'s error, a
-    fused-MoE record's name in bytes is read, and that name with a slash after it is `open`'s error before any pin is made."""
+def _pin_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[PC.PinOptions, list[Any]]:
+    """`predict compiled-pin`'s options over a Build and its ``routes.json`` in ``tmp_path``, and the list that takes the
+    fused-MoE record each call hands `pin_of`, which is stood in: it reads the Inductor dir of a serving process."""
     seen: list[Any] = []
 
     def pin_of(build: dict, inductor_dir: str, moe: Any, **kw: Any) -> dict[str, Any]:
@@ -71,10 +71,22 @@ def test_the_pin_command_opens_its_build_and_its_moe_record_by_the_names_given(t
     monkeypatch.setattr(PC, "pin_of", pin_of)
     build = _written(tmp_path / "build.json", {"program": {}})
     _written(tmp_path / "routes.json", {"device": RTX})
-    moe = _written(tmp_path / "moe.json", {"moe": 1})
-    a = PC.PinOptions(build=build, inductor_dir="inductor", role="R", evidence="r0", out=str(tmp_path / "pin.json"))
+    return PC.PinOptions(build=build, inductor_dir="inductor", role="R", evidence="r0", out=str(tmp_path / "pin.json")), seen
+
+
+def test_the_pin_command_opens_its_build_by_the_name_given(tmp_path, monkeypatch):
+    """`predict compiled-pin` reads ``--build`` through `open`: the empty name is `open`'s error, and no pin is made."""
+    a, seen = _pin_command(tmp_path, monkeypatch)
     with pytest.raises(FileNotFoundError):
         PC.main(replace(a, build=""))
+    assert PC.main(a) == 0 and seen == [None]
+
+
+def test_the_pin_command_opens_its_moe_record_by_the_name_given(tmp_path, monkeypatch):
+    """`predict compiled-pin` reads ``--moe`` through `open`: the fused-MoE record's name in bytes is read, and that name with a
+    slash after it is `open`'s error before any pin is made."""
+    a, seen = _pin_command(tmp_path, monkeypatch)
+    moe = _written(tmp_path / "moe.json", {"moe": 1})
     in_bytes: Any = os.fsencode(moe)
     assert PC.main(replace(a, moe=in_bytes)) == 0 and seen == [{"moe": 1}]
     with pytest.raises(NotADirectoryError):
