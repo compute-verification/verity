@@ -146929,3 +146929,32 @@ The three lemmas of order F are now checked where it counts: on a node, in the j
 - The whole Lean check on the branch: only the one file's try ran, and the orphan rule would fail until the root line is in.
 
 **Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `b7abdd8e8478` (off the join at `4e986e339ad2`); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
+
+## FIXEDCOST, Fri 13 Nov 14:51Z: before the launch: the four checks pass (tree `774b31eca17c…`, the row still ours, 1,982.8 GB free on node A, no `LATE`); I launch at about 15:33Z with `--mem-wait 300` as today's order says, though your Thursday 22:05Z decision set 120: say so if 120 is what you want
+
+Nothing is launched yet. Nothing here runs on the served engine. Sources: [run] a command I ran, with its time; [read] the place.
+
+**Two things that differ from your order's wording; neither stops the launch**
+
+- **The memory wait.** Your Thursday 22:05Z decision 1 was "`MEM_WAIT_S` = 120, not 300 … My 300 is withdrawn", and the kit's default has been 120 since. Today's order says "300 stands". I follow today's: I pass `MEM_WAIT_S=300` in the launch line's environment, and no kit file changes. [read: both messages; `pair/launch-pair.sh`]
+  - With memory free at the launch there is no wait, and 120 and 300 give the same run.
+  - If the launch does wait, at 300 the run tool's kill can fall as late as 16:18:00Z, three minutes past the row's end. The lease's end does not move: 16:11Z to 16:12Z. [run: the dry run]
+- **The kit is Thursday 22:27Z's, not the 21:30Z entry's bytes.** It is the one your 22:05Z decision 2 asked for: no issue id in a printed line, the lease named `proofs-one-prover`. It passed its rehearsal as `r20261112-222952-8a64`. The launch line is the 21:30Z entry's, with `MEM_WAIT_S=300` in front. [run: `sha256sum -c` on both checksum files at 14:48Z, every file OK; `pair/pair.sha256` `30e456c239db…`, `four/kit.sha256` `1bd576dc134e…`, as in the notes' `friday-launch.md`]
+
+**The four checks**
+
+1. **Clock, VM, tree.** [run, 14:46Z to 14:48Z]
+   - `date -u`: Fri 13 Nov 14:46:40Z. The VM is new (up since 14:45:20Z).
+   - The pen: this VM has no `~/wt`, and nothing in my earlier turns, my mailbox or the tree names a pen, so I took none. I work from `/agent/repos/verity`, on `main`, clean, and commit nothing there.
+   - The notes are fetched. `scratch-tree.sh` printed `tree 774b31eca17c1495fd4451f615540a44ab305ed2` and `commit ba470f98b8bc8bced82cdcddf29ed654d82d9179`. The checkout at `/tmp/fx/src-c6ca-slot` is clean, on no branch, and its archive's SHA-256 is `342949a9b5f0…`, the rehearsals'.
+2. **The calendar.** [read: `calendars/node-a.md` at the notes' commit `c40bb63098`, 14:42Z]
+   - The row 15:45Z to 16:15Z on card 7, cores 48-71 and 82-95, is proofs' and unchanged.
+   - No other row names card 7 or cores 82-91 in the half hour. The others in it: kernels on card 2 (cores 24-33), card 3 (34-43) and card 6 (72-81, "times nothing before 16:15Z"); circuits on cards 0 and 1 (cores 0-19).
+   - vllm's row on all cards and cores ends at 15:45Z.
+3. **Memory.** `research mem` on node A, read only, no lock, at 14:49:38Z: available 1,982.8 GB = limit 2,013 − in use 30.2 − reserved 0, no live reservation. [run]
+4. **The dry run**, at 14:49:51Z: exit 0, no `LATE`, no `REFUSED`. `--on vy-spot-glm53 --mem-gb 100 --mem-wait 300`, card 7, cores 82-91, the fetch at 15:46:00Z, the kill at 16:13:00Z. [run]
+
+**What I do next**
+
+- At about 15:30Z I read the calendar, the memory and the dry run again, then launch at about 15:33Z. Late, not now, because the node is vllm's until 15:45Z: until the fetch the job is one sleeping shell on core 91 and a 100 GB reservation.
+- I do not launch if the calendar shows another's row on card 7 or cores 82-91, the dry run prints `LATE`, or it is past 15:39Z.
