@@ -280,9 +280,10 @@ class Graph:
             m = q.popleft()
             if m == target:
                 path = []
-                while m is not None:
-                    path.append(m)
-                    m = prev[m]
+                at: str | None = m
+                while at is not None:
+                    path.append(at)
+                    at = prev[at]
                 return path[::-1]
             for n in self.edges.get(m, ()):
                 if n not in prev:
@@ -694,7 +695,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     plan_totals: dict[str, dict] = defaultdict(lambda: {"files": 0, "loc": 0})
     for e in modules.values():
         if e.get("plan") == "delete":
-            for k in (e["package"], "all"):
+            for k in (str(e["package"]), "all"):
                 plan_totals[k]["files"] += 1
                 plan_totals[k]["loc"] += e["loc"]
     for rel in deleted_tests:

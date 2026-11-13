@@ -9,15 +9,14 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.circuits.boolean import trace as TR
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
@@ -161,7 +160,7 @@ def _program(*fns) -> Program:
 def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
     """A partial block's padded keys and values, and the first block's zero state, are the zero bit broadcast: a head's description
     does not grow with its padding, as a word head's does not.  It is the circuit an explicit zero word per padded word writes."""
-    from verity_vllm.program.descriptor_equivalence import compare
+    from tests.program.descriptor_equivalence import compare
     heads = {T: bind(BAt.AttentionHeadV8, T=T, D=16, BN=16, MASKED_FROM=0, **FA2_CHECK) for T in (17, 31)}
     size = {T: len(codec.canonical_json(codec.definition_entry(h))) for T, h in heads.items()}
     assert abs(size[17] - size[31]) < 16, size
