@@ -15,11 +15,11 @@ import torch
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.definitions.circuits.census import step_of
+from verity.circuits.census import step_of
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, concat
-from verity.definitions.circuits.requirement import from_census
+from verity.circuits.requirement import from_census
 from verity.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program import prune as P

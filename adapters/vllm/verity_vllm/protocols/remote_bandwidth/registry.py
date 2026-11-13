@@ -49,7 +49,7 @@ import numpy as np
 from verity.protocols.poub.verifier import receipts as rb
 from verity.protocols.poub.verifier.receipts import PER_LEAF, Plan
 from verity.protocols.poub.verifier.store import store_salt
-from verity.definitions.circuits import requirement
+from verity.circuits import requirement
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, ChainHead, Codec, Counters,

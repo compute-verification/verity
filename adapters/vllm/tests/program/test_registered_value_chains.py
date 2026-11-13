@@ -11,7 +11,7 @@ import pytest
 
 from verity.circuits.evaluation import evaluate
 from verity.circuits.codec import encode_program, program_digest
-from verity.definitions.circuits.constants import program_data
+from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.definitions.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, hopper

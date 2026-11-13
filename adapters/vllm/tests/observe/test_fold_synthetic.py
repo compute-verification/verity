@@ -482,7 +482,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
 
-    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs, program_data
+    from verity.circuits.constants import REGISTRATION, RUN, inputs, program_data
     from verity.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)

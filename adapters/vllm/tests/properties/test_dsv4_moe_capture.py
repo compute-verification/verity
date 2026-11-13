@@ -11,7 +11,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.circuits import library
+from verity.circuits import library
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops import mufu as MU

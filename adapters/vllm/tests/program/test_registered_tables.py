@@ -9,7 +9,7 @@ import pytest
 
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.codec import encode_program, program_digest
-from verity.definitions.circuits.constants import REGISTRATION, inputs
+from verity.circuits.constants import REGISTRATION, inputs
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value

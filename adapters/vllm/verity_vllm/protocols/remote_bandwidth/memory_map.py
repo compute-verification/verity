@@ -73,7 +73,7 @@ import numpy as np
 
 from verity.protocols.poub.verifier import audit, codec
 from verity.protocols.poub.verifier.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
-from verity.definitions.circuits import requirement
+from verity.circuits import requirement
 
 LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)
 """The lifetime cap a map keeps without the session's, in windows: the audit's at its stated window under deferred

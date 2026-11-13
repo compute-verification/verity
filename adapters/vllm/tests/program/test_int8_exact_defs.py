@@ -270,7 +270,7 @@ def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
     """`Exp2Lut127_v2` reads LUT[t] from the registered `exp2_lut127` (`TableRead8x2_v1` at the byte zero-extended, the 16-bit index
     the Lean evaluator decodes for every read of at most 16 index bits): every byte gives v1's word.
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
-    from verity.definitions.circuits import operations as O
+    from verity.circuits import operations as O
     from verity.circuits.program import Program
     from verity.definitions.registry import tables as T
 

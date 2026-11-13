@@ -22,7 +22,7 @@ import pytest
 
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.definitions.circuits import operations as O
+from verity.circuits import operations as O
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
