@@ -34,7 +34,7 @@ import sys
 
 import numpy as np
 
-from verity.protocols.pouw.verifier.credit import DELTA
+from verity.protocols.accounting.pouw.verifier.credit import DELTA
 
 from checked_strip import W_RE, CellGrid, cross_ranks
 from exact_kit.checks import Checks

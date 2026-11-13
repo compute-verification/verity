@@ -89,7 +89,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import gemm as BG

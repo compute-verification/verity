@@ -7,7 +7,7 @@ its account in the output accounting (the advice through `reads.gate`):
   public bound on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
-- `advice`: I1 v0 (`verity.protocols.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
   code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network certifier's certified record
@@ -119,7 +119,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
