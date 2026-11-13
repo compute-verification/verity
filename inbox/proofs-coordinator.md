@@ -161206,3 +161206,117 @@ Your 21:18Z (`1c9fdfcafc4c`) read.
 - #9820's quick tier: no verdict yet.
 - That the split's suites pass.
 - That no record's text moves: the two records runs have not ended.
+
+## MESSAGES, Fri 13 Nov 21:35Z: checkpoint: `filesAt` by position: yes, but only with `memberAt` by position beside it, or `pinHeldAt` does not ask the tie; step 4's `StmtsRound.lean` compiles on a node (rc 0); the bound's assembly `FormRounds.lean` is written, and compiles on a node too (rc 0, first try); the identity rule is read and item 4 is clean
+
+**In plain words.** Your question first. Reading a session's files by position costs about eight lines and changes
+no statement of mine or of `SessionReplay.lean`. But it does not do what ASSEMBLY's last sentence says. The session's
+statement takes everything but its sample from the member, and the member is still picked by circuit, so `pinHeldAt`
+cannot see which session was picked. The tie only moves into the clause that says the check verified that session
+at that statement. Reading the member by position too, about six more lines, makes ASSEMBLY's sentence true. On my
+own work: the statements' round compiles, and the bound over every round of the form's reading is written as one
+file, with the first and last messages of a session taken from two named hypotheses.
+
+**1. Your 21:21Z: the tie, read only** [read at my word line `8ce0572d902` and, for which file names what, at the
+join's tip `86874e0e5314`; nothing changed, nothing compiled]
+
+1. **Yes, and it leaves every statement as it is.** By position, `filesAt p e t` is the `t`-th of
+   `e.statements.toList.flatMap (·.sessions.toList)`, the list `sessionRecords` and my `evidenceAt` read.
+   - Lines touched: about 8, all in `SessionMsgs.lean`: the body (lines 59 to 63), its docstring and the header's
+     two lines. No statement changes: `stmtAtCase_some` (line 218) names `filesAt p e t = some s` and unfolds only
+     `stmtAtCase`.
+   - `SessionReplay.lean` names none of `filesAt`, `memberAt` and `stmtAtCase`. Its two theorems take
+     `msgsAtCase k t = some ms` as a hypothesis (lines 97 and 160) and do not unfold it.
+   - Steps 2, 3 and 4 are over any `S : SessionReading` and read the records through `sessionRecords`. None names
+     `filesAt`.
+   - At the join's tip `filesAt` is named in `SessionMsgs.lean` alone (lines 15, 59, 87, 118, 218). HELDOF's and
+     ACCEPTS's lines: not known, I have not read them; known within 30 minutes of their heads being named to me.
+2. **Half of it holds by unfolding, and what is left is not what `pinHeldAt` asks.**
+   - `RecordsCover`: that every session's record reads is already a theorem of an accepted play under `HeldSize`
+     (`sessionRecords_of` with `named_records`, as `logCloses_of` uses them). What is left is the count: at least
+     one session a template. By position, `filesAt p e t = some s` says exactly that there is a `t`-th. It is `some`
+     wherever `stmtAtCase k t` is, so the count follows from `StmtsRead` (the reading has a statements' message) and
+     `StmtsCount` (one statement a template). Not by unfolding alone, but from two hypotheses already named.
+   - The order part of `MsgsOfRecords` (the `t`-th record the check read is the parse of the text `msgsAtCase` reads
+     template `t`'s messages from): yes, by unfolding, with two small lemmas. `Verity.Sampled.recordOn` and
+     `recordAt` read one blob under two labels, and `Blobs.get`'s label enters only its error text. `recordOn` gives
+     `null` for a text that does not parse, and `FlockDeploy.liveOf` refuses such a text, so where the session has
+     messages the text parses.
+   - What is left: `MsgsOfRecords`'s other clauses, above all that Flock's masked verdict accepts the record at the
+     statement `stmtAtCase k t`. The check verified the `t`-th session at the statement of the member its own
+     statement names (`heldStep`: `ms.find? (·.name == name)`). `stmtAtCase k t` is the statement of `memberAt p t`,
+     the first member whose circuit is template `t`'s, with only the sample taken from the session's record. The two
+     are one statement only if the `t`-th statement names that member: ASSEMBLY's facts three and four, moved, not
+     removed.
+   - `pinHeldAt` does not ask it. `pinOk` (`SpotFlock/Code.lean:814`) compares every field but the sample, the
+     registered reads and the public file. With `memberAt` by circuit, those fields of `stmtAtCase k t` are the
+     member's whichever session `filesAt` picks, so `PinHeldAt` holds or fails the same for any session.
+   - **With `memberAt` by position too** (the member the `t`-th session's statement names, looked up as `heldStep`
+     looks it up), `stmtAtCase k t` is by its definition the statement the check verified the `t`-th session at.
+     Then the verdict clause is the per-member step's own fact, and `PinHeldAt` at the join's reading says that this
+     member's circuit, tables, program and partition are template `t`'s. That is ASSEMBLY's sentence, made true:
+     facts one, two and four are not needed, and fact three is what `PinHeldAt` asks, as the fields' equality.
+     About 6 more lines of `SessionMsgs.lean`: `memberAt` (line 55), its call (line 86) and its argument in
+     `stmtAtCase_some`'s statement (line 218), a theorem no other file names at the join's tip.
+3. **If no** (the names kept): facts one and two I could prove from `heldStep`'s refusals, a file of about 150
+   lines beside `membersHeld_find`. Facts three and four I would take as hypotheses: three is a fact of the run's
+   accept and four no check makes. I do not recommend it.
+4. **I recommend position for both `filesAt` and `memberAt`.** The day: Sat 14 Nov, counted from your word, for the
+   two definitions, `RecordsCover` from `StmtsRead`, `StmtsCount` and `HeldSize`, and the record clause of
+   `MsgsOfRecords`; about 150 lines and three tries. The verdict clause of `MsgsOfRecords` at `stmtAtCase k t`: not
+   known. I have not read `MemberChecks.lean`; I say in my next entry what it gives. I change nothing of `filesAt`
+   or `memberAt` before your word.
+
+**2. Step 4's tries** [run, on a node]
+
+| File | Run | Lean | Theorems | Axioms | Siblings |
+| --- | --- | --- | --- | --- | --- |
+| `StmtsRound.lean` | `r20261113-205655-1cb3`, `done 0 SUCCESS` | "lean exit 0 in 516 s" | 13 | the three only | no clash |
+| `FormRounds.lean` | `r20261113-212402-769f`, `done 0 SUCCESS` | "lean exit 0 in 568 s" | 14 | the three only | no clash |
+
+- [git] The word line's head: `8ce0572d902` on `cursor/proofs-messages-word-745c` (`StmtsRound.lean` is
+  `915575010e5`, `FormRounds.lean` is `8ce0572d902`). The tries build the scratch branch
+  `cursor/proofs-messages-wordtry-745c` (`8c5101dd912`): the word line and the mend's five files. Nobody should carry
+  or merge it.
+- [run, local] The tree's eleven lint files at the word line's head: "71 passed" and "64 passed".
+
+**3. What `FormRounds.lean` states** [written; compiled on a node, the run of section 2]
+
+- `reached_form`: `Messages.MessagesReached` at the form's reading, at the frame of the run's locator
+  (`Messages.frameLog`), with the miss term `Messages.missLog`. It is `Messages.reachedLog` with one pair of
+  functions for all rounds (`formDg`, `formRaw`), which pick each round's digests and strings by the round's case
+  (`byRound`, `round_cases`).
+- `showsAt_form`, `explainsOr_form`: `ShowsAt` and `ExplainsOr` at every round, each case one of the per-round
+  theorems of steps 1 to 4.
+- Its hypotheses, all named: `SecondShown`, `StageDraws`, `HeldSize`, `InteriorLogged`, `StmtsRead`, one `θ` on
+  every accepted play, `LogRising`, `RecordsCover`, `MsgsOfRecords`, `SessionMsgsAsk`, `StmtsFixed`, and two new
+  ones, `LinkFixed` and `LastFixed`.
+- `LinkFixed`: a session's first message is fixed by the bytes its link points are opened after and the log before
+  the round, or two blobs collide. Not shown. It needs that the statement fixes each `root_B`'s length and that a
+  circuit statement has no public words; I found no lemma for either.
+- `LastFixed`: a session's last message is fixed by the session's evidence and the log before the round, or two
+  blobs collide. Not shown. It needs the evidence read back to its files, the statement fixed, and the tie of
+  section 1. With both definitions by position the tie's part of it goes.
+- It gives `MessagesReached`, not `MessagesFixed`: `RunsThrough` is not in it.
+
+**4. Your 21:02Z, the identity rule (INF-798): read.** Item 4: no commit of mine is unpushed under another name.
+Every commit I pushed since, on the word line, the scratch branch and this inbox, has author and committer
+`Cursor Agent <cursoragent@cursor.com>`, my checkout's own. I export no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` and do
+not use `mkpass.py`.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock record. One more module name is in the roots
+lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (`FormRounds`).
+
+## NEEDS
+
+- Your word on section 1: position for `filesAt` and `memberAt`, or the names kept.
+- When the word line is next carried, it needs the mend below it to build; it is not on the line.
+
+## Not established
+
+- `RecordsCover`, `MsgsOfRecords`, `StmtsFixed`, `LinkFixed`, `LastFixed`: hypotheses, not theorems.
+- Section 1 is a reading. I compiled nothing for it, and I did not read HELDOF's, ACCEPTS's or MEMBERS's lines.
+- `MessagesFixed` at the form's reading: `reached_form` stops at `MessagesReached`.
+- A build of the word line's own head: the tries build the scratch branch, which differs by the mend's five files.
