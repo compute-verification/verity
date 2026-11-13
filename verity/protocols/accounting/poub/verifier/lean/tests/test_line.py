@@ -19,9 +19,9 @@ from fractions import Fraction
 
 import pytest
 import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
+import verity_difftest as D
 from verity.protocols.accounting.poub.verifier import audit, line, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

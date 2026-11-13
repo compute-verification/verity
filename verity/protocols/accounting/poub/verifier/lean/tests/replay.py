@@ -53,8 +53,8 @@ import sys
 from pathlib import Path
 
 import ra_cases as M
-import verity_difftest as D
 
+import verity_difftest as D
 from verity.protocols.accounting.poub.verifier import audit, coins, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)

@@ -16,9 +16,9 @@ import shutil
 
 import pytest
 import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
+import verity_difftest as D
 from verity.commitments import (
     Commitment,
     CommitmentDomain,

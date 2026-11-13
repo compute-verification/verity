@@ -19,10 +19,10 @@ from pathlib import Path
 
 import pytest
 import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 from ra_cases import Entropy
 
+import verity_difftest as D
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.accounting.poub.verifier.codec import (
     P2_EXPANDER,
