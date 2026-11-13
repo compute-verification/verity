@@ -3,7 +3,7 @@ SPOT's two-stage form (`verity/sampled-proofs/v1`, params and evidence `{"form":
 registration sampled once on the challenger's coins (the first stage, its replay blocks), the interior registration
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
-run of record over both stages (`Spot.Run.run`), whose round 2 holds the sessions' statements to the verdicts. It
+run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
 refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
 refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
 
@@ -28,7 +28,7 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
   per-member form (`OneStageZk.membersEvidenceOf`), whose sessions, statement, proved units, instances, served units,
   session roots and coins are the second stage's; the interior registration's record; and the second-stage sessions'
-  statements round 2 checks.
+  statements the second-stage statement check reads.
 * **check** (`checkBlobsAt`), in order:
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
@@ -36,12 +36,14 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      public structure, each session's coins one tree of the interior's challenger session, closed after its
      evidence, the trees opened in order, the members laid over the registration, each session verified on its
      member's files); every session must accept;
-  3. each verdict stamped with what round 2 reads of it, as `flock-verify verify` writes it and the stream's driver
-     hands it on (`stamped`): the delivered sessions, the session's public header's and registered reads' digests, its
-     sample and one table;
+  3. each verdict stamped with what the second-stage statement check reads of it, as `flock-verify verify` writes it
+     and the stream's driver hands it on (`stamped`): the delivered sessions, the session's public header's and
+     registered reads' digests, its sample and one table;
+     neither stage's bytes run past one coin's (`stagesFit`, `STAGE_PAST`): the first stage's bytes are read as one
+     coin's first bytes and the second stage's as its coins' in order, so bytes past a coin's are none of theirs;
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
-     sample at the boundary's session roots, and the interior audit over the second sample with round 2's statement
-     check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
+     sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
+     statement check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
      `INTERIOR_SHOWN`);
@@ -68,8 +70,8 @@ open Spot
 
 def TWO_STAGE : String := "two-stage"
 
-/-- **The switch**: the two-stage form accepts only where `Spot.SecondStage.FORM` lets round 2 accept, so one change
-flips both. -/
+/-- **The switch**: the two-stage form accepts only where `Spot.SecondStage.FORM` lets the second-stage statement check
+accept, so one change flips both. -/
 def FORM : Bool := SecondStage.FORM
 
 theorem form_off : FORM = false := rfl
@@ -200,10 +202,10 @@ def rootsSplit (boundary : Json) (roots : Option Json) : Json × Json :=
     let (mine, rest) := (entries r).partition fun (p, _) => ports.contains p
     (if mine.isEmpty then .null else Json.mkObj mine.toList, Json.mkObj rest.toList)
 
-/-- **Each verdict as round 2 reads it** (check, 3): the verdicts in session order with the delivered sessions, and
-what `flock-verify verify` names of the session it checked: its public file's header's digest, its registered reads'
-(where its member reads any), its sample and one table. A refusal where a member's public file, a session's record or a
-header is not on the blobs or not readable. -/
+/-- **Each verdict as the second-stage statement check reads it** (check, 3): the verdicts in session order with the
+delivered sessions, and what `flock-verify verify` names of the session it checked: its public file's header's digest,
+its registered reads' (where its member reads any), its sample and one table. A refusal where a member's public file, a
+session's record or a header is not on the blobs or not readable. -/
 def stamped (p : Params) (e : Evidence) (bs : Core.Blobs) (out : Array (String × Json)) :
     V (Array (String × Json)) := do
   let named := e.statements.flatMap fun st => st.sessions.map fun s => (st.member.getD "", s)
@@ -269,12 +271,26 @@ def sourceRead (ξ : ByteArray) (run : Json) : V Unit :=
   | some read => if read < ξ.size then .error SOURCE_READ else .ok ()
   | none => .ok ()
 
+/-- One coin's bytes: 65,536 elements of 16 bytes. -/
+def STAGE_BYTES : Nat := 65536 * 16
+
+def STAGE_PAST (stage : String) : String :=
+  s!"the {stage} stage's bytes run past one coin's {STAGE_BYTES} bytes: a stage's sample reads one coin's bytes"
+
+/-- **Neither stage's bytes run past one coin's** (check, 3): the first stage's bytes `ξ` and the second stage's `ξ₂`
+are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes draws fresh ones, and the coins'
+check takes a read over any number of whole coins, so nothing else bounds them. -/
+def stagesFit (ξ ξ₂ : ByteArray) : V Unit :=
+  if STAGE_BYTES < ξ.size then .error (STAGE_PAST "first")
+  else if STAGE_BYTES < ξ₂.size then .error (STAGE_PAST "second")
+  else .ok ()
+
 def INTERIOR_SHOWN : String :=
   "on two windows the first session's log shows coins of the interior's family released after the interior " ++
     "registration's digest: the second stage's coins are its own session's alone"
 
-/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released after
-`after`. -/
+/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released
+after `after`. -/
 def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray) : Bool :=
   (((roots.find? (·.1 == label)).map (·.2)).getD []).contains after
 
@@ -294,12 +310,13 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
-/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its round 2 at the
-switch `form`, its first stage having read every byte of `ξ`, the first session releasing none of the second stage's
-coins. -/
+/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
+statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
+`ξ`, the first session releasing none of the second stage's coins. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
+  stagesFit ξ ξ₂
   let run ← Spot.Run.run i form
   sourceRead ξ run
   interiorUnshown p e
@@ -402,6 +419,14 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("read", Lean.toJson (2 : Nat))])).toOption.isSome
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("step", "select")])).toOption.isSome
+#guard (stagesFit (ByteArray.mk (Array.replicate STAGE_BYTES 0))
+  (ByteArray.mk (Array.replicate STAGE_BYTES 0))).toOption.isSome
+#guard match stagesFit (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) ByteArray.empty with
+  | .error why => why == STAGE_PAST "first"
+  | .ok _ => false
+#guard match stagesFit ByteArray.empty (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) with
+  | .error why => why == STAGE_PAST "second"
+  | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
 #guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])

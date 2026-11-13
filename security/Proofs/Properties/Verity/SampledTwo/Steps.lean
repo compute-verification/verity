@@ -12,6 +12,8 @@ accepts at the switch `form` (`accepted_steps`):
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`);
+* neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
+  by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
   run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`), and on two windows the
   first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
@@ -89,12 +91,42 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     subst hf
     unfold prepare at hp
     obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
+    obtain ⟨u₀, -, hp⟩ := bind_ok hp
     obtain ⟨run', hr, hp⟩ := bind_ok hp
     obtain ⟨u, hs, hp⟩ := bind_ok hp
     obtain ⟨u', hu, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
     exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
+
+/-- **Neither stage's bytes run past one coin's**, where `stagesFit` passed. -/
+theorem stagesFit_le {ξ ξ₂ : ByteArray} {u : Unit} (h : stagesFit ξ ξ₂ = .ok u) :
+    ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES := by
+  unfold stagesFit at h
+  by_cases h1 : STAGE_BYTES < ξ.size
+  · simp [h1] at h
+  · by_cases h2 : STAGE_BYTES < ξ₂.size
+    · simp [h1, h2] at h
+    · omega
+
+/-- **An accepted two-stage check's stages each read at most one coin's bytes**: the first stage's bytes `ξ` and the
+bytes `ξ₂` the interior audit's sample read (`inputAt`'s) are each at most `STAGE_BYTES` long. -/
+theorem accepted_fits {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) {c₂ : OneStage.Commitment} {ξ₂ : ByteArray}
+    {r : OneStageZk.Run} {i : Spot.Run.Input} (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
+    ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨c₂', ξ₂', r', i'⟩, hi', hp⟩ := bind_ok hp
+    obtain ⟨u, hfit, -⟩ := bind_ok hp
+    rw [hi] at hi'
+    simp only [Except.ok.injEq, Prod.mk.injEq] at hi'
+    obtain ⟨-, rfl, -, -⟩ := hi'
+    exact stagesFit_le hfit
 
 /-- **The evidence's first-stage bytes are no more than the run read**, where the run reports what it read and
 `sourceRead` passed. -/
