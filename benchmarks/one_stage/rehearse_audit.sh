@@ -28,11 +28,15 @@
 #                         by no reclaim, stays counted). Read every 5 s beside the disk; where no level has a limit
 #                         this stop reads nothing. At each stage's start one line says the scope's `max` events (the
 #                         times it reached its limit), what its processes and its file cache hold, and MemAvailable
-#   MEM_STOP_GB           default 650 (GB of 10^9 bytes): the second reading, and a stop of its own. The job ends (exit
+#   MEM_STOP_GB           (GB of 10^9 bytes): the second reading, the node's, and a stop of its own. The job ends (exit
 #                         72) once the node's MemAvailable, read every 5 s, is more than that under its value at this
-#                         script's start; rehearsal.json then holds the stage, the sampled member's circuit file's
-#                         bytes and the reason (which of the two stops), and on every way out the lowest value seen
-#                         and the stage it was seen in
+#                         script's start. Default: the memory scope's limit less MEM_ROOM_GB, the taking the first
+#                         reading stops at, so it is under the limit by that room; 650 where no level has a limit. A
+#                         value set at or over the scope's limit is refused (exit 64): the limit would end the job
+#                         before that reading could. The stop's message, in the job's output and in rehearsal.json's
+#                         stop_reason, names which reading stopped the job, the scope's or the node's, with both
+#                         readings as they were then; rehearsal.json also holds the stage and the sampled member's
+#                         circuit file's bytes, and on every way out MemAvailable's lowest value and its stage
 #   MEMINFO               default /proc/meminfo: the file MemAvailable is read from (a test names its own)
 #   CGROUP                default the job's own cgroup (v2), from /proc/self/cgroup: the directory the memory scope
 #                         is looked for from (a test names its own)
@@ -73,7 +77,7 @@ set -uo pipefail
 K=${K:-0} CLASS=${V3C_CLASS:-8,32,4,4,16} LAW=${V3C_LAW:-subset:1}
 WORKERS=${V3C_NEGATIVE_WORKERS:-7} MEM_GB=${AUDIT_MEM_GB:-650} JOB_S=${JOB_SECONDS:-12600}
 MIN_FREE_GB=${MIN_FREE_GB:-600} FLOOR_GB=${FLOOR_GB:-15}
-MEM_STOP_GB=${MEM_STOP_GB:-650} MEMINFO=${MEMINFO:-/proc/meminfo} MEM_ROOM_GB=${MEM_ROOM_GB:-32}
+MEM_STOP_SET=${MEM_STOP_GB:-} MEMINFO=${MEMINFO:-/proc/meminfo} MEM_ROOM_GB=${MEM_ROOM_GB:-32}
 # the table: a member of TABLE_BYTES took TABLE_MEMBER_S s in its session, its Lean check and the registered reads' four
 # checks at once; the outcome and the negatives' workers take TABLE_WORKERS_S whatever the member: the outcome, then the
 # negatives' twelve tasks in one wave, as six workers took them. The table has that stage at six workers alone: five
@@ -140,8 +144,17 @@ SENT=''
 step "a rehearsal on a local development session: no audit of record, no verdict of a record$SENT"
 [[ $WORKERS =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: V3C_NEGATIVE_WORKERS is a positive integer"; exit 64; }
 [[ $JOB_S =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: JOB_SECONDS is a positive integer"; exit 64; }
-[[ $MEM_STOP_GB =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: MEM_STOP_GB is a positive integer"; exit 64; }
 [[ $MEM_ROOM_GB =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: MEM_ROOM_GB is a positive integer"; exit 64; }
+[ -z "$MEM_STOP_SET" ] || [[ $MEM_STOP_SET =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: MEM_STOP_GB is a positive integer"; exit 64; }
+# the node's reading stops the job under the scope's limit: at the first reading's taking where unset, and never set over it
+LIMIT0=$(limit)
+if [[ $LIMIT0 =~ ^[0-9]+$ ]]; then
+  [ $((LIMIT0 / 1000000000)) -gt "$MEM_ROOM_GB" ] || { step "PREFLIGHT: MEM_ROOM_GB $MEM_ROOM_GB leaves nothing under the memory scope's limit $(bgb "$LIMIT0"): set it under the limit"; exit 64; }
+  MEM_STOP_GB=${MEM_STOP_SET:-$((LIMIT0 / 1000000000 - MEM_ROOM_GB))}
+  [ $((MEM_STOP_GB * 1000000000)) -lt "$LIMIT0" ] || { step "PREFLIGHT: MEM_STOP_GB $MEM_STOP_GB is not under the memory scope's limit $(bgb "$LIMIT0"), which would end the job before the node's reading could stop it: leave MEM_STOP_GB unset (it is then the limit less MEM_ROOM_GB, $((LIMIT0 / 1000000000 - MEM_ROOM_GB))) or set it under the limit"; exit 64; }
+else
+  MEM_STOP_GB=${MEM_STOP_SET:-650}
+fi
 [[ $MEM0_KB =~ ^[0-9]+$ ]] || { step "PREFLIGHT: no MemAvailable line in ${MEMINFO##*/}"; exit 64; }
 MEM_STOP_KB=$((MEM_STOP_GB * 1000000000 / 1024))
 [ -z "${WARM_JOBS:-}" ] || [[ $WARM_JOBS =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: WARM_JOBS is a positive integer"; exit 64; }
@@ -203,7 +216,7 @@ if [ -n "$SCOPE0" ]; then
 else
   step "memory stop: no level of the job's cgroup has a memory limit, so the stop on the scope's processes reads nothing"
 fi
-step "memory stop, the second reading: MemAvailable is $(gb "$MEM0_KB") GB now; the job ends (exit 72) once it is more than $MEM_STOP_GB GB under that$([ "$MEM0_KB" -gt "$MEM_STOP_KB" ] || echo ', which it cannot be: less than that is available now')"
+step "memory stop, the second reading (the node's): MemAvailable is $(gb "$MEM0_KB") GB now; the job ends (exit 72) once it is more than $MEM_STOP_GB GB under that ($([ -n "$MEM_STOP_SET" ] && echo 'MEM_STOP_GB as set' || { [ -n "$SCOPE0" ] && echo "the scope's limit less MEM_ROOM_GB $MEM_ROOM_GB" || echo 'the default where no level has a limit'; }))$([ "$MEM0_KB" -gt "$MEM_STOP_KB" ] || echo ', which it cannot be: less than that is available now')"
 
 WORK=$(mktemp -d "$WORK_PARENT/rehearse-audit.XXXXXXXX") || exit 70
 CHILD='' WATCH='' PEAK_GB=0 warm=() warn=() COPY=ok ANSWER=ok
@@ -231,7 +244,7 @@ gone() {
 }
 stop() {  # told to stop, or the disk or the memory ran low: the command in flight first, then out by the EXIT trap
   if [ -n "$CHILD" ]; then kill -TERM "$CHILD" 2>/dev/null; wait "$CHILD" 2>/dev/null; fi
-  step "stopping: exit $1"
+  step "stopping: exit $1$([ ! -s "$WORK/.stop" ] || echo ": $(cat "$WORK/.stop")")"
   [ ! -x "$PY" ] || read_out "${warm[@]}" --stopped "$1"
   exit "$1"
 }
@@ -269,11 +282,22 @@ printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
      printf "REHEARSAL +%ss %s: the memory scope's max events %s, %s at the job's start; its processes hold %s, its file cache %s, of its limit %s; MemAvailable %s GB\n" \
        "$(($(date +%s) - T0))" "$s" "$(maxed "${sd:-$CG}")" "$MAXED0" "$(bgb "$h")" "$(bgb "$(stat_of "${sd:-$CG}" file)")" "$(bgb "$(limit)")" "$([[ $m =~ ^[0-9]+$ ]] && gb "$m" || echo unread)"
    fi
+   # both readings as they are now: whichever stops the job, its message holds the two
+   l=$([ -n "$sd" ] && cat "$sd/memory.max" 2>/dev/null)
+   if [[ $h =~ ^[0-9]+$ ]] && [[ $l =~ ^[0-9]+$ ]]; then
+     scope_now="the memory scope's processes hold $(bgb "$h") of its limit $(bgb "$l"), and stop the job over the limit less MEM_ROOM_GB $MEM_ROOM_GB"
+   else
+     scope_now="the memory scope's processes hold $(bgb "$h"), and $([ -n "$sd" ] && echo 'its limit is unread' || echo 'no level of the cgroup has a limit'), so that reading stops nothing"
+   fi
+   if [[ $m =~ ^[0-9]+$ ]]; then
+     node_now="MemAvailable is $(gb "$m") GB, $(gb $((MEM0_KB - m))) GB under the $(gb "$MEM0_KB") GB at the start, and stops the job more than MEM_STOP_GB $MEM_STOP_GB under it"
+   else
+     node_now="MemAvailable is unread"
+   fi
    if [[ $h =~ ^[0-9]+$ ]]; then
      if [ "$h" -gt "$most" ]; then most=$h; printf '%s\t%s\n' "$h" "$s" > "$WORK/.held.new" && mv -f "$WORK/.held.new" "$WORK/.held"; fi
-     l=$([ -n "$sd" ] && cat "$sd/memory.max" 2>/dev/null)
      if [[ $l =~ ^[0-9]+$ ]] && [ "$h" -gt $((l - MEM_ROOM_GB * 1000000000)) ]; then
-       why="the memory scope's processes held $(bgb "$h"), more than its limit $(bgb "$l") less MEM_ROOM_GB $MEM_ROOM_GB"
+       why="the scope's reading stopped the job: $scope_now; the node's reading then: $node_now"
        echo "the memory ran low: $why" > "$WORK/.stop"
        printf 'REHEARSAL LOW MEMORY: %s, in %s\n' "$why" "$s"; kill -USR2 $$; exit 0
      fi
@@ -287,7 +311,11 @@ printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
      printf "REHEARSAL +%ss the outcome and the negatives' workers ended: %s s in the stage; MemAvailable's lowest in it %s GB, %s GB under the job's start and %s GB under the stage's own start\n" \
        "$(($(date +%s) - T0))" "$(($(date +%s) - neg_t0))" "$(gb "$neg_low")" "$(gb $((MEM0_KB - neg_low)))" "$(gb $((neg_m0 - neg_low)))"
    fi
-   [ $((MEM0_KB - m)) -le "$MEM_STOP_KB" ] || { printf 'REHEARSAL LOW MEMORY: MemAvailable %s GB, more than MEM_STOP_GB %s under the %s GB at the start, in %s\n' "$(gb "$m")" "$MEM_STOP_GB" "$(gb "$MEM0_KB")" "$s"; kill -USR2 $$; exit 0; }
+   if [ $((MEM0_KB - m)) -gt "$MEM_STOP_KB" ]; then
+     why="the node's reading stopped the job: $node_now; the scope's reading then: $scope_now"
+     echo "the memory ran low: $why" > "$WORK/.stop"
+     printf 'REHEARSAL LOW MEMORY: %s, in %s\n' "$why" "$s"; kill -USR2 $$; exit 0
+   fi
  done) &
 WATCH=$!
 limited() {  # limited STDOUT STDERR CMD...: CMD with the job's seconds left as its limit, stopped with the job

@@ -180,8 +180,8 @@ def mem_available(start_kb: int | None, low_kb: int | None, low_stage: str | Non
 
 
 def stop_reason(stopped: int | None, stop_gb: int | None, said: str | None = None) -> str | None:
-    """Why the job stopped itself, by its exit; ``said`` is the job's own reason where its stop wrote one (which of the
-    two memory stops it was)."""
+    """Why the job stopped itself, by its exit; ``said`` is the job's own reason where its stop wrote one: which of the
+    two memory readings stopped it, the scope's or the node's, with both as they were then."""
     if stopped is None:
         return None
     if said and stopped == 72:
