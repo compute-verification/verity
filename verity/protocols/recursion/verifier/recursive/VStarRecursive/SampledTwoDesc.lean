@@ -211,9 +211,13 @@ def templateOk (r : Ref) : Bool :=
 def refsOf (p : SampledTwo.Params) (bs : Core.Blobs) : Option (List Ref) :=
   (List.range p.circuits.size).mapM fun t => (refOf p bs t).toOption
 
-/-- **Template `t`'s circuit**: its reference statement's statement circuit, the first template's past them. -/
-def circAt (rs : List Ref) (t : Nat) : Circuit :=
-  (rs.map Ref.stmt).getD t ((rs.map Ref.stmt).headD default)
+/-- **The templates' circuits**: each reference statement's statement circuit, in the params' template order. A
+statement circuit is a parse of its circuit file, so `descOk` reads this list once and every clause reads a template's
+circuit off it (`circAt`): a parse a template, whatever the count of reads. -/
+def circsOf (rs : List Ref) : List Circuit := rs.map Ref.stmt
+
+/-- **Template `t`'s circuit** among the templates' circuits `cs`: the first template's past them. -/
+def circAt (cs : List Circuit) (t : Nat) : Circuit := cs.getD t (cs.headD default)
 
 /-! ## A member's size -/
 
@@ -441,11 +445,12 @@ def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : 
       let wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
       let rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn
       let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
+      let cs := circsOf rs
       p.circuits.size == T && !rs.isEmpty &&
         rs.all (fun r => fits r && zkOk r.spec r.sts && templateOk r && ProvedScope.scopeOkH r.stmt) &&
-        (List.range T).all (fun t => memberOk (circAt rs t)) && designOk law l &&
+        (List.range T).all (fun t => memberOk (circAt cs t)) && designOk law l &&
         ks.size == T && ks.toList.all (1 ≤ ·) && ns.size == T &&
-        wiringOk T names links wires rows (circAt rs) ns (unitsAt (requests l) ns T) refReads it.params.verifier
+        wiringOk T names links wires rows (circAt cs) ns (unitsAt (requests l) ns T) refReads it.params.verifier
     | _, _ => false
   | _, _, _ => false
 

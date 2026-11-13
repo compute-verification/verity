@@ -270,21 +270,22 @@ theorem refOf_of_mem {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List Sample
   exact ⟨j, hR'⟩
 
 theorem circAt_of {rs : List SampledTwoDesc.Ref} {t : ℕ} {R : SampledTwoDesc.Ref} (h : rs[t]? = some R) :
-    SampledTwoDesc.circAt rs t = R.stmt := by
-  unfold SampledTwoDesc.circAt
+    SampledTwoDesc.circAt (SampledTwoDesc.circsOf rs) t = R.stmt := by
+  unfold SampledTwoDesc.circAt SampledTwoDesc.circsOf
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, h]
   rfl
 
 /-- **The templates' circuits are the check's**: template `t`'s reference statement's circuit is the check's
-(`circAt`), at every `t`. -/
+(`circAt` of `circsOf`), at every `t`. -/
 theorem stmtOf_refStmt {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refsOf p bs = some rs) (hf : rs.all SampledTwoDesc.fits = true) (hne : rs ≠ [])
-    (t : ℕ) : stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t) = SampledTwoDesc.circAt rs t := by
+    (t : ℕ) : stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t) =
+      SampledTwoDesc.circAt (SampledTwoDesc.circsOf rs) t := by
   have hall : ∀ R ∈ rs, stmtOf (rawOf R).encode = R.stmt := by
     intro R hR
     obtain ⟨j, hj⟩ := refOf_of_mem h hR
     exact stmtOf_rawOf hj (List.all_eq_true.1 hf R hR)
-  unfold refStmt SampledTwoDesc.circAt
+  unfold refStmt SampledTwoDesc.circAt SampledTwoDesc.circsOf
   cases rs with
   | nil => exact absurd rfl hne
   | cons R₀ rs' =>
@@ -515,7 +516,8 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     exact (hR' R hRm).2.2.2
   · -- the registered wiring
     have hmc : ∀ t, memberCircuit (held₀ i it { u₀ with xs := rs.map fun R => (rawOf R).encode }
-        ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)) t = SampledTwoDesc.circAt rs t :=
+        ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)) t =
+        SampledTwoDesc.circAt (SampledTwoDesc.circsOf rs) t :=
       fun t => stmtOf_refStmt hrs hfits hne' t
     have hu : ∀ t, ((held₀ i it { u₀ with xs := rs.map fun R => (rawOf R).encode }
         ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)).vus.getD t #[]).size =
