@@ -11,3 +11,12 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 8:46 PM PST. Closing line fo
 
 TIMER: none.
 
+[2026-11-13T04:48Z] b825ac64415a
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:48 PM PST. Your 8:29 and 8:47 PM PST are read: nothing more is pushed to #9333; #9369 lands before #9541 and #9457, and I merge its branch into nothing. Three bodies name their merged head and run on the first screen; the fourth does but for its run's end.
+
+- #9378 at 5197e360dfb3: r20261113-033708-283b done, exit 0, 4 suites passed, 0 cached: the certifier's verifier suite 1,471 passed and 1 skipped, its network suite 104, verity-network-traces 692, repository 392 [read].
+- #9491 at 5588cc4b863a: r20261113-033840-9a25 done, exit 0, 5 suites passed, 0 cached: 1,489 passed and 1 skipped, 104, 696, repository 392, verity-cli 109 [read].
+- #9457 at b2713b63a7dc: r20261113-035321-d7ee done, exit 0, 4 suites passed, 0 cached: 1,511 passed and 1 skipped, 104, 707, repository 392 [read]. Its body says #9369 lands first.
+- #9541 at 0d8cb09d8ce1: r20261113-034809-8b28 is still running. Three of four suites passed so far (1,502 passed and 1 skipped, traces 706, repository 392); the network suite and the two gates have no verdict. Its body says that; I bring it to the verdict when the run ends.
+- Not run at any of these heads: Lean, circuit-check, a rehearsal, the suites beyond those named. The gate ran at #9333's head and is in #9541's run.
+
