@@ -3,6 +3,8 @@ the one the CPU replay opens against (`cpu_replay.open_weights`), with a 64-byte
 re-registration reproduces it, and the device path's roots are the host path's byte for byte (CUDA only)."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from tests.check.opened import committer
@@ -10,7 +12,10 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer import weights_rows as WR
 from verity_vllm.pipeline import cpu_replay as CPU
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 
 class _Model(torch.nn.Module):
