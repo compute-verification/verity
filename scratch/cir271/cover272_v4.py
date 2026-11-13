@@ -1,4 +1,4 @@
-"""cover272_v4.py COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]...: CIR-272's second pass, `circuits/request-cover/v4`,
+"""cover272_v4.py COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass, `circuits/request-cover/v4`,
 written over COVER.json, which must be v3 (`art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888`, the record
 NET-390 quoted; `git show 9a0d813ec490:scratch/cir271/cover.json`).
 
@@ -137,7 +137,7 @@ for R in RUNS:
         reached = not (r.get("why") == "not-reached" or r.get("text") == "not started")
         if tag in seen:
             assert not (reached and seen[tag]["_reached"]), f"{tag} staged in two runs: {seen[tag]['run']} and {R['run']}"
-            if not reached and (seen[tag]["_reached"] or seen[tag]["list"] == plan[tag].get("list")):
+            if not reached and seen[tag]["_reached"]:
                 continue
         seen[tag] = {**r, "_reached": reached}
 
