@@ -307,15 +307,14 @@ end Form
 
 /-! ## The accept -/
 
-/-- **The form's accept is the run's accept** (`AcceptsRunOf`): at the sessions' provers `P'`, where every coins' byte
-string is some coins' (`CoinsCover`), an accepted run read at most the coins it has (`SourcesFit`), its run of record is
-a play SPOT[Flock] accepts (`PlayAccepts`) whose sessions' messages are those the check read (`SessionMsgs`), and
-SPOT[Flock] reads a coin only where `readsAt` says (`ReadsOnly`), every run whose coins agree with what the form's
-check read and whose messages are what it read accepts. -/
-theorem acceptsRun (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
-    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : AcceptsRunOf A x C S dev := by
-  intro P' hcov hfit hplay hsess hreads
-  refine acceptsRun_of_proverAt ?_
+/-- **`proverSeq` is the accepted prover sending the check's messages** (`ProverAt` at the form): at the sessions'
+provers `P'`, under `AcceptsRunOf`'s premises, at every play the form's check accepts and every coin vector agreeing
+with what it read, `SpotFlock.V` accepts `proverSeq` at the run of record's records, and its messages are those the
+check read. -/
+theorem proverAt (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hcov : CoinsCover A.h) (hfit : SourcesFit A C) (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P')
+    (hreads : ReadsOnly A.h) : ProverAt A x (formReading A C S dev) (FormAccepts C) := by
   intro o hA hs r hc
   have hst : A.h.stage = A.h.more + 1 := rfl
   have hT3 := SpotFlock.stage_le_off A.h A.h.ms.length
@@ -462,5 +461,15 @@ theorem acceptsRun (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
       have hsm := hsess o i it x m₁ m₂ hA hi hit hx hm₁ hm₂ c₀ c₁ r' hread t ht (n - SpotFlock.off A.h t) (by omega)
       rw [Nat.add_sub_cancel' (show SpotFlock.off A.h t ≤ n by omega), hT] at hsm
       exact hsm.symm
+
+/-- **The form's accept is the run's accept** (`AcceptsRunOf`): at the sessions' provers `P'`, where every coins' byte
+string is some coins' (`CoinsCover`), an accepted run read at most the coins it has (`SourcesFit`), its run of record is
+a play SPOT[Flock] accepts (`PlayAccepts`) whose sessions' messages are those the check read (`SessionMsgs`), and
+SPOT[Flock] reads a coin only where `readsAt` says (`ReadsOnly`), every run whose coins agree with what the form's
+check read and whose messages are what it read accepts. -/
+theorem acceptsRun (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : AcceptsRunOf A x C S dev := by
+  intro P' hcov hfit hplay hsess hreads
+  exact acceptsRun_of_proverAt (proverAt A x C S dev P' hcov hfit hplay hsess hreads)
 
 end Verity.SampledTwo
