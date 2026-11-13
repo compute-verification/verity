@@ -439,6 +439,17 @@ loaded_by = [
 
 [[place]]
 paths = [
+    "verity/protocols/experimental",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
+    "verity/definitions/silicon",
+    "verity/protocols/pouw/prover",
+]
+
+[[place]]
+paths = [
     "verity/protocols/flock/sigma",
 ]
 trusted = true
@@ -565,11 +576,6 @@ reaches = [
     "verity/periods",
     "verity/protocols/reporting.py",
     "verity/runtime",
-]
-
-[[place]]
-paths = [
-    "verity/protocols/experimental",
 ]
 
 [[place]]
