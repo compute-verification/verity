@@ -31932,7 +31932,7 @@
    }
   },
   "Definitions.Accounting.Device": {
-   "digest": "dbde68114962a9c64523d705e7aa96d2a80dd0dea607d8f8a49906972ac84cff",
+   "digest": "1a4692c92896964ea0df598284a24379ecd13cba3ff01c8fe31107d27db03fbf",
    "definitions": {
     "Accounting.Device": "315b8d520a689e4684b49fe8598fd0b717e0b6c2ef9f57992d70d36964c8d500",
     "Accounting.Device.bw": "6076f565a748904859f15e8ea22b33289ebe2dc17822f47f1c81f6079f7a931b",
@@ -31949,10 +31949,6 @@
     "Accounting.OpClass.rec": "3b66b68a996c6a513469a90c26049feef7981ba705e3d7b947aec81d321c43af",
     "Accounting.OpClass.tc": "cc9a8682df4bd6df3303bed1debdb87614497c8c1b65f8fdeb775b9c2c3fed1f",
     "Accounting.Price": "6fc7de01fe338a82e2726d450c7cc7b518878fe3121f8c76e156173e58777b51",
-    "Accounting.Resource": "7530c33f58e3b15a2b4059d106be86b3eeda5a1a0f1e8d935f285d9331bea41b",
-    "Accounting.Resource.bandwidth": "f7c11a2c44fdb5fc3ada31e561b9e8f3dec24a26e20288ca9a2442fb32589db5",
-    "Accounting.Resource.capacity": "e3be90efd096e8692c8448817d90ee74cdd5382eeb2ee950bda6c8b5da04c2e2",
-    "Accounting.Resource.compute": "721b8ee9555fa025b515871ac27b25d16e2194d13b7fce74991159b5443ad696",
     "Accounting.Schedule": "8266f4df125ef6f7587938b529c4347bd547d48ac8a700764d44d6e8d873ad3d",
     "Accounting.Schedule.Fits": "5d6bb8594c92eda81ac7b22bff939a1e28a875db86a82686a044749ae810348c",
     "Accounting.Schedule.held": "070a142008da5ea91f6f62090dd107139fd7c508fe2541e7217ffd3aa7d9f9bc",
@@ -33025,8 +33021,12 @@
    }
   },
   "Definitions.Accounting.Joint": {
-   "digest": "89fbed3155d7b596cfec73c8fa26da523e55a130e7838e393841ef4be7d006d6",
+   "digest": "1087a8cb49bd61e6e3f2e8c5c6bdc77fdddfe4e806cd6f92a86853a8f38bf7d6",
    "definitions": {
+    "Accounting.Resource": "7530c33f58e3b15a2b4059d106be86b3eeda5a1a0f1e8d935f285d9331bea41b",
+    "Accounting.Resource.bandwidth": "f7c11a2c44fdb5fc3ada31e561b9e8f3dec24a26e20288ca9a2442fb32589db5",
+    "Accounting.Resource.capacity": "e3be90efd096e8692c8448817d90ee74cdd5382eeb2ee950bda6c8b5da04c2e2",
+    "Accounting.Resource.compute": "721b8ee9555fa025b515871ac27b25d16e2194d13b7fce74991159b5443ad696",
     "Accounting.Run": "5f7c9b30af33f2f8677ab7fc07414be5638d0835ba4023d251d5255440e104f2",
     "Accounting.Run.Accepted": "79b94e8a2366d77715dab5b90eef96065fc0169c6145ae7a6ceae717172dda17",
     "Accounting.Run.BandwidthCovert": "4ab47a389c759ca0d951c919b54300c02d53b9b6913883cd21a5e065345dabca",
@@ -33656,6 +33656,42 @@
     "Accounting.ReadUnit.bytesOf": "dfe52e248617543a2e890da83c52ad849016e1997791758996911e8c0c22850d",
     "Accounting.ReadUnit.digestOf": "07baad6c4660effb26ea0b1991632746c135caf1faa6fb5e0f4e029fae8d4d2d",
     "Accounting.ReadUnit.num": "3821544964af530c566ef1e34f36fefa415a5bce09a8784cca6d1f5e52d8ebf6"
+   }
+  },
+  "Definitions.Accounting.Registration.Guarantees": {
+   "digest": "4842a7677750a7ef526c80ecba2001bca999d585013019ab0768b9fa850de3f6",
+   "definitions": {
+    "Verity.Guarantees.RegistrationSound": "01b138e834d82de977dd28f74334381ce9dc69d4b687a904229a9d002b69cf34"
+   }
+  },
+  "Definitions.Accounting.Registration.Guarantees.Witnesses": {
+   "digest": "c0e93c9383c2269a3649c7da2c8327f0bc044b7a2897e8cb078afedfc6559bba",
+   "definitions": {
+    "Verity.Guarantees.RegistrationSound_honest": "c94c7a36d0931ac6cb017e3c3c01fbef03a6fca8cadea34057efa95161c70ae6",
+    "Verity.Guarantees.RegistrationSound_nontrivial": "bcc474e5db716a52adb4b5f28019988a7b5adce999c63ad5d25a5937d25f0283",
+    "Verity.Registration.Witness.auditor": "069cd33b8a74ef6ba4e955ac88b2412ae83a33e0aac5031c2fbdd4bbaa20cbb3",
+    "Verity.Registration.Witness.digests": "a8c34b756caa20a77b79632958ef958d6367bea2d4a513f619bdeec7048d0913",
+    "Verity.Registration.Witness.entry": "2244f3207ec022d7249d7cab1158f60211c1b5c9778f14ef05a8cd5780545914",
+    "Verity.Registration.Witness.gpu": "ee77819ce9117e37ace0431b0e4891e7328c2365cad438b4f3f36cc46e4db0a7",
+    "Verity.Registration.Witness.log": "75f98677d06230d133cc9c4c1e62370402d6f00df74a181b0a2f472e051e78d7",
+    "Verity.Registration.Witness.sheet": "4efb8d903cc267362e9eef59ddd6b9b3e85e14adc9c087165f6a58883ec96def",
+    "Verity.Registration.Witness.unnamed": "48b0f77f92f39e6121d9ff6b1a63504c8880e7ed3a5a4f6c9b71f8e87cf1223d",
+    "Verity.Registration.Witness.uplink": "199b696a7f940bb6bc77a9ddcc4b2327355a8a04e1d4405fff77e86f8973f345"
+   }
+  },
+  "Definitions.Accounting.Registration.View": {
+   "digest": "4aa097fae86b246ea9e3c9ed58b685e4ee57017b76f9add6e99e14d6e27bde3c",
+   "definitions": {
+    "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
+    "Verity.Registration.View.Devices": "57ae39208ba1d0ff9a716eb4daaa087e659e08bf3ad0e6f76c7c55c7463d1f08",
+    "Verity.Registration.View.Holds": "a08ae8d982afa757ae415002b9bfcecbffcb413ec9d1fc04fffc1dcafd6342ba",
+    "Verity.Registration.View.Once": "f53e892033655f1db2f53283c8a8dd8bbe6a87775e47a1ba38b6aa25b30038f9",
+    "Verity.Registration.View.Onsite": "030c41620ffa4452644da1dfc4e49ca222a4987b9d0eaa6542f7f9a265be6ce9",
+    "Verity.Registration.View.declarations": "9b5b1996f3d5309e8d7a73417741591bd7c0dfc599c98dd2c380e9b8596b988b",
+    "Verity.Registration.View.site": "daca8b37b3b956728e71ee33d63fea90a1f73f3ab459e31cc14cfa6785d1de27",
+    "Verity.Registration.View.theta": "ab0b2f0a94dfccc500c42a6f0215b8e07e2497d64073135e33c865799050056b",
+    "Verity.Registration.heads": "dd0d7f40d5c07b916fd8fb2ce1af04a6aa443db81e6bbdad016d3668a76ecd9b",
+    "Verity.Registration.view": "b29115a930d7a483e82179d15a25787c55467af20450dc05378947ee040c0916"
    }
   },
   "Definitions.Accounting.Remote.Deployed": {
@@ -36240,27 +36276,6 @@
     "Verity.Guarantees.RecZK": "c2ea38efeb1432568321c801a3f35d51496cf2d18e79c599a9bdc53c79169aa3"
    }
   },
-  "Definitions.Accounting.Registration.Guarantees": {
-   "digest": "4842a7677750a7ef526c80ecba2001bca999d585013019ab0768b9fa850de3f6",
-   "definitions": {
-    "Verity.Guarantees.RegistrationSound": "01b138e834d82de977dd28f74334381ce9dc69d4b687a904229a9d002b69cf34"
-   }
-  },
-  "Definitions.Accounting.Registration.Guarantees.Witnesses": {
-   "digest": "c0e93c9383c2269a3649c7da2c8327f0bc044b7a2897e8cb078afedfc6559bba",
-   "definitions": {
-    "Verity.Guarantees.RegistrationSound_honest": "c94c7a36d0931ac6cb017e3c3c01fbef03a6fca8cadea34057efa95161c70ae6",
-    "Verity.Guarantees.RegistrationSound_nontrivial": "bcc474e5db716a52adb4b5f28019988a7b5adce999c63ad5d25a5937d25f0283",
-    "Verity.Registration.Witness.auditor": "069cd33b8a74ef6ba4e955ac88b2412ae83a33e0aac5031c2fbdd4bbaa20cbb3",
-    "Verity.Registration.Witness.digests": "a8c34b756caa20a77b79632958ef958d6367bea2d4a513f619bdeec7048d0913",
-    "Verity.Registration.Witness.entry": "2244f3207ec022d7249d7cab1158f60211c1b5c9778f14ef05a8cd5780545914",
-    "Verity.Registration.Witness.gpu": "ee77819ce9117e37ace0431b0e4891e7328c2365cad438b4f3f36cc46e4db0a7",
-    "Verity.Registration.Witness.log": "75f98677d06230d133cc9c4c1e62370402d6f00df74a181b0a2f472e051e78d7",
-    "Verity.Registration.Witness.sheet": "4efb8d903cc267362e9eef59ddd6b9b3e85e14adc9c087165f6a58883ec96def",
-    "Verity.Registration.Witness.unnamed": "48b0f77f92f39e6121d9ff6b1a63504c8880e7ed3a5a4f6c9b71f8e87cf1223d",
-    "Verity.Registration.Witness.uplink": "199b696a7f940bb6bc77a9ddcc4b2327355a8a04e1d4405fff77e86f8973f345"
-   }
-  },
   "Definitions.Core.Guarantees.TC": {
    "digest": "482236f9d4e61b61c0d296fbfa35abc0416ab6b54467ff2a9f9f47ad914101fa",
    "definitions": {
@@ -36655,21 +36670,6 @@
     "Verity.RegisteredCircuit.out": "749577acf06909a426de4bf41cfcc4dc5353e69ba9b8cf2385c9f166595889ff",
     "Verity.RegisteredCircuit.θ": "d14c26dd29fbbae51a1e041908492d07949b6e0b0d55effa535fc3caf025045c",
     "Verity.RegisteredCircuit.𝓘": "aba61d57f4d8260e4a1cd7b888b9264f789fd3070636876b7efd9ef1a76f35f1"
-   }
-  },
-  "Definitions.Accounting.Registration.View": {
-   "digest": "4aa097fae86b246ea9e3c9ed58b685e4ee57017b76f9add6e99e14d6e27bde3c",
-   "definitions": {
-    "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
-    "Verity.Registration.View.Devices": "57ae39208ba1d0ff9a716eb4daaa087e659e08bf3ad0e6f76c7c55c7463d1f08",
-    "Verity.Registration.View.Holds": "a08ae8d982afa757ae415002b9bfcecbffcb413ec9d1fc04fffc1dcafd6342ba",
-    "Verity.Registration.View.Once": "f53e892033655f1db2f53283c8a8dd8bbe6a87775e47a1ba38b6aa25b30038f9",
-    "Verity.Registration.View.Onsite": "030c41620ffa4452644da1dfc4e49ca222a4987b9d0eaa6542f7f9a265be6ce9",
-    "Verity.Registration.View.declarations": "9b5b1996f3d5309e8d7a73417741591bd7c0dfc599c98dd2c380e9b8596b988b",
-    "Verity.Registration.View.site": "daca8b37b3b956728e71ee33d63fea90a1f73f3ab459e31cc14cfa6785d1de27",
-    "Verity.Registration.View.theta": "ab0b2f0a94dfccc500c42a6f0215b8e07e2497d64073135e33c865799050056b",
-    "Verity.Registration.heads": "dd0d7f40d5c07b916fd8fb2ce1af04a6aa443db81e6bbdad016d3668a76ecd9b",
-    "Verity.Registration.view": "b29115a930d7a483e82179d15a25787c55467af20450dc05378947ee040c0916"
    }
   },
   "Definitions.Core.Requirement": {
