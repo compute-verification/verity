@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
@@ -124,7 +125,6 @@ def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
 def excluded_host(flags: Any, rows: Any) -> tuple[int, ...]:
     """`excluded` from host bytes: a call's flags (uint8, m x 2: fails, unsure) and its A rows as BF16 (m or more rows),
     whose words widened exactly are A's FP32 words."""
-    import numpy as np
     flags = np.asarray(flags)
     unsure = np.flatnonzero(flags[:, 1]).tolist()
     words = (np.asarray(rows)[unsure].astype("<u4") << 16) if unsure else ()
