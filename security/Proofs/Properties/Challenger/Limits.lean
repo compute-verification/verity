@@ -211,7 +211,7 @@ def openingsHashed (c : LiveCommitment) (label : String) (segment : Json) : List
   | _, _ => []
 
 /-- What `readHashed` hashes for the session. -/
-def sessionHashed (I : ByteArray) (label : String) (coins : Json) : List ByteArray :=
+def challengePhaseHashed (I : ByteArray) (label : String) (coins : Json) : List ByteArray :=
   let session := getD coins "session"
   match ChallengerRecord.ofJson (getD session "record") with
   | .error _ => []
@@ -237,7 +237,7 @@ def pinsHashed (coins : Json) : List ByteArray :=
 
 theorem readHashed_eq (key : ChallengerKey) (label : String) (coins : Json) :
     readHashed key label coins =
-      sessionHashed (ident key.pub) label coins ++ ledgerLinesHashed (ident key.pub) coins ++ pinsHashed coins := rfl
+      challengePhaseHashed (ident key.pub) label coins ++ ledgerLinesHashed (ident key.pub) coins ++ pinsHashed coins := rfl
 
 theorem linesOf_length (j : Json) : (linesOf j).length ≤ arrSize j := by
   cases j with
@@ -271,10 +271,10 @@ theorem openingsHashed_length (c : LiveCommitment) (label : String) (segment : J
       exact Nat.mul_le_mul_right _ hops
   · simp
 
-theorem sessionHashed_length (l : Limits) (I : ByteArray) (label : String) (coins : Json)
-    (h : withinAt l coins = true) : (sessionHashed I label coins).length ≤ 9 + l.log + l.hellos + l.openings * (7 + l.path) := by
+theorem challengePhaseHashed_length (l : Limits) (I : ByteArray) (label : String) (coins : Json)
+    (h : withinAt l coins = true) : (challengePhaseHashed I label coins).length ≤ 9 + l.log + l.hellos + l.openings * (7 + l.path) := by
   obtain ⟨hlog, hhel, -, -, hops, hpath⟩ := withinAt_spec h
-  unfold sessionHashed
+  unfold challengePhaseHashed
   dsimp only
   split
   · simp
@@ -349,7 +349,7 @@ theorem readHashed_le (l : Limits) (key : ChallengerKey) (label : String) (coins
     (readHashed key label coins).length ≤ readsAt l := by
   rw [readHashed_eq]
   simp only [readsAt, List.length_append]
-  have := sessionHashed_length l (ident key.pub) label coins h
+  have := challengePhaseHashed_length l (ident key.pub) label coins h
   have := ledgerLinesHashed_length l (ident key.pub) coins h
   have := pinsHashed_length l coins h
   omega
