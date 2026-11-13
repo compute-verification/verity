@@ -9,5 +9,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # is named by its file, so it stays an input wherever it sits; the handshake's package is read when it is imported.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/site/__init__.py",
           "verity/configuration/wire/__init__.py", "verity/configuration/wire/handshake.py",
-          "verity/configuration/deploy/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/configuration/__init__.py", "verity/hardware/__init__.py"]
