@@ -139,7 +139,7 @@ theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.r
   · exfalso
     have hs : Spot.getD run "symbol" = Json.str "accept" := SpotFlock.str_of_jeq (SpotFlock.jeq_symm ha)
     have hn : Spot.getD (Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) "symbol" =
-        Json.null := getD_mkObj_none (by first | simp | decide)
+        Json.null := getD_mkObj_none (by simp)
     rw [hj, hn] at hs
     cases hs
   · refine ⟨n, rule, law, workTable, derived, resolved, draw, rest, read, hn, hrule, hlaw, htab, hder, hres, hsel,
@@ -152,8 +152,10 @@ theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.r
       exact hb _ hchk
     · rw [hj]
       rcases interiorAudit_staged hia with rfl | ⟨e, rfl⟩
-      · exact getD_mkObj (by first | simp | simp [List.pairwise_cons, Std.compare_eq_iff_eq]) (by simp)
-      · exact getD_mkObj (by first | simp | simp [List.pairwise_cons, Std.compare_eq_iff_eq]) (by simp)
+      · exact getD_mkObj (by simp [FlockComplete.JsonRT.Distinct, List.pairwise_cons, Std.compare_eq_iff_eq])
+          (by simp)
+      · exact getD_mkObj (by simp [FlockComplete.JsonRT.Distinct, List.pairwise_cons, Std.compare_eq_iff_eq])
+          (by simp)
 
 /-- **What `secondLawOf` computed** where it returned: under a two-stage rule, `Select.secondLaw` of the proved units
 of the run's `draw`, over the replay block's cells under the interior's query at the rule's counts. -/
