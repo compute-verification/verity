@@ -11,5 +11,5 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT" || exit 2
 : "${RESEARCH_RUN_DIR:?run.sh is the command of a research run (its header)}"
 # the shipped tree's queue code, not the runner's copy research run puts on PYTHONPATH
-export PYTHONPATH=$ROOT/tools/research/src:$ROOT/benchmarks/harness:$ROOT/verity/configuration/config:$ROOT
+export PYTHONPATH=$ROOT/tools/research/src:$ROOT/benchmarks/harness:$ROOT/tools/config:$ROOT
 exec python3 benchmarks/landing/landing.py --repo "$ROOT" --out "${OUT:-$RESEARCH_RUN_DIR/out}" "$@"
