@@ -110,3 +110,59 @@ Its docstring says both: the third execution phase under form 2, and a clock not
 
 On my machine, one file an invocation, at each merged tree [ran]: every test file the change touches passes. No run is read yet but the gate. I bring each body to its head as its run ends.
 
+[2026-11-13T03:55Z] ce0834755a3f
+ONSITEMAIN, Thu 12 Nov 7:55 PM PST.
+
+**#9319 is merged with `main` and pushed; its suites run is launched. H's records run is launched. Three of the four answers. One question on #9319's held list, one fact on H and NET-402.**
+
+## 1. #9319 [ran]
+
+- Head: `cursor/net-onsite-pool-port-84f9` at `6844215626f7e002bfee9f7457f27e6eb75c329f`, one merge commit over `0e7b13e39bd1`. `main` merged: `8ef93f01963c05a70d63ad0e81d8eaf88fe08db6`. Not marked. `git show --remerge-diff 6844215626f7` prints every hunk as resolved.
+- Its suites, once: `r20261113-035154-0f68` (`suites.py --changed 8ef93f01963c --quick`, `main`'s launcher, limit 4 h). The body goes to the head when it ends.
+- Five files, sixteen regions, resolved against `main` only, as proofs read them:
+
+| File | Region | Resolved |
+|---|---|---|
+| `a0.py` | `lean_verify`'s docstring | `main`'s text on the registered interface, with the pool's clause on `archiving` |
+| | the archive's put | the port's `with archiving(held, ident)` block, `main`'s `*iface` added to the command inside it |
+| `a5.py` | module docstring | both bullets: `main`'s declared day, then the negatives at once |
+| | `coins_outcome`'s docstring | the port's sentence on the tasks and its return, then `main`'s on the coins' record's `verified` |
+| | `registered_negatives`' signature | `main`'s `declared_ports` kept above it; the port's `workers` argument |
+| | its docstring | `main`'s text, the port's last sentence added |
+| | its body | `main`'s cases whole (the registered document a case, `is_declared`, the five bound-port cases); `main`'s loop body moved inside the port's `verify(name)`, the interface left out for `bound-ports-without-interface` there |
+| | the comment over the members' loop | the port's text, `main`'s sentence on the window's challenger session, `main`'s `relayed` |
+| | the members' loop | the port's pool; `s = closed(member_session(i, s))` inside `lean.session` (and on the proof-server path), then `lean.submit` |
+| | the negatives from R2 | each stays a task; `main`'s declared-day negative is one more task, `registration` passing `day` and `declarations` through to `V.check` |
+| `served_verdicts.sh` | step 6's header | `main`'s text on the challenger's coins and the warm composes, then the port's on the pool and the workers |
+| | `v3c_audit`'s pool lines | the port's three lines, then `main`'s `if v3c_live` block and its host line |
+| | the audit's command | `main`'s line with `"${day[@]}"`, then `"${pool[@]}"` on its own line |
+| | the preflights | the port's `V3C_NEGATIVE_WORKERS` block, then `main`'s new block whole |
+| `test_served_verdicts.py` | before `FOLLOW_FAIL` | the port's two tests, then `main`'s line |
+| `records_audit.py` | the usage text | `main`'s lines with the day's flags, the port's three flags on a line after |
+
+- `test_records_audit.py`, `test_a5_memo.py` and the README merged without a meeting.
+- On the VM at the head [ran]: the five files compile and hold no marker; `ratchet_gate.py 8ef93f01963c HEAD` passed; ruff's three findings are the E402s the files had before; `test_tree`, `test_retired_terms`, `test_no_wall_clock`, `test_shell_verifier_env` 57 passed; the driver's four pool tests passed; `test_a5_lean_pool` and `test_a5_negative_workers` ran 23 tests without a failure before my local limit cut them. The merged `registered_negatives` and the declared day's task are run only by the remote suites.
+
+**Question.** I pushed the merge and nothing else. Your held list for "its one merge of `main`" (the `V3C_LEAN_WORKERS` preflight, `available_memory` by the cgroup's room, `LEAN_WORKERS` default 1, the race's fix, the Goal line; and after Friday's log the fork fact, `lean_need`'s form and the guard) stood under "nothing of this is pushed before the rehearsal", which I read as still in force. The body's Goal line I add tonight with the body, since it is no code. Say if the four buildable ones go on now instead.
+
+## 2. H [ran]
+
+- `cursor/na-scratch-port-h-onmain-84f9` at `21a7df7a40f72f725b18c947dc111b085ab6560d`: H's seven commits on job 6's merged head `b48be403627c`, each picked without a stop. No pull request, no mark.
+- Records run, once: `r20261113-033816-ff43` (the certifier verifier's package, `--update`), running.
+- **H meets NET-402's branch in four files** [ran, `git merge-tree` of H's head with `cursor/network-accounting-period-bound-scratch-4a02` at `3a7e8cc85657`]: `security/Properties/NetworkPeriod.lean`, `security/Proofs/Properties/NetworkPeriod.lean`, `period_case.py`, `test_network_period_protocol.py`. `NetworkCheck/Period.lean` and the lock merge without a stop. H's own diff names no `readAt`. So H under or over that pull request is a merge by hand in four files and then a second records run, which I launch only on your word. Tonight's records run is of H on job 6's head alone.
+
+## 3. The four cut checks
+
+Running since 7:33 PM PST: A `r20261113-033323-c6aa`, B `r20261113-033325-f0f9`, I1 `r20261113-033326-eaff`, L `r20261113-033327-20c5`.
+
+## 4. Answers
+
+- **NET-416, which cuts touch what** [ran, each cut's diff]: `certifier_piece.py` is changed by B (and so I1 and L, which stand on it) and by H. Neither writes or reads the case's place: no hunk names `write_case`, `case.json`, `pieces/certifier` or `CERTIFIER_PRIVATE`. B's hunks are `rows_check` and `own_rows` (new, after `period_check`), one argument of `decide`, one line in each of `piece`, `chain_step`, `period_step`, and `--rows` in the parser; its scratch directory is under the kept run's parent and removed. H's are `period_check`, `v3c_case` and the module's text. H's tests write `scan/answers.json` in a temporary directory as `main`'s do. NET-416 will meet B in `decide` and the three steps if it changes their lines; nothing of mine is built against the old place. `served_verdicts.sh` is changed by #9319 only, and not near `CERTIFIER_PRIVATE`.
+- **The three names** [ran, grep of every branch of mine against its base]: none names `PeriodLeakAccepted_honest`, `PeriodLeakAccepted_nontrivial` or `PeriodLeaksCarried`, and none touches `security/Definitions/NetworkCertifier/Carried.lean`. The old rows series (scratch, staying there) touches `Definitions/NetworkCertifier/{Warden,Tap,RecordRows}.lean`.
+- **`COMPOSITE` and `WITHOUT_POUW`** [read]: no. `onsite_record.py` is not on `main` and no cut adds it, and `main`'s `composites` names neither development id, so cut L removes nothing: its two commits only add the two executables. On the onsite tree `COMPOSITE` (line 331), `NOT_CLAIMED_WITHOUT_POUW` (407) and `WITHOUT_POUW` (410) stand as they are; they reach `main` only with the record's port, which is in no cut of mine. If "prepared removal" meant something other than cut L's, tell me which.
+- The fourth (which change rests on which) comes by the morning, before 11 AM PST.
+
+Least sure of: the merged `registered_negatives` and the declared day's task, until the suites run ends.
+
+TIMER: none
+
