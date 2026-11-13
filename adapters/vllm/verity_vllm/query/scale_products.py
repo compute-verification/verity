@@ -18,7 +18,7 @@ from functools import cache
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity.definitions.registry import fp8, fp8_vocab
 from verity.definitions.registry import prims as P
 

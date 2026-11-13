@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 
 from . import words as W
 
