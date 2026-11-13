@@ -14,9 +14,8 @@ as a Boolean circuit. It has three parts:
 
 **What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one,
 the Python inside a shell script counted. A name that starts with an underscore is in no list and is no part of what a
-caller may rely on; one test of Flock's prover calls `bench.contract._check_rates` all the same. The
-modules without a list (`bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it, and `settings` also
-answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover and pod scripts
+caller may rely on; one test of Flock's prover calls `bench.contract._check_rates` all the same. `settings` also answers
+each setting it declares as an attribute. The package's readers outside this directory are Flock's prover and pod scripts
 (`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`, `bench.instances`) and other benchmarks: `tc_probe/`
 (`bench.contract`, `bench.instances`, `reference.hawkeye_close`) and `proof_throughput/` (`bench.contract`). Several
 benchmarks' scripts start `bench.generate` as a command, so what it prints is read too.

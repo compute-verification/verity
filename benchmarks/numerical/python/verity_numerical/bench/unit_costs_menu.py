@@ -62,6 +62,25 @@ from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 from .unit_costs import retree
 
+__all__ = [
+    "ROWS_PER_PRODUCT",
+    "SESSION",
+    "excluded",
+    "inner",
+    "inner_algebra",
+    "lean",
+    "main",
+    "menu",
+    "one_session_per_shape",
+    "pick",
+    "plan",
+    "proofs_rows",
+    "regions",
+    "render",
+    "rep_algebra",
+    "row_id",
+]
+
 B_MENU = (1, 4, 16, 64, 256, 1024)
 #: the fit's largest D: 2^35 (a 4096-instance session)
 D_FIT_LOG = 35
@@ -158,6 +177,8 @@ def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHEC
 
 
 def row_id(w: str, i: int, B: int) -> str:
+    """The id of workload ``w``'s bucket ``i`` at B slots, ``WORKLOAD#BUCKET@B``: the ``workload`` field of its row
+    in the ``--rows`` output and in the ``--outer`` input."""
     return f"{w}#{i}@{B}"
 
 
@@ -353,6 +374,8 @@ def _h(x: float | None) -> str:
 
 
 def render(mn: Mapping[str, Any]) -> str:
+    """``menu.md``: what the menu ``mn`` (:func:`menu`'s) was chosen on, then two tables: each model's totals per audit,
+    and each of its entries."""
     L = [f"# F6 pinned menu: dp4t, slots per session per bucket, K = {mn['K']}", "",
          f"Chosen on {mn['chosen_on']}; B from {mn['b_menu']}; a B runs if k_log ≤ {mn['k_log_max']}, inner and outer peak "
          f"≤ {mn['node_gib']} GiB and D ≤ 2^{mn['d_fit_log']}. Hours per audit, mean / public.", "",
@@ -394,6 +417,8 @@ def lean(mn: Mapping[str, Any], source: str) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """The command (the module docstring): write ``menu.json`` and ``menu.md``, or with ``--rows`` the rows' input
+    ``proofs-rows/``, or with ``--lean`` ``Pinned.lean``, under ``--out``, and return 0."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--inventory", help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for menu.json and menu.md (or proofs-rows/, or Pinned.lean)")
