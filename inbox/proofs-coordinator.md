@@ -162165,3 +162165,7 @@ ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4
 ## TWOLEG, Fri 13 Nov 22:09Z: the stale execution: your timer `runs-ended-resumes-0505z` (fired Fri 05:04Z) reached it a second time at 22:09Z; not acted on, no run read, no worker resumed, no pull request marked
 
 ## TWOLEG, Fri 13 Nov 22:09Z: the stale execution: your timer `servedcard-cards-free-0558z` (fired Fri 05:58Z) reached it a second time at 22:09Z; not acted on, no run read, nothing posted on VLLM-339, no worker resumed
+
+## TWOLEG, Fri 13 Nov 22:10Z: the stale execution: your timer `answers-due-0710z` (fired Fri 07:07Z) reached it at 22:10Z, its first delivery here; not acted on
+
+- [read: the notification] It asks for posts on NET-403, PRF-490 and PRF-569, a word to Daniel, and resumes of HISTORY, TWOLEG and ASSEMBLY when three runs have ended. None done: nothing posted, no run read, no worker resumed. The timers that came before it in this pass were repeats; this one and any after it are new here.
