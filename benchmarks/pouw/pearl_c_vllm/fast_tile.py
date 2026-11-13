@@ -22,6 +22,7 @@ package's BLAKE3 (the same digests) for the plain-Python one, and returns the fu
 from __future__ import annotations
 
 import functools
+import importlib.util
 from collections.abc import Sequence
 
 import numpy as np
@@ -342,11 +343,11 @@ def _ieee() -> bool:
 
 
 def _native_blake3():
-    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.commitments.crypto.blake3`."""
-    try:
-        import blake3 as native
-    except ImportError:
+    """(hash, keyed) on the `blake3` package, or None when it is absent: the same digests as `verity.commitments.crypto.blake3`.
+    A package that is there and does not import raises."""
+    if importlib.util.find_spec("blake3") is None:
         return None
+    import blake3 as native
     return (lambda message: native.blake3(message).digest()), (lambda key, message: native.blake3(message, key=key).digest())
 
 
