@@ -128713,3 +128713,36 @@ Nothing.
 - Anything of mine compiled at TWOLEG's `c9e1f9dee0` or later.
 - `FirstDrawn` and `SessionMatches` are hypotheses, not proved, at any head.
 - That no other step of the run ties `Registration.digest j₁` to `c.digest`: I relied on CUT's reading and my own of `inputOf`, and did not read every line of the run.
+
+## ADDRROW, Fri 13 Nov 07:56Z: `RowOf` (three premises) and `RowLeaves` COMPILE (`0c37`); the labels of `Sits` are WRITTEN in `RowTable.lean`, NOT compiled, in a try by `--on auto` (`c127`); the one-table step is a hypothesis there, for SESSIONOF2's one lemma
+
+**In plain words.** The row fact now compiles with three premises, and with the wiring condition in place of the leaf-count premise. Of the last big premise, `Sits`, I have written the half that says the session's instances carry their slots as labels. It is in a try now. It takes "the session has one table" as a hypothesis, which SESSIONOF2 is writing; I asked it below for the form I can call. The other half of `Sits`, where the checked unit sits in its part, is next.
+
+Clock: `date -u` read 07:55Z. Pen: this machine was replaced at 07:38:40Z; I made `~/wt/.pen` at 07:40:10Z, one loop. Nothing unpushed was lost; my scratch copy of `drawn_units` in `/tmp` was, and I re-wrote it from my notes.
+
+**Your 07:38Z mail.**
+1. [run] `a243` was cancelled at about 07:30Z and never started. I had already re-sent it pinned to cpu-11, before your note, as `r20261113-072803-0c37`: `done rc=0` at 07:43Z, at `e8ced15fa9`:
+   - `lean-try: security/Proofs/Flock/SpotFlock/AddressFacts/RowOf.lean: lean exit 0 in 394 s`
+   - `lean-try: .../RowOf.lean: axiom probe: none of its 27 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+   - `lean-try: .../RowLeaves.lean: lean exit 0 in 474 s`
+   - `lean-try: .../RowLeaves.lean: axiom probe: none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+
+   So `rowFact_of_runs` (from `Sits`, `OwnLeaves` and `PublishedRows`) and `rowFact_of_wires` (`OwnLeaves` replaced by `wiresChecked h = true`) compile. My next try went by `--on auto` as you asked (`r20261113-075317-c127`, which placed itself on vy-nebius-cpu-7's research pool). [run] `--on auto` refuses `--pool`: "it takes no --queue or --pool: it is the queue itself".
+2. Ruling read. `wiresChecked` stays a hypothesis of `rowFact_of_wires`, `rowFact_of_runs` keeps `OwnLeaves`, and I write nothing in FRAME's files.
+3. One lemma for one table. [read] SESSIONOF2's 07:47Z entry states its (a) from `TwoHolds h` and `ScopeHeld h m₂`. A checked run has neither, but it has what they give at its one statement: `two h r.s = some d` is a field of `CheckedRun.Ok`, and `sessionOk h t (unitStmt h r.m₂ r.u) = true` comes from `stmtOkAt_unit`. **Ask to SESSIONOF2, through you:** state the core lemma at one statement, `two h s = some d → sessionOk h t xS = true → FlockDeploy.setupOf true xS = some (ins, spec, sts) → sts.size = 1 ∧ ins.read.I.count ≤ 1`, with the `ScopeHeld` form as its corollary. The second conjunct is the form `header_roots`, `rows_rooted` and my `drawn_of_ok` take. [derived] It follows from the first by `SetupTablesOkAny` (`1 < count → sts.size = count`). Until it is in, `drawn_of_ok` and `labelled_of_ok` take `hc1 : r.ins.read.I.count ≤ 1`, and I write no second lemma.
+4. I merge nothing from `main`.
+
+**What `RowTable.lean` states** [derived; written, not compiled], at `fddc438a08`, in `lakefile.toml`'s and the lock's `roots`:
+- `drawn_of_ok`: at an accepted run's session with one table, the run's draw parses to `D`. `D.proved` is the second draw's units in the part, counted from the part's first slot. The proof gets this from the second stage's sample check through `proved_of_wf`, and carries `jeq` across Flock's `norm` by `canon_jsonEquiv` and `jsonEquiv_norm`. The session's first statement has `D.proved.size` instances, and its header's unit indices are `lo + D.proved[n]`.
+- That last fact comes from `drawn_units` and `unitIndices_of_units` (what `HmRow.drawn` writes in `units`), and from `slots_of_population`: the second stage's `populationOk` on the raw header gives, on Flock's normalized header, instance count `q · n` and indices `lo + i`.
+- `labelled_of_ok`: the `LabelledAt (drawSlot …)` conjunct of `Sits`, from `drawn_of_ok`.
+
+**Next: the place half of `Sits`** [derived plan]: `Counted`, `unitOf … < q·n`, and the quotient and remainder. `proved_of_checked` gives a second-draw slot `j` with `blockAt sample j = r.u`, and `replayOf_filesReplay` with `mem_filesUnits` puts `r.u` at `unitBase t + (r.ρ·n_t + p)`. `blockAt_cell` and `filesOk_sound` then tie that `j` to the cell. Two facts I have not found yet: that the second draw's units are below `q · Σ n_t`, and that each sampled replay block is a layout slot whose unit is itself.
+
+**STOP RULE.** No listed guarantee, named assumption or verifier touched; the lock's only edit is one `roots` line.
+
+**NEEDS.** The ask in item 3.
+
+**Not established.** That `RowTable.lean` compiles (`c127` running). All of the place half. The one-table step.
+
+Branch `cursor/proofs-addrrow-d318` at `fddc438a08`, pushed; nothing unpushed. Runs: `r20261113-075317-c127` (cpu-7).
