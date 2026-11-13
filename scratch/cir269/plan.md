@@ -237,7 +237,7 @@ what it needs in a sidecar, as section 2's A does for the served part: proofs' f
 The ten most frequent codes: `arg-type` 72, `attr-defined` 52, `misc` 36, `assignment` 32, `union-attr` 28, `index` 17,
 `var-annotated` 10, `operator` 6, `list-item` 6, `return-value` 5 (then `dict-item` 3, `call-arg` 3,
 `func-returns-value` 2, `syntax` 1: `ambient.py:93`, an invalid `type: ignore` comment). By file: `cli.py` 75, `cache.py`
-54, `bodies.py` 48, `units.py` 46, `checks.py` 24, `targets.py` 8, seven files 23 together.
+54, `bodies.py` 48, `units.py` 46, `checks.py` 24, `targets.py` 8, six files 19 together.
 
 What fixes them, by a classifier over the messages:
 
@@ -278,7 +278,7 @@ edit moves the key as much as a code edit does.
 | 7 | sweep S4: `checks.py` (24 mypy, 60 imports, 90 `Any`, 28 aliases) | | ✱ | 8 |
 | 8 | sweep S5: `bodies.py` (48 mypy, mostly the `Body` attributes) and the eleven small files | | ✱ | 7 |
 
-Separately that's 6 sweep landings that move the key (each one cold whole-catalog build), and with 3, 7 of ours. The
+Separately that's 5 sweep landings that move the key (each one cold whole-catalog build), and with 3, 6 of ours. The
 fewest it can be: **2**, with S1 to S3 in PR 2b's candidate and S4 and S5 in one candidate after it.
 
 ### (e) Two days for the sweep's last landing
@@ -294,7 +294,7 @@ fewest it can be: **2**, with S1 to S3 in PR 2b's candidate and S4 and S5 in one
   `checks.py` and `cache.py` are one worker each and can't be split. Every PR moves `cache.version`, so parallel
   landings in separate candidates each pay a cold build, and a red in a shared candidate bisects all of them. What makes
   it earlier instead:
-  1. **Batching:** all sweep PRs marked for the same candidate as PR 2b, and the rest in one more (2 cold builds, not 7).
+  1. **Batching:** all sweep PRs marked for the same candidate as PR 2b, and the rest in one more (2 cold builds, not 6).
   2. **CIR-234's narrower key first:** a sweep landing then misses only the targets that loaded the edited module.
   3. **A version that hashes annotations as one constant.** Typing and annotation-only edits would then move no key. No
      file of `src/circuit_check` reads annotations at run time (no `get_type_hints`, `__annotations__`, `ClassVar` or
