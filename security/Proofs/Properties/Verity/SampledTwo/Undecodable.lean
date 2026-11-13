@@ -35,7 +35,7 @@ theorem prob_zero_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Compo
   obtain ⟨kk, hk, hAcc⟩ := hwire o hθ hv
   obtain ⟨cm, i, hcm, -, hrb, -⟩ := input_of_accepts hAcc
   have hkc : kk.commitment = c := (hcc o kk hk).trans hc
-  obtain ⟨s, -, -, hs'⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
+  obtain ⟨s, hs', -, -⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
   have hsx : stmtOf c = recordMsg cm.record := by
     rw [← hkc]
     unfold stmtOf
