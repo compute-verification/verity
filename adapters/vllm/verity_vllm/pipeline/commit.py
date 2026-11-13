@@ -1079,7 +1079,9 @@ def commit_config(args: Options) -> CommitConfig:
                              "of record (verity-vllm served-match); the control runs with --compiled-taps off --only-arm control")
         from verity_vllm.pipeline.served_match import ServedCommit
 
-        served = ServedCommit(json.load(open(args.required_manifest)), fault if fault.startswith("compiled_") else None)   # hooks before vLLM compiles
+        with open(args.required_manifest) as f:
+            _doc = json.load(f)
+        served = ServedCommit(_doc, fault if fault.startswith("compiled_") else None)   # hooks before vLLM compiles
         print(f"[delta] SERVED TAPS: every value of every engine step at vLLM's defaults; fault {served.src.fault!r}", flush=True)
     required_classes = tuple(c for c in (args.required_classes.split(",") if args.required_classes is not None else REQUIRED_CLASSES_DEFAULT) if c)
     required_classes_cli = args.required_classes is not None
@@ -1088,7 +1090,9 @@ def commit_config(args: Options) -> CommitConfig:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # named refusal, before any engine
         from verity_vllm.commit.partition import require_partition
-        required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        with open(args.required_manifest) as f:
+            _doc = json.load(f)
+        required_manifest = require_partition(_doc, args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
     staging_environ(args)
 
