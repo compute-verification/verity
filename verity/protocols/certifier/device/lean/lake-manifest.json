@@ -70,7 +70,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verifier/lean/../../../../commitments/identity/../../difftest/lean",
+   "../../../../circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
