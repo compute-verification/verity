@@ -4,9 +4,12 @@ others."""
 from __future__ import annotations
 
 import copy
+import importlib.util
 import math
 import re
+import shutil
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -36,6 +39,21 @@ def test_the_cards_we_run() -> None:
     assert skus("server") == ["dgx-h200"]
     assert skus("timebase") == ["nebius-vm-monotonic-raw"]
     assert skus() == sorted(sku for kind in KINDS for sku in skus(kind))
+
+
+@pytest.mark.parametrize(("module", "sheets", "listed"), [(cards, "CARDS", "skus"), (nodes, "NODES", "kinds")])
+def test_the_sheets_are_found_through_a_link_to_the_package(tmp_path, module, sheets: str, listed: str) -> None:
+    """A `research run` job imports `verity` through a directory of links (`research.pythonpath.shim_dir`), so a
+    module's `__file__` is the link's path, and the checkout's `hardware/` is beside the package, not the link."""
+    real = Path(module.__file__).resolve()
+    (tmp_path / "verity").symlink_to(real.parents[1], target_is_directory=True)
+    through = tmp_path / "verity" / "hardware" / real.name
+    spec = importlib.util.spec_from_file_location(f"{real.stem}_through_a_link", through)
+    linked = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(linked)
+    assert linked.__file__ == str(through)
+    assert getattr(linked, sheets) == getattr(module, sheets)
+    assert getattr(linked, listed)() == getattr(module, listed)() != []
 
 
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
@@ -345,6 +363,24 @@ def test_an_unknown_sku_names_the_cards() -> None:
              "xeon-6776p-2s", "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
+
+
+def test_a_copy_of_the_cards_elsewhere_loads_as_they_do(tmp_path) -> None:
+    """The card files copied to another directory, named as ``directory``, give the same SKUs, of each kind, and the
+    same tables as the default."""
+    shutil.copytree(cards.CARDS, tmp_path / "cards", ignore=shutil.ignore_patterns("*.py", "__pycache__"))
+    there = tmp_path / "cards"
+    assert sorted(p.name for p in there.iterdir()) == [f"{sku}.toml" for sku in skus()]
+    assert skus(directory=there) == skus() and all(skus(kind, directory=there) == skus(kind) for kind in KINDS)
+    assert all(load(sku, directory=there) == load(sku) for sku in skus())
+
+
+def test_a_directory_without_the_card_names_itself(tmp_path) -> None:
+    """A card missing from the directory given is refused as one missing from the default is, naming that directory
+    and the cards in it."""
+    shutil.copy(cards.CARDS / "dgx-h200.toml", tmp_path)
+    with pytest.raises(KeyError, match=re.escape(f"the cards are ['dgx-h200'] ({tmp_path}/<sku>.toml)")):
+        load("h200-sxm-141gb", directory=tmp_path)
 
 
 @pytest.mark.parametrize(("body", "refusal"), [

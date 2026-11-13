@@ -22,9 +22,9 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Shape as Unit  # noqa: E402
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 
 
@@ -244,6 +244,7 @@ def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
     monkeypatch.delitem(sys.modules, "overhead_arm", raising=False)
     try:
         (mod, cls), (emod, fn) = door.arm.split(":"), door.epsilon.split(":")
+        assert sorted(OA.__all__) == sorted([cls, fn])
         assert isinstance(getattr(importlib.import_module(mod), cls)(), A.BenchArm)
         eps = getattr(importlib.import_module(emod), fn)
         for n, k in LINEARS.values():

@@ -17,10 +17,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.protocols.certifier.verifier import blocks as BK
-from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.circuits.defs import bind
 from verity.definitions.registry import boolean_io_shell as BIO
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import blocks as BK
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = BK.SCAN_STATE

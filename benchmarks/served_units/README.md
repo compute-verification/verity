@@ -2,8 +2,8 @@
 
 A served model's proof blocks proved one type at a time, from synthetic values at the model's served statics, through the path the
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
-`serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/flock/prover`'s
-patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/flock/verifier`), which must
+`serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/proofs/flock/prover`'s
+patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/proofs/flock/verifier`), which must
 pass the honest run through `Zk.verify` and every check before the Program and reject the selftest build's forgeries (a
 committed false output word, a false output claim, a flipped internal bit). The verifier holds no program for a proof block
 (`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
@@ -54,7 +54,12 @@ Files:
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
-- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
+- `prove_rows.py OUT --record RUN`: a `window.py prove` run's timed statements as rows by block type, in the format
+  the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
+  largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
+  no time are listed with their reasons.
+- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
+  `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME` and `full/D` on a stub stager, `stage_window.py`'s member choice and public-body check, and
   `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in each) held to
   the tree.
@@ -81,7 +86,7 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.definitions.ops`),
-  `verity.commitments`, `verity.protocols.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+  `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

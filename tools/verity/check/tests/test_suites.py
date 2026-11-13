@@ -140,7 +140,8 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
-    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    found = S.foreign({"odd": "odd"}, dict(os.environ))
+    assert found == "odd's package from nowhere (its build configuration declares none)"
     (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
     (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
     assert S.importable({"odd": "odd"}) == {"odd": "odd"}
@@ -868,7 +869,7 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
     (tmp_path / "pkg" / "fx" / "small.json").write_text("{}\n")
     reg = {"art:" + "a" * 64: "pkg/fx/small.json", "art:" + "b" * 64: "pkg/fx/big.proof", "art:" + "c" * 64: "other/big.bin",
            "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (tmp_path / "artifacts.json").write_text(json.dumps(reg))
     S = _suites(monkeypatch, tmp_path)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
@@ -903,7 +904,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     if absent:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (root / "artifacts.json").write_text(json.dumps(reg))
     (root / ".gitignore").write_text("__pycache__/\n")
     _git(root, "init", "-q")
     _git(root, "add", ".")
@@ -1027,8 +1028,8 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     root = tmp_path / "tree"
     _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
                                           "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
@@ -1085,7 +1086,7 @@ def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetche
     _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
                                  "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
     (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "registered")
@@ -1175,9 +1176,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "protocols" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1194,10 +1195,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/protocols/flock/verifier'} build\n"
+    assert log.read_text() == f"{root / 'verity/protocols/proofs/flock/verifier'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/flock/verifier exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/proofs/flock/verifier exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
@@ -1680,16 +1681,16 @@ def test_an_edit_to_a_nested_suite_reuses_the_outer_suites_pass_and_reading_it_u
 
 
 def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
-    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `artifacts.json` for
     repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (root / "artifacts.json").write_text("{}\n")
     (tests / "test_registry.py").write_text(
         "import os, subprocess, sys\n\ndef test_registry():\n"
-        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'artifacts.json')\n"
         "    open(p).read()\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
     _git(root, "add", ".")
@@ -1697,7 +1698,7 @@ def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     assert "cached  pkg" in _run_suite(root, tmp_path).stdout
-    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    (root / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
@@ -2194,6 +2195,38 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
     assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
         "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
+    """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
+    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
+    processes and half the GB at its worker_gb, and the others split the rest as before."""
+    S = _suites(monkeypatch, tmp_path)
+    cc = S.Suite("cc", "cc", (), (), parallel=True, worker_gb=8, workers=14)
+    defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
+    seconds = [300.0, 900.0, 200.0, 100.0]
+    [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
+    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    longest = [3000.0, *seconds[1:]]
+    assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
+        "a share that gives it as many already is as it was"
+    assert S.wide_lanes([cc, defs], seconds[:2], 20, 260.0)[0] == S.Lane([cc], 10, 80.0), "at most half the processes"
+    assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
+    assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
+    assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
+    pyproject.write_text(head + "parallel = true\nworkers = 14\n")
+    _git(tmp_path, "init", "-q")
+    assert [s.workers for s in S.discover()] == [14]
+    for bad in ("parallel = true\nworkers = 1\n", "parallel = true\nworkers = 2.5\n", "workers = 14\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="workers"):
+            S.discover()
 
 
 def _line_end(S, lanes, cost) -> float:

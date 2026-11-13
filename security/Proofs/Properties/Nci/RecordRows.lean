@@ -179,7 +179,7 @@ private theorem fields_leaves (ty : Ty) : (fieldsOf ty).foldl (fun a t => a + t.
     · rw [Ty.leaves, ← Array.foldl_toList, List.foldl_map]
 
 /-- **A leaf of an output row is a leaf of the return.** -/
-private theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length)
+theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length)
     (hl : l < (outRow d f).2.size) : (outRow d f).1 + l < d.ret.leaves := by
   have h1 := take_leaves (fieldsOf d.ret) f 0 hf
   rw [fields_leaves] at h1
@@ -254,7 +254,7 @@ theorem operandsOwn (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
 /-! ## R4 -/
 
 /-- **A leaf of a row is a leaf of the row's parameter.** -/
-private theorem inRow_lt (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < (inRow d i k row).2.size) :
+theorem inRow_lt (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < (inRow d i k row).2.size) :
     (inRow d i k row).1 + l < d.params[i]!.2.leaves := by
   rw [inRow_size d i k row hrow] at hl
   have h0 : (inRow d i k row).1 = row * (d.params[i]!.2.leaves / k) := rfl
@@ -266,38 +266,6 @@ private theorem inRow_lt (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l <
   generalize row * q = a at h2 ⊢
   generalize k * q = b at h1 h2
   omega
-
-/-- **Where a unit is**: member `m` of the root node of a range `j`, a call or a batch that is no input node, with
-as many arguments as the unit's Definition has parameters. -/
-private theorem unit_place {ts : Array String} (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (hu : UnitAt P rs tid u sc) :
-    ∃ j m, j < rs.size ∧ rs[j]!.template = tid ∧ u = unitsBefore rs tid j + m ∧
-      sc = P.child P.rootScope rs[j]!.node m ∧ rs[j]!.node < (P.defs[P.root]!).body.nodes.size ∧
-      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[rs[j]!.node]!) = false ∧
-      (((P.defs[P.root]!).body.nodes[rs[j]!.node]!).form = .call ∨
-        ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).form = .batch) ∧
-      m < ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).members ∧
-      ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
-        (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
-  obtain ⟨hr, -, -, -⟩ := read_bodies hP
-  have hir := readProg_inputs hP
-  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hir hrs
-  obtain ⟨j, m, hj, htj, hm, huj, hsc⟩ := hu
-  have hmem : rs[j]! ∈ rs.toList := by
-    rw [getElem!_pos rs j hj]
-    simp
-  obtain ⟨hlt, -, hform, hcount⟩ := hall _ hmem
-  have hno : rs[j]!.node ∈ rs.toList.map (·.node) := List.mem_map.2 ⟨_, hmem, rfl⟩
-  rw [hnodes, List.mem_filter] at hno
-  have hkey : isInputId (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).key = false := by
-    simpa using hno.2
-  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
-  refine ⟨j, m, hj, htj, huj, hsc, hlt, ?_, hform, ?_, hnode.1⟩
-  · simp [Desc.isInputNode, hkey]
-  · rw [← hcount]
-    exact hm
 
 /-- A row is its template, its unit, its port and its place in the port's cut. -/
 private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.unit) (h3 : r.port = r'.port)

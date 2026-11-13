@@ -1,4 +1,4 @@
-"""property/v1 (`verity.definitions.circuits.stacking`) on real bf16 Programs, the weights as the registered store: Llama-3.2-1B's step (the
+"""property/v1 (`verity.circuits.stacking`) on real bf16 Programs, the weights as the registered store: Llama-3.2-1B's step (the
 traced Build `test_predict` pins) and a small request (a prefill of 3 rows, then a decode step), and Qwen3-30B-A3B's step (a
 mixture of experts). Each is refused for its bf16 tensor-core steps, every served MAC in one: a rounding of 544 operand bits,
 past B (``operand-bits``), and budgeted with the rest of its units by class. A change to a Definition these Programs call moves
@@ -11,13 +11,13 @@ import json
 import random
 
 import pytest
+from verity.circuits.program import Program
+from verity.circuits import stacking as P
+from verity.circuits.census import census, step_ends
+from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 
 from tests.program.predict.test_predict import FIX, _phi
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census, step_ends
-from verity.circuits.program import Program
 from verity_vllm.program.predict.build import build_program
-from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 WGMMA = "HopperBF16WgmmaDot16_v1"
@@ -61,7 +61,7 @@ def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw,
     value lives 2 steps."""
     r, c, a = _analysis(model, wrapper, **kw)
     assert r.digest.startswith(digest)
-    v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.Window(range(steps), 1, 1)])
+    v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.CertifiedReads(range(steps), 1, 1)])
     assert (a.affine, v.numbers["units"]) == (affine, units), (a.affine, v.numbers["units"])
     g = a.gates[WGMMA]
     assert a.refused == {} and (g["class"], g["operand_bits"]) == ("roundings", 32 + 2 * 16 * 16)

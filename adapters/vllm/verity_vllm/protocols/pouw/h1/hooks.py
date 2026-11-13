@@ -5,6 +5,7 @@ model runner's ``execute_model``, which hands each step's admissions to the wind
 from __future__ import annotations
 
 import weakref
+from contextlib import nullcontext
 from typing import Any
 
 from verity_vllm.protocols.pouw import credit_gate as CG
@@ -25,7 +26,8 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
     routers (`kernel_readback.routers`) stay bf16 as the model builds them, and the linears the checkpoint's
     ``modules_to_not_convert`` keeps bf16 (`kernel_readback.kept`) stay bf16 too; neither is recorded."""
     from verity_vllm.program.frontend.kernel_readback import kept, routers
-    skip, seen, out = routers(model) | kept(model), set(), []
+    skip, seen = routers(model) | kept(model), set()
+    out: list[Any] = []
     for m in model.modules():
         qm = getattr(m, "quant_method", None)
         if isinstance(m, types) and id(m) not in skip:
@@ -99,12 +101,15 @@ def expert_names(layers: list[Any]) -> dict[int, str]:
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself)."""
+    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself). A record given z writes
+    neither y nor z and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM
+    a retaining record runs is seen."""
 
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
+            with CG.outside() if z is not None else nullcontext():
+                run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
     return observe
 
 
@@ -189,4 +194,5 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "committed", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
+__all__ = ["admitting", "committed", "expert_names", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots",
+           "wire"]

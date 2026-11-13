@@ -12,21 +12,33 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * manifest rows      -- the lifted dtypes of the padded construction, the promoted-row observation rule (`promoted_observation`: a pre-flip
                         v1 manifest's `promoted: true` rows); the binder and the layout-level `coverage_check` over these rows are
                         `verity_vllm.query.manifest.bind`
-* Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
-                        `RegistryUnavailable` (the environment fault a manifest build refuses under)
+* Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its rank policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
+too, with its rank policy).  Dependency-free (json/hashlib, and `SCHEMA` from `verity_vllm.records`) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import os
 import re
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
-SCHEMA = "verity-sweep/required-manifest/v1"
+from verity_vllm.records import required_manifest
+
+__all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
+           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM", "SCHEDULE_READERS",
+           "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
+           "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
+           "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
+           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "program_dirs_for", "programs_for",
+           "promoted_observation", "segment_steps", "spec_family", "spec_statics", "split_name", "tp_ranks_fold_digest",
+           "wrapper_prefix_of"]
+
+SCHEMA = required_manifest.SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
@@ -158,28 +170,6 @@ def promoted_annotations(d: dict[str, Any]) -> dict[str, Any]:
     return {"rows": d["rows"], "width": d["width"], "dtype": d["dtype"], "spec": d["spec"], "promoted": True, "boundary_class": INTERIOR_CROSSING,
             "consumers": list(d["consumers"])}
 
-#: the fail class `row_pod.sh` / the harness classify a RegistryUnavailable under (precheck vocabulary: an environment fault, not a Commit verdict)
-REGISTRY_UNAVAILABLE_FAIL_CLASS = "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
-
-REGISTRY_UNAVAILABLE_EXIT = 3                                                    # row_pod.sh's PRECHECK_FAIL_* exit status
-
-
-class RegistryUnavailable(ImportError):
-    """The core `verity` package (verity.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
-    (infra / precondition: PYTHONPATH, the shipped tree's root, an incomplete venv), never a semantic result: without the
-    registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
-    (complete: false).  Raised instead of
-    building; the CLI exits REGISTRY_UNAVAILABLE_EXIT naming REGISTRY_UNAVAILABLE_FAIL_CLASS."""
-
-    fail_class = REGISTRY_UNAVAILABLE_FAIL_CLASS
-    kind = "infra/precondition"
-
-    def __init__(self, cause: BaseException):
-        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.circuits.defs: "
-                         f"{type(cause).__name__}: {cause}); the required-value manifest cannot be built without the registry "
-                         f"(sys.path lacks the tree's root? an incomplete venv?) -- an environment fault, not a manifest result")
-        self.cause = cause
-
 #: the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)
 PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
 
@@ -204,14 +194,15 @@ def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
     consumers: dict[str, int] = {}
     producers: dict[str, dict[str, Any]] = {}
     problems: list[str] = []
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    rows = manifest_rows(manifest)
     own_inputs = {str(r.get("op_path")) for r in rows if str(r.get("output_member")) == "in" and not r.get("promoted")}
     for r in rows:
         if not r.get("promoted"):
             continue
         op = str(r.get("op_path"))
         member = str(r.get("output_member", PROMOTED_MEMBER))
-        cons = [str(c) for c in (r.get("consumers") or [])]
+        named = r.get("consumers")
+        cons = [str(c) for c in named] if named else []
         if not cons:
             problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
             continue
@@ -337,15 +328,15 @@ def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
-    M, K, H, I, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
+    M, K, H, inter, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
     route = [("router_w", M * K, "f32"), ("router_ids", M * K, "i32")]
     tail = [("down", M * K * H, "bf16"), ("sum", M * H, "bf16")]
     if not g.get("fp8"):
-        return route + [("up", M * K * N, "bf16"), ("act", M * K * I, "bf16")] + tail
+        return route + [("up", M * K * N, "bf16"), ("act", M * K * inter, "bf16")] + tail
     G = int(g.get("G") or 1)
     return (route + ([("in_q", M * H, "w8"), ("in_scale", M * H // G, "f32")] if g.get("in_quant_rows") else [])
-            + [("up", M * K * N, "bf16")] + ([("act", M * K * I, "bf16")] if g.get("act_rows") else [])
-            + ([("act_q", M * K * I, "w8"), ("act_scale", M * K * I // G, "f32")] if g.get("act_quant_rows") else []) + tail)
+            + [("up", M * K * N, "bf16")] + ([("act", M * K * inter, "bf16")] if g.get("act_rows") else [])
+            + ([("act_q", M * K * inter, "w8"), ("act_scale", M * K * inter // G, "f32")] if g.get("act_quant_rows") else []) + tail)
 
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:
@@ -363,16 +354,6 @@ def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, w
         HB, M = n_seq * NH, seqlen_q
     base = f"g{HB}x{M}x{NB}"
     return HB, M, NB, BN, (base if (BN, D) == (128, 64) else f"{base}x{BN}x{D}")
-
-
-def fa3_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int) -> tuple[int, int, int, int, str]:
-    g = NH // max(1, KVH)
-    seqlen_q = rows // max(1, n_seq)
-    one_wg = seqlen_q * g <= 64
-    BN = (192 if one_wg else 128) if D == 64 else 128
-    NB = -(-T_max // BN)
-    HB, M = n_seq * KVH, seqlen_q * g
-    return HB, M, NB, BN, f"g{HB}x{M}x{NB}x{BN}x{D}"
 
 
 def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
@@ -483,25 +464,23 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
     that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
     (`instances_file.read_instances`): read them, never modify them in place."""
+    # Inside the function: importing this module loads nothing of `program`, which a suite that lists its inputs by file
+    # and reads this module relies on (its read guard fails on a file its list lacks).
     from verity_vllm.program.instances_file import read_instances
     inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
-    res = json.load(open(os.path.join(program_dir, "result.json")))
+    with open(os.path.join(program_dir, "result.json")) as f:
+        res = json.load(f)
     art = None
     p = os.path.join(program_dir, "artifact.json")
     if os.path.exists(p):
-        art = json.load(open(p))
+        with open(p) as f:
+            art = json.load(f)
     return {"instances": inst, "result": res, "artifact": art, "dir": program_dir}
 
 #: the sampling event that ends an engine step: greedy `TokenSelect_v1`, and the stochastic / explicit-argmax selectors of `registry.sampling`
 #: (`GumbelTokenSelect_v1{V}` = temperature + top-p + Gumbel argmax with the seed as a registered runtime input; `ArgmaxTokenSelect_v1`) --
 #: every one of them samples ONE id per sequence per step (`sampled_token_ids`); the chain's interior values are the sampler's, not module outputs.
 TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect", "GumbelTopPTokenSelect")
-
-#: the stochastic selectors (`Gumbel*TokenSelect_v1`: temperature -> top-p mask -> Gumbel noise from Philox(seed, pos) ->
-#: argmax) consume ONE registered runtime input the greedy chain has not: the per-request SEED.  It is a required value of the sampling
-#: event (identity `runner.sampler/seed`, one i64 per sequence per step, family `sampler_seed`): without it the committed sampled id is not
-#: reproducible from the committed logits, so the population REQUIRES it and a collector that does not bind it fails coverage (named).
-STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 
 #: the runtime inputs a stochastic selector may read: the seed alone.  Its top-p split count S is the registered constant
 #: (`topp_geometry.registered_splits`), a `Const32[S]` of the Program; a selector reading S from a Program input (one a live batch
@@ -534,10 +513,6 @@ def is_token_select(family: str) -> bool:
     return base.endswith("TokenSelect") or family.startswith(TOKEN_SELECT_FAMILIES)
 
 
-def is_stochastic_select(family: str) -> bool:
-    return is_token_select(family) and family.startswith(STOCHASTIC_SELECT_PREFIXES)
-
-
 def segment_steps(rows: list[dict], checks: dict | None = None) -> list[tuple[int, int]]:
     """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`).
     The Program's checks after its last sampling event (`checks`: its instances header's, `at` their rows), which the runtime never
@@ -568,13 +543,13 @@ def alias_family(member: str) -> str:
 REQ_RE = re.compile(r"^r(\d+)$")
 
 
-def request_label(rid: Any, workload: dict[str, Any] | None = None, *, position: int | None = None) -> str:
+def request_label(rid: Any, workload: Mapping[str, Any] | None = None, *, position: int | None = None) -> str:
     """The identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
     the convention the binding's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
     a manifest keyed by it matches only the request-less weights.
     Accepts `r<k>`, an int / digit string k, or a workload id resolvable through `workload["requests"]`; anything else is an error
     (fail closed -- a manifest keyed by an id no map can carry is a manifest that covers nothing)."""
-    reqs = (workload or {}).get("requests") or []
+    reqs = sweep_and_requests(workload)[1]
     if rid is None:
         if position is not None:
             return f"r{int(position)}"
@@ -608,16 +583,21 @@ def canonical_identity(r: dict[str, Any]) -> list:
 
 
 def components_fold_digest(component_digests: Iterable[str]) -> str:
-    """The B>1 manifest's `program_digest` when the Build has not (yet) produced gprog's Workload_v1 digest: a sha256 fold of the sorted
+    """The B>1 manifest's `program_digest` when the Build has not (yet) produced gprog's Workload_v1 digest: a SHA-512 fold of the sorted
     request-Program digests -- one string (the identity key needs a string), labelled `program_digest_kind: components-fold` beside it,
     replaced by the workload digest (`--workload-digest`, kind `workload`) once the Build carries it."""
-    return hashlib.sha256(("workload-components/" + ",".join(sorted(str(d) for d in component_digests))).encode()).hexdigest()
+    return hashlib.sha512(("workload-components/" + ",".join(sorted(str(d) for d in component_digests))).encode()).hexdigest()
+
+
+def query_id_digest(text: str) -> str:
+    """A manifest query's `query_id_digest`: SHA-512 of its `query_text`."""
+    return hashlib.sha512(text.encode()).hexdigest()
 
 
 def tp_ranks_fold_digest(rank_digests: Iterable[str]) -> str:
     """A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
-    (`program_digest_kind: tp-ranks-fold`) -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
-    return hashlib.sha256(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
+    (`program_digest_kind: tp-ranks-fold`), SHA-512 -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
+    return hashlib.sha512(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
 
 
 TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather2) consumes the rank's OWN partial and the RECEIVED peer partial "
@@ -684,9 +664,33 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
             "n_unbound": len(unbound), "unbound": sorted(unbound)[:16], "rule": TP_PEER_BINDING_RULE}
 
 
+def identity_rows(manifest: Mapping[str, Any] | None) -> Sequence[Mapping[str, Any]]:
+    """The identity rows a manifest holds under `identities`; none where there is no manifest, or it holds none there.  A truth
+    test, so every value reads as it did under `(manifest or {}).get("identities") or []`."""
+    rows = manifest.get("identities") if manifest else None
+    return rows if rows else []
+
+
+def manifest_rows(manifest: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
+    """A manifest document's rows: under the first of `identities`, `entries` and `rows` that holds any; none where none does."""
+    for key in ("identities", "entries", "rows"):
+        rows = manifest.get(key)
+        if rows:
+            return rows
+    return []
+
+
+def sweep_and_requests(workload: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], Sequence[Any]]:
+    """A workload manifest's `sweep` block and its `requests`: an empty block and no requests where there is no workload, or it
+    holds neither."""
+    sweep = workload.get("sweep") if workload else None
+    requests = workload.get("requests") if workload else None
+    return (sweep if sweep else {}), (requests if requests else [])
+
+
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
-    """sha256 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
-    h = hashlib.sha256()
+    """SHA-512 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
+    h = hashlib.sha512()
     for r in sorted(identities, key=row_key):
         h.update(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode())
         h.update(b"\n")
@@ -710,7 +714,7 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
     request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
-    import glob
+    # Inside the function, for `load_program`'s reason.
     from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
@@ -722,8 +726,9 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                 rj = os.path.join(cand, "result.json")
                 if os.path.isdir(cand) and os.path.exists(rj):
                     try:
-                        res = json.load(open(rj))
-                    except Exception:  # noqa: BLE001
+                        with open(rj) as f:
+                            res = json.load(f)
+                    except (OSError, ValueError):      # unreadable, or not JSON: not this request's Program
                         continue
                     if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]

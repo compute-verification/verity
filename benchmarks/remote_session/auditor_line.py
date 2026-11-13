@@ -49,7 +49,7 @@ the auditor's.
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
-  `git rev-parse COMMIT:verity/protocols/poub/verifier` of the run's recorded commit (`--commit`), so it counts
+  `git rev-parse COMMIT:verity/protocols/accounting/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
@@ -92,9 +92,10 @@ in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, an
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
-**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
-certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
+from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
@@ -149,17 +150,17 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.certifier.verifier import audit as caudit  # noqa: E402
-from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
-from verity.protocols.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
-from verity.protocols.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.spot.device import challenger as Ch  # noqa: E402
-from verity.protocols.spot.device import remote  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
+from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import audit as caudit  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
+from verity.protocols.proofs.spot.device import remote  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
@@ -171,7 +172,7 @@ BURSTS = ("stated", "none")
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
-VERIFIER_TREE = "verity/protocols/poub/verifier"
+VERIFIER_TREE = "verity/protocols/accounting/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""
@@ -185,10 +186,11 @@ NAMED_TERMS = ledger.NAMED_TERMS
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which nothing
 prices and the line doesn't assume (the ledger's). Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
-    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
-    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span"),
+    "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
+    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
@@ -203,12 +205,12 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
-    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
-    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
-    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
-    "shared filesystem)")}
+    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
+    "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
+    "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
+    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"

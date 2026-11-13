@@ -10,15 +10,15 @@ import math
 from dataclasses import replace
 
 import pytest
+from verity.protocols.accounting.certifier.verifier import advice as I1
+
+from tests.program.predict.test_steps import GREEDY, _prompt, _registered
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import lengths as LN
 from verity_vllm.pipeline.advice_code import schedule as SC
 from verity_vllm.pipeline.advice_code import window_code as CV
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps, plan_steps
-
-from tests.program.predict.test_steps import GREEDY, _prompt, _registered
-from verity.protocols.certifier.verifier import advice as I1
 
 EOS = 2
 #: two sequences and an 8-token budget: the second request's prefill is chunked beside the first's, the third waits for a slot

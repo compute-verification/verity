@@ -14,8 +14,8 @@ as `AttentionHead_v8` is.
 from __future__ import annotations
 
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import attention as BA
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.registry import boolean_attention as BAT

@@ -8,7 +8,6 @@ them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a bui
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import re
@@ -20,23 +19,18 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.audit import weights_root
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from conftest import load
+
+from verity.protocols.accounting.pouw.verifier.audit import weights_root
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 
 
-def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a fixture.py and a run.py too."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-F = load("pearl_c_sm120_fixture", HERE / "fixture.py")
-S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
-RUN = load("pearl_c_sm120_run", HERE / "run.py")
+#: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
+F = load("pearl_c_sm120/fixture.py")
+S = load("pearl_c_sm120/sass_gate.py")
+RUN = load("pearl_c_sm120/run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()
@@ -147,9 +141,9 @@ def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unc
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)

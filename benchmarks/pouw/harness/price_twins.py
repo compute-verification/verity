@@ -8,7 +8,7 @@ gap's function (v1-hot, v2-hot, Pearl-C4 v1 and v2). The Lean store's pins keep 
 both. Its key is
 
   statement   the panel line and version it is the gap for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity.protocols.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity.protocols.accounting.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap
@@ -48,6 +48,12 @@ import re
 import sys
 from fractions import Fraction
 from pathlib import Path
+
+#: what `ledger.py` and the tests read
+__all__ = [
+    "CAST_VALUES", "LEAN_STORE", "REPO_AUDIT", "REPO_SOURCE", "SCHEMA", "STAGED", "TABLE", "TwinError", "build",
+    "extract", "guarantees", "lifted_definitions", "load", "lookup", "parse", "refresh", "statement",
+]
 
 HERE = Path(__file__).resolve().parent
 TABLE = HERE / "price_twins.json"
@@ -295,6 +301,8 @@ def load(path: Path = TABLE) -> list[dict]:
     doc = json.loads(path.read_text())
     if doc.get("schema") != SCHEMA:
         raise TwinError(f"{path} is {doc.get('schema')!r}, not {SCHEMA}")
+    if not isinstance(doc.get("twins"), list):
+        raise TwinError(f"{path} has no twins list")
     return doc["twins"]
 
 

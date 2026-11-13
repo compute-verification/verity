@@ -42,7 +42,7 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: `verity`'s packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`)
-PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core")
+PACKAGES = ("verity", "verity.circuits", "verity.circuits.kernels", "verity.core")
 #: the repository's directories of other distributions' packages, one directory per serving stack holding the package that
 #: attaches Verity to it.  A package there registers itself by a sidecar of its own module
 #: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
@@ -78,7 +78,7 @@ def discover() -> dict[str, dict[str, Path]]:
     it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
     tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
     the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     imported: dict[Path, bool] = {}
     with CC.internal():
@@ -268,7 +268,7 @@ def named(fid: str) -> Any | None:
     None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
     or not."""
     from verity.circuits.codec import lookup_primitive
-    from verity.circuits.defs import Registry
+    from verity.circuits.defs import DefinitionTable
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -278,7 +278,7 @@ def named(fid: str) -> Any | None:
         if (d := composite_lift(fid)) is not None:
             return d if d.id == fid else None
         try:
-            return lookup_primitive(Registry(), fid)
+            return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
             return None
 

@@ -163,20 +163,23 @@ LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha"
 #: the tiny start's one block grown to three, the two copies of it with their output projections zero, trained whole
 GROW = {"depth": 3, "lr": 1e-2, "adam_lr": 2e-3, "embed_lr": 3e-3, "weight_decay": 0.05, "warmup": 1,
         "micro_batches": 2}
-#: the whole model, one block, LoRA's adapters, one block's average, one block under Muon in two micro-batches, and
-#: the model grown by copies of its block
+#: the whole model, one block, LoRA's adapters, one block's average, one block under Muon in two micro-batches (its
+#: Newton-Schulz products cast to bf16), one block under Shampoo (its factors' products and roots in f32), and the
+#: model grown by copies of its block
 JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
         "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
         "lora": {"route": "lora", "dials": LORA},
         "ema": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2, "ema_decay": 0.5}},
         "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}},
+        "shampoo": {"dials": {"trainable": "blocks.0.*,norm", "opt": "shampoo", "lr": 1e-2}},
         "grow": {"route": "grow", "dials": GROW}}
 
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
-    the job's trace is taken from (its config, route, model and optimizers)."""
+    attention kernel torch picks (a fused one, a job's on a GPU) or under the math kernel (a job's on a CPU,
+    `run.cpu_attention`): the counter's record, and what the job's trace is taken from (its config, route, model
+    and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)

@@ -56,15 +56,17 @@ import re
 import subprocess
 import sys
 import time
-from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option, workload_arg
-from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
-from verity_vllm.properties.record import seal
+from verity_vllm.properties.noninterference_families import (
+    FINAL_NORM_MODULES,
+    parallel_residual_boundaries,
+    unfused_norm_boundaries,
+)
+from verity_vllm.properties.record import REGISTRY, seal
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
@@ -586,7 +588,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
 # the property record, world-parametric: a run's observed arm against its bare arm
 # ---------------------------------------------------------------------------------------------------------
 
-SCHEMA = "verity-vllm/noninterference/v2"
+SCHEMA = REGISTRY["noninterference"].schema
 #: the tensor-parallel worlds a record is taken at; there are no collective records above two ranks, so a larger world is refused
 WORLDS = (1, 2)
 

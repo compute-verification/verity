@@ -4,7 +4,7 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 
 * the plain-integer reference (`verity.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
-* the step's pinned vectors (`verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
+* the step's pinned vectors (`verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
 * the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
@@ -22,30 +22,30 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import bind
-from verity.circuits.boolean import trace as TR
-from verity.definitions.ops.prims import F32ToE4m3Sat
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fp8_moe_rows as MR
+from verity.definitions.numerics.moe_twins import nv_expf_bits
+from verity.circuits.ops.prims import F32ToE4m3Sat
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions.registry import act as A
 from verity.definitions.registry import boolean_fp8 as BF
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8 as F
 from verity.definitions.registry import fp8_moe as M
-from verity.definitions.numerics.moe_twins import nv_expf_bits
+
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
-VECTORS = Path(__file__).resolve().parents[4] / "verity" / "definitions" / "silicon" / "captures" / "vectors"
+VECTORS = Path(__file__).resolve().parents[4] / "verity" / "circuits" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
 
 
@@ -336,7 +336,7 @@ def act_group_model(gate: list[int], up: list[int]) -> list[int]:
     s = s if _q(s) > _q(F.MIN_SCALE_BITS) else F.MIN_SCALE_BITS
     def quant(x: int) -> int:
         v = _q(x) / _q(s)
-        return F32ToE4m3Sat.evaluate(_rn(max(-448, min(448, v)), x & SIGN))
+        return F32ToE4m3Sat.evaluate(_rn(max(Fraction(-448), min(Fraction(448), v)), x & SIGN))
     return [quant(x) for x in r] + [s]
 
 
@@ -358,15 +358,15 @@ def test_act_result_matches_the_kernel_model() -> None:
 
 def test_act_groups_match_the_kernel_model() -> None:
     rng = np.random.default_rng(12)
-    I, G = 32, 16
-    fn = bind(M.SiluMulFp8BlockQuant, I=I, G=G)
-    for p, gu in enumerate(_bf16_rows(rng, 6, 2 * I, -6, 4)):
+    inter, G = 32, 16
+    fn = bind(M.SiluMulFp8BlockQuant, I=inter, G=G)
+    for p, gu in enumerate(_bf16_rows(rng, 6, 2 * inter, -6, 4)):
         gu = gu.tolist()
         if p == 5:
-            gu[I:I + G] = [0x0001] * G                       # a group whose results are subnormal: the floor scale
+            gu[inter:inter + G] = [0x0001] * G                       # a group whose results are subnormal: the floor scale
         want = []
-        for g in range(I // G):
-            want.append(act_group_model(gu[g * G:(g + 1) * G], gu[I + g * G:I + (g + 1) * G]))
+        for g in range(inter // G):
+            want.append(act_group_model(gu[g * G:(g + 1) * G], gu[inter + g * G:inter + (g + 1) * G]))
         got = evaluate(fn, gu)
         assert list(got) == sum((w[:-1] for w in want), []) + [w[-1] for w in want]
     assert want[0][-1] == F.MIN_SCALE_BITS
@@ -391,35 +391,35 @@ def test_act_is_not_bf16_silu_then_group_quant() -> None:
     """The fused kernel keeps `result` in f32; `SiluMul_v2` (silu_and_mul's bf16 output) then `Fp8GroupQuant_v1` rounds it to bf16
     first, and the two give different words on ordinary rows."""
     rng = np.random.default_rng(13)
-    I, G = 64, 32
+    inter, G = 64, 32
     differ = 0
-    for gu in _bf16_rows(rng, 4, 2 * I):
-        fused = evaluate(bind(M.SiluMulFp8BlockQuant, I=I, G=G), gu.tolist())
-        two = evaluate(bind(F.Fp8GroupQuant, K=I, G=G), list(evaluate(bind(A.SiluMul, I=I), gu.tolist())))
+    for gu in _bf16_rows(rng, 4, 2 * inter):
+        fused = evaluate(bind(M.SiluMulFp8BlockQuant, I=inter, G=G), gu.tolist())
+        two = evaluate(bind(F.Fp8GroupQuant, K=inter, G=G), list(evaluate(bind(A.SiluMul, I=inter), gu.tolist())))
         differ += fused != two
     assert differ == 4
 
 
 def test_act_statics_the_kernel_cannot_launch_are_refused() -> None:
-    for I, G in ((192, 96), (200, 128), (64, 128)):
+    for inter, G in ((192, 96), (200, 128), (64, 128)):
         with pytest.raises(ValueError, match="silu_and_mul_per_block_quant needs"):
-            _ = bind(M.SiluMulFp8BlockQuant, I=I, G=G).body
+            _ = bind(M.SiluMulFp8BlockQuant, I=inter, G=G).body
     with pytest.raises(ValueError, match="silu_and_mul_per_block_quant needs"):
         MR.silu_mul_fp8_block_quant_rows(np.zeros((1, 400), np.uint16), G=128)
 
 
-@pytest.mark.parametrize("I,G,specials", [pytest.param(64, 16, False, marks=pytest.mark.slow), (64, 16, True), (256, 128, True)])
-def test_the_act_twin_is_the_definition(I: int, G: int, specials: bool) -> None:
+@pytest.mark.parametrize("inter,G,specials", [pytest.param(64, 16, False, marks=pytest.mark.slow), (64, 16, True), (256, 128, True)])
+def test_the_act_twin_is_the_definition(inter: int, G: int, specials: bool) -> None:
     """`fp8_moe_rows.silu_mul_fp8_block_quant_rows` against `SiluMulFp8BlockQuant_v1` row by row, on rows with the bf16 special words
     (zeros, subnormals, infinities, NaNs) planted at random places when `specials`."""
-    rng = np.random.default_rng(I + specials)
-    gu = _bf16_rows(rng, 6 if I < 256 else 2, 2 * I, -8, 10)
+    rng = np.random.default_rng(inter + specials)
+    gu = _bf16_rows(rng, 6 if inter < 256 else 2, 2 * inter, -8, 10)
     if specials:
         m = rng.random(gu.shape) < 0.08
         gu[m] = rng.choice(BF16_SPECIALS, int(m.sum()))
         gu[0, :G] = 0x7FC0
     q, s = MR.silu_mul_fp8_block_quant_rows(gu, G=G)
-    fn = bind(M.SiluMulFp8BlockQuant, I=I, G=G)
+    fn = bind(M.SiluMulFp8BlockQuant, I=inter, G=G)
     for p in range(gu.shape[0]):
         assert list(evaluate(fn, gu[p].tolist())) == q[p].tolist() + s[p].tolist(), p
 

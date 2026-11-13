@@ -5,7 +5,7 @@
         --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\
         [--tmpl-unit-bin B] [--wide-leaf]
 
-* **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
+* **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit sampled: a
   sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
   `served_units/stage.py` stages a table read) is proved and verified with its unit's rows at their positions, which
   ``--tmpl-unit-bin`` (`flock-tmpl-unit`) places once into ``stage/unit.placed`` from the circuit's template section.
@@ -41,9 +41,9 @@
   ``program_note``, which on a statement under the provisional unit cover says the Program was handed and not held to
   the circuit.
   With ``--wide-leaf`` the verdict is asked under the version's own name, ``verity/flock-circuit+wide-leaf`` or
-  ``verity/flock-circuit/tmpl+wide-leaf``, and the name alone selects the version: `flock-verify` has no
+  ``verity/flock-circuit/tmpl+wide-leaf``, and the name alone selects the version: the Lean verifier has no
   ``--wide-leaf`` argument, takes a wide-leaf name only with ``--zk`` and with no ``--rec-…`` argument, and refuses
-  every other name that ends ``+wide-leaf`` as an unknown statement (exit 2). A `flock-verify` whose `Flock/Tags.lean`
+  every other name that ends ``+wide-leaf`` as an unknown statement (exit 2). A Lean verifier whose `Flock/Tags.lean`
   does not list the two names refuses them the same way, and a row then records that refusal for each session
   (`no_verdict`), not a verdict on the proof.
 
@@ -75,10 +75,10 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
@@ -311,9 +311,9 @@ def cores(cpus=None, nodes: Path | None = None) -> dict:
 
 
 def no_verdict(statement: str, rc: int, said: str) -> str:
-    """Why a `flock-verify verify` that printed no VERDICT line gave none, from its exit code and what it wrote
+    """Why a Lean `verify` that printed no VERDICT line gave none, from its exit code and what it wrote
     (``said``). A statement name it does not know is said as that: the refusal is of the name, before any proof is read,
-    and a wide-leaf name is known only to a `flock-verify` whose `Flock/Tags.lean` lists it."""
+    and a wide-leaf name is known only to a Lean verifier whose `Flock/Tags.lean` lists it."""
     if "unknown statement" not in said:
         return f"no verdict (rc {rc})"
     why = f"no verdict (rc {rc}): this flock-verify does not know the statement {statement!r} and refused it unread"

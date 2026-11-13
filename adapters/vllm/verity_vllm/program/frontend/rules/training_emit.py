@@ -17,18 +17,25 @@ import math
 
 import numpy as np
 import torch
-
-from verity.definitions.ops import scalar as SC
 from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import torch_words as W
+
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule
-from verity_vllm.program.frontend.rules.training_views import (_PARTS, StaticFloat, _const, _static_words, _view_expand,
-                                                               _view_permute, _words)
+from verity_vllm.program.frontend.rules.training_views import (
+    _PARTS,
+    StaticFloat,
+    _const,
+    _static_words,
+    _view_expand,
+    _view_permute,
+    _words,
+)
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
@@ -38,7 +45,7 @@ _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 _NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
 
 
-def _bits(x: float) -> int:
+def _bits(x: float | np.floating) -> int:
     return int(np.float32(x).view(np.uint32))
 
 
@@ -238,7 +245,7 @@ def _word_ew(ctx, node, fn, args, S: tuple[int, ...], dtype) -> Coll:
     if dims is None:
         return _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, dtype) for a in args], S, w)
     T = tuple(S[d] for d in dims)
-    ops = []
+    ops: list[tuple[Coll, int | None]] = []
     for a in args:
         v = ctx.val(a) if isinstance(a, torch.fx.Node) else None
         if isinstance(v, (StaticIndex, StaticFloat)) and v.tensor.numel() > 1:

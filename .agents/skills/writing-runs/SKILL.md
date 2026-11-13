@@ -22,6 +22,12 @@ there when the workload exits and publishes to the store:
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
+A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
+on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
+(`research retention gc --unpreserved-runs`) the directory goes 7 days after its last write, unless
+`research keep RUNDIR ...` before then or `research data custody RUN --publish` keeps it (the research README,
+"Retention of node data").
+
 A local `research run` (no `--on`) publishes only its telemetry and the files its `result.json` lists, unless
 `--run-record` gives it custody's selection; the Nebius Sky templates with a free-form `CMD` (`port-capture`,
 `prover-bench`, `prover-dev`) pass it.
@@ -49,6 +55,9 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed; it deletes passes only once their record names a
    preserved artifact. On "Permission denied" or a refusal, stop and report it: someone made the path read-only or kept
    it on purpose.
+5. **Size `--mem-gb` from a run that ended:** the `mem` line of `research status RUN` says the most the run held (its
+   peak, page cache left out), what it asked and the memory limit it would have been stopped at, and that peak is the
+   figure to choose the job's `--mem-gb` from.
 
 ~~~bash
 research run --on auto --cwd source -- \
@@ -56,4 +65,7 @@ research run --on auto --cwd source -- \
 ~~~
 
 Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
-"Tests"), and check that the run dir holds only your output directory beside the harness's files.
+"Tests"), and check that the run dir holds only your output directory beside the harness's files. A run `--on auto`
+sent to a pool that waits there on memory moves by itself to a pool that would start it now only while the VM that
+launched it is up and holds its asker, one of at most eight alive there: its launch and `research status RUN` say
+whether it has one.
