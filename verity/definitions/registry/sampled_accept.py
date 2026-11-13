@@ -109,9 +109,13 @@ PART = 4096
 #: the lanes of an `AcceptResample_v1` chunk, at most (`chunk`): the registered top-p select's chunk
 RESAMPLE_N = 32
 NEG_INF = SA.NEG_INF_BITS
-_CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for cc 9.0 from vLLM d9105ea80's "
-         f"`rejection_sample` kernels at 154,880 logits and five draft tokens ({EVIDENCE['sampled_accept_ptx']['run_record']}); "
-         "a capture of those kernels on a cc 9.0 GPU would hold it")
+_CONF = ("exact-model-tested: vLLM d9105ea80's `rejection_sample` kernels launched on a cc 9.0 GPU at 154,880 logits and five "
+         f"draft tokens, one request of 1 + 5 rows a launch ({EVIDENCE['sampled_accept_capture']['run_record']}, "
+         "adapters/vllm/tests/properties/sampled_accept_capture_gpu.py): every word they stored for a request inside the "
+         "domain is the reference's, and on the requests its replay evaluates "
+         f"({EVIDENCE['sampled_accept_capture']['replay_run_record']}) `SampledAccept_v1` gives the stored count and tokens; "
+         "the launched PTX and SASS are the ones the Definitions were read from "
+         f"({EVIDENCE['sampled_accept_ptx']['run_record']})")
 
 
 def _refuse(b: dict) -> str | None:
