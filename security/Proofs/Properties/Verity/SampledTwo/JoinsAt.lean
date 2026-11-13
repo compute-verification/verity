@@ -7,6 +7,7 @@ public import Proofs.Properties.Verity.SampledTwo.CoinBytes
 public import Proofs.Properties.Verity.SampledTwo.StageAlone
 public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
+public import Proofs.Properties.Verity.SampledTwo.SessionCut
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
@@ -62,8 +63,10 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
 * **The first stage's coins are read under the parameters' key** (`firstReads`) and **an accepted play on two windows
   shows its sessions' order** (`orderShown`): CUT derives both from the form's accept (`CutAccept.lean`, not on the
   join yet); `firstDrawn`, `sessionMatches`.
-* **The interior's log on the play's** (`interiorLogged`, SESSIONCOINS) and **the messages** (`msgOpens`,
-  `digestBefore`, MESSAGES).
+* **On two windows the first session samples no coin tree** (`firstTreeless`): a named hypothesis until the form
+  refuses a coin tree's line in the first session's log on two windows (TWOLEG); with `caseIsSent` it gives the
+  interior's log on the play's (`SessionCoins.interiorLogged_read`, SESSIONCOINS). **The messages** (`msgOpens`,
+  `digestBefore`, MESSAGES): no check gives either; their docstrings say what each holds of.
 * **The run of record's accept** (`playAccepts_form`'s premises): `heldAt`, `twoHolds` (HELDOF); `recordsHeldAt`
   (HELDOF's names, ACCEPTS's rest); `recordsRead` (TWOLEG's form change); `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`,
   `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`.
@@ -235,8 +238,8 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   firstDrawn : FirstDrawn C
   /-- The check's first session is the cut's. -/
   sessionMatches : SessionMatches C
-  /-- The interior's log, as the check read it, ends the play's. -/
-  interiorLogged : SessionCoins.InteriorLogged C LogIsDevice
+  /-- On two windows the first session's releases, as the cut reads them, hold no coin tree's `Hello`. -/
+  firstTreeless : SessionCoins.FirstTreeless C
   /-- The message the check reads at each round opens the digest the play records. Holds of a strategy whose message
   at each round is fixed before the round's coin; no check gives it: at the digests the device signs (the link's
   `after`, a rep round's SHA-512 of its retained bytes, the closing's SHA-512 of the session's evidence; the
@@ -343,7 +346,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
         (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) LogIsDevice hShow₂ hDev₂))
   -- The sessions' pieces, at the case itself.
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
-  have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg => h.interiorLogged o hA hg.1.2
+  have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg =>
+    SessionCoins.interiorLogged_read C h.caseIsSent h.firstTreeless o hA hg.1
   have hLoc := SessionCoins.locates_run A (CoinMap.stageLocate ℓ₁ ℓ₂) tab
   have hSess := SessionCoins.sessionsAgree_accepted A x C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood _
     hsz hlog
