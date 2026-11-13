@@ -23,6 +23,7 @@ public import Proofs.Accounting.RateAudit.SketchInteractive
 public import Proofs.Accounting.RateAudit.SketchRank
 public import Proofs.Accounting.RateAudit.SketchTable
 public import Proofs.Accounting.RateAudit.Windows
+public import Proofs.Accounting.RateAudit.Witnesses
 public import Definitions.Accounting.RateAuditRemote
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
