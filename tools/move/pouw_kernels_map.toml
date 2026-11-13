@@ -1,18 +1,19 @@
 # compute-accounting's GPU rows toward the architecture's tree: what `tools/move/layout.py --map
 # tools/move/pouw_kernels_map.toml` moves and rewrites. It runs after `pouw_rows_map.toml`, on the commit that map makes,
-# and before the protocol group move (`verity/protocols/accounting/`, `proofs/`, `policy/`); its paths are today's.
+# and before the protocol group move; its paths are chain 1's.
 #
-# - PoUW's served GPU code becomes `verity/protocols/pouw/prover/kernels/`, the directories siblings as they were:
-#   `pearl_c/`, `pearl_c_sm90/`, `pearl_c_sm120/`, `filler/` (its `comm/`, a measurement, stays in `benchmarks/`) and
-#   `served_zk/`'s `hm96_rows.cu`.
+# - PoUW's served Pearl-C kernels become `verity/protocols/pouw/prover/kernels/`, siblings as they were, since their
+#   includes cross: `pearl_c/`, `pearl_c_sm120/`, `served_zk/`'s `hm96_rows.cu`, and of `pearl_c_sm90/` the kernel's
+#   sources, `build.sh`, `run.py`, `fixture.py` and `sass_gate.py`. The rest of `pearl_c_sm90/` (the Python that drives
+#   vLLM or a model, its README and job scripts) and of `served_zk/` stays in `benchmarks/`.
 # - The receipt folds' one reference, `verity/protocols/pouw/receipts/`, becomes `verity/protocols/pouw/verifier/receipts/`.
-# - Dither's kernels (`benchmarks/hash/dither/h1u.cu`, `h1sha.cuh`) become `verity/protocols/experimental/dither/prover/
-#   kernels/`, and Pearl-C4's (`benchmarks/pouw/pearl_c4/`) `verity/protocols/experimental/pearl_c4/prover/kernels/`.
 #
-# Unlike `pouw_rows_map.toml`, kernel sources are rewritten: a relative `#include` that leaves a moved directory
-# (`../../../verity/definitions/kernels/sha512.cuh`), or reaches into one (`../pearl_c/sha512.cuh` from
-# `benchmarks/pouw/masked_gemm/`), names its file at its new depth. Only those paths change in them. No file is split
-# or deleted. The format is `layout_map.toml`'s.
+# Unlike `pouw_rows_map.toml`, kernel sources are rewritten, and only where a relative `#include` names a moved path: one
+# that leaves a moved directory (`../../../verity/definitions/kernels/sha512.cuh`) or reaches into one
+# (`../../../verity/protocols/pouw/receipts/receipt_folds.cuh` from a benchmark's kernel) names its file at its new depth.
+# What stays out, each needing a code change first: `benchmarks/pouw/filler/` (a distribution of its own that loads
+# `benchmarks/`) and `benchmarks/pouw/pearl_c4/` (it imports the config package). No file is split or deleted. The
+# format is `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
@@ -21,42 +22,26 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 [paths]
 "verity/protocols/pouw/receipts/" = "verity/protocols/pouw/verifier/receipts/"
 "benchmarks/pouw/pearl_c/" = "verity/protocols/pouw/prover/kernels/pearl_c/"
-"benchmarks/pouw/pearl_c_sm90/" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/"
 "benchmarks/pouw/pearl_c_sm120/" = "verity/protocols/pouw/prover/kernels/pearl_c_sm120/"
-"benchmarks/pouw/filler/" = "verity/protocols/pouw/prover/kernels/filler/"
-"benchmarks/pouw/filler/comm/" = "benchmarks/pouw/filler/comm/"
 "benchmarks/pouw/served_zk/hm96_rows.cu" = "verity/protocols/pouw/prover/kernels/hm96_rows.cu"
-"benchmarks/hash/dither/h1u.cu" = "verity/protocols/experimental/dither/prover/kernels/h1u.cu"
-"benchmarks/hash/dither/h1sha.cuh" = "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh"
-"benchmarks/pouw/pearl_c4/" = "verity/protocols/experimental/pearl_c4/prover/kernels/"
+"benchmarks/pouw/pearl_c_sm90/acc.h" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/acc.h"
+"benchmarks/pouw/pearl_c_sm90/debit_sm90.cu" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/debit_sm90.cu"
+"benchmarks/pouw/pearl_c_sm90/hash_prefill.cuh" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill.cuh"
+"benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp"
+"benchmarks/pouw/pearl_c_sm90/pearl_c_sm90.cu" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu"
+"benchmarks/pouw/pearl_c_sm90/build.sh" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/build.sh"
+"benchmarks/pouw/pearl_c_sm90/run.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/run.py"
+"benchmarks/pouw/pearl_c_sm90/fixture.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/fixture.py"
+"benchmarks/pouw/pearl_c_sm90/sass_gate.py" = "verity/protocols/pouw/prover/kernels/pearl_c_sm90/sass_gate.py"
 
 [retired]
-paths = ["verity/protocols/pouw/receipts/", "benchmarks/pouw/pearl_c/", "benchmarks/pouw/pearl_c_sm90/",
-         "benchmarks/pouw/pearl_c_sm120/", "benchmarks/pouw/pearl_c4/"]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["verity/protocols/pouw/receipts/", "benchmarks/pouw/pearl_c/", "benchmarks/pouw/pearl_c_sm120/"]
 
 [split]
 # A reference to a directory the map splits follows its larger part; each one here says why that is what it means
 # (`layout.py` fails on any other, and on an entry no reference needs): "old file: old directory" = why.
-"benchmarks/pouw/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/arms.py: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/capfill_co_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/capfill_fit_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/capfill_fold_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/capfill_fstep_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/dcap.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/dfill.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/fill.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/flin.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/fold_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/pfill_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/psched.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/psched_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/pyproject.toml: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/filler/tile_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
-"benchmarks/pouw/pearl_c/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
 "benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/served_zk" = "served_zk's benchmark as a whole, which stays; only its kernel hm96_rows.cu moves"
-"tools/research/tests/test_landing.py: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
 
 [drop]
 paths = []
@@ -81,10 +66,9 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.pouw.filler" = "verity.protocols.pouw.prover.kernels.filler"
-"benchmarks.pouw.filler.comm" = "benchmarks.pouw.filler.comm"
 "benchmarks.pouw.pearl_c" = "verity.protocols.pouw.prover.kernels.pearl_c"
-"benchmarks.pouw.pearl_c4" = "verity.protocols.experimental.pearl_c4.prover.kernels"
 "benchmarks.pouw.pearl_c_sm120" = "verity.protocols.pouw.prover.kernels.pearl_c_sm120"
-"benchmarks.pouw.pearl_c_sm90" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90"
+"benchmarks.pouw.pearl_c_sm90.fixture" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.fixture"
+"benchmarks.pouw.pearl_c_sm90.run" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.run"
+"benchmarks.pouw.pearl_c_sm90.sass_gate" = "verity.protocols.pouw.prover.kernels.pearl_c_sm90.sass_gate"
 "verity.protocols.pouw.receipts" = "verity.protocols.pouw.verifier.receipts"
