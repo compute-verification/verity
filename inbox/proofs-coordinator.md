@@ -124641,3 +124641,51 @@ Second entry to your 05:36Z and 05:49Z messages. Nothing has stopped.
 **#9602:** `r20261113-041521-46a8` is still running, 9 of 13 suites passed. Ratchet gate `origin/main..c0ebc52445e2`: passed [run on my VM]. `main` `8ef93f01963c` is in its head; `main`'s tip merges into it with no conflict [derived from the scratch merge above].
 
 **Scratch branches I pushed for this, mine to delete:** `cursor/proofs-scratch-world-interface-moved-bdb3`, `cursor/proofs-scratch-chain-tree-fix-51a7`.
+
+## CUT, Fri 13 Nov 06:20Z: `CutFirst.lean` COMPILES at `3b2eaa5371` (`8c4e`: "lean exit 0 in 379 s", probe clean over 24 theorems); `CutAccept.lean` does NOT yet (one theorem, `win_lines`); fixed at `8cf4d46672`, in try `51b2`; ASSEMBLY should merge `8cf4d46672` once `51b2` passes
+
+In plain words: the file that shows the first stage's coins are read under the parameters' key now compiles. The last file, which turns the cut's two facts about an accepted play into theorems, failed on one name: `MonitoringPeriod` in one signature meant a different type from the challenger's. I wrote the challenger's full name, pushed, and one try is building that file.
+
+STOP RULE: none reached. Nothing in the lock changed since the two `roots` lines of `3b2eaa5371`.
+
+**The machine was replaced again [run].** At 06:13:53Z `~/wt` did not exist. I made `~/wt/.pen` (the `mkdir` succeeded), so this loop holds the pen, and I rebuilt my worktrees from the pushed `3b2eaa5371`. Nothing was unpushed.
+
+**`r20261113-054257-8c4e` (vy-nebius-cpu-12, at `3b2eaa5371`) [run]:**
+- `CutFirst.lean`: "lean exit 0 in 379 s". Its probe printed "axiom probe: none of its 24 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Siblings were clean: "no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.CutFirst declares a name it does".
+  - So `keyOf_some`, `firstReads_of_shown` and `cutBound_shown` are compiled. `members_deployed` and `form_audit` both go through `mvcgen`.
+  - The 24 are the file's 11 public theorems and the 13 private specs `mvcgen` reads.
+- `CutAccept.lean`: "lean exit 1 in 108 s". Its probe printed "axiom probe: 1 of its 11 theorems failed, with Lean's error above on its own lines: Verity.SampledTwo.win_lines".
+  - The one error is `CutAccept.lean:207:42: Application type mismatch`: `ms` "has type `Array MonitoringPeriod` but is expected to have type `Array Spot.Challenger.MonitoringPeriod`".
+  - `orderShown` then printed "declaration uses `sorry`", because it calls `win_lines`. So `orderShown` and `cutBound_accept` are not compiled.
+  - The other theorems of the file elaborated without an error, among them `firstShown`, `firstReads`, `ordered_order`, `evidence_coins`, `windowsOf_some` and `reserve_line`. No probe line covers them, because the file failed.
+
+**Fix (not compiled), `8cf4d46672`.** `win_lines`' signature now says `Spot.Challenger.MonitoringPeriod`. Because the error was in the signature, Lean had not checked `win_lines`' body or the last twelve lines of `orderShown`. I checked both on a core-Lean copy of `LedgerInv`'s two fields, `verifyLedger_inv` and `checked_ok`; they pass there.
+- Try: `r20261113-061742-51b2` (vy-nebius-cpu-12, `CutAccept.lean` alone). It should end about 06:45Z.
+
+**Your 05:49Z and 06:09Z messages.**
+- Nodes: my tries go to vy-nebius-cpu-12, where my build tree is warm, so I add none to vy-nebius-2's line.
+- Memory: my tries ask 24 GB. `8c4e` held at most 6.8 GiB over its whole run (`cgroup.memory_peak_bytes` in its `resources.jsonl`), so I leave the ask as it is. I launch neither `walk_ab.sh` nor `walk_cut.sh`; neither is in my tree.
+- The first accepted play: noted. I still report nothing of mine as saying something about a run.
+- The roots rule's second half [run: a script over both files at `8cf4d46672`]: my two lock roots, `…SampledTwo.CutFirst` and `…SampledTwo.CutAccept`, are each a quoted name among `security/Proofs/lakefile.toml`'s roots. My other five files are on the join, so their lock roots are ASSEMBLY's to add; all five are lakefile roots at my head.
+- No ready line is asked for or given: no records run of `security/Proofs` has run at my head.
+
+**ASSEMBLY.** Merge `8cf4d46672` once `51b2` passes, and not an earlier head: `CutAccept` is a root and fails at each one. `firstReads θ` and `orderShown θ` are then theorems of `CutAccept.lean`. `firstLabel`'s move to the boundary's family comes with the same merge.
+
+Events not mine this hour: eleven task-finished notices for other workers, 22 Slack and Linear events. I acted on none of them.
+
+The premises the cut names:
+- At `cutBound_order` (compiled, `CutOrder.lean`): `Wired`, `FirstReads θ`, `OrderShown θ`, `PrintsInOrder`, `SignsPlay`.
+- At `cutBound_shown` (compiled, `CutFirst.lean`): `Wired`, `FirstShown θ`, `PrintsTwo`, `SignsPlay`. It is the older bound, under `PrintsTwo`, with `FirstReads` taken from `FirstShown`.
+- At `cutBound_accept` (not compiled, `CutAccept.lean`): `Wired`, `PrintsInOrder`, `SignsPlay`.
+
+NEEDS: none.
+
+To post: nothing.
+
+Not established:
+- `CutAccept.lean` has not compiled, so `orderShown`, `firstReads` as a theorem and `cutBound_accept` are not established.
+- Whether a file of mine reads the step TWOLEG's coming refusal changes: not known until TWOLEG names its head.
+- `PrintsInOrder` is proved of no device.
+- The known hole stands, as the docstrings say: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
+
+Head: `8cf4d46672` (`cursor/proofs-cut-9323`), pushed; nothing unpushed.
