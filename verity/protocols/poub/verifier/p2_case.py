@@ -5,7 +5,9 @@ to PoUS's.
 A case (`case_of`) is ``{"params", "commitment", "evidence", "store_root"}``, the commitment and evidence canonical JSON
 in hex:
 
-* ``params``: ``{"not_before_ns": n, "request": R}``, the verifier's clock floor and the prover's request R;
+* ``params``: ``{"not_before_ns": n, "request": R}``, the verifier's clock floor and the prover's request R, which the
+  replay refuses unless it restates `p2_party.SESSION` (`P2Session.SESSION`, pinned there, since no digest binds R),
+  naming each value that doesn't: a toy party's case is refused;
 * ``commitment``: the auditor's registration file, its fields and its plan (`p2_party.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
 * ``evidence``: ``{"log": [...]}``, every request the verifier's Lean process answered of the session after it opened,
@@ -98,8 +100,10 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
 
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
     """The case's answer in the core interface's form from the session's own answer `session` (`p2_party.answer`'s,
-    `P2Session.answer`), as `RemoteAudit.P2Protocol` answers the case: accepted, `{"eps", "q_bytes", "span_ns"}` and the
-    rest of the answer as its profile; rejected with the failure, its window and its draw; or undecided."""
+    `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_party.SESSION`'s session: accepted,
+    `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
+    its draw; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}
     verdict = session.get("verdict")

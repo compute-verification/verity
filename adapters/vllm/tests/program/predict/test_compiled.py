@@ -33,23 +33,23 @@ SCHEDULE = [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": n, "max_tokens
 
 @pytest.mark.parametrize("role,device,program,manifest,artifact", [
     ("LLAMA32_1B", H200, "1f2df5e1029f878debf647a562314108b4e15159e90c5a852adefe9ade1987077c2b4cbf5621209148cdafbdc1113f15cbafd7a9c3f38d11a70659c291062a6b",
-     "f2862dbc43dbeb61bd7e6be2c60cefbd756e04d754a193875e4b3fa64d747071", "0a169ef67dd55fb6"),
+     "9eab133ca46937706a4999ce1c33e6ca984f35b5b1897205cd81c17ecb0c5a1c77ea071a8a7e41dcc510c6aad580855f8f56b8f373ab413ccabbe42fc4fcba5d", "0a169ef67dd55fb6"),
     ("QWEN3_8B", H200, "beed60d6bb75d7d9d39b7adf154b0b458b981e76ff2a6aed29c5f73046f0194b44b221b20ff86e0e5a7cb6a41a465592beecf3ea81a8add0b3d5d165c79f960c",
-     "3d1368d361d6c1a6", "3bd5dcb11c2004ca"),
+     "a3425b3502c70598", "3bd5dcb11c2004ca"),
     ("QWEN3_30B_A3B", H200, "763ff762378d085d78977b341aab0b38bf7047507cf9887f51a4bcedcbe36dac87faeefd68e957a914d6a70147f912c31b4ffe3dc7c44f5cb86c477f9cd662b4",
-     "8564ceaa69e105bf", "970c4d99d29792e3"),
+     "125617a00d331487", "970c4d99d29792e3"),
     ("LLAMA32_1B", RTX, "c98f0b6b62bf8ea5a06333f828df1c09ebae314bac4c438ca4f84d8206b3595c5f8bf1b7333a62e5f264ee2f8377bd61939ff4f13765bb9eca99e5cd145c47cf",
-     "ee8896c9db33aac5", "fba557acf341db86"),
+     "f8eca6d3fc912935", "fba557acf341db86"),
     ("QWEN3_8B", RTX, "feb1c2906ea08bddd4c38b5fe402b203ac364ef888b1b4b9664b9c2011e3a33c4adc1b965b6049af37de659457d4e0784217f7be61ae420e962a11e3a09ebbc0",
-     "c28dc3bf7e0ef088", "533721fc9d37833a"),
+     "4c41aa21e20338cd", "533721fc9d37833a"),
     ("QWEN3_30B_A3B", RTX, "387b8559b378775070e037bd31fda88e4bdcd2595c18f15a542cfdad612b25470c47fc6cfdfff72652eff93bc30a4e04b2139b25447507f43aedd25053afecb3",
-     "64b37498fdee9cc0", "4605351dd36012fb"),
+     "dd38981af4ce8766", "4605351dd36012fb"),
     ("LLAMA32_1B", B200, "3ab045d8848f451edcd5fc9d05cf81b7d6cfff82c5c7dc071b2109fe3c7c555d850dc864ed59922f7323f27552a9e26fbc53203c8f724de922b5f0bdd73d0688",
-     "6e2fdc764358c78e", "f23f3e483d51b467"),
+     "277f22e76729927c", "f23f3e483d51b467"),
     ("QWEN3_8B", B200, "184dfca07df5ad5cfabb2179b16d3f6f4734c9aee02d6b5da429e11ba65758e225ee03717dac57e67725328dc12ebc96aa1d333d3bc5901b4a13914cd2ee5e1f",
-     "0a894bb296596d6d", "4e20ad37fe15d4f2"),
+     "94c19d4ccd6433e0", "4e20ad37fe15d4f2"),
     ("QWEN3_30B_A3B", B200, "ef0d829cb709ad3fb9e51531f4ff4b57d71fbd2007c6630e311e652d5613e5ceffe664918427da7c6d0b55405076726bf41afbc720a0e0b86a601e2598787cf7",
-     "33506dedcacb998e", "a8d8e030689c29b4"),
+     "57612bc5e91f70ab", "a8d8e030689c29b4"),
 ])
 def test_the_predicted_served_build_is_the_traced_one(role, device, program, manifest, artifact):
     b = PC.predict(role, device, SCHEDULE, 14)
