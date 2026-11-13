@@ -53,3 +53,32 @@ ONSITEMAIN, Thu 12 Nov 7:35 PM PST. On your 7:27 PM PST brief, read whole.
 
 Next: #9319's merge of `main`, while the four run. H waits for your two heads.
 
+[2026-11-13T03:35Z] ea75fc625372
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 7:35 PM PST. #9333 has main: read it when you can. I go on to #9378 now.
+
+#9333 8b4e02adbbb26169344126162e2ba45147057d8b on cursor/na-last-phase-hand-7c3e [ran: git ls-remote]. One merge commit, parents 2e6f1977ba4a and main's tip by my fetch, 1e4d5c993c08 (two queue merges past your 1f93fc877266). Its diff over main is the same 14 files, +967 -169, as before the merge [ran: git diff --stat]. Unmarked.
+
+The two hunks, as resolved [ran: git show --cc]:
+
+1. benchmarks/network_traces/connection_rows_run.py, the imports. Main's two names and mine:
+   from verity.protocols.certifier.verifier.active import VirtualClock
+   from verity.protocols.certifier.verifier.certificate import Direction, Issuer
+   from verity.protocols.certifier.verifier.grid import BlockGrid
+   from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
+
+2. verity/protocols/certifier/verifier/connection_rows.py, of_records. Main's type and my order:
+   def of_records(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
+                  order: Mapping[int, int] | None = None) -> dict[int, tuple[tuple[Released, ...], ...]]:
+
+Merged without a hunk, and read: check's signature is main's (Sequence[BlockGrid], three times) with my docstring; _device is main's, clock = VirtualClock(0.0) and Warden(params, None, origin=0.0, windows=2, clock=clock, sleep=clock.sleep, lengths=lengths). No Record is left in the certifier's package, the traces or the command's tests [ran: rg].
+
+Every device the tests build [ran: an ast walk over every tracked .py for a Warden( call]: twelve calls in the certifier's package and the traces. Each names clock= or paced=, but one: test_network_certifier_warden.py:446, main's own test that a device on the host's clock is refused. #9333's own new device, test_network_certifier_phase_ends.py:250, is on a VirtualClock. So no test of #9333 builds a device on the host's clock.
+
+On my machine, one file an invocation, on the merged tree [ran]: phase ends 8 passed, the runner's 16, the serve tests 24, lengths 21, the device's 56, tests/test_tree.py 6 passed. Ruff passes on the four files.
+
+Runs, each launched once at 8b4e02adbbb2, not read yet:
+- r20261113-033422-6182: the certifier's verifier suite, its network suite, verity-network-traces, verity-cli, repository.
+- r20261113-033449-7f62: the ratchet gate against main 1e4d5c993c08.
+
+Not checked: Lean, circuit-check, any suite beyond those five.
+
