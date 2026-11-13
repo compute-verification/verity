@@ -52,6 +52,7 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 from verity_vllm.pipeline.row_json import field_of
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.schema_ids import EXECUTING_TREE_SCHEMA
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
@@ -145,7 +146,7 @@ class SingleRow(Row):
                 self.log(f"collector build dir from the release: {self.ncb}")
         export = R.load_json(self.path("EXPORT.json")) if os.path.exists(self.path("EXPORT.json")) else None
         with open(f"{self.d}/tree.json", "w") as f:
-            json.dump({"schema": "verity-sweep/executing-tree/v1", "tree": self.tree, "export": export, "release_line": rel_line}, f, indent=1)
+            json.dump({"schema": EXECUTING_TREE_SCHEMA, "tree": self.tree, "export": export, "release_line": rel_line}, f, indent=1)
         self.verdict("release", self.rel_tag, rel_line.split("|", 1)[1] if "|" in rel_line else rel_line, quiet=True)
         self.precheck_identity()
         self.shape()

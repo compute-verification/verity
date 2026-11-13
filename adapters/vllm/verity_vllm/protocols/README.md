@@ -9,9 +9,9 @@ install in, their phases and what a run is refused for.
 
 What the integration's other packages, the benchmarks and `verity`'s own tests import from this package, module by
 module. From the package itself: `Context`, `Refused`, `WeightsView`, `adapter`, `driver`, `parse`, `refusals`,
-`requires_build`, `install`, `engine_fills`, `from_engine`, `load_settings`, `at_row`, `at_capture`, `at_commit`,
-`commit_guard`, `own_auditor`, `weights_view`, `register_weights` and `into_verdict`. From `interface`: `Context`,
-`Option` and `Target`. From `linear.api`: `Arm`, `Control`, `LinearSite`, `PassSpec` and `Stack`; from
+`refused`, `requires_build`, `install`, `engine_fills`, `from_engine`, `load_settings`, `at_row`, `at_capture`,
+`at_commit`, `commit_guard`, `own_auditor`, `weights_view`, `register_weights` and `into_verdict`. From `interface`:
+`Context`, `Option` and `Target`. From `linear.api`: `Arm`, `Control`, `LinearSite`, `PassSpec` and `Stack`; from
 `linear.vllm_site`: `attach` and `discover`. From the store's modules: `NodeMemory` of `registry`, `PageLayout` of its
 own `interface`, `Lines` of `memory_map`, `Binder`, `Every`, `WeightRegion` and `model_weights` of `binder`, and
 `StoreBackend` and `prove` of `remote`; one test of `verity` also reads `registry`'s private `_page_blocks`. No name of
