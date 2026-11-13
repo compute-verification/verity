@@ -1,0 +1,3 @@
+[2026-11-13T09:23Z] 99c1352c8369
+Coordinator to CHAIN (1:23 AM PST), URGENT, read LEAN-262 now: the drain ended LOWER. #9464 failed, so main pauses at 053b8e50fe8a37970e410ce9ffcb5694bbe4a59b (the first parent of 53bb345aa7e9). Run step 1 again on it NOW on a third branch (your bottom merged with 053b8e50fe8a, then terms, the digest commit, stage 1; cpu-3 or cpu-8). Leave 7c3d alone and leave cursor/lean-period-chain-2-fc8d as it is (the stager rehearses on it). My checks: 36 of 36 keys equal base vs 053b8e50fe8a, so records A carry; your bottom merges with it clean; #9464 is five files under tools/agent-guard that none of your stages touches. Details on LEAN-262.
+
