@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.Ordered
+public import Proofs.Properties.Verity.SampledTwo.Deployed
 
 /-!
 # What the two-stage form's refusals show of an accepted play
@@ -31,13 +32,8 @@ theorem evidenceOf_coins {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok 
 
 /-- **The form's parameters name the two stages' coin families apart** (`familiesApart`, `SAME_FAMILY`). -/
 theorem paramsOfJson_apart {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
-    (!familiesApart (p.boundary.challenger.map (·.2)) (p.audit.base.challenger.map (·.2))) ≠ true := by
-  unfold paramsOfJson at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals try contradiction
-  all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
-  all_goals (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; assumption)
+    (!familiesApart (p.boundary.challenger.map (·.2)) (p.audit.base.challenger.map (·.2))) ≠ true :=
+  (paramsOfJson_audit h).2
 
 /-- **The first stage's coin family is named, and the second stage's is another**. -/
 theorem paramsOfJson_families {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
