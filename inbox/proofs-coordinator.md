@@ -153305,3 +153305,138 @@ Each claim says where it comes from: [run] a node's run, [git] or [local] this m
 - Pushed this turn: the new branch `cursor/proofs-redraw-commitof-carried-4de2` at `5d3a350b8f40`. Nothing else.
 - Runs in flight: `r20261113-170726-4267` (vy-nebius-cpu-9), `r20261113-170942-cb9f` (vy-nebius-cpu-14).
 - Mailbox read 17:16Z: 581 lines, nothing after your 16:03Z. Timer `redraw-mailbox`, every 30 minutes, next 17:30Z.
+
+## SESSIONOF2, Fri 13 Nov 17:18Z: the parser switch is carried across the 24 moves by the tool, clean, to `cursor/proofs-sessionof2-parser-carried-e464`; its difftest and its theorem's file pass there on a node; PoUS's one token is tried and its theorem compiles with it; a second theorem of that file times out with and without the switch, and on `main`'s own tree too
+
+The switch makes `Core.canonicalJson`, the function every protocol reads its parameters with, read its text with
+the parser our proofs can read through. It was written before `main` moved many directories. A tool of the tree
+re-applies each move to a branch, so that the branch's files land where `main`'s now are. I ran it on a node. It
+crossed all 24 moves with nothing to settle, and the result is on a new branch. On that branch the switch's tests pass
+and its theorem's file compiles, as they did before the moves. No pull request is open, no lock was touched, and I
+ran no `--update`.
+
+**1. The carry** `[run]`: `r20261113-162445-d2bc` on vy-nebius-cpu-14, `--on auto --as proofs --mem-gb 24` (the
+processes' memory peaked at 0.73 GiB), 16:25:09Z to 16:48:40Z, rc 0. The job is your 16:03Z form: a scratch made with
+`mktemp -d -p /workspace/research/scratch` and removed by a trap, then
+`python3 tools/move/restack.py pass/parser --main pass/main --dry-run --kept --json`, then a bundle of the result,
+which I pushed from my VM by a plain push.
+- Its lines: "status clean", "crossed 24 skipped 0", "result 7814a7867c810d4177d9c010f6c61cc7fe207964", head
+  `fe28c96c43228dd453ee0e2b2434d33be68e21f8` onto `5eb1231b25581a1c9e87191d28cd5cf591f6033b`, last move
+  `0932f6acd0a8` (`protocol_groups_map`).
+- "plain conflicted 1 tests/test_flock_json.py": an ordinary merge of `main` would have stopped in that file. The
+  tool did not, and nothing was settled by hand.
+- Each of the 24 moves was first checked to be what its script writes on its base ("as checked before", from the
+  node's kept checks).
+- The result adds 59 commits to `main` and the old head: for each move the script's rerun and the merge of the move,
+  and a merge of the move's base where one was needed `[run: git rev-list --count]`.
+- The launch commit `586a9bad3605` (the tree of `main`, parents `main` and the line) is on no branch.
+
+**2. What the result is** `[run: git on my VM]`.
+- `main` at `5eb1231b2558` and the old head `fe28c96c4322` are both its ancestors.
+- Its difference from `main` is the switch's eleven files, 607 lines added and 22 removed, the same count as the old
+  head's difference from its base. Three of them moved: `verity/difftest/README.md`, `pyproject.toml` and
+  `tests/test_canonical_json_port.py` are under `tools/difftest/`.
+- The five Lean files have the old head's bytes. The six others differ from the old head's only in lines where a path
+  moved: `verity/protocols/flock/` and `spot/` and `recursion/` under `verity/protocols/proofs/`, the harness's Lean
+  at `../../circuits/difftest` in the interface's lakefile, the composition's test path in the interface's README.
+- The tool wrote what your 16:03Z expected me to mend: line 31 of the test is
+  `INTERFACE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "interface"`, and in
+  `tests/test_flock_json.py` the interface is in `TREES` and not in `NOT_READ`, the difftest's module is in
+  `ALLOWED`, and the four `PENDING` entries are there, on `main`'s rewritten paths.
+
+**3. The mend, one commit on top:** `cb1a28a8a748fdb7f77e00d41aebd67a993aad94`, three lines in two files. The moves
+never rewrite a Lean source, so the docstrings of `CanonicalJsonDifftest.lean` and `CanonicalJsonDifftestMain.lean`
+still named `verity/difftest`; they name `tools/difftest` now. After it no added line of the eleven files names an
+old path `[run: rg over the eleven files for the maps' old paths]`.
+- On my VM at that head, one named file each `[run]`: `tests/test_flock_json.py` 3 passed, `tests/test_tree.py` 6
+  passed, `tests/test_doc_paths.py` 4 passed, its bookkeeping warning naming none of my files.
+
+**4. The tries at `cb1a28a8a748`** `[run]`: `r20261113-165316-b8ab` on vy-nebius-cpu-9, `--mem-gb 24` (peak 4.28
+GiB), 16:53:52Z to 16:56:13Z, rc 0. One run, the difftest and then the theorem's file.
+- The port: "Build completed successfully (22 jobs)". The interface's default targets, with their guards: "Build
+  completed successfully (45 jobs)".
+- `tools/difftest/tests/test_canonical_json_port.py` and `tests/test_protocol_port.py`: "14 passed in 22.81s", none
+  skipped; "canonical-parsers: Stats(examples=3000, counts={'output': 1717, 'reject': 1283}); swept {('honest',
+  'ok'): 200, ('broken', 'error'): 182, ('broken', 'ok'): 18}".
+- `tests/test_flock_json.py`: "3 passed".
+- `security/Proofs/Core/CanonicalJson.lean`, `lean_changed.py --try … --siblings`: "lean exit 0 in 89 s"; "axiom
+  probe: none of its 14 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "siblings: no built
+  module of its package that doesn't import Proofs.Core.CanonicalJson declares a name it does (315 imported in 8 s,
+  peak 3725 MB); 3736 unchecked". The 3,736 are modules that node's tree had no build of at this source, so the
+  sibling check covers 315 modules and not the package `[read]`. "Build completed successfully (8980 jobs)" for its
+  dependencies.
+
+**5. PoUS's token (NEEDS 1), tried in a run's own clone, committed nowhere** `[run]`: `r20261113-165950-62d7` on
+vy-nebius-cpu-11, `--mem-gb 24`, 17:00:17Z to 17:07:43Z, rc 1. It tries
+`security/Proofs/Properties/Pous/Component.lean` at `cb1a28a8a748` as it is, then with line 98 changed by `sed` in
+the clone to `cases hp : Flock.JsonParse.parse s with`.
+- As it is: "lean exit 1 in 265 s", "2 of its 57 theorems failed: Pous.Component.SecurityProofs.canonicalJson_ok,
+  Pous.Component.SecurityProofs.wverdict_eq". The first fails at lines 101, 107, 114 and 118 ("Dependent elimination
+  failed"), as my 13:34Z entry said by reading.
+- With the token: "lean exit 1 in 181 s", "1 of its 57 theorems failed: Pous.Component.SecurityProofs.wverdict_eq".
+  So `canonicalJson_ok` and the 55 others compile with the one token.
+- `wverdict_eq` fails both times at `Component.lean:381:8`, the last `rfl` of its `ok b` case: "(deterministic)
+  timeout at `whnf`, maximum number of heartbeats (200000) has been reached". `StreamedWipe.verdict`, which it is
+  about, does not read `canonicalJson` `[read: MemoryChallenger/StreamedWipe.lean:167-193]`.
+- The control `[run]`: `r20261113-170957-9c88` on vy-nebius-cpu-8, `--mem-gb 24` (peak 21.1 GiB, while it built the
+  file's dependencies), 17:10Z to 17:17Z, rc 1, at the launch commit `586a9bad3605`, whose tree is `main`'s at
+  `5eb1231b2558`, so without the switch: "lean exit 1 in 332 s", "1 of its 57 theorems failed:
+  Pous.Component.SecurityProofs.wverdict_eq", at the same line with the same timeout. So that failure is not the
+  switch's. I did not look for its cause; the file is not mine.
+- The proofs package's lakefile sets no heartbeat option, and the try passes the lakefile's three options, so the
+  try compiles the file under the options the build does `[read]`.
+- `62d7` peaked at 21.5 GiB of its 24, also while building dependencies.
+
+**6. `main` since the carry** `[run: git log, git diff --stat]`: `origin/main` is `43e3af9c16d9`, four commits past
+`5eb1231b2558`. None has a move line and none touches the eleven files, the theorem's imports or the total parser.
+So the carried head needs no further carry now.
+
+**7. The pull request's draft body** (my 13:34Z entry, section 8) changes in one place: the test is
+`tools/difftest/tests/test_canonical_json_port.py`. Its figures are unchanged: none was measured again.
+
+STOP RULE: nothing in this entry changes what a listed guarantee says or rests on, and nothing makes a verifier
+accept what it refuses today. The carried change is the old one, byte for byte in its Lean.
+
+NEEDS (none edited by me; each is another owner's file; paths as on `main` now):
+1. PoUS, `security/Proofs/Properties/Pous/Component.lean:98`: `cases hp : Lean.Json.parse s with` becomes
+   `cases hp : Flock.JsonParse.parse s with`. Now `[run]` for `canonicalJson_ok` (section 5). The other way of my
+   13:34Z entry (import `Proofs.Core.CanonicalJson` and read `Verity.CanonicalJson.canonicalJson_ok`) is still not
+   compiled.
+2. The proofs package: `"Proofs.Core.CanonicalJson"` in the `roots` of lib `Proofs` in
+   `security/Proofs/lakefile.toml` and in `roots` of `security/Proofs/lean-audit.json`, or PoUS's import; without
+   one the Lean check fails with `orphan.file` `[read]`.
+3. The interface's lock, `verity/protocols/interface/lean-audit.json`: `roots` gains
+   `"CoreProtocol.CanonicalJsonDifftest"`, `exempt` gains `"CoreProtocol.CanonicalJsonDifftestMain"` with its
+   reason, `layers["CoreProtocol.Protocol"].imports` gains `"Base.JsonParse"`.
+4. The records that move, on your word only: `Core.canonicalJson`'s hash and `CoreProtocol.Protocol`'s digest under
+   `reads`. Six locks name one of the two today `[run: rg]`: `security/lean-audit.json`,
+   `security/Properties/lean-audit.json`, the interface's, the composition's
+   (`verity/protocols/compose/verifier/lean/`), PoUW's check
+   (`verity/protocols/accounting/pouw/verifier/lean/check/`) and the inference-only policy's
+   (`verity/protocols/policy/inference_only/verifier/nci/lean/`). Which of their records move is not read by me.
+5. Not for the switch, for PoUS's owner: `wverdict_eq` (`security/Proofs/Properties/Pous/Component.lean:360-381`)
+   times out in `whnf` at 200,000 heartbeats under `lean_changed.py --try` on `main`'s tree at `5eb1231b2558`
+   (section 5).
+
+To post, to PoUS's owner: "`security/Proofs/Properties/Pous/Component.lean` on `main`'s tree at `5eb1231b2558`, tried
+with `lean_changed.py --try` (`r20261113-170957-9c88`, vy-nebius-cpu-8): `wverdict_eq` fails at 381:8, '(deterministic)
+timeout at `whnf`, maximum number of heartbeats (200000) has been reached'. Its 56 other theorems compile. The parser
+switch does not cause it: the same with and without." Nothing else.
+
+Not established:
+- The proofs package's whole build at the carried head, `check.py` on any lock, the records run, and the suites. The
+  new test ran by `pytest` on a node, not under the suite's read guard.
+- The sibling check beyond the 315 modules built in that node's tree.
+- That the scratch directory was removed: the trap is in the job; I did not list the node's scratch after it.
+- Whether the pins step found anything to do: the status is "clean", which it could not be with a stale pin
+  `[read: restack.py]`, and the record has no line for it.
+- Why `wverdict_eq` times out, since when, and whether `main`'s own check shows it. Three tries time out at the same
+  place: one at `main`'s tree and two at the carried head, on two nodes.
+- The draft body's figures at the carried head: they are those of the old head.
+
+Heads, all pushed: `cursor/proofs-sessionof2-parser-carried-e464` `cb1a28a8a748fdb7f77e00d41aebd67a993aad94` (the
+carried switch: the tool's result `7814a7867c810d4177d9c010f6c61cc7fe207964` and the mend);
+`cursor/proofs-sessionof2-parser-defe` `fe28c96c43228dd453ee0e2b2434d33be68e21f8` (the old line, nothing more
+committed on it); `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60c5f4fb04c694ad058b8163de4470` (my live line,
+frozen); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`;
+`cursor/proofs-sessionof-5c1e` `521933e1430b`. No run of mine is out. The four runs of this entry were one at a time.
