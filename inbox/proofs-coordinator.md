@@ -119592,3 +119592,24 @@ Nothing.
 ### To post
 
 Nothing.
+
+## MAJORITY, Fri 04:13Z: `059a9408fe59` merged (my head `c4c6c19c1393fd93b1d8a09e760e5d9ed7b8bc36` on `cursor/proofs-majority-cb10`); the blocked records audit is in line on vy-nebius-2 as r20261113-040212-1843; no theorem of mine is stated at the form's accept
+
+I merged TWOLEG's compiled head, not its tip, and launched again the records audit that `DevAgrees.lean` had blocked. It has been in vy-nebius-2's line since 04:04Z, with 6 checks ahead at 04:13Z. Below are the three lines you asked for on my change to `Recursive/Target.lean`, and the line on the form's accept.
+
+**1. The merge.** [run] `git merge 059a9408fe59` on `cursor/proofs-majority-cb10` (from `65810fa781`) was clean. The head is `c4c6c19c1393fd93b1d8a09e760e5d9ed7b8bc36`, pushed. [read] The merge changes neither of my files, nor `Recursive/`, `Recursive.lean`, `SampledTwo/Claim.lean` or `SampledTwo/Leg.lean`, and `MajorityBound`'s text is as before. I have not merged the base `e033bfc14be4`: my files don't need it.
+
+**2. The change to `Recursive/Target.lean`, in three lines:**
+- **What it is** [read]: it deletes `Target.lean`'s own copies of the averaging lemmas (its `namespace Target` block), defines `Dep.plays` as an instance of the shared `Majority.Plays` with the bridges `Dep.weight_plays` and `Dep.extract_plays`, and reproves each listed lemma (`extract_bit` through `ex_off_le_units` and `unbound_drawn`) by calling the shared file. The text of every theorem's statement is unchanged. `wEvent`, `offEvent` and `bitEvent` keep their signatures but are now defined as the plays' events.
+- **Why my files need it** [read]: they don't. `Majority.lean` and `SampledTwo/Majority.lean` import neither `Recursive/Target.lean` nor anything that imports it, and the old copies live under `Verity.Recursive.Target.*`, so the join builds and clashes with nothing without it. It is the brief's "move them, don't copy them": without it the averaging argument exists twice, once in `Verity.Majority` and once in `Target.lean`.
+- **Whether it changes a statement a listed guarantee reads** [read]: no. No lock lists a name defined in `Target.lean`, and `security/Proofs/lean-audit.json` names the module only under `roots`. The three definitions whose bodies changed (`wEvent`, `offEvent`, `bitEvent`) appear in no lock. [guess] r20261113-040212-1843 checks the lock mechanically, though at a tree with the change, so it shows the change moves nothing rather than testing the join without it.
+
+**3. The form's accept** [read]: no theorem of mine is stated at the form's accept. `majorityBound` and `majorityBound_ecr` are stated at the compiled two-stage verifier's run reaching `.acc`: `Claims.run … A.L.V …`, where `A.L` is `SamplingDeploy.compiledTwo` at the held copies. They are not stated at `V.Verdict` or the form's check, so they are not empty while the form accepts no play.
+
+**STOP RULE.** None.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** The records audit, which is running. Pushed head: `c4c6c19c1393fd93b1d8a09e760e5d9ed7b8bc36`; nothing is left unpushed.
