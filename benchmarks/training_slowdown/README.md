@@ -54,10 +54,11 @@ least 1; None, with the reason in `why`, where the record gives none); `binds` (
 `term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
 work it read; `figure`, the choice of that work; and `read`, what the record says of itself.
 
-The work it reads takes one premise on the step's batch, which no record checks (`work.P_BATCH`): past each row's
-first position, no two positions of the batch hold equal words. Every published string that names what the products
-term rests on states it: `formalism.RESTS_ON`, `RESTS_ON_CELL` and `he_rests_on` (a row's `rests_on`, the grade's
-"rests on"), the `premise` part of the library's table and the `proved` part of the grade's periods.
+A job's record counts each step's positions that repeat another's tokens (`repeats`), which M leaves out; the work
+then takes `work.P_REPEATS`: two positions hold equal words only by their tokens. A record without the count, and the
+library, take `work.P_BATCH`: past each row's first position, no two positions hold equal words. Every published
+string naming what the products term rests on states which: `formalism.RESTS_ON`, `RESTS_ON_CELL` and `he_rests_on`
+(a row's `rests_on`, the grade's "rests on"), the library's `premise` and the grade's periods' `proved`.
 
 ## The library of training algorithms
 
@@ -440,12 +441,11 @@ of M named `tf32` is priced apart from its trace, and ρ is refused.
   traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the grade's ρ is never Fit's.
   It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the steps that
   have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
-- The products count charges a token-indexed product for every position past each row's first, as words of its own
-  (`work.P_BATCH`). A batch breaks that, to rounding, where two rows share their first two tokens or more, where a
-  row starts with a run of three or more of one token, and, on a model with no rotation, where two positions hold
-  one token and their tokens up to it, its own included, are in the same proportions (`tests/test_batch_premise.py`
-  holds each on the model's forward). No trace keeps the batch's tokens, so the count takes the premise and measures
-  none of them.
+- The products count leaves out the positions a step's batch repeats by its tokens: a prefix shared with another
+  row, or a row's leading run of one token (`work.batch_count`). A step reading its batch otherwise counts none.
+  Without a count (`work.P_BATCH`), those break it, and so, on a model with no rotation, do two positions of one
+  token whose tokens up to it are in the same proportions (`tests/test_batch_premise.py` holds each on the model's
+  forward).
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
