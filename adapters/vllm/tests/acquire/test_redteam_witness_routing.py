@@ -13,15 +13,19 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-from tests.check.opened import commit_steps  # noqa: E402
-from verity_vllm.acquire.sources import moe_align_source as MA  # noqa: E402
-from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from verity_vllm.check import oracle_compare as OC  # noqa: E402
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+from tests.check.opened import commit_steps
+from verity_vllm.acquire.sources import moe_align_source as MA
+from verity_vllm.acquire.sources import oracle_witness as OW
+from verity_vllm.acquire.sources import partial_source as tps
+from verity_vllm.check import oracle_compare as OC
 
 OPROJ, MOE = "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.experts"
 E, BM = 384, 8

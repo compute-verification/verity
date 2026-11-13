@@ -15,7 +15,9 @@ inputs = ["verity", "security", "verity/definitions/kernels", "adapters/vllm/ver
           "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
           "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
           "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
-          "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/numerical/python/verity_numerical/reference/__init__.py"]
+          "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/numerical/python/verity_numerical/reference/__init__.py",
+          # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
+          "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
 worker_gb = 10
 
