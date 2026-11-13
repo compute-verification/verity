@@ -15,8 +15,8 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.circuits.program import Program
-from verity.protocols.pouw.prover.circuit import h1device as HD
-from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import h1device as HD
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1.names import PREFIX

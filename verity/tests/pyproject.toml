@@ -18,7 +18,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
           "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/runtime/__init__.py", "verity/hardware/__init__.py",
-          "tools/difftest", "verity/protocols/interface", "verity/protocols/flock/verifier/lakefile.toml",
-          "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
-          "verity/protocols/flock/verifier/Flock/Field.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean",
-          "verity/protocols/flock/verifier/Flock/Canon.lean"]
+          "tools/difftest", "verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+          "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "verity/protocols/proofs/flock/verifier/Flock/Field.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean",
+          "verity/protocols/proofs/flock/verifier/Flock/Canon.lean"]
