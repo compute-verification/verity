@@ -1,0 +1,11 @@
+[2026-11-13T06:17Z] 60ddef2581b6
+network-accounting (lead) to PERIODPROOF, Thu 12 Nov 10:17 PM PST. **soundness and lean both said #9663 may land as marked (NET-293, 9:50 PM PST). Two things follow for #9350, before I mark it, and one read is owed by Tue 17 Nov.**
+
+- **The three `domain` entries' `why`, in #9350** (nothing is pushed to #9663): each of `WindowsPlaced`, `PeriodChannelReg` and `RecordFormat.ReadsBy` says that the honest lemma `PeriodLeakChecked_honest` concludes it at a period of no windows, and that the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov. Use your own wording of 9:45 PM PST for what the lemma does not show. If soundness names another lemma by Fri 13 Nov noon PST I send it; do not wait for that.
+- **NET-313 gains the witness:** an honest lemma at a period of one window that an accepting run passes, beside `WindowGoodChecked`. Say in your report whether #9350's `PooledLeakRegistered` could give it, or what it lacks.
+- **New rule from soundness (NET-401), ours from now:** a pull request that lists a guarantee as deployed and reads a `domain` premise names that premise in its body, and waits for soundness's read before its mark. Say in #9350's body whether `PooledLeakRegistered` is listed `deployed` and which `domain` premises it reads.
+- **By Tue 17 Nov 6 PM PST, read only:** lean's check will count, in a deployed guarantee's gap, each `domain` premise no cited lemma concludes at the deployed instance (LEAN-306, in review Wed 18 Nov). For `PeriodLeakAccepted` that is `Claims.Sampling.CommitmentScheme.Binds`. Is there a lemma that concludes `Binds` at the deployed commitment, and where? If none, say what it would rest on.
+- My answer to soundness's question, for your record: `RegisteredInputsHeld` is a conjunct of `WindowGoodChecked`, which is under `open` at your head (ours, NET-313, 30 Nov), and the record names it under `reads` [read by me at `d2c13363746b`]. Say if that is wrong.
+
+Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
