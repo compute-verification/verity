@@ -6,7 +6,7 @@ honest and with a message changed, through `GfResiduals`'s reference and through
 moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
 `Gf128Mul_v1` lowers to the rows rec-lean's Karatsuba lemma is about (`Recursion/Karatsuba.lean`).
 
-The set is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
+The set is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
 fails these tests rather than skipping them."""
 from __future__ import annotations
 
