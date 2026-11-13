@@ -1194,6 +1194,47 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     assert outcome_line(said)["outcome"] == LC.PASS
 
 
+SEALED = ("sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean "
+          "differ; the seal's copy is /w/sealed/P/M.olean, the recompile's /w/sampled/P/M.olean)")
+
+
+def test_a_mismatch_against_the_provers_seal_is_forgotten_in_the_tree_and_the_spec_audited_once_more(fast, tmp_path,
+                                                                                                     monkeypatch):
+    """In the sandbox the sample compares a prover's seal, taken after its build passed, so the spec that read the
+    prover's facts fails with `proved_in.sampled`, not `proved_in.unpassed`. The mismatch is still the one cause: the run
+    drops the module's trace, `.hash` files and objects in the tree, which the seal copied (`mismatched` names the
+    package's own directory), and audits once more without the artifact cache, so Lake compiles the module there."""
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: [])
+    prover = (tree / "pkg" / "Proofs").resolve()
+    mine, others = kept_module(prover)
+
+    def run(argv, **kw):
+        calls.append((argv, kw.get("cwd")))
+        first = len(calls) == 1
+        out = Path(argv[argv.index("--out") + 1])
+        (out / "audit-pkg").mkdir(parents=True, exist_ok=True)
+        (out / "audit-pkg" / "sampled.log").write_text(f"audit {len(calls)}")
+        spec = {"package": argv[-1], "failures": ["proved_in: Proofs's sampled recompile failed"] * first,
+                "failure_codes": ["proved_in.sampled"] * first, "sampled": {}}
+        proofs = {"package": str(prover), "failures": [SEALED] * first, "failure_codes": ["sampled"] * first,
+                  "sampled": {"mismatched": {"P.M": str(prover)}} if first else {}}
+        (out / "audit.json").write_text(json.dumps({"packages": [spec, proofs]}) + "\n")
+        return type("P", (), {"returncode": int(first)})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    out, said = tmp_path / "out", []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=out, log=said.append) == 0, said
+    assert len(calls) == 2 and "--artifacts" in calls[0][0] and "--artifacts" not in calls[1][0]
+    gone = [f for f in mine if not f.exists()]
+    assert gone == [f for f in mine if f.name.endswith((".trace", ".hash", ".c.o.export"))] and len(gone) == 5, \
+        "what tells Lake the module is built goes from the tree, so the second audit's build compiles it"
+    assert all(f.exists() for f in others), "and nothing of another module's"
+    assert any("compiled P.M to other outputs" in s and "audits pkg once more" in s for s in said)
+    assert outcome_line(said)["outcome"] == LC.PASS
+
+
 def test_a_second_sampled_mismatch_fails_the_run(fast, tmp_path, monkeypatch):
     _, tree, calls = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
@@ -1318,7 +1359,8 @@ def test_after_the_second_audit_the_entry_under_the_modules_key_names_what_it_co
 
 def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audited_again(tmp_path):
     """A spec whose `proved_in` package fails its sampled recompile fails with it (`proved_in.unpassed`: it reads none of
-    that package's facts), so that mismatch is still the one cause and the run audits once more; any other failure of the
+    that package's facts; `proved_in.sampled`: the sample ran on that package's seal, after the spec read its facts), so
+    that mismatch is still the one cause and the run audits once more; any other failure of the
     spec's keeps it from doing so. The slot tree is a link to the cache volume, as on a node, and check.py names packages
     by their resolved paths."""
     real, tree = tmp_path / "volume" / "tree", tmp_path / "tree"
@@ -1332,7 +1374,7 @@ def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audite
              "sampled": {"mismatched": {"P.M": str(real / "Proofs")}}}]}))
         return LC.mismatched(tmp_path, tree)
 
-    assert found(["proved_in.unpassed"]) == found([]) == {"P.M": (real / "Proofs").resolve()}
+    assert found(["proved_in.unpassed"]) == found(["proved_in.sampled"]) == found([]) == {"P.M": (real / "Proofs").resolve()}
     assert found(["proved_in.unpassed", "lean"]) == {}
     (tmp_path / "audit.json").write_text("{")
     said: list[str] = []
