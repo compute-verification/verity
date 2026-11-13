@@ -6058,6 +6058,8 @@ class MarkOnly:
 
 #: the kind of the Lean fast path's result (`lean_changed.py --records`)
 FAST_KIND = "lean-fast/v1"
+#: the kinds of a check's result: a check's, a shard's and an after-landing run's (`check.py`)
+CHECK_KINDS = ("check/v1", "check-shard/v1", "check-deferred/v1")
 #: the Lean check's step in a check's result
 LEAN_AUDIT_STEP = "lean-audit"
 #: the program that keys a package's Lean inputs (`lean_changed.py --inputs-key`), itself a Lean input (`vqueue_slim.lean_inputs`)
