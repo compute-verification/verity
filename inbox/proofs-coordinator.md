@@ -117856,3 +117856,54 @@ Not established:
 NEEDS: nothing blocks. One note on machines: the `proofs` pool on vy-nebius-2 has a line now (24 slots held, 11 to 13 waiting between 03:18Z and 03:31Z; the line moved about one place a minute). Your 02:14Z rule, cancel at 10 minutes and resend to vy-nebius-2, cannot shorten that, so I stay in line unless you name another machine.
 
 I wait on `r20261113-033047-0355`: its slot about 03:45Z, its verdict about 04:15Z [guess].
+
+## ASSEMBLY, Fri 03:35Z: both files compiled at `4bb68f528b` with only the three axioms (r20261113-021235-dc1b, done, rc 0); the try of the new messages' piece is in line (r20261113-032633-3e3a, vy-nebius-cpu-12). One correction to my 03:20Z entry, and two things the join needs that no worker's theorem gives
+
+In plain words: the second file of the last try finished, so both assembly theorems are compiled at the merged head. Reading on for the join, I found that MESSAGES already has the theorem I asked for, so MESSAGES owes me nothing. I also found that the join cannot be made by merging the pieces' branches into mine, and that two premises of TWOLEG's `devAgrees_formReading` are the conclusion of nobody's theorem.
+
+**What compiled** [run, `r20261113-021235-dc1b`, vy-nebius-cpu-12, at `4bb68f528b`, ended 03:26Z, rc 0]:
+- `ProjectionOf.lean`: lean exit 0 in 138 s; `play_params`, `projection_core`, `projection_of` each on `propext`, `Classical.choice`, `Quot.sound`.
+- `CouplingOf.lean`: lean exit 0 in 2247 s (its step rebuilt 11,402 modules on a tree with 755 changed files); `coupling_of` on the same three axioms.
+- That is the content before the messages' change. The change (`63d233290e`, now under the merge `8af933566b`) is in `r20261113-032633-3e3a`: launched 03:26Z, took a place at once, and waits for a Lean slot with 2 checks ahead at 03:32Z.
+
+**Correction to 03:20Z, NEEDS 2.** MESSAGES has it already. `reachedOfRounds` with `missBound` gives `MessagesReached` at the frame's prover from `MsgOpens`, `DigestBefore` and `RunShown`, with no `RunsThrough` [read: `Messages.lean:253-262`, `628-634`, `769` at `ec0f516af1`; MESSAGES's 02:51Z entry says both files compile, relayed]. `MessagesReached` is word for word the premise `h` of my `messagesFixedAgreed_of_reached`, and ACCEPTS's `reaches_frame` is its `hR` [read: `Reached.lean:131-140` at `d169ce4c52`]. So the messages' piece the assembly takes follows from theorems that exist, and the join does not need `RunsThrough`. MESSAGES and ACCEPTS: nothing to write for me.
+
+**The base.** I merged TWOLEG's `b774e651d2` (which holds `main`) and CUT's `cb9c52965a` at 03:23Z, as my brief says to when the base moves. I then read your 03:13Z word to three other workers not to take TWOLEG's tip past `059a9408fe59`. It was not sent to me, and a merge cannot be taken back without a forced push, so it stays. It does not reach my files: of the Lean files that differ between `4bb68f528b` and my head, only `ProjectionOf.lean` is among the 2,153 modules my two files import, and neither the form nor `Steps.lean` is [run: an import walk over the tree].
+
+**The join: I do not merge the pieces' branches into mine.** I made the merge of all seven in a scratch checkout, pushed nowhere, to see what the join would stand on [run]:
+1. SESSIONCOINS's branch holds two reverts of TWOLEG's commits (`2b92d76759`, `016c9128dc`). Merged into a branch that has TWOLEG's tip, they take `accepted_fits` and the form's `stagesFit` out again with no conflict shown: 61 lines removed from `Steps.lean` and the form.
+2. ACCEPTS's head `02c26ad4d9` does not merge with the base (four conflicts outside `security/`, from RUNCOINS's branch under it). `d169ce4c52`, which has `stmtAt`, `acceptsRun_of'` and `reaches_frame`, merges clean.
+3. MAJORITY's branch changes `Recursive/Target.lean`, which is not mine to carry.
+4. The other four merge clean, and the lakefile's roots merge without a conflict.
+So the join needs one integration branch that someone owns, with SESSIONCOINS's two reverts undone first. Tell me which branch that is and I write `SampledTwo/Joined.lean` on it. Until then I keep my branch to my two files. This replaces "I start it after the try below is sent" in my 03:20Z entry.
+
+**What the join still lacks, by reading the merged tree** [read]:
+1. `FirstElems` and `SecondElems`, two of the three premises of `devAgrees_formReading`, are the conclusion of no theorem on any branch [run: `grep` over the merged tree finds the names only in `DevAgrees.lean` and in docstrings of `CoinMap.lean` and `CoinStages.lean`]. COINMAP's `elems_first` and `elems_second` stop one step short: they speak of a log and the stages' locator alone. Getting from them to the two premises takes six facts:
+   - the first stage's and second stage's bytes start the family's released coins: STAGECOINS's `FirstShown C Good` and `SecondShown C Good`, with `SourceRead`;
+   - the family is the locator's, after one root: COINMAP's `StageDraws`, whose docstring names TWOLEG as owner;
+   - every fresh coin in the log carries 512 bits (`FreshWide o.log`): COINMAP's `freshWide_play` gives it on a play of the game, but `FirstElems` asks it of every exchange `Acc` and `Good` hold of, so `Good` or the coin map's agreement has to carry it;
+   - the bytes fit one coin: ACCEPTS's `SourcesFit`, from TWOLEG's `accepted_fits`;
+   - the count of elements that fit is the same at the run's locator as at the stages': SESSIONCOINS's `dev_run_stage` says this of the release, and nothing says it of `fitOf`;
+   - the run's verifier reads rounds 0 to `stage` (`readsAt`), since the coin map's agreement speaks only at read rounds.
+   This is about a hundred lines and it is in nobody's brief. I take it with the join.
+2. The 512 bits cost no term, since they hold on every play. The join needs one lemma saying so, mine.
+3. The join's locator is SESSIONCOINS's `runLocate A (stageLocate ℓ₁ ℓ₂) tab`. It serves the stages and the sessions, and `locates_run` and `dev_run_stage` are the two facts the other pieces need of it. This fits.
+
+### STOP RULE
+Nothing. No lock edits, no file of another worker's touched [run].
+
+### NEEDS
+1. Coordinator: the branch the join is written on, and who undoes SESSIONCOINS's two reverts there. Or say the join is soundness's, and I hand over the two lists above.
+2. TWOLEG: `StageDraws` (`CoinStages.lean:67` on COINMAP's branch, which names you as its owner) is a premise of both `FirstElems` and `SecondElems`. Say if it is not yours.
+3. Withdrawn: 03:20Z NEEDS 2 (MESSAGES) and 3 (ACCEPTS).
+
+### To post
+Nothing new.
+
+### Not established
+- `63d233290e`'s content has not compiled; `r20261113-032633-3e3a` decides it.
+- The join's two lists are by reading and one scratch merge. No line of a join is written.
+- The earlier-period signature hole in `CutBound` stays open.
+- Per your 03:25Z word to TWOLEG, the form with its switch on accepts no play today. My two theorems are over any `Acc` and say nothing of the form. Every piece stated at `FormAccepts C` is empty until the form changes, and a join of them would be too.
+
+Branch `cursor/proofs-assembly-992e` at `8af933566b`, pushed. Nothing is left unpushed; the scratch merge is deliberately not kept [run].
