@@ -14,7 +14,7 @@ the root of a checkout of its parent B. Because the move is a deterministic, ide
 same script rather than by rename detection:
 
 1. merge B into the branch (skipped when the branch already contains B). A conflict here is an ordinary one with the tree
-   before the move: the owner merges main first, as without the move.
+   before the move: the owner merges B into the branch first and resolves it, as without the move.
 2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
    the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
    itself, B's copy runs and the branch's is put back before the commit. B's script runs with no limit on the text it
@@ -35,9 +35,15 @@ restack across a move pays for the check and the rest don't. The file's key is e
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after` M: step 3 would bring main's commits since B in a second time and still report
 clean (duplicate imports and lock entries), so M's script never runs on it. A `--move-commit` it is based after refuses
-it, and so does the last of the moves found on `--main`: there is no result, and its owner merges main instead (`git merge
-origin/main`); the restack is for branches based at or before B. An earlier one of the moves found is skipped where a
-later one's base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
+it, and so does the last of the moves found on `--main`: there is no result. A plain `git merge origin/main` is no way
+out: it is clean and wrong, since M's script never runs on the branch's own lines, so the files it adds stay at their old
+paths and its added lines keep the old names. That is a line stacked on a pull request's old head, once the head has
+crossed M and landed: main holds the old head's commits. The refusal gives the command that carries the branch against
+M's own commit as `--main` (`carry`: `restack.py BRANCH --main M`, or each `--move-commit` up to M where they were named),
+which it shares no commit after B with; its owner then merges today's main into that result, a merge inside the new
+layout, and checks that the merge's tree holds the branch's own files at the new paths (where the moves go on past M, it
+carries the result across those with restack.py first). An earlier one of the moves found is skipped where a later one's
+base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
 main's side, as its owner's merge of main would, so M's script is not run on the branch's own lines, and its owner looks
 for M's map's old names in what the branch adds. A carry that skipped a move never ends `clean`: it ends `clean-skipped`
 (or `locks-stale`), pushes nothing and exits 1, and its output gives the command that crosses the same moves named, with
@@ -473,6 +479,36 @@ def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str |
     return None
 
 
+def named_flags(move: str, script: str, args: tuple[str, ...] | list[str], cwd: str | None) -> list[str]:
+    """`--move-commit` ``move``, with `--script` and its `--script-arg`s where they aren't what `main` reads from its move line
+    (or, with none, `layout.py`)."""
+    if (move_line(move, cwd) or (LINE_SCRIPT["Layout-move"], ())) == (script, tuple(args)):
+        return ["--move-commit", move]
+    return ["--move-commit", move, "--script", script, *(f"--script-arg={a}" for a in args)]
+
+
+def carried_against(branch: str, move: str, named: list[tuple[str, str, tuple[str, ...]]], cwd: str | None) -> list[str]:
+    """The command that carries ``branch`` across ``named`` (each move's (commit, script, arguments)), or with none across the
+    moves `--main` finds, with ``move``'s own commit as `--main` (and so as `--onto`): its only parent is the move's base, so
+    the branch shares no commit after that base with it, and isn't `based-after` there."""
+    return ["python3", f"{SCRIPT_DIR}/restack.py", branch, *(f for m, s, a in named for f in named_flags(m, s, a, cwd)),
+            "--main", move]
+
+
+def refused_after(branch: str, late: str, base: str, move: str, command: list[str], later: list[str]) -> str:
+    """A `based-after` refusal's error: why neither a restack nor a plain merge of main will do, and ``command``
+    (`carried_against`), then the merge of main, or with ``later`` the restack across those moves first."""
+    then = (f"then carry the result across the later move{'s' if len(later) > 1 else ''} "
+            f"{', '.join(m[:12] for m in later)} with restack.py too, and only then merge today's main into it"
+            if later else "then merge today's main into the carried result")
+    return (f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: a restack would bring the commits since "
+            "then in a second time and report clean (duplicate imports and lock entries), and a plain `git merge` of main is "
+            "clean and wrong\n(the move's script never runs on the branch's own lines, so the files it adds stay at their old "
+            "paths and its added lines keep the old names). Carry it against the move's own commit "
+            f"{move[:12]}, which it shares no commit after the base with:\n  {shlex.join(command)}\n{then}, a merge inside "
+            "the new layout, and check that the merge's tree holds the branch's own files at the new paths")
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -489,11 +525,9 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
         return {**r, "status": "up-to-date", "result": head}
     main_sha = git("rev-parse", "--verify", "-q", f"{main}^{{commit}}", cwd=cwd, ok=(0, 1)).stdout.decode().strip() if main else ""
     if not contains(move, head, cwd) and (late := based_after(head, base, [onto, *([main_sha] if main_sha else [])], cwd)):
-        return {**r, "status": "based-after", "error": (
-            f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: restacking it would bring main's commits "
-            f"since then in a second time, and report clean (duplicate imports and lock entries). Merge instead: "
-            f"`git merge {main or onto[:12]}` once the move has landed, and resolve what that leaves; restack.py is only for "
-            f"branches based at or before {base[:12]}")}
+        command = carried_against(branch, move, [(move, SCRIPT, SCRIPT_ARGS)], cwd)
+        return {**r, "status": "based-after", "late": late, "carry": command,
+                "error": refused_after(branch, late, base, move, command, [])}
     tip, ran = head, False
     if not contains(move, head, cwd):
         if not contains(base, head, cwd):
@@ -564,9 +598,10 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
 
     With ``found`` (the moves are `moves_on`'s, none of them named), a move the branch is `based-after` is skipped, and
     named in `skipped`, where a later move's base contains it: crossing that later move starts by merging its base, which
-    is the merge of main the refusal asks of the owner, up to that base. A skipped move is then in the base of a move that
+    is what a merge of main brings in, up to that base. A skipped move is then in the base of a move that
     is crossed, or the carry stops before a result: the later move is crossed, or skipped under the same rule, or stops it.
-    The last move has no later one, so it still refuses."""
+    The last move has no later one, so it still refuses, with `carry`, the command that carries ``branch`` against the move's
+    own commit (`carried_against`: the moves found, or each named up to it)."""
     global SCRIPT, SCRIPT_ARGS
     head, tip, crossed, skipped, locks = rev(branch, cwd), branch, [], [], []
     if not moves:
@@ -581,6 +616,11 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
             skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
             continue
+        if r["status"] == "based-after":
+            named = [] if found else [(rev(m, cwd), s, a) for m, s, a in moves[:i + 1]]
+            command = carried_against(branch, r["move"], named, cwd)
+            r = {**r, "carry": command, "error": refused_after(branch, r["late"], r["base"], r["move"], command,
+                                                               [rev(m, cwd) for m, *_ in moves[i + 1:]])}
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             return r
         crossed = [*crossed, move]
