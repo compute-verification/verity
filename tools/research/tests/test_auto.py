@@ -1582,7 +1582,7 @@ def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_ask
     same = {k: m["launch"][k] for k in ("project", "command", "harness_args", "env", "mem_gb", "custody_ttl")}
     assert same == {k: kw[k] for k in same} and kw["env"]["K"] == "V", "the request as the first launch sent it"
     err = capsys.readouterr().err
-    assert f"an asker of this launch stays on {os.uname().nodename} (pid 4242)" in err and "only while this VM is up" in err
+    assert "an asker of this launch stays on this VM (pid 4242)" in err and "only while this VM is up" in err
     del launched[:], _no_asker_left[:]
     docs[CPU1] = pool(slot("r0", held=True), waiters=9)
     docs[N2] = share(free=48)

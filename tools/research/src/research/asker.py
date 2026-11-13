@@ -17,10 +17,10 @@ run. One twin is live at a time. The asker ends when the run has started on eith
 
 Its record (`record`) is <runs root>/DIR/<run id>.json on the launching VM, written before every sleep and before a twin is
 launched, so a twin is never launched unrecorded, and copied beside the run's request on its machine
-(<root>/requests/<run id>/FILE), where another VM's `research status` reads it: who asks (host, pid, since), when it looked
-last and looks next, each ask and its answer, the twin (its run and machine, why the first waited and for how many minutes)
-and how the asker ended. It is no file of the run dir, which the run's custody seals. `alive` reads it, and `told` is what
-`research status RUN` says from it.
+(<root>/requests/<run id>/FILE), where another VM's `research status` reads it: who asks (the launching agent, since
+agent VMs share one host name; pid, since), when it looked last and looks next, each ask and its answer, the twin (its run
+and machine, why the first waited and for how many minutes) and how the asker ended. It is no file of the run dir, which
+the run's custody seals. `alive` reads it, and `told` is what `research status RUN` says from it.
 
 A run whose launching VM is gone has no asker: it waits where it is, `research status` says so, and the `stranded` monitor
 is what is left to see it.
@@ -103,7 +103,7 @@ def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path]
     except (OSError, subprocess.SubprocessError, TypeError, ValueError) as e:
         return (f"no asker of this launch could be left here ({type(e).__name__}: {e}), so the run will not move by itself: "
                 f"it waits in {asks['home']}'s line")
-    return (f"an asker of this launch stays on {os.uname().nodename} (pid {pid}): at minute {FIRST_ASK_MIN} and each "
+    return (f"an asker of this launch stays on this VM (pid {pid}): at minute {FIRST_ASK_MIN} and each "
             f"{ASK_EVERY_MIN} min the run waits on memory in {asks['home']}'s line it asks `auto` again and, where another "
             f"machine's pool would start the run now, launches its late twin there. It lives only while this VM is up: "
             f"`research status {run_dir.name}` says whether one is alive")
@@ -224,13 +224,14 @@ def tell(root: Path, rec: dict) -> None:
 
 def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep) -> str:
     """The asker of launch ``m`` (module doc), until it ends; how it ended, which its record keeps."""
-    from . import auto, runs
+    from . import auto, remote, runs
 
     began = now()
     over = began + m["wait_s"]
     every, early = ASK_EVERY_MIN * 60, began + FIRST_ASK_MIN * 60
     rec: dict[str, Any] = {"schema": SCHEMA, "run": m["run"], "home": m["home"], "pool": m["pool"], "host": os.uname().nodename,
-                           "pid": os.getpid(), "since": _utc(began), "every_min": ASK_EVERY_MIN, "asks": [], "twin": None}
+                           "by": remote.sender(), "pid": os.getpid(), "since": _utc(began), "every_min": ASK_EVERY_MIN, "asks": [],
+                           "twin": None}
     twin: dict | None = None                                   # the live twin
     tried: dict[str, str] = {}                                 # machines a twin of the run left unrun: asked for no other
     again = False                                              # a twin was just launched: look at once, in case of a cancel
@@ -299,8 +300,6 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
         except Exception as e:  # noqa: BLE001  (an ask or a launch that failed is recorded, and the run keeps its place)
             asked["error"] = f"{type(e).__name__}: {e}"
             if twin:
-                from . import remote
-
                 phase = (remote._read_json(root / twin["run"] / "remote.json") or {}).get("phase")
                 twin.update(state="unknown" if phase == "unknown" else "not launched", error=asked["error"])
         if twin and twin["state"] in ("refused", "not launched"):
@@ -315,13 +314,13 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
 # ---- reading its record -------------------------------------------------------------------------------------------------------
 
 def record(run_dir: Path) -> dict | None:
-    """The asker's record of the run in ``run_dir``: this VM's, else, for a run that carries its own id as its pair (its
-    slot record, as fetched), the copy beside its request on its machine, one ssh; None when there is none or it can't be
-    read."""
+    """The asker's record of the run in ``run_dir``: this VM's (marked "here": its asker is, or was, a process of this VM),
+    else, for a run that carries its own id as its pair (its slot record, as fetched), the copy beside its request on its
+    machine, one ssh; None when there is none or it can't be read."""
     from . import remote, runs
 
     if doc := remote._read_json(run_dir.parent / DIR / f"{run_dir.name}.json"):
-        return doc
+        return {**doc, "here": True}
     try:
         if (remote._read_json(run_dir / runs.SLOT_FILE) or {}).get("twin") != run_dir.name or not (at := _beside(run_dir)):
             return None
@@ -333,13 +332,14 @@ def record(run_dir: Path) -> dict | None:
 
 
 def alive(rec: dict | None, now: float) -> bool:
-    """Whether the asker of record ``rec`` is alive at ``now``: it hasn't ended, its next look isn't LATE_S overdue, and,
-    where it is this machine's, its process is there."""
+    """Whether the asker of record ``rec`` (`record`) is alive at ``now``: it hasn't ended, its next look isn't LATE_S
+    overdue, and, where the record is this VM's own, its process is there. Another VM's asker is known by its record's
+    times alone: agent VMs share one host name, so a record's host tells no VM from another."""
     from . import remote
 
     if not rec or rec.get("ended") or (due := _epoch(rec.get("next"))) is None or now > due + LATE_S:
         return False
-    return rec.get("host") != os.uname().nodename or remote._pid_alive(rec.get("pid"))
+    return not rec.get("here") or remote._pid_alive(rec.get("pid"))
 
 
 def twin(run_dir: Path) -> dict | None:
@@ -366,6 +366,7 @@ def told(s: dict, now: float) -> list[str]:
     if rec is None and pair != s["id"]:
         return []
     out, where = [], rr.get("machine")
+    vm = f"the VM that launched it ({rec.get('by') or rec['host']}, pid {rec['pid']})" if rec else None
     if tw := (rec or {}).get("twin"):
         head = {"started": f"moved to {tw['machine']} as {tw['run']}", "launched": f"its late twin {tw['run']} waits on {tw['machine']} too, "
                 "and the one that takes a slot first runs:", "launching": f"its asker was launching its late twin {tw['run']} on "
@@ -375,11 +376,11 @@ def told(s: dict, now: float) -> list[str]:
     if s["state"] != "waiting":
         return out
     if alive(rec, now):
-        return [*out, f"an asker is alive on {rec['host']} since {rec['since']} (pid {rec['pid']}; it looked last at {rec['seen']} and "
-                      f"looks next at {rec['next']}): while the run waits on memory it asks `auto` again, and moves the run to a "
-                      "pool that would start it now"]
-    gone = "" if rec is None else f" (the one on {rec['host']} ended at {rec['ended']['at']}: {rec['ended']['why']})" if rec.get("ended") \
-        else f" (the one on {rec['host']} looked last at {rec.get('seen')} and is gone)"
+        return [*out, f"an asker is alive on {vm} since {rec['since']}; it looked last at {rec['seen']} and looks next at "
+                      f"{rec['next']}: while the run waits on memory it asks `auto` again, and moves the run to a pool that would "
+                      "start it now"]
+    gone = "" if rec is None else f" (the one on {vm} ended at {rec['ended']['at']}: {rec['ended']['why']})" if rec.get("ended") \
+        else f" (the one on {vm} looked last at {rec.get('seen')} and is gone)"
     return [*out, f"waits{' on memory' if auto.MEMORY_BLOCK in str(slot.get('why')) else ''} on {where}; no asker is alive{gone}, so it "
                   "will not move by itself"]
 

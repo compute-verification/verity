@@ -28,6 +28,7 @@ MEMORY = f"every check slot is taken (r0: 12{auto.MEMORY_BLOCK}, under the 40 GB
 STARTS = f"{B}'s research pool has the most places for it (2): a slot is free there now"
 NOWHERE = "no other machine's pool would start it now (the shortest line per run that fits is vy-b's research pool)"
 UNREACHED = f"twin {RUN}@{A} can't be claimed (ssh to {A} (exit 255): timed out), so its twin there runs instead"
+AGENT = "https://cursor.com/agents/bc-1"
 
 
 class Died(BaseException):
@@ -413,6 +414,7 @@ def test_an_asker_is_a_process_of_its_own_session_that_takes_the_launch_on_its_s
         return popen(argv, **kw)
 
     monkeypatch.setattr(asker.subprocess, "Popen", spawn)
+    monkeypatch.setenv("CURSOR_CONVERSATION_ID", "bc-1")
     m = {"run": RUN, "root": str(root), "home": A, "pool": "research", "git": "/no/repo", "commit": "c" * 40, "cpus": 4,
          "mem_gb": 16, "lean": None, "wait_s": 0, "sends": {}, "launch": {"env": {"TOKEN": "s3cret"}}}
     pid = START(root, m)
@@ -423,6 +425,7 @@ def test_an_asker_is_a_process_of_its_own_session_that_takes_the_launch_on_its_s
     assert kw["stdout"].name == kw["stderr"].name == str(root / asker.DIR / f"{RUN}.log")
     rec = json.loads((root / asker.DIR / f"{RUN}.json").read_text())
     assert (rec["pid"], rec["host"], rec["ended"]["why"], rec["next"]) == (pid, os.uname().nodename, f"it started on {A}", None)
+    assert rec["by"] == AGENT, "whose asker it is: the launching agent, since a VM's host name names no VM"
     assert (root / asker.DIR / f"{RUN}.log").read_text() == f"asker of {RUN}: it started on {A}\n"
     assert "s3cret" not in "".join(p.read_text() for p in (root / asker.DIR).iterdir())
 
@@ -456,10 +459,15 @@ def _on(tmp: Path, machine: str, run: str, state: str, slot: dict, here: str | N
     return d
 
 
+VM = f"the VM that launched it ({AGENT}, pid {os.getpid()})"
+
+
 def _record(tmp: Path, **over) -> dict:
-    """The record an asker on another VM keeps of RUN, written as it writes it: here and beside the run's request on A."""
-    rec = {"schema": asker.SCHEMA, "run": RUN, "home": A, "pool": "research", "host": "vm-1", "pid": 7, "since": SINCE,
-           "every_min": 10, "seen": "2026-10-01T09:10:00Z", "next": "2999-01-01T00:00:00Z", "asks": [], "twin": None, **over}
+    """The record the asker of RUN keeps, a process of this VM (this test's own), written as it writes it: here and beside
+    the run's request on A."""
+    rec = {"schema": asker.SCHEMA, "run": RUN, "home": A, "pool": "research", "host": "cursor", "by": AGENT, "pid": os.getpid(),
+           "since": SINCE, "every_min": 10, "seen": "2026-10-01T09:10:00Z", "next": "2999-01-01T00:00:00Z", "asks": [], "twin": None,
+           **over}
     asker.tell(tmp / "here", rec)
     return rec
 
@@ -483,6 +491,7 @@ def test_the_asker_keeps_its_record_on_its_vm_and_beside_the_runs_request_never_
     assert sorted(p.name for p in (machines / "here" / RUN).iterdir()) == ["remote.json"]
     elsewhere = machines / "elsewhere"
     assert cli.main(["status", RUN, "--runs-dir", str(elsewhere)]) == 0
+    assert asker.record(machines / "here" / RUN) == {**rec, "here": True}, "this VM's own record says it is"
     assert asker.record(elsewhere / RUN) == rec, "read from the run's machine by a VM that has no record of its own"
     named = "r20261001-090000-eeee"
     _on(machines, A, named, "running", {"state": "waiting", "since": SINCE, "why": MEMORY})
@@ -492,15 +501,16 @@ def test_the_asker_keeps_its_record_on_its_vm_and_beside_the_runs_request_never_
 
 
 def test_an_asker_is_alive_until_it_ends_or_misses_its_next_look():
-    rec = {"host": "vm-1", "pid": 7, "next": "2026-10-01T09:10:00Z"}
+    """Agent VMs share one host name, so a record's host can't say whose process its pid is: only a record this VM keeps
+    itself is held to its process, and another VM's to its times."""
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    rec = {"host": os.uname().nodename, "pid": gone.pid, "next": "2026-10-01T09:10:00Z"}
     assert asker.alive(rec, T0 + 600 + asker.LATE_S) and not asker.alive(rec, T0 + 601 + asker.LATE_S)
     assert not asker.alive({**rec, "ended": {"at": SINCE, "why": "it started"}}, T0) and not asker.alive(None, T0)
     assert not asker.alive({**rec, "next": None}, T0)
-    here = {**rec, "host": os.uname().nodename}
-    assert asker.alive({**here, "pid": os.getpid()}, T0)
-    gone = subprocess.Popen(["true"])
-    gone.wait()
-    assert not asker.alive({**here, "pid": gone.pid}, T0), "on its own VM, an asker whose process is gone is not alive"
+    assert asker.alive({**rec, "here": True, "pid": os.getpid()}, T0)
+    assert not asker.alive({**rec, "here": True}, T0), "on its own VM, an asker whose process is gone is not alive"
 
 
 def test_status_says_whether_an_asker_is_alive_for_a_waiting_run_or_that_it_will_not_move_by_itself(machines, capsys):
@@ -512,14 +522,23 @@ def test_status_says_whether_an_asker_is_alive_for_a_waiting_run_or_that_it_will
 
     assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive, so it will not move by itself"]
     _record(machines)
-    assert auto_lines() == [f"auto an asker is alive on vm-1 since {SINCE} (pid 7; it looked last at 2026-10-01T09:10:00Z and looks "
-                            "next at 2999-01-01T00:00:00Z): while the run waits on memory it asks `auto` again, and moves the run "
-                            "to a pool that would start it now"]
+    alive = [f"auto an asker is alive on {VM} since {SINCE}; it looked last at 2026-10-01T09:10:00Z and looks next at "
+             "2999-01-01T00:00:00Z: while the run waits on memory it asks `auto` again, and moves the run to a pool that would start "
+             "it now"]
+    assert auto_lines() == alive
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    _record(machines, pid=gone.pid)
+    assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive (the one on the VM that launched it ({AGENT}, pid "
+                            f"{gone.pid}) looked last at 2026-10-01T09:10:00Z and is gone), so it will not move by itself"]
+    assert cli.main(["status", RUN, "--runs-dir", str(machines / "elsewhere")]) == 0
+    assert f"auto an asker is alive on the VM that launched it ({AGENT}, pid {gone.pid}) since {SINCE}; " in capsys.readouterr().out, \
+        "another VM, of the same host name, knows it by its record's times and not by a pid of its own"
     _record(machines, next="2026-10-01T09:20:00Z")
-    assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive (the one on vm-1 looked last at 2026-10-01T09:10:00Z "
+    assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive (the one on {VM} looked last at 2026-10-01T09:10:00Z "
                             "and is gone), so it will not move by itself"]
     _record(machines, next=None, ended={"at": "2026-10-01T09:20:00Z", "why": "its twin r1 was cancelled"})
-    assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive (the one on vm-1 ended at 2026-10-01T09:20:00Z: its twin "
+    assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive (the one on {VM} ended at 2026-10-01T09:20:00Z: its twin "
                             "r1 was cancelled), so it will not move by itself"]
     (machines / A / "runs" / RUN / "slot.json").write_text(json.dumps({**FIRST, "why": "3 check(s) ahead in line"}))
     assert auto_lines()[0].startswith(f"auto waits on {A}; no asker is alive")
