@@ -85,7 +85,7 @@ def published (i : Input) (ans : RunAnswer) : Option Published :=
       { work := testCredit i.testInstance g.work, giveUp := some g.giveUp, exact := some w }
     | _, _ => { work := w }
 
-/-! ## Class (4, 32, 4) on Llama 3.2 1B: the load of the run of record `r20261106-165116-614b`
+/-! ## Class (4, 32, 4) on Llama 3.2 1B: the load of the run of record
 
 Sixteen layers of four linears (k, n): q, k and v as one (2048, 3072), o (2048, 2048), gate and up as one (2048, 16384)
 and down (8192, 2048); round 0's calls have 128 rows and each later round's 4, committed in 16. The run of record's

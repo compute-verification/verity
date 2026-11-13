@@ -2165,6 +2165,19 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
+def test_a_window_class_that_is_no_three_positive_integers_is_refused_by_name():
+    """``--class`` (`served_passes.window_class`) reads SLOTS,PROMPT,OUTPUTS, and refuses a word that is no integer, a
+    count other than three and a zero alike, each naming the text it read and raising from what failed to parse."""
+    import argparse
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    assert SP.window_class("4,32,4") == (4, 32, 4)
+    for text in ("4,x,4", "4,32", "4,0,4", ""):
+        with pytest.raises(argparse.ArgumentTypeError, match="a window class is SLOTS,PROMPT,OUTPUTS") as e:
+            SP.window_class(text)
+        assert repr(text) in str(e.value)
+        assert isinstance(e.value.__cause__, ValueError) == (text in ("4,x,4", ""))
+
+
 @pytest.mark.slow
 def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     """With the window's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
@@ -2243,7 +2256,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
 
 
 def test_the_load_check_takes_the_run_of_records_shape():
-    """The class of record's run (r20261106-165116-614b: class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
+    """The class of record's run (class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
     load, so the check accepts its shape: 64 calls a pass, round 0's of 4 x 32 = 128 rows in 128, each later round's of 4
     in 16 (`window_class.PearlTables`' ``rows`` and ``a_rows``), also with a round dropped; and no other."""
     NS = types.SimpleNamespace
@@ -2286,7 +2299,7 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
     the credit less the give-up (structural less exact) padded up to H1's window grid (`window.pad`).  So it is at most
     the exact credit, whatever the passes exclude, and two give-ups of one grid level publish one work.
 
-    The run of record's shape and credit (r20261106-165116-614b: class 4, 32, 4 on Llama 3.2 1B, 459 draws, none over
+    The run of record's shape and credit (class 4, 32, 4 on Llama 3.2 1B, 459 draws, none over
     the inert-work bound): its published exact credit, 134,194,399,455 MACs of 135,895,449,600 declared, is this load's
     with 19 rows excluded, 4 of an o, 4 of a gate-up and 11 of a down, and its grid form is 4,196,341 MACs less.  The
     Lean holds the same numbers (`PouwPearlPlus/Grid.lean`'s guard)."""

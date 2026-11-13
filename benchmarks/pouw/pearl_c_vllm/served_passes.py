@@ -594,12 +594,13 @@ def arm(args: argparse.Namespace) -> int:
 
 def window_class(text: str) -> tuple[int, int, int]:
     """``--class``'s SLOTS,PROMPT,OUTPUTS, each a positive integer (`verify_run.load_class`'s form)."""
+    wrong = f"a window class is SLOTS,PROMPT,OUTPUTS, each a positive integer, not {text!r}"
     try:
         cls = tuple(int(x) for x in text.split(","))
-    except ValueError:
-        cls = ()
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(wrong) from e
     if len(cls) != 3 or min(cls) < 1:
-        raise argparse.ArgumentTypeError(f"a window class is SLOTS,PROMPT,OUTPUTS, each a positive integer, not {text!r}")
+        raise argparse.ArgumentTypeError(wrong)
     return cls
 
 
