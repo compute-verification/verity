@@ -171,14 +171,14 @@ noncomputable def blocks {m : ℕ} (Q : Verity.Partition C m) (home : Cell → F
     else if T.tied.D.isInput h = true then none else some (home (T.owner h))
   input_iff h := by
     by_cases hs : ∃ g, T.emb g = h
-    · rw [dif_pos hs]
+    · rw [dite_eq_left hs]
       have e : T.tied.D.isInput h = T.tied.D.isInput (T.emb hs.choose) := by rw [hs.choose_spec]
       rw [e]
       by_cases hy : hs.choose ∈ L.yOf T.cells
-      · rw [if_pos hy, T.y_gate _ hy]
+      · rw [ite_eq_left hy, T.y_gate _ hy]
         simp
-      · rw [if_neg hy, Q.input_iff, T.isInput_emb _ hy]
-    · rw [dif_neg hs]
+      · rw [ite_eq_right hy, Q.input_iff, T.isInput_emb _ hy]
+    · rw [dite_eq_right hs]
       by_cases hi : T.tied.D.isInput h = true
       · simp [hi]
       · simp [hi]

@@ -43,7 +43,7 @@ theorem blocks_unit_emb {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fi
   have hc : hs.choose = g := T.emb_inj hs.choose_spec
   unfold Tying.blocks
   simp only []
-  rw [dif_pos hs, hc, if_pos hg]
+  rw [dite_eq_left hs, hc, ite_eq_left hg]
 
 /-- **The placement is from below**, at any blocks `Q`, homes `home` and untied cells `U`: a placed cell's gates are
 its 32 bits in its home block, an untied cell's are untied gates, and distinct cells sit at disjoint gates. -/
@@ -52,42 +52,44 @@ theorem fromBelow {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) (
   refine ⟨fun c u O h => ?_, fun c hcU u O h => ?_, fun c c' u u' O O' hne h h' => ?_⟩
   · unfold Tying.place at h
     by_cases hc : c ∈ T.cells
-    · rw [if_pos hc] at h
+    · rw [ite_eq_left hc] at h
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj h)
       refine ⟨fun x hx => ?_, ?_⟩
       · obtain ⟨g, hg, rfl⟩ := mem_map.1 hx
         obtain ⟨hgy, hgc⟩ := L.mem_yAt.1 hg
         have hgo : g ∈ L.yOf T.cells := L.mem_yOf.2 ⟨hgy, by rw [hgc]; exact hc⟩
-        rw [Partition.mem_gates, T.blocks_unit_emb Q home hgo, hgc]
+        rw [Partition.mem_gates]
+        show (T.blocks Q home).unit (T.emb g) = some (home c)
+        rw [T.blocks_unit_emb Q home hgo, hgc]
       · show ∑ x ∈ (L.yAt c).map ⟨T.emb, T.emb_inj⟩, T.tied.D.w x = 32
         rw [sum_map]
         simp only [Function.Embedding.coeFn_mk, T.emb_w]
         exact L.width_word c (T.cells_sub hc)
-    · rw [if_neg hc] at h
+    · rw [ite_eq_right hc] at h
       cases h
   · unfold Tying.place at h
     by_cases hc : c ∈ T.cells
-    · rw [if_pos hc] at h
+    · rw [ite_eq_left hc] at h
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj h)
       intro x hx
       obtain ⟨g, hg, rfl⟩ := mem_map.1 hx
       obtain ⟨hgy, hgc⟩ := L.mem_yAt.1 hg
       unfold Tying.untiedGates
       exact mem_map_of_mem _ (L.mem_yOf.2 ⟨hgy, by rw [hgc]; exact hcU⟩)
-    · rw [if_neg hc] at h
+    · rw [ite_eq_right hc] at h
       cases h
   · unfold Tying.place at h h'
     by_cases hc : c ∈ T.cells
     · by_cases hc' : c' ∈ T.cells
-      · rw [if_pos hc] at h
-        rw [if_pos hc'] at h'
+      · rw [ite_eq_left hc] at h
+        rw [ite_eq_left hc'] at h'
         obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj h)
         obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj h')
         rw [disjoint_map]
         exact disjoint_left.2 fun g hg hg' => hne ((L.mem_yAt.1 hg).2.symm.trans (L.mem_yAt.1 hg').2)
-      · rw [if_neg hc'] at h'
+      · rw [ite_eq_right hc'] at h'
         cases h'
-    · rw [if_neg hc] at h
+    · rw [ite_eq_right hc] at h
       cases h
 
 end Tying
@@ -112,16 +114,19 @@ theorem novelReads_asInputs_eq {m : ℕ} (d : Verity.RegisteredCircuit) (P : Ver
       exact h (mem_sdiff.1 hθa).1
   have hset : (d.D.asInputs T).into (P.gates u \ T) \ (d.θ \ T) = d.D.into (P.gates u \ T) \ d.θ := by
     ext a
-    rw [mem_sdiff, mem_sdiff, Nci.Cut.SecurityProofs.mem_into, Nci.Cut.SecurityProofs.mem_into]
     constructor
-    · rintro ⟨⟨ha, g, hgu, hag⟩, hθa⟩
-      have h : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
-      rw [if_neg (mem_sdiff.1 hgu).2] at h
-      exact ⟨⟨ha, g, hgu, h⟩, (hθ a).1 hθa⟩
-    · rintro ⟨⟨ha, g, hgu, hag⟩, hθa⟩
-      refine ⟨⟨ha, g, hgu, ?_⟩, (hθ a).2 hθa⟩
+    · intro h
+      obtain ⟨hin, hθa⟩ := mem_sdiff.1 h
+      obtain ⟨ha, g, hgu, hag⟩ := Nci.Cut.SecurityProofs.mem_into.1 hin
+      have h' : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
+      rw [ite_eq_right (mem_sdiff.1 hgu).2] at h'
+      exact mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, h'⟩, (hθ a).1 hθa⟩
+    · intro h
+      obtain ⟨hin, hθa⟩ := mem_sdiff.1 h
+      obtain ⟨ha, g, hgu, hag⟩ := Nci.Cut.SecurityProofs.mem_into.1 hin
+      refine mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, ?_⟩, (hθ a).2 hθa⟩
       show a ∈ (if g ∈ T then ∅ else d.D.reads g)
-      rw [if_neg (mem_sdiff.1 hgu).2]
+      rw [ite_eq_right (mem_sdiff.1 hgu).2]
       exact hag
   show (d.D.asInputs T).width ((d.D.asInputs T).into ((P.asInputs T).gates u) \ (d.θ \ T)) =
     d.D.width (d.D.into (P.gates u \ T) \ d.θ)
