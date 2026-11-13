@@ -1,1 +1,1 @@
-2026-11-13T17:16Z GEMMCALL: carried head d015be086ecc (e4aada53 + merge of origin/main c68135b49d63); r20261113-165939-b78b: pins clean, circuit-check 10/0/7; suites running
+2026-11-13T20:21Z GEMMCALL: waiting on r20261113-165939-b78b (vy-nebius-cpu-14, running; pins clean, circuit-check 10/0/7 done, suites 120+ passed, last finishing). research.carry exit 0 (carries). Left: suites' final line, PR body, CIR-258 comment, return.
