@@ -450,17 +450,6 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "verity/protocols/proofs/flock/sigma",
-]
-trusted = true
-
-[[place]]
-paths = [
-    "verity/protocols/policy/inference_only/verifier",
-]
-
-[[place]]
-paths = [
     "verity/protocols/accounting/poub/verifier",
 ]
 loads = [
@@ -469,9 +458,9 @@ loads = [
     "verity/configuration/deploy",
     "verity/configuration/wire",
     "verity/protocols/accounting/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/reporting.py",
 ]
 reaches = [
     "verity/circuits",
@@ -484,9 +473,9 @@ reaches = [
     "verity/hardware/record.py",
     "verity/periods",
     "verity/protocols/accounting/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/reporting.py",
 ]
 loaded_by = [
     "verity/commitments/tests/test_block_check.py",
@@ -514,9 +503,9 @@ reaches = [
     "verity/periods",
     "verity/protocols/accounting/poub/verifier",
     "verity/protocols/accounting/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/reporting.py",
 ]
 
 [[place]]
@@ -619,7 +608,6 @@ reaches = [
     "verity/protocols/proofs/spot/verifier/profile.py",
 ]
 loaded_by = [
-    "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
     "verity/protocols/accounting/pouw/clear/clear_audit.py",
     "verity/protocols/accounting/pouw/clear/clear_work.py",
     "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
@@ -644,30 +632,25 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
+    "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
 ]
+
+[[place]]
+paths = [
+    "verity/protocols/policy/inference_only/verifier",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/proofs/flock/sigma",
+]
+trusted = true
 
 [[place]]
 paths = [
     "verity/protocols/proofs/recursion",
 ]
 trusted = true
-
-[[place]]
-paths = [
-    "verity/protocols/remote",
-]
-trusted = true
-
-[[place]]
-paths = [
-    "verity/protocols/reporting.py",
-]
-trusted = true
-loaded_by = [
-    "verity/protocols/policy/inference_only/rho/rho/params.py",
-    "verity/protocols/policy/inference_only/rho/tests/test_operating.py",
-    "verity/protocols/policy/inference_only/rho/tests/test_params.py",
-]
 
 [[place]]
 paths = [
@@ -703,6 +686,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/inner_registered.py",
@@ -751,7 +735,6 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
-    "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
 ]
 
 [[place]]
@@ -765,12 +748,29 @@ reaches = [
     "verity/circuits",
 ]
 loaded_by = [
-    "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
+    "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/policy/inference_only/rho/rho/params.py",
     "verity/protocols/policy/inference_only/rho/tests/test_envelopes.py",
     "verity/protocols/policy/inference_only/rho/tests/test_held_to_core.py",
     "verity/protocols/policy/inference_only/rho/tests/test_params.py",
-    "verity/protocols/accounting/pouw/prover/circuit/plan.py",
+    "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/remote",
+]
+trusted = true
+
+[[place]]
+paths = [
+    "verity/protocols/reporting.py",
+]
+trusted = true
+loaded_by = [
+    "verity/protocols/policy/inference_only/rho/rho/params.py",
+    "verity/protocols/policy/inference_only/rho/tests/test_operating.py",
+    "verity/protocols/policy/inference_only/rho/tests/test_params.py",
 ]
 
 [[place]]
