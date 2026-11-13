@@ -45,9 +45,10 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     (`scan_zk.certified_rows`), which the stream is handed as its certified entries, so both verifiers' R7 holds the
     record's entries to them, and each member's registered read of the network certifier's rows is the record's entry
     of its value. On those files' reads, reported as Lean reports a held member's, both verifiers' record check
-    (`verifier.audit_record`) accepts the round's sample; with the egress member's file naming another root for the
-    network certifier's rows, both refuse it at ``registered``, naming the value, and so they do with that file naming
-    the port under a value the registration doesn't list, at its root or another. The evidence for another window is
+    (`verifier.audit_record`, handed the certified rows' names as `scan_zk.audit` hands them) accepts the round's
+    sample; with the egress member's file naming another root for the network certifier's rows, both refuse it at
+    ``registered``, naming the value; with that file naming the port under a value the registration doesn't list, at
+    its root or another, both refuse it at ``certified``, the value unread. The evidence for another window is
     replayed on a stream handed the same certified entries, so that stream receives the registration and draws the
     honest sample: with the sessions stubbed it ends where the honest stream does, at the delivery (``sessions``), and
     not at its registration. That it is then refused at its select's coins is a round with real sessions' to hold
@@ -141,7 +142,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     def record(files: dict[str, dict]) -> dict:
         verdicts = {f"lean-verify/{name}": {"of_record": True, "accepted": True, "registered": {
             p: {"value": e["value"], "root": e["root"]} for p, e in f["ports"].items()}} for name, f in files.items()}
-        got = M.V.audit_record(rec, receipt, lean_draw, rec["law"], proved, len(proved), {}, verdicts, av.delta)
+        got = M.V.audit_record(rec, receipt, lean_draw, rec["law"], proved, len(proved), {}, verdicts, av.delta,
+                               certified=sorted(certified))
         assert got["verifiers"]["agree"], got["checks"].get("verifiers")
         return got
 
@@ -164,7 +166,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         unlisted = record(named(value=its + "/x", root=root))
         assert not unlisted["accepted"]
         assert unlisted["verifiers"]["lean"] == unlisted["verifiers"]["python"] == {"accepted": False,
-                                                                                    "failed": ["registered"]}
+                                                                                    "failed": ["certified"]}
+        assert unlisted["checks"]["certified"]["detail"] == {"certified": sorted(certified), "unread": [its]}
     told = json.loads((out / "coins.json").read_text())
     late, other = told["outcome"].get("refused"), told["negatives"]["coins-for-another-window"]
     assert late is not None and late["codes"] == ["sessions"], json.dumps(told, sort_keys=True)

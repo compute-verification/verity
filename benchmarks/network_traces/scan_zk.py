@@ -1467,10 +1467,13 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
     then each held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A
     member with no unit sampled runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a
-    port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An accepted audit carries its
-    charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
-    of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
-    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests."""
+    port the OS picks free. Writes what the verifier received under ``out / "verifier"``. The record check is handed
+    the certified rows' names, as the stream is its certified entries, so a certified value no verdict of record
+    reports a read of refuses the round (``certified``): a read reported under a value the registration doesn't list
+    is none. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per sampled proof
+    block; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`). Every outcome carries
+    the tied values R8 let through (``rests_on_period_check``, the registration verdict's), on whose period check its
+    acceptance rests."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1587,7 +1590,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     neg, told = {}, None
     if stream is None:
         result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), n_inst, statement, verdicts,
-                                a.delta, sessions=sessions, served=sorted(served), session_roots=session_roots)
+                                a.delta, sessions=sessions, served=sorted(served), session_roots=session_roots,
+                                certified=sorted(certified))
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),

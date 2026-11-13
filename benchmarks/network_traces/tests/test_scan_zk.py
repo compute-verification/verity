@@ -411,8 +411,9 @@ def _reported(files: dict[str, dict]) -> dict[str, dict]:
 
 def _record_check():
     """A stand-in registration of four units, and the record check on it. -> (``record(registered)``, the registration
-    listing those registered values; ``check(files, rec)``, the record check's ``registered`` finding on the reads the
-    members' ``--registered`` files report, None where it finds nothing)."""
+    listing those registered values; ``check(files, rec)``, the record check's ``registered`` or ``certified`` finding
+    on the reads the members' ``--registered`` files report, None where it finds nothing). The check is handed the
+    registration's registered values' names as the certified entries', as `scan_zk.audit` hands it its round's."""
     program = sz.PA.mixed_population_program([(FIRST, 4)])
     query = sz.PA.template_instances_query([FIRST])
     law = sz.DR.parse_design("stratified:4")
@@ -425,25 +426,29 @@ def _record_check():
         verdicts = _reported(files)
         draw = {**sz.DR.derive(program, query, law), "population": 4, "units": [0, 1, 2, 3]}
         got = sz.AU.audit_record(rec, R.receipt(rec, "a test"), draw, rec["law"], [0, 1, 2, 3], 4, {}, verdicts,
-                                 2.0 ** -20, session_registered=sz.AU.session_registered(verdicts, rec))
-        assert not got["accepted"] or "registered" not in got["checks"]
-        return got["checks"].get("registered")
+                                 2.0 ** -20, session_registered=sz.AU.session_registered(verdicts, rec),
+                                 certified=sorted(e["value"] for e in rec.get("registered", [])))
+        found = [got["checks"][c] for c in ("registered", "certified") if c in got["checks"]]
+        assert len(found) <= 1 and not (found and got["accepted"])
+        return found[0] if found else None
 
     return record, check
 
 
 def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_the_record_check(tmp_path):
-    """The record check on a scan's registration (`audit.audit_record`'s ``registered``, on the reads the verdicts
-    report for the registration's values, `audit.session_registered`). Lean opens a member's registered reads against
-    the root its ``--registered`` file names (`registered_file`) and reports each under the file's value and root; the
-    registration lists each certified row registration under that value at the root the verifier read under the
-    deployment's key (`certified_rows`). On the honest round's files the reported reads are the registration's, each
-    value at its root, and the check finds nothing. A file naming another root for a member's network certifier port
-    (a statement committing other rows, which a session holds against that root) is refused naming the value: the
-    egress member's ``o1``, and one ingress member's ``row`` while the others read the registration's, the value then
-    reported under two roots. A file naming that port under a value the registration doesn't list, at the
-    registration's root or another, is refused too. A registration listing no certified rows holds none of it: the
-    check has nothing to compare such a read with.
+    """The record check on a scan's registration (`audit.audit_record`'s ``registered`` and ``certified``, on the reads
+    the verdicts report for the registration's values, `audit.session_registered`). Lean opens a member's registered
+    reads against the root its ``--registered`` file names (`registered_file`) and reports each under the file's value
+    and root; the registration lists each certified row registration under that value at the root the verifier read
+    under the deployment's key (`certified_rows`). On the honest round's files the reported reads are the
+    registration's, each value at its root, and the check finds nothing. A file naming another root for a member's
+    network certifier port (a statement committing other rows, which a session holds against that root) is refused at
+    ``registered`` naming the value: the egress member's ``o1``, and one ingress member's ``row`` while the others read
+    the registration's, the value then reported under two roots. A file naming that port under a value the
+    registration doesn't list, at the registration's root or another, is refused at ``certified``, naming the value
+    unread: the check drops a read under a value the registration doesn't list, and holds each certified entry the
+    caller names to have a reported read. A registration listing no certified rows holds none of it: the check has
+    nothing to compare such a read with.
 
     What the check does not hold, the open premise that the ``--registered`` file agrees with the record: a file naming
     an ingress member's ``row`` under the egress value at the egress root reports nothing the check refuses, since the
@@ -483,7 +488,8 @@ def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_th
 
     for root in (certified[egress]["root"], "dd" * 64):
         unlisted = check(named(eg, "o1", value=egress + "/x", root=root), rec)
-        assert unlisted is not None and (unlisted["ok"], unlisted["codes"]) == (False, ["registered"]), unlisted
+        assert unlisted == {"ok": False, "codes": ["certified"],
+                            "detail": {"certified": sorted(certified), "unread": [egress]}}, unlisted
     swapped = named(ing[0], "row", value=egress, root=certified[egress]["root"])
     assert check(swapped, rec) is None
     bare = record([])
