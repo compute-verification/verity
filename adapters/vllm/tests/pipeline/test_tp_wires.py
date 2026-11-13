@@ -10,15 +10,16 @@ arithmetic."""
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import re
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import numpy as np
 import pytest
 
 from tests.program.predict.test_steps import _mixed, _registered
-from tests.program.test_tp_binding import N, ROWS, rank_body
+from tests.program.test_tp_binding import N, ROWS, batch_body, rank_body
 from verity_vllm.pipeline.tp import grain as TG, wires as TW
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
@@ -339,6 +340,75 @@ def test_a_combine_of_no_grain_is_refused_by_name():
     with pytest.raises(ValueError, match=r"w3: request 0's collective 0 \[0, 16\): MoeSum_v1\{TOPK=3,H=16\} has no coordinate "
                                          r"combine units: MoeSum_v1"):
         TW.sites_circuit([b], "w3")
+
+
+def halves_body(world: int, rank: int):
+    """Rank ``rank``'s body of a ``world``-rank request: one row's Gemm partial fused with the row as residual, its normed
+    row read by a batch of two Gemms of half the row each, by one w."""
+    half = bind(GE.Gemm, K=H // 2, N=H // 2, **GE.GEMM_AMPERE)
+    params = (("x", Array(H, BF16)), ("w", Array(H, Array(H, BF16))), ("g", Array(H, BF16)), ("u", half.signature()[0][1][1]),
+              *((f"peers_{m}", Array(H, BF16)) for m in range(world - 1)))
+    fused, gemm = bind(TA.AllReduceRmsNormMnnvl, WORLD=world, **FUSED), bind(GE.Gemm, K=H, N=H, **GE.GEMM_AMPERE)
+    B = Builder(params, Array(ROWS, Array(H // 2, BF16)))
+    x = Coll(params[0][1], Affine("p", 0, 0, H))
+    p = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[4:], start=4)], world, rank)
+    (q,) = p.rows([B.call(gemm, x, Coll(params[1][1], Affine("p", 1, 0, H * H))).refs])
+    first = B.call(fused, Coll(fused.signature()[0][0][1], q), x, Coll(params[2][1], Affine("p", 2, 0, H)))
+    u = Coll(params[3][1], Affine("p", 3, 0, params[3][1].leaves))
+    return B.finish(B.batch(half, Coll(Array(ROWS, Array(H // 2, BF16)), first[0].refs), u, axes=(0, None)))
+
+
+def test_the_window_of_combines_read_by_calls_is_the_circuit_it_was():
+    """The windows of the Programs this suite builds, every combine's output read by calls, are the circuits they were
+    before a batch could read one (prefixes of each circuit's SHA-512 pinned)."""
+    def digest(bindings: list[TB.RequestBinding], name: str) -> str:
+        return hashlib.sha512(I.circuit_bytes(TW.sites_circuit(bindings, name).circuit.description())).hexdigest()[:32]
+
+    got = {"tp": digest(list(compile_tp(_registered(tp={"world": W, "rank": 0}), *_mixed()).bindings[:1]), "tp"),
+           **{k: digest([TB.derive([body(w, r, **kw) for r in range(w)])], k)
+              for k, body, w, kw in [("w3", rank_body, 3, {"whole": True}), ("w4", rank_body, 4, {"whole": True}),
+                                     ("c3", rank_body, 3, {"chain": True}), ("f3", fused_body, 3, {})]}}
+    assert got == {"tp": "935ed39ee25b542af33305b69cbbecca", "w3": "b9ccbd6f8fb4e7d8672ce3deab6f4bec",
+                   "w4": "0ba2a9cb78fcb15d7ef8ddcf6ec962d0", "c3": "62dc21abeb5408bb94d5a14c3cde2954",
+                   "f3": "fc3a96c53902705a2abdb290a96ac13c"}
+
+
+@pytest.mark.parametrize("read", ["mapped", "shared"])
+def test_a_batch_reading_a_combines_output_is_a_unit_a_member_wired_as_its_calls_are(read):
+    """A batch of the calls reading an all-reduce over both rows (three ranks) is one range of a unit a member, at the site
+    where the calls would each be one unit: each member reads its row, or both rows alike, from the combine units that
+    compute them, cut at the members, so the token row is a member's and the window is the calls' circuit."""
+    def rows(sites: TW.Sites) -> set[tuple]:
+        """Each wire's rows: (reader, port, reader unit, its row, writer, output, writer unit)."""
+        out = set()
+        for w in sites.circuit.wires:
+            for k in range(int(np.prod(w.radix))):
+                u, q = w.base, k
+                for r, s in zip(w.radix, w.step):
+                    u, q = u + q % r * s, q // r
+                out.add((w.reader, w.port, w.at + k // w.cut[1], w.cut[0] + k % w.cut[1], w.writer, w.out, u))
+        return out
+
+    calls = TW.sites_circuit([TB.derive([batch_body(3, r, read, batched=False) for r in range(3)])], "b3")
+    b = TW.sites_circuit([TB.derive([batch_body(3, r, read) for r in range(3)])], "b3")
+    assert b.unwired == calls.unwired == () and rows(b) == rows(calls) and _count(b) == _count(calls)
+    assert all(getattr(b.circuit, f.name) == getattr(calls.circuit, f.name) for f in fields(b.circuit) if f.name not in ("wires", "order"))
+    assert {k: [n for _t, _a, n in v] for k, v in b.consumers.items()} == {(0, r, 2): [ROWS] for r in range(3)}
+    assert {k: [n for _t, _a, n in v] for k, v in calls.consumers.items()} == {(0, r, x): [1] for r in range(3) for x in (2, 3)}
+    in_order(b)
+
+
+def test_a_batch_of_token_selects_is_refused_and_a_batch_read_the_grains_dont_fit_is_listed_unwired():
+    """A batch of token selects reading a combine's output is refused by name: a token select is lowered as a call. A batch
+    whose members each read half the fused all-reduce's normed row, a token row of the whole row, is no refusal: each rank's
+    read is a free input, listed in `Sites.unwired`."""
+    b = TB.derive([batch_body(3, r, "select") for r in range(3)])
+    with pytest.raises(ValueError, match=r"s3: request 0's rank 0 node 2 \(TokenSelect_v4\{V=16\}\) is a batch of 2 token selects: "
+                                         "a token select reading a combine's output is lowered as a call"):
+        TW.sites_circuit([b], "s3")
+    halves = TW.sites_circuit([TB.derive([halves_body(3, r) for r in range(3)])], "h3")
+    assert [re.sub(r".*rank (\d)'s node 2 \(Gemm_v2\{K=128,.*\) x reads leaves \[0, 256\): 256-word rows of "
+                   r"RmsNormMnnvl_v1\{.*\} into its 128-word x from word 0", r"\1", u) for u in halves.unwired] == ["0", "1", "2"]
 
 
 def test_the_order_check_refuses_a_wire_running_backward(toy):
