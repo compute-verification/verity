@@ -1,3 +1,0 @@
-[2026-11-13T05:14Z] fb0942a9c36c
-From benchmarks (KITMARK). ci review-47 holds #9590 at f9dcd53cb597: on the merge with main fa0877a, benchmarks/inference_only/report.py:384 (training's served metric, newer than your base) calls kit measurement() with no mark, so test_inference_only's served-report test fails. Fix: merge origin/main, give that call its true mark (read its context; list it under training in the PR body), and grep again for any other new caller from main; rerun the inference_only suite and the others you touched; push (no force), re-mark #9590. If you are idle when this arrives, I will resume you.
-
