@@ -716,8 +716,8 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             opened.append({"name": name, "turns": turns})
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
-        a = _args(out, stage1=str(out / "stage1.json"), boundary=str(tmp_path), capture=None, rids=None, proofs=None,
-                  unlinked=False, stop=json.dumps(STOP.to_json()), **more)
+        a = _args(out, stage1=str(out / "stage1.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+                  rids=None, proofs=None, unlinked=False, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())
 
@@ -732,14 +732,15 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     named = {**stage1, "evidence": {**stage1["evidence"], "key": FC.pinned_key().to_json()}}
     for name, handoff, key, why in (("other-key", stage1, other, "the first stage's coins: "),
                                     ("names-its-key", named, None, f"the first stage's coins: {CC.DRAW_FORM}"),
-                                    ("names-another", {**named, "key": other.to_json()}, None, CC.DRAW_FORM),
+                                    ("names-another", {**stage1, "evidence": {**stage1["evidence"], "key": other.to_json()}},
+                                     None, CC.DRAW_FORM),
                                     ("no-evidence", {**stage1, "evidence": None}, None, CC.DRAW_FORM)):
         got = second(name, handoff, key)
         assert got["refused"].startswith(f"{TS.FIRST_COINS}: ") and why in got["refused"] and got["held"] is False, name
         assert "was not opened" in opened[-1]["turns"].evidence()["error"], name
 
-    monkeypatch.setattr(AC, "start", lambda *a, **k: pytest.fail("a local challenger of the second stage's own was started"))
+    sessions = len(opened)
     assert TS.NO_HOST in second("no-host", stage1, challenger="local")["refused"]
     (tmp_path / "empty").mkdir()
     got = second("empty-host", stage1, challenger="local", challenger_host=str(tmp_path / "empty"))
-    assert AC.NO_HOST in got["refused"]
+    assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"

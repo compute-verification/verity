@@ -1,7 +1,7 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from the hand-off alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on seventeen written cases. No input is random. No proof runs here: a session's
+(`Record.across`) held to the Python's on eighteen written cases. No input is random. No proof runs here: a session's
 verdicts are stand-ins of the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The
 class is the two-stage driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -293,7 +293,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     ours = T.FC.pinned_key()
     holds = {"another key": (replace(ours, public=bytes(x ^ 1 for x in ours.public)), T.FC.MAIN), "no key": (None, T.FC.MAIN),
              "another main": (ours, T.FC.MAIN[1:])}
-    assert len(cases) == 17 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 12 + [3] * 3 + [4]
+    assert len(cases) == 18 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 12 + [3] * 3 + [4]
     for name, (case, stop, log, outcome, why) in cases.items():
         mine = {**handoff, "stop": {**s, **stop}}
         log = list(r.first.stream.log) if log is None else log
