@@ -66,6 +66,17 @@ def test_a_row_of_an_optimizers_phase_stays_whole_where_a_dimension_is_rows_time
           for phase in sorted(gates.OPTIMIZER_PHASES)))
 
 
+def test_a_width_of_the_model_of_the_records_rows_times_context_is_refused():
+    """A forward's dimension of rows x context is read as tokens by its size, so a model with a width of that size
+    can't have the record's rows divided out: refused, naming the width. One row a forward divides nothing."""
+    assert of_record.tokens_by_size(SHAPE, 3) is None
+    wide = SHAPE | {"d_ff": 4 * CTX}
+    assert of_record.tokens_by_size(wide, 4) == (
+        f"the model's d_ff is {4 * CTX:,}, the record's 4 rows a forward times the context: a dimension of that size "
+        "reads as tokens, so the record's rows can't be divided out")
+    assert of_record.tokens_by_size(wide, 2) is None and of_record.tokens_by_size(SHAPE | {"d_model": CTX}, 1) is None
+
+
 def attention(rows: int, calls: int) -> tuple:
     """Attention as the counter writes a fused kernel at `rows` rows a forward, `calls` calls a step, each with a
     backward call that asks for q's, k's and v's gradients: a call's two scalings and two products, and a backward

@@ -179,7 +179,8 @@ def per_row(struct: dict, shape: dict) -> dict:
     are sorted: their order is the order a program lists its parameters in, which is no part of the step. The dtype a
     row names for its op, where it names one, is not part of an entry: a record's rows name none where a config's
     counted step names each, so rows of one op and shape in several dtypes are one entry, their counts added. The
-    bits a use reads its weight at are compared in `updated`."""
+    bits a use reads its weight at are compared in `updated`. A width of the model of rows x context is read as tokens
+    too, which `tokens_by_size` refuses."""
     ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
     a_head = {ctx, shape["d_model"] // heads}
@@ -203,6 +204,16 @@ def per_row(struct: dict, shape: dict) -> dict:
         e[0] += count
         e[1] += _whole(Fraction(macs, r)) if now != was else macs
     return {"rows": r, "updated": sorted((u[0], u[1], u[4]) for u in struct["updated"]), "log": log}
+
+
+def tokens_by_size(shape: dict, rows: int) -> str | None:
+    """Why a record of `rows` rows a forward on a model of `shape` can't be divided into rows, None where it can:
+    `per_row` reads a forward's or a backward's dimension of rows x context as tokens by its size, so a width of the
+    model of that size would be read as tokens on the record's side and not on the config's."""
+    at = rows * shape["ctx"]
+    same = [k for k in ("d_model", "d_ff", "vocab") if rows > 1 and shape.get(k) == at]
+    return (f"the model's {', '.join(same)} is {at:,}, the record's {rows} rows a forward times the context: a "
+            "dimension of that size reads as tokens, so the record's rows can't be divided out") if same else None
 
 
 def uses(mine: list, theirs: list) -> list[str]:
@@ -478,6 +489,8 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
         return r | {"refused": f"its record's fused attention rows can't be compared as the math kernel's ops: {e} "
                                f"(what `--partial` would say is the entry's `partial` in {HELD.name})"}
     r["differences"] += unread
+    if why := tokens_by_size(shape, rows_a_forward(struct, shape["ctx"])):
+        return r | {"refused": why}
     theirs = per_row(struct, shape)
     batch, rows = cfg.budget["batch"], theirs["rows"]
     if batch % rows:
