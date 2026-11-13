@@ -13,22 +13,22 @@ set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-flock}; mkdir -p $O $W/bin
 nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo "threads $(nproc)" | tee -a $O/host.txt
 
-KEY=$(cat verity/protocols/flock/pod/20-gpu-link.sh verity/protocols/flock/pod/60-circuit.sh verity/protocols/flock/prover/*.patch verity/protocols/flock/prover/cuda_*_patch.py \
+KEY=$(cat verity/protocols/flock/prover/pod/20-gpu-link.sh verity/protocols/flock/prover/pod/60-circuit.sh verity/protocols/flock/prover/*.patch verity/protocols/flock/prover/cuda_*_patch.py \
   $(find verity/protocols/flock/prover/cuda verity/protocols/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-LKEY=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
+LKEY=$(python3 verity/protocols/flock/prover/pod/lake_closure.py key verity/protocols/flock/verifier)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   if [ ! -x $L ]; then
-    rm -rf $W/lean && cd $(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $W/lean) \
+    rm -rf $W/lean && cd $(python3 verity/protocols/flock/prover/pod/lake_closure.py copy verity/protocols/flock/verifier $W/lean) \
       && lake build flock-verify && cp .lake/build/bin/flock-verify $L
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 if [ ! -x $B ]; then
-  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash verity/protocols/flock/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
+  FLOCK_WORK=$W MODE=build GPU=0 SM=0 bash verity/protocols/flock/prover/pod/60-circuit.sh > $O/build-circuit.log 2>&1 || { tail -40 $O/build-circuit.log; exit 1; }
   cp $W/flock-gpu-link/flock/target/release/flock-circuit $B
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
