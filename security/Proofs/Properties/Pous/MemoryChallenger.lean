@@ -228,4 +228,61 @@ theorem judgeSigned : JudgeSigned := by
   obtain ⟨schemes, hs, ⟨p, hp, ht, m, hm, hv⟩, -, he, -⟩ := judgeAccepts r hj
   exact ⟨schemes, hs, Device.signedByDevice_of dev hp ht hm hv he⟩
 
+/-! ## The converse: a session that meets every check is accepted -/
+
+private theorem forIn'_fix {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ)) (b : σ)
+    (hf : ∀ a h, f a h b = pure (.yield b)) : forIn' l b f = pure b := by
+  induction l with
+  | nil => rfl
+  | cons a as ih =>
+    rw [List.forIn'_cons, hf a List.mem_cons_self]
+    exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m => hf a' _)
+
+private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession}
+    {c : SessionCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
+    (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
+    (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
+    (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k) : pre schemes trusted s c = #[] := by
+  have ht' : s.publicKey ∈ trusted := by simpa using ht
+  unfold pre
+  simp [hp, ht', hm, hv, hc, he, hn, bind, Except.bind, Id.run]
+  rfl
+
+private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedSession} {c : SessionCommitment}
+    {openings : Array CoinOpening}
+    (h : ∀ j (hj : j < s.rounds.size),
+      (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
+        verifyCoin c o = true) ∧
+      s.rounds[j].index < c.blocks ∧ expected s.rounds[j].index = some s.rounds[j].digest ∧
+      0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs) :
+    (tail expected s c openings #[]).accepted = true := by
+  unfold tail
+  simp only [Id.run]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
+  rw [forIn'_fix _ _ _ ?_]
+  · rfl
+  · intro a ha
+    have hj : a < s.rounds.size := by simp at ha; omega
+    obtain ⟨⟨o, ho, hrj, hoi, hv⟩, hb, hd, h0, hl⟩ := h a hj
+    have ho' : openings.reverse.find? (fun x => x.j == a) = some o := by simpa using ho
+    simp [ho', hrj, hoi, hv, hb, hd, h0, hl]
+
+/-- **A session that meets every check `verdict` makes is accepted**, the converse of `verdictAccepts`: a scheme it
+names, a trusted key whose signature over the session's message verifies, the commitment, a complete session of `k`
+rounds, and each round's index its committed coin (the last opening for its `j`), its digest the expected one, on
+time. -/
+theorem verdict_accepted_of {schemes : Schemes} {trusted : List ByteArray} {expected : Nat → Option ByteArray}
+    {s : SignedSession} {c : SessionCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
+    (hp : schemes.lookup s.scheme = some p) (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
+    (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
+    (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k)
+    (h : ∀ j (hj : j < s.rounds.size),
+      (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
+        verifyCoin c o = true) ∧
+      s.rounds[j].index < c.blocks ∧ expected s.rounds[j].index = some s.rounds[j].digest ∧
+      0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs) :
+    (verdict schemes trusted expected s c openings).accepted = true := by
+  rw [verdict_eq, pre_empty_of hp ht hm hv hc he hn]
+  exact tail_accepted_of h
+
 end MemoryChallenger.Properties.SecurityProofs
