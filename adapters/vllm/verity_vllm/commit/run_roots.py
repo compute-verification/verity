@@ -3,6 +3,9 @@ committer's measurements, Merkle roots or layout digests.  A committed store kee
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+__all__ = ["RunRoots", "StepRoot"]
 
 
 @dataclass
@@ -17,6 +20,8 @@ class StepRoot:
 
 @dataclass
 class RunRoots:
-    """The run root and each step's `StepRoot`."""
+    """The run root and each step's `StepRoot`.  `weight_registration` is the record's, not the store's: a dumped store doesn't keep
+    it, and a reader of the record sets it on the roots it loaded, where a replay reads it as it reads a live run commitment's."""
     run_root: bytes
     steps: list[StepRoot]
+    weight_registration: dict[str, Any] | None = None

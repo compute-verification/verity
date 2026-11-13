@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex
+from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex, plane_copies
 from verity_vllm.check.replay.request_replay import Replay
 
 
@@ -36,7 +36,7 @@ def positions(pi: ProgramIndex) -> dict[tuple[str, str], int]:
         if d is None or int(d["step"]) != 0:
             continue
         for op, member, w in [(d["op_path"], m[0], int(m[1])) for m in d["members"]] + \
-                             [(c["op_path"], c["member"], int(c["width"])) for c in d.get("copies") or ()]:
+                             [(c["op_path"], c["member"], int(c["width"])) for c in plane_copies(d)]:
             rows[(op, member)] += 1
             width[(op, member)] = w
     embed = pi.embed_op_path()
@@ -77,7 +77,9 @@ class RecomputedPrefix:
             raise ValueError(f"request {rid}: a hit of {C} positions of its {len(prompt)}-token prompt (at least one, and short of it)")
         self.store, self.rid, self.C, self.arrive = store, str(rid), int(C), int(arrive)
         self.per = positions(pi)
-        self.replay = None if plan else Replay(pi, rid, prompt, weights, arrive=arrive)
+        if weights is None and not plan:
+            raise TypeError(f"request {rid}: its recomputed prefix is replayed from the registered weights, and none are given")
+        self.replay = None if plan or weights is None else Replay(pi, rid, prompt, weights, arrive=arrive)
         self.reads: list[list[Any]] = []
 
     def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
@@ -113,14 +115,15 @@ def adopt(pi: ProgramIndex, rid: str, warm: Mapping[str, Any] | None) -> frozens
     C = int((warm or {}).get("cached") or 0)
     if not C or pi.kv_prefix is not None:
         return frozenset()
-    if (warm or {}).get("prompt") is None:
+    prompt = (warm or {}).get("prompt")
+    if prompt is None:
         raise ValueError(f"{rid} is served {C} cached prompt rows and its Program recomputes them: the replay needs its certified "
                          "prompt (`cached_prefixes[rid]['prompt']`)")
-    pi.recomputed[rid] = (C, [int(t) for t in warm["prompt"]])
+    pi.recomputed[rid] = (C, [int(t) for t in prompt])
     return prefix_rows(pi, C)
 
 
-def stores(indices: Mapping[Any, Any], store: Any, weights: Callable | None, arrivals: Mapping[str, int], *,
+def stores(indices: Mapping[int | str, ProgramIndex], store: Any, weights: Callable | None, arrivals: Mapping[str, int], *,
            plan: bool = False) -> dict[str, RecomputedPrefix]:
     """Each adopted request's store over ``store`` (`adopt`)."""
     return {rid: RecomputedPrefix(store, pi, rid, *pi.recomputed[rid], weights, arrive=int(arrivals.get(rid, 0)), plan=plan)
