@@ -4,7 +4,7 @@
 # /workspace/jobs/phase) between runs on the pod. STEPS (default setup,build,stage,ident,tl):
 #   setup  CUDA 13.3 (cuda-13.3.sh), Nsight Systems 2026.1.3 and a Python venv, unpacked under KW
 #   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
-#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit drawn
+#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit sampled
 #          (zk_cost.py stage), once per KW and UNITS
 #   test   TESTS (default the hm96 trees', the arena layout's and level 0's fused folds') under pytest, slow ones included, on
 #          the pod's nvcc and GPU, against b684b12's cuda-ghash from the build's Flock checkout; a skip fails

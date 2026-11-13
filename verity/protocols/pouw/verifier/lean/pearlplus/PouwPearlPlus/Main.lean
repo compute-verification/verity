@@ -17,9 +17,9 @@ reason, in the verdict's order; a tile over its bound has its reason, and is ok 
 
 `COINS.json` is the epoch's coin commitment, an in-process challenger's or a live session's (`EpochCoins.ofJson`). The
 prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`) and names its
-draw, and its ``rounds`` and ``dropped`` place the passes for the tie; one that doesn't is written with the run's
-commitment, the given source and the node's draw. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
-and `--of-record` takes only a challenger draw on live coins (`Coins.ofRecordReason`).
+sample, and its ``rounds`` and ``dropped`` place the passes for the tie; one that doesn't is written with the run's
+commitment, the given source and the node's sample. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
+and `--of-record` takes only a challenger sample on live coins (`Coins.ofRecordReason`).
 -/
 
 @[expose] public section
