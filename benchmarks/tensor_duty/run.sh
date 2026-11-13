@@ -14,7 +14,8 @@
 # --arms fp32-beside: in place of the duty sweep, FP32 adds beside the tensor pipe (duty.cu's arms A to D) at each clock,
 # for each of BESIDE_CLASSES ("zero const uniform"): A, B, C at the add:MAC ratios 1/X for X in RATIOS ("128 32 8"), and D
 # in phases of PHASES_MS ("1 10 100"), each point SECS; the warm-up is arm A on uniform operands; nvidia-smi samples every
-# 10 ms; summarize.py --arms fp32-beside writes summary.json and exits nonzero unless p >= 31.84 in C and D.
+# 10 ms; summarize.py --arms fp32-beside writes summary.json, a verdict per reading of an FP32 add's price, and
+# exits nonzero unless every reading is decided (BASE_MHZ and BASE_SOURCE: the cautious reading's base clock).
 # --no-lock (LOCK=0): no sudo; the clock and power limit stay as found and CLOCKS is `default`.
 #
 # Env: CLOCKS ("1980 default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
@@ -24,8 +25,9 @@
 # continuous wg_s8 on uniform operands, at each clock first); LEASE_MIN (75); BUILD_ONLY (1: build and list the
 # binary's tensor and FADD instructions, no lease).
 # Writes $OUT/points.jsonl (beside.jsonl with --arms fp32-beside) and warm.jsonl (duty's lines, each with its clock),
-# smi.csv, found.json, gpu-before.txt, gpu-after.txt, lock.txt, restored.txt, rc.txt, build.log, sass_ops.txt, and
-# summarize.py's summary.md and verdict.json (summary.json with --arms fp32-beside).
+# smi.csv, found.json, gpu-before.txt, gpu-after.txt, lock.txt, clock-CLOCK-before.txt and -locked.txt (nvidia-smi -q -d
+# CLOCK,PERFORMANCE before and after each clock's lock; -after.txt after its fp32-beside arms), restored.txt, rc.txt,
+# build.log, sass_ops.txt, and summarize.py's summary.md and verdict.json (summary.json with --arms fp32-beside).
 set -uo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 O=${OUT:?run under research run}
@@ -77,6 +79,7 @@ if [ "${1:-}" = --leased ]; then
     echo "no lock: clock and power limit as found" > "$O/lock.txt"
   fi
   for clock in $CLOCKS; do
+    nvidia-smi -i "$UUID" -q -d CLOCK,PERFORMANCE > "$O/clock-$clock-before.txt" 2>&1
     if [ "$LOCK" != 1 ]; then true
     elif [ "$clock" = default ]; then sudo -n nvidia-smi -i "$UUID" -rgc
     else sudo -n nvidia-smi -i "$UUID" -lgc "$clock,$clock"; fi >> "$O/lock.txt" 2>&1
@@ -84,6 +87,7 @@ if [ "${1:-}" = --leased ]; then
     echo "clock $clock rc $rc" | tee -a "$O/lock.txt" >> "$O/rc.txt"
     nvidia-smi -i "$UUID" --query-gpu=clocks.sm,clocks.applications.graphics,power.limit,enforced.power.limit --format=csv \
       >> "$O/lock.txt" 2>&1
+    nvidia-smi -i "$UUID" -q -d CLOCK,PERFORMANCE > "$O/clock-$clock-locked.txt" 2>&1
     if [ "$clock" != default ] && [ "$rc" != 0 ]; then
       echo "clock $clock skipped: not locked" >> "$O/rc.txt"
       continue
@@ -98,6 +102,7 @@ if [ "${1:-}" = --leased ]; then
           echo "$clock $arm $c rc ${PIPESTATUS[0]}" >> "$O/rc.txt"
         done
       done
+      nvidia-smi -i "$UUID" -q -d CLOCK,PERFORMANCE > "$O/clock-$clock-after.txt" 2>&1
       continue
     fi
     "$BIN" wg_s8 uniform idle 65536 "$WARM_S" 100 2>> "$O/duty.err" | sed "s/^{/$tag/" >> "$O/warm.jsonl"
@@ -138,7 +143,8 @@ else
 fi
 echo "lease rc $?" | tee -a "$O/rc.txt"
 if [ "$ARMS" = fp32-beside ]; then
-  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" | tee "$O/summary.md"
+  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" \
+    ${BASE_MHZ:+--base-mhz "$BASE_MHZ" --base-source "${BASE_SOURCE:?with BASE_MHZ}"} | tee "$O/summary.md"
 else
   PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --json "$O/verdict.json" | tee "$O/summary.md"
 fi

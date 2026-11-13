@@ -26,6 +26,7 @@ tmp_path_retention_policy = "failed"
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_agents.py",
+    "tests/test_asker.py",
     "tests/test_at_main.py",
     "tests/test_auto.py",
     "tests/test_binprov.py",
