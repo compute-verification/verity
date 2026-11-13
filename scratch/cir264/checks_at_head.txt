@@ -1,0 +1,112 @@
+Checks at 8e96f9e2a3d3380ebc75ae532bb32cd8d588ca60 (PR #9693's head)
+
+== r20261113-192224-1665 (vy-nebius-cpu-12): suites.py --changed af9b13440693 --quick; each suite's verdict and count ==
+cached  verity-commitments-benchmarks                           a pass the node kept from another commit's run (every file that run read is as it was)
+cached  verity-datacenter                                       a pass the node kept from another commit's run (every file that run read is as it was)
+cached  benchmarks/hash/dither                                  a pass the node kept from another commit's run (every file that run read is as it was)
+cached  verity-tc-probe                                         a pass the node kept from another commit's run (every file that run read is as it was)
+cached  benchmarks/torch_gpu/j10r_sm90                          a pass the node kept from another commit's run (every file that run read is as it was)
+cached  verity/circuits/private_circuits                        a pass the node kept from another commit's run (every file that run read is as it was)
+cached  verity/protocols/tests                                  a pass the node kept from another commit's run (every file that run read is as it was)
+passed  verity/protocols/accounting/pouw/verifier/lean/commit   6 passed, 0 skipped, 0 failed
+passed  verity/circuits/requirement                             22 passed, 0 skipped, 0 failed
+passed  verity/circuits/ops                                     949 passed, 2 skipped, 0 failed
+passed  verity/protocols/proofs/flock/sigma                     4 passed, 0 skipped, 0 failed
+passed  verity/protocols/proofs/spot/verifier                   914 passed, 0 skipped, 0 failed
+passed  verity/protocols/accounting/pouw/verifier               2007 passed, 0 skipped, 0 failed
+passed  verity/protocols/accounting/certifier/verifier/network  90 passed, 0 skipped, 0 failed
+passed  verity/protocols/accounting/certifier/verifier          1421 passed, 1 skipped, 0 failed
+passed  verity-core-composition                                 21 passed, 0 skipped, 0 failed
+passed  benchmarks/spot_figures                                 246 passed, 0 skipped, 0 failed
+passed  benchmarks/one_stage                                    1069 passed, 0 skipped, 0 failed
+passed  repository                                              357 passed, 0 skipped, 0 failed
+passed  verity-bench                                            626 passed, 0 skipped, 0 failed
+passed  benchmarks/prove_path                                   170 passed, 0 skipped, 0 failed
+passed  verity-core-firewall                                    50 passed, 0 skipped, 0 failed
+passed  memory-challenger-lean                                  27 passed, 0 skipped, 0 failed
+passed  benchmarks/sampling_plan                                61 passed, 0 skipped, 0 failed
+passed  benchmarks/training_slowdown                            652 passed, 0 skipped, 0 failed
+passed  benchmarks/training_slowdown/grader                     25 passed, 3 skipped, 0 failed
+passed  benchmarks/property_redteam                             92 passed, 2 skipped, 0 failed
+passed  verity-graph                                            220 passed, 0 skipped, 0 failed
+passed  verity-network-traces                                   716 passed, 0 skipped, 0 failed
+passed  benchmarks/verifier_cost                                9 passed, 0 skipped, 0 failed
+passed  benchmarks/dsa_topk                                     15 passed, 10 skipped, 0 failed
+passed  verity-netsim-workload                                  35 passed, 0 skipped, 0 failed
+passed  verity-commit-slots                                     61 passed, 18 skipped, 0 failed
+passed  verity-network-e2e                                      70 passed, 0 skipped, 0 failed
+passed  demos/lifecycle                                         66 passed, 0 skipped, 0 failed
+passed  benchmarks/spot_proved                                  101 passed, 0 skipped, 0 failed
+passed  benchmarks/pouw/pearlplus_lean                          3 passed, 0 skipped, 0 failed
+passed  benchmarks/inference_only                               21 passed, 0 skipped, 0 failed
+passed  verity-core-periods                                     30 passed, 0 skipped, 0 failed
+passed  core-identity                                           5 passed, 0 skipped, 0 failed
+passed  verity-cli                                              133 passed, 0 skipped, 0 failed
+passed  verity-certifier-timing                                 29 passed, 0 skipped, 0 failed
+passed  verity-proof-throughput                                 48 passed, 0 skipped, 0 failed
+passed  verity-circuit-properties                               117 passed, 0 skipped, 0 failed
+passed  benchmarks/served_units                                 40 passed, 0 skipped, 0 failed
+passed  benchmarks/route_capture                                13 passed, 0 skipped, 0 failed
+passed  benchmarks/one_stage/interfaces                         93 passed, 0 skipped, 0 failed
+passed  verity-sha512-rows                                      8 passed, 4 skipped, 0 failed
+passed  benchmarks/two_stage                                    9 passed, 6 skipped, 0 failed
+passed  verity-network-sim                                      21 passed, 0 skipped, 0 failed
+passed  benchmarks/unit_lowering                                3 passed, 0 skipped, 0 failed
+passed  verity-core-sampled-proofs                              318 passed, 2 skipped, 0 failed
+passed  verity-vllm                                             17217 passed, 479 skipped, 0 failed
+passed  research                                                5016 passed, 3 skipped, 0 failed
+passed  verity-flock                                            1470 passed, 30 skipped, 0 failed
+passed  verity-circuit-check                                    383 passed, 2 skipped, 0 failed
+passed  verity/definitions                                      1027 passed, 0 skipped, 0 failed
+passed  verity/commitments                                      600 passed, 0 skipped, 0 failed
+passed  verity/circuits                                         1120 passed, 0 skipped, 0 failed
+passed  verity-numerical                                        660 passed, 6 skipped, 0 failed
+passed  verity-core-evaluate                                    36 passed, 0 skipped, 0 failed
+passed  verity/commitments/windows                              101 passed, 1 skipped, 0 failed
+62 suites: 55 passed here, 7 cached, 0 failed
+then `repository` whole: passed, 361 passed, 0 failed
+then the ratchet gate: ratchet gate af9b13440693..8e96f9e2a3d3: 1 change(s), 0 failed
+then pins.py --stale: exit 0, no output
+
+== r20261113-190708-21a4 (vy-nebius-cpu-12): circuit-check verity/definitions/registry/sampled_accept.circuit-check.py --update-pins, in a clone; no pin written ==
+ok        definition LogitAtStep_v1  failures=0 unchecked=0 q_call=3u/65b
+ok        definition SampledAccept_v1{K=5,V=154880,TILE=8192}  failures=0 unchecked=0 by-calls: 9 callees, not lowered whole
+unchecked definition AcceptExpLane_v1  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptResample_v1{K=2,N=16,FIRST=False,LAST=True}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=2,N=2,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=2,N=2,FIRST=False,LAST=True}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=2,N=2,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=2,N=32,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=2,N=32,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=5,N=32,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=5,N=32,FIRST=False,LAST=True}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptResample_v1{K=5,N=32,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=refused:gate-too-wide
+unchecked definition AcceptRowEnd_v1{T=17,N=16,AT=0}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptRowEnd_v1{T=17,N=16,AT=512}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptRowEnd_v1{T=19,N=3328,AT=4096}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptTileHead_v1{N=16,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=78u/1535b
+unchecked definition AcceptTileHead_v1{N=16,FIRST=False,LAST=True}  failures=0 unchecked=1 q_call=77u/1503b
+unchecked definition AcceptTileHead_v1{N=16,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=78u/1535b
+unchecked definition AcceptTileHead_v1{N=512,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=2558u/50143b
+unchecked definition AcceptTileHead_v1{N=512,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=2558u/50143b
+unchecked definition AcceptTileHead_v1{N=7424,FIRST=False,LAST=True}  failures=0 unchecked=1 q_call=37117u/727487b
+unchecked definition AcceptTileHead_v1{N=8192,FIRST=False,LAST=False}  failures=0 unchecked=1 q_call=40958u/802783b
+unchecked definition AcceptTileHead_v1{N=8192,FIRST=True,LAST=False}  failures=0 unchecked=1 q_call=40958u/802783b
+unchecked definition AcceptTileSum_v1{N=16,AT=512,LAST=True}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptTileSum_v1{N=4096,AT=0,LAST=False}  failures=0 unchecked=1 q_call=8064u/258048b
+unchecked definition AcceptTileSum_v1{N=4096,AT=4096,LAST=True}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptTileSum_v1{N=512,AT=0,LAST=False}  failures=0 unchecked=1 q_call=896u/28672b
+unchecked definition AcceptTileSum_v1{N=512,AT=0,LAST=True}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptTileSum_v1{N=6,AT=0,LAST=True}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition AcceptUniform_v1  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition SampledAccept_v1{K=2,V=8208,TILE=512}  failures=0 unchecked=2 q_call=refused:gate-too-wide
+unchecked redundant-gates/boolean: 6311 over 6 target(s)
+unchecked redundant-gates/ir: 2560 over 1 target(s)
+unchecked vectors/none: 23 over 23 target(s)
+circuit-check: vectors a realization compared with the reference on: 7 random, 0 edge-only, 23 none
+circuit-check: 31 target(s), 0 failure(s), 30 unchecked (warnings, which never fail) on 29 Definition(s), 10 Definition(s) Q_call v1 refuses
+
+== the same checks one commit earlier, at f1d2ecc7050a ==
+r20261113-180800-47af (vy-nebius-cpu-14): 62 suites, 62 passed (0 cached), 0 failed; 39156 tests passed, 570 skipped; repository whole 361 passed; ratchet gate 1 change, 0 failed
+r20261113-180332-58cd (vy-nebius-cpu-3): circuit-check, the same 36 report lines, no pin written
+r20261113-173733-65a2 (vy-nebius-cpu-10): pins.py --stale, exit 0, no output
