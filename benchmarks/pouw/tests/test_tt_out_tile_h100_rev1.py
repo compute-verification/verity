@@ -593,6 +593,34 @@ def test_sub_rule_raisers_at_the_deepest_shape_are_over_the_cap():
     _over_the_cap("raisers at 368", _live_raiser_case(k=65536, groups=112, raisers=5, at=368.0))
 
 
+@pytest.mark.slow
+def test_dead_pairs_at_the_deepest_shape_are_over_the_cap():
+    """`test_dead_pairs_are_over_the_cap` at k = 65,536, the H100 domain's deepest (`k_max`), with liveness's whole
+    allowance planted (nine frozen groups of the 512). What 8192 can't check: that the dead-pair term keeps the tile over
+    its cap when the cap has grown eightfold with k and the planted groups only ninefold, and that the program, which
+    saves more of the credit here than at 8192, is still answered by the mends alone."""
+    _over_the_cap_by_its_mends("dead pairs", _dead_pair_case(k=65536, n=8192, groups=9, units=256))
+
+
+@pytest.mark.slow
+def test_raised_adder_groups_at_the_deepest_shape_are_over_the_cap():
+    """`test_raised_adder_groups_are_over_the_cap` at k = 65,536 with liveness's whole allowance planted (170 groups of
+    the 512). What 8192 can't check: that the program's 4,096 words are still the reference's after 2,048 atoms and 512
+    promotions, whose running total the planted groups keep moving, and that the forced zeros of 170 groups keep up with
+    a cap that grows with k."""
+    _over_the_cap_by_its_mends("raised adder", _raised_case(k=65536, n=8192, groups=170, units=1, fill="zero"))
+
+
+@pytest.mark.slow
+def test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_cap():
+    """`test_planted_cross_group_skips_are_over_the_cap` at k = 65,536 with 170 planted groups of the 512, which 8192
+    can't check for the reasons `test_raised_adder_groups_at_the_deepest_shape_are_over_the_cap` gives; here too no
+    flag is set in a planted group."""
+    case = _raised_case(k=65536, n=8192, groups=170, units=1, fill="zero", program="skip")
+    assert case["flagged_in_planted_groups"] == 0, case
+    _over_the_cap_by_its_mends("planted cross-group skips", case)
+
+
 def test_honest_tiles_take_no_mends():
     """The mends charge nothing on the census's honest-like tiles: no dead pair and no forced zero on any of their
     words, so the new terms move no honest tile's debit toward its cap."""
