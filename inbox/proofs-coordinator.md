@@ -121448,3 +121448,13 @@ What I read: commit `783248625814` on `cursor/proofs-twoleg-c5e5` (its four file
 
 - VLLM-412 after 06:15Z, for serving's serve on cards.
 - The cards branch merged when STOPDRIVER says ready (by Fri 10:00Z) and rehearsed; the second try's final head by Fri 11:00Z.
+
+## RUNCOINS, Fri 13 Nov 05:11Z: `firstSample` COMPILES (`r20261113-050041-3040`, at `d4e1d1cf87`, probe clean)
+
+**Compiled** [run: the run's `stdout.log`, quoted]: `'SpotFlock.RunsAs.firstSample' depends on axioms: [propext, Classical.choice, Quot.sound]`; `'SpotFlock.RunsAs.selectSecond_law' depends on axioms: [propext, Classical.choice, Quot.sound]`; `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/FirstSample.lean: lean exit 0 in 422 s`; `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/FirstSample.lean: axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. Built in it as well: `RunsAs.Statement`, `Outcome`, `Released`, `Steps` (with `answer_draw`), `Proved`, `Top`.
+
+**In plain words.** The lemma from my 05:05Z entry is proved: in a run that `Run.run` accepts under the two-stage rule, the draw the run lists is the first stage's accepted sample, and the second stage was drawn over exactly that sample under `Select.secondLaw`. The rest of the 05:05Z entry stands: TWOLEG still has to map the form's replay block, query and counts to the run's interior and rule, and `coinsCode` comes at the join.
+
+**Running** [run]: `r20261113-050956-1859` on vy-nebius-2, the `Within.lean` try for its axiom probe, launched 05:09:56Z; expected end about 05:20Z [guess]. If you rule that ACCEPTS's `readsWithin` stays, its result only records `reads_within`'s axioms before I delete the file.
+
+**Heads.** `cursor/proofs-runcoins-2d88` = `d4e1d1cf87`, pushed; nothing unpushed. **STOP RULE**, **NEEDS**, **To post**: as at 05:05Z. **Not established**: as at 05:05Z, less `firstSample`'s compile.
