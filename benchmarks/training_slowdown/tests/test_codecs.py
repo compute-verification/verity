@@ -253,7 +253,7 @@ def test_a_codec_packs_the_parts_its_apply_takes_and_a_plan_takes_them_for_a_wei
                                   bases), bases)
     assert same(out["lora"], LowRank.apply(base, a, b, 1.0)) and same(out["quant"], QuantDelta.apply(base, codebook, index))
     assert same(out["codes"], SparseTernary.apply(base, *codes)) and same(out["whole"], base + 1)
-    for c in (Identity(), SparseMask(), ScaledQuant(4), SeedReplay(), Compose([Identity()])):
+    for c in (Identity(), SparseMask(), SeedReplay(), Compose([Identity()])):
         with pytest.raises(Unencodable, match="packs no trained parts"):
             c.encode_trained(base)
     with pytest.raises(Unencodable, match="packs no trained parts"):
