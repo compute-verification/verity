@@ -35,8 +35,10 @@
 # a launch names, and `DEBIT_CUBIN`).
 #
 # Left as they are ([rewrite] exclude): the retired-terms lint, which names the retired words as the words, this
-# directory's maps and toy fixtures, research's store vocabulary and `moves.json`, fixtures, whose bytes tests pin, and
-# kernel sources (`*.cu`, `*.cuh`, `*.c`, ...), whose rename a build must show leaves every cubin as it was.
+# directory's maps and toy fixtures, research's store vocabulary and `moves.json`, fixtures, whose bytes tests pin,
+# kernel sources (`*.cu`, `*.cuh`, `*.c`, ...), whose rename a build must show leaves every cubin as it was, and the
+# price-twin table (`price_twins.json`), which its generator writes: its rows from the Lean store keep the store's pin
+# names, and `price_twins.py --repository-only` re-reads the repository's rows once the Lean records hold the new names.
 
 
 [[words_in]]                              # the cap circuit's module, as the files that import it use it
@@ -306,4 +308,5 @@ exclude = [
     "**/*.cpp",
     "**/*.h",
     "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
 ]
