@@ -49,9 +49,13 @@
 # for, as not answered, never as refused), and the job's cgroup's limit, kills and peak read at the start and at the end.
 #   AUDIT_WARNINGS        the audit's PYTHONWARNINGS (default::DeprecationWarning shows Python's warning of a fork with
 #                         more than one thread alive, which it hides otherwise); unset, the audit runs as it did
+# Where the public copy fails, or the reader's answer on the honest arm raises, the audit ended and no row of a record can
+# be read of it here: the job says so, exits 73 whatever the audit's exit, and first keeps under $OUT/rehearsal-audit-kept
+# the two files of the audit's directory those two steps read (summary.json and window/audit.json, as the audit wrote
+# them: the audit's own files, which hold more than the public copy does), so both can be made again from them elsewhere.
 # Exits: 64 an input is missing or not as this job reads it, 70 too little disk to start, 71 the disk ran low, 72 the
 # memory ran low, 5/6/7 a build, 80 the warm failed, 124 the job's seconds ran out, 143 it was told to stop, 90 the kept
-# dir changed, else the audit's.
+# dir changed, 73 the public copy or the reader's answer failed, else the audit's.
 set -uo pipefail
 : "${KEPT:?the kept serve dir}" "${WORK_PARENT:?a directory on the file system the composed circuits go to}"
 K=${K:-0} CLASS=${V3C_CLASS:-8,32,4,4,16} LAW=${V3C_LAW:-subset:1}
@@ -162,7 +166,7 @@ step "memory limit: $(memory)"
 step "memory stop: MemAvailable is $(gb "$MEM0_KB") GB now; the job ends (exit 72) once it is more than $MEM_STOP_GB GB under that$([ "$MEM0_KB" -gt "$MEM_STOP_KB" ] || echo ', which it cannot be: less than that is available now')"
 
 WORK=$(mktemp -d "$WORK_PARENT/rehearse-audit.XXXXXXXX") || exit 70
-CHILD='' WATCH='' PEAK_GB=0 warm=() warn=()
+CHILD='' WATCH='' PEAK_GB=0 warm=() warn=() COPY=ok ANSWER=ok
 NEG_STAGE="the audit, the outcome and the negatives' workers"
 at() { echo "$1" > "$WORK/.stage"; }
 stage() {  # the job's stage now: the one it last entered, and inside the audit what its directory holds so far
@@ -241,7 +245,7 @@ limited() {  # limited STDOUT STDERR CMD...: CMD with the job's seconds left as 
   return "$rc"
 }
 read_out() {  # rehearsal.json, from whatever the job reached
-  local low_kb='' low_stage=''
+  local low_kb='' low_stage='' r
   peak
   IFS=$'\t' read -r low_kb low_stage 2>/dev/null < "$WORK/.mem"
   "$PY" "$IN/rehearsal_read.py" "$WORK/audit" "$VW/audit" "$OUT/rehearsal.json" --tree "$TREE" \
@@ -249,8 +253,24 @@ read_out() {  # rehearsal.json, from whatever the job reached
     --min-free-gb "$MIN_FREE_GB" --free-at-start-gb "${free:-0}" --audit-err "$WORK/audit.err" \
     --warnings "${AUDIT_WARNINGS:-}" --memory "$(memory)" --stage "$(stage)" --mem-start-kb "$MEM0_KB" \
     --mem-low-kb "${low_kb:-$MEM0_KB}" --mem-low-stage "${low_stage:-unread}" --mem-stop-gb "$MEM_STOP_GB" \
-    ${TREE_INPUT:+--tree-commit "$TREE_COMMIT" --tree-id "$TREE_ID"} "$@" \
-    || step "rehearsal.json: not whole (rehearsal_read.py exit $?)"
+    ${TREE_INPUT:+--tree-commit "$TREE_COMMIT" --tree-id "$TREE_ID"} "$@"
+  r=$?
+  case $r in
+    0) ;;
+    3) ANSWER=failed; step "THE ANSWER on the honest arm raised (rehearsal_read.py exit 3; rehearsal.json's honest.answer.error): no row of a record was read of this audit";;
+    *) step "rehearsal.json: not whole (rehearsal_read.py exit $r)";;
+  esac
+}
+keep_read() {  # the audit's own two files the public copy and the answer read, kept before the job's directory goes
+  local d=$OUT/rehearsal-audit-kept f said=''
+  for f in summary.json window/audit.json; do
+    if [ -f "$WORK/audit/$f" ] && mkdir -p "$(dirname "$d/$f")" && cp -p "$WORK/audit/$f" "$d/$f"; then
+      said="$said $f ($(stat -c %s "$d/$f") bytes)"
+    else
+      said="$said $f (NOT KEPT: $([ -f "$WORK/audit/$f" ] && echo 'the copy failed' || echo 'the audit left none'))"
+    fi
+  done
+  step "kept under out/rehearsal-audit-kept, as the audit wrote them and not as a public copy:$said"
 }
 
 build() {  # what V3c's audit runs, as served_verdicts.sh's build
@@ -327,11 +347,16 @@ at "after the audit"
 step "audit: exit $rc after $(($(date +%s) - a0)) s"
 [ "$rc" = 0 ] || tail -3 "$WORK/audit.err" | cut -c1-600
 "$PY" "$TREE/benchmarks/one_stage/served_integrity.py" public-copy "$WORK/audit" "$OUT/rehearsal-audit" \
-  || step "no public copy of the audit (served_integrity.py public-copy exit $?)"
+  || { crc=$?; COPY=failed; step "NO PUBLIC COPY of the audit (served_integrity.py public-copy exit $crc)"; }
 read_out "${warm[@]}" --exit "$rc" --audit-seconds "$(($(date +%s) - a0))"
+[ "$COPY$ANSWER" = okok ] || keep_read
 if [ -n "$(find "$KEPT" -newer "$WORK/.start" -print -quit 2>/dev/null)" ]; then
   step "THE KEPT SERVE DIR CHANGED while this job ran: $(find "$KEPT" -newer "$WORK/.start" 2>/dev/null | wc -l) path(s) newer than its start"
   exit 90
 fi
 step "the kept serve dir holds nothing newer than this job's start"
+if [ "$COPY$ANSWER" != okok ]; then
+  step "exit 73: the public copy $COPY, the answer $ANSWER; the audit's own exit was $rc"
+  exit 73
+fi
 exit "$rc"
