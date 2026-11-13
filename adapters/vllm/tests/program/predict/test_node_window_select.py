@@ -15,8 +15,6 @@ from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_select as NSEL
 from verity_vllm.program.predict import node_window_sparse as NS
-from verity_vllm.program.predict.common import Unexpressible
-
 from tests.program.predict.test_node_window import LP, glm_request
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -132,14 +130,12 @@ def test_select_stand_ins(program, window):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=Unexpressible, strict=True,
-                   reason="node_window_multimem combines rank 0's partial in 96-word chunks, which 192-word rows cross")
 def test_joined_with_select():
     """Every family set (`node_window`, `_dense`, `_sparse`, `_multimem`, `_embed`, `_select`) at a 43-id prompt, 2 outputs and
     one decoder layer: only the stop check is unlowered; no row is free of the token select, the decode's 32 shard reads taking
     ``tok`` by one wire from the prefill select's combine unit; the prefill's 1,376 reads are still row 0 of the ``SIZE=192``
-    combine's ``parts``. A strict expected failure on `node_window_multimem`'s chunk refusal until it combines such rows, as
-    `test_node_window_join.test_joined` is."""
+    combine's ``parts``, which `node_window_multimem` combines as rows of 192 words. The only test that builds the window with
+    the select beside the other five sets."""
     families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
     circuit, w = NW.node_window(glm_request(IDS, 1).program.fn, families=families)
     assert w.census(circuit)["unlowered"] == {"StopCheck": 1}
