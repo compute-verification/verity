@@ -191,7 +191,7 @@ PROOF_DEADLINE_S = 86400.0
 def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
     """The interior values of a replay side that commits the check template's units as one window member
     (`ml.windows.rows`): each port's name and schema, in the member's order."""
-    return tuple((member.port(p), member.schema(p)) for p in CS.port_leaves(member))
+    return tuple((member.port(p), member.schema(p)) for p, _w in member.all_rows)
 
 
 @dataclass(frozen=True)

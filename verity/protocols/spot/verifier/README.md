@@ -340,7 +340,8 @@ The verifier holds the record to its own copies with R1 to R7 (`check`):
 
 - R1: the format, the protocol, the sampling design and the run's kind (`window.kind`);
 - R2: the program, query and partition digests and the population;
-- R3: the scheme, and each port's root, leaf count and domain;
+- R3: the scheme, and each port's root, leaf count and domain; a port the layout wires to another port's tree at that
+  port's root;
 - R4: the leaf layer;
 - R5: the anchors;
 - R6: `previous`, one record a window, the window's stream and prover, and its seed salt;

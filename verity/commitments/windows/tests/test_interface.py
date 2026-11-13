@@ -427,11 +427,12 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
 
 
 def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
-    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
-    window derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
-    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
-    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
-    that isn't its writer's rows in order."""
+    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root: its rows are its
+    writer's output value, its writer units' leaves of its writer's tree (`rows.Binding.held`, `held_leaves`), given as
+    `rows.WIRED`, and its ``b || c`` its writer's. The verifier's window and the record name it under its reader all
+    the same, at the leaves, the domain and the root of the port that holds it (`rows.wired_ports`): one tree at two
+    ports. Given as rows it is refused, and so is a wire of several members' units, which no one tree holds, and, in a
+    member with no tables, one that isn't its writer's rows in order."""
     win = I.Window(chain(), RUN, LAW, 2)
     ins, outs = chain_values()
     win.record(GEMM, ins, outs, {"chain": 0})
@@ -444,8 +445,17 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
     data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given["data"], ms)]
     c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
     wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
-    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
-    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
+    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains))
+    lay, named = CS.expected_ports(held), CS.wired_ports(held)
+    assert named == {m.port(p): held.held(m, p) for m in ms for p, _o, _ws in m.wired} and set(named) == wired
+    assert all(lay[a] == {**lay[q], "wired": q} for a, q in named.items()) and not any("wired" in lay[q] for q in c.roots)
+    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(lay)
+
+    class Roots:
+        KINDS = ("served",)
+        record = staticmethod(lambda program, query, law, scheme, roots, window, **kw: {r["port"]: r for r in roots})
+    roots = CS.registration(c, {}, registrar=Roots)
+    assert set(roots) == set(lay) and all(roots[a] == {**roots[q], "port": a} for a, q in named.items())
     assert (held.held(ms[0], "x"), held.held_leaves(ms[0], "x")) == (ms[0].port("x"), (0, 1))
     assert [(held.held(m, "x"), held.held_leaves(m, "x")) for m in ms[1:]] == [
         (ms[2].port("o0"), (0, 1)), (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1))]
