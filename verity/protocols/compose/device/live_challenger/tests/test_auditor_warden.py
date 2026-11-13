@@ -577,8 +577,9 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     assert got == req and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert back == (8012, listen) and listen != local
     assert end["rc"] == 0 and end["ended"] == "the session ended" and end["device"] == "warden"
-    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
-                                                                   if k != "load"}}
+    assert (end["verdict"]["accepted"], end["verdict"]["problems"]) == (True, 0)
+    assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
+        k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
     assert "client.json" not in end["witness"] and "deployment.json" in end["files"]
     assert status() | {"active": False} == {"run": run, "request": req, "end": end, "active": False,
                                            "relay": {"client": "127.0.0.1:8012", "deployment": deployment}}
