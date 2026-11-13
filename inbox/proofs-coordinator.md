@@ -125595,3 +125595,19 @@ Your 05:50Z: read. I launch no `walk_ab.sh` or `walk_cut.sh`. My next try names 
 Your 05:56Z, the site at `Spot/OneStageZk.lean` 589 in `push`: taken. While the records run goes I write it on a branch of its own from `origin/main` (`cursor/proofs-members-programsha-34fd`), pushing nothing to the one-parse head. Its ready line comes after the one-parse change's, as you ordered.
 
 Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4f595b14`; `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27` (marked, untouched). Unpushed: nothing.
+
+## MAJORITY, Fri 06:42Z: the base `3b05c3a3b1a7` is merged, head `0277a820e74eb46ff5b2ad1ecf93280f8fad501b` (not compiled); one rehearsal r20261113-063950-10cc on vy-nebius-cpu-9, expected to end between 07:15Z and 07:50Z
+
+**The merge** [run: `git merge`, `git diff`]
+- One conflict, in `verity/protocols/spot/verifier/lean/Spot/Run.lean`, two places. I took the base's three new fields of `Own` (`supplied`, `fixed`, `reads`) with `SecondStage.check form`, and kept the docstring of `run` that says "second stage". [run: `git diff --no-index`] The result is byte for byte the join's `Run.lean` at `f53493e9f08f`.
+- The merge changed no file under `SampledTwo/`, nor `Majority.lean`, nor `Recursive/Target.lean`. `security/Proofs/lean-audit.json` and its lakefile are as before (181 roots, my three last). The locks of `security` and `security/Properties` are the base's. I regenerated no record.
+- [run: `git rev-parse` of each file] What my three files import and the merge changed (`SamplingGeneric/Guarantees.lean`, `Claim`, `Leg`, `Projection`) is the same content as on the join at `f53493e9f08f`.
+- Not established: whether TWOLEG's `Steps.lean`, `Reading.lean`, `Refused.lean` and `DevAgrees.lean` as of `059a9408fe59` still build on this base. `Spot/SecondStage.lean` changed under them, and my head has TWOLEG's older `Steps.lean` and `VStarRecursive/SampledTwo.lean`, not the join's. If they do not build, the rehearsal stops in the build for a reason outside my files, and its build log says which.
+
+**The rehearsal** [run] r20261113-063950-10cc on vy-nebius-cpu-9, at `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`. Same command as r20261113-060204-4e88: in the run's clone only, TWOLEG's seven lakefile-rooted names are added to the lock; `ClaimInner` and `SecondRead` are left out.
+- What I expect if all is well: `security/Proofs` FAIL on exactly the two orphan lines, `security` PASS, `security/Properties` PASS.
+- Machines: `--mem-gb 64` was refused on vy-nebius-cpu-10 ("MemoryNotAvailable … available 51.5 GB") and on vy-nebius-cpu-11 ("available -49.5 GB"). `--on auto --cpus 16 --mem-gb 64 --max-min 120` took vy-nebius-cpu-9 at once, at 06:39:50Z. Its tree there is cold, so the end is a guess.
+
+**STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
+
+**Not established.** Everything the rehearsal is for. Pushed head: `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`; nothing is left unpushed.
