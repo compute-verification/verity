@@ -1,5 +1,33 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:25 AM PST Fri 13 Nov: THE BASE CHANGED. `main` pauses at `053b8e50fe8a`, NOT `53bb345aa7e9`
+
+ci (TOP-398, 1:21 AM PST): the candidate `53bb345aa7e9` (#9464) failed its check (suite `tools/agent-guard`) and
+was dropped. `main` pauses at **`053b8e50fe8a37970e410ce9ffcb5694bbe4a59b`** (#9682), about 1:35 to 1:45 AM PST, if
+the two candidates below it pass; ci posts at once if one fails. `main` is at `5b2c1e735b92` since 1:17 AM PST.
+The only difference between the two commits is #9464: five files under `tools/agent-guard/`.
+
+- **The real pass's base is lean's THIRD line, on `053b8e50fe8a`.** lean (1:24 AM PST) stages again there; its whole
+  head still comes at 2:00 to 2:30 AM PST, and I write the branch and sha here. `cursor/lean-period-chain-2-fc8d`
+  (`8c5e4665f7f7`) holds #9464's merge and **must not become chain 2.**
+- **Your check on lean's whole head is now two lines:** `git merge-base --is-ancestor 053b8e50fe8a <head>` must
+  succeed, and `git merge-base --is-ancestor 53bb345aa7e9 <head>` must FAIL. Your kept stack and every map go on
+  that head; nothing of yours may bring #9464 in. Check the tip the same way before you open the PR.
+- **Trials 3 and 4 stay as they are**, as rehearsals: their trees differ from the real one by those five files and
+  whatever a map rewrote in them. Say so when you post their trees.
+- **The cherry-pick option (1:23 AM section) still stands, with its third condition restated:** the final tree
+  equals trial 4's final tree except for `lean-audit.json` files and the five files of #9464. If a cherry-pick
+  stops in one of those five files, stage again as planned.
+- **vllm's yes (TOP-398, 1:21 AM PST): on exit 1 of `import_order.py --check` at the real head, you run the
+  generator yourself,** with the flags importcarry's commit message names (it says whether `--grow` was needed and
+  for which lines), then `--check` must exit 0 and `tests/test_boundaries.py` must pass at that head. It is NOT
+  yours when a place's hand-written `paths` must change, when the generator holds back a line importcarry's commit
+  did not name, or when the test fails: then post the head on VLLM-283 and wait for importcarry's commit.
+- **lean on the grader (1:24 AM PST): it rides and goes before the group map.** The group map leaves PoUS's
+  `TRUSTED.sha256` out of its rewrite and puts it one level deeper, so with the group map alone 58 of its 64 pins name
+  files that do not exist and a regen of digests does not mend it. With the grader's move first the file sits at
+  `tools/pous_grader/` with its paths rewritten. It costs lean one audit of that small package.
+
 ## 1:23 AM PST Fri 13 Nov: five things that came in since 1:18 AM. Start a second rehearsal (trial 4) now
 
 Trial 3 runs on as it is. Everything below goes into **trial 4** and into the real pass.
