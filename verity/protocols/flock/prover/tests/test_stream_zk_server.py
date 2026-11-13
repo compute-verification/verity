@@ -23,7 +23,7 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
   before it.
 
 These skip unless ``FLOCK_CIRCUIT`` names a proving build of `flock-circuit`
-(`verity/protocols/flock/pod/94-stream-zk-server.sh` builds one and runs them); they build the Lean verifier's two
+(`verity/protocols/flock/prover/pod/94-stream-zk-server.sh` builds one and runs them); they build the Lean verifier's two
 executables (`VERIFY`, `LOOP`) and the challenger's Lean. No stand-in shows what they hold, which is what the real
 prover, the real Lean loop and the real challenger do in six sessions. The two rules themselves (`differ`,
 `order_reason`) are tested on values written here, with no build."""
