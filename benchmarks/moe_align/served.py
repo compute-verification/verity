@@ -5,7 +5,7 @@
     bash benchmarks/moe_align/served.sh      (its header has the parameters)
 
 One engine; every batch is the workload's first request with its prompt rotated by ``--rotate`` tokens per request
-(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Its prefill budget
+(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the length limit. Its prefill budget
 (``max_num_batched_tokens``) holds the largest batch's prompts, so every batch prefills in one step and then decodes with every
 row; at the row's own budget the first requests of 256 would finish before the last began. Three phases, written to ``--out``:
 
@@ -464,10 +464,10 @@ def main() -> None:
     served = SV.require(llm, wl, target, out, a.rpc_timeout)
     eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
     rpc = a.rpc_timeout
-    to_cap = va.sampling_params
+    to_params = va.sampling_params
 
     def capped(req: dict[str, Any], sampling: dict[str, Any]) -> Any:
-        p = to_cap(req, sampling)
+        p = to_params(req, sampling)
         p.ignore_eos = True
         return p
 

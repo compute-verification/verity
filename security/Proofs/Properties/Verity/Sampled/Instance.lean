@@ -40,9 +40,10 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
   committed files pass the file check, the registered files do. The registered files and the pinned tables' are the
   deployment's data (`Vocab.registered`, `Instance.pinned`): none is picked from its digest.
 * **What stays open**: the commitment format's openings (`OpensAt`, from the sessions' files in
-  `Sampled/OpensAt.lean`), v2's session at the registered files (`SessionAt`, from `SessionRegistered` in
-  `Sampled/SessionAt.lean`), and of the coupling the device's log opening only the record's rounds
-  (`LogOpensRecorded`, `remote_soundness_deployedAt`), each of the sessions the deployment runs.
+  `Sampled/OpensAt.lean`) and v2's session at the registered files (`SessionAt`, from `SessionRegistered` in
+  `Sampled/SessionAt.lean`), each of the sessions the deployment runs. Of the coupling, the device's log opening only
+  the record's rounds (`LogOpensRecorded`, `remote_soundness_deployedAt`) is v2's record check's
+  (`Instance.logOpensRecorded` in `Sampled/OpensRecorded.lean`).
 -/
 
 @[expose] public section
@@ -775,21 +776,12 @@ noncomputable def inst (δ : ℝ≥0∞) (session : ByteArray → Option Live) :
   coins _ _ _ h := by cases h
   session := session
 
-theorem sessions_none (δ : ℝ≥0∞) (θ : ByteArray) (F : Array ByteArray) :
-    (inst δ fun _ => none).sessions θ F = none := rfl
-
 /-- At no session the openings hold of every session, there being none. -/
 theorem opensAt_none (δ : ℝ≥0∞) : (inst δ fun _ => none).OpensAt := fun _ _ _ h => by simp [inst] at h
 
 /-- At no session the registered files pass the file check at every session's parameters, there being none. -/
 theorem registeredFiles_none (δ : ℝ≥0∞) : (inst δ fun _ => none).RegisteredFiles := fun _ _ _ h => by
   simp [inst] at h
-
-/-- At no session the device's log opens only the record's rounds at every session, there being none. -/
-theorem logOpensRecorded_none (δ : ℝ≥0∞) (k : Verity.Registration.Composite) :
-    (inst δ fun _ => none).LogOpensRecorded k := fun θ F A h => by
-  rw [sessions_none] at h
-  cases h
 
 /-- At `base ⊤` every subprotocol's error is `⊤`. -/
 theorem error_top (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
