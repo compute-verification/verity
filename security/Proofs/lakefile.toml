@@ -144,4 +144,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.CoinBytes", "Proofs.Properties.Verity.SampledTwo.StageLog",
   "Proofs.Properties.Verity.SampledTwo.StageCut", "Proofs.Properties.Verity.SampledTwo.StageCoins",
   "Proofs.Properties.Verity.SampledTwo.StageAlone", "Proofs.Properties.Verity.SampledTwo.CutRead",
-  "Proofs.Properties.Verity.SampledTwo.ProjectionOf", "Proofs.Properties.Verity.SampledTwo.CouplingOf"]
+  "Proofs.Properties.Verity.SampledTwo.ProjectionOf", "Proofs.Properties.Verity.SampledTwo.CouplingOf",
+  "Proofs.Properties.Verity.Majority", "Proofs.Properties.Verity.SampledTwo.Majority"]
