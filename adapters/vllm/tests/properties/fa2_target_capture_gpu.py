@@ -314,14 +314,15 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
-    from verity.circuits.evaluation.reference import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
     from verity.definitions.numerics import derived_rows as DR
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import fa2_check_inf as F2
     from verity.definitions.registry import prims as P
+
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"])) if job.get("cc") else None

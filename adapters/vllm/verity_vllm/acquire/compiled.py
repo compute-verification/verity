@@ -15,8 +15,8 @@ from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.engine.arrivals import realized_arrive_steps
-from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
 from verity_vllm.program.compiled_relations import OUTPUT_ROLES, pointer_arity, roles_of
+from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 _RUN = re.compile(r"^\s*(\w+)\.run\((.*),\s*stream=\w+\)\s*$")

@@ -13,11 +13,17 @@ Usage:
       [--define VERITY_TAP=1 ...] [--files split,split_align] [--extra-src file.cu ...]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import hashlib, json, os, subprocess, time, glob
+import glob
+import hashlib
+import json
+import os
+import subprocess
+import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
 from verity_vllm.config import option
+
 
 def sha256(path):
     h = hashlib.sha256()

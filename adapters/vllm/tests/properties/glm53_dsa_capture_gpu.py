@@ -105,9 +105,9 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 from verity.circuits.ops.fp32 import f32_sub_bits as sub
+from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP
@@ -997,12 +997,12 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     """vLLM's top-k kernels: prefill on the served logits (twice) and on synthetic rows from row start 5; the decode kernels on
     synthetic rows; the reference `DsaTopKShortRow_v1{2048}` on the lengths the rows take."""
     import torch
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.definitions.registry import dsa
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     if not lst:

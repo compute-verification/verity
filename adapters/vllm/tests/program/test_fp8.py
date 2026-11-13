@@ -24,11 +24,12 @@ if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
 from verity.circuits import Program, bind
-from tests.program.capture_check import coll_range as _coll_range
 from verity.circuits.evaluation import evaluate_region
-from verity.definitions.registry import fp8 as F
 from verity.definitions.numerics import fp8_twins
+from verity.definitions.registry import fp8 as F
 from verity.definitions.registry import prims as P
+
+from tests.program.capture_check import coll_range as _coll_range
 
 DATA = Path(__file__).parent / "data"
 

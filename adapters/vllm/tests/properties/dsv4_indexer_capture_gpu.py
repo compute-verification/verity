@@ -644,10 +644,10 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     import torch
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
+    from verity.definitions.registry import dsa
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     cooperative = bool(current_platform.has_device_capability(90) and not current_platform.is_device_capability_family(120))

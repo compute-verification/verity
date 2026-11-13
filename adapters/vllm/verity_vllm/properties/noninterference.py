@@ -172,7 +172,8 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     prof.apply_env()
     import torch
 
-    from verity_vllm.engine import arrivals as AR, vllm_adapter as va
+    from verity_vllm.engine import arrivals as AR
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.engine.handle import scheduler_or_none
 
     out = Path(out_dir)
@@ -306,8 +307,8 @@ def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dic
 def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
     """From (a)'s log + snapshots.json: {step: {"hidden": {L: sha}, "residual": {L: sha}, "final": sha, "logits": sha}}."""
     from verity_vllm.observe.events import DispatchEnter, TritonLaunch
-    from verity_vllm.observe.log import read_log, split_steps
     from verity_vllm.observe.fold.tree import step_events
+    from verity_vllm.observe.log import read_log, split_steps
 
     idx = _read_json(a_dir / "snapshots.json")
     by_key: dict[tuple[int, int, str], str] = {}
@@ -689,7 +690,9 @@ def compare_markdown(rep: dict) -> str:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
+    from verity_vllm.engine import (
+        vllm_adapter as va,  # torch import only on the GPU half
+    )
     return va.parse_engine_args(items)
 
 

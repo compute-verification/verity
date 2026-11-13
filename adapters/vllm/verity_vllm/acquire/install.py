@@ -17,13 +17,18 @@ value reads, no synchronisation): the GPU gate's non-interference observer.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable, Mapping
 
+from verity_vllm.acquire.plan import (
+    HOOK_KINDS,
+    AcquisitionPlan,
+    AcquisitionSite,
+    hooks_of_doc,
+)
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
-from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 

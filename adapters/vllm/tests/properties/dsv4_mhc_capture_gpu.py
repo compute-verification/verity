@@ -85,9 +85,9 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.silicon.models import GroupSum
 from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
-from verity.circuits.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -477,7 +477,6 @@ def mufu_inputs() -> dict[str, np.ndarray]:
 def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The tables and sweeps on this GPU (module docstring); the expf sweep's words go to comparison jobs."""
     import torch
-
     from verity.circuits.ops import mufu as MU
     from verity.definitions.numerics import derived_rows as DR
 

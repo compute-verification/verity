@@ -59,6 +59,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.ops import mufu as MU
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.dsv4_moe_twin import (
     clamp_twin,
@@ -67,7 +68,6 @@ from verity.definitions.numerics.dsv4_moe_twin import (
     router_twin,
     score_words,
 )
-from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 
@@ -672,11 +672,10 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str, want_sms: int, workers: int,
         program_sample: int) -> dict[str, Any]:
-    from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.properties.record import seal as seal_record
-
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.properties.record import seal as seal_record
 
     env_flags = prof.apply_env()
     os.environ["VLLM_BATCH_INVARIANT"] = "1"

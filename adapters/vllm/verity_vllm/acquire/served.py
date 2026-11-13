@@ -53,6 +53,8 @@ import re
 from typing import Any
 
 import numpy as np
+from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity.definitions.registry import inductor as IR
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -62,12 +64,12 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SCHEMA, SERVED_FAMILY, manifest_digest
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
 KIND = "verity/served-required-manifest/v1"
 FAMILY = SERVED_FAMILY
@@ -675,9 +677,9 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (sampled from the generator of
     seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
     import torch
+    from verity.definitions.registry import bf16_gemm_check as BC
 
     from verity_vllm.commit import challenge as CH
-    from verity.definitions.registry import bf16_gemm_check as BC
 
     to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 

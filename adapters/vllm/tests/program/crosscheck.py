@@ -11,14 +11,11 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
-
-from verity.circuits.defs import bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.program import Program
-from verity.definitions.registry import b1, prims as P
-
-
-from verity.circuits.defs import CompositeDefinition
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
 
 _STANDALONE = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(),
                                   lambda B, S, *args: B.call(S.FN, *args),

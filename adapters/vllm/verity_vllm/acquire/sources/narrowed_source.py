@@ -17,8 +17,8 @@ no forward) the source does not attach, and the Commit's coverage names the narr
 from __future__ import annotations
 
 import time
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
 from verity_vllm.acquire.sources.vocab_range_source import module_of
