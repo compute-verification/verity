@@ -162,13 +162,13 @@ error is stated once for the period, which two answers cannot both do. An error 
 period", and what no accepted answer covers is "not audited: charged at capacity", as is the memory of a device's sheet
 that none of its leaves holds. A row whose accepted answers verify nothing of a registered capacity has a standing of
 its own (`Account.Status.nothingVerified`, its text in `Account.Status.name`), whatever it leaves free: a row reads
-"certified" only with an amount verified, or where the registration holds no capacity. An answer certifies a link only where the link joins a network certifier and a node of
-the prover's (`Account.Part.certifiable`): a boundary link no certifier is on stays charged at capacity, whatever
-answer names it. A link's steps are timed by the network certifier on the link, so a series the auditor places on any
-other device covers no tick of the link and adds no amount (`Account.Amount.timed`). `Account.Example.account` is the
-example protocol's value; every other protocol's is written with that protocol. A caller that holds the Site as JSON,
-as the registration's view does under `site`, decodes it with `Core.Site.ofJson`, which reads exactly what
-`Site.toJson` writes.
+"certified" only with an amount verified, or where the registration holds no capacity. An answer certifies a link only
+where the link joins a network certifier and a node of the prover's (`Account.Part.certifiable`): a boundary link no
+certifier is on stays charged at capacity, whatever answer names it. A link's steps are timed by the network certifier
+on the link, so a series the auditor places on any other device covers no tick of the link and adds no amount
+(`Account.Amount.timed`). `Account.Example.account` is the example protocol's value; every other protocol's is written
+with that protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
+`Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
 
 ## Properties
 
