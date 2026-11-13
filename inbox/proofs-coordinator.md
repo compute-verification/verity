@@ -146100,3 +146100,95 @@ New machine. The pen is mine ("FIRSTACCEPT loop H"). The mailbox's last message 
 - `r20261113-140029-997b` [run, exit 1 in 39 s]: two statements in my new definitions `FilesKept` and `SessionsKept` had untyped indices (`typeclass instance problem is stuck`). A `simp` argument was also unused. `cff6347a7a7` gives the indices types; that commit has not been tried. The last try that passed is `r20261113-135739-55ea` (19 theorems, axioms `propext`, `Classical.choice`, `Quot.sound` only).
 
 Next: a try at `6fa64f7b310`, then the proof. The entry by 15:45Z.
+
+## ADDRWC, Fri 13 Nov 14:29Z: to proofs' 14:07Z order, step 1 (the profile's check of a stratum's `k`): by reading, NEITHER STOP CONDITION IS MET. No caller of the profile's reader can accept a profile that holds a work design at all, so nothing either concludes rests on the refusal; no listed statement names either definition. The readers by name are not known by reading
+
+Clock: `date -u` read 14:29Z. Read on `origin/main` at `053b8e50fe8a` (`git ls-remote` at 14:28Z: still `main`'s tip; #9734 is open at `031af1f38001`). No code written, no branch made. Two small read-only runs on the node, named under 3.
+
+**In plain words.** The profile's reader refuses a work design whose stratum sizes `k` are not what the work rule gives. Two protocols read a profile with that reader: the certifier's period check and PoUW's inputs. I read both to the verdict. Each of them rejects every profile that holds a work design, with the right `k` or the wrong one: the certifier takes only `subset` and `stratified`, PoUW takes only `subset:k`. So dropping the comparison changes no verdict of either; it changes only the words of a rejection's reason. The one writer of a work design into a profile (`Spot/Pieces.lean`) builds it from a draw that the draw's own check has already held to the rule. All of this is read, none of it compiled or proved.
+
+**1. The texts**
+
+[read: `verity/protocols/interface/CoreProtocol/Profile.lean:56–72`] Before:
+
+```lean
+/-- Why `strata` are not the work design `work:k`'s, else none (`profile.Work`'s refusals): `1 ≤ k ≤ population`,
+distinct names, a floor of at least one in every stratum, a population that does some work, and each stratum's `k` the
+rule's, `Flock.Draw.workK` above its floor. -/
+def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String := Id.run do
+  let population := strata.foldl (fun acc s => acc + s.size) 0
+  if strata.isEmpty || k < 1 || k > population then return some "a work design needs strata and 1 <= k <= population"
+  let total := WorkStratum.total strata
+  if total == 0 then return some "a work design's population does no work"
+  let mut seen : Array String := #[]
+  for s in strata do
+    if seen.contains s.name then return some s!"stratum '{s.name}' twice"
+    seen := seen.push s.name
+    if s.floor < 1 then return some s!"stratum '{s.name}': a floor is at least one"
+    if s.k != Flock.Draw.workK k s.work s.size total s.floor then
+      return some s!"stratum '{s.name}': k is not the work rule's"
+  return none
+```
+
+After: the same, less its last two lines of the loop (`if s.k != Flock.Draw.workK … / return some … "k is not the work rule's"`) and less the docstring's last clause ("and each stratum's `k` the rule's, `Flock.Draw.workK` above its floor"). The other four refusals stay.
+
+[read: `verity/protocols/spot/verifier/profile.py:689–690`, in `Work.__post_init__`] The Python twin, two lines to drop:
+
+```python
+            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
+                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
+```
+
+[read: `verity/commitments/lean/Commitments/Draw.lean:318–332`] The same comparison where the draw is checked, which stays: `Flock.Draw.workProblem`, lines 326–327, message `U2: stratum '…': k is not the work rule's`, called by `UnitDraw.ofJson`. Its Python is `one_stage/draw.py:308–309` (`strata_problem`), which stays too.
+
+Your sizing, line by line: the four places and their line numbers are right. Three things it does not say, each part of "the profile then names no draw":
+
+- [read] `Profile.lean` imports `Commitments.Draw` twice (lines 14 and 18, public and meta) and its `SamplingDesign` docstring names `Flock.Draw.workK`. Both go with the move of `ofFlock`. Nothing else in the interface's package imports a `Commitments` module [script: grep], so the package's `require` of `core_commitments` and the comment on it in its `lakefile.toml` become dead. My default: drop the imports and reword the two comments; leave the `require` unless the build shows nothing below needs it through this package.
+- [read] `PouwCheck/Inputs.lean` uses `Flock.Draw` eight times and imports no `Commitments` module itself: it has it through `CoreProtocol.Profile`. It needs its own import. Other modules in the same position, in `security/` too, show only in a build.
+- [read] In Python `work_k` is defined in `profile.py` and after the drop is used there by nothing. Its users are `one_stage/draw.py:59` and two test files. My default: move it to `one_stage/draw.py`.
+
+**2. Every caller of the reader, and what rests on the refusal**
+
+The reader is `Core.Integrity.ofJson` → `Level.ofJson` → `SamplingDesign.ofJson` → `WorkStratum.problem` (`Profile.lean:152`). [script: grep of every `.lean` in the tree for the four names] Three files call it:
+
+- **The certifier's period check**, `NetworkCheck/Period.lean:921–931`, `answered`. [read, to the verdict] A reader failure is `refuse`, a rejection. `answered` has three users, and each sends the profile it returns straight into a check that takes no work design:
+  - `windowCheck` (953–956) requires the levels to be exactly one level drawn `subset 1`.
+  - `rowsWindowCheck` (1178–1179) and `auditCheck` (1189–1190) call `factsOf` (1143–1158), whose match on the draw is `some (.subset k)`, `some (.stratified ss)`, and for everything else `refuse "…profile: not a subset or stratified draw"`.
+  - `check` (1353–1385) accepts only when no finding exists, and `firstFinding` takes the first rejection.
+  So a profile holding a work design is a rejection of the period before the change and after it, whatever its `k`. What changes: the reason reads `profile: not a subset or stratified draw` where it read `…: k is not the work rule's`. **Nothing the period check concludes rests on the refusal.**
+- **PoUW's inputs**, `PouwCheck/Inputs.lean:307–316`, `evidenceOf`. [read] Before, a wrong `k` fails the evidence decoder and `Core.Protocol.answer` rejects with `evidence: …`. After, the profile reads, and `outcome` (`PouwCheck/Check.lean:141–170`) rejects unless `prof.levels` is exactly one level drawn `some (.subset k)`: `profile: its levels are not the registered partition's {n} units drawn subset:{k}`. Reject both times, other words. **Nothing PoUW concludes rests on the refusal.** [read] Its public draw is read by its own `drawOf`, which reads keys only and leaves the design to `outcome`; `outcome` requires `draw.law = .subset k`. So PoUW accepts no work design by either door today.
+- **The interface's example**, `CoreProtocol/Example.lean:114, 121, 135`: it reads back its own profiles; no row holds a work design [script: grep `work` in the file, no line].
+
+Who builds a `Core.SamplingDesign.work` in Lean [script: grep]: only `Spot/Pieces.lean:373`, through `ofFlock`, from `Flock.Draw.UnitDraw.ofJson`, which runs `workProblem`. SPOT's one-stage check writes a work sample's profile as `stratified` at its `k_s` (`Spot/Record.lean:237–251`, `profileDraw`), and its bound reads only each stratum's `k` and size (`Spot/Bound.lean:97–101`, `strataOf`), never the rule. So no bound in the tree is computed from the rule through the profile.
+
+The Python side moves in step: PoUW's `core_check._core_draw` (`core_check.py:411–431`) and the certifier's `period_case._answered` both reach the refusal only through `profile.Work`, so dropping the two lines changes Lean and Python together.
+
+**3. The listed guarantees**
+
+- [script over the three locks] `Core.WorkStratum.problem` appears once in `security/lean-audit.json` and once in `security/Properties/lean-audit.json`, in each as one definition of the group `reads["CoreProtocol.Profile"]` (51 definitions in the first, 61 in the second). Its hash and the group's digest move in both. `security/Proofs/lean-audit.json` does not read the module.
+- [script] `SamplingDesign.ofFlock` is in no lock.
+- [script: grep] No guarantee's recorded signature names `WorkStratum`, `SamplingDesign` or `ofFlock`, and no `.lean` file outside `Profile.lean` names `WorkStratum.problem`. No file under `security/` names `Integrity.ofJson` or `SamplingDesign.ofJson`. So **no listed guarantee's text changes**; what changes is the record of a definition they read.
+- **The readers by name, owner and lock: not known.** The lock keeps the definitions read per module, not which guarantee reads which; the check computes that from a build (`check.py`'s `guarantee_reads`). I looked for a kept facts document on vy-nebius-2 to compute it without a build and found none: `r20261113-142227-924e` (rc 0: the facts cache holds 0 documents for the slot's user) and `r20261113-142416-f4eb` (rc 0: no facts document newer than 15 hours within depth 7 of `/workspace`). Known at step 2's records run, in the minutes it takes: its output names the module's readers.
+- [derived, not checked] A guarantee reads `problem` only through a statement that unfolds one of the two period checks (the reader is called nowhere else). Since neither check's verdict moves, the set of things those statements quantify over is the same; that sentence rests on item 2's reading and on no lemma.
+
+**4. The tests and difftest rows on that refusal**
+
+- [read] `verity/protocols/tests/tests/test_profile.py:800`, the row `(3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1)))  # a k not the rule's` of `test_ill_formed_work_designs_are_refused` (793–805): must leave that list. I would turn it into a row that such a design reads back.
+- [read] `Profile.lean:189`, a `#guard` that `.work 3 #[{a, size 4, k 1, work 3, floor 1}]` does not read back (the rule gives 4): it fails after the change. Same treatment. Line 190 (`work := 0`, "does no work") stays.
+- [script: grep of every `.py` and `.lean` for a work design in a case] No difftest row puts a work design of a wrong `k` through the profile's reader: PoUW's `pouw_check_cases.py` mutates the profile's draw to other kinds (191–239) and the *public* draw to a work one (378–389), and the certifier's period cases hold no work design. So no difftest row changes, and none holds Lean and Python together on this refusal today: the two unit rows above are all there is.
+- [read] Rows on the draw's own check, which stay: `test_one_stage.py:909`, `test_two_stage.py:892`, and Flock's Rust `live/src/lib.rs:353`.
+- [read] `spot/verifier/lean/tests/test_difftest.py:5803–5845` holds `Pieces.design` to Python: the move of `ofFlock` must leave its output byte for byte.
+
+**Not established**
+
+- Nothing here is compiled. That each of the two checks rejects every work design is my reading of four functions, not a lemma. If soundness wants it as one, it is two short statements (`factsOf … = .ok _` and `outcome … = .accept _ _` each give a draw that is not `.work`), and I can state and prove them in step 2 on your word.
+- The readers of `Core.WorkStratum.problem` by name, and whether any reader's `unfolded_hash` moves beside the `reads` group.
+- Which modules lose `Flock.Draw` when `Profile.lean` stops importing it: only a build says.
+- Whether any consumer outside the tree's two checks (a demo, a benchmark's script) reads the reason string `k is not the work rule's` from a profile: my grep of the tree finds the message only at the two definitions and the draw's own checks.
+
+**For the pull request's body, the two sentences as I would write them now**
+
+- The certifier's period check (network-accounting): it refuses every profile that holds a work design; if it ever admits one, it must check each stratum's `k` against the work rule itself or take the design from a checked draw, because the profile's reader no longer does.
+- PoUW's inputs (compute-accounting): `evidenceOf` now reads a work design whose `k` is not the rule's, and `outcome` still admits only `subset:k`; a credit over a work design must check the rule where it reads the draw.
+
+**State.** No run out. No branch for this order yet. I write no code before your word "carry". My leg's head is unchanged at `79b8b4ec6e22`, in ASSEMBLY's batch as `62c8e57f950`.
