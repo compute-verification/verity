@@ -31,3 +31,7 @@ tests = [
     "tests/test_nci_lean_difftest.py",
 ]
 paths = ["verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nci_record_difftest.py"]
+paths = ["verity"]

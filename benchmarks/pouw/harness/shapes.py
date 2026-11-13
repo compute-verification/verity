@@ -9,6 +9,9 @@ import re
 
 from arm import Shape
 
+#: what `bench.py` and the tests read
+__all__ = ["ALIASES", "DECODE_M", "HEADLINE", "all_shapes", "key", "phase_of", "select"]
+
 SQUARE = (2048, 4096, 8192, 16384, 32768)
 #: the panel's headline shapes, by phase
 HEADLINE = {"prefill": "m8192-n8192-k8192", "decode": "m32-n8192-k8192"}

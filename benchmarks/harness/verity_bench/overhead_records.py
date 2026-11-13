@@ -6,7 +6,7 @@ A record is named in the store, never in code (`served_table`'s rule): the curre
 are the newest art of kind `POINTS_KIND` labelled `run_of_record=overhead-points` and not `superseded_by` a newer one; a run
 of record is a run labelled `run_of_record=overhead`.
 
-**The source check** (`of_record`, `gamma_of_record`): an overhead of record comes only from a labelled run of the door. A
+**The source check** (`of_record`): an overhead of record comes only from a labelled run of the door. A
 γ stands when its run is labelled, ran the door's node job as the door launches it (`door_why`), passed with exit 0 from a
 clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
@@ -130,7 +130,7 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     return None
 
 
-def run_files(store: Any, run: str, sub: str) -> tuple[dict | None, str | None]:
+def run_files(store: Any, run: str, sub: str) -> tuple[dict | None, str]:
     """A run's attempt and its run files' art, or (None, why) when it isn't a passing run of the door's `sub` from a clean
     tree."""
 
@@ -182,8 +182,8 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
         whys.append(f"{run} isn't labelled {RUN_OF_RECORD}={RUN_RECORD}")
     whys += doc.get("whys") or []
-    art = doc.get("points_art")
-    if not str(art or "").startswith("art:"):
+    art = str(doc.get("points_art") or "")
+    if not art.startswith("art:"):
         whys.append("its points come from no stored art")
     else:
         m = store.get_manifest(art)
@@ -236,17 +236,6 @@ def gamma_rows(store: Any) -> list[dict]:
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], name)] = row
     return [best[k] for k in sorted(best, key=lambda k: tuple(map(str, k)))]
-
-
-def gamma_of_record(store: Any, scheme: str, card: str, point: str) -> dict:
-    """The γ of record of a scheme at a card's point, or ValueError naming why there is none: what a reader of γ calls."""
-
-    row = next((r for r in gamma_rows(store) if (r["scheme"], r["card"], r["point"]) == (scheme, card, point)), None)
-    if row is None:
-        raise ValueError(f"no labelled run of `verity bench overhead run` times {scheme} at the {card}'s {point}")
-    if not row["of_record"]:
-        raise ValueError(f"{scheme} at the {card}'s {point} (run {row['run']}) isn't of record: {row['why']}")
-    return row
 
 
 # ---- writing the store -------------------------------------------------------------------------------------------------------
@@ -342,7 +331,7 @@ def _eps(e: Mapping | None) -> str:
         return "—"
     if "why" in e:
         return f"— ({e['why']})"
-    worst = max((v.get("epsilon") for v in e.values() if isinstance(v, Mapping) and v.get("epsilon") is not None),
+    worst = max((eps for v in e.values() if isinstance(v, Mapping) and (eps := v.get("epsilon")) is not None),
                 default=None)
     return "—" if worst is None else f"≤ {worst:.3g} (worst linear)"
 
@@ -361,11 +350,11 @@ def render(table: Mapping) -> str:
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
                      f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
     lines += ["", table["covers"],
-              "", f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
-              f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
-              f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
-              "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
-              f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate.", "",
+              "", (f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
+                   f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
+                   f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
+                   "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
+                   f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate."), "",
               "| Scheme | Card | Point | Share | Period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in table["rows"]:

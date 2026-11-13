@@ -319,8 +319,8 @@ static int round_up(int x, int a) { return (x + a - 1) / a * a; }
 static int limbs_for(int fmt, int k, int r) {
   const long b = (long)((fmt == I8 ? 127 : 16) + 2) * 2 * k / r;
   for (int L = 1; L < 200; L++) {
-    const long cap = fmt == I8 ? 63 + 127L * 127 * (L - 1) : L == 1 ? 7 : 7 + 16 * 7 + 256L * 16 * (L - 2);
-    if (cap >= b) return L;
+    const long limit = fmt == I8 ? 63 + 127L * 127 * (L - 1) : L == 1 ? 7 : 7 + 16 * 7 + 256L * 16 * (L - 2);
+    if (limit >= b) return L;
   }
   return -1;
 }

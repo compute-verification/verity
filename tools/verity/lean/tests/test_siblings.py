@@ -2,8 +2,11 @@
 imports, and, with a real toolchain, that a module redeclaring a name another built module of its package declares fails
 the try naming both, as the package's root fails a records run an hour in. Its stub loads no build that is not of its
 source as it is, by the hash Lake's trace states, in the package or in one it requires by path, and none without a
-source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules
-(INF-667), and still fails a clash that is in the sources. And the package's Lean options every try takes from it: with
+source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules,
+and still fails a clash that is in the sources. A first refusal that names a sibling has Lake rebuild it, once, before
+the stub's word is the verdict: with a real toolchain, a theorem Lean makes in two modules, one of them left built
+against an older build of an import, is refused in the stub and in a root alike until Lake rebuilds that module, and a
+name two sources declare is refused after the rebuild too. And the package's Lean options every try takes from it: with
 a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
 from __future__ import annotations
 
@@ -217,13 +220,16 @@ def test_try_with_siblings_passes_beside_two_scripts_that_declare_main_under_exe
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_refuses_two_scripts_that_declare_main_under_no_exempt_prefix(tmp_path, capsys):
     """The control: the same package, its lock with no `exempt` entry. The stub imports both scripts beside the library,
-    Lean refuses the second for the `main` the first declares, and the line names both."""
+    Lean refuses the second for the `main` the first declares, and the line names both. Lake, which the try has build
+    the two, holds both current and rebuilds neither, and the stub's second refusal is the verdict."""
     file = scripts(tmp_path, {})
     assert S.plan(file.parents[1], "P/D.lean").siblings == ["P", "P.A", "P.Probe", "P.Run.Bulk"]
     assert _cli().main(["lean", "try", str(file), "--siblings"]) == 1
     out = capsys.readouterr().out
     assert "import P.Run.Bulk failed, environment already contains 'main' from P.Probe" in out, out
-    assert "siblings: P.Run.Bulk and P.Probe both declare 'main', neither of them P.D: a clash already in the sources" in out, out
+    assert "siblings: P.Run.Bulk and P.Probe both declare 'main' as they are built here: Lake rebuilt nothing in " in out, out
+    assert ("siblings: P.Run.Bulk and P.Probe both declare 'main', neither of them P.D, and Lake holds both current, which "
+            "this try had it build: a clash in the sources") in out, out
 
 
 def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_path):
@@ -245,7 +251,7 @@ def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_
 
 
 def moved(ws: Path) -> tuple[Path, Path, Path]:
-    """INF-667's tree, (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
+    """A tree built before names moved, (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
     `Identity.Domains`' names into the new `Identity.Domains.Pouw`. It rewrote `Identity/Domains.lean` and what imports
     the new module from then on, `PouwCommit/Bindings.lean` and `Proofs/New.lean`, and wrote `Identity/Domains/Pouw.lean`
     and FILE. Since then Lake built only what a target imported, `Identity.Domains.Pouw` and `Proofs.New`: the products
@@ -274,7 +280,7 @@ def moved(ws: Path) -> tuple[Path, Path, Path]:
 
 
 def test_a_sibling_that_loads_a_build_from_before_a_source_in_another_package_changed_is_unchecked(tmp_path):
-    """INF-667 (`moved`). `Proofs.Old`'s source never changed, and its build loads `PouwCommit.Bindings` and through it
+    """On `moved`'s tree, `Proofs.Old`'s source never changed, and its build loads `PouwCommit.Bindings` and through it
     `Identity.Domains` as they were built before the move, the second declaring what `Identity.Domains.Pouw` declares
     now: a stub that imports it beside FILE fails on a clash that is in no source. `PouwCommit.Bindings`' build is not
     of its source as it is, in a package `proofs` requires through another, so `Proofs.Old` is unchecked, and so is
@@ -407,6 +413,127 @@ def test_the_line_names_both_modules_of_a_clash_and_counts_what_it_left_unchecke
     assert S.verdict(p, 1, "error: object file ... does not exist\n", 1, 1)[0] == 1
 
 
+REFUSAL = "VeritySiblings.lean:1:0: error: import {} failed, environment already contains '{}' from {}\n"
+#: Lake's output for a rebuild that compiled `P.B` alone, and `check`'s line for it
+REBUILT = (0, "✔ [3/4] Built P.B (1.1s)\nBuild completed successfully.\n", 12.4)
+ONCE = ("siblings: P.B and P.A both declare 'P.step.eq_1' as they are built here: Lake rebuilt P.B in 12 s, and the stub is "
+        "elaborated once more")
+COST = "(5 imported in 20 s, peak 800 MB)"
+
+
+def checked(tmp_path, outputs: list[str], lake: tuple[int, str, float] | None = None):
+    """`check` of `P.D` beside five siblings, its stub answered by ``outputs`` in turn (a refusal, or `""` for a pass) and
+    its rebuild by ``lake`` (None: `check` is given no `rebuild`): (the status, the lines, how many times the stub ran,
+    the outputs `rebuild` was given)."""
+    p, ran, given = S.Plan("P.D", True, ["P.A", "P.B", "P.C", "P.E", "P.F"], []), [], []
+
+    def lean(args: list[str]) -> tuple[int, str, float, int]:
+        ran.append(args)
+        return (1 if outputs[len(ran) - 1] else 0), outputs[len(ran) - 1], 20.0, 800
+
+    def rebuild(output: str) -> tuple[int, str, float]:
+        given.append(output)
+        return lake
+
+    rc, output, lines = S.check(p, tmp_path, lean, rebuild if lake else None)
+    assert output == outputs[len(ran) - 1], "the last stub's output"
+    return rc, lines.splitlines(), len(ran), given
+
+
+def test_a_first_refusal_has_lake_rebuild_the_siblings_it_names_and_the_stub_elaborated_once_more(tmp_path):
+    """`P.B` holds a theorem Lean made for it with the type an older build of an import gave it, and `P.A` with today's.
+    Lake rebuilds `P.B` alone, and the stub passes: the rebuild's line, then the line of a check that passes."""
+    refusal = REFUSAL.format("P.B", "P.step.eq_1", "P.A")
+    rc, lines, ran, given = checked(tmp_path, [refusal, ""], REBUILT)
+    assert (rc, ran, given) == (0, 2, [refusal])
+    assert lines == [ONCE, f"siblings: no built module of its package that doesn't import P.D declares a name it does {COST}"]
+
+
+def test_a_second_refusal_is_the_verdict_and_its_line_says_whether_this_try_rebuilt_the_modules_it_names(tmp_path):
+    """One rebuild and one more stub, never a second rebuild. The same two again are builds Lake holds current: a clash
+    in the sources. Another two, or one of them, this try did not rebuild, so its line says they may be stale builds
+    too, which a second try rebuilds."""
+    first = REFUSAL.format("P.B", "P.step.eq_1", "P.A")
+    rc, lines, ran, given = checked(tmp_path, [first, first], REBUILT)
+    assert (rc, ran, given) == (1, 2, [first])
+    assert lines == [ONCE, (
+        "siblings: P.B and P.A both declare 'P.step.eq_1', neither of them P.D, and Lake holds both current, which this try "
+        "had it build: a clash in the sources, which a root that imports both refuses too (rename one); P.D's own names are "
+        f"unchecked {COST}")]
+
+    second = REFUSAL.format("P.E", "P.run.eq_2", "P.C")
+    rc, lines, ran, given = checked(tmp_path, [first, second, ""], REBUILT)
+    assert (rc, ran, given) == (1, 2, [first]), "no second rebuild, and no third stub"
+    assert lines == [ONCE, (
+        "siblings: P.E and P.C both declare 'P.run.eq_2', neither of them P.D, and this try did not rebuild P.E or P.C (it "
+        "rebuilds once): a clash in the sources, which a root that imports both refuses too (rename one), or a build made "
+        "against an older build of a module it imports, which a second try rebuilds; P.D's own names are unchecked "
+        f"{COST}")]
+
+    shared = REFUSAL.format("P.F", "P.step.eq_1", "P.A")
+    rc, lines, ran, given = checked(tmp_path, [first, shared], REBUILT)
+    assert (rc, ran, given) == (1, 2, [first])
+    assert "P.F and P.A both declare 'P.step.eq_1', neither of them P.D, and this try did not rebuild P.F (it rebuilds " \
+        "once): a clash in the sources" in lines[1], lines
+
+
+def test_a_refusal_of_the_files_own_build_has_the_sibling_rebuilt_before_it_is_the_verdict(tmp_path):
+    """FILE's build is the try's own, so only the sibling is rebuilt; the same refusal then says to rename one, and one
+    that names another sibling says that one was not rebuilt."""
+    refusal = REFUSAL.format("P.C", "Q.bar", "P.D")
+    assert S.named(S.Plan("P.D", True, ["P.C"], []), refusal) == ["P.C"]
+    rc, lines, ran, given = checked(tmp_path, [refusal, refusal], (0, "✔ [1/1] Built P.C (1s)\n", 2.0))
+    assert (rc, ran, given) == (1, 2, [refusal])
+    assert lines == [
+        "siblings: P.D and P.C both declare 'Q.bar' as they are built here: Lake rebuilt P.C in 2 s, and the stub is "
+        "elaborated once more",
+        "siblings: P.D and P.C both declare 'Q.bar', which Lean refuses when it imports both, as the package's root does: "
+        f"rename one, and Lake holds P.C current, which this try had it build {COST}"]
+
+    rc, lines, ran, given = checked(tmp_path, [refusal, REFUSAL.format("P.D", "Q.baz", "P.F")], (0, "", 0.3))
+    assert (rc, ran, given) == (1, 2, [refusal])
+    assert lines == [
+        "siblings: P.D and P.C both declare 'Q.bar' as they are built here: Lake rebuilt nothing in 0 s, and the stub is "
+        "elaborated once more",
+        "siblings: P.D and P.F both declare 'Q.baz', which Lean refuses when it imports both, as the package's root does: "
+        "rename one; or P.F, which this try did not rebuild (it rebuilds once), was built against an older build of a module "
+        f"it imports, which a second try rebuilds {COST}"]
+
+
+def test_a_rebuild_that_fails_is_the_verdict_with_lakes_last_line(tmp_path):
+    refusal = REFUSAL.format("P.B", "P.step.eq_1", "P.A")
+    failed = (1, "✖ [3/4] Building P.B\nerror: P/B.lean:3:0: unknown identifier 'x'\nerror: build failed\n\n", 4.0)
+    rc, lines, ran, given = checked(tmp_path, [refusal], failed)
+    assert (rc, ran, given) == (1, 1, [refusal]), "the stub is not elaborated again"
+    assert lines == ["siblings: P.B and P.A both declare 'P.step.eq_1' as they are built here, and Lake's rebuild of P.B and "
+                     "P.A failed (exit 1), its last line: error: build failed; P.D's own names are unchecked"]
+
+
+def test_nothing_is_rebuilt_where_the_first_stub_names_no_sibling_in_a_refusal_or_no_rebuild_is_given(tmp_path):
+    """A check that passes, and a stub that fails on something else, give with `rebuild` what they give without it, and
+    never call it. Without `rebuild` a refusal is the verdict as it was before `check` took one: one stub, one line,
+    the text unchanged."""
+    passed = checked(tmp_path, [""], REBUILT)
+    assert passed == (0, [f"siblings: no built module of its package that doesn't import P.D declares a name it does {COST}"], 1, [])
+    assert passed == checked(tmp_path, [""])
+    missing = "error: object file 'P/A.olean' of module P.A does not exist\n"
+    failed = checked(tmp_path, [missing], REBUILT)
+    assert failed == (1, [f"siblings: the stub that imports P.D beside them failed (its output above) {COST}"], 1, [])
+    assert failed == checked(tmp_path, [missing])
+
+    rc, lines, ran, given = checked(tmp_path, [REFUSAL.format("P.B", "P.step.eq_1", "P.A")])
+    assert (rc, ran, given) == (1, 1, [])
+    assert lines == [
+        "siblings: P.B and P.A both declare 'P.step.eq_1', neither of them P.D: a clash already in the sources, which a root "
+        "that imports both refuses too (rename one), since each build the stub loaded is of its source as it is; or one of "
+        "them was built against an older build of a module it imports (`lake build +P.B +P.A` and try again); P.D's own "
+        f"names are unchecked {COST}"]
+    rc, lines, ran, given = checked(tmp_path, [REFUSAL.format("P.C", "Q.bar", "P.D")])
+    assert (rc, ran, given) == (1, 1, [])
+    assert lines == ["siblings: P.D and P.C both declare 'Q.bar', which Lean refuses when it imports both, as the package's "
+                     f"root does: rename one {COST}"]
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_module_declares(tmp_path, capsys):
     """Each of `P.C` and `P.D` elaborates; only importing both refuses `Q.bar`, which `verity lean try` alone passes."""
@@ -428,6 +555,8 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
     out = capsys.readouterr().out
     assert "import P.C failed, environment already contains 'Q.bar' from P.D" in out, out
     assert "siblings: P.D and P.C both declare 'Q.bar'" in out and "rename one" in out, out
+    assert "siblings: P.D and P.C both declare 'Q.bar' as they are built here: Lake rebuilt nothing in " in out, out
+    assert "rename one, and Lake holds P.C current, which this try had it build (4 imported" in out, out
     assert not list((pkg / S.COPIES).glob("siblings-*")), "the scratch build is removed"
     write(pkg, {"P/D.lean": dup.replace("def bar", "def baz")})
     assert cli.main(["lean", "try", str(pkg / "P" / "D.lean"), "--siblings"]) == 0
@@ -439,7 +568,7 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fails_a_clash_in_the_sources(tmp_path, capsys):
-    """INF-667, built with Lake. `proofs` requires `commit`, which requires `ident`, and all three are built. Then
+    """Built with Lake: `proofs` requires `commit`, which requires `ident`, and all three are built. Then
     `Identity.tag` moves from `Identity.Domains` into the new `Identity.Domains.Pouw`, which `PouwCommit.Bindings` imports
     from then on, and of all that Lake builds only what FILE imports, as a try does on a slot tree synced across the move.
     The products of `Identity.Domains` (which still declares `Identity.tag`), of `PouwCommit.Bindings` and of `Proofs.Old`,
@@ -507,8 +636,9 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert (dup := lake("build", "+Proofs.Dup")).returncode == 0, dup.stdout
     assert cli.main(["lean", "try", file, "--siblings"]) == 1
     out = capsys.readouterr().out
-    assert ("siblings: Proofs.Dup and Identity.Domains.Pouw both declare 'Identity.tag', neither of them Proofs.File: a clash "
-            "already in the sources") in out, out
+    assert "both declare 'Identity.tag' as they are built here: Lake rebuilt nothing in " in out, out
+    assert ("siblings: Proofs.Dup and Identity.Domains.Pouw both declare 'Identity.tag', neither of them Proofs.File, and "
+            "Lake holds both current, which this try had it build: a clash in the sources") in out, out
     (proofs / "Proofs" / "Dup.lean").unlink()
     assert (proofs / S.LIB / "Proofs" / "Dup.olean").is_file()
     assert cli.main(["lean", "try", file, "--siblings"]) == 0, capsys.readouterr().out
@@ -523,6 +653,161 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert S.plan(proofs, "Proofs/File.lean") == S.Plan("Proofs.File", True, ["Proofs", "Proofs.Kept", "Proofs.Old"], [])
     assert cli.main(["lean", "try", file, "--siblings"]) == 0, capsys.readouterr().out
     assert "(3 imported" in capsys.readouterr().out
+
+
+DEFS = ("module\n\n@[expose] public section\n\nnamespace P\n\nstructure Trace where\n  log : List Nat\n  out : Nat\n\n"
+        "def step : Nat → Trace → Trace\n  | 0, t => { t with out := 0 }\n  | n + 1, t => step n { t with log := n :: t.log }\n")
+USER = ("module\n\npublic import P.D\n\n@[expose] public section\n\nnamespace P\n\n"
+        "theorem NAME : ∀ t, (step 0 t).out = 0 := by\n  intro t\n  simp [step]\n")
+FILE = "module\n\npublic import P.D\n\n@[expose] public section\n\ntheorem P.c : ∀ n : Nat, n = n := fun _ => rfl\n"
+DUP = "module\n\n@[expose] public section\n\ntheorem P.a : True := trivial\n"
+
+
+def left_behind(tmp_path: Path):
+    """A package built with Lake in which `P.A` and `P.B` each unfold `P.step` of `P.D` (`simp [step]`), so the build of
+    each holds the equation lemma Lean makes for it, the root imports both, and FILE (`P/C.lean`) imports `P.D` alone;
+    then `P.D` renames the structure in that lemma's type and Lake builds `P.B` and FILE's imports, as a try does. `P.A`,
+    whose source names neither, stays built against the older `P.D`, with the lemma at its older type: (the package,
+    `lake` run there)."""
+    pkg = tmp_path / "p"
+    write(pkg, {"lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
+                "lean-toolchain": (HERE / "fixtures" / "control" / "lean-toolchain").read_text(),
+                "P.lean": "module\n\npublic import P.A\npublic import P.B\n", "P/D.lean": DEFS,
+                "P/A.lean": USER.replace("NAME", "a"), "P/B.lean": USER.replace("NAME", "b"), "P/C.lean": FILE})
+
+    def lake(*argv: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["lake", *argv], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    assert (first := lake("build")).returncode == 0, first.stdout
+    assert S.plan(pkg, "P/C.lean") == S.Plan("P.C", True, ["P", "P.A", "P.B", "P.D"], [])
+    write(pkg, {"P/D.lean": DEFS.replace("Trace", "Transcript")})
+    assert (some := lake("build", "+P.B", "+P.C:deps")).returncode == 0 and "Built P.B" in some.stdout, some.stdout
+    assert "Built P.A" not in some.stdout, "no target imports it, so it stays as it was built"
+    assert S.plan(pkg, "P/C.lean") == S.Plan("P.C", True, ["P", "P.A", "P.B", "P.D"], []), \
+        "its trace states its source as it is, so it is a sibling still"
+    return pkg, lake
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_theorem_lean_makes_in_two_modules_is_refused_only_between_builds_lake_holds_current(tmp_path):
+    """Built with Lake (`left_behind`). Lean refuses `P.A`, left built against an older build of its import, beside
+    `P.B`, in the stub and in the root elaborated on these builds alike, though no source declares a name twice.
+    Without `rebuild` that refusal is the verdict, and its line says how to rebuild the two. With it Lake rebuilds `P.A`
+    alone, the check passes and the root elaborates. A name two sources declare is refused after the rebuild too, in
+    which Lake builds nothing, and the line names both.
+
+    Only this test loads builds Lake made against two versions of an import, so only it shows that the refusal is
+    Lean's own on such builds, a root's as much as the stub's, and that Lake's rebuild of what it names ends it."""
+    pkg, lake = left_behind(tmp_path)
+
+    def check(rebuild: bool) -> tuple[int, str, list[str], list[str]]:
+        """The check of `P/C.lean` as a try makes it: (its status, the stub's last output, its lines, what Lake said)."""
+        p, said = S.plan(pkg, "P/C.lean"), []
+
+        def again(output: str) -> tuple[int, str, float]:
+            rc, text, seconds, _ = S.run(["lake", "build", *(f"+{m}" for m in S.named(p, output))], pkg)
+            said.append(text)
+            return rc, text, seconds
+
+        with S.scratch(pkg) as work:
+            args = S.lean_args(pkg, p, work)
+            S.source(p, work).write_text(FILE)
+            assert (made := lake("env", "lean", *args, str(S.source(p, work)))).returncode == 0, made.stdout
+            rc, output, lines = S.check(p, work, lambda a: S.run(["lake", "env", "lean", *a], pkg), again if rebuild else None)
+        return rc, output, lines.splitlines(), said
+
+    setup = pkg / ".lake" / "build" / "ir" / "P.setup.json"
+    root = lake("env", "lean", "--setup", str(setup), str(pkg / "P.lean"))
+    assert root.returncode and "import P.B failed, environment already contains 'P.step.eq_" in root.stdout, \
+        f"the root itself, on these builds and with Lake's own setup of it: {root.stdout}"
+    rc, output, lines, _ = check(rebuild=False)
+    assert rc == 1 and "import P.B failed, environment already contains 'P.step.eq_" in output, output
+    assert len(lines) == 1 and "siblings: P.B and P.A both declare 'P.step.eq_" in lines[0], lines
+    assert "or one of them was built against an older build of a module it imports (`lake build +P.B +P.A` and try again)" \
+        in lines[0], lines
+
+    rc, output, lines, said = check(rebuild=True)
+    assert rc == 0, (output, lines)
+    assert len(said) == 1 and "Built P.A" in said[0] and "Built P.B" not in said[0], f"Lake rebuilds the one it holds stale: {said}"
+    assert len(lines) == 2 and "siblings: P.B and P.A both declare 'P.step.eq_" in lines[0], lines
+    assert "as they are built here: Lake rebuilt P.A in " in lines[0], lines
+    assert "siblings: no built module of its package that doesn't import P.C declares a name it does (4 imported" in lines[1], lines
+    assert lake("env", "lean", "--setup", str(setup), str(pkg / "P.lean")).returncode == 0, "and the root elaborates on them"
+
+    write(pkg, {"P/E.lean": DUP})
+    assert (dup := lake("build", "+P.E")).returncode == 0, dup.stdout
+    rc, output, lines, said = check(rebuild=True)
+    assert rc == 1 and len(said) == 1 and "Built" not in said[0], f"one rebuild, in which Lake holds both current: {said}"
+    assert len(lines) == 2 and "siblings: P.E and P.A both declare 'P.a' as they are built here: Lake rebuilt nothing in " in lines[0], lines
+    assert ("siblings: P.E and P.A both declare 'P.a', neither of them P.C, and Lake holds both current, which this try had "
+            "it build: a clash in the sources, which a root that imports both refuses too (rename one)") in lines[1], lines
+
+
+def test_the_local_try_rebuilds_what_the_stubs_refusal_names_once_and_elaborates_the_stub_once_more(
+        tmp_path, monkeypatch, capsys):
+    """Against a stand-in `lake` that refuses the stub over `P.B` and `P.A` until it has built them: the local try runs
+    `lake build +P.B +P.A` in the package, once, then the stub once more, and prints the rebuild's line before the
+    verdict's, as `lean_changed.py --try` does on a node for such a refusal (`test_lean_changed.py`)."""
+    pkg, bin_, log = tmp_path / "p", tmp_path / "bin", tmp_path / "ran"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/A.lean": "module\n", "P/B.lean": "module\n",
+                "P/C.lean": "module\n"})
+    built(pkg, "P.A", "P.B")
+    write(bin_, {"lake": f"""#!/bin/sh
+echo "$@" >> "{log}"
+case "$1 $2 $3" in
+    "env lean --setup")
+        [ -e "{tmp_path}/rebuilt" ] && exit 0
+        echo "VeritySiblings.lean:1:0: error: import P.B failed, environment already contains 'P.step.eq_1' from P.A"
+        exit 1;;
+    build\\ *)
+        : > "{tmp_path}/rebuilt"
+        echo "[3/4] Built P.A (1.0s)";;
+esac
+exit 0
+"""})
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    assert _cli().main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0
+    assert [" ".join(line.split()[:3]) for line in log.read_text().splitlines()] == [
+        "env lean -R", "env lean --setup", "build +P.B +P.A", "env lean --setup"]
+    first, last = [line for line in capsys.readouterr().out.splitlines() if "siblings:" in line]
+    assert first.startswith("verity lean try: P/C.lean: siblings: P.B and P.A both declare 'P.step.eq_1' as they are built "
+                            "here: Lake rebuilt P.A in ") and first.endswith(" s, and the stub is elaborated once more")
+    assert last.startswith("verity lean try: P/C.lean: siblings: no built module of its package that doesn't import P.C "
+                           "declares a name it does (2 imported in ")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_local_try_passes_a_tree_where_a_sibling_was_left_built_against_an_older_build_of_its_import(tmp_path, capsys):
+    """`left_behind` through `verity lean try --siblings`: it has Lake rebuild `P.A` and passes, and a second try, with
+    nothing left to rebuild, says what a try says on builds made together. A name two sources declare still fails it,
+    after a rebuild in which Lake builds nothing.
+
+    The test above this one's package shows what the check does given a `rebuild`; only this one shows that the local
+    try gives it one that Lake takes."""
+    pkg, lake = left_behind(tmp_path)
+    cli, file = _cli(), str(pkg / "P" / "C.lean")
+    assert cli.main(["lean", "try", file, "--siblings"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    lines = [line for line in out.splitlines() if "siblings:" in line]
+    assert len(lines) == 2 and lines[0].startswith(
+        "verity lean try: P/C.lean: siblings: P.B and P.A both declare 'P.step.eq_"), out
+    assert "as they are built here: Lake rebuilt P.A in " in lines[0], out
+    assert lines[1].startswith("verity lean try: P/C.lean: siblings: no built module of its package that doesn't import P.C "
+                               "declares a name it does (4 imported"), out
+    assert out.splitlines()[-1].startswith("verity lean try: P/C.lean: axiom probe:"), "the probe's line stays last"
+    assert cli.main(["lean", "try", file, "--siblings"]) == 0, capsys.readouterr().out
+    assert len([line for line in capsys.readouterr().out.splitlines() if "siblings:" in line]) == 1, "one line, as before"
+
+    write(pkg, {"P/E.lean": DUP})
+    assert (dup := lake("build", "+P.E")).returncode == 0, dup.stdout
+    assert cli.main(["lean", "try", file, "--siblings"]) == 1
+    out = capsys.readouterr().out
+    assert "siblings: P.E and P.A both declare 'P.a' as they are built here: Lake rebuilt nothing in " in out, out
+    assert ("siblings: P.E and P.A both declare 'P.a', neither of them P.C, and Lake holds both current, which this try had "
+            "it build: a clash in the sources") in out, out
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

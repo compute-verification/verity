@@ -818,11 +818,11 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
-units, ran under `A.law`. -/
+units, ran under `A.design`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
-    (hn : A.n = n) : A.law = L := by
+    (hn : A.n = n) : A.design = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
   obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'

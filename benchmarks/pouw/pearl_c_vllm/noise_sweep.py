@@ -16,6 +16,7 @@ import argparse
 import json
 import re
 import statistics
+import sys
 from pathlib import Path
 
 ARMS = ("pearlc-nohash", "pearlc")
@@ -135,7 +136,6 @@ def main() -> None:
         a.md.write_text(md)
     print(md)
     if a.result:
-        import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         import run_result
         done = [n for n, p in doc["points"].items() if p["runs"]]

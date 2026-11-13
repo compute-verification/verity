@@ -268,7 +268,7 @@ def named(fid: str) -> Any | None:
     None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
     or not."""
     from verity.circuits.codec import lookup_primitive
-    from verity.circuits.defs import Registry
+    from verity.circuits.defs import DefinitionTable
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -278,7 +278,7 @@ def named(fid: str) -> Any | None:
         if (d := composite_lift(fid)) is not None:
             return d if d.id == fid else None
         try:
-            return lookup_primitive(Registry(), fid)
+            return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
             return None
 

@@ -14,8 +14,8 @@ than a label), at `w = 184`, `p = 2^184 − 33` and 16 labels:
 * the conjecture's bound is the ideal row's with `λ` bits of slack per label: a responder holding `⌊ρ·|C|⌋ + λ·B`
   bits keeps at most `KEPT = ⌊(⌊ρ·|C|⌋ + λ·B)/w⌋` labels, and `K` is the least `k` with `(KEPT/B)^k ≤ δ` (the
   deployed `k = 105` is the `λ = 128` row's), so the bound is `δ` and the crypto terms are zero;
-* the region is the `(D, Q, L)` a deadline gives: `D_CAP` one multiplication round short of a recomputed label
-  (`PousP2Ring.tight`'s `2(n + 1)`), two key queries, and `L_CAP` the ring work of searching `λ` dropped bits.
+* the region is the `(D, Q, L)` a deadline gives: `D_MAX` one multiplication round short of a recomputed label
+  (`PousP2Ring.tight`'s `2(n + 1)`), two key queries, and `L_MAX` the ring work of searching `λ` dropped bits.
   As at the deployed point (a root in `65,789` ring queries, `λ = 128`, `w/19 = 865`), a recomputed label's ring work
   is below `2^λ` and `λ < w/19`, so the depth-limited recompute is inside the region and the slack is not vacuous.
 
@@ -43,7 +43,7 @@ RHO, DELTA = Fraction(18, 19), Fraction(1, 100)
 S = math.floor(RHO * B * W)
 LAM = 9
 N = ((P + 1) // 4).bit_length()
-D_CAP, Q_CAP, L_CAP = 2 * N + 1, 2, (1 << (LAM + 1)) + 1
+D_MAX, Q_MAX, L_MAX = 2 * N + 1, 2, (1 << (LAM + 1)) + 1
 KEPT = min(B, (S + LAM * B) // W)
 K = next(k for k in range(1, 10_000) if Fraction(KEPT, B) ** k <= DELTA)
 SEED = 2026101201
@@ -167,16 +167,16 @@ def dec_block(m: Meter, j: int, c: int) -> int:
 
 
 @dataclass
-class Draw:
+class Sample:
     ring: Ring
     w: list[int]
     code: list[int]
 
 
-def draw(trial: int, salt: str) -> Draw:
+def sample(trial: int, salt: str) -> Sample:
     ring = Ring(random.Random(f"{SEED}/{salt}/{trial}"))
     w = [ring.rng.getrandbits(PAYLOAD) for _ in range(B)]
-    return Draw(ring, w, [enc_block(ring, j, w[j]) for j in range(B)])
+    return Sample(ring, w, [enc_block(ring, j, w[j]) for j in range(B)])
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -195,7 +195,7 @@ class Responder:
     def state_bits(self) -> int:
         return sum(W - a[1] for a in self.plan if a[0] == "keep")
 
-    def preprocess(self, d: Draw) -> dict[int, int]:
+    def preprocess(self, d: Sample) -> dict[int, int]:
         return {i: d.code[i] >> a[1] for i, a in enumerate(self.plan) if a[0] == "keep"}
 
     def answer(self, m: Meter, wi: int, state: dict[int, int], i: int) -> int:
@@ -262,9 +262,9 @@ def cases() -> list:
               keep_first("depth-limited-recompute", S // W, 0, ("recompute", N - 1))]
     inside += [random_responder(i) for i in range(RANDOM)]
     outside = [(keep_first("honest", B, 0), "holds all of C, past the state bound"),
-               (Responder("recompute", (("recompute", N),) * B), "PousP2Ring.tight: D = 2(n + 1), past D_CAP"),
+               (Responder("recompute", (("recompute", N),) * B), "PousP2Ring.tight: D = 2(n + 1), past D_MAX"),
                (keep_first(f"truncation-t{LAM + 1}", min(B, S // (W - LAM - 1)), LAM + 1),
-                "PousP2Ring.not_meetsOn_b19_k88's truncation one bit past the slack: L past L_CAP")]
+                "PousP2Ring.not_meetsOn_b19_k88's truncation one bit past the slack: L past L_MAX")]
     return ([pytest.param(Case(r, True), id=r.name) for r in inside]
             + [pytest.param(Case(r, False), id=r.name,
                             marks=pytest.mark.xfail(strict=True, raises=Counterexample, reason=why))
@@ -283,7 +283,7 @@ class Play:
 def play(r: Responder) -> Play:
     out = Play([])
     for trial in range(TRIALS):
-        d = draw(trial, r.name)
+        d = sample(trial, r.name)
         state, right = r.preprocess(d), 0
         for i in range(B):
             m = Meter(d.ring)
@@ -295,7 +295,7 @@ def play(r: Responder) -> Play:
 
 
 def inside_region(r: Responder, p: Play) -> bool:
-    return r.state_bits() <= S and p.D <= D_CAP and p.Q <= Q_CAP and p.L <= L_CAP
+    return r.state_bits() <= S and p.D <= D_MAX and p.Q <= Q_MAX and p.L <= L_MAX
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -308,7 +308,7 @@ def test_the_scaled_point():
     assert P2.P2Params(W, C0, B).p == P and P % 4 == 3
     assert all(pow(a, P - 1, P) == 1 for a in (2, 3, 5, 7, 11, 13))
     assert (S, N, KEPT, K) == (2789, 182, 15, 72)
-    assert 4 * N + 4 <= L_CAP and LAM < W / 19 and B * (W - LAM) > S >= B * (W - LAM - 1)
+    assert 4 * N + 4 <= L_MAX and LAM < W / 19 and B * (W - LAM) > S >= B * (W - LAM - 1)
 
 
 def test_the_model_is_the_reference_codec():
@@ -337,7 +337,7 @@ def test_p2_ring_audit_secure_at_a_scaled_point(case: Case):
     estimate = sum(p.acceptance) / len(p.acceptance)
     if estimate > DELTA + Fraction(margin(TRIALS)):
         raise Counterexample(f"{r.name} (state {r.state_bits()} of {S} bits, D={p.D}, Q={p.Q}, L={p.L}) is accepted "
-                             f"with probability {float(estimate):.4f} over {TRIALS} draws (seed {SEED}), above "
+                             f"with probability {float(estimate):.4f} over {TRIALS} samples (seed {SEED}), above "
                              f"δ = {float(DELTA)} + {margin(TRIALS):.3f}; plan {r.plan}")
 
 
@@ -359,4 +359,4 @@ def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
         if (seen := sum(x ** j for x in xs)) and (rate := sum(x ** (j + 1) for x in xs) / seen) > Fraction(KEPT, B):
             raise Counterexample(f"{r.name} (state {r.state_bits()} of {S} bits, D={p.D}, Q={p.Q}, L={p.L}) answers "
                                  f"round {j + 1} right with probability {float(rate):.4f} given the first {j} over "
-                                 f"{TRIALS} draws (seed {SEED}), above 1 − p = {KEPT}/{B}; blocks right {p.right}")
+                                 f"{TRIALS} samples (seed {SEED}), above 1 − p = {KEPT}/{B}; blocks right {p.right}")

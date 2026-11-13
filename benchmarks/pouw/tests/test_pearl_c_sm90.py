@@ -183,10 +183,81 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
+    """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
+    registry declares, so a capture that would race on the rows doesn't run them by default."""
+    from verity_config.settings import of
+
+    for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
+        if raw is None:
+            monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
+        else:
+            monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
+        assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
+        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+    sys.modules.pop("pearl_c_sm90_run_bf16_rows")
+
+
+def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypatch):
+    """`Debit.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
+    chunk's rows in the one copy put before it), and after its first call nothing else: no copy, synchronization or
+    allocation, so `Dev.timed` times the count's kernels alone."""
+    class Dev:
+        def __init__(self, cubin):
+            self.log, self.top = [], 1 << 20
+
+        def open(self):
+            pass
+
+        def alloc(self, n):
+            self.log.append(("alloc", n))
+            p, self.top = self.top, self.top + -(-n // 256) * 256
+            return p
+
+        def free(self, p):
+            self.log.append(("free", p))
+
+        def ck(self, f, *a):
+            self.log.append((f,))
+
+        def launch(self, name, grid, block, p=(), i=(), **kw):
+            self.log.append((name, grid, block, p, i))
+
+        def sync(self):
+            self.log.append(("sync",))
+
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setitem(sys.modules, "run", RUN)
+    monkeypatch.setattr(RUN, "Dev", Dev)
+    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    rng = np.random.default_rng(7)
+    a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
+    budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
+    w, r = deb.Debit(b"", budget), deb.Debit(b"", budget)
+    w.words(a, b)
+    body = r.resident(a, b)
+    put = [e for e in r.dev.log if e[0] == "cuMemcpyHtoD_v2"]
+    body()
+    r.dev.log.clear()
+    body()
+    assert len(put) == 2 and all(e[0].startswith("debit_") for e in r.dev.log)
+    want = [e for e in w.dev.log if e[0].startswith("debit_")]
+
+    def named(d, e, a_at):
+        by = {p: n for n, (p, _) in d.live.items()}
+        return e[0], e[1], e[2], e[4], tuple("A′" if x == a_at else by.get(x, x) for x in e[3])
+
+    assert len(want) == len(r.dev.log) == 9
+    for i, (got, ref) in enumerate(zip(r.dev.log, want)):
+        assert named(r, got, r.live["a_all"][0] + i // 3 * deb.BLOCK_ROWS * k) == named(w, ref, w.live["a"][0])
+    sys.modules.pop("pearl_c_sm90_debit")
+
+
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
     """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
     gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
     before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
     launched = []
 
     class D:
@@ -235,6 +306,91 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     RUN.widen_a(dev, 1, 2, 8, 16, 4096)
     RUN.widen_a(dev, 1, 2, 8, 16, 4096, pdl=False)
     assert calls == ["programmatic", "plain"]
+
+
+def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
+    """`pd_setup` gives each served pd_commit and pd_tree and each stamp twin PD_WHOLE's dynamic shared memory (all a CTA
+    may take beside its static, so one CTA an SM) and `Pipeline.pd_shared`'s (half an SM's beside its static and the
+    driver's reserve, so two CTAs an sm_90 SM and not three), each at least the PD_PAIR_SMEM the code uses and within the
+    limit it sets; a static that leaves less is refused.  Under ``pd_shared`` a pipeline launches the same functions with
+    the same grid, block and parameters, its shared memory alone changed, in each mode and with stamps."""
+    sm = H100_MAX_DYN + RUN.CTA_RESERVED_SMEM
+
+    class D:
+        def __init__(self, static):
+            self.static, self.dev, self.limit, self.launched = static, 0, {}, []
+
+        def get(self, call, attr, x):
+            return H100_MAX_DYN if call == "cuDeviceGetAttribute" else self.static[x.rsplit("_", 1)[0]]
+
+        def fn(self, name):
+            return name
+
+        def ck(self, call, fn, attr, v):
+            self.limit[fn] = v
+
+        def launch(self, name, grid, block, smem=0, p=(), i=(), **kw):
+            self.launched.append((name, grid, block, smem, tuple(p), tuple(i)))
+
+        def sync(self):
+            pass
+
+    static = {"pd_commit": 6000, "pd_tree": 1500}
+    d = D(static)
+    RUN.pd_setup(d)
+    for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED):
+        for f, whole, shared in (("pd_commit", d.pd_smem, d.pd_smem_shared), ("pd_tree", d.pd_tree_smem, d.pd_tree_smem_shared)):
+            cta = {x: x + static[f] + RUN.CTA_RESERVED_SMEM for x in (whole[v], shared[v])}
+            assert v & RUN.PD_WHOLE and whole[v] == H100_MAX_DYN - static[f] and 2 * cta[whole[v]] > sm
+            assert shared[v] == (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2 - static[f] >= RUN.PD_PAIR_SMEM
+            assert 2 * cta[shared[v]] <= sm < 3 * cta[shared[v]] and d.limit[f"{f}_{v}"] == whole[v]
+    with pytest.raises(RuntimeError, match="pd_tree_shared"):
+        RUN.pd_setup(D({"pd_commit": 6000, "pd_tree": 70000}))
+
+    pipe = RUN.Pipeline.__new__(RUN.Pipeline)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    for pipe.pd in RUN.PD_SERVED:
+        for pipe.stamps in (0, 9):
+            got = {}
+            for pipe.pd_shared in (False, True):
+                d.launched.clear()
+                pipe.pd_commit(0)
+                pipe.pd_commit(1)
+                pipe.pd_tree()
+                got[pipe.pd_shared] = list(d.launched)
+            v = pipe.pd_a | (RUN.PD_STAMP if pipe.stamps else 0)
+            assert [x[3] for x in got[False]] == [d.pd_smem[v]] * 2 + [d.pd_tree_smem[v]]
+            assert [x[3] for x in got[True]] == [d.pd_smem_shared[v]] * 2 + [d.pd_tree_smem_shared[v]]
+            assert [x[:3] + x[4:] for x in got[True]] == [x[:3] + x[4:] for x in got[False]]
+            assert [x[0] for x in got[True]] == [f"pd_commit_{v}"] * 2 + [f"pd_tree_{v}"]
+    pipe.pd_shared = False
+
+
+def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_commitment_reads_bf16_rows(monkeypatch):
+    """`e2e.bf16_race`: a whole capture with hashing forking each call's A tree and A scales (`whole_defer_a`,
+    `whole_fork_stats`) on this kernel, under BF16_ROWS and from a cubin with BF16_ROWS_MARK (`Pipeline.reads_bf16`'s own),
+    races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
+    the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
+    BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
+    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
+    kernel = SimpleNamespace(run=RUN, dev=marked)
+
+    def run(**kw):
+        return SimpleNamespace(**{"kernel": kernel, "hashing": True, "whole_defer_a": True, "whole_fork_stats": True, **kw})
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
+    got = E2E.whole_check(run(), {})
+    assert got == {"check": "whole", "hashing": True, "refused": E2E.BF16_RACE, "ok": False}
+    assert all(w in got["refused"] for w in ("rows_a", "widen_a", "PEARLC_BF16_ROWS=0", "PEARLC_WHOLE_FORK_STATS=0"))
+    for kw in ({"whole_defer_a": False}, {"whole_fork_stats": False}, {"hashing": False},
+               {"kernel": SimpleNamespace(run=RUN, dev=SimpleNamespace(has=lambda name: False))},
+               {"kernel": SimpleNamespace(run=RUN, dev=object())},
+               {"kernel": SimpleNamespace(run=SimpleNamespace(), dev=marked)}):
+        assert not E2E.bf16_race(run(**kw)), kw
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not E2E.bf16_race(run())
 
 
 def test_a_programmatic_launch_waits_at_its_entry():
@@ -451,8 +607,8 @@ def kernel_names() -> list[str]:
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm90.cu."""
     if name == "lines":
-        count = i[2]
-        return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
+        count = i[2]   # lines t < i4 take p4's keys; only the rest read p0's
+        return {**({0: 32} if count > i[4] else {}), 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
     if name == "stats_s5":
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
@@ -650,6 +806,14 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
     assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
                       (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
+    # check_pd's /shared forms: pd_commit in both modes and pd_tree, each a launch of a PD_WHOLE form but its shared memory
+    pd: dict[int, set] = {}
+    for ev in evs:
+        if ev["op"] == "launch" and ev["name"].startswith(("pd_commit_", "pd_tree_")):
+            pd.setdefault(ev["smem"], set()).add((ev["name"], tuple(ev["grid"]), ev["block"], tuple(ev["p"]), tuple(ev["i"])))
+    half = (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2
+    assert set(pd) == {H100_MAX_DYN, half} and pd[half] <= pd[H100_MAX_DYN]
+    assert {(x[0], x[4][2]) for x in pd[half]} == {("pd_commit_851", 0), ("pd_commit_851", 1), ("pd_tree_851", 0)}
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
@@ -779,6 +943,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert bool(p[12]) == (i[0] < i[3]) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN, ev
         if name.startswith(("pd_commit_", "pd_tree_")):
             assert bool(p[13]) == bool(int(name.rsplit("_", 1)[1]) & RUN.PD_STAMP), ev
+            assert ev["smem"] in (H100_MAX_DYN, (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2), ev
         if name.startswith("pl_"):
             half = RUN.PD_PAIR_SMEM // 2
             shape = {"pl_leaves": (-(-i[0] // RUN.PL_ROWS), 128, half), "pl_seed_a": (1, 64, half),

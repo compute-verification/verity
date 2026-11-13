@@ -131,7 +131,7 @@ class _Session:
         self.secrets.append(secret)
         return self.client if at == self.at else None
 
-    def _serve(self, sock: socket.socket, session: R.Session) -> None:
+    def _serve(self, sock: socket.socket, session: R.ChallengePhase) -> None:
         with sock:
             self.reason = R.serve(sock, session, iter(range(1 << 20)).__next__)
 

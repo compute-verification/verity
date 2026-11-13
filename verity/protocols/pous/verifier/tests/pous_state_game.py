@@ -20,7 +20,6 @@ over    overwrite chain (r_j, h_j) = Pi2(blk_j || h_{j-1}), width 2l + c; h_j (l
         later). Moves: forward only.
 """
 import itertools
-import sys
 
 W1, WH, W2 = 1 + 512 / 8192, 1 + 256 / 8192, 2 + 512 / 8192
 

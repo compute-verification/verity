@@ -4,7 +4,7 @@
 # exit, then ROUNDS rounds of every class through each kernel and encoding, SECS seconds an arm. Timings only: the one
 # nvidia-smi query is of clocks. The build runs outside the lease, in a scratch directory.
 #
-#   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=compute-accounting \
+#   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/int8_class_rate/run.sh
 #
 # Env: CLASSES (default "s8 s2 u2 u4 zero"), ENCODINGS (wgmma's, default "s8s8 u8u8"; u8u8 runs on s8 and s2, the classes

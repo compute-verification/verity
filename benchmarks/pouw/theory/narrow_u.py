@@ -31,21 +31,20 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from checked_strip import (TS_SHAPES, CellGrid, co32c_words, cross_ranks, instance, n_digits, o_routes, s32,
+                           ts_best)
+from exact_kit.checks import Checks
 
-from checked_strip import (MASK, TS_SHAPES, CellGrid, co32c_words, cross_ranks, instance, n_digits,  # noqa: E402
-                           o_routes, s32, ts_best)
-from exact_kit.checks import Checks  # noqa: E402
+__all__ = ["main", "NarrowBlock", "planes"]
 
 WIDTHS = (8, 16, 32, 64)
 MEASURED_X = 10.66
 
 
-def planes(N, even=False):
+def planes(N: int, even: bool = False) -> np.ndarray:
     """U's plane weights for U on ±1..±N: (1, 2, …, N/2, N + 1); `even` doubles the first and drops the odd top."""
     p = N.bit_length()
     w = [1 << j for j in range(p - 1)] + [N + 1]
@@ -57,21 +56,21 @@ def planes(N, even=False):
 class NarrowBlock(CellGrid):
     """checked_strip.py's CellGrid with U = −N + β·w, N the half-width the planes span."""
 
-    def __init__(self, design, n, k, n2, r, L, w):
+    def __init__(self, design: str, n: int, k: int, n2: int, r: int, L: int, w: np.ndarray) -> None:
         super().__init__(design, n, k, n2, r, L, w=w)
         self.off = int(np.sum(w)) // 2
 
-    def fields(self, Z):
+    def fields(self, Z: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         U, c, b, z = super().fields(Z)
         return U + 64 - self.off, c, b, z
 
 
-def draw_u(rng, n, r, w):
+def sample_u(rng: np.random.Generator, n: int, r: int, w: np.ndarray) -> np.ndarray:
     beta = rng.integers(0, 2, (n, r, len(w)))
     return -(int(np.sum(w)) // 2) + beta @ w
 
 
-def word_routes_p(kk, x, p):
+def word_routes_p(kk: int, x: float, p: int) -> list[tuple[float, float]]:
     m = n_digits((kk // 32) * -128, (kk // 32) * 127)
     routes = [(-(kk // 32), (1 + p) * x * (kk // 32))]
     if m > 1:
@@ -79,7 +78,7 @@ def word_routes_p(kk, x, p):
     return routes + [o_routes("co32c", kk)["scalar"](x)]
 
 
-def weighted_best(fold, x, p, mname):
+def weighted_best(fold: float, x: float | None, p: int, mname: str) -> float:
     h = c_ = 0.0
     for _, kk, nn in TS_SHAPES[mname]:
         th, tb = ts_best("co32c", kk, nn, fold, word_routes_p(kk, x, p) if x else [])
@@ -87,7 +86,7 @@ def weighted_best(fold, x, p, mname):
     return h / c_ - 1
 
 
-def breakeven(fold, p, mname):
+def breakeven(fold: float, p: int, mname: str) -> float:
     """The least x (to 0.01) at which no bit-sliced route gains over the cheater that does every IMMA."""
     base = weighted_best(fold, None, p, mname)
     lo, hi = 0.0, 64.0
@@ -100,7 +99,7 @@ def breakeven(fold, p, mname):
     return hi
 
 
-def main():
+def main() -> None:
     checks = Checks()
     rng = np.random.default_rng(20261017)
     out = {}
@@ -117,19 +116,21 @@ def main():
 
         nz, k6, r6 = 16, 256, 32
         m6 = n_digits((k6 // r6) * -128, (k6 // r6) * 127)
-        U6 = draw_u(rng, nz, r6, w)
+        U6 = sample_u(rng, nz, r6, w)
         c6, b6 = rng.integers(0, 2, (nz, k6)), rng.integers(0, 2, (k6, nz))
         z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
         Pz, Vz = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
         Pr, Vr = rng.integers(P_rng[0], P_rng[1] + 1, (nz, k6)), rng.integers(-128, 127, (k6, nz))
-        served = lambda Op, D: s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1))
-                                                             for d, Dd in enumerate(D)))
+
+        def served(Op, D):
+            return s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
         T6, D6, Op6 = co32c_words(Pz, Vz, U6, c6, b6, z6, r6, L, m6)
         Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
-        draws = 64
+        samples = 64
         zero_words = []
-        for _ in range(draws):
-            Ud, cd, bd = draw_u(rng, 4, r6, w), rng.integers(0, 2, (4, k6)), rng.integers(0, 2, (k6, 4))
+        for _ in range(samples):
+            Ud, cd, bd = sample_u(rng, 4, r6, w), rng.integers(0, 2, (4, k6)), rng.integers(0, 2, (k6, 4))
             zd = rng.integers(0, 2, (m6 - 1, r6, 4))
             Td, Dd, Opd = co32c_words(np.zeros((4, k6), np.int64), np.zeros((k6, 4), np.int64), Ud, cd, bd, zd, r6, L,
                                       m6)
@@ -139,7 +140,7 @@ def main():
         nonzero = np.count_nonzero(D6[0])
         checks.check(f"A{N} committed digits: O = O′ − Σ 128^d D_d in s32 (random and zero instance); at A = B = 0 "
                      f"D_1 = U·z_0 is nonzero in ≥ 95% of cells and every committed word of every cell varies with the "
-                     f"coins ({draws} draws)",
+                     f"coins ({samples} samples)",
                      np.array_equal(served(Opr, Dr), s32((Pr + c6) @ (Vr + b6)))
                      and np.array_equal(served(Op6, D6), s32(c6 @ b6)) and np.array_equal(D6[0], s32(U6 @ z6[0]))
                      and nonzero >= 0.95 * nz * nz and varying,
@@ -174,9 +175,9 @@ def main():
                          f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}")
         out[f"N={N} cohalf ranks"] = half
         Bz = NarrowBlock("co", 4, 64, 4, 32, 32, w)
-        zw = Bz.words(np.zeros((4, 64), np.int64), np.zeros((64, 4), np.int64), rng.integers(0, 2, (draws, Bz.nbits)))
+        zw = Bz.words(np.zeros((4, 64), np.int64), np.zeros((64, 4), np.int64), rng.integers(0, 2, (samples, Bz.nbits)))
         checks.check(f"C{N} cohalf at Q = K = 0, U on ±{N}: every committed word of every cell (T_t and O) varies with "
-                     f"the coins ({draws} draws)", bool(np.all(zw.min(0) != zw.max(0))), f"{zw.shape[1]} words")
+                     f"the coins ({samples} samples)", bool(np.all(zw.min(0) != zw.max(0))), f"{zw.shape[1]} words")
         if checks.mutations:
             Bm = NarrowBlock("co", 1, 64, 1, 32, 32, planes(N, even=True))
             r1, r2, _ = cross_ranks(Bm, *instance(Bm, "random", rng))

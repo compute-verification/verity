@@ -15,18 +15,20 @@ The host supplies only public inputs: the operands, the epoch's salt and each co
 B's rows as the verifier checks them (`commit_rows`) and derives the seeds from the roots; self-timing takes labels for the
 salt and the domain ids.
 
-The pipeline (`Pipeline`) is also the FP4 bench arm's (arm.py): `weight_side` is the per-(weight, epoch) work, `launch` the
-per-call prover step, each on a given stream and capturable into a CUDA graph.
+The pipeline (`Pipeline`) is what both modes run: `weight_side` is the per-(weight, epoch) work, `launch` the per-call
+prover step, each on a given stream and capturable into a CUDA graph.
 """
 
 from __future__ import annotations
 
+import argparse
 import ctypes as C
 import hashlib
 import json
 import os
 import statistics
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +47,6 @@ CUDA = {
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
     "cuFuncSetAttribute": [vp, i32, i32], "cuMemAlloc_v2": [P(u64), sz], "cuMemFree_v2": [u64],
     "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
-    "cuMemcpyDtoDAsync_v2": [u64, u64, sz, vp],
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
@@ -98,14 +99,14 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.smem: dict[str, int] = {}
 
-    def ck(self, f: str, *a) -> None:
+    def ck(self, f: str, *a: object) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
             s = C.c_char_p()
             self.cu.cuGetErrorString(r, C.byref(s))
             raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
-    def get(self, f: str, *a) -> int:
+    def get(self, f: str, *a: object) -> int:
         v = i32()
         self.ck(f, C.byref(v), *a)
         return v.value
@@ -145,10 +146,8 @@ class Dev:
         self.ck("cuMemcpyDtoH_v2", buf, u64(p), n)
         return buf.raw
 
-    def copy(self, dst: int, src: int, n: int, stream: int = 0) -> None:
-        self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, vp(stream or None))
-
-    def launch(self, name: str, grid: int | tuple[int, int], block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
+    def launch(self, name: str, grid: int | tuple[int, int], block: int, smem: int = 0, p: Sequence[int] = (), i: Sequence[int] = (),
+               stream: int = 0) -> None:
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -161,7 +160,7 @@ class Dev:
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
 
-    def timed(self, body, reps: int) -> list[float]:
+    def timed(self, body: Callable[[], object], reps: int) -> list[float]:
         out = []
         for _ in range(reps):
             a, b, ms = vp(), vp(), C.c_float()
@@ -381,7 +380,6 @@ def check_fmt(dev: Dev, d: Path) -> bool:
 
 
 def main(argv: list[str]) -> int:
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("what", choices=("check", "time"))
     ap.add_argument("args", nargs="*")

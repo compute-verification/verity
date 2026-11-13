@@ -1,0 +1,512 @@
+# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at four levels: the root,
+# verity/, verity/protocols/ and each protocol's directory.
+#
+# [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
+# the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
+# and the `verity/protocols/NAME/` entries say what each of their directories may hold.  The shape is not changed here
+# without asking top.
+#
+# [[not_yet]] is what main holds and the tree doesn't: each path, where it goes (`to`), its owner and the day.  A day
+# is a date, 6 PM PST on it unless it gives a time.  A move that lands leaves its line for top to delete: the stale
+# line only warns, as bookkeeping, and the metric counts it until then.  A move needn't edit this file; a new stray
+# entry still fails.  An owner of "unowned" waits for top to assign the line; its place and day may be "unowned" too.  `arriving = true` marks a path
+# an admitted change brings that main doesn't hold yet.  The list only shrinks: test_tree.py holds its length.
+#
+# [[open]] is what is not ruled: the question, who answers it and by when.
+
+# ---- the root ------------------------------------------------------------------------------------------------------
+
+[[tree]]
+path = "verity/"
+means = "the distribution `verity`: what a party, a channel, a device, a protocol and a configuration are, the runtime, the protocols, the circuit language and the commitment schemes"
+
+[[tree]]
+path = "hardware/"
+means = "the registered hardware's data sheets, TOML only, no code"
+owner = "compute-research"
+day = "2026-11-13"
+
+[[tree]]
+path = "adapters/"
+means = "one directory per serving system, holding only what attaches Verity to it: torch/, and vllm/ on it with the served kernels' circuits"
+
+[[tree]]
+path = "demos/"
+means = "one directory per demo: its workload, placement, commands and doneness, and its configurations, a .toml each"
+
+[[tree]]
+path = "security/"
+means = "the Lean every guarantee is stated and proved in"
+
+[[tree]]
+path = "benchmarks/"
+means = "the measuring side: reproducible workloads and measurements"
+
+[[tree]]
+path = "tools/"
+means = "the `verity` command, the check, and the team's own tooling"
+
+[[tree]]
+path = "tests/"
+means = "invariants of the whole tree"
+
+[[tree]]
+path = "infra/"
+means = "the team's machines"
+
+[[tree]]
+path = "AGENTS.md"
+means = "the rules in force, and the map"
+
+[[tree]]
+path = "ARCHITECTURE.md"
+means = "the architecture and the Glossary"
+
+[[tree]]
+path = "GLOSSARY.md"
+means = "the rest of the Glossary: notation, older names and narrower senses"
+
+[[tree]]
+path = "pyproject.toml"
+means = "the distribution `verity` and the workspace"
+
+[[tree]]
+path = "ruff.toml"
+means = "ruff's configuration"
+
+[[tree]]
+path = "uv.lock"
+means = "the workspace's lock"
+
+[[tree]]
+path = "artifacts.json"
+means = "every replicated fixture, by its art: id"
+owner = "top"
+day = "2026-11-14 12:00 PST"
+
+[[tree]]
+path = ".agents/"
+means = "the skills"
+
+[[tree]]
+path = ".cursor/"
+means = "the agents' editor configuration"
+
+[[tree]]
+path = ".gitattributes"
+means = "git's merge drivers and attributes"
+
+[[tree]]
+path = ".gitignore"
+means = "what git leaves untracked"
+
+[[tree]]
+path = ".python-version"
+means = "the Python the workspace runs"
+
+# ---- verity/ -------------------------------------------------------------------------------------------------------
+
+[[tree]]
+path = "verity/party.py"
+means = "what a party is"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/channel.py"
+means = "what two parties exchange messages over: a message and its types, and the configuration's Channel"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/device.py"
+means = "the registered hardware"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/protocol.py"
+means = "what a protocol declares"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/config.py"
+means = "reads a configuration, the file `verity run CONFIG` takes (a .toml in demos/)"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/errors.py"
+means = "the shared exception classes"
+
+[[tree]]
+path = "verity/runtime/"
+means = "runs parties over channels (pipes, framing, handshake)"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[tree]]
+path = "verity/protocols/"
+means = "one directory per protocol, the list flat"
+
+[[tree]]
+path = "verity/circuits/"
+means = "the circuit language and the circuits a protocol names"
+
+[[tree]]
+path = "verity/commitments/"
+means = "the commitment schemes"
+
+[[tree]]
+path = "verity/__init__.py"
+means = "the package, which re-exports nothing"
+
+[[tree]]
+path = "verity/README.md"
+means = "the distribution's module list"
+
+[[tree]]
+path = "verity/tests/"
+means = "the tests of the flat files, a suite of its own; made with the first of them"
+
+[[tree]]
+path = "verity/pyproject.toml"
+means = "a suite's configuration, where it has one"
+
+# ---- verity/protocols/ ---------------------------------------------------------------------------------------------
+
+[[tree]]
+path = "verity/protocols/flock/"
+means = "the proof system: its Lean verifier and the ZK server, and its prover"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/spot/"
+means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/recursion/"
+means = "one proof system's verifier proved in another's proofs, and the ZK server's release side"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/pouw/"
+means = "proof of useful work"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/pous/"
+means = "proof of useful space"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/poub/"
+means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/certifier/"
+means = "network certification: the network certifier and its guarantee"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/inference_only/"
+means = "the inference-only policy's check"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/compose/"
+means = "the protocol on top of the audits that holds several quantities on one registration, their named values tied by key; remote's and onsite's lists of protocols inside it"
+protocol = true
+owner = "proofs"
+day = "2026-11-15"
+
+[[tree]]
+path = "verity/protocols/experimental/"
+means = "experimental/NAME/, a whole directory no configuration lists; made with the first such directory"
+
+[[tree]]
+path = "verity/protocols/interface/"
+means = "the Lean interface each protocol's check implements"
+
+[[tree]]
+path = "verity/protocols/__init__.py"
+means = "the package"
+
+[[tree]]
+path = "verity/protocols/tests/"
+means = "the tests of verity/protocols' own modules, a suite of its own"
+
+[[tree]]
+path = "verity/protocols/pyproject.toml"
+means = "a suite's configuration, where it has one"
+
+# ---- each protocol's directory -------------------------------------------------------------------------------------
+
+[[tree]]
+path = "verity/protocols/NAME/verifier/"
+means = "trusted code: its Lean check, and a Python verifier until the Lean replaces it"
+
+[[tree]]
+path = "verity/protocols/NAME/prover/"
+means = "what its prover builds and its verifier does not read"
+
+[[tree]]
+path = "verity/protocols/NAME/device/"
+means = "the programs the auditor's devices run"
+
+[[tree]]
+path = "verity/protocols/NAME/README.md"
+means = "its outline, signposts and core API"
+
+[[tree]]
+path = "verity/protocols/NAME/PROTOCOL.md"
+means = "its specification, while experimental"
+
+[[tree]]
+path = "verity/protocols/NAME/__init__.py"
+means = "the package"
+
+[[tree]]
+path = "verity/protocols/NAME/pyproject.toml"
+means = "its distribution or suite"
+
+[[tree]]
+path = "verity/protocols/NAME/tests/"
+means = "its tests, a suite of its own"
+
+# ---- not in the tree yet -------------------------------------------------------------------------------------------
+
+[[not_yet]]
+path = "verity/protocols/remote/"
+to = "inside verity/protocols/compose/"
+owner = "proofs"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "verity/protocols/onsite/"
+to = "inside verity/protocols/compose/"
+owner = "proofs"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "verity/protocols/reporting.py"
+to = "into verity/protocol.py"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "verity/hardware/cards/*.toml"
+to = "hardware/"
+owner = "compute-research"
+day = "2026-11-13"
+
+[[not_yet]]
+path = "verity/hardware/nodes/*.toml"
+to = "hardware/"
+owner = "compute-research"
+day = "2026-11-13"
+
+[[not_yet]]
+path = "verity/hardware/cards/__init__.py"
+to = "into the hardware file"
+owner = "compute-research"
+day = "2026-11-14 22:00 PST"
+
+[[not_yet]]
+path = "verity/hardware/nodes/__init__.py"
+to = "into the hardware file"
+owner = "compute-research"
+day = "2026-11-14 22:00 PST"
+
+[[not_yet]]
+path = "verity/hardware/site/"
+to = "verity/device.py"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[not_yet]]
+path = "verity/hardware/registration.py"
+to = "into the hardware file"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "verity/hardware/record.py"
+to = "into the hardware file"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "verity/hardware/lean.py"
+to = "deleted, once the Lean takes a card as a parameter"
+owner = "compute-research"
+day = "2026-11-24"
+
+[[not_yet]]
+path = "verity/hardware/world/"
+to = "where proofs says, outside any one protocol's device; a Lake package the certifier's device requires today and the memory challenger's will"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/configuration/config/"
+to = "tools/config/"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[not_yet]]
+path = "verity/configuration/deploy/"
+to = "verity/party.py, verity/protocol.py, verity/config.py and verity/runtime/"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[not_yet]]
+path = "verity/configuration/wire/"
+to = "verity/channel.py, and its handshake to verity/runtime/"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[not_yet]]
+path = "verity/definitions/"
+to = "its protocol part to verity/circuits/, its served part to the vLLM adapter"
+owner = "top"
+day = "2026-11-15"
+note = "two Lake packages move with Sunday's chain; its served part waits for the vLLM adapter's snapshot and may land 2026-11-16"
+
+[[not_yet]]
+path = "verity/difftest/"
+to = "its Python to tools/difftest/, its Lake package to verity/circuits/difftest/"
+owner = "top"
+day = "2026-11-15"
+note = "its Lake package moves with Sunday's chain"
+
+[[not_yet]]
+path = "verity/composite/"
+to = "verity/protocols/compose/device/live_challenger/"
+owner = "top"
+day = "2026-11-14 12:00 PST"
+
+[[not_yet]]
+path = "verity/settings.py"
+to = "tools/config/, with verity_config"
+owner = "top"
+day = "2026-11-13 08:00 PST"
+
+[[not_yet]]
+path = "verity/claims/"
+to = "deleted; its two readers (PoUS's verifier/protocol.py, spot's device/challenger.py) keep what they need"
+owner = "top"
+day = "2026-11-14"
+
+[[not_yet]]
+path = "verity/periods/"
+to = "verity/protocol.py"
+owner = "top"
+day = "2026-11-15"
+arriving = true
+note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
+
+[[not_yet]]
+path = "fixtures/artifacts.json"
+to = "the root"
+owner = "top"
+day = "2026-11-14 12:00 PST"
+
+[[not_yet]]
+path = "fixtures/"
+to = "beside its reader, each file"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/pouw/clear/"
+to = "verity/protocols/pouw/verifier/"
+owner = "compute-accounting"
+day = "2026-11-19"
+
+[[not_yet]]
+path = "verity/protocols/pouw/receipts/"
+to = "verity/protocols/pouw/verifier/"
+owner = "compute-accounting"
+day = "2026-11-19"
+
+[[not_yet]]
+path = "verity/protocols/pous/lean/"
+to = "out of verity/: tools/pous_grader/, or deleted"
+owner = "memory-accounting"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/inference_only/nci/"
+to = "benchmarks/nci/"
+owner = "network-accounting"
+day = "2026-11-14 12:00 PST"
+
+[[not_yet]]
+path = "verity/protocols/inference_only/rho/"
+to = "benchmarks/rho/"
+owner = "network-accounting"
+day = "2026-11-14 12:00 PST"
+
+[[not_yet]]
+path = "verity/protocols/flock/pod/"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/flock/sigma/"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/flock/agreement/"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/flock/tool.py"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/spot/candidates.py"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/spot/costfit.py"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/spot/optimize.py"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+[[not_yet]]
+path = "verity/protocols/spot/plancheck.py"
+to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+owner = "proofs"
+day = "2026-11-18"
+
+# ---- not ruled -----------------------------------------------------------------------------------------------------
+
+[[open]]
+what = "whether a device with parts gets limits of its own in the Lean"
+answers = "top"
+by = "2026-11-13 10:00 PST"
+
+[[open]]
+what = "verity/commitments/windows/, inside verity/commitments/ and so below the levels the test reads: its name (the Glossary retires the word), its place and its day"
+answers = "vllm"
+by = "2026-11-13 10:00 PST"
