@@ -706,25 +706,25 @@ def _slot_lines(sl: Mapping[str, Any] | None) -> list[str]:
     if not sl:
         return []
     lo, hi = sl["band"]
-    return [f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = K1 x entries x {sl['reps']} reps, K1 = "
-            f"{_k1s(sl['k1_ns'])} (band: {_k1s(lo)} to {_k1s(hi)}); GiB = ({sl['bits_bytes']:.4g} B x the bucket's stacked "
-            f"table, its T templates (T up to a power of two) at the largest's entries, the committed bits, + "
-            f"{sl['work_bytes']:.4g} B x entries, the working set) / 2^30; "
-            "entries = slots x the session's largest template (its type's registered table: a registered type's one unit, "
-            "a tree's distinct members, a generic type's whole subcircuit; at most Z). A session's time is prove + "
-            "sumcheck, its peak RSS + sumcheck memory."]
+    return [(f"- slot sumcheck (candidate 3), K1 {sl['source']}: seconds = K1 x entries x {sl['reps']} reps, K1 = "
+             f"{_k1s(sl['k1_ns'])} (band: {_k1s(lo)} to {_k1s(hi)}); GiB = ({sl['bits_bytes']:.4g} B x the bucket's stacked "
+             f"table, its T templates (T up to a power of two) at the largest's entries, the committed bits, + "
+             f"{sl['work_bytes']:.4g} B x entries, the working set) / 2^30; "
+             "entries = slots x the session's largest template (its type's registered table: a registered type's one unit, "
+             "a tree's distinct members, a generic type's whole subcircuit; at most Z). A session's time is prove + "
+             "sumcheck, its peak RSS + sumcheck memory.")]
 
 
 def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     sl = pr["slot_sumcheck"]
     lo, hi = sl["band"]
     L = ["", f"## Slot sumcheck per workload (K1 {_k1s(sl['k1_ns'])}; {sl['source']})", "",
-         "The heaviest session at the node limit (its Z and its largest template), split into Flock's prove and the slot "
-         "sumcheck; its peak; the limits with the sumcheck and with Flock alone; prover hours per audit at the node limit and "
-         f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)}).", "",
-         "| workload | limit: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
-         "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
-         "band high: prover h (share) |", "|" + "---|" * 15]
+         ("The heaviest session at the node limit (its Z and its largest template), split into Flock's prove and the slot "
+          "sumcheck; its peak; the limits with the sumcheck and with Flock alone; prover hours per audit at the node limit and "
+          f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)})."), "",
+         ("| workload | limit: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
+          "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
+          "band high: prover h (share) |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
         n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_cap"]
         s = n["heaviest"]
@@ -748,12 +748,12 @@ def _names(labels: Sequence[str]) -> str:
 
 def _menu_table(pr: Mapping[str, Any]) -> list[str]:
     L = ["", "## Menus: dp4, dp4t, and dp4t with the bulk unregistered types registered (what-if)", "",
-         "Prover hours per audit at the node limit and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
-         "session at the node limit (Z, its largest template, prove + sumcheck, peak); the limits; the body's padding unsplit "
-         "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
-         f"(generic body types sampled at least {RARE_SAMPLES} times per audit, each as one GEMM tc step's template).", "",
-         "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | limit: node / GPU | "
-         "zpad / pad_mean / public | registered |", "|" + "---|" * 9]
+         ("Prover hours per audit at the node limit and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
+          "session at the node limit (Z, its largest template, prove + sumcheck, peak); the limits; the body's padding unsplit "
+          "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
+          f"(generic body types sampled at least {RARE_SAMPLES} times per audit, each as one GEMM tc step's template)."), "",
+         ("| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | limit: node / GPU | "
+          "zpad / pad_mean / public | registered |"), "|" + "---|" * 9]
     for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
         for tag, w in zip(("dp4", "dp4t", "dp4t, registered"), ws):
             n, a, b, p = w["cpu"], w["cpu"]["at_cap"], w["unsplit"]["buckets"], w["unsplit"]["padding"]
@@ -767,8 +767,8 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
                 f"{_p2(n['cap'])} / {_p2(w['gpu']['cap'])}", f"{p['zpad']:.3f} / {p['pad_mean']:.3f} / {p['public']:.3f}",
                 _names(reg) if tag.endswith("registered") else "–",
             ]) + " |")
-    L += ["", "### dp4t buckets, unsplit", "", "| workload | class | Z | slots | types | sessions mean / public | template | "
-          "session: prove + sumcheck | peak | prover h mean |", "|" + "---|" * 10]
+    L += ["", "### dp4t buckets, unsplit", "", ("| workload | class | Z | slots | types | sessions mean / public | template | "
+           "session: prove + sumcheck | peak | prover h mean |"), "|" + "---|" * 10]
     for w in pr["workloads_dp4t"]:
         for x in w["unsplit"]["body"] + w["unsplit"]["rare"]:
             s = x["session"]
@@ -785,25 +785,25 @@ def render(pr: Mapping[str, Any]) -> str:
     sc = pr["staging_fit"]["coef"]
     line = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
-         "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
-         "the session's bits (slots x 2^k_log); cb: its circuit text, the descriptions of its distinct unit types at "
-         f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
-         f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
-         "(Stmt.InRange): flock-circuit refuses a session needing more.", "",
+         ("Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
+          "the session's bits (slots x 2^k_log); cb: its circuit text, the descriptions of its distinct unit types at "
+          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
+          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
+          "(Stmt.InRange): flock-circuit refuses a session needing more."), "",
          f"- peak RSS (GiB) = {line('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
          f"- prove (s) = {line('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
-         f"- prover process wall, circuit load included (s) = {line('wall_s')}; max relative residual "
-         f"{f['max_residual']['wall_s']:.2f}",
-         f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
-         f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
-         "measured staging",
-         f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU fit as "
-         "a bound)", *_slot_lines(pr.get("slot_sumcheck")), "",
+         (f"- prover process wall, circuit load included (s) = {line('wall_s')}; max relative residual "
+          f"{f['max_residual']['wall_s']:.2f}"),
+         (f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
+          f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
+          "measured staging"),
+         (f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU fit as "
+          "a bound)"), *_slot_lines(pr.get("slot_sumcheck")), "",
          "## Check: registered GEMM-coordinate sessions", "",
-         "Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
-         "bound Z: each slot its own description of Z nonzeros) and against this model.", "",
-         "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
-         "prove | posted model | posted fit | this model |", "|" + "---|" * 14]
+         ("Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
+          "bound Z: each slot its own description of Z nonzeros) and against this model."), "",
+         ("| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
+          "prove | posted model | posted fit | this model |"), "|" + "---|" * 14]
     for r in pr["check"]:
         m, po, la, no = r["measured"], r["posted"], r["law_at_measured"], r["now"]
         L.append(f"| {r['K']} | {r['run']} | {P._si(r['Z'])} | {r['k_log']} | 2^{int(math.log2(r['D']))} | "
@@ -812,13 +812,13 @@ def render(pr: Mapping[str, Any]) -> str:
                  f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_law']:+.0%}) | "
                  f"{_t(no['prove_s'])} |")
     L += ["", "## Per workload: dp4 at B = 16, unsplit and at the limit", "",
-          "limit: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
-          "sumcheck's) fits; units over it split into ceil(z / limit) pieces. Prover hours: Σ sessions x (prove + slot "
-          "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
-          "template shape, and the largest of every shape in the workload.", "",
-          "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | limit: node / GPU | "
-          "units split at node limit (share of the sample) | sessions at node limit (mean / public) | prover h at node limit | "
-          "prover h at GPU limit | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
+          ("limit: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
+           "sumcheck's) fits; units over it split into ceil(z / limit) pieces. Prover hours: Σ sessions x (prove + slot "
+           "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
+           "template shape, and the largest of every shape in the workload."), "",
+          ("| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | limit: node / GPU | "
+           "units split at node limit (share of the sample) | sessions at node limit (mean / public) | prover h at node limit | "
+           "prover h at GPU limit | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |"),
           "|" + "---|" * 15]
     for w in pr["workloads"]:
         u, n, g, s, st = w["unsplit"], w["cpu"], w["gpu"], w["top_session"], w["staging"]
@@ -837,8 +837,8 @@ def render(pr: Mapping[str, Any]) -> str:
     L += ["", f"## Power-of-two bounds (ρ = {RHO_TABLE} nonzeros per row)", "",
           ("Registered: 16 distinct types, each one GEMM tc-step description. Generic: each slot its own description of Z "
            "nonzeros."), "",
-          "| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
-          "peak RSS | prove | slot sumcheck | its memory | fits GPU: registered / generic |", "|" + "---|" * 14]
+          ("| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
+           "peak RSS | prove | slot sumcheck | its memory | fits GPU: registered / generic |"), "|" + "---|" * 14]
     for q in pr["pow2"]:
         r, gq = q["registered"], q["generic"]
         L.append(f"| {_p2(r['Z'])} | {P._si(r['rows'])} | {r['k_log']} | {_yn(r['in_range'])} | 2^{int(math.log2(r['D']))} | "
@@ -853,8 +853,8 @@ def render(pr: Mapping[str, Any]) -> str:
     for r in pr["staging_fit"]["registered"]:
         L.append(f"| {r['run']} | {r['lowering']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
                  f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
-    L += ["", "## Shapes", "", "| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
-          "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |", "|" + "---|" * 15]
+    L += ["", "## Shapes", "", ("| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
+           "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
         for tag, a in (("unsplit", w["unsplit"]), ("node limit", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
             if a is None:
@@ -867,8 +867,8 @@ def render(pr: Mapping[str, Any]) -> str:
                              f"{s['session']['rss_gib']:.3g} GiB | {_t(s['session']['prove_s'])} | "
                              f"{_t(s['session']['sumcheck_s'])} | {s['session']['sumcheck_gib']:.3g} GiB | "
                              f"{s['prover_s_mean'] / 3600:.3g} | {_st(s.get('staging'))} |")
-    L += ["", "## Source runs", "", "| run | definition | instances | k_log | D | circuit text | prove | fit | process wall | fit | "
-          "peak RSS | fit | threads |", "|" + "---|" * 13]
+    L += ["", "## Source runs", "", ("| run | definition | instances | k_log | D | circuit text | prove | fit | process wall | fit | "
+           "peak RSS | fit | threads |"), "|" + "---|" * 13]
     for p in f["points"]:
         L.append(f"| {p['run']} | {p['definition']} | {p['instances']} | {p['k_log']} | 2^{p['dense_m']} | "
                  f"{p['circuit_bytes'] / 1e6:.0f} MB | {p['prove_s']:.3g} | {p['prove_s_fit']:.3g} | {p['wall_s']:.3g} | "
