@@ -28,11 +28,11 @@ are the challenger's, the setup's salt and the session's:
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
-The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`Challenger`) and the prover
+The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`Challenger`) and the prover
 (`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
 (`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, run on the deployment layer's byte-stream
-adapter (`verity.configuration.deploy.stream`) on the clock and coins it is given: it reads its clock once before each index it
+adapter (`verity.runtime.stream`) on the clock and coins it is given: it reads its clock once before each index it
 sends and once after each block it takes, those readings alone, so on the same coins and readings it signs the same
 bytes wherever it runs.
 
@@ -61,10 +61,10 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.configuration.deploy import stream
-from verity.configuration.deploy.party import Finish, Identity, Received, Send
-from verity.configuration.deploy.runtime import ProtocolDef
-from verity.configuration.wire import Message, Phase, Refused
+from verity.runtime import stream
+from verity.party import Finish, Identity, Received, Send
+from verity.runtime.runner import ProtocolDef
+from verity.channel import Message, Phase, Refused
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.device.challenger_session import (
     CHALLENGER,
