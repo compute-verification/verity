@@ -9,7 +9,7 @@ from synthetic import SHAPE, run_job, tiny_registry, write_config
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from training_slowdown import config, run, starts
-from training_slowdown.codecs import LowRank, ScaledQuant, SparseTernary
+from training_slowdown.codecs import LowRank, RowScale, ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import _codes as codes
@@ -469,6 +469,26 @@ def test_a_dgrad_runs_checkpoints_are_e_on_the_start_and_its_codes_are_traced_at
     torch.manual_seed(0)
     model, optimizers = dgrad.build(cfg.start.shape, cfg.dials)
     assert trace_step(cfg, dgrad, model, optimizers, "cpu")["circuit"]["state_bits"] == 0
+
+
+def test_an_ia3_runs_checkpoints_are_the_start_with_each_scaled_matrixs_rows_times_its_scales(tmp_path):
+    """Route `ia3` through the harness: θ loads into a model that holds scales θ has none of, every op is counted and
+    the step traces, the start's own weights never move, and each checkpoint's output has θ's names, each scaled
+    matrix diag(l)·W as E's codec rebuilds it from the scales the run trained."""
+    targets = ("blocks.0.wk.weight", "blocks.0.w_up.weight")
+    rec, outputs, model, theta, trace = loop(tmp_path, route="ia3", dials={"targets": ",".join(targets), "lr": 1e-2})
+    assert rec["invalid"] == [] and "refused" not in trace
+    assert [(cp["step"], cp["changed"]) for cp in rec["checkpoints"]] == [(0, 2), (1, 2), (2, 2)]
+    state = model.state_dict()
+    assert set(outputs[-1]) == set(theta) == {k for k in state if not k.endswith(".l")}
+    assert all(torch.equal(state[k], theta[k]) for k in theta)
+    codec = RowScale()
+    for k, v in outputs[-1].items():
+        if k in targets:
+            scales = state[k.replace(".weight", ".l")]
+            assert torch.equal(v, codec.decode(codec.encode_trained(scales), theta[k])) and not torch.equal(v, theta[k])
+        else:
+            assert torch.equal(v, theta[k])
 
 
 def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path):

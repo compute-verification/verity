@@ -230,7 +230,7 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
     beside its coded ones (`quant`), but a plan that keeps every tensor whole is not, and neither is a whole tensor
     beside a format that carries none (`lora2`) or any plan beside a format this table doesn't know."""
     assert of_record.e_kind(["scaledquant"], "quant") == [] == of_record.e_kind(["identity"], "full")
-    assert of_record.e_kind(["lowrank"], "lora2") == []
+    assert of_record.e_kind(["lowrank"], "lora2") == [] == of_record.e_kind(["rowscale"], "lora2")
     monkeypatch.setitem(of_record.E_KINDS, "quant", ("scaledquant", "coded"))
     for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"], ["coded", "identity"]):
         assert of_record.e_kind(kinds, "quant") == []
@@ -241,7 +241,7 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
         "E's kind: the config's plan is identity, lowrank, the record's format quant (scaledquant or coded, with "
         "identity beside one of them)"]
     assert of_record.e_kind(["lowrank", "identity"], "lora2") == [
-        "E's kind: the config's plan is lowrank, identity, the record's format lora2 (lowrank)"]
+        "E's kind: the config's plan is lowrank, identity, the record's format lora2 (lowrank or rowscale)"]
     assert of_record.e_kind(["coded"], "full") == [
         "E's kind: the config's plan is coded, the record's format full (identity)"]
     assert of_record.e_kind(["identity"], "model") == [

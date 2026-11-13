@@ -579,3 +579,12 @@ shapes = [[]]
 count = 8
 macs = 8
 why = "the program's running average of the loss, which it prints: each block's loss over the blocks"
+
+# The count's rule for a kernel without a mask is the gradients of operands that require one
+# (`flops.Counter._attention`'s docstring); what the card's kernel computes beyond that is outside every job's count.
+[held."m-t20-1.1x-ia3"]
+run = "r20261103-075334-0538"
+art = "art:71be21124f7bf81f831b01e4dc2b0646c1056601131b009395f5d38f7a509c06"
+path = "out/run/run.json"
+sha256 = "5fd7c7a5088b646a00984a0bb6070b2052026fa3a884b2ee614197d75c3abcbf"
+partial = "kv:2"

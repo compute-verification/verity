@@ -77,8 +77,9 @@ HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
 #: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
-#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary"), "lora2": ("lowrank",)}
+#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`), and the parts an adapter trained beside the
+#: frozen start, low-rank factors (`lowrank`) or a scale a row (`rowscale`). A format may have several kinds
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary"), "lora2": ("lowrank", "rowscale")}
 #: the codecs a plan may hold beside at least one of its record's format's own kind: a tensor the record's program
 #: carried whole beside its coded ones
 E_BESIDE = {"quant": ("identity",)}
