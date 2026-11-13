@@ -173,8 +173,8 @@ the device printed each play's log after the parameters (`hP`); its history at e
 signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); its members each have the one table `tb W`
 with hm96-sha512 rows (`hMA`); and `WindowRead` holds of each play the sampled verdict accepts, whose log v2 read is
 the device's, whose blobs sent hold each pinned table and each member's files at their registered files and whose
-sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant `StepInv`, and each round's
-reading picks only openings (`windowReadingAt_picks`). -/
+sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant
+`StepInv`, and each round's reading picks only openings (`windowReadingAt_picks`). -/
 theorem windowSpotSound_sessions (K : WindowConstructions V) (dev : Exchange → Properties.Challenger.History)
     (reg : Option Claims.Msg → ByteArray) (tb : Window → String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)

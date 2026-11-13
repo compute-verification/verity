@@ -596,8 +596,8 @@ noncomputable def constructionsAt (K₀ : WindowConstructions I.base) (k : Verit
 /-- **What the verifier's acceptance gives of each play, at the deployment's windows** (`WindowRead`), at composite
 `k`: at every play on files the verifier sets one of the deployment's windows up on, which `k`'s sampled verdict
 accepts, whose log v2 read is the device's, whose blobs sent hold each pinned table and each member's file at its
-registered file and whose sample answers the strategy's `afterAt`, every release of the family the parameters name precedes every opening, and
-the play has the sessions of the window's sample at the coins that family releases. -/
+registered file and whose sample answers the strategy's `afterAt`, every release of the family the parameters name
+precedes every opening, and the play has the sessions of the window's sample at the coins that family releases. -/
 def WindowReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) : Prop :=
   ∀ θ F W, I.windows θ F = some W →

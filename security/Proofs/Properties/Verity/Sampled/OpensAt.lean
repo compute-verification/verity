@@ -188,8 +188,8 @@ theorem opens_rowLeaf (hA : Ready D hU n pi pub) {i : ℕ} {b : Bool} {m : Claim
     simp only [Flock.Bridge.portsOfL, Array.mem_map, Array.mem_range] at hmem
     obtain ⟨q, hq, hreg⟩ := hmem
     obtain ⟨r, hr, hri⟩ := Option.bind_eq_some_iff.mp
-      (show (Flock.Bridge.rowOfPos (Cc D hU n pi) (rows D hU n pi pub) i).bind (fun r => (roots D n pub)[r.port]?.map fun rt => (rt, r.leaf)) =
-        some ri from hat)
+      (show (Flock.Bridge.rowOfPos (Cc D hU n pi) (rows D hU n pi pub) i).bind
+          (fun r => (roots D n pub)[r.port]?.map fun rt => (rt, r.leaf)) = some ri from hat)
     obtain ⟨rt, hrt, hrti⟩ := Option.map_eq_some_iff.mp hri
     have hrq : r.port < D.unroll.ports.size := by
       simpa [Commit.roots, Flock.Bridge.rootsOfL] using (List.getElem?_eq_some_iff.mp hrt).1
@@ -201,18 +201,21 @@ theorem opens_rowLeaf (hA : Ready D hU n pi pub) {i : ℕ} {b : Bool} {m : Claim
       have e3 : (roots D n pub).getD r.port [] = ri.1 := by simp [List.getD_eq_getElem?_getD, hrt, ← hrti]
       have he : (roots D n pub).getD q [] = (roots D n pub).getD r.port [] := e1.symm.trans (e2.trans e3.symm)
       rcases Nat.lt_trichotomy q r.port with hlt | heq | hgt
-      · exact absurd he (h(roots D n pub) r.port q hlt hrq)
+      · exact absurd he (hA.roots r.port q hlt hrq)
       · exact heq
-      · exact absurd he.symm (h(roots D n pub) q r.port hgt hq)
+      · exact absurd he.symm (hA.roots q r.port hgt hq)
     subst hqr
     have hpr : (D.unroll.ports[r.port].v2 || D.unroll.ports[r.port].segs.isSome) = true :=
-      (Array.all_eq_true.mp h(rows D hU n pi pub)) r.port hq
+      (Array.all_eq_true.mp hA.rows) r.port hq
     have hschema : reg.schema = Flock.Registered.portSchema D.unroll.ports[r.port] := by
       rw [← hreg]; simp [Flock.Bridge.schemaOf, hq]
-    have hrow : Flock.Bridge.rowDep (Cc D hU n pi) (rows D hU n pi pub) D.unroll (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub))
-        (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩ = Flock.Bridge.rowMsg D.unroll.ports[r.port]
-          (SamplingDeploy.rowBits (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub)) (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩) := by
-      have hpo : Flock.Bridge.portOfPos (Cc D hU n pi) (rows D hU n pi pub) D.unroll i = some D.unroll.ports[r.port] := by
+    have hrow : Flock.Bridge.rowDep (Cc D hU n pi) (rows D hU n pi pub) D.unroll
+        (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub)) (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩ =
+          Flock.Bridge.rowMsg D.unroll.ports[r.port]
+            (SamplingDeploy.rowBits (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub))
+              (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩) := by
+      have hpo : Flock.Bridge.portOfPos (Cc D hU n pi) (rows D hU n pi pub) D.unroll i =
+          some D.unroll.ports[r.port] := by
         simp [Flock.Bridge.portOfPos, hr, hq]
       simp only [Flock.Bridge.rowDep, hpo]
     have hdom : reg.domain.size = 64 := by
@@ -225,7 +228,8 @@ theorem opens_rowLeaf (hA : Ready D hU n pi pub) {i : ℕ} {b : Bool} {m : Claim
       simp only [Flock.Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at hop'
       obtain ⟨⟨-, hl⟩, -⟩ := hop'
       have hleaves : reg.leaves = (Lm D n pub).cnt r.port := by rw [← hreg]
-      have hidx : Flock.Bridge.portIdxOf (Cc D hU n pi) (rows D hU n pi pub) i = r.port := by simp [Flock.Bridge.portIdxOf, hr]
+      have hidx : Flock.Bridge.portIdxOf (Cc D hU n pi) (rows D hU n pi pub) i = r.port := by
+        simp [Flock.Bridge.portIdxOf, hr]
       rw [Claims.Sampling.size_bytes, hleaves] at hl
       exact Flock.Bridge.saltOf_length (by simpa [Flock.Bridge.pathOfL, hidx] using hl)
         (Flock.Bridge.PortRoots.one_le_log2ceil (hA.leaves r.port hq))
@@ -243,7 +247,8 @@ theorem opens_rowLeaf (hA : Ready D hU n pi pub) {i : ℕ} {b : Bool} {m : Claim
                             format := f }
               root := Flock.Bridge.Spec.dig reg.root, rank := ri.2,
               offset := (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub) i).2.val }, ?_,
-      ⟨SamplingDeploy.rowBits (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub)) (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩,
+      ⟨SamplingDeploy.rowBits (Flock.Bridge.placeOf (Cc D hU n pi) (rows D hU n pi pub))
+          (Flock.Bridge.bitsOf (Lm D n pub).d) ⟨i, b, m⟩,
         Flock.Bridge.saltOf ⟨i, b, m⟩, _⟩, ⟨?_, hsalt, hacc⟩, ?_⟩
     · simp [Commit.placeAt, placeFrom, hat, hfind, hf]
     · refine hfit _ ?_
