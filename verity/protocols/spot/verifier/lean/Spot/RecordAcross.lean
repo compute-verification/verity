@@ -5,7 +5,7 @@ computed whatever the others say:
 
 * `logged`: the later registration's `previous` is the digest of a record of the earlier stream's log (`loggedAt`), the
   registrations that stream received, in order;
-* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedSessionOf`, under the
+* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedChallengePhaseOf`, under the
   verifier's challenger key and its copy of main's first-parent history, `key` and `main`, which the caller holds and
   the evidence does not name), the bytes the later
   stream's sample read are exactly the coins of the later stream's family (`family`, which the caller names and the
@@ -85,7 +85,7 @@ def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Opti
 /-- The roots of the `root` events among the release log `log`'s lines after its head, in the log's own order: for
 each coin the challenger released, of whatever family, the root it had received (`Challenger.releasedRootsOf` reads the
 same lines family by family). A line that is no event, and an event that is no `root`, give none. It checks no line's
-form: `receivedOf` reads a log only once `Challenger.trustedSessionOf` holds it. -/
+form: `receivedOf` reads a log only once `Challenger.trustedChallengePhaseOf` holds it. -/
 def rootLines (log : Json) : List ByteArray :=
   match log with
   | .arr lines => lines.toList.tail.filterMap fun
@@ -103,11 +103,11 @@ def rootLines (log : Json) : List ByteArray :=
 
 /-- The roots the challenger received, one for each coin it released, over every family's lines in its signed log's own
 order (`rootLines`), from the session the auditor's ledger opens on `window` under the verifier's key `key`, once that
-session's files hold (`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads them, `main` the verifier's copy
+session's files hold (`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads them, `main` the verifier's copy
 of main's first-parent history). -/
 def receivedOf (key : Challenger.ChallengerKey) (main coins : Json) (window : String) : V (List ByteArray) := do
   let session := getD coins "session"
-  let _ ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+  let _ ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") main session
   return rootLines (getD session "log")
 
@@ -308,7 +308,7 @@ private def logOf (lines : List String) : Json := Json.arr (lines.map Json.str).
 #guard rootLines .null == []
 -- a line that is not its own canonical JSON is no event, and neither is one that is no string
 #guard rootLines (Json.arr #[Json.str "", Json.str "{ \"event\": \"root\", \"root\": \"01\" }", Json.null]) == []
--- `rootLines` holds a line to no more than that: the log's form is `Challenger.trustedSessionOf`'s to check, before it
+-- `rootLines` holds a line to no more than that: the log's form is `Challenger.trustedChallengePhaseOf`'s to check, before it
 #guard rootLines (Json.arr #[Json.str "", Json.str "{\"event\":\"root\",\"root\":\"01\"}"]) == [root 1]
 
 private def audited (digest : String) (accepted : Json) (complete : Json := .bool true) : Json :=

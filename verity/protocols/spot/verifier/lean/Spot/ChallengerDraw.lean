@@ -5,7 +5,7 @@ never the evidence's, and as a stream's run holds the bytes it read to them (`co
 
 `drawCoins key window label after coins` reads the evidence `{ledger, main, pins, segment, session}`: the auditor's
 ledger, the verifier's copy of main's first-parent history, the host's pins log, the sample's segment and the session's
-files. The session is the one the ledger opens on `window` under `key` (`trustedSessionOf`), a withheld one
+files. The session is the one the ledger opens on `window` under `key` (`trustedChallengePhaseOf`), a withheld one
 (`withheldOn`: its challenger released no root, salt or path before it closed). The segment must be of
 family `label`, and its openings exactly the coins that session's signed log shows released after `after`
 (`challengerStream`). The result is their concatenation, the bytes a sample reads. A component whose check reads its
@@ -18,7 +18,7 @@ its copy of main's first-parent history, which its caller holds and hands it (`k
 `drawCoins`'s, one object for both readers, so it names no key: evidence that carries one is refused in form, and the
 session is one signed under the verifier's key, whoever wrote the evidence. The copy of main's history the evidence
 carries must be the verifier's own, commit for commit (`sameMain`), so the session counts only from a commit the pins
-log records on main's first-parent line as the verifier holds it (`pinnedSession`), and what `drawCoins` reads from that
+log records on main's first-parent line as the verifier holds it (`pinnedChallengePhase`), and what `drawCoins` reads from that
 evidence is read under the verifier's copy too. The session is the one of the window the verifier holds (its open root
 R, `windowRoot`, which it reads from the challenger's signed open of the registration's window, never from the record
 or the evidence), so the record names neither, the prover picks no window, and coins a session of another window
@@ -54,7 +54,7 @@ under `key` released after `after`, read from `coins`, in order: the bytes a sam
 one (`withheldOn`). -/
 def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
-  let (c, roots) ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+  let (c, roots) ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") (getD coins "main") (getD coins "session")
   unless withheldOn (getD coins "ledger") window do throw WITHHELD
   let segment := getD coins "segment"
