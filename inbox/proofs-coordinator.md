@@ -130411,3 +130411,25 @@ Clock: `date -u` read 08:32Z. Mailbox (branch `inbox/bc-a5cbdecf-6e51-5b21-bf0d-
 **Pushed.** `cursor/proofs-honest2-7c4e` at `7c1e4fb8d7c35ae8240d6aa3e97b41d11da3a14c`; nothing unpushed. Runs: none out; `f627`, `8cd7`, `f5b6`, `a9e4` each ended rc 0. Timer: one, for ADDRWC's `50ae` and FRAME's cut, about 09:05Z.
 
 **To post.** Nothing.
+
+## MEMBERS, Fri 13 Nov 08:33Z: READY LINE: #9712 (the 589 site, PRF-490) at `b940017b6864`: open, unmarked, every check passed; it crosses tonight's moves, so mark it now or have me carry it after chain 2
+
+**[#9712](https://github.com/compute-verification/verity/pull/9712)**, `cursor/proofs-members-programsha-34fd`, head `b940017b6864dcde4d53ae539aed2f4709becf5d`, pushed, unmarked, linked to PRF-490. Three files of code and the two locks.
+
+- [read] **What it changes:** one line of `Spot.OneStageZk.push`. The verdict's program is compared with the partition object's by `jsonStrIs`, which a proof can open, in place of `!=` on `Option Json`. Two proofs that split that `if` now use `split_ifs` (`Sampled/Held.lean`, `Properties/Spot/Credited.lean`). No statement changes.
+- [run] **Tries**, at `273199a73b18`, each rc 0 with the three axioms only: `Credited.lean` (`r20261113-064656-f46a`), `Held.lean` (`r20261113-065027-67dc`), `Record/Accepts.lean` (`r20261113-065401-2669`).
+- [run] **Records run** `r20261113-065745-ae1b` at `a7e04a40f373`: rc 0. The spot package (6,035 declarations), the certifier's and `security/Proofs` (204,290 declarations, 4,051 modules) pass. `security` and `security/Properties` pass after `--update`.
+- [run] **Stop rule clear.** Each regenerated lock differs from that head's in `reads[Spot.OneStageZk]` alone: the text of `push` and the group's digest. No guarantee's record, premise or witness moved. The head carries both files.
+- [run] **Suites** `r20261113-065833-b949` at `a7e04a40f373`: 5 of 5. Spot's Lean suite 323 passed and 2 skipped; spot's verifier 931; one-stage 1,086; the protocols' tests 321; the root suite 359.
+- [run] **Root suite at the head** `b940017b6864`: `r20261113-081537-e3f2` (vy-nebius-cpu-11), rc 0, 359 passed.
+- [run: `git merge-tree`, no branch touched] As text the head merges clean with `main` at `9182900fb94e`, with one-parse, with #9584 and with WINDOWAT's `e977fbc96f63`.
+- [read] It holds one merge of `main` (`e6567379d76b`), made at 06:56Z, before your 07:22Z order. I merged none since.
+- It adds no line to `Spot/OneStageZk.lean`, so the cap does not see it.
+
+**Yours to say:** mark it at this head now, or leave it unmarked for chain 2, after which I carry it with `restack.py` and give a new ready line.
+
+**Correction.** My last entry cites "my 08:17Z entry" for #9703. Its heading says 08:16Z. It is the same entry.
+
+**Not established.** The Lean difftest has no case that reaches this refusal, so that the refusing branch is unchanged rests on the argument in the body and on a scratch evaluation of 90 pairs. Nothing has run on a tree that holds this with #9576 or with the path moves.
+
+Nothing of mine is unpushed. No run of mine is out. No timer is set.
