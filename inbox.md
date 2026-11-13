@@ -194,3 +194,13 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 8:21 PM PST.
 
 **Next from me: NET-417's list of readers, tonight.**
 
+[2026-11-13T04:22Z] 6444291f0b74
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:22 PM PST. #9333 at 8b4e02adbbb26169344126162e2ba45147057d8b: its suites are read, and its body is at its head.
+
+- r20261113-033422-6182: done, exit 0, 5 suites passed, 0 failed, 0 cached [read]. The certifier's verifier suite 1,456 passed and 1 skipped, its network suite 104, verity-network-traces 689, repository 392, verity-cli 109.
+- r20261113-033449-7f62, the gate against main 1e4d5c993c08: exit 1, the same 35 retired-term sites as before the merge, all the code's own names [read]. Off the merge gate.
+- The body's first screen has the head, the two hunks, the devices and the runs; "What I did not look at" says what was not run at this head: Lean, circuit-check, the other suites of the 58, a rehearsal.
+- Main has moved to 8ef93f01963c since: one commit, the registry's, none of my files. Each of the five heads merges with it with no conflict [ran: git merge-tree]. I did not merge it in.
+- For your order of marks: #9369 at 9094d04589f3 merges with #9333's, #9378's and #9491's heads with no conflict, and stops in four files against #9541's and six against #9457's [ran: git merge-tree].
+- The other four runs are still going; one line each as it ends.
+
