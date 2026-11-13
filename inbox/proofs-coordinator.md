@@ -125311,3 +125311,52 @@ NEEDS: nothing.
 To post: nothing (the leg has not the fault).
 
 Loops: new machine (up 06:27Z). Pen made 06:27Z and removed as this turn ends. My branch is unchanged at `e019992865`.
+
+## TWOLEG, Fri 13 Nov 06:35Z: head `870cc9da1b` on `cursor/proofs-twoleg-c5e5`: every one of the form's fifteen proof files compiles there (for ASSEMBLY, STAGECOINS, ACCEPTS, SESSIONCOINS, HISTORY); the refusal and `RecordsRead` are NOT in it and change three statements at the next head
+
+**The play ran on two windows** [run `r20261113-053625-2556`, read from its `out/form/params.json`]: the boundary's window root is `361c46fcde511924…` under family `draw/0`, the interior's is `a1fcc706d69c4090…` under `draw/second/0`. It is an interior of one member.
+
+**The head.** `870cc9da1b`. No single run compiled all fifteen at it; each file has a passing try on text identical to this head's, and nothing it imports changed after its pass [derived: the runs below and `git diff 03072eb90b 870cc9da1b`, which changes only `Accepts`, `Deployed`, `FirstSample`, `InputMap`, `Ordered`, `SecondRead`, `Shown` among `.lean` files; the form's own file is unchanged]. Every probe printed "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+
+| file under `security/Proofs/Properties/Verity/SampledTwo/` | theorems | run | at |
+|---|---|---|---|
+| `Deployed`, `Shown` | 4, 4 | `r20261113-061923-885a` | `870cc9da1b` |
+| `Accepts` (`accepts_of_steps`, `accepts_iff_steps`) | 6 | `r20261113-061101-5806` | `0c9b2a654a` |
+| `FirstSample`, `Ordered` | 6, 2 | `r20261113-055249-141d`, `r20261113-055128-5143` | `e03a1aff6f` |
+| `InputMap` | 5 | `r20261113-052901-254b` | `faf4b73bd7` |
+| `SecondRead` | 4 | `r20261113-052211-9393` | `dd230ef7e2` |
+| `Steps`, `ClaimInner`, `DevAgrees`, `Refused`, `Leg`, `Claim`, `Reading`, `Projection` | 10, 4, 8, 2, 3, 3, 0, 0 | `r20261113-044424-14a0` | `03072eb90b` |
+
+The executables' build and the difftest are `14a0`'s, at `03072eb90b`: `BUILD rc=0`, `DIFFTEST rc=0`, "65 passed, 1 skipped" [run].
+
+**Which tries failed in `14a0`** [run]: `SecondRead`, `Shown`, `Deployed` and `Ordered`, each rc 1 at `03072eb90b`. All four were mended and pass in the rows above. The other eight files, the build and the difftest passed there.
+
+**Under the proved law** [run `r20261113-055249-141d`]: the form's own lemma `accepted_secondLaw` compiles; the join with RUNCOINS's `firstSample` is ASSEMBLY's.
+
+**`import all`: one of mine has it** [read]. `FirstSample.lean` has `import all Spot.Run`, to name the private `Spot.Run.interiorAudit` in `run_path`. At the next head I drop `private` on `interiorAudit` in `Spot/Run.lean` (visibility only; #9574 already changes that definition's signature, and the file has `backward.privateInPublic` on) and the `import all` with it. The form's file has two private definitions, `keysAre` and `without`; I drop `private` on both at the next head, so RUNCOINS's `Parsed.lean` and `OfCheck.lean` need no `import all` of it, whatever they read. Say if `Spot/Run.lean` is not mine to touch.
+
+**Ports** [read]: from the verifier's own descriptor. `OneStage.paramsOfJson` reads them from the parameters' `"ports"` object (`entries (obj (getD j "ports"))`, one pair a key of that object), into `p.boundary.verifier.ports` and `p.audit.base.verifier.ports`; the form takes `p` apart from the commitment and the evidence, and nothing the prover files reaches them. The record's roots, which `R3-ports` holds to them, are the prover's.
+
+**Rep streams in `2556`** [run, read from `out/form/evidence.json`]: the play has one second-stage session. Its log holds one `coin-tree` line, streams `session`, `circuit/rep0`, `circuit/rep1` in that order, and 198 `tree-open` lines: `session` round 0; then `circuit/rep0` rounds 0 to 97 in order; then `circuit/rep1` rounds 0 to 97 in order; then `session` round 1. So the rep streams open one after another in the tree's stream order, and the `session` stream's second opening comes after both. The Python server made the session: SPOT's proof server, the `dev` arm (`"firewall": null, "arm": "dev"` in the audit's summary), not the Firewall. The first session's log has 7 lines, none a coin tree's.
+
+**STOP RULE: the two changes of the next head, before and after** (the refusal ruled yes 05:29Z; `RecordsRead` is item 4 of the order). Neither makes the verifier accept anything it refuses today; no listed guarantee reads either.
+- *The refusal.* Before: no step refuses a first session's log that holds a coin tree's line. After: `firstTreeless p e`, a step of `prepare` after `stagesOrdered`: where the boundary names a window and the interior audit's is another, a line of `firstLines e` with `Spot.Challenger.treeLine` refuses (`FIRST_TREE`). No honest play is refused: the first stage's session only draws its sample (7 lines, none a tree's, in `2556`).
+- *`RecordsRead`.* Before: the run reads `c.record` and `e.record` as given. After: `readBack r` = `Flock.JsonParse.parse` of `Flock.canon r`, refused unless it prints back to that text (`RECORD_READ`); `inputAt` calls `inputOf` at `{ c with record := j₁ }` and `{ e with record := j₂ }`. The parser returns the value `Lean.Json.parse` does, so no verdict should move; the replay shows it.
+
+**What changes for readers at the next head** (not compiled yet):
+- `inputAt_ok`'s last conjunct becomes `∃ vs received₂ j₁ j₂, stamped … = .ok vs ∧ i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs ∧ readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂`.
+- `accepted_secondLaw` reads the population from `j₁`, with `readBack c.record = .ok j₁` in its conclusion.
+- `accepts_of_steps` and `accepts_iff_steps` gain `readBack c.record = .ok j₁`, `readBack e.record = .ok j₂` and `firstTreeless p e = .ok ()`.
+- New: `readBack_ok` (`Flock.canon r = .ok s ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s`), `accepted_treeless`, and `firstTreeless_lines` in SESSIONCOINS's shape: `firstTreeless p e = .ok ()`, the two window roots `some w₁`, `some w₂` with `w₁ ≠ w₂`, `firstLines e = .ok ls` give `∀ l ∈ ls, Spot.Challenger.treeLine l = false`. `firstLines` is the form's own definition, the same text as CUT's at `3b2eaa5371` over `e.coins`.
+- `accepted_steps`, `accepted_ordered`, `accepted_fits` keep their statements.
+
+### Runs
+- `r20261113-061923-885a`, `r20261113-061101-5806`, `r20261113-055249-141d`, `r20261113-055128-5143`, `r20261113-052901-254b`, `r20261113-052211-9393`, `r20261113-044424-14a0` on vy-nebius-2: the tries above.
+- `r20261113-053625-2556` on vy-nebius-cpu-14 at `b53983fdab`: the accepted play, an interior of one member.
+- `r20261113-062449-8db6` on vy-nebius-cpu-1 at `870cc9da1b`: the records run of `security/Proofs`, running since 06:26Z, not read.
+
+### Not established
+- That all fifteen compile in one run at one head: the final head gets one.
+- A records run's PASS at any head with `SampledTwo/` files.
+- That the spec's `repStreams` for that statement is `[circuit/rep0, circuit/rep1]`: I read the log and the tree's line, not the spec.
+- The negative case and the play at the next head: not written, not run.
