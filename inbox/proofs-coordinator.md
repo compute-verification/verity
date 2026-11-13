@@ -113746,3 +113746,174 @@ With TWOLEG's newer head merged, all three of my files still compile, and the tw
 **To post.** Nothing.
 
 **Not established.** The records run itself. The siblings check against the 1,497 modules that had no build. The two premises left for soundness (`ReadsBind` and `hX`). The earlier period's challenger signature hole, still open. Pushed head: `65810fa781`; nothing is left unpushed.
+
+## RELAX, Fri 13 Nov 02:09Z: design, the certified rows: the Program format gains one key of a port row (a label, never the value's name); a reader in Spot's Lean gives each sampled unit its value, root and row; the record's check `certified` asks exactly those of the units proved and nothing of a member with no unit sampled; two changes to what an accept means are in it, for Daniel through you
+
+In plain words. Today the verifier's `--registered` file says which row of a certified table each unit reads, and nothing compares that with the registered Program, so a file that reverses the rows passes. The design puts into the registered Program which ports are rows of a certified table, and derives each unit's row from the unit's place in the Program. The session's verdict reports the row it held each unit to, and the record's one check `certified` refuses any unit whose report is not the value, root and row derived for it. It asks this of the units that were proved, so a member with no unit sampled owes nothing. Nothing here is built; every line below is a reading of `cursor/proofs-r7-certified-b6a0` at `3c020f77568d` or a proposal.
+
+### 1. The plain answer on the Program format
+
+- **The value's name needs no new field of the Program format, and must not get one.** [read] The scan's certified values are per link-window (`<link>/<direction>/<w>`, `benchmarks/network_traces/scan_zk.py` `warden_roots`, `member`), and the Program is registered per class, once. A name in the Program would make its digest move every window.
+- **The format does gain one key: `certified`, a key of a port row, whose value is a label.** [read] `verity/circuits/PROTOCOL.md` §12 and `verity/circuits/ports.py` (`_KEYS`, `In`, `Out`) hold a port row's keys: `bound`, `kind`, `receipt`, `word` in, `interval`, `sink`, `word` out. `word` is a word type with its own flow rule (`E_PORT_WORD`), so it cannot carry the label. A Program that declares no such key keeps its digest (§12: "Undeclared is the default").
+- **The Lean decoder does not change.** [read] `verity/circuits/lean/Circuits/Program.lean` reads no `ports` key at all; `Spot.Program.parse` (`Spot/Program.lean`) has the descriptor's bytes and can read the marks from them beside `Program.decode`. So no base Lean package is rebuilt. If circuits prefers `Program.decode` to keep each entry's port rows, that is a change under `verity/circuits/lean` and every Lean package rebuilds; I do not propose it.
+- [read] There is a precedent for "the Program gives the structure, the verifier holds the names": a descriptor names no root parameter, and the verifier holds its program function's parameters (`params`) beside it, held to lower to exactly the descriptor's input nodes (`Spot/Registered.lean`, module docstring and `params`).
+
+### 2. The mark
+
+One new key of a §12 port row, on a template's entry:
+
+~~~text
+"ports": {"params": [[i, lo, hi, {"certified": <label>}], ...], "ret": [[lo, hi, {"certified": <label>}], ...]}
+<label> matches [a-z][a-z0-9_]*   (as a word type's name does)
+~~~
+
+- On a `params` row: leaves `[lo, hi)` of parameter `i` are one row of the certified table labelled so, which the unit reads.
+- On a `ret` row: leaves `[lo, hi)` of the return are one row of that table, which the unit writes (its output is opened against the row).
+- In Python: `ports.Ports(params={"row": In(certified="in")}, ret=(..., Out(certified="out"), ...))`.
+- It is declared only on a Definition the root calls or batches (a template). It does not flow: the root's `inputs` and `ret` rows never carry it, and it types no leaf fact.
+- This is the integration's "public layout of external I/O, registered by digest" (AGENTS.md, Integrations are frontends) [read]: which ports are the network certifier's rows is part of the circuit the developer registers, and stops being something the verifier's file says.
+
+### 3. Which row, and which value
+
+- **The row.** [derived] A label's rows are numbered from 0 in root order: going through the root's nodes in order, each node that calls or batches a template marking the label takes as many rows as it has units (1 for a call, `n` for a batch), and its unit `m` is row (rows taken by earlier nodes) + `m`. Nothing else decides a row. For the scan (`scan_root`; `TEMPLATES = ("first", "ingress", "egress")`) [read]: `first` and `ingress` mark their parameter `row` with one label, giving bucket 0 row 0 and the ingress node's unit `m` row `1 + m`, which is its bucket; `egress` marks its return's field `o1` with another, unit `m` row `m`. That is `rows = [b - w*T for b in bs]` of `member` once the label's rows are cut into the windows' tables (next bullet).
+- **The value.** The verifier's side binds each label to certified values, in order: one more input beside R7's `certified`, `labels={label: [value, ...]}`. Row `g` of a label is row `g - (leaves of the values before it)` of the value its running sum of `leaves` reaches. For a group of G link-windows of T buckets [read: `leaves` is the registration's row count, `verity/protocols/certifier/verifier/warden_rows.py` `_port`]: label `in` is `[<link>/ingress/0, ..., <link>/ingress/G-1]`, each T leaves.
+- **Refused before the record is read** (as a certified name the verifier expects registered is today): a label of the Program with no entry in `labels` or the reverse; a value under two labels or twice; a value in `labels` that is no key of `certified`; a certified entry under no label; a label whose values' `leaves` do not sum to its row count in the Program.
+- **What I deliberately leave out.** No shape is asked of the root's argument for a marked parameter. [derived] A unit is proved alone against its own committed ports, and the session opens the marked port's rows at the certified root at the row its file gives, which the record's check then holds to the derived row; where the root takes the argument from decides nothing about that. A Program whose units are not in row order cannot use the mark: it is refused by sum or it fails every honest unit. I would rather refuse than add a stride or an offset to the format now.
+
+### 4. The reader: Lean signatures
+
+A new file `verity/protocols/spot/verifier/lean/Spot/CertifiedRows.lean`, with a Python twin `one_stage/certified_rows.py` held by difftest:
+
+~~~lean
+namespace Spot.CertifiedRows
+
+/-- A template's port that is one row of a certified table: `port` is the parameter's name, or `o<j>` for field `j` of
+the return; `output` says the unit writes the row rather than reads it. -/
+structure Mark where
+  template : String   -- the Definition's descriptor id (`Flock.Program.Defn.key`)
+  port : String
+  label : String
+  output : Bool
+
+/-- The marks of the verifier's Program: each `certified` key of a `params` or `ret` port row of an entry of the
+descriptor `bytes` (PROTOCOL.md §12). Refuses a row that is not one whole parameter or one whole top-level field of
+the return, a label on two ports of one template, and a mark on the root, on a primitive or on a Definition no root
+node calls. -/
+def marks (bytes : ByteArray) (P : Flock.Program.Prog) : V (Array Mark)
+
+/-- A label's rows in root order: each root node that calls or batches a template marking it, with the label's first
+row there and the mark, and the label's row count. One pass over the root's nodes. -/
+structure Layout where
+  label : String
+  at : Array (Nat × Nat × Mark)   -- (root node, first row, the template's mark)
+  rows : Nat
+
+def layout (P : Flock.Program.Prog) (ms : Array Mark) : Array Layout
+
+/-- What unit `u` reads or writes of certified tables: `(port, label, row)` for each mark of its template, `row` the
+label's first row at `u`'s root node plus `u`'s place among the node's units (`rs`, the template query's ranges:
+`u` is member `u - r.first` of root node `r.node`). -/
+def rowsAt (ls : Array Layout) (rs : Array Flock.TemplateQuery.TRange) (u : Nat) : Array (String × String × Nat)
+
+/-- Row `g` of `label` as a certified value's: the value, the root the verifier holds for it and the row within it, by
+the verifier's order of the label's values and each entry's `leaves`. -/
+def valueAt (certified : Array (Registered.Entry × String)) (labels : Array (String × Array String))
+    (label : String) (g : Nat) : Option (String × String × Nat)
+
+/-- The registration's refusal (section 3's list). -/
+def labelsHeld (ls : Array Layout) (certified : Array (Registered.Entry × String))
+    (labels : Array (String × Array String)) : Bool
+~~~
+
+- [read] Everything it reads exists: `Flock.Program.Defn` has `key`, `params : Array (String × Ty)` and `ret : Ty` (a template's parameter names are in the descriptor; only the root's are not), `Node` has `form`, `fn`, `n`, and `Flock.TemplateQuery.TRange` has `node`, `template`, `first`, `count`.
+- [derived] Cost: the entries once, the root's nodes once, then O(marks) a unit. It never walks a gate, a batch member or the leaves (AGENTS.md, Verifier cost).
+- `Registration.Verifier` gains `labels` beside `certified`, read by `OneStage.paramsParsed`; Python's keyword `labels=` goes where `certified=` goes (`registration.check`, `verifier.check`, `run`, `Stream.register`, the kept entry).
+
+### 5. What a verdict reports
+
+- [read] Today a verdict reports, for each port of the verifier's file, the value and the root (`Flock.Registered.finding`, written at three sites: `FlockVerify.lean` twice, `Spot/OneStageZk.lean` `verdictJson`), and its `units`. It reports no row.
+- **It gains `rows`: `{port: [row or null, ...]}`, one entry for each unit of its `units`, in their order**: `Port.readAt u` of the verifier's port [read: `Flock/Registered.lean`: `readAt` is O(1), and `checkPort` refuses a session unless each instance reads the position `readAt` gives its unit (`badInstance`)]. A sibling of `finding` (`rowsFinding own units`), written at the same three sites. `finding`, `checkPort` and `Registered.check` are untouched.
+- A marked parameter is read by the port of its own name, and a marked return field `j` by the port `o<j>`; a file that renames a marked port (`param`) reports nothing under the name and is refused by the record's check. [guess] That every circuit names its output ports `o<j>` by top-level return field holds for the scan's stager and for NCI's records; I check it for the general circuit in the build.
+
+### 6. The record's check, and the clause as Lean
+
+**The check.** `certified` keeps its name and stays the one refusal. For every accepting verdict of record, every unit `u` of its `units` and every `(port, label, g)` of `rowsAt ls rs u`: the verdict's `registered[port]` is the value and root of `valueAt … label g`, and its `rows[port]` at `u`'s place is that row. Its detail names the first failing `[unit, port]` pairs. `Record.certifiedCheck` and Python's `audit.audit_record` take the derived rows from the caller, which holds the Program (`OneStage.check`, `Run.run`, `Stream.outcome`).
+
+**What it stops asking.** A reported read of each certified value (`CertifiedRead`) goes. A certified value that no proved unit reads owes nothing, which is soundness's rule (the read of drawn members only) on network's answer (no session for a member with no unit sampled; `scan_zk.py`: "no unit drawn, no session") [relayed, both on PRF-548; the log line read].
+
+**The clause.**
+
+~~~lean
+/-- Verdict `v` reports unit `u` at `port`: its `registered` names `value` at `root` for the port, and its `rows` gives
+`row` for the port at `u`'s place among its `units`. -/
+def Reports (v : Json) (u : Nat) (port value root : String) (row : Nat) : Prop :=
+  ∃ i, (unitsOf v)[i]? = some u ∧
+    jeq (getD (getD (getD v "registered") port) "value") (.str value) = true ∧
+    jeq (getD (getD (getD v "registered") port) "root") (.str root) = true ∧
+    (rowsOf v port)[i]? = some (some row)
+
+/-- **The certified rows.** Every unit that an accepting verdict of record proved, at each port its template marks in
+the verifier's Program, was opened at the certified value, root and row that the Program and the verifier's entries
+give that unit. It asks nothing of a certified value no proved unit reads. -/
+def CertifiedRows (ls : Array CertifiedRows.Layout) (rs : Array TRange)
+    (certified : Array (Registered.Entry × String)) (labels : Array (String × Array String))
+    (verdicts : Array (String × Json)) : Prop :=
+  ∀ x ∈ verdicts, truthy (getD x.2 "of_record") = true → jeq (getD x.2 "accepted") (.bool true) = true →
+    ∀ u ∈ unitsOf x.2, ∀ m ∈ CertifiedRows.rowsAt ls rs u,
+      ∃ value root row, CertifiedRows.valueAt certified labels m.2.1 m.2.2 = some (value, root, row) ∧
+        Reports x.2 u m.1 value root row
+~~~
+
+- With `UnitsProved` (the proved units are the sample's) it reads: each sampled unit read or wrote each certified table at the derived row.
+- **Where it sits.** In the proofs tree it replaces `CertifiedRead` inside `UnitsRead`, so `acceptMeans_iff` states it the day it is built, with no question open. To be in the listed statement, `AcceptMeans` must name it, which changes `AcceptMeans`' own text; see the stop rule.
+- [derived] `Registered` gains one conjunct beside `CertifiedHeld`: `labelsHeld` holds (under `ExpectsV2`).
+
+### 7. A read named by one of the record's own ports, under the one-stage rule
+
+- [read] Today's one-stage check keeps every reported read whose value is one of the record's `roots` ports or registered values (`Record.ownRegistered`) and holds all of them to the `registered` entries, so a read named by an own port fails `registered` at any root. Under a two-stage rule the check first drops each read of an own port at that port's own root (`Record.lessOwnReads`, `own_reads`; `Spot/Run.lean` sets it only for `.twoStage`). Network's names branch (`cursor/na-scratch-net335-names-7c2e` at `debc13167461`) names the scan's tree reads by the record's ports (`scan/state`, `scan/view`, `scan/prog<j>`), so every honest scan audit fails there [relayed: network, PRF-548; the two code facts read].
+- **How I would hold it: the one-stage check drops such a read exactly as the two-stage check does.** A read named by one of the record's own ports passes when its root is that port's root in the record, and stays, and fails `registered` as today, at any other root. `lessOwnReads` runs under both rules; the flag `own_reads`, `Record.Input.ownReads` and the keyword go.
+- [derived] It holds more than `main` does for the scan: there the tree reads are named `verity/certifier/scan-<kind>/v1` (`scan_zk.value`), which the scan's record does not hold [relayed: it lists no registered value today], so `ownRegistered` drops them unseen and their roots are held by the session's file alone. Under the names branch and this rule each is held to the record's root for the port.
+- **What it does not hold: the row.** Under a two-stage rule stage 2 holds an own read's rows; under the one-stage rule nothing in the SPOT check does, exactly as for a registered value's rows today. The mark of section 2 covers certified tables only. An own table would need the label bound to a port of the record and, for the scan's state, an offset (`sin` reads row t, `o1` writes row t + 1) [read: `NetworkCheck.Period` `stateTied`'s docstring], which I do not design here. [read] The period check ties the scan's own names by port, leaf count, root and domain (`holds`, `wired`, `stateTied` in `NetworkCheck/Period.lean`), not by row.
+- It is a small change of its own and does not wait for the mark: one line of `OneStage.recordChecks`, `Properties.Spot.openedRoots` and the lemma under `recordChecks_nil`, Python's default, and the cases that say "a root port's value as a registered value is refused", which split into "at the port's own root: accepted" and "at another root: refused". It moves what an accept means (stop rule, b).
+
+### 8. The Programs the difftest uses
+
+In the SPOT verifier's suite (no import of `benchmarks/`), built in the test from the circuit language:
+
+1. **Two tables.** Templates `A` (parameters `row`, `x`; `row` marked `in`) and `B` (return `(o0, o1)`; `o1` marked `out`); the root is a call of `A`, a batch of five `A` and a batch of six `B`. Labels: `in` is two values of three leaves each, `out` one of six. It covers a call beside a batch under one label, the cut across two values, and an output.
+2. **Refused shapes**, each a one-line change of 1: a mark over half a parameter; one label on two ports of a template; a mark on a Definition called only from inside a template; labels whose leaves do not sum; a label with no value; a certified entry under no label.
+3. **The reader**, Lean against Python on 1 and 2: `marks`, `layout`, `rowsAt` at every unit, `valueAt` at every row and one past the end.
+4. **The record's check**, Lean against Python on 1: honest; a port's rows reversed; an output one row on; the right row of the label's other value; the right value at another root; a verdict with no `rows`; a renamed marked port; a unit of an unmarked template (owes nothing); a certified value no proved unit reads (accepted); a verdict that is not of record, or does not accept (not read).
+
+In network's suite: the scan's root at small G and T with the marks, and its four cases, which flip from accepted to refused (`test_scan_zk.py` at their scratch `6e4fd315970b`: the reversed file, the output one row on) [read: the test names].
+
+### 9. Files, and the hour
+
+- [derived] The mark: `verity/circuits/ports.py`, `PROTOCOL.md` §12 and their tests; `Spot/CertifiedRows.lean` and `one_stage/certified_rows.py`; `Flock/Registered.lean` (`rowsFinding`) and the three verdict sites; `Spot/Registration.lean`, `Spot/OneStage.lean`, `Spot/Record.lean`, `Spot/Run.lean`, `Spot/Pieces.lean`; `registration.py`, `audit.py`, `verifier.py`, `service.py`; `security/Properties/Spot.lean` and its proofs; the difftests; both locks. Changing Flock's verifier brings Flock's build and `lean-agreement` into its check.
+- [read] By the registry `verity/circuits/` has no owner of its own and falls under proofs' `verity/`; circuits owns `verity/definitions/ops/`. [guess] circuits should still read the §12 change before it is built.
+- **The hour** [guess]: your order stands (LEAN-238's step 1 by Mon 16 Nov 5 PM PST, the mark after it). The mark's pull request, unmarked, with its records and quick tier: **Thu 19 Nov 5 PM PST**, which moves LEAN-238's step 2 from that hour to **Mon 23 Nov 5 PM PST**; or step 2 keeps Thu 19 Nov and the mark is Mon 23 Nov. Your call which goes first. The own-port change of section 7, on R7's head: **Sat 14 Nov 5 PM PST**, unmarked, if you want it before network's Monday.
+- Network's side when this is agreed [relayed]: the scan's Program builder marks the two tables, its driver passes `labels`, and `scanOf` gives way to the reader.
+
+### STOP RULE: two changes to what an accept means
+
+a. **The certified rows.** `Properties.Spot.acceptMeans` would say one thing more. In plain words for Daniel: "An accepted audit also means that every sampled unit read or wrote each certified table at the row, of the value and at the root that the registered Program and the certifier's registrations give that unit." As Lean: `CertifiedRows` above, a conjunct of `AcceptMeans` beside `UnitsProved c e`. No named assumption and no premise is added. **One thing to rule with it:** naming it changes `AcceptMeans`' own text, and the witnesses rule then asks two lemmas of the guarantee. The one that its conclusion can fail is short. The one that the compiled check accepts a built instance is not written for the one-stage check today (the guarantee is exempt at its present text), and I have not sized it. Until it is ruled, the clause can stand where `CertifiedRead` stands tonight: proved about the check in `acceptMeans_iff`, not in the listed statement.
+b. **Own-port reads under the one-stage rule.** `Properties.Spot.openedRoots`, which `UnitsProved` reads, would drop the reads of the record's own ports at their own roots. Today no accepted one-stage audit holds a reported read named by an own port; after it, one may, at that port's root in the record. `AcceptMeans`' own text does not change, so no witness is owed; the record of `acceptMeans` moves because a definition it reads does.
+
+I build neither before your word.
+
+### To post
+
+For network, on PRF-548, as it stands:
+
+> proofs' design for the certified rows, not built. (1) The Program format gains one key of a port row, `certified`, whose value is a label; the value's name stays out of the Program. Your builder marks `row` of `first` and `ingress` with one label and `o1` of `egress` with another, on the templates' entries. (2) A label's rows are the marked templates' units in root order, so bucket b is row b of its label; your driver passes `labels={label: [<link>/<direction>/0, ...]}` beside `certified`, and the verifier cuts the label's rows by each entry's `leaves`. (3) The verdict reports the row each unit was held to; the record's check `certified` refuses a unit whose value, root or row is not the derived one, and asks nothing of a member with no unit sampled. Your four cases flip to refused. (4) Your names: under the one-stage rule a read named by one of the record's own ports passes at that port's root and is refused at any other, as under the two-stage rule; its row is not held by this. Both change what an accept means and wait on that word. Does your scan ever put a marked template's units out of bucket order, or read a certified row from a template the root does not call directly? Either would be refused.
+
+### Not established
+
+- Nothing is compiled or run: every signature above is a proposal.
+- That the session's verifier held each proved unit at `readAt u` is read off `checkPort`'s code. Its docstring names a proof (`FlockProofs.Registered`, `check_ok`), which I have not read; the lemma from it to the reported `rows` is not written.
+- That output ports are named `o<j>` in every circuit [guess].
+- The size of the lemma that the compiled check accepts a built instance.
+- Whether circuits agrees to the §12 key.
+- Rows of the record's own tables (the scan's state, view and slot entries) under the one-stage rule: not held by this design.
+
+For the table: RELAX | certified rows, design | no branch | format: one key of a port row, a label; no Lean decoder change | clause `CertifiedRows` written, two statement changes at your stop rule | build: Thu 19 Nov 5 PM PST or Mon 23 Nov, by your order of it and LEAN-238's step 2
