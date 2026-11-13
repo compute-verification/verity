@@ -1,8 +1,9 @@
 """The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal (a certifier's or a warden's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, registrations and
-certificates, and writes its end; `fetch` gives `witness/` to the run's own lane and vy-admin alone."""
+warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment and its certificates, a
+row registration's without the registration, and writes its end; `fetch` gives `witness/` to the run's own lane and
+vy-admin alone."""
 
 from __future__ import annotations
 
@@ -181,18 +182,37 @@ def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_an
 
 SALT_C = "5a" * 64
 CELL_SALTS = bytes(range(192))
-REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": "warden/egress/0", "root": "ab" * 64}
+#: a link-window's cells' registration, with `warden_rows.registration`'s keys
+REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": "warden/egress/0", "link": "warden",
+                "direction": "egress", "window": 0, "parameters": "31" * 64, "cell_bytes": 512, "rows": 600,
+                "words": 1024, "word_bits": 16, "row_schema": "cells/v1", "domain": "d0" * 64, "wiring": "17" * 64,
+                "root": "ab" * 64, "layout": {"buckets": 600, "slots": 4, "connection_slots": 4, "first_bucket": 0},
+                "certificate": {"key": "0c" * 16, "digest": "9d" * 64, "signature": "e5" * 40}}
+#: an execution phase's connection rows' registration, with `connection_rows.registration`'s keys: it names no
+#: direction
+ROWS_REGISTRATION = {"format": "verity-network-certifier/connection-rows-registration/v1", "link": "warden",
+                     "window": 0,
+                     "parameters": "31" * 64, "word_bits": 16, "row_schema": "rows/v1",
+                     "tables": [{"name": "lengths", "value": "warden/lengths/0", "rows": 48, "words": 4,
+                                 "domain": "d1" * 64, "root": "ac" * 64, "layout": {"first_bucket": 0}}],
+                     "certificate": {"key": "0c" * 16, "digest": "9e" * 64, "signature": "e6" * 40}}
+#: a line's cost: a registration's rows and their bytes, and two measured times
+COST = {"rows": 600, "row_bytes": 2048, "commit_ms": 41.375, "sign_ms": 7.125}
 CHECK = {"accepted": True, "problems": [], "summary": {
     "requests": 4, "ended": 4, "refused": 0, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
-    "signer_refused": [], "cell_rows": {"registered": 4, "of": 4}, "cells": {"ingress": 9, "egress": 31},
+    "signer_refused": [], "cell_rows": {"registered": 4, "of": 4, "rows": [600], "row_bytes": [2048],
+                                        "commit_ms": {"n": 4, "max": 41.375}, "sign_ms": {"n": 4, "max": 7.125}},
+    "cells": {"ingress": 9, "egress": 31},
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
 #: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
-    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
-    f' + json.dumps({{"refused": ["warden", "ingress", 1], "cost": {{"rows": 600}}}}) + "\\n")\n'
+    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
+    f' + json.dumps({{"refused": ["warden", "ingress", 1], "withheld": True, "cost": {COST!r}}}) + "\\n")\n'
+    f'(out / "rows.jsonl").write_text(json.dumps({{"registration": {ROWS_REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
+    f' + json.dumps({{"refused": ["warden", "egress", 1], "cost": {COST!r}}}) + "\\n")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT_C!r}, "head": {{"root": "77" * 64}}, '
     f'"certificate": {{"digest": "cd" * 64, "signature": "ef"}}}}) + "\\n" + json.dumps({{"refused": ["warden-fails", '
     f'"egress", 1]}}) + "\\n")\n'
@@ -225,7 +245,7 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
-def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_registrations_and_certificates(host):
+def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
     d = host.certifier / run
@@ -235,12 +255,14 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
     assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
-                                                                   if k != "load"}} and "load" not in end
-    assert end["registrations"] == {"warden/egress/0": "ab" * 64}
+                                                                   if k != "load"},
+                              "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
+    assert "registrations" not in end
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
-        "deployment.json", "cells.jsonl", "certified.jsonl", "cells.salts", "requests.records", "client.json",
-        "check.json")}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "tunnel.log", "rehearse.log"}
+        "deployment.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts", "requests.records",
+        "client.json", "check.json")}
+    assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
+                                 "rows-certificates.jsonl", "tunnel.log", "rehearse.log"}
     out = d / "out"
     assert json.loads((out / "deployment.json").read_text())["upstream"] == url
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
@@ -249,6 +271,34 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
     for secret in (SALT_C.encode(), b"77" * 64, CELL_SALTS[:16], CELL_SALTS[:16].hex().encode(), b"prompt",
                    b"completion_tokens", b"data_bytes", b"text_bytes"):
         assert secret not in public
+
+
+def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothing_else(host):
+    """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. `out/` holds, line for line, its
+    certificate under the link, direction and window its registration names (a connection rows' the link's egress),
+    or the execution phase it was refused for: no root, wiring, domain, layout or value of a registration is in
+    `out/` or the end, nor a line's cost, nor the check's summary of the costs."""
+    run, end = run_warden(host)
+    d = host.certifier / run
+    out = d / "out"
+    whole = [{"registration": REGISTRATION, "cost": COST}, {"refused": ["warden", "ingress", 1], "withheld": True,
+                                                            "cost": COST}]
+    assert [json.loads(x) for x in (d / A.WITNESS / "cells.jsonl").read_text().splitlines()] == whole
+    assert not (out / "cells.jsonl").exists() and not (out / "rows.jsonl").exists()
+    assert [json.loads(x) for x in (out / "cells-certificates.jsonl").read_text().splitlines()] == [
+        {"certificate": {"key_id": "0c" * 16, "link": "warden", "direction": "egress", "window": 0,
+                         "digest": "9d" * 64, "signature": "e5" * 40}},
+        {"refused": ["warden", "ingress", 1]}]
+    assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()] == [
+        {"certificate": {"key_id": "0c" * 16, "link": "warden", "direction": "egress", "window": 0,
+                         "digest": "9e" * 64, "signature": "e6" * 40}},
+        {"refused": ["warden", "egress", 1]}]
+    public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    body = [REGISTRATION[k] for k in ("value", "parameters", "domain", "wiring", "root", "row_schema")]
+    body += [t[k] for t in ROWS_REGISTRATION["tables"] for k in ("value", "domain", "root")]
+    for held in (*body, "layout", "first_bucket", "tables", "cost", "row_bytes", "commit_ms", "sign_ms", "withheld",
+                 "41.375", "7.125"):
+        assert held.encode() not in public, held
 
     rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: False)
     assert rc == 0 and json.loads(st)["end"] == end
@@ -265,12 +315,15 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
     run, _ = run_warden(host)
     rc, blob = A.gate([w.format(run=run) for w in argv], host, by="vy-admin")
     names = tar_names(blob)
-    assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells.jsonl",
-                        f"{run}/out/certificates.jsonl", f"{run}/out/deployment.json"} <= names
+    assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells-certificates.jsonl",
+                        f"{run}/out/rows-certificates.jsonl", f"{run}/out/certificates.jsonl",
+                        f"{run}/out/deployment.json"} <= names
+    assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl"} & names
     hidden = {n for n in names if n == f"{run}/witness" or n.startswith(f"{run}/witness/")}
     assert bool(hidden) == witness
     if witness:
-        assert {f"{run}/witness/cells.salts", f"{run}/witness/certified.jsonl", f"{run}/witness/check.json"} <= hidden
+        assert {f"{run}/witness/cells.jsonl", f"{run}/witness/rows.jsonl", f"{run}/witness/cells.salts",
+                f"{run}/witness/certified.jsonl", f"{run}/witness/check.json"} <= hidden
 
 
 def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
@@ -279,7 +332,7 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
                           up=lambda t, p: False, command=lambda *a: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in end["ended"]
-    assert end["verdict"] is None and end["registrations"] == {} and end["witness"] == {}
+    assert end["verdict"] is None and "registrations" not in end and end["witness"] == {}
     assert set(end["files"]) == {"tunnel.log"}
 
     run, end = run_warden(host, "raise SystemExit(1)", token="cd34")

@@ -226,7 +226,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json",
+    assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "certificates.jsonl", "load.json",
                                  "load-relay.json", "tunnel.log", "rehearse.log"}
     assert json.loads((d / "out" / "load.json").read_text())["registrations"] == [{"root": "ab" * 64}]
     assert "load-heads.json" in end["witness"]

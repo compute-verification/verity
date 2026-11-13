@@ -238,12 +238,15 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
-  the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
-  `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
+  with its certificate), each row registration whole with its cost (`cells.jsonl`, `warden_rows`, a line a
+  link-window; `rows.jsonl`, `connection_rows`, a line an execution phase), the cells' salts (each link-window's
+  rows' and wiring's), the traffic, the client's log and the check, all the prover's. Its unit publishes to `out/`
+  only what isn't: `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records'
+  certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate
+  alone, `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or
+  layout, and no cost) and a `--window-per-group` run's `groups.json`.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
-  `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
+  `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
   rehearsals): the demo's weights, plain INT8 as interface 1 generates them from its public seed, sit on this
@@ -437,11 +440,22 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
-#: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
-#: public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json", "load-relay.json")
+#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`);
+#: everything else `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's
+#: own lane alone. `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the
+#: request's public counts and the scan's schedule alone
+WARDEN_PUBLIC = ("deployment.json", "groups.json", "load.json", "load-relay.json")
+#: the row registrations' files of `witness/`, the cells' (`warden_rows`) and the connection rows'
+#: (`connection_rows`), each with the file of `out/` that holds its lines' certificates, line for line
+#: (`row_certificate`). A line is a registration, or the execution phase it was refused for, and its cost; of a
+#: registration `out/` holds the certificate and nothing else
+ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
+#: the direction a connection rows' certificate signs, which its registration doesn't name
+#: (`connection_rows.check_registration`)
+ROWS_DIRECTION = "egress"
+#: of the check's `cell_rows`, what an end carries: how many link-windows' cells registered, and of how many. Its
+#: other keys are the registrations' cost
+CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
@@ -2472,18 +2486,31 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
-#: connection's own (a load's are its values and how many registered)
+#: connection's own (a load's are its values and how many registered), and `cell_rows` is cut to `CELL_ROWS`
 WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
                  "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
                  "load")
 
 
+def row_certificate(line: dict) -> dict:
+    """A row registration's line (`ROW_CERTIFICATES`) as `out/` holds it: its certificate, the key, digest and
+    signature under the link, direction and window its registration names (`certificate.Certificate`'s fields), or
+    the execution phase it was refused for. Nothing else of the registration, and not the line's cost."""
+    r = line.get("registration")
+    if r is None:
+        return {k: line[k] for k in ("refused",) if k in line}
+    c = r["certificate"]
+    return {"certificate": {"key_id": c["key"], "link": r["link"], "direction": r.get("direction", ROWS_DIRECTION),
+                            "window": r["window"], "digest": c["digest"], "signature": c["signature"]}}
+
+
 def warden_outcome(out: Path, witness: Path) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
-    (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
-    `WARDEN_COUNTS`), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and
-    the sink's acknowledgements, or why it was refused)."""
+    (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
+    the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
+    cost), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and the sink's
+    acknowledgements, or why it was refused)."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2492,8 +2519,11 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         (out / "certificates.jsonl").write_text("".join(
             json.dumps({k: doc[k] for k in ("certificate", "refused") if k in doc}, sort_keys=True) + "\n"
             for doc in docs))
-    cells = (out / "cells.jsonl").read_text().splitlines() if (out / "cells.jsonl").is_file() else []
-    registrations = {r["value"]: r["root"] for r in (json.loads(x).get("registration") for x in cells) if r}
+    for name, public in ROW_CERTIFICATES.items():
+        if (witness / name).is_file():
+            (out / public).write_text("".join(
+                json.dumps(row_certificate(json.loads(x)), sort_keys=True) + "\n"
+                for x in (witness / name).read_text().splitlines()))
     try:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
@@ -2503,13 +2533,14 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         summary = check.get("summary") or {}
         verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
                    **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
+        if isinstance(verdict.get("cell_rows"), dict):
+            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
     sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
     try:
         load = json.loads((out / "load-relay.json").read_text())
     except (OSError, ValueError):
         load = None
-    return {"verdict": verdict, "registrations": registrations, "witness": sizes,
-            **({} if load is None else {"load": load})}
+    return {"verdict": verdict, "witness": sizes, **({} if load is None else {"load": load})}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int) -> list[str]:
