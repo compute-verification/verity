@@ -9,7 +9,7 @@
 * every coordinate of each route's call is `coordinate_binding`'s unit on the ranks' words there, and every row of an n-row call
   `row_binding`'s unit on the ranks' rows, at small sizes and at GLM-5.3's width, on words whose sum the multimem tree and the
   custom kernel's owner decide (`WITNESS`), so a unit bound at another position's statics would differ;
-* the units of a GLM-5.3 call at chunks of 96 fit a C-Flock block with at least a tenth of it to spare, their rows' slots
+* the units of a GLM-5.3 call at chunks of 96 fit a Flock block with at least a tenth of it to spare, their rows' slots
   (`windows.interface.check_proof_block`) beside the slot of their ANDs and port bits (`verity_flock.circuit.unit_witness`), and
   neither its coordinate units nor a unit of a whole row of 6,144 (the MoE's fused call at any served launch) fit one;
 * the σ versions (`registry.boolean_tp_combine`) compute their words on bits."""
@@ -277,7 +277,7 @@ def test_the_units_refuse_what_they_do_not_state() -> None:
 
 
 def _block(fn, cuts, on_bits: bool = True) -> float:
-    """The share of a 2^K_MAX-bit C-Flock block that ``fn`` under ``cuts`` takes as one unit, as `verity_flock.circuit.compose`
+    """The share of a 2^K_MAX-bit Flock block that ``fn`` under ``cuts`` takes as one unit, as `verity_flock.circuit.compose`
     places it at one unit a block: its rows' sha512x3 and hm96 slots (`check_proof_block`'s) and the mask beside the unit's own
     slot, the least power of two above the ANDs and port bits read off its Boolean version (``on_bits``), or off ``fn`` itself
     (`unit_witness`, never lowered). Past 1, compose refuses it."""
@@ -297,7 +297,7 @@ def test_glm53s_units_at_chunks_of_96_fit_a_flock_block_and_its_coordinates_and_
     (`AllGather_v1{WORLD=K, N=1}`), or its one-row partial (the MoE's) cut into chunk rows (`RowChunks_v1{N=6144, C=K}`), each
     chunk's combine reading the 8 ranks' chunk rows (`row_binding`'s), the chunks gathered into the call's row, and its readers
     (the fused call's norm at each served launch) reading that row whole; its logits (8 ranks of 19,360 one-word LM-head rows)
-    gathered 121 words a row, which `TokenSelectGroups_v1{C=1936, G=16}` reads 16 of. Each fits a C-Flock block, its rows (at
+    gathered 121 words a row, which `TokenSelectGroups_v1{C=1936, G=16}` reads 16 of. Each fits a Flock block, its rows (at
     most 256, one past 111 B) and its gates, with a tenth of it to spare. A unit of a whole row does not, though its rows alone
     would: the fused call's at any served launch, nor an all-reduce's or its residual add's. A coordinate
     unit, whose rows are a word each, does not, nor does a chunk combine reading words (8V rows: at V >= 56 one row would pass

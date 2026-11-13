@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.poub.verifier import audit, codec, memory_map
-from verity.protocols.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier import audit, codec, memory_map
+from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from tests import fake_vllm
 from verity_vllm.engine.hooks import Hooks, Patch
