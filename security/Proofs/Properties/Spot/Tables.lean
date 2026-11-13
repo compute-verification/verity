@@ -27,8 +27,11 @@ import all Std.Data.DTreeMap.Internal.Def
 /-! # Proofs of v2's holding the blobs' lookup tables to the registered circuit's (`Properties.Spot.Tables`)
 
 `tablesHeld` reads the circuit file, its lookups and the blobs' tables, and throws where the two lists of names differ,
-so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and `checkBlobsAt` accepts
-only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`).
+so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and on parameters that
+name no members `checkBlobsAt` accepts only where its chain of refusals ends in `run`'s acceptance
+(`checkBlobsAt_run`). On parameters that name members it accepts only where the per-member run returned, which holds
+every member's statement (`Spot.OneStageZk.membersRun_files`), and a member's statement binds `tablesHeld` first at
+the member's own files (`statement_tables`, `checkBlobsAt_members_tables`).
 
 `tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
 the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
@@ -72,10 +75,10 @@ theorem run_tables {p : OneStageZk.Own} {ss : Array OneStageZk.RunFiles} {pu : O
   exact tablesHeld_ok hu
 
 theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : OneStageZk.Evidence}
-    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity} (hm : p.members = none)
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r, OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r := by
-  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -90,8 +93,37 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h7⟩ := bind_ok h6
     exact ⟨r, h7⟩
 
-theorem tablesRegistered : TablesRegistered :=
-  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
+/-- A member's statement binds `tablesHeld` first, at the member's own files. -/
+theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs} {a : OneStageZk.StepAt}
+    (h : m.statement slice bs = .ok a) : HoldsRegisteredTables m.own bs := by
+  unfold OneStageZk.Member.statement at h
+  obtain ⟨a', hs, -⟩ := bind_ok h
+  unfold OneStageZk.statementOf at hs
+  obtain ⟨u, hu, -⟩ := bind_ok hs
+  exact tablesHeld_ok hu
+
+/-- **On parameters that name members, an accept holds every member's registered tables**, sampled or not: the
+per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so every member's statement was read
+(`Spot.OneStageZk.membersRun_files`). -/
+theorem checkBlobsAt_members_tables {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    {ms : Array OneStageZk.Member} (hm : p.members = some ms)
+    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) : ∀ m ∈ ms, HoldsRegisteredTables m.own bs := by
+  obtain ⟨sts, -, h⟩ := OneStageZk.checkBlobsAt_accept_members hm h
+  obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
+  obtain ⟨roots, -, hf⟩ := OneStageZk.membersRun_files hr
+  intro m hmem
+  obtain ⟨a, ha, -⟩ := hf m hmem
+  exact statement_tables ha
+
+theorem tablesRegistered : TablesRegistered := by
+  refine ⟨fun _ _ => tablesHeld_ok, fun p c ξ e bs pub prof h => ?_⟩
+  unfold AcceptHoldsTables
+  split
+  · rename_i hm
+    exact (checkBlobsAt_run hm h).elim fun _ hr => run_tables hr
+  · rename_i ms hm
+    exact checkBlobsAt_members_tables hm h
 
 private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x with

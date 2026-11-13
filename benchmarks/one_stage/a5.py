@@ -1363,9 +1363,12 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
-    ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
-    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
-    (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
+    ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up, each path
+    once: a template's members share one circuit file, and v2 finds a blob by its digest (`Core.Blobs.get`). The
+    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 checks a case of this form by
+    `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
+    case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
@@ -1376,7 +1379,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
         raise ValueError("the statements' sessions, in the members' order by first unit, are not the evidence's sessions "
                          "in order: the sampled members' sessions ran in another order")
     evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
-    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+    return {"blobs": list(dict.fromkeys(str(b) for b in (*blobs, *tables))), "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
 
 
@@ -1481,7 +1484,9 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
 def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
-    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
+    the sample, its circuit file its template's (the one its first member composed: a later member has no file of its
+    own unless it is sampled), its registered file, its units and its circuit's ``vus_per_block``, and a sampled
+    member's session and
     the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
     statement's (`v2_proof`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -1499,7 +1504,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> di
             return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
         sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
         reads = st.get("registered_file")
-        out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
+        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
         if sessions:
             tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)

@@ -94,6 +94,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
   (`sessions_tree_reason`), and the log's order, the sample, then the link, then the other rounds
   (`sample_link_first`).
+* `challenger_links_first`: several members' sessions' trees in one release log, each tree's link opened before its
+  other rounds (`links_first`, `Challenger.linksFirst`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
@@ -977,6 +979,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
+   ("challenger_members_order", Challenger.membersOrderPiece),
+   ("challenger_links_first", Challenger.linksFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),

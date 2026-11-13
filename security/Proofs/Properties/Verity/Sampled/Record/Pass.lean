@@ -84,10 +84,10 @@ theorem units_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
     (hshow : Shows A o ev bs v) :
     provedOf A (drawOf v) = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) := by
   obtain ⟨s, pubB, B, record, law, n, units, read, hs, hpB, hB, hr, hder, hn', hd, hc⟩ :=
-    _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hacc
+    _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hn.single hacc
   have hpb : pubB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
   subst hpb
-  have hpop := _root_.Properties.Spot.Credited.population_of_checkBlobsAt hacc hpB A.hpub
+  have hpop := _root_.Properties.Spot.Credited.population_of_checkBlobsAt hn.single hacc hpB A.hpub
   rw [hn', A.hn] at hpop
   obtain rfl := Option.some.inj hpop
   replace hd := drawnFrom_eq ξ hder hlaw hd
@@ -121,10 +121,10 @@ theorem drawUnits_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sp
     {cs : List Coin} (hξ : ∃ t, drawBytes cs = ξ ++ t) :
     ∃ u rd, _root_.Spot.Draw.drawUnits A.design A.n (drawBytes cs) = .ok (u, rd) := by
   obtain ⟨s, pubB, B, record, law, n, units, read, hs, hpB, hB, hr, hder, hn', hd, hc⟩ :=
-    _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hacc
+    _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hn.single hacc
   have hpb : pubB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
   subst hpb
-  have hpop := _root_.Properties.Spot.Credited.population_of_checkBlobsAt hacc hpB A.hpub
+  have hpop := _root_.Properties.Spot.Credited.population_of_checkBlobsAt hn.single hacc hpB A.hpub
   rw [hn', A.hn] at hpop
   obtain rfl := Option.some.inj hpop
   replace hd := drawnFrom_eq ξ hder hlaw hd
