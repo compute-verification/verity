@@ -126,17 +126,17 @@ theorem h1CheckedCreditPeriod_honest :
       tileLuck Honest.scheme circuit 144 t ≤ 7 / 8 ∧ tileLuck0 Honest.scheme circuit 144 t ≤ 1 / 2) ∧
     (checkedPlay 64).game =
       monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period 64) ∧
-    (period 64).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
+    (period 64).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer 64) (checkedPlay 64).game ∧
     (∀ w, prob (fun x => (layer 64).MovedIn x w) ≤ 0) ∧
     RegisteredBeforeDraw (windows 64) ∧ SampleIsCoin hK24 prm (windows 64) ∧
     ServiceSound prm (windows 64) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := 64)) enc ∧ StagedPins staged flat ∧
-    (period 64).EveryWindow
+    (period 64).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
-    (period 64).EveryWindow
+    (period 64).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
-    (period 64).EveryWindow
+    (period 64).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (checkedPlay 64) (layer 64) (monitoringPeriodMode circuit (period 64) (run 64))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
