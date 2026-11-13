@@ -11,7 +11,7 @@ without the card's integer tensor core and at prices per SM clock. These are the
 `devH100Tensor`, the H100 record with its SM pipes priced per second at the tensor clock (`Prices.h100Tensor`), so
 that they hold whichever clock each pipe holds under a mixed load. They rest on the two named assumptions of
 `Definitions.Assumptions.PearlC`, which together imply TT_OUT at `CM` on that record: the device model `W1CompleteH100`
-(`w1-complete-h100`, W1 on `W1Device.s8H100Best` dominates `CM` on rev1's audit tiles) and the conjecture
+(`w1-complete-h100`, W1 on `W1Device.s8H100Best` dominates `CM` within every bound on rev1's audit tiles) and the conjecture
 `TTOutTilePearlCH100Rev1S8` (`tt-out-tile-pearl-c-h100-rev1`, TT_OUT over W1 there).
 It is the one PoUW statement module that reads a named assumptions module (the `Definitions.Pouw` layer's exception in
 `lean-audit.json`).

@@ -172,7 +172,8 @@ reads. Proved:
   (`devH100Tensor`), so that it holds whichever clock each pipe holds under a mixed load:
   `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` at g = 5040227/775520000 (0.650%, ε = 0.654%; and `…S8_8192`
   at 8192³, 0.538%), under `w1-complete-h100` (W1 on the H100 with INT8 at those prices, at zero SHA-512 and fetch
-  prices, earns every adversary's good-tile credit at no more cost) and the conjecture `tt-out-tile-pearl-c-h100-rev1`
+  prices, matches every adversary within its cost and query bound with good-tile credit at least as likely to exceed
+  any threshold) and the conjecture `tt-out-tile-pearl-c-h100-rev1`
   (TT_OUT per audit tile over that W1 setting, whose falsification test is
   `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`).
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in

@@ -146,6 +146,7 @@ def test_tt_out_at_the_h100_splits_into_a_device_claim_and_a_conjecture() -> Non
     w1, tt = get("w1-complete-h100"), get("tt-out-tile-pearl-c-h100-rev1")
     assert (w1.kind, w1.standing) == ("assumption", "measured") and "H100 whitepaper Tables 1 and 3" in w1.name
     assert "1830 MHz tensor clock" in w1.name and "tensor clock" in tt.name
+    assert "within the same cost and count" in w1.name and "at least as often" in w1.name
     assert (tt.kind, tt.standing) == ("assumption", "conjectured") and "TT_OUT(1/400)" in tt.name and "rev1" in tt.name
 
 

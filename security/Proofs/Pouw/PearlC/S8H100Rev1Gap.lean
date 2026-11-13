@@ -10,8 +10,8 @@ public import Definitions.Pouw.Guarantees.PearlCS8
 
 `ttOutTilePearlCH100Rev1_of_s8` is TT_OUT per audit tile at the card's cost model `CM` on `devH100Tensor`, the H100
 record per second at the tensor clock, from its two named parts: W1's completeness for the card's credited work on the
-H100 with INT8 (`W1CompleteH100`, a domination of `CM` by W1 on `W1Device.s8H100Best` on rev1's audit tiles) and TT_OUT
-there (`TTOutTilePearlCH100Rev1S8`), by `Pouw.PearlC.ttOutTile_of_dominatedBy`.
+H100 with INT8 (`W1CompleteH100`, a domination of `CM` by W1 on `W1Device.s8H100Best` within every bound on rev1's
+audit tiles) and TT_OUT there (`TTOutTilePearlCH100Rev1S8`), by `Pouw.PearlC.ttOutTile_of_dominatedWithin`.
 
 The gaps at `devH100Tensor`, `g = 1 − (399/400)²·credit/W_ref` per unit as at `devH100` (`ServedH100Rev1Gap`), with the
 FP32 add at `976/33` and the forming `fs = 62`, `qa = 4`:
@@ -42,7 +42,7 @@ completeness for its credited work on the H100 with INT8 and TT_OUT there. -/
 theorem ttOutTilePearlCH100Rev1_of_s8 {CM : CostModel Q R S} {salt : S → List ℕ} {sem : PearlCSem Q R S} {ρ : ℚ}
     (hW1 : W1CompleteH100 salt sem ρ CM) (hTT : TTOutTilePearlCH100Rev1S8 salt sem ρ) :
     TTOutTilePearlCDevRev1 CM devH100Tensor sem ρ :=
-  ttOutTile_of_dominatedBy hW1.1 hW1.2 ((Pouw.PearlC.TTOutW1.ttOutTileW1_iff _ _ _ _ _ _ _).1 hTT)
+  ttOutTile_of_dominatedWithin hW1.1 hW1.2 ((Pouw.PearlC.TTOutW1.ttOutTileW1_iff _ _ _ _ _ _ _).1 hTT)
 
 /-! ## The gaps at `devH100Tensor` -/
 

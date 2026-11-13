@@ -329,13 +329,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `TTOutTilePearlCH100Rev1S8`; benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py is the conjecture's falsification
     # test
     Entry("w1-complete-h100", "assumption",
-          "W1 is complete for the H100's credited work: for every adversary of the cost model at an in-domain "
-          "workload, a W1 program on the H100 (or the H200) with INT8, run on the adversary's inputs, costs no more "
-          "and makes no more oracle calls, and its good tiles at the H100 record per second at the tensor clock (rev1) "
-          "earn at least the adversary's credit; W1's prices are the data sheets' per-MAC tensor-core ratios with the "
+          "W1 is complete for the H100's credited work: every adversary of the cost model at an in-domain workload "
+          "within a cost and a query count has a W1 adversary on the H100 (or the H200) with INT8 within the same cost "
+          "and count whose good tiles at the H100 record per second at the tensor clock (rev1) exceed every credit at "
+          "least as often over the oracle and the salt; W1's prices are the data sheets' per-MAC tensor-core ratios with the "
           "SM pipes priced per second at the 1830 MHz tensor clock beside the 1980 MHz SM clock (H100 whitepaper "
           "Tables 1 and 3, H200 data sheet), with SHA-512 compressions and first fetches free; refuted by a program on "
-          "the card that earns more good-tile credit for its cost than every W1 program at that cost", "W1 complete (H100)",
+          "the card, within a cost and a query count, that earns more good-tile credit with higher probability than "
+          "every W1 program within them", "W1 complete (H100)",
           "measured"),
     Entry("tt-out-tile-pearl-c-h100-rev1", "assumption",
           "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record per second at the tensor clock, rev1, over W1 on "

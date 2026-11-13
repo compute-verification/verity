@@ -5,19 +5,22 @@ public import Proofs.Pouw.PearlC.TTOutW1
 public import Definitions.Assumptions.PearlC
 
 /-!
-# TT_OUT along a domination, and W1's unpriced resources at the adversary's best case
+# TT_OUT along a domination within every bound, and W1's unpriced resources at the adversary's best case
 
-* **A domination carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_dominatedBy`): if `CM'` dominates `CM` on the tiles
-  (`CostModel.DominatedBy`), every adversary of `CM` has one of `CM'` within the same bounds whose good tiles earn no
-  less, so TT_OUT per tile at `CM'` is TT_OUT per tile at `CM`.
-* **A simulation is a domination** (`CostModel.dominatedBy_of_simulatedBy`): a program of `CM'` with the same run at no
-  more cost and calls (`CostModel.SimulatedBy`) commits the same good tiles. `ttOutTile_of_simulatedBy` is the
-  transfer along it.
-* **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100Tensor_simulatedBy_best`): the run's memory
-  and its fetched words never read a price, and its cost only grows with each, so at any `sha, fetch ≥ 0`
+* **A domination within every bound carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_dominatedWithin`): if `CM'`
+  dominates `CM` within every bound on the tiles (`CostModel.DominatedWithin`), every adversary of `CM` within `T` and
+  `q` has one of `CM'` within `T` and `q` whose good tiles beat TT_OUT's threshold at least as often, so TT_OUT per tile
+  at `CM'` is TT_OUT per tile at `CM`.
+* **The program-by-program forms imply it.** `CostModel.DominatedBy` (for each adversary, a program of `CM'` on its
+  inputs at no more cost and calls on every oracle and salt, whose good tiles earn no less there) gives a domination
+  within every bound (`CostModel.dominatedWithin_of_dominatedBy`), and a simulation (`CostModel.SimulatedBy`, the same
+  run at no more cost and calls) is such a domination (`CostModel.dominatedBy_of_simulatedBy`).
+  `ttOutTile_of_dominatedBy` and `ttOutTile_of_simulatedBy` are the transfers along them.
+* **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100Tensor_simulatedBy_best`): the run's
+  memory and its fetched words never read a price, and its cost only grows with each, so at any `sha, fetch ≥ 0`
   `W1Device.s8H100Tensor sha fetch` is simulated by `W1Device.s8H100Best`, each program by itself.
-  `ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best` is the consequence for TT_OUT: `TTOutTilePearlCH100Rev1S8` holds at every
-  such price.
+  `ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best` is the consequence for TT_OUT: `TTOutTilePearlCH100Rev1S8` holds at
+  every such price.
 -/
 
 @[expose] public section
@@ -26,19 +29,48 @@ namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
-/-- **TT_OUT per tile moves along a domination**: at `CM`, given `CM.Queries` and a domination of `CM` by `CM'` on the
-tiles, from TT_OUT per tile at `CM'`. -/
+/-- **TT_OUT per tile moves along a domination within every bound**: at `CM`, given `CM.Queries` and a domination
+of `CM` by `CM'` within every bound on the tiles, from TT_OUT per tile at `CM'`. -/
+theorem ttOutTile_of_dominatedWithin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
+    {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
+    (hQ : CM.Queries) (hD : CM.DominatedWithin P TR D CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
+    Assumptions.TTOutTile CM P TR D g₀ δ := by
+  refine ⟨hQ, fun U hU T hT q hq A hA => ?_⟩
+  obtain ⟨A', hB, hpr⟩ := hD U hU T q A hA
+  exact (hpr _).trans (h.2 U hU T hT q hq A' hB)
+
+/-- **`CM'` dominates `CM` program by program on the tiles `TR`**: for every in-domain workload and every adversary of
+`CM`, some program of `CM'`, run on the adversary's activations and its preprocessed state, costs no more and makes no
+more oracle calls on every oracle and salt, and the credit of the good tiles it commits is at least that of the
+adversary's there. -/
+def CostModel.DominatedBy (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (CM CM' : CostModel Q R S) :
+    Prop :=
+  ∀ U : Workload, U.InDomain P D → ∀ A : Adversary CM, ∃ p' : CM'.Prog, ∀ (H : Q → R) (s : S),
+    CM'.cost p' H U A.act (A.pre.eval H) s ≤ CM.cost A.online H U A.act (A.pre.eval H) s ∧
+      CM'.calls p' H U A.act (A.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s ∧
+      ∑ g ∈ goodTiles P TR U H s (A.transcript U H s),
+          TR.credit H s U g (actOf (A.transcript U H s) ((TR.tiling U.layout).unit g)) ≤
+        ∑ g ∈ goodTiles P TR U H s (CM'.run p' H U A.act (A.pre.eval H) s),
+          TR.credit H s U g (actOf (CM'.run p' H U A.act (A.pre.eval H) s) ((TR.tiling U.layout).unit g))
+
+/-- A program-by-program domination is a domination within every bound: the dominating program, with the adversary's
+preprocessing and activations, stays within its bounds and earns no less on every oracle and salt. -/
+theorem CostModel.dominatedWithin_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    {CM CM' : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
+    (hD : CM.DominatedBy P TR D CM') : CM.DominatedWithin P TR D CM' := by
+  intro U hU T q A hA
+  obtain ⟨p, hp⟩ := hD U hU A
+  refine ⟨⟨A.pre, p, A.act⟩, fun H s =>
+    ⟨(hp H s).1.trans (hA H s).1, (Nat.add_le_add_left (hp H s).2.1 _).trans (hA H s).2⟩, fun c => ?_⟩
+  exact pr_mono fun x hx => hx.trans_le (hp x.1 x.2).2.2
+
+/-- **TT_OUT per tile moves along a program-by-program domination**: `ttOutTile_of_dominatedWithin` at
+`dominatedWithin_of_dominatedBy`. -/
 theorem ttOutTile_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (hQ : CM.Queries) (hD : CM.DominatedBy P TR D CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
-    Assumptions.TTOutTile CM P TR D g₀ δ := by
-  refine ⟨hQ, fun U hU T hT q hq A hA => ?_⟩
-  obtain ⟨p, hp⟩ := hD U hU A
-  let A' : Adversary CM' := ⟨A.pre, p, A.act⟩
-  have hB : A'.Bounded U T q := fun H s =>
-    ⟨(hp H s).1.trans (hA H s).1, (Nat.add_le_add_left (hp H s).2.1 _).trans (hA H s).2⟩
-  refine (pr_mono fun x hx => ?_).trans (h.2 U hU T hT q hq A' hB)
-  exact hx.trans_le (hp x.1 x.2).2.2
+    Assumptions.TTOutTile CM P TR D g₀ δ :=
+  ttOutTile_of_dominatedWithin hQ (CostModel.dominatedWithin_of_dominatedBy hD) h
 
 /-- **`CM'` simulates `CM`**: every program of `CM` has a program of `CM'`, fixed before the oracle and the salt, with the
 same run at no more cost and no more oracle calls on every oracle, workload, activation input, state and salt. -/
