@@ -14,24 +14,27 @@ them (`held R B desc q c₀`: one template, no wires). Neither conclusion reads 
   (`two`). Each wire's writer is then first (`wiresFirst_of_two`), so the code's wiring map rewires the members'
   programs (`rewires_of_two`), and a rewiring keeps the two-stage scope at the wired program, the partition and the
   design's replay partition cut (`scope_rewired`);
-* `inScope_of_two`, `inScope_of_run`: so some statement is in scope where the design evaluates and a statement
-  decodes, and where a run is accepted, whose design evaluated (`CheckedRun.Ok`);
-* `accepts_of`: what an accepted run takes, the fields `CheckedRun.Ok` derives left out: the statement check
-  passing, one unit the two stages check, and a witness in Flock's relation at that unit's session statement;
+* `inScope_of_two`: so some statement is in scope where the design evaluates and a statement decodes;
+* `scope_of_play`, `inScope_of_play`: the statement of a play the verifier accepts is in scope, since its accept
+  passed the session statements' check, at which the statement parses and the design evaluates (`refusesTwo`);
+* `inScope_of_run`, `accepts_of`: the same of a run with a checked unit and its witness (`Accepts`), and what such a
+  run takes, the fields `CheckedRun.Ok` derives left out: the statement check passing, one unit the two stages
+  check, and a witness in Flock's relation at that unit's session statement;
 * `premises_of_checks`: the premises, where the frame is SPOT's own at the wired program (`BuiltWired`), from five
   facts of the auditor's copies (`addressesConnected_of_firstK`): the reference reads are well formed, no proof
   block is always checked, the boundary registration passes the run's population check, its first stage samples a
   uniform `K`-subset, and the condition decided on the registered wires holds;
-* `honest_of_run`: `HonestExists` from those five facts and one accepted run.
+* `honest_of_run`: `HonestExists` from those five facts and one play the verifier accepts.
 
-So a registration with wires, several templates and several replay blocks is an instance of `HonestExists` where a
-run of it is accepted: the design's own decided conditions (`scopeOk`, `filesOk`, `templateOk`, `membersScoped`,
-`wiringOk`) are not asked again, since the accepted run's design evaluated.
+So a registration with wires, several templates and several replay blocks is an instance of `HonestExists` where
+its verifier accepts a play: the design's own decided conditions (`scopeOk`, `filesOk`, `templateOk`,
+`membersScoped`, `wiringOk`) are not asked again, since the accepted play's design evaluated.
 
 ## What this does not show
 
-* An accepted run (`Accepts`). `CheckedRun.Ok` holds a witness that Flock's relation holds of a checked unit's
-  session statement, which no check of the verifier's gives: it is the prover's.
+* A play the verifier accepts (`AcceptsPlay`): it is an honest session's, which no fact of the registration gives.
+* `Accepts` at an accepted play. `CheckedRun.Ok` holds a witness that Flock's relation holds of a checked unit's
+  session statement, which no check of the verifier's gives: it is the prover's. `HonestExists` does not ask it.
 -/
 
 @[expose] public section
@@ -72,16 +75,31 @@ theorem inScope_of_two {h : Held} {x : Msg} {st : Roots} (hx : decode x = some s
   have h2' : two h s₁ = some d := h2
   exact ⟨x, scope_of_two hs₁ h2'⟩
 
-/-- **An accepted run's statement is in the two-stage scope at the compiled code**, at any auditor's copies: the
-run's design evaluated. -/
+/-- **The statement of a play the verifier accepts is in the two-stage scope at the compiled code**, at any auditor's
+copies and any hash: the accept passed the session statements' check, at which the statement parses and the design
+evaluates (`refusesTwo`). -/
+theorem scope_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc) :
+    (compiled h).Scope x := by
+  obtain ⟨s, Pt, d, hp, -, h2, -⟩ := refusesTwo h H x Ω P ω r hacc
+  have hp' : parse h x = some s := hp
+  exact scope_of_two hp' h2
+
+/-- **Some statement is in scope where the verifier accepts a play**: the play's. -/
+theorem inScope_of_play {h : Held} (hA : AcceptsPlay h) : InScope h := by
+  obtain ⟨Ω, P, x, ω, r, hacc⟩ := hA
+  exact ⟨x, scope_of_play FlockDeploy.sha512 hacc⟩
+
+/-- **The statement of a run with a checked unit is in the two-stage scope at the compiled code**, at any auditor's
+copies: the run's design evaluated. -/
 theorem inScope_of_run {h : Held} (hA : Accepts h) : InScope h := by
   obtain ⟨r, Pt, d, spec, hp, -, h2, -⟩ := hA
   exact ⟨r.x, scope_of_two hp h2⟩
 
-/-- **What an accepted run takes**: a statement that parses where the design evaluates, the statement check passing
-its records at some coins, one unit the two stages check there, and a witness in Flock's relation at that unit's
-session statement. The unit's proof block, its replay block and its session's setup follow, as `stmtOpensWired`
-reads them. -/
+/-- **What a run with a checked unit takes**: a statement that parses where the design evaluates, the statement check
+passing its records at some coins, one unit the two stages check there, and a witness in Flock's relation at that
+unit's session statement. The unit's proof block, its replay block and its session's setup follow, as
+`stmtOpensWired` reads them. -/
 theorem accepts_of {h : Held} {x m₁ m₂ : Msg} {s : AuditStatement} {d : Design.Two} {c₀ : FlockDeploy.Coin}
     {c₁ : Stage h} {wF : Claims.Flock.Wit} {u : ℕ} (hp : parse h x = some s) (h2 : two h s = some d)
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
@@ -117,13 +135,14 @@ theorem premises_of_checks {h : Held} (hB : BuiltWired h (wireMap h) (returned h
     (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) : Premises h :=
   ⟨hB, addressesConnected_of_firstK hWf hna hp hK hwc⟩
 
-/-- **`HonestExists`, from five facts of the auditor's copies and one accepted run**: the copies meet the premises
-(`premises_of_checks`), and the accepted run's statement is in scope (`inScope_of_run`). -/
+/-- **`HonestExists`, from five facts of the auditor's copies and one play their verifier accepts**: the copies meet
+the premises (`premises_of_checks`), and the accepted play's statement is in scope (`inScope_of_play`). It takes a
+play and no witness in Flock's relation, since a verifier's accept gives the first and only a prover has the second. -/
 theorem honest_of_run {h : Held} (hB : BuiltWired h (wireMap h) (returned h)) (hWf : RefReadsWf h)
     (hna : ∀ v, h.reg.always v = false) {n K : ℕ}
     (hp : _root_.Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true)
-    (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) (hA : Accepts h) :
+    (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) (hA : AcceptsPlay h) :
     HonestExists :=
-  ⟨h, premises_of_checks hB hWf hna hp hK hwc, inScope_of_run hA, hA⟩
+  ⟨h, premises_of_checks hB hWf hna hp hK hwc, inScope_of_play hA, hA⟩
 
 end SpotFlock.Honest
