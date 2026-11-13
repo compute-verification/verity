@@ -36,6 +36,8 @@ LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
 SCHEMA = "demos/README.md has the schema"
+#: the directories under verity/protocols/ that hold protocols rather than being one
+GROUPS = ("proofs", "accounting", "policy")
 WHERE = "tools/verity/cli/verity_cli/examples.py"
 DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*\n?[ \t]*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe)[ \t]+)*"
                   r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque)[ \t]+([^\s:({\[]+)", re.M)
@@ -123,12 +125,13 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols and configurations (packages under verity/protocols/ and verity/configurations/) and
-    workloads."""
+    """The known protocols and configurations (packages under verity/protocols/, or under one of its `GROUPS`, and
+    verity/configurations/) and workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
     named = [p for p in (root / "verity" / "protocols", root / "verity" / "configurations") if p.is_dir()]
-    return sorted(n for p in named for n in dirs(p)), [*dirs(root / "adapters"), "none"]
+    named += [p / g for p in named for g in GROUPS if (p / g).is_dir()]
+    return sorted(n for p in named for n in dirs(p) if n not in GROUPS), [*dirs(root / "adapters"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
