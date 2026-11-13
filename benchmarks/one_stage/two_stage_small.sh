@@ -3,9 +3,11 @@
 # engine): flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
-# Exit 0 when the second stage held (two_stage_small.py expect): round 1 commits the ids the block returns as a port, the
-# return's sessions read it at round 1's rows, round 2 accepts the statements, and the stream's outcome is accepted or
-# refused by the two-stage form alone. Records under $OUT (never a circuit, a prover file, a
+# Exit 0 when the second stage is what the class's record gives (two_stage_small.py expect). Round 1 commits the ids the
+# block returns as a port and the return's sessions read it at round 1's rows. Where it commits the select's logits
+# too (SMALL_ARGS with --logits), the interior registers no value, the sessions read them at round 1's rows and round 2
+# has no code. Where it doesn't, they are a value the prover registers after the first stage's sample, and everything
+# holds but round 2's second-inputs, by which it refuses the statements. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
@@ -16,8 +18,10 @@
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
-#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop
-#   adding --tables commits each request's history table beside it instead, as a serve with no stop rule does
+#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop; adding --tables
+#   commits each request's history table beside it instead, as a serve with no stop rule does; adding --logits commits
+#   the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which `second`
+#   takes as --kept
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
 #   verity/protocols/flock/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
 #   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
@@ -84,6 +88,10 @@ CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["chec
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
 RULE=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop", ""))' "$O/serve.json")
 STOP=(); [ -z "$RULE" ] || STOP=(--stop "$RULE")
+# a linked run whose record of round 1 doesn't commit the select's logits is refused by round 2's second-inputs; one
+# whose record commits them opens the kept rows
+LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
+INPUTS=(); KEPT=(); if [ -n "$LOGITS" ]; then KEPT=(--kept "$LOGITS"); elif [ -z "${SMALL_INLINE:-}" ]; then INPUTS=(--inputs); fi
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
@@ -92,7 +100,7 @@ rc=0
 # shellcheck disable=SC2086
 "${ON_CARDS[@]}" "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
@@ -104,4 +112,4 @@ for d in first second; do
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
 [ -f "$W/second/summary.json" ] || exit 2
-"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" | tee "$O/expect.txt"
+"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" "${INPUTS[@]}" | tee "$O/expect.txt"

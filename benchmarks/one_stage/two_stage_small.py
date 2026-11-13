@@ -7,16 +7,21 @@ the id `TokenSelect_v4{V}` selects from it, which is the id the class's egress r
 ``--units K`` makes the check the greedy select in K units, `GreedySelect_v1{V, N=V / K}`, which selects the same id.
 ``expect`` reads a ``two_stage.py second`` summary and says whether the run held, check by check: round 2 accepting
 the statements, the return's read at round 1's rows among them, the stream's outcome accepted or refused by the
-two-stage form alone, and the summary saying what the stage cost. ``--inline`` writes the class as a served
-vocabulary's is, its replay block the check's body inlined. `TokenSelect_v4`'s body is chunks and a combine a token,
-which round 2 derives no wires from and whose record commits no return: ``second --unlinked`` runs it, and ``expect
---unlinked`` holds that run to round 2's refusal of the wires. `GreedySelect_v1`'s body is one unit of each of its K
-templates a token, each wired row one chunk's output row, which round 2 derives its wires and its return link from:
-its record commits the ids, and ``second`` runs it linked.
+two-stage form alone, and the summary saying what the stage cost; ``expect --inputs`` holds a linked run whose
+interior registers the select's ``logits``, which the prover gives after the first stage's sample, to round 2's
+refusal by ``second-inputs`` alone. ``--inline`` writes the class as a served vocabulary's is, its replay block the
+check's body inlined. `TokenSelect_v4`'s body is chunks and a combine a token, which round 2 derives no wires from and
+whose record commits no return: ``second --unlinked`` runs it, and ``expect --unlinked`` holds that run to round 2's
+refusal of the wires. `GreedySelect_v1`'s body is one unit of each of its K templates a token, each wired row one
+chunk's output row, which round 2 derives its wires and its return link from: its record commits the ids, and
+``second`` runs it linked.
 ``--stop`` serves the class under a stop rule (`boundary_stop.Stop`, T the outputs): its one stop id is the id the
 check selects at the first request's second token, every request ends at its first stop id or at its ``max_tokens``,
 as an engine ends it, and all of them are the one stop class's, (P, T); ``first`` and ``second`` take the rule as
-``--stop``.
+``--stop``. ``--logits`` (with ``--inline --units K``) commits the select's inputs beside the ids
+(`boundary_rows.Layout.logits`): each span's capture rows as rank 0's builder lays them out
+(`boundary_logits.Builder`), kept under ``private/`` beside the class, which `boundary_logits.load` opens and
+``second`` takes as ``--kept``: the interior then registers no value, and ``expect`` holds the run to no code.
 ``--tables`` commits each request's history table at one layer beside the class's values, as a serve with no stop rule
 does (`boundary_tables`): rank 0's latent rows are random bf16 bits, built into each table on the host
 (`verity.commitments.history.HistoryTable`), and the class lists their roots after its parts and return. No unit of the
@@ -25,8 +30,8 @@ The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a cha
 ever, so a first stage on one takes a nonce no run has used.
 
     python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--units K] [--stop | --tables]
-        [--serve NONCE]
-    python two_stage_small.py expect SUMMARY.json [--unlinked]
+        [--logits] [--serve NONCE]
+    python two_stage_small.py expect SUMMARY.json [--unlinked | --inputs]
 """
 from __future__ import annotations
 
@@ -42,7 +47,7 @@ import numpy as np
 from verity.circuits.evaluation.reference import evaluate
 from verity.commitments import history as HT
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
+from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 
 SERVE = "two-stage-small"
 PROMPT = (1, 2, 3)
@@ -54,6 +59,9 @@ MAX_MODEL_LEN = 4096
 TABLE_LAYER, TABLE_LEAVES = 0, 16
 #: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
 FORM = "two-stage-form"
+#: round 2's code for a value the interior registration registers that a replay block's input may not read: here the
+#: sampler's ``logits``, which the prover registers after the first stage's sample
+INPUTS = "second-inputs"
 #: round 2's code for a replay block it derives no wires from: an inlined class's
 UNWIRED = "second-wires"
 
@@ -71,23 +79,25 @@ def token(out: Sequence[int]) -> int:
 
 
 def layout(v: int, outputs: int, spans: int, inline: bool = False, nonce: str = SERVE, units: int = 0,
-           stop: BS.Stop | None = None, tables: bool = False) -> BR.Layout:
+           stop: BS.Stop | None = None, logits: bool = False, tables: bool = False) -> BR.Layout:
     """The class's layout, a stop class of ``stop`` where given, with each span's history table at `TABLE_LAYER`
     where ``tables``. Its record commits the ids its replay block returns wherever round 2 derives that return's link: a
-    class of whole instances, and an inlined class of the greedy select in units (``units``)."""
+    class of whole instances, and an inlined class of the greedy select in units (``units``); with ``logits``, the
+    select's inputs beside them."""
     return BR.Layout(BR.check_template(template(v, units)), 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0),
                      inline, (TABLE_LAYER,) if tables else (), TABLE_LEAVES if tables else HT.CAPACITY,
-                     ids=bool(units) or not inline, stop=stop)
+                     ids=bool(units) or not inline, stop=stop, logits=logits)
 
 
 def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int = 1108, inline: bool = False,
-          nonce: str = SERVE, units: int = 0, stop: bool = False, tables: bool = False) -> dict[str, Any]:
+          nonce: str = SERVE, units: int = 0, stop: bool = False, logits: bool = False, tables: bool = False) -> dict[str, Any]:
     """The class's directory and the capture under ``out``: ``spans`` requests ``r<i>`` of ``outputs`` tokens over a
     vocabulary of ``v``, each captured under a launch of its own, in the window of the serve ``nonce``. ``units``: K,
     the check the greedy select in K units (`template`). ``stop``: under a stop rule whose one id is the first request's
-    second id, each request ended at its first stop id. ``tables``: each request's history table, refused beside a
-    rule as the serve refuses it. -> the check template's id, the two directories, the rule (or None), and each
-    request's rows and ids."""
+    second id, each request ended at its first stop id. ``logits``: the class commits each request's rows as its
+    select's inputs, kept under ``out``/private (`boundary_logits.load`'s directory). ``tables``: each request's
+    history table, refused beside a rule as the serve refuses it. -> the check template's id, the two directories, the
+    rule (or None), the kept value's directory (or None), and each request's rows and ids."""
     if stop and tables:
         raise ValueError(BR.TABLES_UNDER_A_RULE)
     check = BR.check_template(template(v, units))
@@ -101,16 +111,23 @@ def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int =
             if rule.ids[0] in t:
                 toks[r], finish[r] = t[:t.index(rule.ids[0]) + 1], "stop"
                 rows[r] = rows[r][:len(toks[r])]
-    L = layout(v, outputs, spans, inline, nonce, units, rule, tables)
+    L = layout(v, outputs, spans, inline, nonce, units, rule, logits, tables)
     directory = out / "w0" / f"p{L.prompt}-o{L.outputs}"
     spans_ = [BR.Span(r, PROMPT, sampling, tuple(toks[r]), finish[r]) for r in rows]
     if rule is not None and any(rule.word(s) is None for s in spans_):
         raise ValueError("a request the stop rule doesn't end as it was served: it would be filed without a stop block")
-    BR.write(BR.commit(spans_, L, 0, tables=_tables(spans_, L, rng) if tables else None), directory)
+    kept, root = (out / "private" if logits else None), None
+    if kept is not None:
+        held = BL.Logits()
+        for r, a in rows.items():
+            for x in a:
+                held.add(r, x)
+        root = BL.root(BL.Builder(held, BL.Kept(kept / "logits")).build(BL.assignment(0, L, spans_)), L)
+    BR.write(BR.commit(spans_, L, 0, tables=_tables(spans_, L, rng) if tables else None, logits=root), directory)
     SC.write(out / "capture", template(v, units), {r: {"logits": rows[r], "tokens": toks[r], "steps": list(range(len(toks[r]))),
                                                  "program": f"launch:{r}"} for r in rows})
-    return {"check": template(v, units), "class": directory, "capture": out / "capture", "stop": rule, "rows": rows,
-            "tokens": toks}
+    return {"check": template(v, units), "class": directory, "capture": out / "capture", "stop": rule, "logits": kept,
+            "rows": rows, "tokens": toks}
 
 
 def _tables(spans: Sequence[BR.Span], L: BR.Layout, rng: np.random.Generator) -> dict[str, bytes]:
@@ -129,13 +146,15 @@ def _tables(spans: Sequence[BR.Span], L: BR.Layout, rng: np.random.Generator) ->
 def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, bool]:
     """A ``two_stage.py second`` summary, check by check: every check before the sample passed, each session's circuit
     file is its template's params', every Lean verdict accepted, every negative refused, and round 2 and the stream's
-    outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
-    the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
-    with the two-stage form's code alone (`FORM`), and the one-stage audit's own record of the interior, which holds no
-    check of round 2's, is accepted, taking the sessions' reads of the interior's own ports as the stream's records do
-    (``accepted``, and ``record``: ``own_reads``, no failed check). For an unlinked run (``code`` `UNWIRED`): round 2 refuses
-    the statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing, and
-    the summary says what the stage cost (`costed`)."""
+    outcome are the run's. For a record of round 1 that commits the block's return and its inputs (``code`` None): round
+    2 accepts the statements with no code, and the outcome is accepted, or refused by its interior record's statements
+    check with the two-stage form's code alone (`FORM`). For a linked run whose interior registers the block's inputs,
+    the ``logits`` the prover gives after the first stage's sample (``code`` `INPUTS`): round 2 refuses the statements
+    by that code alone, its return read at round 1's rows, and so does the outcome. Either way the one-stage audit's
+    own record of the interior, which holds no check of round 2's, is accepted, taking the sessions' reads of the
+    interior's own ports as the stream's records do (``accepted``, and ``record``: ``own_reads``, no failed check). For
+    an unlinked run (``code`` `UNWIRED`): round 2 refuses the statements by that code alone, and so does the outcome.
+    In every case its replay sample's record fails nothing, and the summary says what the stage cost (`costed`)."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
@@ -143,9 +162,10 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     if code is None:
         r2_ok = r2.get("ok") is True and r2.get("codes") == []
         o_ok = (o.get("accepted") is True and o.get("statements") == []) or (refused and o.get("statements") == [FORM])
-        record_ok = summary.get("accepted") is True and summary.get("record") == {"own_reads": True, "failed": []}
     else:
-        r2_ok, o_ok, record_ok = r2.get("codes") == [code], refused and o.get("statements") == [code], True
+        r2_ok, o_ok = r2.get("codes") == [code], refused and o.get("statements") == [code]
+    record_ok = code == UNWIRED or (summary.get("accepted") is True
+                                    and summary.get("record") == {"own_reads": True, "failed": []})
     return {"before_draw": bool(audit.get("checks_before_draw")) and all(audit["checks_before_draw"].values()),
             "pins": bool(summary.get("pins")) and all(summary["pins"].values()),
             "lean_verdicts": bool(inner.get("verdicts")) and all(v is True for v in inner["verdicts"].values()),
@@ -186,19 +206,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--inline", action="store_true")
     s.add_argument("--units", type=int, default=0, help="K: the check is GreedySelect_v1{V, N=V / K}, the greedy select in K units")
     s.add_argument("--stop", action="store_true", help="under a stop rule (T the outputs), printed as stop for first and second's --stop")
+    s.add_argument("--logits", action="store_true", help="commit the select's inputs beside the ids (needs --inline --units K)")
     s.add_argument("--tables", action="store_true", help="each request's history table at one layer, with no stop rule")
     s.add_argument("--serve", default=SERVE, help="the serve's nonce, which the window's run is of")
     e = sub.add_parser("expect")
     e.add_argument("summary", type=Path)
     e.add_argument("--unlinked", action="store_true")
+    e.add_argument("--inputs", action="store_true", help="a linked run whose interior registers the block's inputs: "
+                                                         "round 2 refuses it by second-inputs alone")
     a = ap.parse_args(argv)
     if a.cmd == "serve":
         got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve, units=a.units, stop=a.stop,
-                    tables=a.tables)
+                    logits=a.logits, tables=a.tables)
         print(json.dumps({**{k: str(got[k]) for k in ("check", "class", "capture")},
-                          **({"stop": json.dumps(got["stop"].to_json())} if got["stop"] else {})}))
+                          **({"stop": json.dumps(got["stop"].to_json())} if got["stop"] else {}),
+                          **({"logits": str(got["logits"])} if got["logits"] else {})}))
         return 0
-    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else None)
+    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else INPUTS if a.inputs else None)
     print("SMALL " + json.dumps(checks))
     return 0 if all(checks.values()) else 1
 

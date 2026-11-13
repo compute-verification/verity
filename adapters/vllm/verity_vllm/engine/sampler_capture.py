@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,7 @@ import numpy as np
 
 from verity_vllm.records.logits_capture import LogitsCapture
 
-__all__ = ["CAPTURE", "Capture", "install", "launch", "piece_rows", "spans", "take", "write"]
+__all__ = ["CAPTURE", "Capture", "emitting", "install", "kept_rows", "launch", "piece_rows", "spans", "take", "write"]
 
 #: a capture's record, beside its rows' files
 CAPTURE = "capture.json"
@@ -42,16 +42,9 @@ class Capture:
         return getattr(self.inner, name)
 
     def __call__(self, logits: Any, input_batch: Any, *a: Any, **kw: Any) -> Any:
-        import torch
         b = input_batch
-        keep = [i for i, r in enumerate(b.req_ids[:b.num_reqs]) if r in self.targets
-                and b.num_computed_tokens_np[i] + b.num_scheduled_tokens[i] >= b.prefill_len_np[i]]
-        rows = None
-        if keep:
-            if b.num_draft_tokens or logits.shape[0] != b.num_reqs or logits.dtype != torch.bfloat16:
-                raise TypeError(f"the sampler takes {tuple(logits.shape)} {logits.dtype} logits for {b.num_reqs} requests "
-                                f"and {b.num_draft_tokens} draft tokens: a token select reads one bf16 row a token")
-            rows = logits[keep].contiguous().view(torch.int16).cpu().numpy().view("<u2")
+        keep = emitting(b, self.targets.__contains__)
+        rows = kept_rows(logits, b, keep) if keep else None
         out = self.inner(logits, input_batch, *a, **kw)
         if keep:
             ids = out.sampled_token_ids[keep, 0].tolist()
@@ -59,6 +52,24 @@ class Capture:
                 self.rows[b.req_ids[i]].append(rows[k].copy())
                 self.ids[b.req_ids[i]].append(int(ids[k]))
         return out
+
+
+def emitting(b: Any, wanted: Callable[[str], bool]) -> list[int]:
+    """The rows of the sampler's batch ``b`` whose request ``wanted`` takes and emits a token at this call: its scheduled
+    tokens reach the end of its prompt, so the runner keeps the token sampled from that row."""
+    return [i for i, r in enumerate(b.req_ids[:b.num_reqs]) if wanted(r)
+            and b.num_computed_tokens_np[i] + b.num_scheduled_tokens[i] >= b.prefill_len_np[i]]
+
+
+def kept_rows(logits: Any, b: Any, keep: Sequence[int]) -> np.ndarray:
+    """Rows ``keep`` of the sampler's ``logits`` for batch ``b``, as bf16 bits (u16) on the host. Refused for a batch with
+    draft tokens, or logits that aren't bf16 or one row a request: a token select reads one bf16 row a token."""
+    import torch
+
+    if b.num_draft_tokens or logits.shape[0] != b.num_reqs or logits.dtype != torch.bfloat16:
+        raise TypeError(f"the sampler takes {tuple(logits.shape)} {logits.dtype} logits for {b.num_reqs} requests "
+                        f"and {b.num_draft_tokens} draft tokens: a token select reads one bf16 row a token")
+    return logits[list(keep)].contiguous().view(torch.int16).cpu().numpy().view("<u2")
 
 
 def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None = None,
