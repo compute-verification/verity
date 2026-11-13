@@ -117501,3 +117501,30 @@ What it does not close [derived]: a lane may open a period under any digest it l
 **Not established.** That the refusal compiles or that Lean and the reference agree on it. That a served SPOT run opens periods with a circuit at all, or which bytes its digest would hash. That one-stage v2's `program` is what a period's `circuit` hashes. The four checks of "proved" for any of PR 3's statements.
 
 **#9375 is merged** (03:01Z) [`gh pr view`]; the R8 sentence's pull request is now due from me, after #9595's run.
+
+## OWNREADS, Fri 13 Nov 03:25Z: two files compile: the `Apart` reduction (`Apart.lean`) and the decided check of well-formed reads (`ReadsCheck.lean`), each with only the three permitted axioms; `HeldOfReads.lean` is in its try on HELDOF's last compiled commit
+
+In plain words: the two pieces you ordered at 02:13Z are proved by the rule. The first says what a two-session device owes, one session at a time, for the cut's condition that no session's run is opened on the other's window. The second is a yes-or-no test that a JSON value's objects are proper search trees, with the proof that passing it gives the fact my lemma needs; nothing runs the test yet. The lemma that carries that fact to `heldOf` is still being compiled.
+
+**1. `Apart.lean` compiles** [run]. `r20261113-030222-643a` on vy-nebius-2 (sent 03:02:22Z, check place 03:06:02Z, then 341 s for a Lean place), `lean_changed.py --try security/Proofs/Properties/Verity/SampledTwo/Apart.lean --siblings` at `9179aaea5a` on `cursor/proofs-apart-a64c` (HISTORY's `f54420243d` plus the one file and its root): "lean exit 0 in 633 s", "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings clean over the 31 modules built there. The same run built HISTORY's `Device.lean` and what it imports ("Build completed successfully (11480 jobs)"). The three:
+- `opensIn_append`: a line that opens a window for a run, in two lists of ledger lines together, is in one of the two.
+- `apart_of_own (h₁ : OpensOwn S₁ w₁) (h₂ : OpensOwn S₂ w₂) (hid : S₁.id ≠ S₂.id) (hw : w₁ ≠ w₂) : Apart S₁ S₂ w₁ w₂`, where `OpensOwn S w := ∀ w' id, OpensIn S.ledger w' id → id = S.id ∧ w' = w`.
+- `binds_of_own`: `Binds (dev₂ S₁ S₂ cut) θ` from `OpensOwn (S₁ o) w₁`, `OpensOwn (S₂ o) w₂` and `(S₁ o).id ≠ (S₂ o).id` at every play after `θ` with the parameters' windows `(w₁, w₂)`.
+
+**2. `ReadsCheck.lean` compiles** [run]. `r20261113-022017-7cd5` on vy-nebius-2, second step, at `f167a566e1` on `cursor/proofs-refreadswf-a64c` (the same file is on the `e310` branch at `2793282dc9`): "lean exit 0 in 204 s", "none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings clean over 561 modules. It imports only `CanonRead` and `JsonNorm`, not `HeldOf.lean`. For HELDOF and TWOLEG, what to call:
+- `SpotFlock.ReadsJson.readsChecked (cs : Array (String × String × Json × Json)) : Bool`, which is `cs.all fun c => Spot.sortedKeys c.2.2.2 && balancedKeys c.2.2.2`.
+- `SpotFlock.ReadsJson.wf_of_checked : readsChecked cs = true → ∀ c ∈ cs, Wf c.2.2.2`. Its conclusion is `HeldOf.ReadsWf cs` unfolded, so with `cs := it.circuits` it is the premise of `refReadsWf_of`, and with `cs := p.circuits` that of `refReadsWf_form`.
+- Cost: one walk over the templates' registered reads, which are part of the parameters.
+I have not changed `decided` or the form.
+
+**3. `HeldOfReads.lean`: in its try** [run: launched]. On `cursor/proofs-refreadswf-e310-a64c` at `2793282dc9` (HELDOF's `e310d9d623`, the commit where its `HeldOf.lean` compiled), sent to vy-nebius-2 at 03:24Z. My 02:58Z entry says why not on HELDOF's later commit.
+
+**4. Still to try**, after that one: `OwnReadsGive.lean` on FRAME's head (`cursor/proofs-ownreads-frame-a64c`, `4b55f363b4`), which is also the first compile of `OwnReads.lean` there.
+
+Branches and heads, all pushed: `cursor/proofs-apart-a64c` `9179aaea5a`; `cursor/proofs-refreadswf-a64c` `f167a566e1`; `cursor/proofs-refreadswf-e310-a64c` `2793282dc9`; `cursor/proofs-ownreads-frame-a64c` `4b55f363b4`; `cursor/proofs-ownreads-9a1c` `90bbf657c8`.
+
+NEEDS: HELDOF, as at 02:58Z (`HeldOf.lean` against its own head). Nobody else.
+
+To post: nothing.
+
+Not established: that `HeldOfReads.lean` or `OwnReadsGive.lean` compiles; `OpensOwn` at any device (HISTORY's question (a), (b), (c) and soundness's PRF-490); `ReadsWf` at the form's parameters, which stays the named premise you ruled at 02:13Z until something runs `readsChecked`. The sibling checks covered only the modules built in each tree. The package's Lean check with its lock has not run on any of these heads.
