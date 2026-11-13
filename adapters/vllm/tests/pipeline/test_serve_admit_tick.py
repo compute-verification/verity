@@ -1089,6 +1089,71 @@ def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
     assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 0, "watermarks": 1, "runs": 1}
 
 
+#: first lines, each with whether it is a request's: the network certifier's rule (`release.with_release`)
+REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1.0", True), (b"get /v1/models?x=1 HTTP/1.1", True),
+                 (b"POST /verity/watermark HTTP/1.1 x", False), (b"POST /verity/watermark HTTP/1.1 ", False),
+                 (b"POST /verity/watermark  HTTP/1.1", False), (b"POST  /verity/watermark HTTP/1.1", False),
+                 (b" POST /verity/watermark HTTP/1.1", False), (b"POST\t/verity/watermark HTTP/1.1", False),
+                 (b"POST /verity/watermark\tx HTTP/1.1", False), (b"POST /verity/watermark\x0b HTTP/1.1", False),
+                 (b"POST /verity/watermark HTTP/1.1\r", False), (b"POST /verity/watermark HTTP/1.1\n", False),
+                 (b"POST /verity/watermark HTTP/1.12", False), (b"POST /verity/watermark HTTP/2.0", False),
+                 (b"POST /verity/watermark http/1.1", False), (b"POST /verity/watermark", False),
+                 (b"P(ST /verity/watermark HTTP/1.1", False), (b"POST", False), (b"", False)]
+
+
+def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does():
+    """`so.request_line` over first lines well formed and not: it gives a line's method and target where the network
+    certifier puts its release on a request that begins with the line, and None where the certifier passes the bytes on
+    as the client wrote them."""
+    for line, is_one in REQUEST_LINES:
+        sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
+        stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
+        assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
+        assert so.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
+
+
+def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_release_over_http():
+    """Two requests of a client's whose first line has a byte after its version, so the network certifier passes each on
+    as the client wrote it (`release.with_release`): a whole watermark stream for the run, whose one line names releases
+    0 and 1 lost, and a completion (its body not JSON, so no server serves it) that names itself the run's release 0.
+    Each is answered 400 for its line. The gate reads no line of the first, and the frontend no release of the second:
+    the run's own watermark stream is taken after them, and its release 0 is admitted and served."""
+    body = dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2)
+    run = bytes.fromhex(RUN)
+
+    def loose(request: bytes) -> bytes:
+        line, rest = request.split(b"\r\n", 1)
+        sent = line + b" x\r\n" + rest
+        assert REL.with_release(sent, 5, run, 1) == sent
+        return sent
+
+    with tick_endpoint() as e:
+        answers = []
+        for sent in (loose(REL.watermark_head(run) + REL.watermark_chunk(0, 2, [0, 1]) + REL.WATERMARK_END),
+                     loose(b"POST /v1/completions HTTP/1.1\r\nhost: s\r\nx-verity-release: 0\r\nx-verity-release-run: ab\r\n"
+                           b"content-length: 1\r\n\r\n{")):
+            c = socket.create_connection(e.address)
+            c.sendall(sent)
+            answers.append(read_all(c))
+        wm = socket.create_connection(e.address)
+        wm.sendall(REL.watermark_head(run) + REL.watermark_chunk(0, 0) + REL.watermark_chunk(1, 1))
+        for _ in range(2):
+            e.lines.acquire()
+        c0 = socket.create_connection(e.address)
+        c0.sendall(request(body, 0, 1))
+        served = read_all(c0)
+        wm.sendall(REL.WATERMARK_END)
+        end = read_all(wm)
+    assert [a.split(b"\r\n", 1)[0] for a in answers] == [b"HTTP/1.1 400 Bad Request"] * 2
+    assert all(so.NO_REQUEST_LINE.encode() in a for a in answers)
+    assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
+    assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
+    s = e.gate.summary()
+    assert (s["admitted"], s["lost"], s["dropped"], s["watermark_errors"], s["opened"]) == (1, 0, 0, 0, None)
+    assert (e.gate.lines, e.gate.lost, e.gate.ended) == ([0, 1], set(), True)
+    assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 1, "runs": 1}
+
+
 def test_the_flag_takes_tick_with_the_engine_class_step_times():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
     opts = cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "27.5", "--tick-free-ms", "41"], environ={})
