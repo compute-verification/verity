@@ -15,12 +15,12 @@ its accesses, whatever the pool's size.
   running slot's cached blocks ``nc`` (and at AS = 1 ``fl``, CompileSlice_v2's), which a later step's cache call
   starts from.
 - ``coin`` (the verifier's coins): α and γ, the memory check's and the bus's, and δ, the keys' print coin, each in
-  GF(2^128), drawn live after the window's rows are committed.
+  GF(2^128), sampled live after the window's rows are committed.
 - ``chk`` (*checked*): each step's bus results (each running slot's returns, each candidate's hit and evictable count,
   each placed slot's returns), and the stream's witness: its NS slots (start, kind, r, a, b, the read's v and t) and
   its touched list's final values and times.
 A registered row is padded to whole words (`compile_slice.WORD`); its padding must be zero. `CLASSES` names each input's
-class. The checked witness is a computed check: the valid witness is unique, its coins are drawn after it is committed,
+class. The checked witness is a computed check: the valid witness is unique, its coins are flipped after it is committed,
 and a wrong one passes only with the fingerprints' collision probability, which enters the soundness error. It still
 counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
 nondeterminism rule), so `free_width` counts the advice and the checked witness.
@@ -577,7 +577,7 @@ def unit(**st):
     return bind(CompileSlice, **st)
 
 
-#: the demonstrations' coins, fixed so the tests are reproducible; a window's are the verifier's, drawn live
+#: the demonstrations' coins, fixed so the tests are reproducible; a window's are the verifier's, sampled live
 COINS = tuple(int.from_bytes(hashlib.sha512(b"compile slice v4 demo coin " + bytes([i])).digest()[:16], "little")
               for i in range(3))
 
