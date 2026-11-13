@@ -82,7 +82,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.definitions.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 
 from . import rec_algebra as A
 from . import rec_cap as RC

@@ -17,9 +17,9 @@ import pytest
 import pearl_c_vectors as CV
 import pearl_vectors as PV
 from verity.commitments.crypto.turboshake import turboshake128
-from verity.definitions.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
-from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16
+from verity.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
+from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
