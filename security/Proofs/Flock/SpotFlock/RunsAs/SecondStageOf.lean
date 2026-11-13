@@ -114,7 +114,7 @@ theorem registersNone_of_two {h : Held} (hT : TwoHolds h) {x m₁ : Msg} {rec : 
   | none =>
     rw [hdx] at hRec
     cases hRec
-  | some st =>
+  | some _ =>
     rw [hdx] at hRec
     simp only [Bool.and_eq_true] at hRec
     exact registersNone_of_recordOk hv hRec.2
