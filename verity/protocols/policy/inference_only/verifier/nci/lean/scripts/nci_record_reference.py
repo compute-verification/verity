@@ -9,9 +9,12 @@
     exported(instance, trusted, rows) -> [[slot, why the row is θ or None], …] | {"error": code}
     count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
     block_rows(instance, trusted, limits) -> {"rows", "fresh", "complies", "failure"} | {"error": code}
+    chosen(instance, trusted) -> {"inputs", "inside", "theta", "cross_wires", "free", "ingress", "unregistered",
+                                  "openings", "chosen"} | {"error": code}
 
 `Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts; `RecordCount`'s gives the count's limits and `RecordRows`'s the rows rule's. Where the Lean reads each template's gates
+of the summary counts; `RecordCount`'s gives the count's limits, `RecordRows`'s the rows rule's and `RecordChosen`'s
+what the prover chose of an execution phase's input bits. Where the Lean reads each template's gates
 from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
 declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
 (`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
@@ -791,3 +794,17 @@ def block_rows(inst, tr, limits) -> dict:
     most, fresh = max(rows), max(e["fresh"])
     failure = "size" if most > gamma else "nci" if fresh * alpha[1] > alpha[0] * most else None
     return {"rows": most, "fresh": fresh, "complies": failure is None, "failure": failure}
+
+
+def chosen(inst, tr) -> dict:
+    """`RecordChosen.checkDetail`: over the whole execution phase, every slot's units, the input bits (`inputs`), those
+    of each of `KINDS`, and the ones the prover chose (`chosen`): the rows no declaration fills (`free`), the registered
+    reads and table reads of a parameter that is not θ (`unregistered`) and the ports of an opening that is not held
+    (`openings`). Added up row by row over every unit, where the Lean takes one product a declaration. Or the form's
+    own refusal."""
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    total = {k: sum(e[k]) for k in ("inputs", *KINDS)}
+    return {**total, "chosen": total["free"] + total["unregistered"] + total["openings"]}

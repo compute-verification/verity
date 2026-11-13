@@ -9,9 +9,9 @@ docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, ea
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
 for a port: leaves of two widths, or an output past a word that is not whole words), some input rows of its units (`[template, port, unit, row]` each), the count's limits
 (`{"table", "c", "k", "n"}`) and the rows rule's (`{"table", "gamma", "alpha"}`, `rows_limits`); and `python.jsonl`,
-`{"detail", "public", "kinds", "exported", "count", "closed", "block_rows"}`:
+`{"detail", "public", "kinds", "exported", "count", "closed", "block_rows", "chosen"}`:
 `nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, each
-template's closed rows (`closed`), and `block_rows`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
+template's closed rows (`closed`), `block_rows` and `chosen`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
 `lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
@@ -1683,12 +1683,13 @@ def total() -> int:
 
 def results(case: dict) -> dict:
     """The reference's results on a case: the whole verdict, what is published, its rows' classes, what the form
-    exports of them (each row's slot and why it is held), the count, each template's closed rows, and the rows rule's
-    verdict."""
+    exports of them (each row's slot and why it is held), the count, each template's closed rows, the rows rule's
+    verdict, and what the prover chose of the phase's input bits."""
     inst, tr = case["instance"], case["trusted"]
     return {"detail": ref.check_detail(inst, tr), "public": ref.check(inst, tr), "kinds": ref.kinds(inst, tr, case["rows"]),
             "exported": ref.exported(inst, tr, case["rows"]), "count": ref.count(inst, tr, case["count"]),
-            "closed": ref.closed(inst, tr), "block_rows": ref.block_rows(inst, tr, case["block_rows"])}
+            "closed": ref.closed(inst, tr), "block_rows": ref.block_rows(inst, tr, case["block_rows"]),
+            "chosen": ref.chosen(inst, tr)}
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

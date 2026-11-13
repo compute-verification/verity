@@ -5,7 +5,7 @@ reference: the Python half.
 two in five broken in one way, and 82 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
-`Record`, `RecordCount` and `RecordRows` give Python's results on every case, and unless SPOT's reader reads the
+`Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
 same wiring from the form's instance and from the one Python builds from its own layout of each template. The audit
 checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test
 is what says the data is still what the generator and the reference write. The second checks that the generator
@@ -30,7 +30,9 @@ a unit of it at the root that the record does not list. The fourteenth is a bloc
 rows the reference adds up unit by unit are what the record's listing gives, a template's units in a block times its
 rows of one unit, with the rate rule's two failures in rows and the refusal of a table that lacks a template. The
 fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh, whatever
-pins and registers the rest.
+pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the rows no
+declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over every
+slot's units, with an opening's ports off the count only where the opening is held.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -890,3 +892,70 @@ def test_a_history_is_a_table_over_no_registered_parameter(shaped):
         k: d0[k] for k in ("blocks", "gates", "inputs", "wired_rows", "wired_bits")}
     assert (d["failure"], r["count"]["failure"], r["block_rows"]["failure"]) == ("nci", "fresh", "nci")
     assert r["block_rows"]["rows"] == held["block_rows"]["rows"] and r["block_rows"]["fresh"] == d["fresh"]
+
+
+def test_what_the_prover_chose_of_an_execution_phase(random_cases, shaped):
+    """The whole execution phase's input bits by kind, every slot's units, and of them the ones the prover chose: the
+    rows no declaration fills (`free`), the reads of a parameter that is not θ (`unregistered`) and the ports of an
+    opening that is not held (`openings`). Every row has one kind, so the kinds' bits are the phase's input bits, a
+    block's times the blocks. A fresh kind's bits are at least the most a block holds and at most that many in every
+    block, and fewer wherever the slots hold it unevenly, so the count is no multiple of the summary's. It is refused
+    exactly where the form is, with the form's code.
+
+    On the served shape, with the weights registered and the opening held, the prover chose the scan's state alone. An
+    opening takes its ports off the count only where it is held: under no pin, with another Definition under the
+    pinned one's name, or with no table read of the root, every row it opens is on the count at every unit it covers;
+    with no root read the root's rows, which nothing fills then, are on it too. Against a history its ports and its
+    table reads' rows are all on it. With nothing registered every row no wire fills is. A wire from the next slot is a
+    block's fresh input and none of the prover's choosing: the summary's fresh bits move and the count does not."""
+    uneven = none = 0
+    for m in (*random_cases, *shaped.values()):
+        inst, tr = m["case"]["instance"], m["case"]["trusted"]
+        detail, c = ref.check_detail(inst, tr), ref.chosen(inst, tr)
+        if "error" in detail:
+            assert c == {"error": detail["error"]}, m["shape"]
+            continue
+        blocks = detail["blocks"]
+        assert c["inputs"] == detail["inputs"] * blocks == sum(c[k] for k in ref.KINDS), m["shape"]
+        assert c["chosen"] == c["free"] + c["unregistered"] + c["openings"], m["shape"]
+        assert all(detail[k] <= c[k] <= detail[k] * blocks for k in ref.FRESH), m["shape"]
+        uneven += any(c[k] < detail[k] * blocks for k in ref.FRESH)
+        none += c["chosen"] == 0
+    assert uneven >= 50 and none >= 3, (uneven, none)
+
+    def chosen(what: str, **over) -> dict:
+        case = shaped[what]["case"]
+        return ref.chosen({**case["instance"], **over}, case["trusted"])
+
+    def moved(c: dict, held: dict, **by: int) -> bool:
+        """Whether `c` is `held` but for the kinds `by` names, each more by its bits, and θ, less by all of them."""
+        want = {**held, **{k: held[k] + n for k, n in by.items()}, "theta": held["theta"] - sum(by.values())}
+        return c == {**want, "chosen": want["free"] + want["unregistered"] + want["openings"]}
+
+    for size, blocks in (("2x3", 2), ("4x35", 4)):
+        case = shaped[f"{size} registered"]["case"]
+        held, detail = chosen(f"{size} registered"), ref.check_detail(case["instance"], case["trusted"])
+        assert vectors.results(case)["chosen"] == held
+        assert held["chosen"] == held["unregistered"] == blocks * detail["unregistered"] > 0
+        assert held["free"] == held["openings"] == held["cross_wires"] == held["ingress"] == 0
+        for what in ("none registered", "none committed"):
+            none = chosen(f"{size} {what}")
+            assert none["theta"] == 0 and none["chosen"] == none["inputs"] - none["inside"] > held["chosen"]
+    accepted = shaped["2x3 registered"]
+    held = chosen("2x3 registered")
+    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    bits = {p: 16 * words for p, words in IF.layout(embed).rows}
+    (opening,) = json.loads(accepted["case"]["instance"]["record"])["registered"]["openings"]
+    units, ports = opening["units"], sum(bits[p] for p in opening["ports"])
+    assert accepted["case"]["instance"]["pins"] != [] and units * ports > 0
+    assert moved(chosen("2x3 registered", pins=[]), held, openings=units * ports)
+    assert moved(chosen("2x3 a constant verdict"), held, openings=units * ports)
+    assert moved(chosen("2x3 no root read"), held, openings=units * ports, free=units * bits["root"])
+    assert moved(chosen(OPENED), held, openings=units * ports, unregistered=units * (bits["root"] + bits["domain"]))
+    # a wire from the next slot: computed in the phase, so not chosen, and fresh to the block that reads it
+    crossing, case = chosen("2x3 one wire from the next slot"), shaped["2x3 one wire from the next slot"]["case"]
+    assert crossing["cross_wires"] > 0 and crossing["chosen"] == held["chosen"]
+    wired = crossing["cross_wires"]
+    assert crossing == {**held, "cross_wires": wired, "inside": held["inside"] - wired}
+    assert (ref.check_detail(case["instance"], case["trusted"])["fresh"]
+            > ref.check_detail(accepted["case"]["instance"], accepted["case"]["trusted"])["fresh"])
