@@ -59,7 +59,7 @@ theorem opensReady_of_accepted {V : Vocab d α} {k : Verity.Registration.Composi
   have hpp : p' = p := paramsAt_case hv.2.1 hcase hacc hp₀
   subst hpp
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
-  obtain ⟨tags0, circuitB, pubB, -, -, -, ht0, hc, hpb, -, -, -, hAc⟩ := checkBlobsAt_event hck
+  obtain ⟨tags0, circuitB, pubB, _, _, _, ht0, hc, hpb, -, -, -, hAc⟩ := checkBlobsAt_event hck
   have hcf : circuitB = A.I.circuitFile := hF.circuit p' hp₀ circuitB hc
   have hpf : pubB = A.I.publicFile := hF.publicFile p' hp₀ pubB hpb
   have htg : tags0 = A.I.tags := Option.some.inj (ht0.symm.trans hA.tags)
