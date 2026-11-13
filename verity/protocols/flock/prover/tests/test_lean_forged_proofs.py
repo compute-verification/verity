@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-4.bin`` and ``<case>/session/``, and
 #: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation)

@@ -12,7 +12,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 - **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in an audit;
   upstream's Rust verifier is a cross-check (the agreement job), not a second verifier. Proofs are about Lean
   definitions, not machine code.
-  - **Mitigation:** the agreement tests of `verity/protocols/flock/agreement/README.md`. The Rust implementation must reach the same verdict on the corpus
+  - **Mitigation:** the agreement tests of `verity/protocols/flock/prover/agreement/README.md`. The Rust implementation must reach the same verdict on the corpus
     and on fuzzed mutations, so a miscompilation that changes a tested verdict fails the agreement job. Untested inputs
     stay exposed.
   - **Also trusted:** compiled code that no proof sees. The executable's `../../../../../verity/protocols/flock/verifier/lean-audit.json` would list it under
