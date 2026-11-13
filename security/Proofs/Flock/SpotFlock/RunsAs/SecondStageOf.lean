@@ -94,9 +94,8 @@ theorem registersNone_of_recordOk {rec : Json} {n : Names} (hv : n.values = []) 
 /-- Where the design evaluates at every statement, it evaluates at one. -/
 theorem two_of_twoHolds {h : Held} (hT : TwoHolds h) :
     ∃ (s : AuditStatement) (d : Design.Two), two h s = some d := by
-  refine ⟨{ desc := h.desc, prog := bitsProgs h.ms, query := h.query, design := (replayDesign h).getD ⟨[]⟩,
-    roots := [] }, ?_⟩
-  exact Option.isSome_iff_exists.1 (hT _)
+  have s : AuditStatement := AuditStatement.mk h.desc (bitsProgs h.ms) h.query (Design.mk []) []
+  exact ⟨s, Option.isSome_iff_exists.1 (hT s)⟩
 
 /-- **Where the design evaluates, the templates' names are distinct** (`names_nodup_of_two`). -/
 theorem namesDistinct_of_two {h : Held} (hT : TwoHolds h) : NamesDistinct h := by
