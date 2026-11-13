@@ -148593,3 +148593,111 @@ set.
 5. Whether the four tests are the only ones that fail in the merged tree. I read the merged tree for calls; I
    ran no test on it, since a merge is not mine to make before the word.
 6. What the composite's pull request does. I repeat your relay.
+
+## TWOLEG — 15:25Z Fri 13 Nov — the 15:30Z entry: my rows are `PLACES` word for word (33 of 33, `e1ed` 105 passed at `4124a539a395`); order 4 is written and compiles (`a328e97564b2`: build rc 0, the difftest suite 432 passed), then widened to every rule to follow STOPDRIVER's `46811047714e` (`898db790ac96`, its build and suite are out); with it the play is refused at its own run; `Spot.Run`'s lock record does not move by reading, and its records run is out
+
+Branch `cursor/proofs-twoleg-family-ad71`, pushed, head `898db790ac96`, on the join's `4e986e339ad2`. No lock is touched and no pull request is open. Commits since my 14:11Z, oldest first: `e5ee84c27620` (the generator's coverage), `39143591f2de` (the stricter rule), `9e65cc4c6e6` (the module carried, the difftest imports it), `4124a539a395` (the key's sentence), `a328e97564b2` (order 4), `898db790ac96` (order 4 on every rule).
+
+**1. The head whose rows agree with `PLACES`: `4124a539a395`, and every head above it**
+
+- My table is STOPDRIVER's `PLACES` word for word: 33 windows, 11 with a place and 22 refused. [run, on the VM: the two lists parsed and compared as text, mine against `verifier/tests/test_window_place.py` at `7b140ae8ec07`; `46811047714e` does not touch that file or the module]
+- `r20261113-144353-e1ed` at `4124a539a395` (cpu-14): `passed  verity-core-sampled-proofs   105 passed in 232 s`. That is the place difftest alone: Lean's `Spot.Place` against `window_place` on the 32 rows the harness can carry, each as given and beside a window's other items (61 rows), and on 1,500 generated windows in which each of the seven kinds (three with a place, four refusals) comes at least 40 times.
+- The Lean file also holds the 33 rows as JSON text in compiled guards, so the build refuses a change to either side alone.
+
+**2. `1ac1`'s three verdicts** (`r20261113-141002-1ac1` at `709510899c5a`; `r20261113-143715-b376` at `39143591f2de` gave the same three)
+
+The play: one member, `--inline --units 1 --logits`; its label is `draw/0`, its window's place is 68719476752, and its window's run is its window root.
+
+| The play's parameters | The form | Its reason |
+|---|---|---|
+| as played | rc 1, reject | "two-stage: the boundary names a family other than the one its record's layout names: a class's first stage reads one family of its session" |
+| the label set to `draw/68719476752` | rc 1, reject | "two-stage: the interior's audit: draw: coins: the work law's strata are not well formed over 8 units" |
+| the window root altered in its last digit | rc 1, reject | "two-stage: the boundary's window root is not its record's run: the first stage's session is the one the auditor's ledger opens on the record's own run" |
+
+- So step 4 refuses the family and the root each by its own reason, and passes a play whose label is its window's family.
+- The second row's refusal comes after step 4. Why the law is malformed there is my reading, not shown: the play's challenger read no coins of that family.
+
+**3. `9fd1`, in one line**
+
+`r20261113-140327-9fd1`: 47 passed, 1 failed, and the one failure was my generator's own coverage assertion (it reached a stop population 8 times, under the 40 it asks); Lean and the Python agreed on every example. Mended in `e5ee84c27620`; `r20261113-141253-63cc` then passed 48 of 48.
+
+**4. Your item 2: what Lean's reader gives on the three rows. No row is dropped**
+
+- **A size written `4.0`: no place.** Lean reads it as mantissa 40 with exponent 1, which is not a natural number to its reader. Lean tells 4.0 from 4. The row stays; it is a compiled guard in `Spot/Place.lean` and not a difftest row, since the harness's canonical JSON refuses a float.
+- **`true` for a size: no place.** A boolean is not a number to the reader.
+- **An explicit null: no place.** For a size, null is not a number. For `stopped` and `population`, the reader tells a field that is null from one that is absent, and only the absent one reads as "not stopped" or "the spans".
+- **The one text Lean cannot tell from 4 is `4e0`.** It reads as the whole number 4, so its window has place 68719476752. `40e-1` has no place. Python reads `4e0` as a float and refuses it [run, on the VM]. Lean's two readings are compiled guards. This text is not canonical: `Flock.canon` refuses an exponent other than 0, the form reads its records back through it, and Python's writer never writes it. So the difference is not reachable through either path I know; I did not prove that.
+
+**5. Your item 3: the difftest imports the module and holds no copy** (`9e65cc4c6e6`)
+
+- `verity/protocols/spot/verifier/window_place.py` on my branch is STOPDRIVER's file byte for byte: blob `12a54e8f5073`, the same at `fd71e0c8bdc6`, `7b140ae8ec07` and `46811047714e`. [run: `git rev-parse` of each]
+- I carried it before STOPDRIVER's entry named a head. My difftest tells its four refusals apart by their words, as STOPDRIVER's 15:06Z says.
+- `tests/test_boundaries.py` and `tests/test_tree.py` at `4124a539a395`, on the VM: 65 passed, one bookkeeping warning that is not of my files.
+
+**6. The key: the sentence is in the form's docstring** (`4124a539a395`, one commit)
+
+- In `VStarRecursive/SampledTwo.lean`'s parameters section: the form has no source of the auditor's key but its parameters, so it holds the challenger's key to nothing; the key is the composite's to pin (`Core.Composites.atPins`, `Verity.SpotPinned`); a run of the form alone says nothing about whose key signed. It names the two definitions and no pull request.
+- Neither definition is in my tree: both are at soundness's head only. The docstring names them ahead of their landing.
+- At that head: `r20261113-144420-8765`, the build of 39 files in three packages, rc 0 (`security/Proofs`: `Build completed successfully (12089 jobs)`); tries `r20261113-144546-f6fa` (`SampledTwo/Steps.lean`, 29 theorems) and `r20261113-144649-c71c` (`SampledTwo/AcceptsOfSteps.lean`, 13 theorems), each `lean exit 0` with no axiom beyond the three.
+
+**7. Your item 4: the stream's run and the stop audit's Lean read `Spot.Place.family`**
+
+What is written:
+
+- **`Spot.Run.run`** (`Run.placed`, one line after the closure refusal, before any coin is read): where the run names a family and its record's window names a place, the family must be `Place.family` of that window, else `select` is refused with the code `place`. A run that names no family, and a window that names no place, are held to none.
+- **`Spot.Record.acrossFound`** (`Record.familyReason`, joined to the `order` verdict after `orderReason`'s own reasons): where the sample names a family, it must be `Place.family` of the later record's window. Another family is refused, and so is a later window that names no place. Eight compiled guards.
+- **The run difftest's reference** takes the same step from `window_place.family`, with 22 new rows (13 under a two-stage rule, 9 under a one-stage one).
+- `a328e97564b2` held `Run.run` only under a two-stage rule, as STOPDRIVER's stream did at `7b140ae8ec07`. STOPDRIVER's `46811047714e` holds every design, and your words name no rule, so `898db790ac96` drops the condition.
+
+What ran at `a328e97564b2`:
+
+| Run | What | Result |
+|---|---|---|
+| `r20261113-145514-7c24` | the build of 76 files in three packages, the six proof files that unfold `Run.run` among them | rc 0; `security/Proofs`: `Build completed successfully (12198 jobs)`, exit 0 in 519 s |
+| `r20261113-145600-47d9` | the suite `verity-core-sampled-proofs`, whole | `432 passed, 2 skipped in 740 s` |
+| `r20261113-145542-2643` | the same suite's place and run tests | `126 passed in 278 s` |
+| `r20261113-150717-4edc` | try `RunsAs/Steps.lean` | `lean exit 0`; 17 theorems, none beyond the three axioms |
+| `r20261113-150825-cd25` | try `RunsAs/PopulationOf.lean` | `lean exit 0`; 3 theorems, none beyond |
+| `r20261113-151101-1db8` | try `SampledTwo/FirstCoins.lean` | `lean exit 0`; 21 theorems, none beyond |
+| `r20261113-145805-fb25` | the suite `verity/protocols/spot/verifier` | `986 passed in 418 s` |
+| `r20261113-145844-fdc7` | the suite `benchmarks/two_stage` | `10 passed, 7 skipped in 247 s` |
+| `r20261113-145612-755e` | a fresh play, then the form three ways | the play is refused at its own run; the form's three verdicts are those of section 2 |
+
+- **No proof needed a change.** The six files that unfold `Run.run` (`RunsAs/Steps`, `RunsAs/PopulationOf`, `SampledTwo/FirstCoins`, `FirstSample`, `CutFirst`, `Sampling/Select/Code`) compiled as they are in `7c24`.
+- I did not read which two tests `47d9` skipped; the run at the new head prints them.
+
+What ran at `898db790ac96` so far: `r20261113-151718-05b3`, try `SampledTwo/FirstSample.lean`: `lean exit 0`, 6 theorems, none beyond the three axioms. The rest is out (section 9).
+
+**What the hold refuses at this head, without B's driver**
+
+- **The play is refused at its own run.** In `755e`, `second rc=1` and `held: false`; the outcome's `interior` is `["run", "statements"]` and its `replay_sample` is `["run"]`. In `b376`, three commits below, `second rc=0`, `held: true`, and those were `["statements"]` and `[]`.
+- The outcome names the step, not the code. That the code is `place` is derived: on each play's own run input (`out/second/run-input.json`) the run names `draw/0` and its record's window's family is `draw/68719476752`, so the reference's hold is false. [run, on the VM, the reference's `_placed` only]
+- The interior record's window in both plays has no `prompt` or `outputs`, so it names no place and is held to none, as STOPDRIVER read.
+- The two suites above pass at `a328e97564b2`, so no test of theirs runs a two-stage stream on a challenger's family other than its window's. Under every rule (`898db790ac96`) they are out again.
+- `benchmarks/one_stage` (the stop audit's and the driver's tests) at `a328e97564b2` is `r20261113-145832-f65e`, still running after 27 minutes. I expect failures there; none is read.
+
+**8. `Spot.Run`'s lock record: its readers, and its text before and after**
+
+- One lock reads `Spot.Run`: `security/Properties/lean-audit.json`. No lock reads `Spot.RecordAcross`, `Spot.Place` or `VStarRecursive.SampledTwo`. [run, on the VM: every `lean-audit.json` of the tree]
+- **Its readers, each owner `@proofs`:** `Properties.Spot.haltEndsOpen`, `Properties.Spot.haltEndsOpen_honest`, `Properties.Spot.haltIsFinal`, `Properties.Spot.noAcceptAfterHalt`. They reach it through `Spot.Stream`, which calls `Run.digest?`. [the readers' names: from the report of my records run `r20261113-062449-8db6` this morning; the owners: the lock]
+- **Its text before:** digest `7e89b30ca8f0be450dd82dbb37e3d3ca4a32d3c7bff17cde769bca4fec1a6e0e`, over two definitions: `Spot.Run.digest?` `157a6ddffadd82452732d2979cb9d5522a68e31e3fa7f7fe3441b63531b1ec3a` and the private `Spot.Run.hexDigit` `1ec677032a444d849b4779159be25540a55afa79e0f1303cdc72abb13e83c695`.
+- **Its text after: the same, by reading.** The record hashes only the definitions its guarantees read, and no guarantee reads `Run.run`, `Run.placed` or `Run.Input`. My commits change neither `digest?` nor `hexDigit`.
+- **By a run: not yet.** `r20261113-150731-b090` is the records run of `security/Properties` with `--update` in a clone, at `a328e97564b2`. It writes nothing on my branch. I report in one line whether it regenerates any record.
+
+**9. Three things that are my choice, for your word**
+
+1. **`Run.run` holds a window with no place to none; `acrossFound` refuses it.** The stream runs records of every adapter, and STOPDRIVER reads that only the vLLM adapter's boundary and stop records name the two sizes. The later record of a read across streams is always a stop record, which names a place. The form's step 4 refuses a window with no place too.
+2. **`acrossFound` has no Python reference.** Its guards are in Lean, and `benchmarks/one_stage/tests/test_stop_audit.py` reaches it through the executable. A difftest row needs a port for `across`; I have not written one.
+3. **My branch is 61 commits behind the join's tip.** FRAME's 15:12Z puts my line in its third batch only once it holds the merged tip. `git merge-tree` of my head with `d557b8cf4282` gives a tree with no conflict [run, on the VM], though the join's tip and GATHER's head both change `Spot/Run.lean` and the run difftest. I have not merged, and nothing is compiled on a merge. Say whether I merge the tip into my branch now.
+
+**10. Not established**
+
+- That `898db790ac96` compiles: its build and suite are out. One of its files tried clean (`05b3`).
+- What `benchmarks/one_stage`'s tests do under the hold, at either head.
+- That the lock's record of `Spot.Run` is unmoved, by a run.
+- Any play accepted by the form with the refusal in it. At this head none can be: the driver names `draw/0`.
+- That the text `4e0` cannot reach a window Lean reads.
+- `Core.Composites.atPins` and `Verity.SpotPinned` as the docstring describes them: I read them at soundness's `dc0092697db0` earlier, not since.
+- The parser lemma and the null-root hypothesis: not written, as you ordered.
+
+Runs out, all at `898db790ac96` but the first two: `f65e` (`benchmarks/one_stage`, at `a328e97564b2`), `b090` (the records run, at `a328e97564b2`), `r20261113-151533-3536` (the build), `r20261113-151628-6711` (the difftest suite, with its skips named), `r20261113-151704-058e` (`verity/protocols/spot/verifier`), `r20261113-151716-d7a0` (`benchmarks/one_stage`), `r20261113-151745-f30e` (a fresh play and the form), and two tries (`CutFirst.lean`, `Select/Code.lean`). Head pushed: `898db790ac96`; nothing unpushed. I write their results in one entry when the build and the suite end, and the mailbox is read again at 15:45Z.
