@@ -148766,3 +148766,41 @@ Out: `r20261113-152240-2af8` (`RoundPrefix.lean` at `e886e90673c`, about ten min
 - The siblings check covers the built modules it could import, not the tree.
 
 Pushed: `cursor/proofs-messages-setups-745c`, `cursor/proofs-messages-rise-745c` and `cursor/proofs-messages-point2-745c` at `2658eaf78153b19e3f3bdeaef1521484785fcea3`; `cursor/proofs-messages-replay-745c` at `e886e90673c2c672e823a325bce08912af1383dc`. Nothing unpushed.
+
+## SESSIONOF2, Fri 13 Nov 15:24Z: both files of order F compile on a node, `PortsDistinctAt` included; the Lean check wants the walk's tactics listed as compile-time code, so they are now in a module of their own, which is being tried
+
+`PortsDistinctAt C` is now a theorem under the one hypothesis the parser switch proves, and Lean accepts it on a node with a clean axiom probe. So all three premises of order F, and the named ports premise, are derived and compiled. One thing the try showed that I had not seen: the Lean check refuses a module that defines tactics unless the package's lock lists it for review. I moved the tactics into a small module of their own so that the listing covers only them; that change has not compiled yet.
+
+**The verdicts** `[run]`
+
+- `r20261113-144840-d257` on vy-nebius-cpu-3, `lean_changed.py --try security/Proofs/Flock/SpotFlock/PortsOfParams.lean --siblings`, `--mem-gb 24`, on commit `b7abdd8e8478`: done, rc 0. "lean exit 0 in 1855 s" (the build of 11,735 modules under it). "axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`ports_of_inputOfCase`, `portsDistinctAt_of`). "siblings: no built module of its package that doesn't import Proofs.Flock.SpotFlock.PortsOfParams declares a name it does (417 imported in 8 s, peak 4854 MB); 3812 unchecked".
+- The same run built `Proofs.Flock.SpotFlock.ParamsWf` at `b6f6845cee44` as a dependency ("Built … (25s)"), the commit that had not compiled on its own. Its axiom probe of record is still the one at `e0eb889df17a` (`r20261113-143202-0854`, 22 theorems, clean).
+
+**What the try showed: compile-time code needs a listing** `[run]` `[read]`
+
+- The run printed: "lean-audit: … Proofs/Flock/SpotFlock/ParamsWf.lean:161 runs code while it compiles (elab), outside a `compile_time` listing reviewed at its digest. Such code can write any module's outputs in the build, so none of its modules go into the artifact cache".
+- The rule (`tools/verity/lean/check.py`, `COMPILE_TIME` and `listings`): a module with an `elab`, a `macro` or a `syntax` is refused unless `compile_time` of its package's `lean-audit.json` lists it, with a reason and the sha256 of the file as reviewed; a listed module may hold no guarantee and no definition a guarantee reads; and a `partial def` is an escape with a listing of its own (`escapes`).
+- So I split the file, commit `9c5b95260b60` `[run: the copy on my VM]`: `security/Proofs/Flock/SpotFlock/DoWalk.lean` (new, 128 lines) holds the eight tactics and nothing else; `ParamsWf.lean` imports it and has no `elab` or `macro` left; the one `partial def` became a recursion on a count, so no `escapes` line is needed. The join does the like with `SampledTwo/JpWalk.lean`. A later change to a theorem then needs no new review of the tactics.
+- On the copy (now three modules: the readers, the tactics, the lemmas): exit 0, 22 theorems, no `sorryAx`. `tests/test_lean_vocabulary.py`: 15 passed.
+- The try of the split: `r20261113-152353-21f3` on vy-nebius-cpu-14, one run with the two tries in turn (`ParamsWf.lean`, then `PortsOfParams.lean`, each `--siblings`), `--mem-gb 24`, limit 60 minutes, launched 15:23:53Z. It is my only run. If that node's tree is cold it builds the 11,735 modules first, so it ends between about 15:35Z and 16:00Z, by 16:24Z at its limit. The commit's first push failed on a dropped connection and went through on the retry at 15:24:01Z, eight seconds after the launch; the run ships my tree, which was at that commit.
+
+**STOP RULE**: nothing. No listed guarantee's statement or premise changes; no verifier code is touched; I edited no lock.
+
+**NEEDS** (for the join's owner, in `security/Proofs/lean-audit.json` and `security/Proofs/lakefile.toml`, neither mine; not before `21f3` passes)
+
+1. `roots`, in both files: `"Proofs.Flock.SpotFlock.PortsOfParams"`. It imports `ParamsWf`, which imports `DoWalk`, so the one line reaches all three; if the roots are to name every module as they do for `JpWalk`, also `"Proofs.Flock.SpotFlock.ParamsWf"` and `"Proofs.Flock.SpotFlock.DoWalk"`.
+2. `compile_time`, in the lock: `"Proofs.Flock.SpotFlock.DoWalk": {"why": "jp_intro, head_zeta, head_whnf, throws, jp_step, do_walk and lit_walk, the tactics that walk an Except do block by its join points (SpotFlock/ParamsWf.lean's proofs of what the parameters' readers return): elaborators that replace a hypothesis by a definitionally equal one or generalize a join point to a variable, and macros that expand to repeat', first, cases, split, refine, obtain, subst and dsimp only. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.", "digest": "9c4f23f64cf0313080637290463c0ca73562e221f45a1b38979550f0bb3f145a"}`. The digest is the file's sha256 at `9c5b95260b60` `[run]`; a reviewer reads the file first, and `check.py --update` records the digest, which I do not run.
+3. The rest of the earlier NEEDS stand.
+
+**A stray delivery, for the coordinator** `[run]`: between 14:51Z and 14:56Z my agent received about forty events that are yours and not mine: two Slack messages of a thread in #agent-coordination (11:14Z and 11:17Z today, to @proofs from vllm and top), and your own timers from Thu 15:52Z to Fri 10:47Z (among them `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, twenty fires of `proofs-sweep-30m-v42`, `chain2-firstaccept-messages-0822z`, `proofs-1047Z-prf490`). I acted on none, read none of their runs and posted nothing. My own subscription list holds only my one timer. If any of them did not also reach you, it was not done.
+
+**To post**: as in my 14:49Z entry, with `portsDistinctAt_of` (`Proofs.Flock.SpotFlock.PortsOfParams`) now compiled too.
+
+**Not established**
+
+- That the split compiles in the tree (`DoWalk.lean` as a module of its own, the tactics used across modules there, the count-bounded `headMatchWhnf`): `21f3`.
+- `hcj` on the join: it holds only after the switch.
+- That any consumer's premise is dropped: I changed no file that takes one.
+- The whole Lean check on the branch: only single-file tries ran, and it fails `orphan.file` and the compile-time listing until the lines above are in.
+
+**Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60` (off the join at `4e986e339ad2`; both files compiled at `b7abdd8e8478`, the split is "not compiled"); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
