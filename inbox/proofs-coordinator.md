@@ -124770,3 +124770,65 @@ NEEDS: nothing of you. To HELDOF: section 4. To MAJORITY: section 2.
 - #9674's body says all of the above [read: `research queue edit`, 06:24Z].
 
 One timer of mine is set for 07:00Z. On it: #9602's ready line if `46a8` ended rc 0, and #9674's if `f77d` passed.
+
+## COUNT, Fri 13 Nov 06:25Z: #9621 ready line: head `13a60635abb295eb520767bf5a96e1c8e16bae24`, changed suites `r20261113-061542-af62` 3 of 3 passed (`verity-bench` 647, `repository` 388, `verity-graph` 220; none cached), merges onto `main` `b843a10af48a` with no conflict; #9479 is on `main` (05:41Z), #9640 is not yet
+
+**In plain words, for Daniel.** The section that prints what a served run's audit showed is ready to land: `main` is merged into it and its tests pass. Before giving it I found it said too much in one case and fixed that first. It printed the audit's final accept as given whenever the outcome said accepted, without asking whether the second stage's own checks had all held or whether the accept was complete. It now prints given only where the second stage held, and "given and not complete" where the outcome does not say complete, which is every accept the two-stage audit gives today; such an accept stays among what is open and moves no figure. On the rehearsal's files nothing changes, because its accept is withheld. The security level is on `main`. Nothing here ran on a served engine or a GPU.
+
+### The ready line, #9621
+
+- Branch `cursor/proofs-count-b7e2`, head `13a60635abb295eb520767bf5a96e1c8e16bae24`, pushed [run: `git ls-remote`, 06:15Z].
+- Changed suites, your command with `--quick`, at that head: `r20261113-061542-af62` on vy-nebius-cpu-3, done rc=0, 3 of 3 passed, none cached: `verity-bench` 647 passed, `repository` 388, `verity-graph` 220; its first line is the head it ran, `13a60635abb2` [run].
+- On my machine at that head, one file a command [run]: `tests/test_served_row.py` 17 passed, `tests/test_served_record.py` 9, `tests/test_exfiltration.py` 38, `tests/test_spot_status.py` 32; ruff clean on the four Python files.
+- `git merge-tree --write-tree origin/main HEAD` at `main` `b843a10af48a`: no conflict; the diff against `main` is this change alone, six files, 1,529 lines, all new [run].
+- Two commits since the head you last had (`b0430debe997`) [run]:
+  - `a2b9a1cac86b`, the merge of `main`. One conflict, `benchmarks/exfiltration/README.md`, where this change and #9479 each add a section after the same line; both kept. Suites at that merge: `r20261113-060157-ad62`, 3 of 3 passed, none cached (`verity-graph` 220, `verity-bench` 646, `repository` 388).
+  - `13a60635abb2`, the accept's rule below.
+- #9621 is not marked ("waiting", at `13a60635`) and is in no train [run: `research queue status`, 06:23Z]. Its body is sent for this head [run: `research queue edit 9621`].
+
+### What I fixed before giving it [run: the new test fails without the fix, `KeyError: 'complete'`]
+
+The command's word `accept` means accepted and complete (`VERDICT_READS`). The section read only the outcome's `accepted`. It now reads the outcome by the rule the driver's writer of these records uses (#9662, `benchmarks/one_stage/verdict_record.py`) [read]:
+
+- the summary's `held` is not true: the final accept is printed as refused, and the record says `refuse`, whatever the outcome says;
+- held and accepted: given; complete only where the outcome's `complete` is true, else "given and not complete", listed in what is open, mark `run, not proved`, record `not complete`;
+- held and refused by one code the data file names a reason for: withheld, as before.
+
+`two_stage.py` on `main` writes no `complete` in its outcome [read: `outcome_of`], so every accept it gives reads `not complete` under both writers until it does. [derived]
+
+### The owed line: what #9479 and #9621 read of a verdict's `rate`, `registration` or a control record
+
+Neither reads a verdict record's `rate` or `registration`, and neither reads a control record, in any form. #9479's lines read only the planner's `verification_phase.binding` [run: grep of the landed diff]. #9621 reads no verdict record at all: it writes one, piece `second_stage`, `control` null, whose `registration` is the full hex digest the second stage's `summary.json` names as `first_stage.registration`, held equal to the first stage's `stage1.json`; it carries no `rate` (the reader prints the first stage's rule as that file gives it, the text `rate:2/6` on the rehearsal, and compares it with nothing); the audit's own negatives are only counted from `summary.json`'s `audit.negatives`, 18 of 18 on the rehearsal [run: the reader on the rehearsal's files; read: the code].
+
+### Where #9621's record differs from the driver's writer (#9662 at `b3d3c01f9983`) [read]
+
+- `class`: `p4-o2` here, `w<row>/p4-o2` there. The window's row is in the boundary record, which the second stage's files name only by digest, so I did not write a second `class_of` that could disagree with the driver's.
+- No `rate`, no `stream_registration`, no `stream_names_boundary` here.
+- `verifier.module`: the verdict kind's name here (`sampled-proofs-verifier`), the module's path there. `proved_by`: the theorem where the mark is `proved` here, always null there.
+- A reader that requires the driver's fields refuses this section's record by name; nothing can miscount it. [derived]
+- Proposal, for the follow-up you approved (its own pull request after #9621 lands): one writer. The section prints the driver's own `verdict_record.record(...)` once #9662 is on `main`, and these differences go. I build none of it now, and nothing of the join of the two readers until you name #9501's head. #9501's head moved to `a479742a71a7` [run: `gh pr view`, 06:16Z]; I read nothing of it.
+
+### Point 3: both on `main`?
+
+- #9479: on `main` since 05:41:41Z, commit `07276cd9e0` [run: `gh pr view`].
+- #9640: open at `58a065ec1f7e`, ready and admitted, not on `main`; `main` is `b843a10af48a` [run: `research queue status`, 06:23Z]. It lands second and is benchmarks' to merge. A scratch merge of it onto `main` has no conflict and `tests/test_exfiltration.py` passes 39 there [run, not committed].
+- #9533 already holds #9479 and merges onto `main` cleanly [run, 06:03Z], so `NO_VERDICTS` needs no new pin from me.
+- I say so in my next entry when #9640 is on `main`.
+
+### The whole command at this head [run, 06:23Z, on my machine against the store's remote]
+
+- `verity bench exfiltration --served-run` on the rehearsal's record: exit 0, 253 lines. The section sits between the figure and the block on the resampling holes; it is the same text line for line as at `b0430debe997`, and so is the holes block [run: diff of the two prints]. The print is kept as `/opt/cursor/artifacts/row4/command-E.md`.
+- Data for point 3: the command now reads `r20261113-031051-a426` as the planner's rows of record, and #9479's line prints "the security level: not read. The rows of record hold no binding bound (`verification_phase.binding`): the planner wrote them before it computed one." So the security level prints no bound until the run of record you named in point 3 is made and labelled. [run]
+- The same command on a run machine exits 2: the store there holds no planner rows and has no remote (`r20261113-061538-cde9`). It is not a fault of the change. [run]
+
+### Not done
+
+- Nothing on a served engine or a GPU.
+
+### Machine
+
+Replaced at 05:57Z; worktrees rebuilt from the pushed branches; nothing was lost. This loop holds `~/wt/.pen` (taken 05:58Z).
+
+### What I wait on
+
+Your mark on #9621; #9640 on `main` (yours to tell benchmarks); your word naming #9501's head.
