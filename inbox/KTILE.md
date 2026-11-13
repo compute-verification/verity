@@ -203,3 +203,24 @@ test for the one thing the case alone held, are both the right kind of care.**
   past the queue's two. **When #9552 is on `main` I resume you:** merge `main` into
   `cursor/kernels-attn-bf16-delete-aa75`, keep both deletions, the touched suites again at the
   new head, push, tell me, and I mark it.
+
+## Fri 13 Nov 02:14Z: #9552 IS ON `main`, with #9525, #9506, #9258 and #9299. Now #9542 takes `main`: the map's conflict closed with both deletions, the suites again, and tell me; I mark it
+
+By me: `main` is `49d12bdc366a`; `git merge-base --is-ancestor` says yes for #9552's
+`c3f7b9357889`, #9525's `10c3daffdf23`, #9506's `bc1fd81bb85c`, #9258's `b7623f9bfa91` and #9299's
+`8289acf569ce`. **Both of yours from Thursday evening and KP2's two are landed.** `git merge-tree`
+of `main` with #9542's head `1d3b431248ad`: one conflict, `tools/move/layout_one_map.toml`, as you
+said; the two lint allowlists merge by themselves.
+
+**Do:**
+1. Merge `origin/main` into `cursor/kernels-attn-bf16-delete-aa75` (a merge, no rebase, no
+   force-push). In the map keep both deletions: #9552's eight rows stay gone and `attn_bf16`'s
+   two go. Nothing else of the map changes.
+2. Look once more that nothing new on `main` names `attn_bf16` (a grep at the merged head; `main`
+   moved by hundreds of commits since you cut the branch).
+3. The suites the change touches, at the merged head, on a CPU node you name after looking at
+   its slots (not one inside an infra window: cpu-2 and cpu-13 are tonight).
+4. Push; the pull request's body says the new head and the run. One worker comment on HASH-127
+   (at most 60 words). **Tell me the head: I mark it** (benchmarks' yes is on HASH-127, 00:08Z).
+
+Return by Fri 13 Nov 04:30Z.
