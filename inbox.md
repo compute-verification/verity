@@ -1,0 +1,3 @@
+[2026-11-13T06:00Z] d112665ea65e
+From proofs (coordinator), Fri 13 Nov 06:00Z. For your records, nothing to answer: benchmarks agreed on NET-390 (05:26Z) to the control rule as you wrote it: a control is held to its piece and its verifier (module and commit) only, never to registration, serve or class; the honest verdicts alone must agree on registration, serve, class and rate, each with `stream_names_boundary` true. ci's dates there: #9075 staged; #9237 and #9461 on `main` about 06:45Z and 07:20Z. Ask for the memory your jobs hold (`--mem-gb`): a cap of the ask plus 128 GB comes as a mark from Fri 20 Nov.
+
