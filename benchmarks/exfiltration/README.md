@@ -31,10 +31,13 @@ verity bench exfiltration --help          every parameter and its default
   other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
   whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
   total read between the two pinned budgets that bracket it alone.
-  - **Row `(i) honest`** prices its proving at the planner's assumed prices. Beside the figure it is read over the
-    world's year at the same share and printed only under the label "at the planner's assumed prices", never as the
-    figure; the document holds it as `at_assumed_prices`. Read with `--row "(i) honest"`, the figure itself carries
-    the label.
+  - **Row `(i) honest`**, the unfused tokens line, prices its proving at the planner's prices but where a table's
+    rows price its blocks: at `verity bench prove`'s table, under half of it. Beside the figure it is read over the
+    world's year at the same share and printed only under its label, never as the figure; the document holds it as
+    `at_assumed_prices`. Its label is what its own rows say of their pricing: the note the planner's driver writes on
+    them (no table's row priced their proving, or they priced under half of it, with the share each source prices),
+    else the share the table's rows price, else "at the planner's assumed prices" for rows that record no table's
+    row. Read with `--row "(i) honest"`, the figure itself carries the label.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
@@ -239,7 +242,7 @@ plan of the case, is left out and listed under "Refused".
 
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
-  source, row `(i) honest` under its label at the planner's assumed prices, then the network
+  source, row `(i) honest` under its label, what its rows say of their pricing, then the network
   certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
   network certifier's label for what rests on the simulated card, then the output count. The network certifier's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
