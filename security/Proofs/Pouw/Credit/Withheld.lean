@@ -331,13 +331,13 @@ namespace Properties.Pouw.Credit.SecurityProofs
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
 
-/-- **`DrawWithheld`'s honest lemma, on a window of no call, crediting nothing**: `credited` accepts at the honest
-deployed instance. A key `Lms.keygen` derives at the deployed LMS parameters signs an honest session withheld
-(`Properties.Challenger.Withheld.Play.Honest`) of the family `pouw/draw`: the auditor's device commits to one
-challenge, records the commitment, logs the window's sample root and the release after it and closes its log, and
-the auditor's ledger opens the session on that root and ends it closed. The window holds no call and no round, and
-its Commit record registers no value: `credited` under that key accepts it and credits no call. That a window
-holding a call is accepted is not shown here. -/
+/-- **`DrawWithheld`'s honest lemma, on a window of no call, crediting nothing** (accepts, credits nothing shown):
+`credited` accepts at the honest deployed instance. A key `Lms.keygen` derives at the deployed LMS parameters signs
+an honest session withheld (`Properties.Challenger.Withheld.Play.Honest`) of the family `pouw/draw`: the auditor's
+device commits to one challenge, records the commitment, logs the window's sample root and the release after it and
+closes its log, and the auditor's ledger opens the session on that root and ends it closed. The window holds no call
+and no round, and its Commit record registers no value: `credited` under that key accepts it and credits no call.
+That a window holding a call is accepted is not shown here. -/
 theorem drawWithheld_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds draw : Json)
       (got : List Nat),
