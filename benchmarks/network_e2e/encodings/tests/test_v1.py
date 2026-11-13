@@ -6,7 +6,7 @@ the decisions charged before their step's window; the strings are prefix-free (s
 bound's `hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a sent
 shortfall) are among them. A trace vLLM's scheduler served with a draft goes to and from its schedule, each row's kept
-count in the string and charged to its request's body's window."""
+count in the string and charged to its step's window."""
 
 from __future__ import annotations
 
@@ -91,8 +91,9 @@ def test_decode_inverts_encode(name, book):
 @pytest.mark.parametrize("name", DRAFT_CASES)
 def test_a_trace_served_with_a_draft_round_trips_through_its_schedule(name):
     """vLLM's own scheduler under 1, 3 and 5 drafts a row, sync and async, with prefix hits, a tight pool and a light
-    load: the string of the trace's schedule decodes to every step vLLM ran and every count its rows kept, each window's
-    charge holds its length terms and its kept terms' second segment, and I1 v0, which can't say such a serve, is
+    load: the string of the trace's schedule decodes to every step vLLM ran and every count its rows kept. Each count
+    is charged in its step's window, never one after the window that releases its row's first output; each window's
+    charge holds its length terms and its kept terms' second segment; and I1 v0, which can't say such a serve, is
     refused by name."""
     t = step_trace(name, DRAFT)
     rec = V.record_of(t, (EOS,))
@@ -103,11 +104,19 @@ def test_a_trace_served_with_a_draft_round_trips_through_its_schedule(name):
     assert SC.decode(data, rec, reg) == served
     charge = V.bits_by_window(data, rec, reg)
     assert len(charge) == V.windows(rec, reg.T) and 0 <= 8 * len(data) - sum(charge.values()) < 8
-    alone = CV.Encoder(V.book_of(reg))
-    for ks in V.kept_terms(rec, reg):
+    order = list(served.arrival)
+    first = {k: s for s in reversed(range(len(served.steps))) for k, _, _ in served.steps[s]}
+    with KP.emitting() as emitted:
+        rp, _, _ = V.replay_record(rec, reg, reg.engine, order, lambda i, k: k >= first[order[i]], served.kept)
+    terms = V.kept_terms(rec, reg, order, rp, emitted)
+    assert {order[i]: c for i, c in enumerate(terms.by_request())} == dict(enumerate(served.kept))
+    alone, counts, out = CV.Encoder(V.book_of(reg)), KP.Counts(K, terms.outputs), [0] * len(order)
+    for w, ks in enumerate(terms.windows):
         alone.window()
-        for k in ks:
-            KP.put(alone, K, len(rec.requests[k].output), served.kept[k])
+        for i, c in ks:
+            assert w <= rec.requests[order[i]].release[out[i]] // reg.T
+            out[i] += 1 + c
+            counts.put(alone, i, c)
     second, lengths = alone.finish().lens, [sum(w) for w in V.length_widths(rec, reg)]
     assert sum(second) > 0 and all(charge[w] >= lengths[w] + second[w] for w in charge)
     with pytest.raises(V.AdviceCodeError, match="^the registered engine drafts, and I1 v0's rows emit one output each"):

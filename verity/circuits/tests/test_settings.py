@@ -74,7 +74,7 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
     typo = {"VERITY_ML_BOOLEAN_EXHAUSTVE": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "0", "VERITY_SLOW": "1", "PATH": "/bin"}
     assert S.REGISTRY.unknown(typo) == ["VERITY_ML_BOOLEAN_EXHAUSTVE"]
     with pytest.raises(S.UnknownSetting, match=r"unknown setting VERITY_ML_BOOLEAN_EXHAUSTVE: nothing in the tree reads it.*"
-                                               r"verity/settings\.py"):
+                                               r"verity/settings.py"):
         S.REGISTRY.validate_environ(typo)
     with pytest.raises(S.UnknownSetting):
         S.get("VERITY_ML_BOOLEAN_EXHAUSTIVE", typo)
