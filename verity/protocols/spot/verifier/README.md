@@ -212,14 +212,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   reference): the check that every window of a lane's monitoring period passed the one-stage audit on its proofs
   (`OneStageZk`), on the one sample its challenger session gave it. Its commitment is the auditor's ledger; its
   evidence is the host's pins log and, for each window, the session's files and one case. The verifier's parameters
-  are the period's alone: a case supplies its registration's public file's digest and its sample's segment, and
+  are the period's alone, this registration's circuit among them, the SHA-512 a period of the lane commits when the
+  ledger opens it: a case supplies its registration's public file's digest and its sample's segment, and
   nothing else of what one-stage reads. Only a window of one registration passes: a session whose signed log shows
   coins of the sample's family released after several registrations (several ranks', or one registered again) is
-  refused, as is a public file that shares rows among members. It publishes each window with the registration
-  audited and the lane's other sessions, of which it holds nothing. Its executable is `sampled-proofs-period`
-  (`id`, `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`, `serve`); nothing calls it yet but its difftest. What its
-  accept means is stated in `security/Properties/Spot/Period.lean`, and whose ledger it reads in
-  `security/Properties/Spot/PeriodLedger.lean`.
+  refused, as is a public file that shares rows among members. Every window's period commits this registration's
+  circuit, and a session of the lane that holds no coin of the family is refused unless a period that commits
+  another circuit lists it: a root committed under this registration and never sampled refuses the period. It
+  publishes each window with the registration audited and each session of the lane that is another registration's,
+  by that registration's circuit and its session alone, of which it holds nothing. Its executable is
+  `sampled-proofs-period` (`id`, `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`, `serve`); nothing calls it yet but
+  its difftest. What its accept means is stated in `security/Properties/Spot/Period.lean`, and whose ledger it reads
+  in `security/Properties/Spot/PeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).

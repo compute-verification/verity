@@ -47,6 +47,8 @@ LANE, OTHER = "dev", "other-lane"
 LABEL = "draw"
 DRAW = [[LABEL, 17]]
 SALT = [["pouw/salt", 1]]
+#: the circuit a period of a `Book` commits unless told another, and another registration's
+CIRCUIT, ELSEWHERE = "ab" * 64, "cd" * 64
 BASE = datetime(2026, 3, 2, tzinfo=UTC)
 DAY = 86400
 
@@ -229,9 +231,10 @@ class Book:
         self.end(sid, t + 120)
         return sid
 
-    def period_open(self, name: str, lane: str, t: int, cap: int = 8) -> None:
+    def period_open(self, name: str, lane: str, t: int, cap: int | None = 8, circuit: str | None = CIRCUIT) -> None:
+        """Lane `lane`'s period `name` opened at `t`, committing `cap` and `circuit`; neither, with both None."""
         self._add("period-open", None, {"period": name, "lane": lane, "by": "operator", "cap": cap,
-                                        "circuit": "ab" * 64, "key_sha512": self.key_sha, "opened_utc": at(t)})
+                                        "circuit": circuit, "key_sha512": self.key_sha, "opened_utc": at(t)})
         self.periods[name] = {"lane": lane, "sessions": []}
         self.current[lane] = name
 
