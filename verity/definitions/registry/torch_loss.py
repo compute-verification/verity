@@ -74,12 +74,12 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops.boolean.elementwise import specialized
-from verity.definitions.ops.boolean.scalar import gt_u
-from verity.definitions.ops.boolean.softmax import f32_gt
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.scalar import gt_u
+from verity.circuits.ops.boolean.softmax import f32_gt
 from verity.circuits.refs import Coll, concat, strided_view
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Tuple
 
 from . import boolean_moe as BMOE
