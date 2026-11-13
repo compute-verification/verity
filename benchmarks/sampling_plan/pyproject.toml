@@ -15,7 +15,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (`verity.protocol`, which imports the wire); a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
 # (verity.commitments.windows.interface).
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/channel.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot", "verity/claims",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/window.py",
           "verity/protocol.py", "verity/channel.py", "verity/commitments/windows",
