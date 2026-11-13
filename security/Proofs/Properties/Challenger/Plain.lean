@@ -2,6 +2,8 @@ module
 
 public import Proofs.Properties.Challenger.CanonLine
 public import Spot.PyJson
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # Plain values: the two writers write them alike, and their text escapes nothing

@@ -8,6 +8,8 @@ public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
 public import Proofs.Core.QSort
 public import CoreProtocol.Record
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # A record's line reads back as the record
@@ -346,7 +348,7 @@ theorem ledgerMessage_same {I : ByteArray} {m : Std.TreeMap.Raw String Json} {b 
 /-- A record's entry without its `sig` is the record's six other values. -/
 theorem unsigned_toJson (r : Core.Record) : Core.Record.unsigned r.toJson =
     Json.mkObj [("body", r.body), ("kind", .str r.kind), ("prev", .str r.prev), ("schema", .str r.schema),
-      ("seq", Lean.toJson r.seq), ("session", (r.session.map Json.str).getD .null)] := rfl
+      ("seq", Lean.toJson r.seq), ("session", (r.session.map Json.str).getD .null)] := by rfl
 
 /-- An entry's message does not read its `sig`. -/
 theorem ledgerMessage_sig (I : ByteArray) (r : Core.Record) (sig : ByteArray) :

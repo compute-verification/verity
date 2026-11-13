@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Properties.Challenger.Bodies
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # A pins log's line and a release log's lines, read back

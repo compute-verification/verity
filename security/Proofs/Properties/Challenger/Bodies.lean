@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.Challenger.Built
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # The bodies of a window's open and its end, read back

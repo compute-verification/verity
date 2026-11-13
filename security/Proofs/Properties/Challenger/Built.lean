@@ -2,6 +2,11 @@ module
 
 public import Proofs.Properties.Challenger.Entry
 public import Proofs.Flock.Bytes
+import all Init.Data.String.Defs
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # An object built from a list: its keys, its reads, its text and a digest's hex

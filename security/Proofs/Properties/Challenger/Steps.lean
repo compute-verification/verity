@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.Challenger.Session
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The reader accepts where each of its steps does
@@ -109,7 +111,7 @@ theorem sessionOf_ok_of_steps {key : ChallengerKey} {record close : Json} {lines
   simp only [hrr, hr, hn, hc, hm, hd, hv, he, bind, Except.bind, pure, Except.pure, Except.toOption,
     beq_self_eq_true, Bool.false_eq_true, ite_false, ite_true]
   rw [mapM_strs (fun _ => rfl)]
-  simp only [hl, hch, hroots, bytes_beq, beq_self_eq_true, ite_true]
+  simp only [hl, hch, hroots, beq_self_eq_true, ite_true]
 
 /-- `sessionNamed` returns what `sessionOf` returns of the session's files: the close names the ledger's session, the
 record its host, the record is signed at the leaf the ledger's end names over the commitment it names, and the release
@@ -179,12 +181,11 @@ theorem verifyLedger_two {key : ChallengerKey} {o e : LedgerEntry} {mo me : Byte
     verifyLedger #[o, e] key = .ok (#[{ root, opened := o, leaf := leafOf o.sig, ended := some e }], #[]) := by
   have hl0 : (-1 : Int) < (leafOf o.sig : Int) := by omega
   have hl1 : (leafOf o.sig : Int) < (leafOf e.sig : Int) := by omega
-  have hl2 : leafOf o.sig < leafOf e.sig := by omega
   have hn0 : r ≠ leafOf o.sig := by omega
   have hn1 : r ≠ leafOf e.sig := by omega
   unfold verifyLedger
   simp [Array.zipIdx, hos, hoq, hop, hok, hom, hov, hor, hof, join_none, hes, heq, hep, hek, hem, hev, hse, hrl, hrn,
-    h1, h2, verifyDays_two hok hek, hl0, hl1, hl2, hn0, hn1, LEDGER_SCHEMA, LEDGER_SCHEMA_V1, bind, Except.bind, pure,
+    h1, h2, verifyDays_two hok hek, hl0, hl1, hn0, hn1, LEDGER_SCHEMA, LEDGER_SCHEMA_V1, bind, Except.bind, pure,
     Except.pure, -Array.any_eq_true, -Array.any_eq_false]
 
 /-- `checked` returns what `verifyLedger` returns of a ledger's two lines, an open under the pinned key and an end,
@@ -288,7 +289,7 @@ theorem challengerStream_one {c : LiveCommitment} {segment doc : Json} {after : 
     (ho : LiveOpening.ofJson doc = .ok o) (hr : liveReason c o label 0 after = .ok none) :
     challengerStream c segment after (some [after]) = .ok o.coin := by
   unfold challengerStream
-  simp [hk, hl, hst, hop, ha, ho, hr, bytes_beq, pure, Except.pure, bind, Except.bind, -Array.any_eq_true,
+  simp [hk, hl, hst, hop, ha, ho, hr, pure, Except.pure, bind, Except.bind, -Array.any_eq_true,
     -Array.any_eq_false]
 
 /-- **`drawCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
