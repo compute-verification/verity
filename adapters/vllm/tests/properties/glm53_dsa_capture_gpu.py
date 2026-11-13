@@ -106,8 +106,8 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
-from verity.definitions.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
-from verity.definitions.ops.fp32 import f32_sub_bits as sub
+from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+from verity.circuits.ops.fp32 import f32_sub_bits as sub
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP
@@ -381,9 +381,9 @@ def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
 
 def rope_forms_exact(x1: int, x2: int, c: int, s: int) -> dict[str, int]:
     """`rope_forms` of one quadruple through core's exact bit functions (the non-flushing forms)."""
-    from verity.definitions.ops.fp32 import f32_add_bits as add
-    from verity.definitions.ops.fp32 import f32_fma_bits as fma
-    from verity.definitions.ops.fp32 import f32_mul_bits as mul
+    from verity.circuits.ops.fp32 import f32_add_bits as add
+    from verity.circuits.ops.fp32 import f32_fma_bits as fma
+    from verity.circuits.ops.fp32 import f32_mul_bits as mul
 
     X1, X2, Cc, Ss = ((v & 0xFFFF) << 16 for v in (x1, x2, c, s))
     n = 0x80000000

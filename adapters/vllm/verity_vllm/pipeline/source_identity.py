@@ -147,7 +147,7 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
         core = tuple(os.path.dirname(d) for d in run_store("research.pythonpath", "source_identity.resolve").package_dirs(root, "verity"))
     except LookupError:
         core = ()                   # not a workspace: no entry to expect (the verdict is check()'s, on repo_root)
-    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.definitions.silicon, verity_sp1.proofs
+    roots = {"verity": ("verity", core), **PACKAGE_ROOTS}           # core: verity.circuits, verity.circuits.silicon, verity_sp1.proofs
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:
