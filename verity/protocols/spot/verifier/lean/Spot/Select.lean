@@ -96,7 +96,7 @@ def rate? (t : String) : Bool :=
     | .ok l => jeq (getD l "law") "bernoulli"
     | .error _ => false
 
-/-- The refusal of a law text that is no rate (`rate?`), `service.FIXED`'s: a fixed count's proof blocks are each sampled
+/-- The refusal of a sampling design text that is no rate (`rate?`), `service.FIXED`'s: a fixed count's proof blocks are each sampled
 with `K/N` as the prover pads the `N` it registers. -/
 def FIXED (t : String) : String :=
   s!"a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), stratified-rate:NUM/DEN or work-rate:NUM/DEN " ++
@@ -152,7 +152,7 @@ def grain? (g : Json) : Bool :=
 blocks the prover registers. -/
 def replayLaw? (t : String) : Bool := (parseRate t).isSome
 
-/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its law text a rate (`rate?`), as
+/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its sampling design text a rate (`rate?`), as
 `service.Law` refuses any other when it is made (`FIXED`), or `{rule: two-stage, grain, replay, k}`, its grain the replay
 partition's query (a `Q_template_instance` query object), its replay law a rate law (`replayLaw?`) and `k` a positive
 integer or an object of them by template (`Counts.ofJson?`), as `service.TwoStage` refuses any other. A stream refuses a
@@ -267,8 +267,8 @@ def cellObj (o n k i r t : Nat) : Json :=
 template `t`'s from `off_t = sample.size · Σ_{t'<t} n_t'`, the `i`-th sampled replay block's (replay block `sample[i]`
 of the registration) instances of it `[off_t + i·n_t, off_t + (i+1)·n_t)`, one cell. One stratum per cell, template by
 template and in each by sampled replay block, `ks[t]` of its `ns[t]` proof blocks in each (`cellObj`); the strata tile
-`[0, sample.size · Σ n_t)` in order. The stratified law sizes each stratum's count in proportion to its size, which
-cells of several templates' sizes don't follow, so the law is the work law at `k = 1` and unit work: its rule
+`[0, sample.size · Σ n_t)` in order. The stratified sampling design sizes each stratum's count in proportion to its size, which
+cells of several templates' sizes don't follow, so the sampling design is the work sampling design at `k = 1` and unit work: its rule
 (`Flock.Draw.workK`) gives each stratum `max floor 1` capped at its size, and each cell's floor is its count. -/
 def secondLaw (sample : Array Nat) (ns ks : Array Nat) : Json :=
   Json.mkObj [("law", "work"), ("k", Lean.toJson (1 : Nat)),

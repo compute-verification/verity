@@ -129,7 +129,7 @@ def integrity_ks(sz: dict[str, float], t: float) -> float:
 
 
 def link(w: float, t: float = T) -> float:
-    """SPOT's link term at `2^w` input and output bits: W·(2t(1+k)/2^256 + 1/(eM) + k/(eR_w))."""
+    """SPOT's binding error at `2^w` input and output bits: W·(2t(1+k)/2^256 + 1/(eM) + k/(eR_w))."""
     return l2sum(w + 1 + t + lg(1 + LINK_K) - 256 + 2, w - lg(math.e) - 192 + 1, w + lg(LINK_K) - lg(math.e) - 192 + 1)
 
 

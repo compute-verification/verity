@@ -1,16 +1,16 @@
-"""The served Pearl+ flow's Lean step end to end (`served_pearlplus.sh` step 4b) with the real Lean verifier of record,
+"""The served Pearl+ flow's Lean step end to end (`served_pearlplus.sh` step 4b) with the real Lean verifier,
 PouwCheck.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
 compose then makes of the piece.
 
 A toy serve stands in for the GPU's: a warm-up pass and two timed passes of one epoch (the pouw suite's `proved_pass`, the
 H100 record's -h3 scheme at k = 128 in 16 x 16 tiles), the commands after it the flow's own: ``served_passes.py retain
 --window-record W`` (the warm-up dropped, W over the two timed rounds), ``verify --tie W --test-instance`` on the node's
-draw, its coins fixed, and ``lean``, which writes the Lean's answer to the piece's ``pearlplus-lean.json`` only where it
+sample, its coins fixed, and ``lean``, which writes the Lean's answer to the piece's ``pearlplus-lean.json`` only where it
 is the Python's.
 
-The compose's earlier conditions (the live salt session, the lane's period and reserve, the live draw and its published
+The compose's earlier conditions (the live salt session, the lane's period and reserve, the live sample and its published
 coin, the window's registration) are `test_served_verdicts._pearlplus_piece`'s stand-ins, since this toy's coins are an
-in-process challenger's and its draw the node's (a live run is `pearlplus_local_e2e.py`'s); Pearl+'s answer, W and the
+in-process challenger's and its sample the node's (a live run is `pearlplus_local_e2e.py`'s); Pearl+'s answer, W and the
 Lean's answer are this run's. The Lean is given W (``--tie W``) and holds the passes to it, the warm-up's round among
 the coin record's dropped. The row then reaches the Lean condition and reads the Lean's answer: without one it names
 none; with it, every condition up to the credit holds (the Lean's verdict, run, source and W) and the row stops at the
