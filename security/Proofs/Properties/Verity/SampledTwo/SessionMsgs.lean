@@ -203,4 +203,39 @@ theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg
   have h2 := hget t (by rw [List.length_range]; exact ht) (by omega)
   simpa using h2
 
+/-- **A session's messages are its link message, its rounds' and its last message.** -/
+theorem sessionMsgs_some {spec : _root_.Flock.SessionSpec} {x : Msg} {record : String} {proofs : Array ByteArray}
+    {ms : List Msg} (h : sessionMsgs spec x record proofs = some ms) :
+    ∃ lv mids, (FlockDeploy.liveOf spec record).toOption = some lv ∧
+      (lv.streams.toList.flatMap Array.toList).mapM (fun r => r.bytes.map fun b => 0 :: b.data.toList) = some mids ∧
+      ms = (0 :: FlockDeploy.linkBody lv.rootB.toList lv.publics.toList) :: mids ++
+        [FlockDeploy.Final.encode ⟨x, record, proofs⟩] := by
+  unfold sessionMsgs at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
+  obtain ⟨lv, hlv, mids, hmids, rfl⟩ := h
+  exact ⟨lv, mids, hlv, hmids, rfl⟩
+
+/-- **A session's first message reads back as its link message**, where the record's roots and public words fit their
+length words. -/
+theorem linkOf_sessionMsgs {spec : _root_.Flock.SessionSpec} {x : Msg} {record : String} {proofs : Array ByteArray}
+    {ms : List Msg} (h : sessionMsgs spec x record proofs = some ms) {lv : FlockDeploy.Live}
+    (hlv : (FlockDeploy.liveOf spec record).toOption = some lv) (hr : lv.rootB.size < 2 ^ 64)
+    (hp : lv.publics.size < 2 ^ 64) (hrb : ∀ b ∈ lv.rootB.toList, b.size < 2 ^ 64)
+    (hpb : ∀ b ∈ lv.publics.toList, b.size < 2 ^ 64) :
+    ∃ a ∈ ms.head?, FlockDeploy.linkOf a = some (lv.rootB.toList, lv.publics.toList) := by
+  obtain ⟨lv', mids, hlv', -, rfl⟩ := sessionMsgs_some h
+  rw [hlv] at hlv'
+  obtain rfl := Option.some.inj hlv'
+  exact ⟨_, rfl, FlockComplete.linkOf_linkBody (by simpa using hr) (by simpa using hp) hrb hpb⟩
+
+/-- **A session's last message reads back as the statement, the record's text and the proof files**, where they fit
+their length words. -/
+theorem finalOf_sessionMsgs {spec : _root_.Flock.SessionSpec} {x : Msg} {record : String} {proofs : Array ByteArray}
+    {ms : List Msg} (h : sessionMsgs spec x record proofs = some ms) (hs : x.length < 2 ^ 64)
+    (hrec : record.toUTF8.size < 2 ^ 64) (hp : proofs.size < 2 ^ 64) (hb : ∀ b ∈ proofs, b.size < 2 ^ 64) :
+    ∃ a ∈ ms.getLast?, FlockDeploy.finalOf a = some ⟨x, record, proofs⟩ := by
+  obtain ⟨lv, mids, -, -, rfl⟩ := sessionMsgs_some h
+  refine ⟨FlockDeploy.Final.encode ⟨x, record, proofs⟩, ?_, FlockComplete.finalOf_encode hs hrec hp hb⟩
+  simp
+
 end Verity.SampledTwo.SessionMsgs
