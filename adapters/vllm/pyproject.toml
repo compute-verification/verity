@@ -67,7 +67,6 @@ untraced = [
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
     "tests/lint/test_ruff_vllm.py",
-    "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/ops/test_vllm_env.py",
