@@ -7,3 +7,4 @@
 2026-11-12 21:41Z DRAFTKERNELS: ratchet fix at 920597d5ca (gate failures: []); repository suite r20261112-210847-6529 waiting for a slot on vy-nebius-cpu-1; verity-vllm after it.
 2026-11-12 22:36Z DRAFTKERNELS: repository r20261112-210847-6529 at 920597d5ca: 352 passed 0 failed; verity-vllm r20261112-215601-1b52 running.
 2026-11-12 23:12Z DRAFTKERNELS: drafts, jobs and PLAN.md committed here for the 03:00Z card row (PR head 920597d5ca).
+2026-11-13 01:08Z DRAFTKERNELS: tonight's row moved to 03:15Z-03:45Z (vllm's serve 03:00Z-03:15Z, VLLM-339): one lease, eh_norm only, NOT_BEFORE guard; eh_proj and indexer_logits to Friday 15:45Z.
