@@ -173,7 +173,8 @@ theorem stmtsOf_encStmts {xs : List Msg} (hl : xs.length < 2 ^ 64) (hb : ∀ x �
       (l := xs.map fun r => (⟨r.toArray⟩ : ByteArray))
       (fun b hm rest => by
         obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hm
-        exact FlockComplete.rdBytes_encBytes (hb r hr) rest)
+        exact FlockComplete.rdBytes_encBytes (b := ⟨r.toArray⟩)
+          (by show r.toArray.size < 2 ^ 64; rw [List.size_toArray]; exact hb r hr) rest)
       (by simpa using hl) []
     rw [List.append_nil] at h
     rw [henc]
@@ -181,7 +182,7 @@ theorem stmtsOf_encStmts {xs : List Msg} (hl : xs.length < 2 ^ 64) (hb : ∀ x �
   unfold SpotFlock.stmtsOf
   rw [hrd]
   simp only [hmap]
-  exact if_pos rfl
+  exact ite_eq_left rfl
 
 /-- **The statements' message states each template's session statement**, where they fit their length words. -/
 theorem stmtsOf_stmtsMsg {k : Case} {m : Msg} (h : stmtsMsg k = some m) :
