@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
-from verity.definitions.circuits.constants import program_data
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.definitions.circuits.constants import program_data
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import prims as P
@@ -93,10 +92,10 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
     import torch
+    from verity.definitions.numerics.serve3_reference import materialize
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity.definitions.numerics.serve3_reference import materialize
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):
@@ -136,9 +135,9 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     """The tiny registered-values serve on bits: every Call has a Boolean version (the norms with eps an input, `Attention_v14`),
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
-
     from verity.circuits import boolean as BL
     from verity.definitions import boolean as BB
+
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
 

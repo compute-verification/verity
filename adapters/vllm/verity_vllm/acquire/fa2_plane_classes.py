@@ -30,13 +30,12 @@ import json
 import os
 import re
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 PLANES = ("S", "P", "RP", "ROW", "O", "FIN")          # native_collect.cpp `name_id_seq` planes[6]; hidden_stream.StreamLayout order
 PLANES_MS = PLANES + ("MS",)                           # a build that writes the MS class (`LayoutPolicy.ms`): the seventh plane
-PLANES_PER_SEQ = len(PLANES)
-TAP_PREFIXES = ("fa2.m1/L", "fa3.m1/L")
 WHOLE, PER_SEQ, NONE = "whole", "per_seq", "none"
 
 _NAME_RE = re.compile(r"^(?P<tap>fa[23])\.m1/L(?P<layer>\d+)/(?P<rest>.+)$")
@@ -148,12 +147,12 @@ class StepSequences:
         return tuple(i for i, sl in enumerate(self.seqlen_q) if sl > 0)
 
     @classmethod
-    def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> "StepSequences":
+    def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> StepSequences:
         """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (launch order)."""
         return cls(tuple(int(hi) - int(lo) for _rid, lo, hi in rows), exact=True)
 
     @classmethod
-    def from_counts(cls, n_seq: int, tokens: int) -> "StepSequences":
+    def from_counts(cls, n_seq: int, tokens: int) -> StepSequences:
         """From (co-scheduled sequences, token rows) only: all-ones when tokens == n_seq (a pure decode step), else an inexact split
         (one sequence carries the surplus) -- enough to decide every layer's class, not its per-sequence geometry."""
         n_seq, tokens = int(n_seq), int(tokens)
@@ -173,6 +172,10 @@ class LayoutPolicy:
     ms: bool = False                                       # the tap build writes the MS class (hidden_source.tap_ms)
 
 
+#: the staging rule of a caller that names none: FA2, compacting, no MS plane
+DEFAULT_POLICY = LayoutPolicy()
+
+
 @dataclass(frozen=True)
 class PlaneClass:
     """The derived expectation of one layer at one step."""
@@ -188,7 +191,7 @@ class PlaneClass:
         return {"class": self.kind, "count": self.count, "slabs": self.slabs, "rows": self.rows, "swapped": self.swapped, "why": self.why}
 
 
-def plane_class(decl: AttnLayerDecl, seqs: StepSequences, policy: LayoutPolicy = LayoutPolicy()) -> PlaneClass:
+def plane_class(decl: AttnLayerDecl, seqs: StepSequences, policy: LayoutPolicy = DEFAULT_POLICY) -> PlaneClass:
     """The class of layer `decl` at a step with active set `seqs` under `policy` -- the composition of the kernel's fold rule (statics x
     max_seqlen_q) and the collector's staging rule (b, swapped, compact).  Pure."""
     b, mq = seqs.n_seq, seqs.max_seqlen_q
@@ -295,7 +298,7 @@ def _layer_diffs(decl: AttnLayerDecl, exp: PlaneClass, obs: ObservedLayer | None
         d.append(f"count {obs.count} observed, {exp.count} expected")
     if exp.kind == WHOLE and obs.whole:
         for HB, M, _NB, _BN, D in obs.whole:
-            if (HB, M) != (exp.slabs, exp.rows):
+            if (exp.slabs, exp.rows) != (HB, M):
                 d.append(f"whole geometry g{HB}x{M} observed, g{exp.slabs}x{exp.rows} expected")
             if D is not None and D != decl.D:
                 d.append(f"head_dim {D} in the name, {decl.D} declared")
@@ -319,7 +322,7 @@ def _layer_diffs(decl: AttnLayerDecl, exp: PlaneClass, obs: ObservedLayer | None
     return d
 
 
-def check_step(decls: Iterable[AttnLayerDecl], seqs: StepSequences, names: Iterable[str], policy: LayoutPolicy = LayoutPolicy()) -> dict[str, Any]:
+def check_step(decls: Iterable[AttnLayerDecl], seqs: StepSequences, names: Iterable[str], policy: LayoutPolicy = DEFAULT_POLICY) -> dict[str, Any]:
     """The X-03 attention-plane verdict of ONE step: for every declared layer the derived class/count (`plane_class`) vs the observed
     inventory (`observe`), plus every observed layer no declaration covers.  Pure; `names` may repeat (multiplicity counts).
     -> {ok, n_seq, max_seqlen_q, expected: {layer: class}, classes: {kind: [layers]} (uniformity as a consequence), layers_bad: {layer:
@@ -366,3 +369,7 @@ def counts_by_layer(names: Iterable[str]) -> Counter:
         if m:
             c[int(m["layer"])] += 1
     return c
+
+
+__all__ = ["LayoutPolicy", "StepSequences", "attention_impls_of_record", "check_step", "counts_by_layer",
+           "declarations_from_attention_impls", "uniform_rule"]

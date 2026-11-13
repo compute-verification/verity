@@ -27,7 +27,7 @@ import pytest
 
 from verity.circuits.codec import SCHEMA_V0, canonical_json, decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
-from verity_vllm.program.descriptor_equivalence import Mismatch, compare
+from tests.program.descriptor_equivalence import Mismatch, compare
 from verity.circuits.program import Program
 from verity.definitions.registry import b1, b1_tp2, hopper
 
