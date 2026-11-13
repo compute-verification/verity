@@ -1377,8 +1377,8 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof h => by
-  obtain ⟨law, d, n, hr, hd, ⟨hu, -⟩, rest⟩ := (acceptMeans_iff p c e pub prof).1 h
-  exact ⟨law, d, n, hr, hd, hu, rest⟩
+  obtain ⟨l, d, n, hr, hd, ⟨hu, -⟩, rest⟩ := (acceptMeans_iff p c e pub prof).1 h
+  exact ⟨l, d, n, hr, hd, hu, rest⟩
 
 /-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of the agreed law over the
 registered population, its units proved and served as sampled with each certified value read (`UnitsRead`), and
