@@ -23,7 +23,7 @@ B=${PREBUILT:-$S}
 if [ "$MODE" = build ] || [ -z "${PREBUILT:-}" ]; then
   stamp "ship and hm96_rows.cubin build into $B"
   mkdir -p "$B" && rm -rf "$B/ship-${HEAD:0:8}"
-  CUDA=$CUDA bash benchmarks/pouw/pearl_c_sm120/build.sh "$B/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+  CUDA=$CUDA bash benchmarks/pouw/pearl_c_sm120/ship.sh "$B/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
     || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
   tar -cf "$B/ship.tar" -C "$B" "ship-${HEAD:0:8}"
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$B/hm96_rows.cubin" \

@@ -12,14 +12,15 @@ alone. `card.sh` is the command of its `research run`: it takes the lease, binds
 `run.py` twice, the check alone on both variants and then the check and the timing. Its header has the full command.
 
 ~~~text
-bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm120-ship
+bash benchmarks/pouw/pearl_c_sm120/ship.sh [OUT]    # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm120-ship
 bash benchmarks/pouw/pearl_c_sm120/card.sh          # under research run, with OUT sent as ship.tar
 python3 run.py [check.json]                         # in the built tree, on the card
 ~~~
 
 - `build.sh` compiles the cubin and refuses it unless `sass_gate.py` passes: no ptxas warning, spill or stack frame,
   every FP8 atom and every peel step the intended tensor-core instruction in the stated counts, and no other MMA form.
-  It writes `fixture.py`'s inputs and expected buffers, the toolchain's command line and the tree's `MANIFEST.sha256`.
+  It writes the toolchain's command line beside the cubin and needs no uv. `ship.sh` runs it, then writes
+  `fixture.py`'s inputs and expected buffers, `run.py` and the tree's `MANIFEST.sha256`.
 - `run.py` first refuses any GPU but the expected one (one visible device, compute capability 12.0, its UUID). It then
   runs every kernel on the fixture and compares each buffer byte for byte, the GEMMs again on all, one and three CTAs.
   A variant is timed only when all its buffers match. It exits 3 on a refused identity and 4 on a failed check.
