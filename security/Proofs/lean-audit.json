@@ -189,9 +189,7 @@
   "Proofs.Properties.Verity.SampledTwo.ClaimInner",
   "Proofs.Properties.Verity.SampledTwo.CoinBytes",
   "Proofs.Properties.Verity.SampledTwo.CoinMap",
-  "Proofs.Properties.Verity.SampledTwo.CoinMapAgree",
   "Proofs.Properties.Verity.SampledTwo.CoinMapLaw",
-  "Proofs.Properties.Verity.SampledTwo.CoinStages",
   "Proofs.Properties.Verity.SampledTwo.CouplingOf",
   "Proofs.Properties.Verity.SampledTwo.Cover",
   "Proofs.Properties.Verity.SampledTwo.Cut",
@@ -208,8 +206,6 @@
   "Proofs.Properties.Verity.SampledTwo.GoodCase",
   "Proofs.Properties.Verity.SampledTwo.JoinElems",
   "Proofs.Properties.Verity.SampledTwo.Joined",
-  "Proofs.Properties.Verity.SampledTwo.JoinedForm",
-  "Proofs.Properties.Verity.SampledTwo.JoinsAt",
   "Proofs.Properties.Verity.SampledTwo.Leg",
   "Proofs.Properties.Verity.SampledTwo.Majority",
   "Proofs.Properties.Verity.SampledTwo.Messages",
@@ -247,8 +243,7 @@
   "Proofs.Flock.SpotFlock.RunsAs.Played",
   "Proofs.Flock.SpotFlock.RunsAs.Round2",
   "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
-  "Proofs.Flock.SpotFlock.RunsAs.Within",
-  "Proofs.Properties.Verity.SampledTwo.JoinedCoupling"
+  "Proofs.Flock.SpotFlock.RunsAs.Within"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
