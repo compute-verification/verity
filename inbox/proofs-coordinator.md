@@ -122302,3 +122302,62 @@ In plain words: every file of mine now compiles on the merged base with only the
 - That `AcceptsTop.lean` at `bb06c823bc` compiles (`a0a1`).
 - `Parsed.lean`'s own axiom line on my tree.
 - Anything about a run: the form accepts no play today.
+
+## MAJORITY, Fri 05:24Z: THE RECORDS AUDIT PRINTS `AUDIT: FAIL` ON `security/Proofs` (r20261113-050045-991a), on one kind of line: 12 "orphan" files, because the lock's `roots` names no two-stage module; the join's audit will print 58 such lines; `Binding.lean` compiles with 5 theorems (r20261113-050928-28a2); head `eb68ce804ee490bba542bd41f7cb5c307a1228b6`
+
+In plain words: the audit built everything at my head and found no bad axiom and no failure of any other kind in `security/Proofs`. It failed because the lock's list of roots does not name the new two-stage files: three of mine and nine of TWOLEG's. Listing a file as a root in the lakefile is not enough; the audit goes by the lock's own list. Until someone who may edit the lock adds those names, these files are built but not audited, and the join's audit fails the same way for every file under `SampledTwo/`. I have not edited the lock. One rehearsal is running with the 12 names added inside the run's own copy of the tree, to see whether anything else is hidden behind the orphan lines.
+
+**What the audit printed** [run] r20261113-050045-991a on vy-nebius-cpu-11, at `a7cacd92709df11273ea65e682bed82903cc7d39`:
+- "AUDIT …/security/Proofs: FAIL  204322 declarations in 4051 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; … built in the sandbox; inline debt 0 (0 premises)".
+- Twelve lines of the form "orphan: Properties/Verity/SampledTwo/Steps.lean is not imported by the roots (…) nor under `exempt`: nothing builds or audits it".
+  - Mine: `Properties/Verity/Majority.lean`, `SampledTwo/Majority.lean`, `SampledTwo/Binding.lean`.
+  - TWOLEG's: `SampledTwo/Claim.lean`, `ClaimInner.lean`, `DevAgrees.lean`, `Leg.lean`, `Projection.lean`, `Reading.lean`, `Refused.lean`, `SecondRead.lean`, `Steps.lean`.
+- No other failure line. The rest is `staged`, `sampled`, one `note` on `Pouw.Dimension.Lifting.grid` (not ours) and the `heartbeats` list.
+- "lean-records: security/Proofs: check.py exit 1 in 452 s … without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse".
+- At 05:22Z the run was auditing `security`. It has not printed `RECORDS rc` yet.
+
+**Why it fails** [read: `tools/verity/lean/Facts.lean` lines 1250 to 1255, `check.py` lines 1472 to 1477, the lock]
+- The audit counts a module only when its name is under a name in the lock's `roots`, and fails on every file of the package that it did not count.
+- `security/Proofs/lean-audit.json` has 178 roots. None is `Proofs.Properties.Verity.Majority` or under `Proofs.Properties.Verity.SampledTwo`.
+- [run: the run's `facts.json.gz`] `Proofs.Properties.Verity.Majority` was loaded and built, because the lock's root `Recursive.Target` imports it. It is the one loaded `Proofs` module the audit did not count.
+- [derived] So no audit has read my three files. What stands for them is the tries' axiom probes.
+- [derived] `Majority.lean` is an orphan with or without my change to `Recursive/Target.lean`: the check is on every file, not on what is imported.
+
+**The join** [run: `git show` of the lock and `git ls-tree`, `cursor/proofs-join-42b8` at `9bfb0bb65f07`]
+- Its lock has the same 178 roots, none under `SampledTwo`. It holds 57 files under `SampledTwo/` and `Verity/Majority.lean`.
+- [derived] A records audit of the join prints 58 orphan lines and `AUDIT: FAIL` on `security/Proofs`, whatever else it finds.
+- [read] The base `e033bfc14be4` holds no `SampledTwo` file, which is why FRAME's audit of it passed `security/Proofs`.
+
+**What closes it** [derived] One edit of the lock's `roots`: the name of each new module. For my three files the names are `Proofs.Properties.Verity.Majority`, `Proofs.Properties.Verity.SampledTwo.Majority` and `Proofs.Properties.Verity.SampledTwo.Binding`. It is a lock edit, so it is not mine to make.
+
+**The rehearsal** [run] r20261113-052157-b358 on vy-nebius-cpu-10, at `eb68ce804ee490bba542bd41f7cb5c307a1228b6`.
+- Its command first adds the 12 names to the lock inside the run's own clone, then runs the same audit. It printed "scratch: 12 roots added to security/Proofs/lean-audit.json in this run's clone only; nothing is committed" and "1 file changed, 13 insertions(+), 1 deletion(-)".
+- No branch holds that edit. [run: `cmp`, `git status`] The lock in my checkout is byte for byte the one at my head.
+- It took its place at 05:22:30Z. [guess] It ends about 05:55Z.
+
+**`Binding.lean`** [run] r20261113-050928-28a2 on vy-nebius-cpu-1, at `eb68ce804ee490bba542bd41f7cb5c307a1228b6`: "lean exit 0 in 106 s" and "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Three theorems are new since my 04:41Z entry. No statement the join reads changed.
+- `majorityBound_opens` gives the join `MajorityBound` in one call. Its premises are the vocabulary's transcript being the majority (`hX`), the statement parsing with its partitions, `UnitsAreReplay`, `CapsAt`, `OpensBy`, and `ExpectedCR` at the binding finder with `collOfOpen`.
+- `collOfOpen_mem` says the finder's pair is two messages of `hashedAll`, the messages the row-leaf checks hash on both witnesses' openings of every wire.
+- `exists_opensBy` says that at every reading of the witness some `openOf` meets `OpensBy`, picked by choice.
+
+**A correction to my 04:41Z entry, for soundness's eye** [run: `exists_opensBy` compiles]
+- I wrote that nobody yet shows the deployed witness carries its openings. That put the weight in the wrong place. `OpensBy` restricts no transcript: an accepted opening exists wherever the transcript opens a wire, and choice picks one.
+- What the premise fixes is which openings the finder reads. The bound means something only where they are computed from the witness, because `ExpectedCR` prices the SHA-512 calls of an algorithm.
+- So nobody should discharge `OpensBy` by `exists_opensBy`. The instance's `openOf` is the witness's own openings (`Claims.Sampling.Wit` is a list of openings), and `dColl` is at least the calls that compute them on both witnesses plus `hashedAll`'s length. The file's header says this.
+
+**What of the brief is left** [derived]
+- All of it is the instance's to supply. [run: `git grep` on the join at `9bfb0bb65f07` and on TWOLEG's branch at `d9d804912561`] Outside `Claim.lean` and my files, nothing there proves `UnitsAreReplay` or calls `majorityBound`, and `CouplingOf` takes `MajorityBound` as a hypothesis. So no reading of a witness (`readX`) is fixed yet.
+  - `hX`, by defining the vocabulary's extractor as the majority.
+  - `UnitsAreReplay` and `CapsAt`, which TWOLEG's `Claim.lean` says the instance owes.
+  - `OpensBy` at the witness's own openings, and `ExpectedCR` at the binding finder with a `dColl` as above.
+- The earlier period's challenger signature is still open, as `SampledTwo/Majority.lean`'s header says.
+
+**For ASSEMBLY** Merge `eb68ce804ee490bba542bd41f7cb5c307a1228b6`, or take `SampledTwo/Binding.lean` and its line in `security/Proofs/lakefile.toml`. Call `majorityBound_opens` for the majority's piece.
+
+**STOP RULE.** None. The rehearsal's lock edit exists only inside run r20261113-052157-b358's clone.
+
+**NEEDS.** Who edits the lock's `roots` for the two-stage tree, and when: ASSEMBLY on the join, or you. Until then every records audit of a tree with `SampledTwo/` prints `AUDIT: FAIL` on `security/Proofs`.
+
+**To post.** Nothing.
+
+**Not established.** The `security` and `security/Properties` audits and the `RECORDS rc` of r20261113-050045-991a; the rehearsal r20261113-052157-b358. Pushed head: `eb68ce804ee490bba542bd41f7cb5c307a1228b6`; nothing is left unpushed.
