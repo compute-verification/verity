@@ -15,14 +15,12 @@ before a run is read against them, decided on the form's params, its blobs and t
   scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
 * the registered wiring, on the templates' names, the outer block's links and wires and the reference reads: each name
   one template's (`namesOnce`), each wire's writer before its reader (`writersFirst`), each row a template's units
-  read source bits at a port a link or a wire names (`sourceRowsNamed`), each wire's reader port like its writer's
-  output port (`wiresAlike`), no wire at a row a template writes that no link names (`writtenRowsUnwired`), each such
-  row some wire's writer port (`writtenRowsRead`), each reference read no link or wire names a port of the interior
+  read source bits at a port a link or a wire names (`sourceRowsNamed`), each wired source bit with a gate to go to
+  (`wiresMoveRows`, on the design's rows and the cells), each wire's reader port like its writer's output port
+  (`wiresAlike`), no wire at a row a template writes that no link names (`writtenRowsUnwired`), each such row some
+  wire's writer port (`writtenRowsRead`), each reference read no link or wire names a port of the interior
   registration (`refReadsOwn`), an interior registration that registers no value, each template's circuit naming its
   ports once (`portsOnce`) and every returned output bit on a computed row (`outsOk`), each read off one unit's net.
-
-Whether each wired source bit has a gate to go to (`wiresMove`) is not decided here: it walks every source bit of every
-unit, and waits on a per-template form.
 
 Nothing calls this module yet. Its definitions have the shapes of the two-stage verifier's own (`SpotFlock.Code`), over
 the components the form holds in place of the auditor's held copies, and a proof (`SpotFlock.HeldOfDesc`) reads each
@@ -338,16 +336,100 @@ def portsOnce (T : Nat) (circ : Nat → Circuit) : Bool :=
 def outsOk (T : Nat) (circ : Nat → Circuit) : Bool :=
   (List.range T).all fun t => outsComputed (circ t)
 
+/-! ## Every wired source bit has a gate to go to
+
+Decided once per template, on the rows a unit of the template reads source bits at, the design's rows (`rows`), the
+cells (`ns`) and each template's count of units (`units`). -/
+
+/-- **Template `t`'s units**, of `T` templates: its cell's `ns[t]` a request, over `r` requests; none past them. -/
+def unitsAt (r : Nat) (ns : Array Nat) (T t : Nat) : Nat := if t < T then r * ns.getD t 0 else 0
+
+/-- The rows template `t`'s units read at its session port `port`, as the second stage finds them. -/
+def rowsOf (rows : Array Spot.SecondStage.Rows) (t port : String) : Option Spot.SecondStage.Rows :=
+  rows.find? fun r => r.template == t && r.port == port
+
+/-- **The row and the bit of it that each input column of one unit of circuit `c` reads**: `sourceRows`, with each
+one's bit. -/
+def sourceCells (c : Circuit) : List (String × Nat) :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).filterMap fun b =>
+    (Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b)).map fun x => (x.row, x.bit)
+
+/-- Bit `bit` of the row named `wport` is one a unit of circuit `c` writes: `wport` names one of its output row
+ports and the bit is inside that output port's words, sixteen bits a word. -/
+def outBit (c : Circuit) (wport : String) (bit : Nat) : Bool :=
+  (List.range c.outPorts.size).any fun o =>
+    (c.ports.getD (Flock.HmOut.nIn c + o) default).name == wport &&
+      decide (bit < 16 * (c.outPorts.getD o default).2)
+
+/-- Wire `w`'s writer writes bit `bit` of its output row: its writer names a template whose unit writes that bit of
+the wire's writer port. -/
+def wireBit (T : Nat) (names : List String) (circ : Nat → Circuit) (w : Spot.SecondStage.Wire) (bit : Nat) : Bool :=
+  match writerOf T names w.writer with
+  | some tw => outBit (circ tw) w.wport bit
+  | none => false
+
+/-- Bit `bit` of template `t`'s row `row` has a writer's bit to go to: where a wire names the row and no link does,
+the wire's writer writes that bit; true at every other row. -/
+def bitGoes (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) (t : Nat) (row : String) (bit : Nat) :
+    Bool :=
+  match linkOf links (names.getD t "") row, wireOf wires (names.getD t "") row with
+  | none, some w => wireBit T names circ w bit
+  | _, _ => true
+
+/-- Every unit of template `t` has a unit of template `tw` to read wire `w` at, at rows `r`: no link names the
+writer's port; the reader's cell is not empty and its units are whole cells; the writer has as many cells of units;
+the rows a replay block holds are no more than the writer's cell; the rows' runs hold the reader's cell, each position
+once; and each run's last row is one of the rows a replay block holds. -/
+def cellGoes (names : List String) (links : Option (Array Spot.SecondStage.Link)) (ns : Array Nat)
+    (units : Nat → Nat) (t tw : Nat) (w : Spot.SecondStage.Wire) (r : Spot.SecondStage.Rows) : Bool :=
+  (linkOf links (names.getD tw "") w.wport).isNone && decide (0 < ns.getD t 0) &&
+    decide (units t % ns.getD t 0 = 0) &&
+    decide (units t / ns.getD t 0 * ns.getD tw 0 ≤ units tw) &&
+    decide (r.per ≤ ns.getD tw 0) && Spot.SecondStage.fits r.runs (ns.getD t 0) &&
+    r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < r.per)
+
+/-- Every unit of template `t` has a writer's unit to read wire `w` at, at its row `row`: the row has rows, the
+wire's writer names a template, and each unit of `t` has a unit of it (`cellGoes`). -/
+def wireGoes (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (rows : Array Spot.SecondStage.Rows) (ns : Array Nat) (units : Nat → Nat) (t : Nat) (row : String)
+    (w : Spot.SecondStage.Wire) : Bool :=
+  match rowsOf rows (names.getD t "") row, writerOf T names w.writer with
+  | some r, some tw => cellGoes names links ns units t tw w r
+  | _, _ => false
+
+/-- Every unit of template `t` has a writer's unit to read its row `row` at: where a wire names the row and no link
+does, `wireGoes`; true at every other row. -/
+def rowGoes (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (rows : Array Spot.SecondStage.Rows) (ns : Array Nat)
+    (units : Nat → Nat) (t : Nat) (row : String) : Bool :=
+  match linkOf links (names.getD t "") row, wireOf wires (names.getD t "") row with
+  | none, some w => wireGoes T names links rows ns units t row w
+  | _, _ => true
+
+/-- **Every wired source bit has a gate to go to**: for each template, each row its units read source bits at has a
+writer's unit for each of its units (`rowGoes`), and each bit one unit reads there is one the writer's unit writes
+(`bitGoes`). -/
+def wiresMoveRows (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (rows : Array Spot.SecondStage.Rows) (circ : Nat → Circuit)
+    (ns : Array Nat) (units : Nat → Nat) : Bool :=
+  (List.range T).all fun t =>
+    ((sourceRows (circ t)).all fun row => rowGoes T names links wires rows ns units t row) &&
+      (sourceCells (circ t)).all fun rb => bitGoes T names links wires circ t rb.1 rb.2
+
 /-! ## The check -/
 
 /-- **The registered wiring's checks decided per template**, at `T` templates named `names`, the links and wires, the
-templates' circuits, their reference reads and the interior registration's verifier `vi`. -/
+design's rows, the templates' circuits, the cells, each template's count of units, the reference reads and the
+interior registration's verifier `vi`. -/
 def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
-    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) (refReads : Nat → Json)
-    (vi : Spot.Registration.Verifier) : Bool :=
+    (wires : Option (Array Spot.SecondStage.Wire)) (rows : Array Spot.SecondStage.Rows) (circ : Nat → Circuit)
+    (ns : Array Nat) (units : Nat → Nat) (refReads : Nat → Json) (vi : Spot.Registration.Verifier) : Bool :=
   namesOnce T names && writersFirst T names wires && sourceRowsNamed T names links wires circ &&
-    wiresAlike T names wires circ && writtenRowsUnwired T names links wires circ &&
-    writtenRowsRead T names links wires circ && refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList &&
+    wiresMoveRows T names links wires rows circ ns units && wiresAlike T names wires circ &&
+    writtenRowsUnwired T names links wires circ && writtenRowsRead T names links wires circ &&
+    refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList &&
     (vi.registered.map (·.1)).toList.isEmpty && portsOnce T circ && outsOk T circ
 
 /-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
@@ -362,12 +444,13 @@ def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : 
       let names := (it.circuits.map (·.1)).toList
       let links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
       let wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
+      let rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn
       let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
       p.circuits.size == T && !rs.isEmpty &&
         rs.all (fun r => fits r && zkOk r.spec r.sts && templateOk r && ProvedScope.scopeOkH r.stmt) &&
         (List.range T).all (fun t => memberOk (circAt rs t) (requests l * ns.getD t 0)) && designOk law l &&
         ks.size == T && ks.toList.all (1 ≤ ·) && ns.size == T &&
-        wiringOk T names links wires (circAt rs) refReads it.params.verifier
+        wiringOk T names links wires rows (circAt rs) ns (unitsAt (requests l) ns T) refReads it.params.verifier
     | _, _ => false
   | _, _, _ => false
 

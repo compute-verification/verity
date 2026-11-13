@@ -50,6 +50,7 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
       let names := (it.circuits.map (·.1)).toList
       let links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
       let wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
+      let rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn
       let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
       let circ := circAt rs
       let vi := it.params.verifier
@@ -61,6 +62,7 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
         ("designOk", designOk law l), ("a count a template", ks.size == T), ("counts at least 1", ks.toList.all (1 ≤ ·)),
         ("a cell a template", ns.size == T), ("namesOnce", namesOnce T names),
         ("writersFirst", writersFirst T names wires), ("sourceRowsNamed", sourceRowsNamed T names links wires circ),
+        ("wiresMoveRows", wiresMoveRows T names links wires rows circ ns (unitsAt (requests l) ns T)),
         ("wiresAlike", wiresAlike T names wires circ),
         ("writtenRowsUnwired", writtenRowsUnwired T names links wires circ),
         ("writtenRowsRead", writtenRowsRead T names links wires circ),

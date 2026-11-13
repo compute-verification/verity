@@ -17,9 +17,8 @@ statements gets a held copy at every run it accepts, and at an accepted run `Two
 `decided` reads the descriptor's checks (`descCore`): the rule and count checks, the layout and the first stage's design
 (`Slots.layout`, `slotDesign`), a step per stratum (`designOk`), and per template its reference statement's reading
 (`templateOk`: parsing its circuit file, the session verifier's own parse) and its member's size class (`memberOk`, a
-closed form in the unit's descriptor); and `two`'s `membersScoped`, a step per template, and `wiringOk`, whose
-`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired` and `writtenRead` pass over every source or written bit
-of the members' programs.
+closed form in the unit's descriptor); and `two`'s `membersScoped`, a step per template, and `wiringOk`, each clause
+of which reads the circuit files and the registered wiring once per template, whatever the count of units.
 -/
 
 @[expose] public section
