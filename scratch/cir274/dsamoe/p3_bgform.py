@@ -15,8 +15,6 @@ import sys
 import time
 from pathlib import Path
 
-out = Path(sys.argv[1])
-out.mkdir(parents=True, exist_ok=True)
 spec = importlib.util.spec_from_file_location("compile_cost", "benchmarks/compile_cost/run.py")
 cc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cc)
@@ -60,28 +58,37 @@ def batched_gemm_runs(w, j, node):
 
 FAM0 = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
 FAM1 = {**FAM0, "BatchedGemm": batched_gemm_runs}
-rec = {}
-for arg in sys.argv[2:]:
-    OUTS, LP = map(int, arg.split(":"))
-    reg = cc.registered(0, 4, "eager")
-    advice, ingress = cc.session([(0, LP, OUTS)])
-    u = [x for x in plan_steps(reg, advice, ingress).requests if x is not None][0]
-    fn = request_program(reg, u).program.fn
-    r = {}
-    for name, fam in (("before", FAM0), ("after", FAM1)):
-        MIXED.update(nodes=0, runs=0)
-        t0 = time.perf_counter()
-        try:
-            c, w = NW.node_window(fn, families=fam)
-            IF.check_wires(c.layouts, c.wires, c.cuts, c.order)
-            IF.check_inputs(c.layouts, c.cuts, c.wires, c.registered, c.ingress)
-            blob = IF.circuit_bytes(c.description())
-            bg = sum(1 for x in c.wires if w.family_of(x.reader, x.at) == "BatchedGemm" and x.port == "x")
-            r[name] = {"ok": True, "digest": hashlib.sha512(blob).hexdigest(), "bytes": len(blob), "wires": len(c.wires),
-                       "wires_before_coalesce": len(w.b.wires), "batched_gemm_x": bg, **{f"mixed_{k}": v for k, v in MIXED.items()}}
-        except Exception as e:  # noqa: BLE001 - a refusal is a result
-            r[name] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:1500]}
-        r[name]["wall_s"] = round(time.perf_counter() - t0, 1)
-    rec[arg] = r
-    (out / "bgform.json").write_text(json.dumps(rec, indent=1) + "\n")
-    print("DSAMOE bgform", arg, json.dumps(r), flush=True)
+
+
+def main() -> None:
+    out = Path(sys.argv[1])
+    out.mkdir(parents=True, exist_ok=True)
+    rec = {}
+    for arg in sys.argv[2:]:
+        OUTS, LP = map(int, arg.split(":"))
+        reg = cc.registered(0, 4, "eager")
+        advice, ingress = cc.session([(0, LP, OUTS)])
+        u = [x for x in plan_steps(reg, advice, ingress).requests if x is not None][0]
+        fn = request_program(reg, u).program.fn
+        r = {}
+        for name, fam in (("before", FAM0), ("after", FAM1)):
+            MIXED.update(nodes=0, runs=0)
+            t0 = time.perf_counter()
+            try:
+                c, w = NW.node_window(fn, families=fam)
+                IF.check_wires(c.layouts, c.wires, c.cuts, c.order)
+                IF.check_inputs(c.layouts, c.cuts, c.wires, c.registered, c.ingress)
+                blob = IF.circuit_bytes(c.description())
+                bg = sum(1 for x in c.wires if w.family_of(x.reader, x.at) == "BatchedGemm" and x.port == "x")
+                r[name] = {"ok": True, "digest": hashlib.sha512(blob).hexdigest(), "bytes": len(blob), "wires": len(c.wires),
+                           "wires_before_coalesce": len(w.b.wires), "batched_gemm_x": bg, **{f"mixed_{k}": v for k, v in MIXED.items()}}
+            except Exception as e:  # noqa: BLE001 - a refusal is a result
+                r[name] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:1500]}
+            r[name]["wall_s"] = round(time.perf_counter() - t0, 1)
+        rec[arg] = r
+        (out / "bgform.json").write_text(json.dumps(rec, indent=1) + "\n")
+        print("DSAMOE bgform", arg, json.dumps(r), flush=True)
+
+
+if __name__ == "__main__":
+    main()

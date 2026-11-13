@@ -5,10 +5,12 @@ checked (`node_window_values.run`, its sampling). Run from the repository root:
 
     .venv/bin/python p3_values.py OUT LAYERS PROMPT_IDS [MOST]
 
-Writes OUT/values_l<LAYERS>_p<PROMPT_IDS>.json."""
+With FAMILIES_FROM=FILE, a scratch prototype's lowerings (its ``FAM1``) in place of the tree's. Writes
+OUT/values_l<LAYERS>_p<PROMPT_IDS>.json."""
 import hashlib
 import importlib.util
 import json
+import os
 import resource
 import sys
 import time
@@ -40,12 +42,18 @@ def log(s):
 
 
 FAM = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
+if os.environ.get("FAMILIES_FROM"):
+    _s = importlib.util.spec_from_file_location("families_from", os.environ["FAMILIES_FROM"])
+    _m = importlib.util.module_from_spec(_s)
+    _s.loader.exec_module(_m)
+    FAM = _m.FAM1
 reg = cc.registered(0, layers, "eager")
 advice, ingress = cc.session([(0, LP, 2)])
 u = [x for x in plan_steps(reg, advice, ingress).requests if x is not None][0]
 p = request_program(reg, u)
 fn = p.program.fn
 rec = {"layers": layers, "ids": LP, "outputs": 2, "seed": SEED, "most": MOST, "program_digest": p.digest}
+rec["families_from"] = os.environ.get("FAMILIES_FROM")
 c0, w0 = NW.node_window(fn, families=FAM)
 c, w = NW.node_window(fn, families=FAM, stand_ins=True)
 rec["description_digest"] = hashlib.sha512(IF.circuit_bytes(c0.description())).hexdigest()
