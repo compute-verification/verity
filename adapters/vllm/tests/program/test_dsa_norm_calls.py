@@ -17,8 +17,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
 from verity.definitions import boolean as SW
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.definitions.registry import boolean_dsa_norm as BN
 from verity.definitions.registry import dsa_norm as DN
 from tests.program.test_boolean_fp8 import _flat, _inputs

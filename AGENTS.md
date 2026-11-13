@@ -80,7 +80,7 @@ outside the trusted places only the files its `loaded_by` names import one, a te
 and the generator writes a line into one only under `--grow`. What the trusted places reach outside themselves is the
 soundness path, which only shrinks: `verity/circuits`, `verity/commitments`, `verity/commitments/crypto` and
 `verity/commitments/randomness` (the first two hold a few files outside those directories too, which their `paths`
-name); none reaches the catalog (`verity/definitions/ops/` and `silicon/`) or the kernels. The rest can't affect
+name); none reaches the catalog (`verity/circuits/ops/` and `silicon/`) or the kernels. The rest can't affect
 soundness. Python of `verity` in no place only groups packages and imports the standard library alone. A directory
 under `verity/` with an import root of its own is a distribution the listing names with its owner: `verity` loads none
 of them by name (a load by file is read only into `benchmarks/`) and imports no other distribution of the workspace.

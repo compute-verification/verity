@@ -53,8 +53,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from verity.circuits.defs import composite
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, BitNot, F32Neg, I32Add, I32Le, SelectI32
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, BitNot, F32Neg, I32Add, I32Le, SelectI32
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.definitions.numerics import dsv4_indices_twin

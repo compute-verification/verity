@@ -29,8 +29,8 @@ import verity.definitions.boolean as BB
 from verity.circuits import boolean as BL
 from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops import prims as MP
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as MP
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value

@@ -25,7 +25,7 @@ from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, Strided, concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.boolean import NoBooleanVersion, boolean_version
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as RP
 from verity.definitions.registry.sampling import bit_at

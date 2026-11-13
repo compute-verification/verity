@@ -4,7 +4,7 @@ d9105ea80's CuTe K-cache gather).
 `prefill` computes `FlashMlaPrefill_v1` over numpy words, its heads at once; `gather_rows` is `FlashMlaGatherRow_v1` over rows and
 `head` the attention over staged rows.  The arithmetic is written here again from phase1.cuh and its SASS rather than read from the
 registry, over `flashmla_twin`'s f32 steps (FADD / FMUL / FFMA round to nearest with subnormals, every NaN result 0x7FFFFFFF;
-MUFU through core's measured tables; the wgmma k16 step through `verity.definitions.kernels.tc`), so the self-check compares two writings.
+MUFU through core's measured tables; the wgmma k16 step through `verity.circuits.kernels.tc`), so the self-check compares two writings.
 
 `registry.flashmla_prefill` registers it (`register_twin`) with `kernel_registry` as kernel ``flashmla-twin`` of
 `FlashMlaGatherRow_v1`, `FlashMlaPrefillHead_v1` and `FlashMlaPrefill_v1` (``DOT`` the Hopper wgmma k16 step).
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.definitions.kernels import tc as CK
+from verity.circuits.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import flashmla_twin as FT
 from verity.definitions.numerics.kernel_registry import register
