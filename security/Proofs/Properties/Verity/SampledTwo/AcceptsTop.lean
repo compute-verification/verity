@@ -11,6 +11,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Flock.SpotFlock.HeldOfRun
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Properties.Verity.Sampled.Record.Reg
+public import Proofs.Properties.Verity.SampledTwo.InputMap
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
@@ -261,7 +262,7 @@ theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Inp
   have hii : i = i' := Option.some.inj (hi.symm.trans hi')
   have hrp : i.rule = p.rule := by
     rw [hii, hieq]
-    exact (VStar.Recursive.SampledTwo.inputOf_first _ _ _ _ _ _ _).1
+    exact (_root_.VStar.Recursive.SampledTwo.inputOf_first _ _ _ _ _ _ _).1
   obtain ⟨j, -, hj⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h1
   obtain ⟨g, t, kk, hr⟩ := SpotFlock.RunsAs.paramsOfJson_twoStage hj
   obtain ⟨j', hj'⟩ := paramsOfJson_ruleOf hj
@@ -304,7 +305,8 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
       exact Verity.Sampled.Record.parseDesign_count "subset" (Or.inl rfl) K hK1
     refine ⟨K, ?_⟩
     unfold SpotFlock.firstK SpotFlock.firstKOf
-    simp only [hcl, hn', Spot.Select.Rule.lawOver, hpd, Verity.Sampled.Record.flockLaw_subset_text K n' hK1 hKn]
+    simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.lawOver, hpd,
+      Verity.Sampled.Record.flockLaw_subset_text K n' hK1 hKn]
   · cases hr
 
 /-- **`PartsHeldAt` from the parts at each count the first stage samples**: at each accepted play the held first
