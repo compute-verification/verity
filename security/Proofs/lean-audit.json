@@ -192,7 +192,11 @@
   "Proofs.Properties.Verity.SampledTwo.Deployed",
   "Proofs.Properties.Verity.SampledTwo.Shown",
   "Proofs.Properties.Verity.SampledTwo.FirstSample",
-  "Proofs.Properties.Verity.SampledTwo.InputMap"
+  "Proofs.Properties.Verity.SampledTwo.InputMap",
+  "Proofs.Properties.Verity.SampledTwo.Messages",
+  "Proofs.Properties.Verity.SampledTwo.MessagesShown",
+  "Proofs.Properties.Verity.SampledTwo.SessionMsgs",
+  "Proofs.Properties.Verity.SampledTwo.MessagesOpen"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
