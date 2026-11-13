@@ -22,7 +22,8 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 the head of the registration log the period is accounted against (a SHA-512 digest, 128 lowercase hex), the
 challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history (newest
-first), the name of the period it credits (a string), the Site location the period's work ran on (a nonempty string)
+first), the name of the period it credits (a string), the id the registration log registered the period's device under
+(a nonempty string, the id of a device in the Site's locations, whose compute is the Site part the period accounts for)
 and the ordered ids of the sessions the challenger's ledger opened for the period's windows (each window's and its
 sample's, `sessionId?`; the empty list names none).
 
@@ -46,7 +47,9 @@ period undecided.
 
 **Public**, on acceptance (`Published.toJson`), what `account` reads: `Credit.PeriodCredit.toJson`, each window's
 credited calls, its credited served work, the K the period's open committed, the δ (`Credit.DELTA`) and each window's
-ε at it; beside it the parameters' `registration_head`, `place` and challenger `key`, and from the ledger the close's
+ε at it; beside it the parameters' `registration_head`, `place` and challenger `key`, the `part` of the device at
+`place` the period accounts for (`PART`, its compute, so the Site part it accounts for is (`place`, compute)), and from
+the ledger the close's
 open `roots` in its order and the period's span: the period-open's `start` and its `length` to its close inclusive, in
 ledger entries, as the ledger carries no clock reading on either.
 
@@ -90,7 +93,8 @@ structure Profile where
   windows : Nat
 
 def HEAD_FORM : String := "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
-def PLACE_FORM : String := "place is not a Site location's id (a nonempty string)"
+def PLACE_FORM : String :=
+  "place is not the id the registration log registered the period's device under (a nonempty string)"
 def SESSIONS_FORM : String :=
   "sessions is not a list of the ids of the sessions the challenger's ledger opened for the period (1 to 64 of " ++
   "[A-Za-z0-9._:-] each, the first alphanumeric)"
@@ -246,8 +250,12 @@ def spanOf (ledger : Json) (name : String) : Option Span := do
   let roots ← ws.toList.mapM fun w => str? (get w "root")
   pure ⟨o.seq, c.seq, roots⟩
 
+/-- The part of the registered hardware at its place a period accounts for: the device's compute. -/
+def PART : Core.Account.Part := .compute
+
 /-- What an accepted period publishes: its credit, the registration head, place and challenger key of its parameters,
-and from the ledger its close's open roots and its span, the period-open's seq and the entries from it to its close. -/
+the part it accounts for (`PART`), and from the ledger its close's open roots and its span, the period-open's seq and
+the entries from it to its close. -/
 structure Published where
   credit : Credit.PeriodCredit
   head : String
@@ -259,8 +267,8 @@ structure Published where
 
 def Published.toJson (p : Published) : Json :=
   (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("registration_head", .str p.head),
-    ("place", .str p.place), ("key", p.key), ("roots", Json.arr (p.roots.map Json.str).toArray),
-    ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
+    ("place", .str p.place), ("part", .str PART.name), ("key", p.key),
+    ("roots", Json.arr (p.roots.map Json.str).toArray), ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
@@ -281,12 +289,13 @@ def profileJson (pr : Profile) : Json :=
   Json.mkObj [("period", .str pr.period), ("windows", toJson pr.windows)]
 
 /-- **What the period accounts for** (`Core.Account`): the served work its windows' credited calls did, in MACs, on the
-place its parameters name, from below, each window's ε at δ (once for the period), over the ledger entries of the
-period's span in the challenger key's ledger, which carry no clock reading, so the span orders periods and covers no
-tick. -/
+compute (`PART`) of the device its parameters' `place` names, from below, each window's ε at δ (once for the period),
+over the ledger entries of the period's span in the challenger key's ledger, which carry no clock reading, so the span
+orders periods and covers no tick. The Site part an accepted answer accounts for is its (`place`, `part`), both read
+off the answer. -/
 def account : Core.Account :=
   { protocol := protocolId, head := some (.published "registration_head")
-    amounts := [{ metric := "work", part := .compute, place := some (.published "place"), key := .published "work",
+    amounts := [{ metric := "work", part := PART, place := some (.published "place"), key := .published "work",
                   unit := Core.Account.macs, side := .verified,
                   time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
                   series := some (.published "key"), share := some (.published "eps"), error := .published "delta",
@@ -353,6 +362,7 @@ private def accepted : Core.Answer :=
 #guard (account.head.bind (·.read accepted)) == some (.str HEAD)
 #guard (account.amounts.map fun m => (m.place.bind (·.read accepted), m.key.read accepted)) ==
   [(some (.str "gpu0"), some (Lean.toJson [10, 20]))]
+#guard (account.amounts.map fun m => some (Json.str m.part.name)) == [(published.getObjVal? "part").toOption]
 #guard (account.amounts.map fun m => match m.time with
   | .steps s _ => s.read accepted
   | _ => none) == [some (3, 8)]

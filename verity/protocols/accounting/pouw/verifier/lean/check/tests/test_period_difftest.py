@@ -73,8 +73,8 @@ def test_an_honest_period_is_its_credit():
     p, ledger = case["params"], [json.loads(x) for x in json.loads(bytes.fromhex(case["commitment"]))]
     close = next(e for e in ledger if e["kind"] == "period-close" and e["body"]["period"] == p["name"])
     start = next(e["seq"] for e in ledger if e["kind"] == "period-open" and e["body"]["period"] == p["name"])
-    assert {k: a["public"][k] for k in ("registration_head", "place", "key", "roots", "start", "length")} == {
-        "registration_head": cases.HEAD, "place": cases.PLACE, "key": p["key"],
+    assert {k: a["public"][k] for k in ("registration_head", "place", "part", "key", "roots", "start", "length")} == {
+        "registration_head": cases.HEAD, "place": cases.PLACE, "part": "compute", "key": p["key"],
         "roots": [w["root"] for w in close["body"]["windows"]], "start": start, "length": close["seq"] + 1 - start}
     assert p["sessions"] == [w["session"] for w in close["body"]["windows"]] != []
     assert a["commitment"] == PC.digest({"bytes": bytes.fromhex(case["commitment"])}).hex()
