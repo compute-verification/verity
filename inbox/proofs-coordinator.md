@@ -161967,3 +161967,17 @@ The ready line itself, the head, the runs and the body are as the entry before t
 - **`main` has moved again,** to `6c52a8dd9cae` (80 commits past the head's `56f6c2675633`, no move among them). It changes `security/lean-audit.json` and Lean under `security/Proofs/`, and no other file of this change; a trial merge of the head with it is clean, and its change to that lock touches no line of `Circuits.Program` [run: `git merge-tree --write-tree`, `git diff`]. I leave the head where the two runs read it.
 - **Timers:** one-off, the records run's at about 22:25Z and the suites' at about 23:20Z. The ready line: about 23:45Z [guess: Thursday's quick suites waited 30 minutes for a slot and ran 77].
 - **Not established:** either run's verdict. Whether `--update` writes the two module digests the locks hold (`ec520df8…` in security's, `0b08e1c0…` in Properties'): they came out of the lock merges, not out of a build at this head [guess: the merge recomputes a module's digest from its definitions']. If a regenerated lock differs from the committed one, I compare before any commit, and stop with both texts if a listed guarantee's own record moved.
+
+## WIDELEAF, Fri 13 Nov 22:01Z: #9108: the ready line at about 23:30Z [guess]; `security/Proofs` built and passed, the records run is in its update pass
+
+**The ready line: about 23:30Z [guess]**, between 23:00Z and 23:55Z. It waits on the records run's last two packages, then the records commit, then the suites whose inputs that commit changes.
+
+- **`security/Proofs` built and passed its audit at `b48abf90aacb` [run]** (`r20261113-202414-3c9d`): 204,478 declarations in 4,050 modules, the build 2,533 s. So the two files I merged by hand and the five-line fix compile. No build has failed.
+- **`security`: one record difference, the one I expected [run].** The run's words: "guarantees: definitions in Proofs.Flock.Claims.KS.ZkTables that Flock.SecurityProofs.MaskedKSTable read changed (changed: FlockDeploy.KS.wordLenJ)". It is a `reads` difference of a guarantee `main` listed after this branch's old base, and nothing else failed in that package. The run then started `check.py --update` on `security` at 21:25Z, as it does when every failure is a record difference; that pass builds `security/Proofs` again (its root module was written at 21:55Z [run: the node's files]). `security/Properties` follows. The run's cap is 23:29Z.
+- **The quick tier `r20261113-202244-644d` [run]:** 36 of 71 suites done at 21:59Z, none failed, `verity-vllm` (3,193 s), `verity-flock`, `repository` and `verity-check` among them.
+- **Your 20:53Z, 21:03Z and 21:57Z are read.** The locks' order stays; the body says it in one sentence with the count. INF-798, item 4 [run]: nothing is unpushed; the 74 commits of the carry that `main` does not hold are each authored and committed as this checkout's own identity, which is the one I commit under. The suites at the new head run with `--changed b48abf90aacb5e3a6cb84a6262e235c6dc977d3b`.
+- **My VM restarted while I was idle [run]:** its worktrees and `/tmp` were gone at 22:00Z. Everything was pushed or in the notes; I rebuilt the worktree from the remote at `b48abf90aacb`. Nothing is lost.
+
+**WRONG, mine**, in my 20:47Z entry: the one premise of `trust_gap` that sits elsewhere than on `main` is two places later, not three.
+
+I poll on a timer of about 13 minutes and write one line each time the records run is still out.
