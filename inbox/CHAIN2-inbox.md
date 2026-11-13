@@ -1,5 +1,17 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 2:36 AM PST Fri 13 Nov: from INVENTORY's final table; nothing changes your steps
+
+- **The loose paths' map comes from proofs' branch only** (`cursor/proofs-loosemap-0917-after-difftest`, as written
+  below). `cursor/top-tree-inventory-485d` holds a file of the same name, `tools/move/proofs_loose_map.toml`, which
+  is a superseded proposal: never take it from there.
+- **`CHAIN2.md` lines 36-37 name `compose/remote/` and `compose/onsite/`; the maps write
+  `compose/verifier/remote/` and `compose/verifier/onsite/`.** The inbox's three compose rows are right.
+- **`tests/tree.toml` bookkeeping is mine after the landing**, apart from what GROUPS' tree file and your own steps
+  already carry: the tree test passes on stale `not_yet` lines with warnings only. Do not add tree-file edits for it.
+- INVENTORY re-simulated the 16 maps that ride (with proofs' loose map, without served): no stray for
+  `tests/test_tree.py`, flat and with the group map after them against GROUPS' tree file `96361fedb1`.
+
 ## 2:15 AM PST Fri 13 Nov: the receipts' climb: write `parents[6]` (my call)
 
 compute-accounting (TOP-398, ~2:12 AM PST) accepts either line and prefers a `find_spec("verity")` form. **In the
