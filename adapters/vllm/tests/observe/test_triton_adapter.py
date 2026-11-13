@@ -139,10 +139,11 @@ def _notes(events: list) -> list[Note]:
     return [e for e in events if isinstance(e, Note)]
 
 
-def test_a_launch_is_an_event_of_every_parameter_by_name_under_the_innermost_open_call(recording) -> None:
+def test_a_launch_is_an_event_of_every_parameter_by_name_under_the_innermost_open_call(recording, monkeypatch) -> None:
     rec, events, patch = recording
     jit, x, told = _jit(), torch.zeros(2, 3), []
     rec.step, rec.phase, rec.open, rec.module_stack, rec.next_id = 4, "forward", [9, 11], ["layers.0", "layers.0.attn"], 12
+    monkeypatch.setattr(rec, "stream", lambda: 81)      # no device here has a stream: the recorder's reading of one
 
     def after_launch(eid: int, fn: str, bound: dict) -> None:
         told.append((eid, fn, bound))
@@ -155,8 +156,7 @@ def test_a_launch_is_an_event_of_every_parameter_by_name_under_the_innermost_ope
     assert patch.launches == [(jit, (x, 6), {"BLOCK": 16, "grid": grid, "warmup": False, "num_warps": 8})]
     args = {"x": rec.storage.view_of(x), "n": 6, "BLOCK": 16}
     assert args["x"].shape == (2, 3) and list(_launches(events)[0].args) == list(PARAMS)
-    assert _launches(events) == [TritonLaunch(12, 11, 4, "forward", NAME, SRC_DIGEST, args, {"BLOCK": 16}, [6, 2], 8, None,
-                                              rec.stream(), "layers.0.attn")]
+    assert _launches(events) == [TritonLaunch(12, 11, 4, "forward", NAME, SRC_DIGEST, args, {"BLOCK": 16}, [6, 2], 8, None, 81, "layers.0.attn")]
     assert _notes(events) == [] and rec.counts["triton"] == 1 and rec.next_id == 13
     [(eid, fn, bound)] = told
     assert (eid, fn) == (12, NAME) and type(bound) is dict and list(bound) == list(PARAMS) and bound["x"] is x
