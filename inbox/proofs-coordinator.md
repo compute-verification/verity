@@ -138754,3 +138754,74 @@ out. No timer is set.
 [run] Run `r20261113-112614-c0b5` ended 11:42:46Z, exit 0. Machine vy-nebius-cpu-14, run directory `/workspace/research/runs/r20261113-112614-c0b5`, case `/workspace/research/runs/r20261113-112614-c0b5/out/standin/m300-k128-256/case-v2-members.json`: 300 members, 2 statements, 308 blobs; v2's refusal on it is `ALL_PASSED`, decided. Its blobs are named by paths in the node's scratch directory; the parameters and evidence are whole in the file.
 
 **Not established**: whether the scratch directory with the blobs is still on the node.
+
+## MESSAGES, Fri 13 Nov 11:46Z: THE TIE IS MINE, stated below as `treeStreams_repStreams`; NOT COMPILED: two tries of (a)'s file failed, the second on ONE line of the tie's own support, mended, third try out (`f4de`, to end about 12:10Z); FOUND: (b) needs a third step beside (a) and COINMAP's lemma: the history must SHOW the coin of every round an earlier release continues, and two kinds of round show none
+
+MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator; ASSEMBLY: section 2 is the field you asked for at 11:26Z; SESSIONCOINS and COINMAP: section 3 names one fact of each of yours that I use, nothing is asked. Your 10:54Z is read. One loop: pen `~/wt/.pen` on this machine since 08:18Z.
+
+**In plain words.** The file for (a) is written and has not compiled. Its second try got through every theorem but one: I had read the session's tags as the statement's, and they differ in one field. That line is mended and the third try is running. The lemma soundness added is the last step of (a)'s proof, so it is mine and sits in the same file. Reading (b) against the definitions, I found that (a) and COINMAP's lemma do not give `FixedBefore` on their own: the premise `FixedBefore` hands over speaks only of rounds whose answer was the verifier's coin, and the statements' round and each session's last round answer with no coin.
+
+**1. The tries** [run; each `--on auto --as proofs --mem-gb 24`, no `ulimit`, the worktree clean and pushed]
+- `r20261113-110639-75d3` at `1fbcadd3ffa`: rc 1 in 316 s. Two parse errors, both a binder named with a token of the tree's. Renamed at `cefe4ecc51d`.
+- `r20261113-111653-f6cb` at `cefe4ecc51d`, with `--siblings`: the build completed (11798 jobs); `lean exit 1 in 1128 s`; "axiom probe: 1 of its 48 theorems failed … `Verity.SampledTwo.SessionCoins.setupAt_oneTable`". The one error, at line 742: `hP.tagsEq` "has type `st.tags = Flock.Witness.zkTags W` but is expected to have type `st.tags = W.tags`". The other 47 theorems had no error on their own lines. None of them counts as compiled: Lean refused the file, and (a) and the tie both stand on the failed one.
+- The mend, at `7292404ff55` [read: `Flock.Zk.tags` in `Zk.lean`]: the tags `--zk` sets a session up under are the statement's with the identity's `hooks` replaced, so the `table` field is the same. The proof now takes that field of the equation. Two fallback tactics the try reported as never run are gone.
+- `r20261113-114207-f4de` at `7292404ff55`, vy-nebius-cpu-7, with `--siblings`, launched 11:42Z. To end about 12:10Z [guess: the second try's 19 minutes, on a machine whose tree may be colder].
+
+**2. The tie soundness adds: mine, not SESSIONOF2's** [written; not compiled]. In `security/Proofs/Properties/Verity/SampledTwo/RoundsRise.lean` on `cursor/proofs-messages-rise-745c`:
+
+```lean
+theorem treeStreams_repStreams {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {bs : Core.Blobs}
+    {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
+    (hacc : MemberChecks.SessionAccepted
+      (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop) bs s)
+    {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) {lines : List String}
+    {trees : Array Spot.Challenger.LoggedTree} (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    {t : Spot.Challenger.LoggedTree} (ht : t ∈ trees) {tables : Array (String × Option ℕ)}
+    (hS : Spot.Challenger.sessionTreeReason #[t.unclosed] tables recJ = none) :
+    ∃ text dr proofs spec tabs rest,
+      Spot.OneStageZk.setupAt (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).I
+          (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop).rd dr = .ok (spec, tabs, rest) ∧
+        Flock.Zk.verify spec tabs text proofs = .ok () ∧
+        Verity.Sampled.specStreams t.spec =
+          #[Json.str Spot.Challenger.TREE_SESSION] ++ spec.repStreams.map fun x => Json.str x.2.2
+```
+
+- In words: take a second-stage session the per-member form accepted, and the logged tree its record is held to. The streams that tree's spec lists are the session stream and then the rep streams of the session the verdict verified, `spec.repStreams`, in that session's own order. So "an earlier place in the tree's spec", which `rep-stream-order` compares, is "an earlier rep stream of the session".
+- Its three hypotheses are what the form's accept gives for every second-stage session: the session's verdict, its record on the blobs, and the members' check holding the record to the tree. `located_rising` produces all three for each session, so at the form's accept the tie has no premise.
+- Why mine: it reads nothing of `session_of_held`, `OneTable`, `TableName`, `refTable` or `PinHeld`. It stands on the one-stage lemmas (`verdictOf_ok`, `zkVerify_decode`, `decode_coinTree`, `Trees.coinTree_held`, `setupTables_okHP`, `setupHidden_specP`, `repStreams_toList`) and on two short lemmas of mine. The second try's one error was in the second of those two, `setupAt_oneTable`.
+- **ASSEMBLY:** until I name a compiled head, the play field is the conclusion above for each second-stage session of an accepted play. When the try passes I name the head and the field goes.
+
+**3. (b): what (a) and `place_prefix_used` leave** [derived; read: `Shows`, `shownAt`, `playHist` and `FixedBefore`'s shape in `Messages.lean` and `MessagesOpen.lean`, `SpotFlock.next` in `Code.lean`, `formReading`, `sessionMsgs`, `runLocate`, `place_prefix_used`]
+- `FixedBefore` at round `i` hands over `Shows (playHist … i) r'`: the second coins `r'` are the first coins `r` at each round below `i` whose answer in the play's history is a coin's bytes. At a round whose answer is no coin it says nothing of `r'`.
+- COINMAP's `place_prefix_used` wants `r'` to be `r` at every round a release before round `i`'s first release continues.
+- (a) puts those rounds below `i`. What is left is that each of them shows its coin. I name it `ShowsPlaced`: on an accepted play whose log is the device's, the verifier answers with its coin at every round the locator puts a release on. Whether a round's answer is its coin depends on the messages alone, not on the coins' values. Four parts:
+  - (c1) Rounds 0 to `stage`: the answer is the coin where the round is 0 or 1 or the message is empty (`SpotFlock.next_coin`), and the form's reading reads the empty message at rounds 2 to `stage`. Short.
+  - (c2) A session's rounds before its last: the answer is the coin where the session's setup reads and every message of the session so far carries the tag 0. From `sessionMsgs`, whose link and middle messages carry it. About 120 lines, the shape of `answersShown`'s middle case.
+  - (c3) The statements' round `stage + 1` shows no coin. The run's locator puts no release there: it puts an opening past that round (`locOf_past`) and any other frame at most on `stage`. Short. COINMAP: this is the fact of `runLocate` I use.
+  - (c4) A session's last round shows no coin: its message is the final one. The session-round locator puts rep 1's `(R + 1)`-th opening on that round (SESSIONCOINS's 08:05Z item 5 says the same of `roundOf`). On an accepted play no tree has such an opening: the members' check holds the tree's openings to the session's record and the session's verifier refuses an uneven record (`FlockDeploy.streams_size_zk`). Mine to write, from `MembersHeld`; not read to the end.
+- So the list after (a) is: (b1) (a) carried from the log the check read to the play's log, by `InteriorLogged`; (b2) every round an earlier release continues is below `i`; (b3) the log before round `i`'s first release, and that release's frame and bytes, are the same at `r` and `r'`, by `place_prefix_used`, under `ShowsPlaced`; then (c1) to (c4). (b1) to (b3), (c1) and (c3) are designed line by line and go in one new file, `PrefixFixed.lean`, which imports (a)'s file, so its first try waits for `f4de`.
+
+**4. Your list.** `9425ffd35b` stands as the form's step. After it, mine: (a), third try out; the tie, in the same try; (b1) to (b3) and (c1) to (c4); then `Fx`, `raw`, `ctx` at the form. Row 7 is STAGECOINS's and I change nothing for it.
+
+## STOP RULE
+
+Nothing to report: no listed guarantee, named assumption or lock record is touched. `RoundsRise.lean` adds one root to `security/Proofs/lakefile.toml` and to the lock's roots, on my try branch only. `ShowsPlaced` is a hypothesis of a lemma of mine, to be proved, not a named assumption.
+
+## NEEDS
+
+1. **You:** nothing to decide. Section 3 is a notice: `FixedBefore` at a session's round is (a), (b) and (c), not (a) and (b).
+2. **ASSEMBLY:** section 2's last point.
+3. **SESSIONCOINS, COINMAP:** nothing. If either of you has (c4) or (c3) compiled under another name, say the name and I use it.
+
+## Runs
+
+Out: `r20261113-114207-f4de` (vy-nebius-cpu-7, at `7292404ff55`), launched 11:42Z, to end about 12:10Z. One timer held on it.
+
+## Not established
+
+- (a), `runMembers_sessions`, `ReadLinkFirst` and the tie: written, not compiled.
+- (b1) to (b3), (c1), (c3): designed, not on disk. (c2), (c4): not written.
+- `FixedBefore` at a session's last round, where the message is the final one: what fixes it there is the tree's closing, which the session-round locator puts on no round, and (a) says nothing of it. Not read.
+- `FixedBefore` where `Fx` reads nothing at `r`: (b3) gives the same log up to the release; that `Fx` at `r'` then reads nothing too is not derived.
+- `FixedBefore` at the first and second stages' rounds and the statements' round: the cut's order and the stages' locator, not read against it.
+- `Fx`, `raw`, `ctx` at the form, `Explains` and `Opens`: not started; due Sat 02:00Z.
