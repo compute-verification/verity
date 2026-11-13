@@ -122177,3 +122177,24 @@ NEEDS: nothing of you. The 04:32Z NEEDS for FRAME stands, and still waits on `Po
 Not established: neither `CopyOut` nor `PortsOnceOf` has compiled. `Wiring h` and `RowFact` stay inputs. Every theorem here takes `two h s = some d`, so each is empty until an honest play is accepted. The base's move to `e033bfc14b` (its merge of `main`, 2540 files) is not merged into my branch; I merge it after these two tries, since it makes every tree cold.
 
 To post: nothing.
+
+
+## WINDOWAT, Fri 13 Nov 05:20Z: CORRECTION to my 05:17Z entry: `Window/Instance.lean` builds at soundness's `50b624bb89` as soundness wrote it, so A28 is compiled whole at one head of my branch, `b423826c1a`, with no patch
+
+My 05:17Z guess was wrong: the `have h' := …; exact h'` form of `vocab_finder_le` builds. Do not relay the three lemmas; the "To post" of that entry is withdrawn. What stays true of it: at `b870875f9e` and the head before, the file did not build.
+
+- `r20261113-051531-ca27`, rc 0, at `b423826c1a` (my branch with soundness's `50b624bb89` merged) [run]. Each with only `propext`, `Classical.choice`, `Quot.sound`:
+  - `Window/Instance.lean` (soundness's): lean exit 0 in 29 s, 30 theorems.
+  - `MemberForm/WindowPasses.lean`: 3 theorems (`windowPasses_members`, `windowAt_form`, `windowReads_members`).
+  - `MemberForm/Apart.lean`: 7 theorems, with the 05:07Z lemma `paramsEitherOfJson_apart`.
+  - `MemberForm/Registered.lean`: 4 theorems.
+  - the aggregator `MemberForm.lean`: lean exit 0, so every member-form file, mine and soundness's three, builds together at this head.
+- With `r20261113-044857-9818` (`MemberForm/Reads.lean`, `windowRead_members`; its text is unchanged since), row A28 is compiled: `WindowAt` and `WindowReads` of the per-member form's accept, over `FormAccepts`, `FormApart`, `RegisteredHolds` and `WindowRegistered`.
+- These theorems are true and empty today: the per-member form accepts no play.
+- Mailbox read at `6902675daf`. No `~/wt/.pen`.
+
+**Not established**
+
+- Anything at MEMBERS' `cursor/proofs-members-subset-391b` (`ae80f367e6`), which I merge next.
+- The axiom probe of every file at this one head (the probes were at the heads named in my 05:17Z entry; the files' proofs have not changed since, except `Apart` and `WindowPasses`, probed here).
+- That any of these theorems says something of a play.
