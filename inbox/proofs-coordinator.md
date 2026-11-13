@@ -139508,3 +139508,104 @@ Out: `r20261113-115654-e248`, to end about 12:20Z. One timer held on it.
 
 - (b1) to (b3), (c1), (c3): written, not compiled. (c2), (c4): not written. So `FixedBefore` is still a premise of the join.
 - The other lines of my 11:46Z entry's list, unchanged.
+
+## ACCOUNTS, Fri 13 Nov 12:00Z: the draft branch builds. `cursor/proofs-accounts-rows-7b2e` at `ca8d91955791`, five changes off `9eec48aab933`; all 145 guards hold in run `r20261113-115431-58a2`, and a control with one false guard fails. No statement and no lock record moves; no pull request is open. Two things are yours to rule: a correction to my 11:31Z entry on the label, and a choice of mine in the device rule. The prefix-head rule is sized at about 45 lines, in a pull request of its own
+
+**STOP RULE: nothing in this entry says a listed guarantee is false or empty, and the branch changes no statement and no named assumption.** No `lean-audit.json` names `CoreProtocol.Account` at the branch's head; the same search finds `CoreProtocol.Site` in three [run]. The branch changes two files, `Account.lean` and the interface's README [run: `git diff --name-only 9eec48aab933..ca8d91955791`].
+
+Marks: [read] a file at the commit named, [run] a command or a run by id, [derived] my reasoning, [relayed] another lane's words. `Account.lean` is `verity/protocols/interface/CoreProtocol/Account.lean`; its line numbers are the branch head's unless #9593 is named. Mailbox read to line 442, its end, at 12:00Z. One loop; I hold the pen.
+
+### What you can act on
+
+1. **The branch waits for your word "carry".** It is off `9eec48aab933`, pushed, with no pull request. #9593 and #9701 are untouched.
+2. **A correction to my 11:31Z entry, on the label.** I wrote that a row with no registered capacity "has no verified column". That is true of a free amount only. An amount verified from below prints its verified column with no capacity too [read: `certifiedRow`, 601–614]. As you ruled it and as I built it ("against a registered capacity"), such a row with 0 verified still reads "certified". If the rule should be "wherever the verified column is 0", it is one line and one guard. I did not write it.
+3. **A choice of mine in the device rule.** An amount about several links at once (a form with no place) is timed only by a certifier that is on every one of them. On a Site with two uplinks, each split by its own certifier, an answer about both verifies nothing [run: guard 1327]. Network's account names one link in each answer, so this does not reach it [relayed: their draft form]. The other reading, a certifier on any of the links, lets a certifier time a link it is not on.
+4. **The reading's change is one case wider than I sized.** The series is a condition of every form that names one, not only of a form that names its steps. An answer of a counted span or of a moment that lacks its form's series key was read under the empty series; now it is not read [read: 494–499]. No account on `main` has such a form: no file there but `Account.lean` and the package's root names an account [run: a search on `053b8e50fe8a` now].
+5. **Ten commits, not four.** Five changes, each its own commit (the bare uplink and the device are two); three that wrap a line over 120; one guard and one wording that belong to the device change. Nothing amended, nothing forced.
+
+### The branch
+
+| | Change | Commits | Try, on its last commit | Result |
+|---|---|---|---|---|
+| 1 | the cap (option B) | `db150d5dc3a` | `r20261113-113630-91c2` | lean exit 0 |
+| 2 | the bare uplink | `be369b5b5bb`, wrap `12d74cfc514` | `r20261113-113858-3762` | lean exit 0 |
+| 3 | the series' device | `a598b8d1ef5`, wrap `9b60f6af966`; later a guard `a282758c814` and a wording `ca8d91955791` | `r20261113-114355-19d1` | lean exit 0 |
+| 4 | no span, no series, no head | `f88d6601c89` | `r20261113-114714-12d3` | lean exit 0 |
+| 5 | the label | `01d89ef49f2`, wrap `54a916eea45` | `r20261113-115049-75a8` (at `a282758c814`) | lean exit 0 |
+| | the head | `ca8d91955791` | `r20261113-115431-58a2` | lean exit 0 |
+| | control: the head and one false guard | `85f1a611fdf`, on `cursor/proofs-accounts-probe-3e91` | `r20261113-115611-893d` | lean exit 1: one error, at the false guard |
+
+- Each try builds the file's imports and elaborates the file with its guards, at the commit named: the run's record holds the commit, clean [run: each run's `remote.json`]. Every run went through `research run --on auto --as proofs`.
+- The control shows that "lean exit 0" means the guards hold: the same file with one false guard added at its end fails with that one error and no other [run]. The probe branch is mine and holds only that commit; say the word and I delete it.
+- The file has 145 guards, 119 before [run]. It is 1,403 lines, under the 2,000 a module may run to [run] [read: `tests/test_lean_packages.py` 572].
+
+What each change does:
+
+| | In the code | Guards |
+|---|---|---|
+| 1 | `certifiedRow` no longer holds a flow's free amount to the capacity; a moment's keeps it. | 2 new: a check of 200,000 bits on a link of 100,000 prints free 260,000 and verified 0; a wipe that states more than its memory leaves the registered memory free and no more. |
+| 2 | `Part.certifiable` (183): of the links at the place an answer names, only one that joins a network certifier and a node of the prover's. `Amount.rows` and `unaudited` read it; `Part.leaves` is unchanged, so a bare uplink is still charged. | 6 new, on a Site with a bare uplink that gives no reason: an answer that names it gives no row, and both links stay "not audited"; an answer on the certifier's link is certified, and the uplink stays charged. |
+| 3 | `Part.times` (191) and `Amount.timed` (619): a link's series counts only where its device is a network certifier at an end of every link the answer can certify. The flow branch reads it, and so does the list of premises in `rows`, so a premise for another link's certifier adds no row. Compute and reads are as they were. | 8 new: a second certifier on an uplink of its own times its own link and not the first; a premise for its clock adds a row for its own link and none for the first. |
+| 4 | `Amount.read` (481): the series and the steps are conditions of the reading, as every other key of the form is. | 4 of #9593's change value (below); 4 new: a check with no span, alone, reads as no answer; a check that publishes no head, the same; an audit with its steps and no session, the same; a whole audit reads its steps and its session. |
+| 5 | `Status.nothingVerified` (516); its text is in `Status.name` (525) and nowhere else in the code, and the guards and the README name the constructor. Set in `certifiedRow` where the verified amount is 0 against a registered capacity. | 4 of #9593's change status (below); 6 new, one that the row's JSON prints `Status.name`'s text and one that no two standings share a text. |
+
+#9593's guards that change value, eight [run: the diff of guards against `9eec48aab933`]:
+
+- By (4): a check with no start beside one with a start no longer adds its 2,000 bits and its error (free 65,000 at 1/500 becomes the first check's row alone, 63,000 at 1/1000); an audit with no span beside one with a span no longer adds its error, and no longer counts where it was the larger (500 becomes 300); two audits with no span give no row.
+- By (5), "certified" becomes "nothing verified" on: a span wholly before the period; a certifier whose clock states no drift; a certifier at the site, on no clock the Site states; an origin that names a device the Site does not hold.
+
+What network's cases read now [run: the guards named]:
+
+| Case | Row |
+|---|---|
+| An answer with the head and its names, and no span | none; the link is "not audited: charged at capacity" (1076–1080) |
+| The clock form's answer, which publishes no head | none; the same (1081–1084) |
+| `K` at or above the capacity | "nothing verified"; free prints `K` plus the charge for the ticks not covered, above the capacity (1087–1088, 1139) |
+| An answer that names a node's bare uplink | none; the uplink is "not audited: charged at capacity" (1300–1303) |
+
+For the pull request's body, kept from your 11:40Z message: the account reads no key; the link half is `rows`', the key half is `NetworkPinned`'s. Its first paragraph will say that it moves no lock record.
+
+### The prefix-head rule, by reading only
+
+Read at `9eec48aab933` (#9593: `Account.lean`, `Site.lean`, `Registration.lean` of the interface) and at `e3d6afb37761` (#9701). Nothing written.
+
+**1. Is `period.heads` already that list?** By its docstring, part of it. By the code, it is whatever the caller hands.
+
+- `Monitored.heads` is a bare list of texts, "every head the registration had in" the period [read: #9593 424–431]. `rows` takes no log and holds the list to nothing; `readings` asks only that the answer's head is in it [read: #9593 668–670].
+- Two differences from soundness's words. Theirs is any prefix of the accepted log, back to its first entry; #9593's is the prefixes since the period began. The type is the same, so a caller can hand the longer list with no change. And theirs carries two conditions on the part; #9593 has neither (2 below).
+- What the caller hands besides: for each head, what was registered at it. An entry's index alone does not serve `rows`, which has no log to read it against. Either `rows` is handed the log and folds its prefixes, or it is handed each head with the Site of its prefix. The second keeps `rows` free of the log and of the check: the function beside `rows` makes the list in the fold `Core.Registration.check` already does, which holds the head and the Site after each entry [read: `Registration.lean` 251–286]. An index is then needed for one thing: the log's length when the period began.
+- #9701's `View` holds one head today and no prefix heads [read: `security/Definitions/Core/Registration.lean` 77–82 at `e3d6afb37761`]. "The view carries its prefix heads" is soundness's plan [relayed].
+
+**2. What `rows` lacks.**
+
+- *Registered in that prefix.* `rows` reads every answer against one Site, the last head's: "the registration only adds, so what an answer read at an earlier head of the period is in `S` unchanged" [read: #9593 700–701]. That is right about what the earlier prefix held. It does not ask the converse: a link or a device registered after the answer's head is in `S`, so an answer that names an earlier head and that part gets its row today [derived from #9593 597–603 and 664–672; no guard shows it and I wrote none].
+- *When a part was registered:* the Site does not hold it. The Site is three lists, sheets, locations and links, with no index and no time [read: `Site.lean` 245–248]. The log holds the order: the entry that adds the part.
+- *Retired:* nothing retires. The Site's log has one kind of entry, which adds; the registration log has three, site, information and declaration, and each appends [read: `Site.lean` 252–254, 274–278; `Registration.lean` 100–105, 272–277]. The word is in no file of the interface, on `main` or on #9593 [run: `rg -i retire`]. So "not retired before the span ends" holds of every part today, with nothing to read.
+- *Once an entry retires a part,* two things are missing beside that entry and its check. A time: no entry carries one (a declaration carries a day), so either the entry states it, or the auditor hands the tick at which each head took over, as it hands each series' origin. And for memory, a span: an amount at a moment states no time in `rows`, so only the log's order is there to compare, the answer's head against the retiring entry.
+- *Where the comparison goes:* the flow branch of `Amount.rows`, the one place a span has ticks. `Origin.clip` already cuts a span at the period's last tick; a retired part's spans are cut at its retiring tick the same way [read: #9593 401–416].
+
+**3. Lines, guards, and where.** Three places, because the three conditions need three different things:
+
+| Condition | Where | Why there | Size |
+|---|---|---|---|
+| The head is a prefix head of an accepted log | a function beside `rows` | it needs the auditor, the composite and the log; `rows` and `readings` are handed none | about 20 lines, 8 guards |
+| The part is registered in that prefix | `readings`, with the leaves read at the prefix's Site | the answer's head, its place and the amount's part meet there | about 15 lines (`Monitored.heads` becomes heads with their Sites, 2; `readings`, 5; the leaves of a group in `rows`, `Amount.rows` and `unaudited`, 8), 8 guards |
+| Not retired before the span ends | `Amount.rows`, flow branch | the span's ticks are known only there | nothing now; about 8 lines and 4 guards once an entry retires |
+| Docstrings and the README | | | about 12 lines |
+
+- About 45 lines and 16 guards now [derived, not written]. No statement and no lock record moves, for the reason at the top.
+- A pull request of its own, after this one and after soundness restates its `View`: the two must agree on which prefixes count.
+- One part is more than a filter. An amount about the whole site, at an earlier head, is about that prefix's leaves, which are fewer than `S`'s. So readings group by their leaves, not by their place alone, and what the later leaves hold is charged as what no answer covers.
+
+### To post
+
+On NET-427, if you want it: "The account's draft is `cursor/proofs-accounts-rows-7b2e` at `ca8d91955791`, off #9593's head, not yet a pull request. An answer with no span, no session or no head gives no row, and its link reads 'not audited: charged at capacity'. A row with 0 verified against a registered capacity reads 'nothing verified'; the text is one line, `Status.name`. A flow's free amount prints above the capacity. An answer that names a bare uplink certifies nothing, and a link's series counts only on the certifier on that link. Run `r20261113-115431-58a2`."
+
+### Not established
+
+- Only the file's try ran: its imports' build and the file with its guards. The interface's Lean check and records run, the changed suites and the root tests did not run on this branch; they run on the carried head.
+- The branch is off `9eec48aab933`. Whether the carry meets a conflict is not known.
+- That network's draft guards read as the table says: their branch was not built against this one.
+- Whether a compute or a read series should be held to its device as a link's now is (a challenger that does not reach the node). The ruling names the link, and I changed nothing there.
+- How a reader outside the tree takes a row's `status`. Inside the tree nothing reads it [run: my 11:31Z search].
+- Every size in the prefix-head section is from reading; none of it was written or compiled.
