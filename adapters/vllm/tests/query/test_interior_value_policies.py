@@ -100,12 +100,20 @@ def test_slots_refuses_a_partition_whose_cut_fails_or_that_recomputes_a_gate(pol
     assert slots(*args) == whole
 
 
-def test_slots_refuses_a_shard_that_commits_other_values_than_the_layout(monkeypatch):
-    monkeypatch.setattr(VR, "LAYOUT", VR.LAYOUT[:2])
+OTHER_LAYOUTS = [
+    ("one value fewer", (("local", "I32Add_v1"), ("ge", "I32Le_v1")), "['I32Add_v1', 'I32Le_v1']"),
+    ("another primitive", (("local", "I32Add_v1"), ("ge", "I32Le_v1"), ("le", "I32Lt_v1")), "['I32Add_v1', 'I32Le_v1', 'I32Lt_v1']"),
+    ("another order", (("ge", "I32Le_v1"), ("local", "I32Add_v1"), ("le", "I32Le_v1")), "['I32Le_v1', 'I32Add_v1', 'I32Le_v1']"),
+]
+
+
+@pytest.mark.parametrize("layout,acquired", [t[1:] for t in OTHER_LAYOUTS], ids=[t[0] for t in OTHER_LAYOUTS])
+def test_slots_refuses_a_shard_that_commits_other_values_than_the_layout(layout, acquired, monkeypatch):
+    monkeypatch.setattr(VR, "LAYOUT", layout)
     with pytest.raises(ValueError) as e:
         VR.slots.__wrapped__(8, 32, 0)
     assert str(e.value) == ("vocab range: EmbeddingShard_v1{VS=8,H=32,START=0} commits ['I32Add_v1', 'I32Le_v1', 'I32Le_v1'], "
-                            "the source acquires ['I32Add_v1', 'I32Le_v1']")
+                            f"the source acquires {acquired}")
 
 
 def test_slots_refuses_a_gemm_that_commits_another_count_of_products_than_its_blocks(monkeypatch):
